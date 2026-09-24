@@ -83,6 +83,7 @@ impl LiveClockAdapter {
     }
 }
 
+// r[impl molten.modularity.fabric_boundary.adapters.clock]
 impl TimerClockAdapter for LiveClockAdapter {
     fn profile_ref(&self) -> &str {
         &self.profile_ref
@@ -244,6 +245,7 @@ pub struct AdapterConformanceObservation {
     pub entropy_bound_rejected: bool,
 }
 
+// r[impl molten.modularity.fabric_boundary.adapters.clock]
 // r[impl molten.fabric_time.live_sim_parity]
 pub fn run_timer_adapter_conformance<A: TimerClockAdapter>(
     profile: &super::AdmittedTimeProfile,

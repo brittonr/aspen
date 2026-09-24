@@ -11,6 +11,7 @@ pub struct CanonicalReplicationRecord {
     pub bytes: Vec<u8>,
 }
 
+// r[impl molten.content_replication.manifest]
 pub fn canonical_manifest(manifest: &Manifest) -> crate::error::Result<CanonicalReplicationRecord> {
     canonical(
         "manifest",
@@ -115,6 +116,7 @@ pub fn canonical_operator_status(view: &OperatorStatusView) -> crate::error::Res
     )
 }
 
+// r[impl molten.content_replication.final_validation]
 pub fn canonical_receipt(receipt: &ExecutionReceipt) -> crate::error::Result<CanonicalReplicationRecord> {
     let expected = NON_CLAIMS.iter().map(ToString::to_string).collect::<Vec<_>>();
     if receipt.non_claims != expected {

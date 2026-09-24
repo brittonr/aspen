@@ -16,6 +16,7 @@ pub enum ProfilerArtifactError {
     EvidenceRoleDenied(ProfilerArtifactRole),
 }
 
+// r[impl dev_profiling.non_claim]
 pub fn admit_profiler_artifact(
     path: &std::path::Path,
     role: ProfilerArtifactRole,
@@ -30,14 +31,19 @@ pub fn admit_profiler_artifact(
     Ok(())
 }
 
+// r[impl dev_profiling.placement]
+// r[impl dev_profiling.platform]
 #[cfg(all(feature = "profiler", target_arch = "x86_64", target_os = "linux"))]
 pub fn enable_development_profiler() {
     flux_profiler::enable_profiler(DEVELOPMENT_PROFILER_APP);
 }
 
+// r[impl dev_profiling.build_gating]
+// r[impl dev_profiling.platform]
 #[cfg(not(all(feature = "profiler", target_arch = "x86_64", target_os = "linux")))]
 pub fn enable_development_profiler() {}
 
+// r[impl dev_profiling.optional_features]
 #[cfg(feature = "profiler-alloc")]
 #[global_allocator]
 static PROFILING_ALLOCATOR: flux_profiler::allocator::CountingAllocator<std::alloc::System> =
@@ -47,6 +53,7 @@ static PROFILING_ALLOCATOR: flux_profiler::allocator::CountingAllocator<std::all
 mod tests {
     use super::*;
 
+    // r[verify dev_profiling.non_claim]
     #[test]
     fn development_trace_is_an_observation() {
         assert_eq!(
@@ -58,6 +65,8 @@ mod tests {
         );
     }
 
+    // r[verify dev_profiling.non_claim]
+    // r[verify dev_profiling.verification]
     #[test]
     fn profiler_trace_is_denied_as_release_evidence() {
         let roles = [

@@ -328,6 +328,8 @@ fn canonical_plan_and_readback_retain_bounded_authority_evidence() {
     assert!(oversized.to_string().contains("assignment limit exceeded"));
 }
 
+// r[verify molten.modularity.fabric_boundary.shell.denial]
+// r[verify molten.modularity.fabric_boundary.validation]
 // r[verify molten.fabric_membership.recruitment]
 // r[verify molten.fabric_membership.drain_replace]
 #[test]

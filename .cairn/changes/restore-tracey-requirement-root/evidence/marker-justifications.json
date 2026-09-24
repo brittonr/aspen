@@ -1,0 +1,537 @@
+{
+  "MarkersAuthorityProject": {
+    "summary": "21 of the 24 assigned ids now have justified markers. I left 3 as none on purpose. Every edit adds comment lines only, with nothing removed, and I made no commit. I ran guard_probe2 from the worktree root after the edits. Across the whole worktree, including sibling edits, it now reports just 3 unexpected_missing, and all 3 are my deliberate nones: molten.authority.nominal_references.octet.guard, molten.modularity.fabric_boundary.compatibility and molten.modularity.fabric_boundary.compatibility.fixtures. Markdown markers use the `<!-- r[...] -->` style already in docs/fabric-port-ownership.md, and the guard picks that style up. Line numbers are current after the edits. flake.nix is also being edited by other agents, so its line numbers may shift.",
+    "table": [
+      {
+        "id": "molten.authority.nominal_references.artifact_core.distinct",
+        "status": "impl+verify",
+        "markers": [
+          "crates/molten-core/src/nominal.rs:260 (impl, ArtifactReferenceSet)",
+          "crates/molten-core/src/nominal.rs:476 (verify, artifact_evidence_operation_and_receipt_roles_remain_distinct)",
+          "src/authority/nominal.rs:250 (verify, artifact_wire_roundtrip_preserves_equal_digest_bytes_under_distinct_roles)"
+        ],
+        "justification": "ArtifactReferenceSet gives artifact and evidence separate typed fields. Both tests use equal digest bytes and assert that the artifact and evidence domains stay distinct."
+      },
+      {
+        "id": "molten.authority.nominal_references.docs",
+        "status": "impl-only",
+        "markers": [
+          "docs/nominal-authority-references.md:89"
+        ],
+        "justification": "The Non-claims section says typed references prove only local category separation and checked syntax, which is exactly what the requirement asks the docs to state."
+      },
+      {
+        "id": "molten.authority.nominal_references.evidence_core.replay",
+        "status": "impl+verify",
+        "markers": [
+          "crates/molten-core/src/nominal.rs:298 (impl, historical_replay_is_evidence_only)",
+          "src/authority/nominal.rs:93 (impl, admit_historical_wire)",
+          "crates/molten-core/src/nominal.rs:491 (verify, historical_replay_never_mints_current_authority)",
+          "src/authority/nominal.rs:276 (verify, historical_receipts_remain_evidence_only)"
+        ],
+        "justification": "Historical wire records are admitted into a typed HistoricalReferenceSet, and the evidence-only check rejects any current-authority flag. Both tests assert this."
+      },
+      {
+        "id": "molten.authority.nominal_references.final_checks",
+        "status": "impl-only",
+        "markers": [
+          "docs/nominal-authority-references.md:90"
+        ],
+        "justification": "The Non-claims section explicitly disclaims current authority, freshness, evidence truth, transport identity, semantic equivalence, runtime correctness and release eligibility."
+      },
+      {
+        "id": "molten.authority.nominal_references.inventory",
+        "status": "impl-only",
+        "markers": [
+          "docs/nominal-authority-references.md:11"
+        ],
+        "justification": "The Inventory table classifies all 15 roles by alias, family, migrated core scope and wire status, and the text below it classifies display, diagnostic and external-protocol strings as out of scope. config/nominal-reference-domains.ncl mirrors the table but sits outside the scanned roots."
+      },
+      {
+        "id": "molten.authority.nominal_references.inventory.complete",
+        "status": "impl+verify",
+        "markers": [
+          "docs/nominal-authority-references.md:12 (impl)",
+          "flake.nix:3152 (verify, above the nominal-reference-domains check)"
+        ],
+        "justification": "Each selected role has one row naming its classification and owning scope. The Nix check typechecks the Nickel Domain contract (family, rust_alias and migrated_scopes required) and requires exactly 15 domains, so a domain missing any of those fields fails the check."
+      },
+      {
+        "id": "molten.authority.nominal_references.octet.guard",
+        "status": "none",
+        "markers": [],
+        "justification": "No Octet nominal-domain check exists for Molten. The archived validation.md says the current Octet cohort does not yet enforce nominal domains, and V7 only got warning-level Octet results. The only Octet nominal policy (cairn-policy/nominal-evidence-identities.ncl) covers crates/cairn-core only. A substitute exists: the Nix nominal-reference-domains check fails if crates/molten-core/src/nominal.rs has a `pub <field>: String`. It is a ripgrep check, not Octet, so I did not mark it. Searched: grep for 'nominal' in *.toml, *.ncl and *.nix, the flake check body, and the archive evidence."
+      },
+      {
+        "id": "molten.authority.nominal_references.types.same_domain",
+        "status": "impl+verify",
+        "markers": [
+          "crates/molten-core/src/nominal.rs:303 (impl, require_session)",
+          "crates/molten-core/src/nominal.rs:408 (verify, same_domain_values_are_admitted_and_accessible)"
+        ],
+        "justification": "require_session takes a &SessionRef with no expected-domain string, and the test passes a typed session reference to it."
+      },
+      {
+        "id": "molten.authority.nominal_references.wire_boundary.invalid",
+        "status": "impl+verify",
+        "markers": [
+          "src/authority/nominal.rs:58 (impl, admit_authority_wire)",
+          "crates/molten-core/src/nominal.rs:442 (verify, wire_admission_rejects_unknown_roles_and_role_grammar_mismatch)",
+          "src/authority/nominal.rs:265 (verify, cross_domain_wire_field_fails_before_core_use)"
+        ],
+        "justification": "Wire admission builds each field through its exact role constructor and fails with ReferenceError{domain}. The tests reject a policy-style value in the evidence field and unknown roles. Caveat: canonical refs such as delegation and revocation share the blake3 grammar, so a swap between them is only caught after admission by the Rust types, not at the wire."
+      },
+      {
+        "id": "molten.authority.nominal_references.wire_boundary.valid",
+        "status": "impl+verify",
+        "markers": [
+          "src/authority/nominal.rs:57 (impl, admit_*_wire / project_*_wire)",
+          "crates/molten-core/src/nominal.rs:432 (verify, wire_admission_preserves_exact_external_text)",
+          "src/authority/nominal.rs:227 (verify, authority_wire_roundtrip_preserves_exact_fields)",
+          "src/authority/nominal.rs:235 (verify, execution_wire_roundtrip_preserves_node_session_operation_and_resource)"
+        ],
+        "justification": "Wire DTOs are admitted into typed sets and projected back to the exact source strings. The round-trip tests assert that the bytes and fields are unchanged."
+      },
+      {
+        "id": "molten.modularity.fabric_boundary.adapters.clock",
+        "status": "impl+verify",
+        "markers": [
+          "src/fabric_time/adapters.rs:86 (impl, TimerClockAdapter for LiveClockAdapter)",
+          "src/fabric_time/adapters.rs:248 (impl, run_timer_adapter_conformance)",
+          "src/fabric_time/tests.rs:80 (verify, executable_fixture_exercises_both_profiles_and_bounded_evidence)",
+          "src/fabric_time/tests.rs:581 (verify, live_adapter_rejects_simulation_profile)"
+        ],
+        "justification": "The live clock needs an admitted live profile and returns ticks as FabricPortResult (a typed error such as Timeout). The conformance runner passes the observed ticks as an explicit value to the pure poll_timer. The tests run live conformance and reject a non-live profile."
+      },
+      {
+        "id": "molten.modularity.fabric_boundary.adapters.transport_error",
+        "status": "impl+verify",
+        "markers": [
+          "src/fabric_transport/adapters.rs:209 (impl, live_loopback_frame)",
+          "src/fabric_transport/adapters.rs:281 (impl, TransportCommandShell for IrohTransportAdapter)",
+          "src/fabric_transport/tests.rs:296 (verify, deterministic_partition_after_submission_reports_uncertainty_without_retry)",
+          "src/fabric/port.rs:107 (verify, typed_failures_retain_infrastructure_ownership)"
+        ],
+        "justification": "If the Iroh network fails after submission, the session is recorded as AdapterFailure with delivery_definitive=false, and execute_command maps errors to FabricPortError::transport, not a policy denial. The tests assert Uncertain delivery after submission and that the TransportFailure class is kept."
+      },
+      {
+        "id": "molten.modularity.fabric_boundary.compatibility",
+        "status": "none",
+        "markers": [],
+        "justification": "No code or test preserves pre-migration canonical output. Commit 3de348149 left every fabric canonical.rs untouched, and the preservation evidence is a one-time rerun of the focused suites recorded in .cairn evidence. Searched: fabric test modules in src/ and crates/molten-core/ for pinned non-placeholder blake3 refs and for golden, include_bytes and include_str; the fixtures/ dir (only semantic-operation); the 3de348149 --stat."
+      },
+      {
+        "id": "molten.modularity.fabric_boundary.compatibility.fixtures",
+        "status": "none",
+        "markers": [],
+        "justification": "There is no accepted pre-migration transition or receipt fixture compared against the migrated path. The existing tests compare live against simulation, or two runs against each other, not before against after migration. Same searches as for compatibility."
+      },
+      {
+        "id": "molten.modularity.fabric_boundary.core",
+        "status": "impl+verify",
+        "markers": [
+          "crates/molten-core/src/fabric_membership/transition.rs:324 (impl, apply_assignment_command)",
+          "crates/molten-core/src/fabric_time/timer.rs:181 (impl, poll_timer)",
+          "flake.nix:3191 (verify, fabric-port-boundaries check)"
+        ],
+        "justification": "The pure core transitions take only explicit in-memory inputs, with observed ticks passed in by the caller. The Nix check fails if molten-core contains host-effect tokens."
+      },
+      {
+        "id": "molten.modularity.fabric_boundary.core.plan",
+        "status": "impl+verify",
+        "markers": [
+          "crates/molten-core/src/fabric_membership/transition.rs:325 (impl)",
+          "crates/molten-core/src/fabric_time/timer.rs:182 (impl)",
+          "crates/molten-core/src/fabric_membership/tests.rs:395 (verify, recruitment_requires_ack_and_rejects_delayed_or_stale_fenced_work)"
+        ],
+        "justification": "These functions return a deterministic transition (next state or timer action) or issue errors and never run the effect; the shell executes it. The test drives the pure transitions and checks denials."
+      },
+      {
+        "id": "molten.modularity.fabric_boundary.enforcement.adapter_trait",
+        "status": "impl+verify",
+        "markers": [
+          "src/fabric/audit.rs:45 (impl)",
+          "flake.nix:3188 (impl, rg 'pub trait ' over adapters.rs)",
+          "src/fabric/audit.rs:125 (verify, negative_fixtures_report_each_forbidden_boundary)"
+        ],
+        "justification": "Both the audit and the Nix check fail with the file path when a maintained adapters.rs defines a trait. The negative fixture test asserts AdapterOwnsPort."
+      },
+      {
+        "id": "molten.modularity.fabric_boundary.enforcement.construction",
+        "status": "impl+verify",
+        "markers": [
+          "src/fabric/audit.rs:47 (impl)",
+          "flake.nix:3190 (impl)",
+          "src/fabric/audit.rs:127 (verify)"
+        ],
+        "justification": "ConcreteAdapterInCore reports the path and the construction token; the Nix rg check fails on concrete constructors in molten-core. The negative fixture test asserts this."
+      },
+      {
+        "id": "molten.modularity.fabric_boundary.enforcement.raw_error",
+        "status": "impl+verify",
+        "markers": [
+          "src/fabric/audit.rs:46 (impl)",
+          "flake.nix:3189 (impl)",
+          "src/fabric/audit.rs:126 (verify)"
+        ],
+        "justification": "RawPortError is raised when a ports.rs uses Result<_, String>; the Nix rg check does the same. The negative fixture test asserts this."
+      },
+      {
+        "id": "molten.modularity.fabric_boundary.final_checks",
+        "status": "impl-only",
+        "markers": [
+          "docs/fabric-port-ownership.md:70"
+        ],
+        "justification": "The Non-claims section keeps the transport, durability, clock, entropy, authority and release non-claims."
+      },
+      {
+        "id": "molten.modularity.fabric_boundary.final_checks.claims",
+        "status": "impl-only",
+        "markers": [
+          "docs/fabric-port-ownership.md:71"
+        ],
+        "justification": "The same section disclaims live transport correctness, durable storage, clock accuracy, entropy quality, authority correctness and release readiness."
+      },
+      {
+        "id": "molten.modularity.fabric_boundary.ownership.classified",
+        "status": "impl-only",
+        "markers": [
+          "docs/fabric-port-ownership.md:16"
+        ],
+        "justification": "The Inventory table lists owner, inputs, outputs, typed failures, effects and composition root for each membership, time, entropy, transport and durability contract."
+      },
+      {
+        "id": "molten.modularity.fabric_boundary.shell.denial",
+        "status": "impl+verify",
+        "markers": [
+          "src/fabric_membership/shell.rs:75 (impl, execute_assignment_command)",
+          "src/fabric_membership/tests.rs:331 (verify, assignment_shell_records_intent_before_effect_and_surfaces_uncertainty)"
+        ],
+        "justification": "The shell returns the authority issues before record_intent or any lifecycle-port call. The test asserts that stale authority leaves no intents and no lifecycle calls."
+      },
+      {
+        "id": "molten.modularity.fabric_boundary.validation",
+        "status": "verify-only",
+        "markers": [
+          "src/fabric/audit.rs:104 and :128 (paired positive and negative audit fixtures)",
+          "crates/molten-core/src/fabric_membership/tests.rs:396 (core)",
+          "src/fabric_membership/tests.rs:332 (shell)",
+          "src/fabric_time/tests.rs:582 (adapter)",
+          "src/fabric_transport/tests.rs:323 (adapter/shell route: accepted, stale, unknown)"
+        ],
+        "justification": "This is a requirement on tests. Each marked test pairs accepted core, shell or adapter behaviour with rejected or malformed cases."
+      }
+    ]
+  },
+  "MarkersCacheProfiling": {
+    "summary": "All 17 ids now have markers. I added comment or doc-marker lines only. I ran guard_probe2 from the worktree root with `--root . --baseline evidence/tracey/inherited-debt-baseline.txt`. Its output has no `dataspace_access_cache` or `dev_profiling` ids in the missing or dangling lists; 44 `unexpected_missing` remain across all specs. I made no commits.",
+    "rows": [
+      {
+        "id": "aspen.dataspace_access_cache.projection.equal",
+        "status": "impl+verify",
+        "markers": [
+          "crates/molten-core/src/fabric_durability/cache/mod.rs:67 (impl)",
+          "crates/molten-core/src/fabric_durability/cache/tests.rs:29 (verify)"
+        ],
+        "why": "`project_key` hashes a deterministic domain-separated BLAKE3 digest over the projection. The test `equal_accesses_project_to_equal_keys_and_distinct_accesses_do_not` checks that equal inputs give equal keys."
+      },
+      {
+        "id": "aspen.dataspace_access_cache.projection.distinct",
+        "status": "impl+verify",
+        "markers": [
+          "crates/molten-core/src/fabric_durability/cache/mod.rs:68 (impl)",
+          "crates/molten-core/src/fabric_durability/cache/tests.rs:30 (verify)"
+        ],
+        "why": "`project_key` hashes the dataspace identity and each argument. The same test checks that a different dataspace identity gives a different key. Gap: no test changes only the arguments."
+      },
+      {
+        "id": "aspen.dataspace_access_cache.bound.configured",
+        "status": "impl+verify",
+        "markers": [
+          "crates/molten-core/src/fabric_durability/cache/mod.rs:36 (impl, Policy::new)",
+          "src/runtime/dataspace/cache/mod.rs:144 (impl, insert_or_reuse)",
+          "crates/molten-core/src/fabric_durability/cache/tests.rs:97 (verify, single_slot)",
+          "src/runtime/dataspace/cache/tests.rs:90 (verify, strict_lru test)"
+        ],
+        "why": "`Policy::new` requires a nonzero explicit capacity. `insert_or_reuse` rejects `actual_count > policy.capacity`. The tests check that the entry count stays at or below the configured capacity."
+      },
+      {
+        "id": "aspen.dataspace_access_cache.bound.full",
+        "status": "impl+verify",
+        "markers": [
+          "crates/molten-core/src/fabric_durability/cache/mod.rs:144 (impl, plan_insertion)",
+          "src/runtime/dataspace/cache/mod.rs:145 (impl, insert_or_reuse)",
+          "crates/molten-core/src/fabric_durability/cache/tests.rs:82 (verify, insertion_at_high_watermark_trims_to_low_before_insertion)",
+          "crates/molten-core/src/fabric_durability/cache/tests.rs:98 (verify, single_slot_policy_evicts_one_and_remains_bounded)"
+        ],
+        "why": "`plan_insertion` trims to the low watermark or `capacity-1` before inserting, and the shell applies the evictions. The tests check the eviction keys and that the count after insertion stays within capacity."
+      },
+      {
+        "id": "aspen.dataspace_access_cache.decision.strict_lru",
+        "status": "impl+verify",
+        "markers": [
+          "crates/molten-core/src/fabric_durability/cache/mod.rs:116 (impl, decide_promotion)",
+          "crates/molten-core/src/fabric_durability/cache/tests.rs:72 (verify)",
+          "src/runtime/dataspace/cache/tests.rs:89 (verify, strict_lru_promotes_hits_before_eviction)"
+        ],
+        "why": "At threshold 0, any access count of 0 or more returns Promote. The core test checks `threshold 0 -> Promote`. The shell test checks that a promoted hit survives eviction."
+      },
+      {
+        "id": "aspen.dataspace_access_cache.decision.fifo",
+        "status": "impl+verify",
+        "markers": [
+          "crates/molten-core/src/fabric_durability/cache/mod.rs:117 (impl)",
+          "crates/molten-core/src/fabric_durability/cache/tests.rs:73 (verify)",
+          "src/runtime/dataspace/cache/tests.rs:107 (verify, fifo_does_not_promote_hits_before_eviction)"
+        ],
+        "why": "`decide_promotion` returns Retain at `FIFO_THRESHOLD` (100). The core test checks `threshold 100 with u32::MAX -> Retain`. The shell test checks that a hit entry is still evicted first."
+      },
+      {
+        "id": "aspen.dataspace_access_cache.deferral.evicted",
+        "status": "impl+verify",
+        "markers": [
+          "src/runtime/dataspace/cache/mod.rs:86 (impl, lookup_or_load)",
+          "src/runtime/dataspace/cache/tests.rs:139 (verify, evicted_value_drops_after_the_guard_is_released)"
+        ],
+        "why": "`lookup_or_load` drops `deferred_releases` after the scope that holds the mutex guard ends. The `DropProbe` destructor checks that `try_len` succeeds, which shows the mutex was already released."
+      },
+      {
+        "id": "aspen.dataspace_access_cache.boundary.overclaim",
+        "status": "impl-only",
+        "markers": [
+          "docs/dataspace-access-cache.md:59 (impl, Claim boundary section)"
+        ],
+        "why": "The doc states that a hit proves only local store presence, not freshness or vat authority. No verify marker: there is no test or check that rejects an over-claim. I grepped src, crates, tests, tools, scripts and docs for `cache hit` and `freshness`; the only hits were the unrelated eval cache under `src/eval/parts/cache`."
+      },
+      {
+        "id": "aspen.dataspace_access_cache.verification.matrix",
+        "status": "verify-only",
+        "markers": [
+          "crates/molten-core/src/fabric_durability/cache/tests.rs:56 (capacity_watermarks_and_thresholds_fail_closed)",
+          "crates/molten-core/src/fabric_durability/cache/tests.rs:99 (single_slot)",
+          "crates/molten-core/src/fabric_durability/cache/tests.rs:118 (malformed_projection_and_eviction_order_are_denied)",
+          "src/runtime/dataspace/cache/tests.rs:194 (malformed_projection_fails_before_the_loader_runs)"
+        ],
+        "why": "These are the negative and boundary fixtures of the matrix: missing capacity, reversed watermarks, invalid threshold, single slot, and malformed projection. This is a verification scenario, so there is no impl marker. Gap: the over-claim input has no fixture."
+      },
+      {
+        "id": "dev_profiling.dependency",
+        "status": "impl+verify",
+        "markers": [
+          "flake.nix:7 (impl, pinned flux-src input)",
+          "flake.nix:504 (impl, fluxProfilerCli from same src)",
+          "docs/development-function-profiling.md:3 (impl)",
+          "tests/devfunctionprofilingboundary.rs:85 (verify, repository_uses_one_pinned_profiler_revision)",
+          "tests/devfunctionprofilingboundary.rs:96 (verify, unpinned_or_mismatched_dependency_is_denied)"
+        ],
+        "why": "The flake pins flux at revision `2a19164` and builds the CLI from that source. The tests check the Cargo/flake revision match and optional-dependency fragments, and reject branch or mismatched pins. `Cargo.toml` itself is off-limits for edits."
+      },
+      {
+        "id": "dev_profiling.build_gating",
+        "status": "impl-only",
+        "markers": [
+          "src/profiling.rs:41 (impl, no-op enable_development_profiler when feature off)",
+          "src/cli/runtime/vat.rs:11 (impl, cfg_attr timed only under profiler/profiler-disabled)",
+          "docs/development-function-profiling.md:48 (impl)"
+        ],
+        "why": "Default builds compile `enable_profiler` to a no-op, so no rings are published. `#[timed]` is added only under `profiler` or `profiler-disabled`, and `profiler-disabled` collapses it to the plain body. No verify marker: the only probe, `examples/profilerprobe.rs`, is outside the scanned roots. `build-plan.json` contains no `profiler` string, even though the archived evidence says a build plan selects `profiler-disabled`, and the flake has no release check for `profiler-disabled`."
+      },
+      {
+        "id": "dev_profiling.placement",
+        "status": "impl+verify",
+        "markers": [
+          "src/profiling.rs:34 (impl, enable_development_profiler)",
+          "src/main.rs:276 (impl, single startup call)",
+          "src/cli/runtime/vat.rs:10 (impl, shell annotation site)",
+          "docs/development-function-profiling.md:54 (impl)",
+          "tests/devfunctionprofilingboundary.rs:105 (verify, pure_cores_have_no_profiler_side_effects)",
+          "tests/devfunctionprofilingboundary.rs:117 (verify, profiler_reference_in_a_pure_core_is_denied)"
+        ],
+        "why": "The only `enable_profiler` call is at the start of the std shell's `main()`, and `#[timed]` appears only on shell functions. The tests scan `molten-core` and `aspen-core` for profiler tokens and check that a fixture containing one is rejected."
+      },
+      {
+        "id": "dev_profiling.capture",
+        "status": "impl+verify",
+        "markers": [
+          "flake.nix:505 (impl, CLI build asserts --duration/--max-mem)",
+          "docs/development-function-profiling.md:28 (impl, bounded capture workflow)",
+          "tests/devfunctionprofilingboundary.rs:125 (verify, documented_capture_is_bounded)",
+          "tests/devfunctionprofilingboundary.rs:135 (verify, unbounded_capture_command_is_denied)"
+        ],
+        "why": "The doc's capture uses the external CLI with `--duration` and `--max-mem` and opens the `.fxt` in Perfetto or magic-trace. The flake's `postInstall` checks that the CLI offers both bound flags. The tests reject a documented capture that has no bound."
+      },
+      {
+        "id": "dev_profiling.platform",
+        "status": "impl+verify",
+        "markers": [
+          "src/profiling.rs:35 (impl, cfg x86_64+linux enable)",
+          "src/profiling.rs:42 (impl, no-op on other targets)",
+          "docs/development-function-profiling.md:8 (impl)",
+          "tests/devfunctionprofilingboundary.rs:86 (verify)"
+        ],
+        "why": "Enabling is behind `cfg(all(feature=profiler, x86_64, linux))`. `repository_uses_one_pinned_profiler_revision` requires the Cargo fragments `cfg(not(all(target_arch=x86_64,target_os=linux)))` and `features=[\"disable-profiling\"]`."
+      },
+      {
+        "id": "dev_profiling.optional_features",
+        "status": "impl-only",
+        "markers": [
+          "src/profiling.rs:46 (impl, CountingAllocator only under profiler-alloc)",
+          "docs/development-function-profiling.md:39 (impl)"
+        ],
+        "why": "`CountingAllocator` becomes the global allocator only under the `profiler-alloc` feature, and `profiler-perf` is a separate opt-in. No verify marker: no scanned test checks that the default allocator stays in place or that the perf permission error is reported. I checked tests/devfunctionprofilingboundary.rs and the profiling.rs tests; `default-features = false` alone is too indirect to count."
+      },
+      {
+        "id": "dev_profiling.non_claim",
+        "status": "impl+verify",
+        "markers": [
+          "src/profiling.rs:19 (impl, admit_profiler_artifact)",
+          "docs/development-function-profiling.md:63 (impl)",
+          "src/profiling.rs:56 (verify, development_trace_is_an_observation)",
+          "src/profiling.rs:68 (verify, profiler_trace_is_denied_as_release_evidence)"
+        ],
+        "why": "`admit_profiler_artifact` rejects `.fxt` traces for the CairnReceipt, Determinism, ReleaseReadiness and Valence roles. The tests check both the accepted and rejected cases."
+      },
+      {
+        "id": "dev_profiling.verification",
+        "status": "verify-only",
+        "markers": [
+          "tests/devfunctionprofilingboundary.rs:87,97,106,118,126,136",
+          "src/profiling.rs:69"
+        ],
+        "why": "The tests cover pinned vendoring, core placement, bounded capture and evidence-role rejection, each with positive and negative cases. Gap: release stripping, platform ring publishing and allocator selection have no test in the scanned roots; that probe is in `examples/`, which is not scanned."
+      }
+    ],
+    "guard_result": "guard_probe2: no `dataspace_access_cache` or `dev_profiling` ids in the missing or dangling output; 44 `unexpected_missing` remain across all specs."
+  },
+  "MarkersReplicationDag": {
+    "summary": "All 15 assigned ids are now covered by impl+verify markers. I added 107 lines, all of them `// r[impl|verify molten.<id>]` comments, and deleted 0 lines. `git diff -U0` shows no other changes. I ran guard_probe2 from the worktree root with `--root . --baseline evidence/tracey/inherited-debt-baseline.txt` and it prints no `content_replication` or `dag_sync` lines, missing or dangling. It still reports 24 `unexpected_missing` ids in total, and those belong to sibling specs. Nothing was built, tested or formatted, and nothing is committed. `dag_sync.final_validation` already had markers and I left them alone; the two `resume_fencing` markers were stacked on top of them in src/dag_sync/tests.rs.",
+    "table": [
+      "molten.content_replication.manifest | impl+verify | impl: crates/molten-core/src/content_replication/model.rs:33, crates/molten-core/src/content_replication/validation.rs:23, src/content_replication/service/mod.rs:28, src/content_replication/records.rs:14; verify: crates/molten-core/src/content_replication/tests/edge.rs:102, src/content_replication/tests/mod.rs:223 | Manifest struct binds service/generation/epochs/profile refs/ports/policies/resources/non-claims; validate_manifest checks required ports, refs and non-claims; activate() only starts the service after manifest, authority, identity, membership and placement checks pass; canonical_manifest gives the canonical record. Tests cover a malformed manifest (missing port or non-claim \u2192 Denied) and lifecycle/non-claims failing closed.",
+      "molten.content_replication.planner | impl+verify | impl: crates/molten-core/src/content_replication/planner.rs:15, crates/molten-core/src/content_replication/identity.rs:49; verify: crates/molten-core/src/content_replication/tests/mod.rs:115, :134 | plan() is a pure function over canonical inputs producing transfers, repairs, handoffs, deferrals, pins and cleanup candidates, and identify_plan gives the plan ref. Tests check that reordered input gives the same plan, and that too few peers or fault domains defers to 'unassigned' instead of picking any peer.",
+      "molten.content_replication.receiver_driven | impl+verify | impl: crates/molten-core/src/content_replication/planner.rs:240 (reuse_or_conflict), crates/molten-core/src/content_replication/validation.rs:157 (validate_history), src/content_replication/service/execution.rs:91 (execute_transfer), src/content_replication/service/validation.rs:115 (validate_envelope), :147 (validate_verification); verify: crates/molten-core/src/content_replication/tests/mod.rs:189, crates/molten-core/src/content_replication/tests/edge.rs:3, src/content_replication/tests/mod.rs:79, :113 | Transfers only happen for planned actions, and the envelope must match operation, content and peers. A verified repeat of the same operation id is reused; a conflicting reuse is denied. Tests cover exact reuse, the ConflictingOperation error, pin\u2192transport\u2192verify\u2192store ordering, and an unsolicited operation mismatch that stores nothing.",
+      "molten.content_replication.epoch_fencing | impl+verify | impl: crates/molten-core/src/content_replication/planner.rs:74 (current_replicas), crates/molten-core/src/content_replication/identity.rs:16 (identify_operation), src/content_replication/service/validation.rs:40, :52, :116, :148; verify: crates/molten-core/src/content_replication/tests/mod.rs:155, :168, src/content_replication/tests/mod.rs:112 | Only replicas from the current generation/membership/placement epoch count toward targets, and operation ids include those epochs. The shell rejects stale placement/membership observations and stale envelopes or verifications. Tests cover stale epochs not satisfying targets, a stale target getting a handoff without stale cleanup, and a delayed old-epoch transfer that stores nothing.",
+      "molten.content_replication.retention_confidentiality | impl+verify | impl: crates/molten-core/src/content_replication/action.rs:4 (plan_cleanup), :86 (build_transfer pin_required/preserve_protected_form), crates/molten-core/src/content_replication/planner.rs:146 (has_protected_form_mismatch), src/content_replication/ports.rs:50 (RetentionPort), src/content_replication/service/execution.rs:92, :125, src/content_replication/service/validation.rs:79 (validate_pin), :96 (validate_cleanup); verify: crates/molten-core/src/content_replication/tests/edge.rs:48, :70, src/content_replication/tests/mod.rs:80, :173, :196 | A pin is acquired before transport. Cleanup needs the content to be unpinned plus explicit authority and clearance. Protected form must match and is never downgraded. Tests cover a pinned excess replica not being cleaned up, protected-form mismatch denial, pin denial blocking transport, and cleanup admission happening before the cleanup effect.",
+      "molten.content_replication.resources_failures | impl+verify | impl: crates/molten-core/src/content_replication/model.rs:68 (ResourceLimits), crates/molten-core/src/content_replication/validation.rs:71 (validate_policy), crates/molten-core/src/content_replication/planner.rs:231 (resource_available), crates/molten-core/src/content_replication/action.rs:31 (defer/QueueExhausted), crates/molten-core/src/content_replication/diagnostic.rs:1 (Issue), src/content_replication/model.rs:114 (TransferOutcome), src/content_replication/service/execution.rs:93, src/content_replication/service/validation.rs:64 (validate_resources binds generation); verify: crates/molten-core/src/content_replication/tests/edge.rs:4, :71, src/content_replication/tests/conformance_tests.rs:29, src/content_replication/tests/mod.rs:149 | Limits on concurrency, bytes, queue, timers, diagnostics and attempts are enforced. Work beyond the budget is deferred, and a full queue returns QueueExhausted. Cancelled, uncertain, unavailable and timed-out outcomes and repair exhaustion are classified explicitly. Tests cover RepairExhausted, ByteBudgetExhausted limiting transfers to one, cancel/partition/timeout/unavailable faults ending Partial, and cancellation persisting progress.",
+      "molten.content_replication.same_core | impl+verify | impl: src/content_replication/service/mod.rs:12 (ReconcilePorts), src/content_replication/conformance/mod.rs:61 (FabricTransferAdapter sim/Iroh-live), src/content_replication/multiprocess.rs:24 (DistinctProcessTransferAdapter), :144 (SimulatedDurableReplicationAdapter); verify: src/content_replication/tests/conformance_tests.rs:3, :72, tests/content_replication.rs:155 | reconcile() talks to adapters only through the port traits, and simulation, live-loopback and multiprocess adapters plug into the same ports. Tests show simulated and live-Iroh runs produce equal plan, status and decision, simulated durability goes through the same core, and multiprocess repair uses the same plan and transport contract.",
+      "molten.content_replication.final_validation | impl+verify | impl: src/content_replication/records.rs:119 (canonical_receipt denies receipts lacking full NON_CLAIMS incl. 'replica count does not prove permanent durability'); verify: src/content_replication/tests/mod.rs:150, :224, src/content_replication/tests/conformance_tests.rs:30, tests/content_replication.rs:143, :156, :167 | Covers the positive and negative suite: restart/partial resume, partition/unavailable/timeout/cancel/corruption faults, the non-claims overreach denial, and multiprocess transfer, repair and wrong-payload denial. The impl marker is on the receipt non-claim gate, which denies the permanent-durability overclaim.",
+      "molten.dag_sync.model | impl+verify | impl: crates/molten-core/src/dag_sync/model.rs:12, src/dag_sync/records.rs:16; verify: src/dag_sync/tests.rs:55, :314 | Domain-neutral node, edge, root, bounds, inventory, request, plan, response, progress and receipt types, plus canonical Preserves records. Tests check stable, domain-separated record identities and that job DAGs and artifact closures both project onto the same model.",
+      "molten.dag_sync.traversal_core | impl+verify | impl: crates/molten-core/src/dag_sync/validation.rs:11 (validate_shape), :97 (reachable_nodes), :130 (topological_order), crates/molten-core/src/dag_sync/planner.rs:11 (plan_dag_sync); verify: crates/molten-core/src/dag_sync/tests/mod.rs:96, :113, :223, :243 | Pure duplicate, unknown-edge and bounds validation; bounded visited-set traversal; deterministic topological order with cycle detection; missing-set and completion checks. Tests cover stable order and plan ref under permutation, cycle/unknown/duplicate/depth denial, and every hard bound.",
+      "molten.dag_sync.strategy_profiles | impl+verify | impl: crates/molten-core/src/dag_sync/model.rs:96 (DagSyncStrategy), crates/molten-core/src/dag_sync/validation.rs:236 (strategy_objects), crates/molten-core/src/dag_sync/identity.rs:13 (assigned_peer), :58 (identify_plan v1 includes strategy/peers/requests); verify: crates/molten-core/src/dag_sync/tests/mod.rs:142 | A closed enum of full, stem-first, leaf-only, resumable and peer-partitioned. Stem-first requests nodes before content, and peer assignment is deterministic. Strategy is part of plan identity. The test checks leaf-only content requests and that full vs stem plan refs differ.",
+      "molten.dag_sync.receiver_driven | impl+verify | impl: crates/molten-core/src/dag_sync/planner.rs:111 (admit_dag_response), src/dag_sync/service.rs:28 (run_dag_sync), :172 (validate_envelope); verify: crates/molten-core/src/dag_sync/tests/mod.rs:165, src/dag_sync/tests.rs:207 | Responses must match the epoch, generation, a requested object and the assigned peer. Duplicate, unverified, unauthorized or over-bound responses are denied, and the shell only fetches plan requests. Tests cover each denial and complete receiver-driven progress.",
+      "molten.dag_sync.content_adapter_boundary | impl+verify | impl: crates/molten-core/src/dag_sync/model.rs:118 (DagObjectRef Node vs Content), src/dag_sync/ports.rs:48 (DagContentVerificationPort), src/dag_sync/service.rs:29; verify: src/dag_sync/tests.rs:250 | Payloads travel as canonical content refs and are checked by the content-verification port before progress changes. The test shows corrupt content stores no progress and publishes no receipt.",
+      "molten.dag_sync.resume_fencing | impl+verify | impl: crates/molten-core/src/dag_sync/validation.rs:193 (validate_progress), src/dag_sync/ports.rs:58 (DagProgressPort), src/dag_sync/service.rs:30 (durable load and caller/durable mismatch denial); verify: crates/molten-core/src/dag_sync/tests/mod.rs:143, :204, :274, src/dag_sync/tests.rs:429, :565 | Resume is tied to epoch, generation, strategy, policy, roots, schemas and peers. Tests cover skipping already-verified refs, denial on root/schema/peer/epoch/policy/strategy drift, restart without refetch, and peer reassignment requiring a new epoch.",
+      "molten.dag_sync.domain_boundary | impl+verify | impl: crates/molten-core/src/dag_sync/model.rs:236 (DAG_SYNC_NON_CLAIMS), src/dag_sync/records.rs:139 (receipt requires full non-claims), src/dag_sync/domain.rs:14, :79 (job/artifact projections, incomplete closure rejected, no authority granted); verify: src/dag_sync/tests.rs:71, :315 | Receipts carry the 'no install/execution/merge/publication authority' non-claims, and projections only build graphs. Tests show a receipt without full non-claims is rejected and that projections keep their domain labels."
+    ]
+  },
+  "MarkersNickelWorld": {
+    "summary": "All 10 assigned ids now have at least one justified marker. I only added comment lines. I ran the guard_probe2 probe from the worktree root with --baseline evidence/tracey/inherited-debt-baseline.txt. None of these 10 ids is listed as unexpected_missing or dangling any more. Line numbers in flake.nix may move because siblings are editing the same file.",
+    "table": [
+      {
+        "id": "molten.nickel_toolchain.cohort",
+        "status": "impl+verify",
+        "markers": [
+          "flake.nix:138 (impl, above nickelPackage = nickel-cli.packages...default, which overrides pkgs.nickel)",
+          "flake.nix:3272 (impl) + flake.nix:3273 (verify), above the nickel-toolchain-cohort check"
+        ],
+        "justification": "flake.nix:138 is the Nix-side cohort pin: the pinned nickel-cli input (rev 1320a983\u2026) replaces pkgs.nickel for every check and the dev shell. The nickel-toolchain-cohort check is the admission guard: it asserts `nickel 1.17.0 (rev 1320a98)`, nickel-lang 2.2.0, nickel-lang-core 0.18.0, parser 0.3.0 and vector 0.2.0 in Cargo.lock, plus the flake.lock rev, and fails on any mix. This matches the archive task 'Add a guard that rejects old, mixed, floating, or ambient Nickel dependencies'."
+      },
+      {
+        "id": "molten.nickel_toolchain.boundary",
+        "status": "impl+verify",
+        "markers": [
+          "src/harness/parts/schema/p020/body.rs:20 (impl, nickel_export_json)",
+          "src/runtime/config/mod.rs:38 (impl, RuntimeStartupConfig::from_nickel_export_json)",
+          "src/runtime/config/mod.rs:129 (verify, test nickel_export_rejects_subscription_for_undeclared_actor)"
+        ],
+        "justification": "nickel_export_json uses Nickel only to evaluate and export. Its errors become MoltenError, and callers still apply Basalt contract-envelope and policy checks. from_nickel_export_json decodes the exported value with Molten serde and then runs Molten's own validate(): source language, consensus profile, bounds, and declared actors. The test shows a well-formed Nickel export still being denied by a Molten-owned check."
+      },
+      {
+        "id": "molten.nickel_toolchain.compatibility",
+        "status": "verify-only",
+        "markers": [
+          "flake.nix:3274 (verify, nickel-toolchain-cohort check)"
+        ],
+        "justification": "The check exports the valid docs/production-node-profile.ncl. It then requires these negative fixtures to fail: malformed-ref (malformed), fractional-limit (bound), unsupported-metadata and missing-required-adapter (contract), and a generated missing-import file (import). Caveat: this check has no redaction-failure fixture. The archived validation.md says redaction is covered by existing Molten redaction tests, but I did not find a Nickel-specific redaction test to mark."
+      },
+      {
+        "id": "molten.nickel_toolchain.evidence",
+        "status": "impl-only",
+        "markers": [
+          "docs/nickel-toolchain.md:3 (impl)"
+        ],
+        "justification": "This doc is the in-repo cohort record. It names the exact CLI version, upstream commit and crate versions, names the compatibility check and what its fixtures cover, and states the non-claims (no policy, runtime or release correctness). The archived results in .cairn/archive/.../evidence/validation.md cannot be marked there. No code emits Nickel cohort release evidence: grep for nickel version or rev strings found only this doc and flake.nix."
+      },
+      {
+        "id": "molten.nickel_toolchain.validation",
+        "status": "verify-only",
+        "markers": [
+          "flake.nix:3275 (verify, nickel-toolchain-cohort check)"
+        ],
+        "justification": "This follows the repo's existing pattern for validation/verification-rail requirements, which are marked # r[verify] on the change-specific Nix check (for example world_state_oracle.verification and world_operator.verification). nickel-toolchain-cohort is the relevant Nix check in this change's validation rail."
+      },
+      {
+        "id": "molten.world_snapshot.profiles",
+        "status": "impl+verify",
+        "markers": [
+          "crates/molten-core/src/world_snapshot/model.rs:22 (impl, enum SnapshotClass {Logical, Opaque})",
+          "crates/molten-core/src/world_snapshot/operation.rs:83 (impl, impl SnapshotClass: parse rejects unknown values with SnapshotIssue::UnsupportedProfile)",
+          "crates/molten-core/src/world_snapshot/tests.rs:78 (verify, complete_logical_snapshot_has_closed_restore_order)"
+        ],
+        "justification": "There are two closed profile classes, and an unknown profile is denied. The test checks that parse(\"mixed\") returns UnsupportedProfile, that a complete logical profile is classified Logical, and that it gets the logical restore plan."
+      },
+      {
+        "id": "molten.world_snapshot.logical",
+        "status": "impl+verify",
+        "markers": [
+          "crates/molten-core/src/world_snapshot/model.rs:70 (impl, LOGICAL_COMPONENTS)",
+          "crates/molten-core/src/world_snapshot/validation.rs:119 (impl, validate_components)",
+          "crates/molten-core/src/world_snapshot/tests.rs:91 (verify, missing_task_and_current_authority_fail_closed)"
+        ],
+        "justification": "LOGICAL_COMPONENTS lists the required durable-state, tasks, history, scheduler, time, entropy, effects, runtime-profile, schema, policy and artifact roots. validate_components raises MissingComponent for any that are absent. The test drops the Tasks root and asserts the verdict is Incomplete with MissingComponent(Tasks), which is exactly the spec scenario."
+      },
+      {
+        "id": "molten.world_snapshot.cohort",
+        "status": "impl+verify",
+        "markers": [
+          "crates/molten-core/src/world_snapshot/validation.rs:169 (impl, validate_cohort)",
+          "crates/molten-core/src/world_snapshot/tests.rs:105 (verify, opaque_snapshot_requires_exact_cohort_and_rejects_live_handles)"
+        ],
+        "justification": "validate_cohort compares each cohort fact the class requires. LOGICAL_COHORT_FACTS covers runtime/ABI/schema/scheduler/time/entropy/effect; OPAQUE_COHORT_FACTS covers architecture/runtime/ABI/topology/device/disk/backend. Any mismatch raises CohortMismatch and a missing fact raises MissingCohortFact. The test changes only the Architecture fact and asserts the result is Incompatible with CohortMismatch(Architecture)."
+      },
+      {
+        "id": "molten.world_promotion.non_claims",
+        "status": "impl+verify",
+        "markers": [
+          "crates/molten-core/src/world_promotion/model.rs:16 (impl, WORLD_PROMOTION_NON_CLAIMS)",
+          "src/world_promotion/records.rs:181 (impl, require_non_claims)",
+          "crates/molten-core/src/world_promotion/tests.rs:150 (verify, terminal_acknowledgment_and_abandonment_do_not_claim_exactly_once)",
+          "src/world_promotion/tests/wire.rs:25 (verify, malformed_records_and_incomplete_nonclaims_fail_closed)"
+        ],
+        "justification": "The constant separates eligibility, reservation, attempt, unknown outcome and exactly-once non-claims. Canonical records reject any incomplete non-claim set. The core test shows that only an acknowledged attempt proves external completion, that an abandoned unknown attempt does not, and that the plan keeps the exactly-once non-claim. The wire test shows that a weakened non-claim list fails canonicalization."
+      },
+      {
+        "id": "molten.world_state_oracle.behavior",
+        "status": "impl+verify",
+        "markers": [
+          "crates/molten-core/src/world_state_oracle/model/observation.rs:6 (impl, enum OracleCaseKind)",
+          "src/world_state_oracle/process.rs:68 (impl, DoltLiteProcessOracle::run_case)",
+          "tests/doltlite_oracle.rs:11 (verify, live_doltlite_oracle_covers_normalized_positive_and_negative_cases)"
+        ],
+        "justification": "OracleCaseKind lists every required behavior case: history-independent, detached read, branch isolation, compare-and-advance, reader-safe GC, exact-format reopen, serialization, stale writer and wrong format. run_case runs them against DoltLite. The live test asserts that forward and reverse mutation histories give equal backend roots, and checks the outcome of every other case. Caveat: compare-and-advance, serialization, stale-writer and wrong-format are explicitly classified Unsupported ('case-requires-reviewed-external-evidence'), not exercised live. The live test is #[ignore]: it needs the Nix-built DoltLite binary."
+      }
+    ],
+    "files_touched": [
+      "crates/molten-core/src/world_snapshot/{model.rs,operation.rs,validation.rs,tests.rs}",
+      "crates/molten-core/src/world_promotion/{model.rs,tests.rs}",
+      "src/world_promotion/{records.rs,tests/wire.rs}",
+      "crates/molten-core/src/world_state_oracle/model/observation.rs",
+      "src/world_state_oracle/process.rs",
+      "tests/doltlite_oracle.rs",
+      "flake.nix",
+      "src/harness/parts/schema/p020/body.rs",
+      "src/runtime/config/mod.rs",
+      "docs/nickel-toolchain.md"
+    ],
+    "verification": "guard_probe2 --root . --baseline evidence/tracey/inherited-debt-baseline.txt: none of the 10 ids appears in unexpected_missing or dangling. 39 unexpected_missing remain in total, all from other specs."
+  }
+}

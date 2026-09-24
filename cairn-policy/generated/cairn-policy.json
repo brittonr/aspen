@@ -5852,7 +5852,7 @@
             "extensions": [
               "md"
             ],
-            "root": "cairn/specs",
+            "root": ".cairn/specs",
             "source_kind": "accepted_specs"
           }
         ]
@@ -5886,7 +5886,7 @@
             "extensions": [
               "md"
             ],
-            "root": "cairn/specs/fabric-transport/spec.md",
+            "root": ".cairn/specs/fabric-transport/spec.md",
             "source_kind": "accepted_specs"
           }
         ]
@@ -5936,21 +5936,21 @@
             "extensions": [
               "md"
             ],
-            "root": "cairn/specs/live-artifact-binding",
+            "root": ".cairn/specs/live-artifact-binding",
             "source_kind": "accepted_specs"
           },
           {
             "extensions": [
               "md"
             ],
-            "root": "cairn/specs/semantic-operation-adoption",
+            "root": ".cairn/specs/semantic-operation-adoption",
             "source_kind": "accepted_specs"
           },
           {
             "extensions": [
               "md"
             ],
-            "root": "cairn/specs/generation-retirement",
+            "root": ".cairn/specs/generation-retirement",
             "source_kind": "accepted_specs"
           }
         ]

@@ -75,7 +75,7 @@ cargo run -- system-extension show \
 
 The fixture proves callback execution and host-contract conformance only. It does not prove consensus, durability, protocol compatibility, extension semantic correctness, or production readiness.
 
-Cairn roadmap status: active production-readiness changes live under `cairn/changes/` when present; use `cairn change list --root .` for the current active set. Accepted requirements live under `cairn/specs/`, and completed roadmap slices are archived under `cairn/archive/`. The drained/archived roadmap includes:
+Cairn roadmap status: active production-readiness changes live under `.cairn/changes/` when present; use `cairn change list --root .` for the current active set. Accepted requirements live under `.cairn/specs/`, and completed roadmap slices are archived under `.cairn/archive/` (older slices under `cairn/archive/`). The drained/archived roadmap includes:
 
 - `runtime-spine`
 - `synit-sam-runtime`

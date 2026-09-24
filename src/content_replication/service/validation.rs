@@ -37,6 +37,7 @@ pub(super) fn validate_identity(manifest: &Manifest, observation: &IdentityObser
     Ok(())
 }
 
+// r[impl molten.content_replication.epoch_fencing]
 pub(super) fn validate_membership(
     manifest: &Manifest,
     observation: &MembershipObservation,
@@ -48,6 +49,7 @@ pub(super) fn validate_membership(
     Ok(())
 }
 
+// r[impl molten.content_replication.epoch_fencing]
 pub(super) fn validate_placement(manifest: &Manifest, observation: &PlacementObservation) -> crate::error::Result<()> {
     validate_ref(&observation.observation_ref, "replication placement observation")?;
     if !observation.current
@@ -59,6 +61,7 @@ pub(super) fn validate_placement(manifest: &Manifest, observation: &PlacementObs
     Ok(())
 }
 
+// r[impl molten.content_replication.resources_failures]
 pub(super) fn validate_resources(
     manifest: &Manifest,
     plan: &Plan,
@@ -73,6 +76,7 @@ pub(super) fn validate_resources(
     Ok(())
 }
 
+// r[impl molten.content_replication.retention_confidentiality]
 pub(super) fn validate_pin(
     manifest: &Manifest,
     action: &Action,
@@ -89,6 +93,7 @@ pub(super) fn validate_pin(
     Ok(())
 }
 
+// r[impl molten.content_replication.retention_confidentiality]
 pub(super) fn validate_cleanup(
     manifest: &Manifest,
     action: &Action,
@@ -107,6 +112,8 @@ pub(super) fn validate_cleanup(
     Ok(())
 }
 
+// r[impl molten.content_replication.receiver_driven]
+// r[impl molten.content_replication.epoch_fencing]
 pub(super) fn validate_envelope(
     manifest: &Manifest,
     action: &Action,
@@ -137,6 +144,8 @@ pub(super) fn validate_envelope(
     Ok(())
 }
 
+// r[impl molten.content_replication.receiver_driven]
+// r[impl molten.content_replication.epoch_fencing]
 pub(super) fn validate_verification(
     manifest: &Manifest,
     action: &Action,

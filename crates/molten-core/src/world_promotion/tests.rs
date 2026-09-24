@@ -147,6 +147,7 @@ fn uncertain_publication_requires_readback_before_dispatch_eligibility() {
     assert!(!conflicting.dispatch_eligible);
 }
 
+// r[verify molten.world_promotion.non_claims]
 #[test]
 fn terminal_acknowledgment_and_abandonment_do_not_claim_exactly_once() {
     let plan = plan_world_promotion(&promotion_request()).expect("promotion plan");

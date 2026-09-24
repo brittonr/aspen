@@ -257,6 +257,7 @@ pub struct ExecutionReferenceSet {
     pub resource: ResourceRef,
 }
 
+// r[impl molten.authority.nominal_references.artifact_core.distinct]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArtifactReferenceSet {
     pub artifact: ArtifactRef,
@@ -294,10 +295,12 @@ pub fn decide_authority(
     }
 }
 
+// r[impl molten.authority.nominal_references.evidence_core.replay]
 pub fn historical_replay_is_evidence_only(references: &HistoricalReferenceSet) -> bool {
     !references.current_authority
 }
 
+// r[impl molten.authority.nominal_references.types.same_domain]
 /// Requires a session-domain reference.
 ///
 /// ```compile_fail
@@ -402,6 +405,7 @@ mod tests {
         }
     }
 
+    // r[verify molten.authority.nominal_references.types.same_domain]
     #[test]
     fn same_domain_values_are_admitted_and_accessible() {
         let session = SessionRef::new("session-a").expect("session");
@@ -425,6 +429,7 @@ mod tests {
         assert!(matches!(PolicyRef::new(uppercase), Err(ReferenceError::InvalidSpelling { .. })));
     }
 
+    // r[verify molten.authority.nominal_references.wire_boundary.valid]
     #[test]
     fn wire_admission_preserves_exact_external_text() {
         let AdmittedReference::Artifact(admitted) = admit_reference(ReferenceRole::Artifact, HASH).expect("artifact")
@@ -434,6 +439,7 @@ mod tests {
         assert_eq!(admitted.as_str().as_bytes(), HASH.as_bytes());
     }
 
+    // r[verify molten.authority.nominal_references.wire_boundary.invalid]
     #[test]
     fn wire_admission_rejects_unknown_roles_and_role_grammar_mismatch() {
         assert!(matches!(ReferenceRole::parse("transport-ticket"), Err(ReferenceError::UnknownRole { .. })));
@@ -467,6 +473,7 @@ mod tests {
         assert_eq!(decide_authority(&supplied, &expected, true, false, false), AuthorityDecision::Deny);
     }
 
+    // r[verify molten.authority.nominal_references.artifact_core.distinct]
     #[test]
     fn artifact_evidence_operation_and_receipt_roles_remain_distinct() {
         let links = ArtifactReferenceSet {
@@ -481,6 +488,7 @@ mod tests {
         assert_eq!(links.receipt.domain(), "receipt");
     }
 
+    // r[verify molten.authority.nominal_references.evidence_core.replay]
     #[test]
     fn historical_replay_never_mints_current_authority() {
         let historical = HistoricalReferenceSet {

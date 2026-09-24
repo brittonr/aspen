@@ -3,6 +3,7 @@ pub const ORACLE_COMPARISON_SCHEMA: &str = "molten.semantic-state-oracle-compari
 pub const ORACLE_PROJECTION_SCHEMA: &str = "molten.semantic-state-oracle-projection.v1";
 pub const REQUIRED_ORACLE_NON_CLAIM_COUNT: usize = 7;
 
+// r[impl molten.world_state_oracle.behavior]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum OracleCaseKind {
     HistoryIndependentState,

@@ -13,7 +13,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
-const REQUIREMENT_ROOT: &str = "cairn/specs";
+const REQUIREMENT_ROOT: &str = ".cairn/specs";
 const REQUIREMENT_EXTENSION: &str = "md";
 const OPTION_ROOT: &str = "--root";
 const OPTION_BASELINE: &str = "--baseline";
@@ -189,6 +189,9 @@ fn read_baseline(path: &Path) -> Result<Vec<String>, String> {
 
 fn read_definitions(root: &Path) -> Result<BTreeMap<String, Vec<RequirementDefinition>>, String> {
     let requirement_root = root.join(REQUIREMENT_ROOT);
+    if !requirement_root.is_dir() {
+        return Err(format!("requirement root {} is missing", requirement_root.display()));
+    }
     let mut files = Vec::new();
     walk_files(&requirement_root, &mut files)?;
     files.retain(|path| path.extension().and_then(|extension| extension.to_str()) == Some(REQUIREMENT_EXTENSION));
@@ -271,8 +274,8 @@ mod tests {
         // r[verify molten.project.inherited_tracey_classification.fixtures]
         let baseline = vec!["molten.beta.two".to_string(), "molten.alpha.one".to_string()];
         let definitions = BTreeMap::from([
-            ("molten.alpha.one".to_string(), vec![location("cairn/specs/zeta/spec.md", 1)]),
-            ("molten.beta.two".to_string(), vec![location("cairn/specs/alpha/spec.md", 2)]),
+            ("molten.alpha.one".to_string(), vec![location(".cairn/specs/zeta/spec.md", 1)]),
+            ("molten.beta.two".to_string(), vec![location(".cairn/specs/alpha/spec.md", 2)]),
         ]);
         let rows = classify_baseline(&baseline, &definitions).expect("valid inventory");
         assert_eq!(rows[0].requirement_id, "molten.beta.two");
@@ -280,9 +283,9 @@ mod tests {
         assert!(rows.iter().all(|row| row.class == CLASS_ACCEPTED_IMPLEMENTATION_UNESTABLISHED));
         let report = render_report(&rows);
         assert!(report.starts_with(REPORT_HEADER));
-        assert!(report.contains("cairn/specs/alpha/spec.md\tbeta"));
+        assert!(report.contains(".cairn/specs/alpha/spec.md\tbeta"));
         let summary = render_summary(&rows);
-        assert!(summary.contains("| 1 | `cairn/specs/alpha/spec.md` |"));
+        assert!(summary.contains("| 1 | `.cairn/specs/alpha/spec.md` |"));
         assert!(summary.contains("| 1 | `beta` |"));
     }
 
@@ -292,8 +295,8 @@ mod tests {
         // r[verify molten.project.inherited_tracey_classification.fixtures]
         let baseline = vec!["molten.alpha.duplicate".to_string(), "molten.beta.missing".to_string()];
         let definitions = BTreeMap::from([("molten.alpha.duplicate".to_string(), vec![
-            location("cairn/specs/alpha/spec.md", 1),
-            location("cairn/specs/beta/spec.md", 2),
+            location(".cairn/specs/alpha/spec.md", 1),
+            location(".cairn/specs/beta/spec.md", 2),
         ])]);
         let issues = classify_baseline(&baseline, &definitions).expect_err("invalid inventory");
         assert!(issues.iter().any(|issue| issue.contains("duplicate accepted definitions")));

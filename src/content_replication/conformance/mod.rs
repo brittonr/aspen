@@ -58,6 +58,7 @@ enum Mechanism {
     },
 }
 
+// r[impl molten.content_replication.same_core]
 pub struct FabricTransferAdapter {
     mechanism: Mechanism,
     manifest_refs: BTreeMap<String, String>,

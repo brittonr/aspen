@@ -9,6 +9,7 @@ pub struct ActivationPorts<'a> {
     pub placement: &'a mut dyn PlacementPort,
 }
 
+// r[impl molten.content_replication.same_core]
 pub struct ReconcilePorts<'a> {
     pub authority: &'a mut dyn AuthorityPort,
     pub identity: &'a mut dyn IdentityPort,
@@ -24,6 +25,7 @@ pub struct ReconcilePorts<'a> {
     pub receipts: &'a mut dyn ReceiptPort,
 }
 
+// r[impl molten.content_replication.manifest]
 pub fn activate(manifest: Manifest, ports: ActivationPorts<'_>) -> crate::error::Result<ServiceInstance> {
     let issues = validate_manifest(&manifest);
     if !issues.is_empty() {

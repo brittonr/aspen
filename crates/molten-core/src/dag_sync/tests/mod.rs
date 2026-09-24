@@ -93,6 +93,7 @@ fn progress(request: &DagSyncRequest, verified: Vec<DagObjectRef>) -> DagSyncPro
     }
 }
 
+// r[verify molten.dag_sync.traversal_core]
 #[test]
 fn stable_topology_and_plan_identity_ignore_input_order() {
     let first = plan_dag_sync(&graph(), &request(DagSyncStrategy::StemFirst)).plan.expect("plan");
@@ -109,6 +110,7 @@ fn stable_topology_and_plan_identity_ignore_input_order() {
     assert_eq!(first.topological_nodes.last(), Some(&node_ref('d')));
 }
 
+// r[verify molten.dag_sync.traversal_core]
 #[test]
 fn cycles_unknown_edges_duplicates_and_bounds_fail_closed() {
     let mut cycle = graph();
@@ -137,6 +139,8 @@ fn cycles_unknown_edges_duplicates_and_bounds_fail_closed() {
     assert_eq!(plan_dag_sync(&graph(), &bounded).issues, vec![DagSyncIssue::DepthBoundExceeded]);
 }
 
+// r[verify molten.dag_sync.strategy_profiles]
+// r[verify molten.dag_sync.resume_fencing]
 #[test]
 fn strategies_are_closed_deterministic_and_resumable() {
     let full = plan_dag_sync(&graph(), &request(DagSyncStrategy::Full)).plan.expect("full");
@@ -158,6 +162,7 @@ fn strategies_are_closed_deterministic_and_resumable() {
     assert_eq!(plan_dag_sync(&graph(), &resume).issues, vec![DagSyncIssue::ProgressGenerationMismatch]);
 }
 
+// r[verify molten.dag_sync.receiver_driven]
 #[test]
 fn peer_partition_and_response_admission_are_generation_fenced() {
     let plan = plan_dag_sync(&graph(), &request(DagSyncStrategy::PeerPartitioned)).plan.expect("partitioned plan");
@@ -196,6 +201,7 @@ fn peer_partition_and_response_admission_are_generation_fenced() {
     assert_eq!(admit_dag_response(&plan, &progress, &stale), Err(DagSyncIssue::ResponseGenerationMismatch));
 }
 
+// r[verify molten.dag_sync.resume_fencing]
 #[test]
 fn resume_context_rejects_root_schema_and_peer_drift() {
     let mut request = request(DagSyncStrategy::PeerPartitioned);
@@ -214,6 +220,7 @@ fn resume_context_rejects_root_schema_and_peer_drift() {
     assert_eq!(plan_dag_sync(&graph(), &peer_drift).issues, vec![DagSyncIssue::ProgressPeerAssignmentMismatch]);
 }
 
+// r[verify molten.dag_sync.traversal_core]
 #[test]
 fn bounded_input_permutations_preserve_plan_identity() {
     let graph = graph();
@@ -233,6 +240,7 @@ fn bounded_input_permutations_preserve_plan_identity() {
     }
 }
 
+// r[verify molten.dag_sync.traversal_core]
 #[test]
 fn every_hard_bound_and_reference_spelling_fails_closed() {
     let mut nodes = request(DagSyncStrategy::Full);
@@ -263,6 +271,7 @@ fn every_hard_bound_and_reference_spelling_fails_closed() {
     );
 }
 
+// r[verify molten.dag_sync.resume_fencing]
 #[test]
 fn stale_resume_epoch_policy_strategy_and_object_fail_closed() {
     let mut resume = request(DagSyncStrategy::Resumable);

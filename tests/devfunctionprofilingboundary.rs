@@ -82,6 +82,9 @@ fn collect_rust_files(root: &Path, files: &mut Vec<(String, String)>) {
     }
 }
 
+// r[verify dev_profiling.dependency]
+// r[verify dev_profiling.platform]
+// r[verify dev_profiling.verification]
 #[test]
 fn repository_uses_one_pinned_profiler_revision() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -90,6 +93,8 @@ fn repository_uses_one_pinned_profiler_revision() {
     assert_eq!(dependency_issues(&cargo_manifest, &flake), Vec::<&str>::new());
 }
 
+// r[verify dev_profiling.dependency]
+// r[verify dev_profiling.verification]
 #[test]
 fn unpinned_or_mismatched_dependency_is_denied() {
     let unpinned = "flux-profiler = { git = \"https://github.com/gattaca-com/flux\", branch = \"main\" }";
@@ -97,6 +102,8 @@ fn unpinned_or_mismatched_dependency_is_denied() {
     assert!(!dependency_issues(unpinned, mismatched_flake).is_empty());
 }
 
+// r[verify dev_profiling.placement]
+// r[verify dev_profiling.verification]
 #[test]
 fn pure_cores_have_no_profiler_side_effects() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -107,12 +114,16 @@ fn pure_cores_have_no_profiler_side_effects() {
     assert_eq!(core_placement_issues(&borrowed_files), Vec::<String>::new());
 }
 
+// r[verify dev_profiling.placement]
+// r[verify dev_profiling.verification]
 #[test]
 fn profiler_reference_in_a_pure_core_is_denied() {
     let fixture = [("crates/molten-core/src/bad.rs", "#[timed] fn transition() {}")];
     assert_eq!(core_placement_issues(&fixture).len(), 1);
 }
 
+// r[verify dev_profiling.capture]
+// r[verify dev_profiling.verification]
 #[test]
 fn documented_capture_is_bounded() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -121,6 +132,8 @@ fn documented_capture_is_bounded() {
     assert_eq!(capture_command_issues(&document), Vec::<String>::new());
 }
 
+// r[verify dev_profiling.capture]
+// r[verify dev_profiling.verification]
 #[test]
 fn unbounded_capture_command_is_denied() {
     let fixture = "```sh\nflux-profiler --out target/unbounded.fxt\n```";

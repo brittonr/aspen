@@ -871,8 +871,8 @@ fn render_context_profile_summary(expansion: &molten::operator_context_profile::
 
 fn collect_spec_sources(root: &std::path::Path) -> Outcome<Vec<molten::requirement_traceability::SpecSource>> {
     let mut sources = Vec::new();
-    collect_specs_under(&root.join("cairn/specs"), false, &mut sources)?;
-    collect_specs_under(&root.join("cairn/changes"), true, &mut sources)?;
+    collect_specs_under(&root.join(".cairn/specs"), false, &mut sources)?;
+    collect_specs_under(&root.join(".cairn/changes"), true, &mut sources)?;
     Ok(sources)
 }
 

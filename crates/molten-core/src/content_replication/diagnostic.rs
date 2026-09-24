@@ -1,3 +1,4 @@
+// r[impl molten.content_replication.resources_failures]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Issue {
     InvalidManifest,

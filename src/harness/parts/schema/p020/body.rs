@@ -17,6 +17,7 @@ fn nickel_string(value: &str) -> String {
     escaped
 }
 
+// r[impl molten.nickel_toolchain.boundary]
 fn nickel_export_json(source: &str) -> Result<String> {
     let mut context = nickel_lang::Context::new();
     let expression = context.eval_deep_for_export(source).map_err(nickel_error)?;

@@ -13,6 +13,7 @@ pub const MAX_WORLD_PROMOTION_INTENTS: usize = 256;
 pub const MAX_WORLD_PROMOTION_PREREQUISITES: u32 = 8;
 pub const MAX_WORLD_PROMOTION_TRANSACTION_OPERATIONS: u32 = 257;
 pub const MAX_WORLD_PROMOTION_DIAGNOSTICS: usize = 128;
+// r[impl molten.world_promotion.non_claims]
 pub const WORLD_PROMOTION_NON_CLAIMS: &[&str] = &[
     "promotion commits local eligibility, not external effect completion",
     "a reservation does not prove dispatch or acknowledgment",

@@ -8,6 +8,9 @@ The Rust types prevent selected local category substitutions after admission.
 
 ## Inventory
 
+<!-- r[impl molten.authority.nominal_references.inventory] -->
+<!-- r[impl molten.authority.nominal_references.inventory.complete] -->
+
 | Wire role | Rust alias | Family | Migrated core scopes | Wire status |
 |---|---|---|---|---|
 | principal | `PrincipalRef` | entity | authority holder | unchanged Preserves string |
@@ -82,6 +85,9 @@ Do not wrap display text or add a generic port for reference conversion.
 Reference conversion is pure internal logic.
 
 ## Non-claims
+
+<!-- r[impl molten.authority.nominal_references.docs] -->
+<!-- r[impl molten.authority.nominal_references.final_checks] -->
 
 A typed reference proves only local category separation and checked syntax.
 It does not prove current authority, freshness, evidence truth, transport identity, semantic equivalence, runtime correctness, or release eligibility.

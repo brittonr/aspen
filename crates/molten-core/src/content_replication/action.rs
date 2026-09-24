@@ -1,6 +1,7 @@
 use super::*;
 
 impl super::planner::PlanningState<'_> {
+    // r[impl molten.content_replication.retention_confidentiality]
     pub(super) fn plan_cleanup(
         &mut self,
         content: &ReplicaRule,
@@ -27,6 +28,7 @@ impl super::planner::PlanningState<'_> {
         Ok(())
     }
 
+    // r[impl molten.content_replication.resources_failures]
     pub(super) fn defer(&mut self, content: &ReplicaRule, issue: Issue) -> Result<(), Issue> {
         self.issues.insert(issue);
         self.deferred.insert(content.content_ref.clone());
@@ -81,6 +83,7 @@ pub(super) struct TransferBuild<'a> {
     pub operation_id: String,
 }
 
+// r[impl molten.content_replication.retention_confidentiality]
 pub(super) fn build_transfer(input: TransferBuild<'_>) -> Result<Action, Issue> {
     Ok(Action {
         action_id: identify_action(&input.operation_id, input.kind)?,

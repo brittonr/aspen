@@ -19,6 +19,7 @@ pub const SNAPSHOT_RESTORE_PLAN_SCHEMA: &str = "molten.world-snapshot.restore-pl
 pub const SNAPSHOT_CLONE_PLAN_SCHEMA: &str = "molten.world-snapshot.clone-plan.v1";
 pub const SNAPSHOT_RECEIPT_SCHEMA: &str = "molten.world-snapshot.receipt.v1";
 
+// r[impl molten.world_snapshot.profiles]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SnapshotClass {
     Logical,
@@ -66,6 +67,7 @@ impl SnapshotComponentKind {
     }
 }
 
+// r[impl molten.world_snapshot.logical]
 pub const LOGICAL_COMPONENTS: &[SnapshotComponentKind] = &[
     SnapshotComponentKind::Artifact,
     SnapshotComponentKind::Schema,

@@ -52,6 +52,7 @@ fn graph() -> DagGraph {
     }
 }
 
+// r[verify molten.dag_sync.model]
 #[test]
 fn canonical_records_are_stable_and_domain_separated() {
     let graph = graph();
@@ -67,6 +68,7 @@ fn canonical_records_are_stable_and_domain_separated() {
     assert_ne!(root_record.record_ref, request_record.record_ref);
 }
 
+// r[verify molten.dag_sync.domain_boundary]
 #[test]
 fn receipt_requires_complete_non_claims() {
     let mut receipt = DagSyncReceipt {
@@ -202,6 +204,7 @@ impl DagReceiptPort for Receipts {
     }
 }
 
+// r[verify molten.dag_sync.receiver_driven]
 #[test]
 fn receiver_driven_shell_persists_each_verified_object_and_receipt_last() {
     let events = Rc::new(RefCell::new(Vec::new()));
@@ -244,6 +247,7 @@ fn receiver_driven_shell_persists_each_verified_object_and_receipt_last() {
     assert!(!status.evidence_refs.is_empty());
 }
 
+// r[verify molten.dag_sync.content_adapter_boundary]
 #[test]
 fn deferral_and_corruption_never_publish_false_completion() {
     let events = Rc::new(RefCell::new(Vec::new()));
@@ -307,6 +311,8 @@ fn deferral_and_corruption_never_publish_false_completion() {
     assert_eq!(receipts.count, 0);
 }
 
+// r[verify molten.dag_sync.model]
+// r[verify molten.dag_sync.domain_boundary]
 #[test]
 fn job_and_artifact_projections_preserve_domain_boundaries() {
     let first_node = crate::workload::JobNode {
@@ -420,6 +426,7 @@ fn same_core_simulation_and_live_iroh_loopback_agree_on_canonical_outcome() {
     assert_eq!(simulated.canonical_receipt.bytes, live.canonical_receipt.bytes);
 }
 
+// r[verify molten.dag_sync.resume_fencing]
 // r[verify molten.dag_sync.final_validation]
 #[test]
 fn partitioned_progress_resumes_after_restart_without_repeating_verified_refs() {
@@ -555,6 +562,7 @@ impl DagAuthorityPort for DeniedAuthority {
     }
 }
 
+// r[verify molten.dag_sync.resume_fencing]
 // r[verify molten.dag_sync.final_validation]
 #[test]
 fn peer_reassignment_requires_a_new_epoch_and_discards_old_progress() {

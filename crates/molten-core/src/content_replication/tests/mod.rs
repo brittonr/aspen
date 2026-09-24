@@ -112,6 +112,7 @@ fn input() -> ReconcileInput {
     }
 }
 
+// r[verify molten.content_replication.planner]
 #[test]
 fn stable_placement_is_receiver_driven_and_fault_domain_aware() {
     let first = plan(&input()).expect("first plan");
@@ -130,6 +131,7 @@ fn stable_placement_is_receiver_driven_and_fault_domain_aware() {
     assert!(action.preserve_protected_form);
 }
 
+// r[verify molten.content_replication.planner]
 #[test]
 fn insufficient_peers_and_fault_domains_defer_without_ambient_targets() {
     let mut insufficient = input();
@@ -150,6 +152,7 @@ fn insufficient_peers_and_fault_domains_defer_without_ambient_targets() {
     assert!(result.issues.contains(&Issue::InsufficientFaultDomains));
 }
 
+// r[verify molten.content_replication.epoch_fencing]
 #[test]
 fn stale_epochs_never_satisfy_current_targets() {
     let mut stale = input();
@@ -162,6 +165,7 @@ fn stale_epochs_never_satisfy_current_targets() {
     }));
 }
 
+// r[verify molten.content_replication.epoch_fencing]
 #[test]
 fn stale_target_handoffs_without_authorizing_stale_cleanup() {
     let mut handoff = input();
@@ -182,6 +186,7 @@ fn stale_target_handoffs_without_authorizing_stale_cleanup() {
     assert!(!stable.actions.iter().any(|action| action.kind == ActionKind::Cleanup));
 }
 
+// r[verify molten.content_replication.receiver_driven]
 #[test]
 fn corrupt_replica_repairs_and_exact_terminal_operation_reuses() {
     let mut corrupt = input();

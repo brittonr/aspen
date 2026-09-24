@@ -30,6 +30,7 @@ pub const NON_CLAIMS: &[&str] = &[
     "cleanup planning does not grant deletion authority",
 ];
 
+// r[impl molten.content_replication.manifest]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Manifest {
     pub service_id: String,
@@ -64,6 +65,7 @@ pub struct RepairPolicy {
     pub cleanup_after_handoff: bool,
 }
 
+// r[impl molten.content_replication.resources_failures]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResourceLimits {
     pub max_concurrent_transfers: usize,

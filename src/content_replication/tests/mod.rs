@@ -76,6 +76,8 @@ fn active(manifest: Manifest, facts: &mut FactPorts) -> ServiceInstance {
     activate(manifest, facts.activation()).expect("active replication service")
 }
 
+// r[verify molten.content_replication.receiver_driven]
+// r[verify molten.content_replication.retention_confidentiality]
 #[test]
 fn receiver_driven_reconcile_pins_verifies_persists_and_receipts_last() {
     let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
@@ -107,6 +109,8 @@ fn receiver_driven_reconcile_pins_verifies_persists_and_receipts_last() {
     assert_eq!(events.last(), Some(&"publish-receipt"));
 }
 
+// r[verify molten.content_replication.epoch_fencing]
+// r[verify molten.content_replication.receiver_driven]
 #[test]
 fn current_authority_and_placement_deny_before_transfer_effects() {
     let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
@@ -142,6 +146,8 @@ fn current_authority_and_placement_deny_before_transfer_effects() {
     assert!(effects.durable.stored.is_empty());
 }
 
+// r[verify molten.content_replication.resources_failures]
+// r[verify molten.content_replication.final_validation]
 #[test]
 fn cancellation_persists_partial_progress_and_restart_reconciles() {
     let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
@@ -164,6 +170,7 @@ fn cancellation_persists_partial_progress_and_restart_reconciles() {
     assert_eq!(complete.receipt.operations.last().expect("retry").attempt, 2);
 }
 
+// r[verify molten.content_replication.retention_confidentiality]
 #[test]
 fn retention_pin_denial_and_corrupt_envelope_never_advance_state() {
     let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
@@ -186,6 +193,7 @@ fn retention_pin_denial_and_corrupt_envelope_never_advance_state() {
     assert_eq!(effects.receipts.count, 0);
 }
 
+// r[verify molten.content_replication.retention_confidentiality]
 #[test]
 fn cleanup_requires_explicit_clearance_and_does_not_use_transport() {
     let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
@@ -212,6 +220,8 @@ fn cleanup_requires_explicit_clearance_and_does_not_use_transport() {
     assert!(admission < cleanup);
 }
 
+// r[verify molten.content_replication.manifest]
+// r[verify molten.content_replication.final_validation]
 #[test]
 fn lifecycle_and_canonical_nonclaims_fail_closed() {
     let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));

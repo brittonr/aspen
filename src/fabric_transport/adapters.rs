@@ -206,6 +206,7 @@ impl IrohTransportAdapter {
         Ok(canonical)
     }
 
+    // r[impl molten.modularity.fabric_boundary.adapters.transport_error]
     // r[impl molten.fabric_transport.live_sim_parity]
     // r[impl molten.fabric_transport.flow_control]
     pub async fn live_loopback_frame(
@@ -277,6 +278,7 @@ impl IrohTransportAdapter {
     }
 }
 
+// r[impl molten.modularity.fabric_boundary.adapters.transport_error]
 impl TransportCommandShell for IrohTransportAdapter {
     fn profile_id(&self) -> &str {
         &self.profile.profile.profile_id

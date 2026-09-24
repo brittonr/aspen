@@ -392,6 +392,8 @@ fn split_views_weak_labels_suspicion_and_capacity_fail_closed() {
     );
 }
 
+// r[verify molten.modularity.fabric_boundary.core.plan]
+// r[verify molten.modularity.fabric_boundary.validation]
 // r[verify molten.fabric_membership.recruitment]
 // r[verify molten.fabric_membership.fencing]
 #[test]

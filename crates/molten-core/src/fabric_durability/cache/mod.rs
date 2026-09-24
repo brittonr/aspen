@@ -33,6 +33,7 @@ pub struct Policy {
 impl Policy {
     // r[impl aspen.dataspace_access_cache.bound]
     // r[impl aspen.dataspace_access_cache.decision]
+    // r[impl aspen.dataspace_access_cache.bound.configured]
     pub fn new(capacity: u32, high_watermark: u32, low_watermark: u32, promotion_threshold: u8) -> Result<Self, Issue> {
         if capacity == 0 {
             return Err(Issue::MissingCapacity);
@@ -63,6 +64,8 @@ pub struct AccessProjection<'a> {
 }
 
 // r[impl aspen.dataspace_access_cache.projection]
+// r[impl aspen.dataspace_access_cache.projection.equal]
+// r[impl aspen.dataspace_access_cache.projection.distinct]
 pub fn project_key(input: &AccessProjection<'_>) -> Result<String, Issue> {
     validate_projection(input)?;
     let mut hasher = blake3::Hasher::new_derive_key(KEY_CONTEXT);
@@ -110,6 +113,8 @@ pub enum Promotion {
 }
 
 // r[impl aspen.dataspace_access_cache.decision]
+// r[impl aspen.dataspace_access_cache.decision.strict_lru]
+// r[impl aspen.dataspace_access_cache.decision.fifo]
 pub fn decide_promotion(policy: Policy, accesses_since_promotion: u32) -> Promotion {
     if policy.promotion_threshold == FIFO_THRESHOLD {
         return Promotion::Retain;
@@ -136,6 +141,7 @@ pub struct InsertionPlan {
 
 // r[impl aspen.dataspace_access_cache.decision]
 // r[impl aspen.dataspace_access_cache.deferral]
+// r[impl aspen.dataspace_access_cache.bound.full]
 pub fn plan_insertion(input: &InsertionInput<'_>) -> Result<InsertionPlan, Issue> {
     if input.active_count > input.policy.capacity {
         return Err(Issue::ActiveCountExceedsCapacity);

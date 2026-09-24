@@ -1,5 +1,5 @@
 {
-  "accepted_specification": "cairn/specs/runtime-spine/spec.md",
+  "accepted_specification": ".cairn/specs/runtime-spine/spec.md",
   "base_revision": "80fbe0a87ef7b8248b90ef4357eed152fe2cc037",
   "baseline_after": 1943,
   "baseline_before": 1956,

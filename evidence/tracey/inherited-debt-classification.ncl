@@ -53,9 +53,9 @@ let metadata | ClassificationMetadata = {
   },
   inventory = {
     path = "evidence/tracey/inherited-debt-classification.tsv",
-    blake3 = "0d0b2f33c9414d9d993eb314604f97a877be9fa7aeaff4bb28e71732a035d0fc",
+    blake3 = "a6c018160bf3586a3097bbac3f337e204f96efc7ef0f0231a3f99135af744d61",
     summary_path = "evidence/tracey/inherited-debt-classification.md",
-    summary_blake3 = "38f676813c4d388cdf1187508c18d4697fa714551c4d650f2bb00453c1a8a107",
+    summary_blake3 = "9747a3cf303ba2b4935d4f12956314b51d37a62ce2f2e6f42d90fdd36503a4c3",
     entries = 1924,
     specification_groups = 35,
     source_area_groups = 107,
@@ -94,7 +94,7 @@ let metadata | ClassificationMetadata = {
     {
       old_requirement_id = "molten.effects.property_tests",
       new_requirement_id = "molten.effects.handle_scope_property_tests",
-      accepted_specification = "cairn/specs/explicit-effect-handle-scoping/spec.md",
+      accepted_specification = ".cairn/specs/explicit-effect-handle-scoping/spec.md",
       preserved_archives = [
         "cairn/archive/2026-06-12-explicit-effect-handle-scoping",
         "cairn/archive/2026-06-13-unison-effect-handlers",

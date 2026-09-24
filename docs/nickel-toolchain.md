@@ -1,5 +1,7 @@
 # Nickel toolchain cohort
 
+r[impl molten.nickel_toolchain.evidence]
+
 Molten uses one reviewed Nickel cohort for embedded and command-line evaluation.
 
 The cohort is:

@@ -4,6 +4,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/f9d8b65950353691ab56561e7c73d2e1063d810b";
     nickel-cli.url = "github:tweag/nickel/1320a983e6c3d1e2fb53dd2464b084b4903b1426";
+    # r[impl dev_profiling.dependency]
     flux-src = {
       url = "github:gattaca-com/flux/2a1916465ae6649aebef3758233cfea98e5d33db";
       flake = false;
@@ -134,6 +135,7 @@
           overlays = [ (import rust-overlay) ];
         };
 
+        # r[impl molten.nickel_toolchain.cohort]
         nickelPackage = nickel-cli.packages.${system}.default;
         pkgs = pkgsBase // {
           nickel = nickelPackage;
@@ -500,6 +502,8 @@
           cargo = rustToolchain;
           rustc = rustToolchain;
         };
+        # r[impl dev_profiling.dependency]
+        # r[impl dev_profiling.capture]
         fluxProfilerCli =
           if system == "x86_64-linux" then
             fluxProfilerRustPlatform.buildRustPackage {
@@ -3145,13 +3149,13 @@
                 }
                 ''
                   set -euo pipefail
-                  mkdir -p "$out" fixture/cairn/changes/traceability/specs/testing-harness fixture/tests
+                  mkdir -p "$out" fixture/.cairn/changes/traceability/specs/testing-harness fixture/tests
                   {
                     printf '%s\n' '## ADDED Requirements'
                     printf '\n'
                     printf '%s\n' '### Requirement: Traceability fixture'
                     printf '%s\n' 'r[molten.testing.traceability.fixture] Molten MUST bind positive and negative coverage in this fixture.'
-                  } > fixture/cairn/changes/traceability/specs/testing-harness/spec.md
+                  } > fixture/.cairn/changes/traceability/specs/testing-harness/spec.md
                   touch fixture/tests/coverage.rs
                   artifact_ref=blake3:8f5174292fe31f8fc364dc8f49560b21581f2cf01e54ae3fe8820c6d90d62f65
                   positive='molten.testing.traceability.fixture|positive|tests/coverage.rs|cargo test coverage|'
@@ -3176,6 +3180,7 @@
                   fi
                 '';
 
+            # r[verify molten.authority.nominal_references.inventory.complete]
             nominal-reference-domains =
               pkgs.runCommand "molten-nominal-reference-domains"
                 {
@@ -3211,6 +3216,10 @@
                   touch "$out"
                 '';
 
+            # r[impl molten.modularity.fabric_boundary.enforcement.adapter_trait]
+            # r[impl molten.modularity.fabric_boundary.enforcement.raw_error]
+            # r[impl molten.modularity.fabric_boundary.enforcement.construction]
+            # r[verify molten.modularity.fabric_boundary.core]
             fabric-port-boundaries =
               pkgs.runCommand "molten-fabric-port-boundaries"
                 {
@@ -3296,6 +3305,10 @@
                   touch "$out"
                 '';
 
+            # r[impl molten.nickel_toolchain.cohort]
+            # r[verify molten.nickel_toolchain.cohort]
+            # r[verify molten.nickel_toolchain.compatibility]
+            # r[verify molten.nickel_toolchain.validation]
             nickel-toolchain-cohort =
               pkgs.runCommand "molten-nickel-toolchain-cohort"
                 {

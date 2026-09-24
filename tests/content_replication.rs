@@ -140,6 +140,7 @@ fn run_action(label: &str, manifest: &Manifest, action: &Action) -> TransferEnve
     envelope
 }
 
+// r[verify molten.content_replication.final_validation]
 #[test]
 fn multiprocess_replication_moves_exact_content_under_operation_identity() {
     let manifest = manifest();
@@ -151,6 +152,8 @@ fn multiprocess_replication_moves_exact_content_under_operation_identity() {
     assert_eq!(envelope.encoded_bytes, manifest.contents[0].encoded_bytes);
 }
 
+// r[verify molten.content_replication.same_core]
+// r[verify molten.content_replication.final_validation]
 #[test]
 fn multiprocess_repair_uses_the_same_receiver_plan_and_transport_contract() {
     let manifest = manifest();
@@ -161,6 +164,7 @@ fn multiprocess_repair_uses_the_same_receiver_plan_and_transport_contract() {
     assert!(envelope.protected);
 }
 
+// r[verify molten.content_replication.final_validation]
 #[test]
 fn multiprocess_adapter_rejects_wrong_payload_before_child_processes() {
     let manifest = manifest();

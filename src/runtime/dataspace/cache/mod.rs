@@ -83,6 +83,7 @@ impl<Value> Store<Value> {
 
     // r[impl aspen.dataspace_access_cache.deferral]
     // r[impl aspen.dataspace_access_cache.boundary]
+    // r[impl aspen.dataspace_access_cache.deferral.evicted]
     pub fn lookup_or_load<LoadError, Load>(
         &self,
         projection: &molten_core::fabric_durability::cache::AccessProjection<'_>,
@@ -140,6 +141,8 @@ fn apply_hit<Value>(
     })
 }
 
+// r[impl aspen.dataspace_access_cache.bound.configured]
+// r[impl aspen.dataspace_access_cache.bound.full]
 fn insert_or_reuse<Value>(
     state: &mut State<Value>,
     policy: molten_core::fabric_durability::cache::Policy,

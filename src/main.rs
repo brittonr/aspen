@@ -273,6 +273,7 @@ pub(crate) fn run_test_command(command: TestCommand) -> molten::error::Result<()
 }
 
 fn main() {
+    // r[impl dev_profiling.placement]
     molten::profiling::enable_development_profiler();
     if let Err(error) = cli_root::run() {
         eprintln!("error: {error}");

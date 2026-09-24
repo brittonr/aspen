@@ -35,6 +35,7 @@ pub struct RuntimeSubscriptionConfig {
 }
 
 impl RuntimeStartupConfig {
+    // r[impl molten.nickel_toolchain.boundary]
     pub fn from_nickel_export_json(source: &str) -> crate::error::Result<Self> {
         let config: Self = serde_json::from_str(source).map_err(|error| {
             crate::error::MoltenError::invalid_harness(format!("invalid Nickel runtime export JSON: {error}"))
@@ -125,6 +126,7 @@ mod tests {
         assert!(error.to_string().contains("unsupported consensus algorithm profile raftt"));
     }
 
+    // r[verify molten.nickel_toolchain.boundary]
     #[test]
     fn nickel_export_rejects_subscription_for_undeclared_actor() {
         let source = r#"{

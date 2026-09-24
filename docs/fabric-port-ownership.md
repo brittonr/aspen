@@ -13,6 +13,8 @@ Adapters contain host mechanisms only.
 
 ## Inventory
 
+<!-- r[impl molten.modularity.fabric_boundary.ownership.classified] -->
+
 | Family | Capability | Owner | Inputs | Outputs | Typed failures | Effects | Composition root |
 |---|---|---|---|---|---|---|---|
 | Membership | Snapshot observation | `fabric_membership/ports.rs` | Source profile and provider state | `MembershipProviderSnapshot` | unavailable or malformed observation | Reads a static, managed, or scripted provider | Membership bootstrap and simulation setup |
@@ -64,6 +66,9 @@ It does not complete those changes or transfer their authority.
 Future live reliability work must use these ports without moving service semantics into generic fabric adapters.
 
 ## Non-claims
+
+<!-- r[impl molten.modularity.fabric_boundary.final_checks] -->
+<!-- r[impl molten.modularity.fabric_boundary.final_checks.claims] -->
 
 This boundary does not prove live transport correctness, durable storage, clock accuracy, entropy quality, authority correctness, simulation parity, or release readiness.
 A canonical receipt records bounded supplied facts only.

@@ -104,6 +104,7 @@ pub type FabricPortResult<T> = std::result::Result<T, FabricPortError>;
 mod tests {
     use super::*;
 
+    // r[verify molten.modularity.fabric_boundary.adapters.transport_error]
     #[test]
     fn typed_failures_retain_infrastructure_ownership() {
         let storage = FabricPortError::storage("commit failed");

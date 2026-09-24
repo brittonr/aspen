@@ -56,6 +56,7 @@ A sibling checkout is not a product dependency.
 
 ## Claim boundary
 
+r[impl aspen.dataspace_access_cache.boundary.overclaim]
 A cache hit proves only that the local store contains a value for the projected key.
 It does not prove record freshness, vat authority, policy currentness, remote availability, durability, or release readiness.
 

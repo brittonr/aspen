@@ -26,6 +26,8 @@ fn projection<'a>(
 
 // r[verify aspen.dataspace_access_cache.projection]
 // r[verify aspen.dataspace_access_cache.verification]
+// r[verify aspen.dataspace_access_cache.projection.equal]
+// r[verify aspen.dataspace_access_cache.projection.distinct]
 #[test]
 fn equal_accesses_project_to_equal_keys_and_distinct_accesses_do_not() {
     let arguments = vec!["subject=alpha".to_string(), "operation=observe".to_string()];
@@ -51,6 +53,7 @@ fn capability_context_changes_the_key_and_ambient_state_is_absent() {
 
 // r[verify aspen.dataspace_access_cache.bound]
 // r[verify aspen.dataspace_access_cache.verification]
+// r[verify aspen.dataspace_access_cache.verification.matrix]
 #[test]
 fn capacity_watermarks_and_thresholds_fail_closed() {
     assert_eq!(Policy::new(0, 0, 0, STRICT_LRU_THRESHOLD), Err(Issue::MissingCapacity));
@@ -66,6 +69,8 @@ fn capacity_watermarks_and_thresholds_fail_closed() {
 
 // r[verify aspen.dataspace_access_cache.decision]
 // r[verify aspen.dataspace_access_cache.verification]
+// r[verify aspen.dataspace_access_cache.decision.strict_lru]
+// r[verify aspen.dataspace_access_cache.decision.fifo]
 #[test]
 fn promotion_threshold_covers_strict_lazy_and_fifo_boundaries() {
     assert_eq!(decide_promotion(policy(STRICT_LRU_THRESHOLD), 0), Promotion::Promote);
@@ -74,6 +79,7 @@ fn promotion_threshold_covers_strict_lazy_and_fifo_boundaries() {
     assert_eq!(decide_promotion(policy(FIFO_THRESHOLD_TEST), u32::MAX), Promotion::Retain);
 }
 
+// r[verify aspen.dataspace_access_cache.bound.full]
 #[test]
 fn insertion_at_high_watermark_trims_to_low_before_insertion() {
     let order = vec!["oldest".to_string(), "middle".to_string(), "newest".to_string()];
@@ -88,6 +94,9 @@ fn insertion_at_high_watermark_trims_to_low_before_insertion() {
     assert_eq!(plan.active_after_insert, LOW_WATERMARK + 1);
 }
 
+// r[verify aspen.dataspace_access_cache.bound.configured]
+// r[verify aspen.dataspace_access_cache.bound.full]
+// r[verify aspen.dataspace_access_cache.verification.matrix]
 #[test]
 fn single_slot_policy_evicts_one_and_remains_bounded() {
     const SINGLE_CAPACITY: u32 = 1;
@@ -106,6 +115,7 @@ fn single_slot_policy_evicts_one_and_remains_bounded() {
     assert_eq!(plan.active_after_insert, SINGLE_CAPACITY);
 }
 
+// r[verify aspen.dataspace_access_cache.verification.matrix]
 #[test]
 fn malformed_projection_and_eviction_order_are_denied() {
     let arguments = vec!["subject=alpha".to_string()];

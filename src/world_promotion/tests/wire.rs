@@ -22,6 +22,7 @@ fn reservation_and_attempt_records_roundtrip_with_complete_nonclaims() {
     assert_eq!(parse_attempt(&canonical.bytes).expect("attempt parse"), attempt);
 }
 
+// r[verify molten.world_promotion.non_claims]
 #[test]
 fn malformed_records_and_incomplete_nonclaims_fail_closed() {
     assert!(parse_reservation(b"not-preserves").is_err());

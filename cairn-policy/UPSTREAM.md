@@ -4,7 +4,7 @@ The local lifecycle policy is vendored from the reviewed Cairn source revision `
 
 The files in this directory start from copies of `cairn-policy/*.ncl` from that revision, with these local ports of Molten's prior policy content:
 
-- the `cairn-default` traceability profile uses `cairn/specs` requirement roots and `src`, `tests`, `docs`, and `scripts` evidence roots;
+- the `cairn-default` traceability profile uses `.cairn/specs` requirement roots and `src`, `tests`, `docs`, and `scripts` evidence roots;
 - the `fabric-transport` and `adopt-artifact-binding-and-semantic-effects` traceability profiles are local;
 - the stack-provenance and function-address gates use Molten boundary text and placeholder policy hashes;
 - `runtime_evidence_policy.aggregation_profiles` lists `smoke`, `release`, and `dogfood`;

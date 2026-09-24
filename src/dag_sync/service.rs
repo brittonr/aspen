@@ -25,6 +25,9 @@ pub struct DagSyncOutcome {
     pub canonical_receipt: CanonicalDagRecord,
 }
 
+// r[impl molten.dag_sync.receiver_driven]
+// r[impl molten.dag_sync.content_adapter_boundary]
+// r[impl molten.dag_sync.resume_fencing]
 #[allow(
     clippy::too_many_lines,
     reason = "the imperative shell keeps authority, resource, transfer, verification, persistence, observation, and receipt order visible"
@@ -166,6 +169,7 @@ fn validate_resources(observation: &DagResourceObservation, plan: &DagSyncPlan) 
     Ok(())
 }
 
+// r[impl molten.dag_sync.receiver_driven]
 fn validate_envelope(envelope: &DagTransportEnvelope, request: &DagFetchRequest) -> Result<()> {
     validate_ref(&envelope.transport_observation_ref, "DAG transport observation")?;
     if envelope.object_ref != request.object_ref

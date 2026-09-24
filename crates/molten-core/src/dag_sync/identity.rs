@@ -10,6 +10,7 @@ use super::*;
 
 const PLAN_IDENTITY_CONTEXT: &str = "onixresearch.molten.dag-sync.plan.identity.v1";
 
+// r[impl molten.dag_sync.strategy_profiles]
 pub(super) fn assigned_peer(
     strategy: DagSyncStrategy,
     object_ref: &DagObjectRef,
@@ -54,6 +55,7 @@ pub(super) struct PlanIdentityInput<'a> {
     pub requests: &'a [DagFetchRequest],
 }
 
+// r[impl molten.dag_sync.strategy_profiles]
 pub(super) fn identify_plan(input: &PlanIdentityInput<'_>) -> Result<DagPlanRef, DagSyncIssue> {
     let mut hasher = blake3::Hasher::new_derive_key(PLAN_IDENTITY_CONTEXT);
     update(&mut hasher, input.request.epoch_ref.as_str())?;

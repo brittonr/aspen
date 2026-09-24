@@ -321,6 +321,8 @@ pub fn propose_assignment(proposal: &AssignmentProposal) -> Result<RoleAssignmen
     })
 }
 
+// r[impl molten.modularity.fabric_boundary.core]
+// r[impl molten.modularity.fabric_boundary.core.plan]
 // r[impl molten.fabric_membership.recruitment]
 pub fn apply_assignment_command(
     assignment: &RoleAssignment,

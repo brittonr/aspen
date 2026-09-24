@@ -19,7 +19,7 @@
   ],
   "observed_date": "2026-08-10",
   "referenced": 584,
-  "requirement_root": "cairn/specs",
+  "requirement_root": ".cairn/specs",
   "requirements": 2508,
   "scanner": "tools/tracey/inherited_debt_guard.rs",
   "schema": "molten.inherited-tracey-debt-baseline.v1",

@@ -72,6 +72,7 @@ pub enum AssignmentExecutionOutcome {
     Uncertain(UncertainAssignmentExecution),
 }
 
+// r[impl molten.modularity.fabric_boundary.shell.denial]
 // r[impl molten.fabric_membership.recruitment]
 // r[impl molten.fabric_membership.drain_replace]
 // r[impl molten.fabric_membership.evidence]

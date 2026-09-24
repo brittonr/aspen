@@ -11,6 +11,7 @@ const JOB_ROOT_CONTEXT: &str = "onixresearch.molten.dag-sync.job-root.v1";
 const JOB_SCHEMA_CONTEXT: &str = "onixresearch.molten.dag-sync.job-schema-set.v1";
 const ARTIFACT_SCHEMA_CONTEXT: &str = "onixresearch.molten.dag-sync.artifact-schema.v1";
 
+// r[impl molten.dag_sync.domain_boundary]
 pub fn project_job_dag(dag: &crate::workload::JobDag) -> Result<DagGraph> {
     let schema_ref = derived_schema(JOB_SCHEMA_CONTEXT, &dag.schema_refs)?;
     let node_refs = dag
@@ -75,6 +76,7 @@ pub fn project_job_dag(dag: &crate::workload::JobDag) -> Result<DagGraph> {
     Ok(DagGraph { roots, nodes })
 }
 
+// r[impl molten.dag_sync.domain_boundary]
 pub fn project_artifact_closure(
     closure: &crate::objects::ArtifactClosure,
     edges: &[crate::objects::ArtifactDependencyEdge],

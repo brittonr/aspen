@@ -178,6 +178,8 @@ pub fn schedule_timer(
     })
 }
 
+// r[impl molten.modularity.fabric_boundary.core]
+// r[impl molten.modularity.fabric_boundary.core.plan]
 // The transition is pure: callers provide the observed time and queue capacity.
 pub fn poll_timer(
     state: &TimerState,

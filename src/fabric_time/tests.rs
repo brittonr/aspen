@@ -77,6 +77,7 @@ fn one_shot(profile: &AdmittedTimeProfile, generation: u64) -> TimerScheduleRequ
     }
 }
 
+// r[verify molten.modularity.fabric_boundary.adapters.clock]
 // r[impl molten.fabric_time.final_validation]
 #[test]
 fn executable_fixture_exercises_both_profiles_and_bounded_evidence() {
@@ -577,6 +578,8 @@ fn retry_observation_denial_preserves_existing_events() {
     assert_eq!(events, original);
 }
 
+// r[verify molten.modularity.fabric_boundary.adapters.clock]
+// r[verify molten.modularity.fabric_boundary.validation]
 #[test]
 fn live_adapter_rejects_simulation_profile() {
     let profile = simulation_profile();

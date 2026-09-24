@@ -293,6 +293,7 @@ async fn live_iroh_loopback_exchanges_a_bounded_frame_without_leaking_adapter_ha
     assert_eq!(adapter.state().sessions[SESSION_REF].inflight_bytes, 0);
 }
 
+// r[verify molten.modularity.fabric_boundary.adapters.transport_error]
 // r[verify molten.fabric_transport.failure_semantics]
 // r[verify molten.fabric_transport.final_validation]
 #[test]
@@ -319,6 +320,7 @@ fn deterministic_partition_after_submission_reports_uncertainty_without_retry() 
     assert_eq!(failed.state.counters.failures, 1);
 }
 
+// r[verify molten.modularity.fabric_boundary.validation]
 // r[verify molten.fabric_transport.session_streams]
 // r[verify molten.fabric_transport.protocol_registration]
 #[test]

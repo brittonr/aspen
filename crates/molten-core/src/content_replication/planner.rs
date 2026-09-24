@@ -12,6 +12,7 @@ use super::action::build_transfer;
 use super::action::denied_plan;
 use super::*;
 
+// r[impl molten.content_replication.planner]
 pub fn plan(input: &ReconcileInput) -> Result<Plan, Issue> {
     let issues = validate_input(input);
     if !issues.is_empty() {
@@ -70,6 +71,7 @@ impl<'a> PlanningState<'a> {
         Ok(())
     }
 
+    // r[impl molten.content_replication.epoch_fencing]
     fn current_replicas(&self, content: &ReplicaRule) -> Vec<&'a Replica> {
         let mut replicas = self
             .input
@@ -141,6 +143,7 @@ impl<'a> PlanningState<'a> {
             .collect()
     }
 
+    // r[impl molten.content_replication.retention_confidentiality]
     fn has_protected_form_mismatch(&self, content: &ReplicaRule) -> bool {
         self.input.inventory.replicas.iter().any(|replica| {
             replica.content_ref == content.content_ref
@@ -225,6 +228,7 @@ impl<'a> PlanningState<'a> {
         matching.map(|operation| operation.attempt).max().map_or(1, |attempt| attempt.saturating_add(1))
     }
 
+    // r[impl molten.content_replication.resources_failures]
     fn resource_available(&self, encoded_bytes: u64) -> bool {
         self.planned_transfers < self.input.manifest.resources.max_concurrent_transfers
             && self.actions.len() < self.input.manifest.resources.max_queue_depth
@@ -233,6 +237,7 @@ impl<'a> PlanningState<'a> {
             })
     }
 
+    // r[impl molten.content_replication.receiver_driven]
     fn reuse_or_conflict(
         &mut self,
         content: &ReplicaRule,

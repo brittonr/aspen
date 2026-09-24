@@ -8,6 +8,7 @@ use std::collections::BTreeSet;
 
 use super::*;
 
+// r[impl molten.dag_sync.traversal_core]
 pub fn plan_dag_sync(graph: &DagGraph, request: &DagSyncRequest) -> DagPlanResult {
     let issues = validate_shape(graph, request);
     if !issues.is_empty() {
@@ -107,6 +108,7 @@ fn finish_plan(request: &DagSyncRequest, context: PlanContext<'_>) -> Result<Dag
     })
 }
 
+// r[impl molten.dag_sync.receiver_driven]
 pub fn admit_dag_response(
     plan: &DagSyncPlan,
     progress: &DagSyncProgress,

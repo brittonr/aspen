@@ -80,6 +80,7 @@ pub const SNAPSHOT_NON_CLAIMS: &[&str] = &[
     "snapshot-receipts-do-not-prove-release-eligibility",
 ];
 
+// r[impl molten.world_snapshot.profiles]
 impl SnapshotClass {
     pub const fn as_str(self) -> &'static str {
         match self {

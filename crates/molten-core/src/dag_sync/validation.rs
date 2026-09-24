@@ -8,6 +8,7 @@ use std::collections::BTreeSet;
 
 use super::*;
 
+// r[impl molten.dag_sync.traversal_core]
 pub(super) fn validate_shape(graph: &DagGraph, request: &DagSyncRequest) -> Vec<DagSyncIssue> {
     let mut issues = BTreeSet::new();
     validate_request_shape(graph, request, &mut issues);
@@ -93,6 +94,7 @@ fn validate_node_shape(graph: &DagGraph, request: &DagSyncRequest, issues: &mut 
     }
 }
 
+// r[impl molten.dag_sync.traversal_core]
 pub(super) fn reachable_nodes(
     request: &DagSyncRequest,
     roots: &BTreeMap<DagRootRef, &DagRoot>,
@@ -125,6 +127,7 @@ pub(super) fn reachable_nodes(
     Ok(visited)
 }
 
+// r[impl molten.dag_sync.traversal_core]
 pub(super) fn topological_order(
     reachable: &BTreeSet<DagNodeRef>,
     nodes: &BTreeMap<DagNodeRef, &DagNode>,
@@ -187,6 +190,7 @@ pub(super) struct ProgressValidationContext<'a> {
     pub peers: &'a [DagPeerId],
 }
 
+// r[impl molten.dag_sync.resume_fencing]
 pub(super) fn validate_progress(
     request: &DagSyncRequest,
     context: &ProgressValidationContext<'_>,
@@ -229,6 +233,7 @@ pub(super) fn validate_progress(
     Ok(verified)
 }
 
+// r[impl molten.dag_sync.strategy_profiles]
 pub(super) fn strategy_objects(
     strategy: DagSyncStrategy,
     order: &[DagNodeRef],

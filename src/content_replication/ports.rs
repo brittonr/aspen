@@ -47,6 +47,7 @@ pub trait DurablePort {
     fn store_status(&mut self, status: &CanonicalReplicationRecord) -> crate::error::Result<String>;
 }
 
+// r[impl molten.content_replication.retention_confidentiality]
 pub trait RetentionPort {
     fn acquire_pin(&mut self, action: &Action) -> crate::error::Result<PinObservation>;
 

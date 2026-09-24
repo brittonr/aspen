@@ -21,6 +21,7 @@ const DURABLE_PROFILE_LIMIT: u64 = 4_096;
 const DURABLE_OPERATION_BYTE_LIMIT: u64 = 1_048_576;
 const DURABLE_NAMESPACE_BYTE_LIMIT: u64 = 16_777_216;
 
+// r[impl molten.content_replication.same_core]
 pub struct DistinctProcessTransferAdapter {
     run_root: PathBuf,
     process_binary: PathBuf,
@@ -140,6 +141,7 @@ impl TransportPort for DistinctProcessTransferAdapter {
     }
 }
 
+// r[impl molten.content_replication.same_core]
 #[derive(Debug, Clone)]
 pub struct SimulatedDurableReplicationAdapter {
     inner: SimulatedDurableStateAdapter,

@@ -1,5 +1,6 @@
 use super::*;
 
+// r[verify molten.content_replication.same_core]
 #[test]
 fn deterministic_durability_commits_or_crashes_before_progress() {
     let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
@@ -25,6 +26,8 @@ fn deterministic_durability_commits_or_crashes_before_progress() {
     assert_eq!(crash_effects.receipts.count, 0);
 }
 
+// r[verify molten.content_replication.resources_failures]
+// r[verify molten.content_replication.final_validation]
 #[cfg(unix)]
 #[test]
 fn deterministic_adapters_classify_transport_content_and_disk_faults() {
@@ -66,6 +69,7 @@ fn deterministic_adapters_classify_transport_content_and_disk_faults() {
     assert!(effects.durable.stored.is_empty());
 }
 
+// r[verify molten.content_replication.same_core]
 #[cfg(unix)]
 #[test]
 fn same_core_simulated_content_and_live_iroh_local_content_agree() {

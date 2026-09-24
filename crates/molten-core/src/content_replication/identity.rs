@@ -13,6 +13,7 @@ pub struct OperationFrame<'a> {
     pub attempt: u32,
 }
 
+// r[impl molten.content_replication.epoch_fencing]
 pub fn identify_operation(input: OperationFrame<'_>) -> Result<String, Issue> {
     let mut hasher = blake3::Hasher::new_derive_key(OPERATION_CONTEXT);
     update(&mut hasher, &input.manifest.service_id)?;
@@ -45,6 +46,7 @@ pub fn identify_action(operation_id: &str, kind: ActionKind) -> Result<String, I
     Ok(format!("blake3:{}", hasher.finalize().to_hex()))
 }
 
+// r[impl molten.content_replication.planner]
 pub fn identify_plan(manifest: &Manifest, observed_tick: u64, actions: &[Action]) -> Result<String, Issue> {
     let mut hasher = blake3::Hasher::new_derive_key(PLAN_CONTEXT);
     update(&mut hasher, &manifest.service_id)?;

@@ -75,6 +75,7 @@ fn descriptor(class: SnapshotClass) -> SnapshotDescriptor {
     }
 }
 
+// r[verify molten.world_snapshot.profiles]
 #[test]
 fn complete_logical_snapshot_has_closed_restore_order() {
     assert_eq!(SnapshotClass::parse("logical"), Ok(SnapshotClass::Logical));
@@ -87,6 +88,7 @@ fn complete_logical_snapshot_has_closed_restore_order() {
     assert!(plan.activation_permitted);
 }
 
+// r[verify molten.world_snapshot.logical]
 #[test]
 fn missing_task_and_current_authority_fail_closed() {
     let mut snapshot = descriptor(SnapshotClass::Logical);
@@ -100,6 +102,7 @@ fn missing_task_and_current_authority_fail_closed() {
     assert!(denial.issues.contains(&SnapshotIssue::CurrentAdmissionDenied));
 }
 
+// r[verify molten.world_snapshot.cohort]
 #[test]
 fn opaque_snapshot_requires_exact_cohort_and_rejects_live_handles() {
     let mut snapshot = descriptor(SnapshotClass::Opaque);

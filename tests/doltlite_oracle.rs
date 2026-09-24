@@ -8,6 +8,7 @@ const WORKSPACE_ENV: &str = "MOLTEN_DOLTLITE_ORACLE_WORKSPACE";
 const BUILD_REF_ENV: &str = "MOLTEN_DOLTLITE_BUILD_REF";
 const ADAPTER_REF_ENV: &str = "MOLTEN_DOLTLITE_ADAPTER_REF";
 
+// r[verify molten.world_state_oracle.behavior]
 #[test]
 #[ignore = "requires the Nix-built remotes-disabled DoltLite cohort"]
 fn live_doltlite_oracle_covers_normalized_positive_and_negative_cases() {

@@ -20,6 +20,7 @@ pub fn validate_input(input: &ReconcileInput) -> Vec<Issue> {
     issues.into_iter().collect()
 }
 
+// r[impl molten.content_replication.manifest]
 pub fn validate_manifest(manifest: &Manifest) -> Vec<Issue> {
     let mut issues = BTreeSet::new();
     validate_manifest_fields(manifest, &mut issues);
@@ -67,6 +68,7 @@ fn validate_ports(manifest: &Manifest, issues: &mut BTreeSet<Issue>) {
     }
 }
 
+// r[impl molten.content_replication.resources_failures]
 fn validate_policy(manifest: &Manifest, issues: &mut BTreeSet<Issue>) {
     let policy = &manifest.policy;
     if policy.desired_replicas == 0
@@ -152,6 +154,7 @@ fn validate_inventory(input: &ReconcileInput, issues: &mut BTreeSet<Issue>) {
     }
 }
 
+// r[impl molten.content_replication.receiver_driven]
 fn validate_history(input: &ReconcileInput, issues: &mut BTreeSet<Issue>) {
     let mut operations = BTreeMap::new();
     for operation in &input.history {

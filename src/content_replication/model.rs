@@ -111,6 +111,7 @@ pub struct TransferEnvelope {
     pub protected: bool,
 }
 
+// r[impl molten.content_replication.resources_failures]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransferOutcome {
     Received(TransferEnvelope),

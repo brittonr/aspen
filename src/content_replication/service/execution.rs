@@ -88,6 +88,9 @@ fn execute_action(
     }
 }
 
+// r[impl molten.content_replication.receiver_driven]
+// r[impl molten.content_replication.retention_confidentiality]
+// r[impl molten.content_replication.resources_failures]
 fn execute_transfer(
     manifest: &Manifest,
     action: &Action,
@@ -119,6 +122,7 @@ fn execute_transfer(
     operation_from_action(manifest, action, outcome, result_ref)
 }
 
+// r[impl molten.content_replication.retention_confidentiality]
 fn execute_cleanup(
     manifest: &Manifest,
     action: &Action,

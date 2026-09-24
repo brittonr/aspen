@@ -9,6 +9,7 @@ pub const MAX_DAG_STEPS: usize = 65_536;
 pub const MAX_DAG_PEERS: usize = 64;
 pub const MAX_DAG_DOMAIN_BYTES: usize = 128;
 
+// r[impl molten.dag_sync.model]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DagEdgeKind {
     Child,
@@ -92,6 +93,7 @@ impl Default for DagBounds {
     }
 }
 
+// r[impl molten.dag_sync.strategy_profiles]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DagSyncStrategy {
     Full,
@@ -113,6 +115,7 @@ impl DagSyncStrategy {
     }
 }
 
+// r[impl molten.dag_sync.content_adapter_boundary]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DagObjectRef {
     Node(DagNodeRef),
@@ -230,6 +233,7 @@ pub struct DagSyncReceipt {
     pub non_claims: Vec<String>,
 }
 
+// r[impl molten.dag_sync.domain_boundary]
 pub const DAG_SYNC_NON_CLAIMS: &[&str] = &[
     "verified receipt does not grant install or execution authority",
     "graph completion does not grant merge or publication authority",

@@ -45,6 +45,7 @@ pub trait DagTransportPort {
     fn request(&mut self, request: &DagFetchRequest) -> Result<DagTransferOutcome>;
 }
 
+// r[impl molten.dag_sync.content_adapter_boundary]
 pub trait DagContentVerificationPort {
     fn verify(
         &mut self,
@@ -54,6 +55,7 @@ pub trait DagContentVerificationPort {
     ) -> Result<DagResponseObservation>;
 }
 
+// r[impl molten.dag_sync.resume_fencing]
 pub trait DagProgressPort {
     fn load(&mut self, epoch_ref: &DagEpochRef) -> Result<Option<DagSyncProgress>>;
     fn store(&mut self, progress: &DagSyncProgress) -> Result<String>;

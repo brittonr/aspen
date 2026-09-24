@@ -86,6 +86,8 @@ fn adapter_error_is_returned_without_an_entry() {
 
 // r[verify aspen.dataspace_access_cache.decision]
 // r[verify aspen.dataspace_access_cache.verification]
+// r[verify aspen.dataspace_access_cache.decision.strict_lru]
+// r[verify aspen.dataspace_access_cache.bound.configured]
 #[test]
 fn strict_lru_promotes_hits_before_eviction() {
     let store = Store::new(policy(STRICT_LRU_THRESHOLD));
@@ -102,6 +104,7 @@ fn strict_lru_promotes_hits_before_eviction() {
     assert!(state.entries.len() <= usize::try_from(CAPACITY).expect("capacity fits usize"));
 }
 
+// r[verify aspen.dataspace_access_cache.decision.fifo]
 #[test]
 fn fifo_does_not_promote_hits_before_eviction() {
     let store = Store::new(policy(FIFO_THRESHOLD));
@@ -133,6 +136,7 @@ impl Drop for DropProbe {
 
 // r[verify aspen.dataspace_access_cache.deferral]
 // r[verify aspen.dataspace_access_cache.verification]
+// r[verify aspen.dataspace_access_cache.deferral.evicted]
 #[test]
 fn evicted_value_drops_after_the_guard_is_released() {
     const SINGLE_CAPACITY: u32 = 1;
@@ -187,6 +191,7 @@ fn evicted_value_drops_after_the_guard_is_released() {
     assert_eq!(store.len(), Ok(SINGLE_CAPACITY));
 }
 
+// r[verify aspen.dataspace_access_cache.verification.matrix]
 #[test]
 fn malformed_projection_fails_before_the_loader_runs() {
     let store = Store::<u32>::new(policy(STRICT_LRU_THRESHOLD));

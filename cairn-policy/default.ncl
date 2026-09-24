@@ -1194,7 +1194,7 @@ let WorkflowRequiredNonClaims = [
       {
         id = "cairn-default",
         requirement_sources = [
-          { root = "cairn/specs", source_kind = "accepted_specs", extensions = ["md"] },
+          { root = ".cairn/specs", source_kind = "accepted_specs", extensions = ["md"] },
         ],
         evidence_sources = [
           { root = "src", source_kind = "rust_source", extensions = ["rs"] },
@@ -1209,7 +1209,7 @@ let WorkflowRequiredNonClaims = [
       {
         id = "fabric-transport",
         requirement_sources = [
-          { root = "cairn/specs/fabric-transport/spec.md", source_kind = "accepted_specs", extensions = ["md"] },
+          { root = ".cairn/specs/fabric-transport/spec.md", source_kind = "accepted_specs", extensions = ["md"] },
         ],
         evidence_sources = [
           { root = "crates/molten-core/src/fabric_transport", source_kind = "rust_source", extensions = ["rs"] },
@@ -1222,9 +1222,9 @@ let WorkflowRequiredNonClaims = [
       {
         id = "adopt-artifact-binding-and-semantic-effects",
         requirement_sources = [
-          { root = "cairn/specs/live-artifact-binding", source_kind = "accepted_specs", extensions = ["md"] },
-          { root = "cairn/specs/semantic-operation-adoption", source_kind = "accepted_specs", extensions = ["md"] },
-          { root = "cairn/specs/generation-retirement", source_kind = "accepted_specs", extensions = ["md"] },
+          { root = ".cairn/specs/live-artifact-binding", source_kind = "accepted_specs", extensions = ["md"] },
+          { root = ".cairn/specs/semantic-operation-adoption", source_kind = "accepted_specs", extensions = ["md"] },
+          { root = ".cairn/specs/generation-retirement", source_kind = "accepted_specs", extensions = ["md"] },
         ],
         evidence_sources = [
           { root = "crates/molten-core/src/live_binding", source_kind = "rust_source", extensions = ["rs"] },

@@ -13,6 +13,7 @@ const DAG_RESPONSE_RECORD: &str = "molten-dag-sync-response-v1";
 const DAG_PROGRESS_RECORD: &str = "molten-dag-sync-progress-v1";
 const DAG_RECEIPT_RECORD: &str = "molten-dag-sync-receipt-v1";
 
+// r[impl molten.dag_sync.model]
 #[derive(Debug, Clone)]
 pub struct CanonicalDagRecord {
     pub record_ref: String,
@@ -135,6 +136,7 @@ pub fn canonical_dag_progress(progress: &DagSyncProgress) -> Result<CanonicalDag
     canonical("progress", progress_value(progress)?)
 }
 
+// r[impl molten.dag_sync.domain_boundary]
 pub fn canonical_dag_receipt(receipt: &DagSyncReceipt) -> Result<CanonicalDagRecord> {
     let expected_non_claims = DAG_SYNC_NON_CLAIMS.iter().map(ToString::to_string).collect::<Vec<_>>();
     if receipt.non_claims != expected_non_claims {

@@ -42,6 +42,9 @@ const CONCRETE_ADAPTER_TOKENS: &[&str] = &[
 
 // r[impl molten.modularity.fabric_boundary.enforcement]
 // r[impl molten.modularity.fabric_boundary.composition]
+// r[impl molten.modularity.fabric_boundary.enforcement.adapter_trait]
+// r[impl molten.modularity.fabric_boundary.enforcement.raw_error]
+// r[impl molten.modularity.fabric_boundary.enforcement.construction]
 pub fn audit_fabric_boundaries(files: &[FabricSource<'_>]) -> Vec<FabricBoundaryIssue> {
     let mut issues = Vec::new();
     for file in files {
@@ -98,6 +101,7 @@ fn has_raw_string_result(text: &str) -> bool {
 mod tests {
     use super::*;
 
+    // r[verify molten.modularity.fabric_boundary.validation]
     #[test]
     fn compliant_positive_fixtures_pass() {
         let files = [
@@ -118,6 +122,10 @@ mod tests {
         assert_eq!(audit_fabric_boundaries(&files), Vec::new());
     }
 
+    // r[verify molten.modularity.fabric_boundary.enforcement.adapter_trait]
+    // r[verify molten.modularity.fabric_boundary.enforcement.raw_error]
+    // r[verify molten.modularity.fabric_boundary.enforcement.construction]
+    // r[verify molten.modularity.fabric_boundary.validation]
     #[test]
     fn negative_fixtures_report_each_forbidden_boundary() {
         let files = [

@@ -116,6 +116,7 @@ pub fn validate_clone_plan(request: &ClonePlanRequest) -> Result<(), Vec<Snapsho
     if issues.is_empty() { Ok(()) } else { Err(issues) }
 }
 
+// r[impl molten.world_snapshot.logical]
 fn validate_components(descriptor: &SnapshotDescriptor, issues: &mut Vec<SnapshotIssue>) {
     if descriptor.components.len() > MAX_SNAPSHOT_COMPONENTS {
         issues.push(SnapshotIssue::TooManyComponents);
@@ -165,6 +166,7 @@ fn validate_components(descriptor: &SnapshotDescriptor, issues: &mut Vec<Snapsho
     }
 }
 
+// r[impl molten.world_snapshot.cohort]
 fn validate_cohort(descriptor: &SnapshotDescriptor, destination: &SnapshotCohort, issues: &mut Vec<SnapshotIssue>) {
     if descriptor.cohort.cohort_ref != destination.cohort_ref {
         issues.push(SnapshotIssue::CohortIdentityMismatch);

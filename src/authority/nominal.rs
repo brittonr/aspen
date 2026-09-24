@@ -54,6 +54,8 @@ pub struct HistoricalWireDto {
     pub current_authority: bool,
 }
 
+// r[impl molten.authority.nominal_references.wire_boundary.valid]
+// r[impl molten.authority.nominal_references.wire_boundary.invalid]
 pub fn admit_authority_wire(wire: &AuthorityWireDto) -> Result<AuthorityReferenceSet, ReferenceError> {
     Ok(AuthorityReferenceSet {
         holder: PrincipalRef::new(wire.holder.clone())?,
@@ -88,6 +90,7 @@ pub fn admit_artifact_wire(wire: &ArtifactWireDto) -> Result<ArtifactReferenceSe
     })
 }
 
+// r[impl molten.authority.nominal_references.evidence_core.replay]
 pub fn admit_historical_wire(wire: &HistoricalWireDto) -> Result<HistoricalReferenceSet, ReferenceError> {
     Ok(HistoricalReferenceSet {
         artifact: ArtifactRef::new(wire.artifact.clone())?,
@@ -221,6 +224,7 @@ mod tests {
         }
     }
 
+    // r[verify molten.authority.nominal_references.wire_boundary.valid]
     #[test]
     fn authority_wire_roundtrip_preserves_exact_fields() {
         let wire = authority_wire();
@@ -228,6 +232,7 @@ mod tests {
         assert_eq!(project_authority_wire(&core), wire);
     }
 
+    // r[verify molten.authority.nominal_references.wire_boundary.valid]
     #[test]
     fn execution_wire_roundtrip_preserves_node_session_operation_and_resource() {
         let wire = ExecutionWireDto {
@@ -242,6 +247,7 @@ mod tests {
         assert_eq!(project_execution_wire(&core), wire);
     }
 
+    // r[verify molten.authority.nominal_references.artifact_core.distinct]
     #[test]
     fn artifact_wire_roundtrip_preserves_equal_digest_bytes_under_distinct_roles() {
         let wire = ArtifactWireDto {
@@ -256,6 +262,7 @@ mod tests {
         assert_eq!(project_artifact_wire(&core), wire);
     }
 
+    // r[verify molten.authority.nominal_references.wire_boundary.invalid]
     #[test]
     fn cross_domain_wire_field_fails_before_core_use() {
         let mut wire = authority_wire();
@@ -266,6 +273,7 @@ mod tests {
         ));
     }
 
+    // r[verify molten.authority.nominal_references.evidence_core.replay]
     #[test]
     fn historical_receipts_remain_evidence_only() {
         let wire = HistoricalWireDto {

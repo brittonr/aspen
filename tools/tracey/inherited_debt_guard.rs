@@ -9,7 +9,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
-const REQUIREMENT_ROOT: &str = "cairn/specs";
+const REQUIREMENT_ROOT: &str = ".cairn/specs";
 const ROOT_EVIDENCE_FILE: &str = "flake.nix";
 const EVIDENCE_ROOTS: &[&str] = &["src", "crates", "tests", "tools", "docs", "scripts"];
 const EVIDENCE_EXTENSIONS: &[&str] = &["rs", "ncl", "md", "sh", "nix"];
@@ -122,8 +122,12 @@ fn has_extension(path: &Path, extensions: &[&str]) -> bool {
 }
 
 fn read_requirements(root: &Path) -> Result<BTreeSet<String>, String> {
+    let requirement_root = root.join(REQUIREMENT_ROOT);
+    if !requirement_root.is_dir() {
+        return Err(format!("requirement root {} is missing", requirement_root.display()));
+    }
     let mut files = Vec::new();
-    walk_files(&root.join(REQUIREMENT_ROOT), &mut files)?;
+    walk_files(&requirement_root, &mut files)?;
     files.retain(|path| has_extension(path, &[REQUIREMENT_EXTENSION]));
     let mut requirements = BTreeSet::new();
     for path in files {
@@ -133,6 +137,9 @@ fn read_requirements(root: &Path) -> Result<BTreeSet<String>, String> {
                 requirements.insert(requirement);
             }
         }
+    }
+    if requirements.is_empty() {
+        return Err(format!("requirement root {} contains no requirements", requirement_root.display()));
     }
     Ok(requirements)
 }
@@ -271,6 +278,13 @@ mod tests {
         assert!(!baseline_is_sorted_and_unique(&["beta".to_string(), "alpha".to_string()]));
         assert!(!baseline_is_sorted_and_unique(&["alpha".to_string(), "alpha".to_string()]));
         assert!(!baseline_is_sorted_and_unique(&[String::new()]));
+    }
+
+    #[test]
+    fn missing_requirement_root_fails_closed() {
+        // r[verify molten.project.inherited_tracey_debt.growth_denial]
+        let error = read_requirements(Path::new("/nonexistent/molten-tracey-root")).unwrap_err();
+        assert!(error.contains("is missing"));
     }
 
     #[test]

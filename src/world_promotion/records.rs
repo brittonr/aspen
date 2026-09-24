@@ -178,6 +178,7 @@ fn canonical(value: IOValue) -> Result<CanonicalWorldPromotionRecord> {
     })
 }
 
+// r[impl molten.world_promotion.non_claims]
 fn require_non_claims(non_claims: &[String]) -> Result<()> {
     if non_claims != promotion_non_claims() {
         return Err(MoltenError::invalid_harness("world promotion non-claims are incomplete"));

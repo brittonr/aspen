@@ -1,5 +1,7 @@
 use super::*;
 
+// r[verify molten.content_replication.receiver_driven]
+// r[verify molten.content_replication.resources_failures]
 #[test]
 fn conflicting_operation_and_repair_exhaustion_fail_closed() {
     let first = plan(&input()).expect("initial plan");
@@ -43,6 +45,7 @@ fn conflicting_operation_and_repair_exhaustion_fail_closed() {
     assert!(result.actions.iter().any(|action| action.kind == ActionKind::Defer));
 }
 
+// r[verify molten.content_replication.retention_confidentiality]
 #[test]
 fn retention_and_cleanup_authority_fence_excess_replicas() {
     let mut excess = input();
@@ -64,6 +67,8 @@ fn retention_and_cleanup_authority_fence_excess_replicas() {
     assert_eq!(cleanup.prior_result_ref, Some(digest('d')));
 }
 
+// r[verify molten.content_replication.retention_confidentiality]
+// r[verify molten.content_replication.resources_failures]
 #[test]
 fn protected_form_and_resource_pressure_never_weaken_policy() {
     let mut protected = input();
@@ -94,6 +99,7 @@ fn protected_form_and_resource_pressure_never_weaken_policy() {
     );
 }
 
+// r[verify molten.content_replication.manifest]
 #[test]
 fn malformed_manifest_and_status_nonclaims_are_explicit() {
     let mut malformed = input();
