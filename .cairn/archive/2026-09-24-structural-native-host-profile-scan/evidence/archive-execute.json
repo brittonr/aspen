@@ -1,0 +1,199 @@
+{
+  "acceptance_ids": [
+    "structural-native-host-profile-scan.check-passes",
+    "structural-native-host-profile-scan.named-failure",
+    "structural-native-host-profile-scan.structural-field"
+  ],
+  "actions": [
+    {
+      "description": "move active change to archive: structural-native-host-profile-scan",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-09-24-structural-native-host-profile-scan"
+    }
+  ],
+  "blocked": false,
+  "change": "structural-native-host-profile-scan",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "fb3d4e1ff49eb82e35acc4099e59f9f3d2171939a47fc218c157cb2ddea1aabc",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "d901375e1c176e6cf1d189f516687a356ed5046850dc737add011dcebb5a85d5",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-structural-native-host-profile-scan/acceptance.md"
+        },
+        {
+          "content_hash": "deac21e53246f447dd36b98f9f37ae181d4fe252d5ee69b1af1f3fa0a1a72803",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-structural-native-host-profile-scan/design.md"
+        },
+        {
+          "content_hash": "e47d74fcf7884ee2fcac1d282a046de27156cef218670bd3b4ba9e218c677c1f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-structural-native-host-profile-scan/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "589b456c5d80e85aafef122c6c4c08256b282f2056571405e8623b8b2848b588",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-structural-native-host-profile-scan/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "4ec40e34d9e2f72156fd8c6517eeb8f97bf794af30be05122d7b7cb8d5981364",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-structural-native-host-profile-scan/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "2080210fc126e85c37ec82901fae5a3552ef1bd2fc915e3a984c106f4f66daff",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-structural-native-host-profile-scan/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "77d6859ad3eb19d6a79b231be3c8fb88d0c465592b4f282ea19082e63b053545",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-structural-native-host-profile-scan/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "57ff29852d56bf9d43c95d0e3eaaa5b579908e61816d8b3159ebfc59667c23ca",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-structural-native-host-profile-scan/evidence/verification.md"
+        },
+        {
+          "content_hash": "eb9e0184cb3cc383ad38fac5085dd2f55cee8e4acb5e46826601ed63746ec4e4",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-structural-native-host-profile-scan/metadata.json"
+        },
+        {
+          "content_hash": "4c526b216916394cea26f3aa210cdf33d997435a8bf180c0d4ecf353a34de91d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-structural-native-host-profile-scan/proposal.md"
+        },
+        {
+          "content_hash": "c7101681269461e2006f524125819e7cb1d6bfb1f0be399a83d6872c4166a8b5",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-structural-native-host-profile-scan/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "f0c1f4dd07bf5539fbebb2f312f8d4057cc19f56b20419303ee888293f398cb8",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-structural-native-host-profile-scan/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/structural-native-host-profile-scan"
+        }
+      ],
+      "manifest_hash": "7d8c39ae40e6b132cff652eaf5f7bb5432d4ad68dcfa3ec6c4ff28306b2c8a1e"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "d901375e1c176e6cf1d189f516687a356ed5046850dc737add011dcebb5a85d5",
+          "exists": true,
+          "path": "./.cairn/changes/structural-native-host-profile-scan/acceptance.md"
+        },
+        {
+          "content_hash": "deac21e53246f447dd36b98f9f37ae181d4fe252d5ee69b1af1f3fa0a1a72803",
+          "exists": true,
+          "path": "./.cairn/changes/structural-native-host-profile-scan/design.md"
+        },
+        {
+          "content_hash": "e47d74fcf7884ee2fcac1d282a046de27156cef218670bd3b4ba9e218c677c1f",
+          "exists": true,
+          "path": "./.cairn/changes/structural-native-host-profile-scan/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "589b456c5d80e85aafef122c6c4c08256b282f2056571405e8623b8b2848b588",
+          "exists": true,
+          "path": "./.cairn/changes/structural-native-host-profile-scan/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "4ec40e34d9e2f72156fd8c6517eeb8f97bf794af30be05122d7b7cb8d5981364",
+          "exists": true,
+          "path": "./.cairn/changes/structural-native-host-profile-scan/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "2080210fc126e85c37ec82901fae5a3552ef1bd2fc915e3a984c106f4f66daff",
+          "exists": true,
+          "path": "./.cairn/changes/structural-native-host-profile-scan/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "77d6859ad3eb19d6a79b231be3c8fb88d0c465592b4f282ea19082e63b053545",
+          "exists": true,
+          "path": "./.cairn/changes/structural-native-host-profile-scan/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "57ff29852d56bf9d43c95d0e3eaaa5b579908e61816d8b3159ebfc59667c23ca",
+          "exists": true,
+          "path": "./.cairn/changes/structural-native-host-profile-scan/evidence/verification.md"
+        },
+        {
+          "content_hash": "eb9e0184cb3cc383ad38fac5085dd2f55cee8e4acb5e46826601ed63746ec4e4",
+          "exists": true,
+          "path": "./.cairn/changes/structural-native-host-profile-scan/metadata.json"
+        },
+        {
+          "content_hash": "4c526b216916394cea26f3aa210cdf33d997435a8bf180c0d4ecf353a34de91d",
+          "exists": true,
+          "path": "./.cairn/changes/structural-native-host-profile-scan/proposal.md"
+        },
+        {
+          "content_hash": "c7101681269461e2006f524125819e7cb1d6bfb1f0be399a83d6872c4166a8b5",
+          "exists": true,
+          "path": "./.cairn/changes/structural-native-host-profile-scan/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "f0c1f4dd07bf5539fbebb2f312f8d4057cc19f56b20419303ee888293f398cb8",
+          "exists": true,
+          "path": "./.cairn/changes/structural-native-host-profile-scan/tasks.md"
+        }
+      ],
+      "manifest_hash": "6a0dd0e1998cd4f008491969e314d38380486f6ff00137785d2abbab84149e31"
+    },
+    "kind": "archive",
+    "manifest_hash": "f585a2fca1994cf10c2a2fdcc52240ad15e63beb3a57a7b40a4e8179002f0a7d"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts",
+    "no-spec profile conformance does not prove zero behavior effect or semantic correctness",
+    "change-local a[...] acceptance IDs are not accepted r[...] requirements and sync never promotes them"
+  ],
+  "plan_hash": "891e8cc077fdc0187484b7b18abb6a29c93a591f9739c5328a7f4b7c2f6657b6",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "8d885308abf901fddf928b3ea9fa7a2eb9c6db65dde51f6aed686ecbbd085754",
+  "reasons": [],
+  "receipt_hash": "bc8847efcac38dd870e9e5e239e5f5525958492b95beba81dd3a46f0bd2db0d3",
+  "review_receipt_hashes": [
+    "ebedc4b4da649dd5e8c1694cf8306aea12cbccbad1b8b8916c1d0e70fd25921d"
+  ],
+  "spec_effect": "none",
+  "workflow_profile": "no-spec-delta",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
