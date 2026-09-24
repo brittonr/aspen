@@ -1359,16 +1359,31 @@
                     echo 'native host functional core contains ambient value I/O' >&2
                     exit 1
                   fi
+                  require_literal() {
+                    literal="$1"
+                    shift
+                    if ! rg -Fq -- "$literal" "$@"; then
+                      echo "native host profile source requirement missing: '$literal' in $*" >&2
+                      exit 1
+                    fi
+                  }
+                  # Type paths may be imported or qualified; import-qualification codemods must not break the scan.
+                  type_path='(?:[A-Za-z_][A-Za-z0-9_]*::)*'
                   test "$(rg -l 'pub trait NativeCallbackValuePort' src/system_extension/native_host | wc -l)" -eq 1
-                  rg -Fq 'NativeCallbackValuePort' src/system_extension/native_host/materialization.rs
-                  rg -Fq '.materialize(' src/system_extension/native_host/executor.rs
-                  rg -Fq '.publish(' src/system_extension/native_host/executor.rs
-                  rg -Fq 'materialized_output: Option<NativeCallbackValue>' src/system_extension/canonical.rs
-                  rg -Fq 'molten.system-extension.effect-completion.v2' crates/molten-core/src/system_extension/mod.rs
-                  rg -Fq 'admit_materialized_effect_output' src/system_extension/native_host/service.rs
-                  rg -Fq 'ExecutionFabricPort' src/system_extension/native_host/executor.rs
-                  rg -Fq 'NativeHostJournal' src/system_extension/native_host/journal.rs
-                  rg -Fq 'molten-native-extension-fixture' Cargo.toml
+                  require_literal 'NativeCallbackValuePort' src/system_extension/native_host/materialization.rs
+                  require_literal '.materialize(' src/system_extension/native_host/executor.rs
+                  require_literal '.publish(' src/system_extension/native_host/executor.rs
+                  # r[verify molten.system_extension.native_host.effect_completion_value]
+                  if ! rg -Pq "\bmaterialized_output\s*:\s*Option\s*<\s*$type_path""NativeCallbackValue\s*>" \
+                    src/system_extension/canonical.rs; then
+                    echo 'canonical effect completion no longer carries an optional materialized NativeCallbackValue' >&2
+                    exit 1
+                  fi
+                  require_literal 'molten.system-extension.effect-completion.v2' crates/molten-core/src/system_extension/mod.rs
+                  require_literal 'admit_materialized_effect_output' src/system_extension/native_host/service.rs
+                  require_literal 'ExecutionFabricPort' src/system_extension/native_host/executor.rs
+                  require_literal 'NativeHostJournal' src/system_extension/native_host/journal.rs
+                  require_literal 'molten-native-extension-fixture' Cargo.toml
                   touch "$out"
                 '';
             fabricMembershipPlacementProfileCheck =
