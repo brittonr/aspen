@@ -9,6 +9,7 @@ The files in this directory start from copies of `cairn-policy/*.ncl` from that 
 - the stack-provenance and function-address gates use Molten boundary text and placeholder policy hashes;
 - `runtime_evidence_policy.aggregation_profiles` lists `smoke`, `release`, and `dogfood`;
 - five `evidence .* validate` receipt schemas are local.
+- `fixtures/valid-with-exemption.ncl` overrides `exemptions` with `| force`, because the upstream fixture merges a one-element array into `default.ncl`'s `exemptions = []`, which Nickel 1.17.0 rejects as an array merge conflict.
 
 Note: `cairn policy export` writes evaluator scratch under `target/`. If `target` is a symlink, replace it with a real directory for the export, then restore the symlink.
 

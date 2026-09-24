@@ -1,0 +1,9 @@
+{
+  "spec_effect": "none",
+  "spec_effect_rationale": "The change restores a Molten-local port in a vendored policy test fixture; accepted requirements, policy contracts, and the generated policy are unchanged.",
+  "workflow_profile": {
+    "id": "no-spec-delta",
+    "source": "change_create",
+    "version": 1
+  }
+}

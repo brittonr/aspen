@@ -1,0 +1,28 @@
+{
+  "schema_version": "cairn.semantic-review.review-receipt.v1",
+  "review_kind": "plan",
+  "decision": "approved",
+  "reviewed_inputs": [
+    {
+      "path": "proposal.md",
+      "hash": "08e160e15084ab7efb147a10deba14c69904c53419c485c208952e5edad26bb1"
+    },
+    {
+      "path": "design.md",
+      "hash": "add1e5742e0222866335fa84752583d8a027a79d8115d0c44bd27eb88d79ce58"
+    },
+    {
+      "path": "acceptance.md",
+      "hash": "c7d92b2f4b39b779b318e1929c23e5620a8856cf794ea5dd7cb31cede20e65b9"
+    },
+    {
+      "path": "tasks.md",
+      "hash": "4bca198a36f9983fd964c49d26c4aec71f746dd0d4ac74e5180451b5ad84e591"
+    }
+  ],
+  "reviewer": {
+    "source": "manual",
+    "id": "agent:aspen-gate-blockers.ReviewBCD (reviewer, anthropic/claude-opus-5-5)"
+  },
+  "findings": []
+}
