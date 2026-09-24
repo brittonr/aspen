@@ -1,0 +1,60 @@
+{
+  "acceptance_ids": [
+    "restore-cairn-exemption-fixture-port.contract-still-applies",
+    "restore-cairn-exemption-fixture-port.gate-passes",
+    "restore-cairn-exemption-fixture-port.positive-export",
+    "restore-cairn-exemption-fixture-port.provenance"
+  ],
+  "actions": [],
+  "blocked": false,
+  "change": "restore-cairn-exemption-fixture-port",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [],
+  "dry_run": false,
+  "input_hash": "ba75cce7c69220cfcff27b83d8e2b3572d62e371a5e58702e55772f902a10eaa",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": []
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts",
+    "no-spec profile conformance does not prove zero behavior effect or semantic correctness",
+    "change-local a[...] acceptance IDs are not accepted r[...] requirements and sync never promotes them"
+  ],
+  "plan_hash": "09598d6381076d7d144f175a2a322c39335449385a32221262b5c9554af211a1",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "425c73b5230a66cfab6cc96bacb2bcd9204c9ca438c861b0a7e1dee10a83eabd",
+  "reasons": [],
+  "receipt_hash": "f222f1c0bf20edd487b1ac783d84f09d5e3e64fceb427f0dbb96cd1c635e9806",
+  "review_receipt_hashes": [
+    "b8c69d5858c0ae5b334d2060e96250ff41dd57623ebd70a77812a04e460c6127"
+  ],
+  "spec_effect": "none",
+  "workflow_profile": "no-spec-delta",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

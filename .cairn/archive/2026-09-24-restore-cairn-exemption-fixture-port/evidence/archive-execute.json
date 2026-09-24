@@ -1,0 +1,200 @@
+{
+  "acceptance_ids": [
+    "restore-cairn-exemption-fixture-port.contract-still-applies",
+    "restore-cairn-exemption-fixture-port.gate-passes",
+    "restore-cairn-exemption-fixture-port.positive-export",
+    "restore-cairn-exemption-fixture-port.provenance"
+  ],
+  "actions": [
+    {
+      "description": "move active change to archive: restore-cairn-exemption-fixture-port",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-09-24-restore-cairn-exemption-fixture-port"
+    }
+  ],
+  "blocked": false,
+  "change": "restore-cairn-exemption-fixture-port",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "84adf25da3df0a6238d788455ca03a2539478638a873706b990f625e8f673102",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "c7d92b2f4b39b779b318e1929c23e5620a8856cf794ea5dd7cb31cede20e65b9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-cairn-exemption-fixture-port/acceptance.md"
+        },
+        {
+          "content_hash": "add1e5742e0222866335fa84752583d8a027a79d8115d0c44bd27eb88d79ce58",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-cairn-exemption-fixture-port/design.md"
+        },
+        {
+          "content_hash": "085a99df5adbc3f0411a95d15d825362a5b104fd905955b2b308c4524defd1c4",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-cairn-exemption-fixture-port/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "ea94c89a360228eb6f5022a5d8afba4ae76f3de5d88028c9a04f615f66c4c94d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-cairn-exemption-fixture-port/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "9f19900bac7bc2f91e6677cd351d1235323987ec7c6876024a0a8e0f254379b4",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-cairn-exemption-fixture-port/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "8554df980417841e8a40c27f5ed715f64b72ba2e0391ca763a126b4a5857a79b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-cairn-exemption-fixture-port/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "995f772ea7a5cf82f89941582a52caab503fa858d3f11f5b974ba6668269f451",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-cairn-exemption-fixture-port/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "53403bf346dce954b1fc9a20a9486a0d146c0bc273232cacdf80994fb0b2aa34",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-cairn-exemption-fixture-port/evidence/verification.md"
+        },
+        {
+          "content_hash": "bfb99ae57ceafa7200f5e755a71831dc3db222bd15eafec0772a327d2aa1ed66",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-cairn-exemption-fixture-port/metadata.json"
+        },
+        {
+          "content_hash": "08e160e15084ab7efb147a10deba14c69904c53419c485c208952e5edad26bb1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-cairn-exemption-fixture-port/proposal.md"
+        },
+        {
+          "content_hash": "332ca2eb7cf7e42ae735d6a18e15fc2f7ccea4c7ed5041bb3231cc968d3bd8e3",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-cairn-exemption-fixture-port/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "4bca198a36f9983fd964c49d26c4aec71f746dd0d4ac74e5180451b5ad84e591",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-cairn-exemption-fixture-port/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/restore-cairn-exemption-fixture-port"
+        }
+      ],
+      "manifest_hash": "176728e0582265dc2b5ed27c8a1c9ad545fb7ba14f906a6beceb8eaf86b0a189"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "c7d92b2f4b39b779b318e1929c23e5620a8856cf794ea5dd7cb31cede20e65b9",
+          "exists": true,
+          "path": "./.cairn/changes/restore-cairn-exemption-fixture-port/acceptance.md"
+        },
+        {
+          "content_hash": "add1e5742e0222866335fa84752583d8a027a79d8115d0c44bd27eb88d79ce58",
+          "exists": true,
+          "path": "./.cairn/changes/restore-cairn-exemption-fixture-port/design.md"
+        },
+        {
+          "content_hash": "085a99df5adbc3f0411a95d15d825362a5b104fd905955b2b308c4524defd1c4",
+          "exists": true,
+          "path": "./.cairn/changes/restore-cairn-exemption-fixture-port/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "ea94c89a360228eb6f5022a5d8afba4ae76f3de5d88028c9a04f615f66c4c94d",
+          "exists": true,
+          "path": "./.cairn/changes/restore-cairn-exemption-fixture-port/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "9f19900bac7bc2f91e6677cd351d1235323987ec7c6876024a0a8e0f254379b4",
+          "exists": true,
+          "path": "./.cairn/changes/restore-cairn-exemption-fixture-port/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "8554df980417841e8a40c27f5ed715f64b72ba2e0391ca763a126b4a5857a79b",
+          "exists": true,
+          "path": "./.cairn/changes/restore-cairn-exemption-fixture-port/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "995f772ea7a5cf82f89941582a52caab503fa858d3f11f5b974ba6668269f451",
+          "exists": true,
+          "path": "./.cairn/changes/restore-cairn-exemption-fixture-port/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "53403bf346dce954b1fc9a20a9486a0d146c0bc273232cacdf80994fb0b2aa34",
+          "exists": true,
+          "path": "./.cairn/changes/restore-cairn-exemption-fixture-port/evidence/verification.md"
+        },
+        {
+          "content_hash": "bfb99ae57ceafa7200f5e755a71831dc3db222bd15eafec0772a327d2aa1ed66",
+          "exists": true,
+          "path": "./.cairn/changes/restore-cairn-exemption-fixture-port/metadata.json"
+        },
+        {
+          "content_hash": "08e160e15084ab7efb147a10deba14c69904c53419c485c208952e5edad26bb1",
+          "exists": true,
+          "path": "./.cairn/changes/restore-cairn-exemption-fixture-port/proposal.md"
+        },
+        {
+          "content_hash": "332ca2eb7cf7e42ae735d6a18e15fc2f7ccea4c7ed5041bb3231cc968d3bd8e3",
+          "exists": true,
+          "path": "./.cairn/changes/restore-cairn-exemption-fixture-port/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "4bca198a36f9983fd964c49d26c4aec71f746dd0d4ac74e5180451b5ad84e591",
+          "exists": true,
+          "path": "./.cairn/changes/restore-cairn-exemption-fixture-port/tasks.md"
+        }
+      ],
+      "manifest_hash": "97b0621cd007d7829f69434457b3dfc9f7e9e87821e9221349fbbcc397087bc5"
+    },
+    "kind": "archive",
+    "manifest_hash": "fcc0170c1f8c7333d5b2c897a80ee035ea0465b37c3143d6d455ea5816b88642"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts",
+    "no-spec profile conformance does not prove zero behavior effect or semantic correctness",
+    "change-local a[...] acceptance IDs are not accepted r[...] requirements and sync never promotes them"
+  ],
+  "plan_hash": "111aa3e2ab8362f272703a0faeb2fddab2d56d7053e9e450556b68010a432297",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "425c73b5230a66cfab6cc96bacb2bcd9204c9ca438c861b0a7e1dee10a83eabd",
+  "reasons": [],
+  "receipt_hash": "d144fce87f282829c571e645bccce894c2e9d965aeead0d9948e443a2c6a363f",
+  "review_receipt_hashes": [
+    "b8c69d5858c0ae5b334d2060e96250ff41dd57623ebd70a77812a04e460c6127"
+  ],
+  "spec_effect": "none",
+  "workflow_profile": "no-spec-delta",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
