@@ -1,0 +1,1 @@
+cargo octet check --artifact-dir target/octet-review-4e2
