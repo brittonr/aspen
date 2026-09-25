@@ -30,7 +30,7 @@ The same loops also passed 200/0 in both modes before `cargo fmt` rewrapped thre
 | `nix develop -c cargo fmt --check` | 0 | clean |
 | `nix develop -c cargo clippy --workspace --all-targets -- -D warnings` | 0 | no warnings |
 | `nix develop -c cargo test --workspace` | 0 | 2072 passed, 0 failed across all workspace test binaries and doctests |
-| `nix build .#checks.x86_64-linux.nextest` | NEXTEST_EXIT | NEXTEST_RESULT |
+| `nix build .#checks.x86_64-linux.nextest` | not observed | the build on the final tree was still compiling `rust_molten-test` (load average ~70) when the change was archived. No result is claimed. Earlier Nix nextest runs failed only on this race. |
 | `cairn gate proposal\|design\|tasks` (explicit Cairn policy) | 0 | 0 issues each |
 | `cairn validate --strict` (explicit Cairn policy) | 0 | valid, 0 issues |
 

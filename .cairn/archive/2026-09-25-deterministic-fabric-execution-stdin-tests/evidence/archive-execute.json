@@ -1,0 +1,230 @@
+{
+  "acceptance_ids": [
+    "deterministic-fabric-execution-stdin-tests.conservative-pin",
+    "deterministic-fabric-execution-stdin-tests.no-unread-input",
+    "deterministic-fabric-execution-stdin-tests.repeatable",
+    "deterministic-fabric-execution-stdin-tests.subjects-kept"
+  ],
+  "actions": [
+    {
+      "description": "move active change to archive: deterministic-fabric-execution-stdin-tests",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-09-25-deterministic-fabric-execution-stdin-tests"
+    }
+  ],
+  "blocked": false,
+  "change": "deterministic-fabric-execution-stdin-tests",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "bc9edd64d38021aecb744c88499df06e1d06df779032f4397fc38ca2a08d842e",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "38df9ca362853ab94ea75c246979adc38bfa74e2d6a081bd3a64448b4d534597",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-deterministic-fabric-execution-stdin-tests/acceptance.md"
+        },
+        {
+          "content_hash": "a8bd49520173353ab9039583fff5c2d208d1e07271cd93d474fe57e52e4f324e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-deterministic-fabric-execution-stdin-tests/design.md"
+        },
+        {
+          "content_hash": "6679325ed783db54d7c685a1f039016bb1664c890127052b1233696923185614",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-deterministic-fabric-execution-stdin-tests/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "e926bba49735cf6c303c7cd0663715ca21573f25c0c2b96c768b3c47f4a9acd5",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-deterministic-fabric-execution-stdin-tests/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "ca898799203d317a61d2cbd77767b585c6a7c6f78d20940beee22c5cfa3813d5",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-deterministic-fabric-execution-stdin-tests/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "703906c961c1f28b75acd964298cdaeef9695dfb4e5785dfd52504eabbd2f9e0",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-deterministic-fabric-execution-stdin-tests/evidence/loop-200-parallel.log"
+        },
+        {
+          "content_hash": "703906c961c1f28b75acd964298cdaeef9695dfb4e5785dfd52504eabbd2f9e0",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-deterministic-fabric-execution-stdin-tests/evidence/loop-200-serial.log"
+        },
+        {
+          "content_hash": "92c7fc9a745956682cce3f745b9909efc9cf5c307f608555daaf296e0a75ecb3",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-deterministic-fabric-execution-stdin-tests/evidence/loop-200.sh"
+        },
+        {
+          "content_hash": "2e38851bec3c33dce93385e3a8d0de0d75a752421d7845383db4438e7047fcb5",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-deterministic-fabric-execution-stdin-tests/evidence/override-dev-only-summary.txt"
+        },
+        {
+          "content_hash": "7a5feeea4d34c74b814c8993bd5b7d117a3ef1d97fca221c005e20fca69667fe",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-deterministic-fabric-execution-stdin-tests/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "e50f288cb7b07862f9636f367d61043ed5f7d3c5d9852d13cc939da62129d952",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-deterministic-fabric-execution-stdin-tests/evidence/verification.md"
+        },
+        {
+          "content_hash": "2fcef08984e2be59013c882e87faa8201b4ed0e974f65494add326eeafb7112d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-deterministic-fabric-execution-stdin-tests/metadata.json"
+        },
+        {
+          "content_hash": "8fc3a4b41a504f48c98f960e38742ac875538508c52b4f21eb6d202bf50076b7",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-deterministic-fabric-execution-stdin-tests/proposal.md"
+        },
+        {
+          "content_hash": "d05da22f9c71e7ee7b894cd33e12f911716b8c0b64f41d52194ff950924082a0",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-deterministic-fabric-execution-stdin-tests/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "c92ad24f6acd005c72675d0e6d98817494479918a2af77e70a7f5d1d3db46e02",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-deterministic-fabric-execution-stdin-tests/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/deterministic-fabric-execution-stdin-tests"
+        }
+      ],
+      "manifest_hash": "55d998c2de37939a65b35e9337d7f8cc0de0f879f54b4f9430e8c3961256dbae"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "38df9ca362853ab94ea75c246979adc38bfa74e2d6a081bd3a64448b4d534597",
+          "exists": true,
+          "path": "./.cairn/changes/deterministic-fabric-execution-stdin-tests/acceptance.md"
+        },
+        {
+          "content_hash": "a8bd49520173353ab9039583fff5c2d208d1e07271cd93d474fe57e52e4f324e",
+          "exists": true,
+          "path": "./.cairn/changes/deterministic-fabric-execution-stdin-tests/design.md"
+        },
+        {
+          "content_hash": "6679325ed783db54d7c685a1f039016bb1664c890127052b1233696923185614",
+          "exists": true,
+          "path": "./.cairn/changes/deterministic-fabric-execution-stdin-tests/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "e926bba49735cf6c303c7cd0663715ca21573f25c0c2b96c768b3c47f4a9acd5",
+          "exists": true,
+          "path": "./.cairn/changes/deterministic-fabric-execution-stdin-tests/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "ca898799203d317a61d2cbd77767b585c6a7c6f78d20940beee22c5cfa3813d5",
+          "exists": true,
+          "path": "./.cairn/changes/deterministic-fabric-execution-stdin-tests/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "703906c961c1f28b75acd964298cdaeef9695dfb4e5785dfd52504eabbd2f9e0",
+          "exists": true,
+          "path": "./.cairn/changes/deterministic-fabric-execution-stdin-tests/evidence/loop-200-parallel.log"
+        },
+        {
+          "content_hash": "703906c961c1f28b75acd964298cdaeef9695dfb4e5785dfd52504eabbd2f9e0",
+          "exists": true,
+          "path": "./.cairn/changes/deterministic-fabric-execution-stdin-tests/evidence/loop-200-serial.log"
+        },
+        {
+          "content_hash": "92c7fc9a745956682cce3f745b9909efc9cf5c307f608555daaf296e0a75ecb3",
+          "exists": true,
+          "path": "./.cairn/changes/deterministic-fabric-execution-stdin-tests/evidence/loop-200.sh"
+        },
+        {
+          "content_hash": "2e38851bec3c33dce93385e3a8d0de0d75a752421d7845383db4438e7047fcb5",
+          "exists": true,
+          "path": "./.cairn/changes/deterministic-fabric-execution-stdin-tests/evidence/override-dev-only-summary.txt"
+        },
+        {
+          "content_hash": "7a5feeea4d34c74b814c8993bd5b7d117a3ef1d97fca221c005e20fca69667fe",
+          "exists": true,
+          "path": "./.cairn/changes/deterministic-fabric-execution-stdin-tests/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "e50f288cb7b07862f9636f367d61043ed5f7d3c5d9852d13cc939da62129d952",
+          "exists": true,
+          "path": "./.cairn/changes/deterministic-fabric-execution-stdin-tests/evidence/verification.md"
+        },
+        {
+          "content_hash": "2fcef08984e2be59013c882e87faa8201b4ed0e974f65494add326eeafb7112d",
+          "exists": true,
+          "path": "./.cairn/changes/deterministic-fabric-execution-stdin-tests/metadata.json"
+        },
+        {
+          "content_hash": "8fc3a4b41a504f48c98f960e38742ac875538508c52b4f21eb6d202bf50076b7",
+          "exists": true,
+          "path": "./.cairn/changes/deterministic-fabric-execution-stdin-tests/proposal.md"
+        },
+        {
+          "content_hash": "d05da22f9c71e7ee7b894cd33e12f911716b8c0b64f41d52194ff950924082a0",
+          "exists": true,
+          "path": "./.cairn/changes/deterministic-fabric-execution-stdin-tests/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "c92ad24f6acd005c72675d0e6d98817494479918a2af77e70a7f5d1d3db46e02",
+          "exists": true,
+          "path": "./.cairn/changes/deterministic-fabric-execution-stdin-tests/tasks.md"
+        }
+      ],
+      "manifest_hash": "604595d75b3c2d4a86d2d4307ccf556a110864279e4f3bea56ae97b008d4b08d"
+    },
+    "kind": "archive",
+    "manifest_hash": "48ac35c30d5bef9be4f2fcadd582bccdc461a17087922c35b1e8abe5eb5f39d3"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts",
+    "no-spec profile conformance does not prove zero behavior effect or semantic correctness",
+    "change-local a[...] acceptance IDs are not accepted r[...] requirements and sync never promotes them"
+  ],
+  "plan_hash": "bd70ef7e835bf25edcb1d422f27b7d56a42549ace19fbf16f3f6865a289193f1",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "d914db01553cad1577c7cc53eeee4259b7207517e1c93578c67fda9240655513",
+  "reasons": [],
+  "receipt_hash": "fc0e0f49ee705a81726ccdc3d6c076b3da182347310ec5369f072f4e87532a25",
+  "review_receipt_hashes": [
+    "0f5ace8627684985af4017f1f334383d6337870fd25c3834ace442c108a743da"
+  ],
+  "spec_effect": "none",
+  "workflow_profile": "no-spec-delta",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
