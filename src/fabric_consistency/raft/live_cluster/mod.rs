@@ -103,6 +103,21 @@ async fn three_endpoint_live_services_elect_commit_read_and_catch_up() {
     );
     assert_eq!(node_a.service.ports().application.handler().applied_request_refs, vec![request_ref.clone()]);
     assert_eq!(node_b.service.ports().application.handler().applied_request_refs, vec![request_ref]);
+    assert_selected_evidence_and_readback(&group, &node_a, &node_b, &node_c);
+
+    setup::close_node(node_a).await;
+    setup::close_node(node_b).await;
+    setup::close_node(node_c).await;
+}
+
+/// The leader records the selected milestone evidence and a healthy, unadmitted readback, and every
+/// replica keeps its durable log or snapshot.
+fn assert_selected_evidence_and_readback(
+    group: &crate::fabric_consistency::ConsistencyGroupBinding,
+    node_a: &LiveNode,
+    node_b: &LiveNode,
+    node_c: &LiveNode,
+) {
     let selected_evidence = node_a
         .service
         .evidence()
@@ -124,7 +139,7 @@ async fn three_endpoint_live_services_elect_commit_read_and_catch_up() {
     assert_eq!(health.status, "healthy");
     assert!(!health.production_admitted);
     crate::preserves_rail::validate_content_ref(&health.evidence_ref).expect("aggregate health ref");
-    let readback = crate::fabric_consistency::live_replica_operator_readback(&group, &node_a.service)
+    let readback = crate::fabric_consistency::live_replica_operator_readback(group, &node_a.service)
         .expect("live operator readback");
     assert_eq!(readback.commit_index, INITIAL_LOG_INDEX);
     assert!(!readback.production_admitted);
@@ -134,10 +149,6 @@ async fn three_endpoint_live_services_elect_commit_read_and_catch_up() {
     assert!(!node_b.service.ports().durability.adapter().state().durable_log.is_empty());
     let node_c_snapshot_ref = &node_c.service.state().snapshot.as_ref().expect("node C snapshot").snapshot_ref;
     assert!(node_c.service.ports().durability.adapter().state().snapshots.contains_key(node_c_snapshot_ref));
-
-    setup::close_node(node_a).await;
-    setup::close_node(node_b).await;
-    setup::close_node(node_c).await;
 }
 
 fn live_timeout() -> std::time::Duration {

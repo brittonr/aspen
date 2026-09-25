@@ -1,0 +1,9 @@
+{
+  "spec_effect": "none",
+  "spec_effect_rationale": "Long functions are split into order-preserving private helpers and CLI variants into clap Args structs; outputs, messages, ordering, CLI surface, and canonical encodings are byte-identical, and accepted requirements are unchanged.",
+  "workflow_profile": {
+    "id": "no-spec-delta",
+    "source": "change_create",
+    "version": 1
+  }
+}

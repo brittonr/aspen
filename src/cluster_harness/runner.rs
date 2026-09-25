@@ -98,6 +98,26 @@ struct PreparedArtifact {
 pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> crate::error::Result<ClusterHarnessExecution> {
     validate_execution_input(input)?;
     prepare_output_roots(input)?;
+    let planned = plan_run(input)?;
+    let evidence = record_run_evidence(input, planned)?;
+    finish_run(input, evidence)
+}
+
+/// The cluster plan, fixture identity, and plan artifacts one harness run executes against.
+struct PlannedRun {
+    plan: crate::cluster::ClusterPlan,
+    node_ids: Vec<String>,
+    fixture_ref: String,
+    caveats: Vec<String>,
+    expected_kinds: Vec<String>,
+    command_plan_ref: String,
+    local_plan_input: crate::multinode_core::LocalMultiprocessPlanInput,
+    artifacts: Vec<PreparedArtifact>,
+}
+
+/// Reads and plans the fixture, and prepares the fixture metadata, command plan, and local plan
+/// artifacts.
+fn plan_run(input: &ClusterHarnessExecutionInput) -> crate::error::Result<PlannedRun> {
     let fixture_source = std::fs::read_to_string(&input.fixture_path).map_err(crate::error::MoltenError::from)?;
     let node_names = crate::cluster::parse_cluster_manifest(&fixture_source)?;
     let plan = crate::cluster::plan_cluster(&input.state_root, &node_names)?;
@@ -115,172 +135,252 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> crate::e
     push_artifact(&mut artifacts, FIXTURE_METADATA_FILE, FIXTURE_METADATA_KIND, fixture_value)?;
     push_artifact(&mut artifacts, COMMAND_PLAN_FILE, COMMAND_PLAN_KIND, command_plan)?;
     push_artifact(&mut artifacts, LOCAL_PLAN_FILE, LOCAL_PLAN_KIND, local_plan.value.clone())?;
+    Ok(PlannedRun {
+        plan,
+        node_ids,
+        fixture_ref,
+        caveats,
+        expected_kinds,
+        command_plan_ref,
+        local_plan_input,
+        artifacts,
+    })
+}
 
+/// The child executions, skip diagnostics, and per-phase outcomes of the node lifecycle phases.
+struct LifecyclePhases {
+    child_executions: Vec<ChildExecution>,
+    diagnostics: Vec<String>,
+    is_init_passed: bool,
+    is_start_passed: bool,
+    is_workflow_passed: bool,
+    is_status_passed: bool,
+    is_stop_passed: bool,
+}
+
+impl LifecyclePhases {
+    const fn all_passed(&self) -> bool {
+        self.is_init_passed
+            && self.is_start_passed
+            && self.is_workflow_passed
+            && self.is_status_passed
+            && self.is_stop_passed
+    }
+}
+
+/// Runs init, start, workflow, and status on every node in order, each only after the previous
+/// phase passed, then stops the started nodes in reverse order.
+fn run_lifecycle_phases(
+    input: &ClusterHarnessExecutionInput,
+    plan: &crate::cluster::ClusterPlan,
+    artifacts: &mut impl crate::bounded::VecSink<PreparedArtifact>,
+) -> crate::error::Result<LifecyclePhases> {
+    let step = |phase| PhaseStep { input, plan, phase };
     let mut child_executions = Vec::new();
     let mut diagnostics = Vec::new();
-    let is_init_passed = execute_phase_for_nodes(
-        PhaseStep {
-            input,
-            plan: &plan,
-            phase: "init",
-        },
-        &mut child_executions,
-        &mut artifacts,
-        |node| {
-            vec![
-                std::ffi::OsString::from("node"),
-                std::ffi::OsString::from("init"),
-                std::ffi::OsString::from("--state-root"),
-                node.state_root.as_os_str().to_os_string(),
-                std::ffi::OsString::from("--node-id"),
-                std::ffi::OsString::from(&node.node_id),
-            ]
-        },
-    )?;
+    let is_init_passed = execute_phase_for_nodes(step("init"), &mut child_executions, artifacts, init_node_args)?;
     let is_start_passed = if is_init_passed {
-        execute_phase_for_nodes(
-            PhaseStep {
-                input,
-                plan: &plan,
-                phase: "start",
-            },
-            &mut child_executions,
-            &mut artifacts,
-            |node| {
-                vec![
-                    std::ffi::OsString::from("node"),
-                    std::ffi::OsString::from("run"),
-                    std::ffi::OsString::from("--state-root"),
-                    node.state_root.as_os_str().to_os_string(),
-                ]
-            },
-        )?
+        execute_phase_for_nodes(step("start"), &mut child_executions, artifacts, start_node_args)?
     } else {
         diagnostics.push("cluster-harness-start-skipped-after-init-failure".to_string());
         false
     };
     let is_workflow_passed = if is_start_passed {
-        execute_phase_for_nodes(
-            PhaseStep {
-                input,
-                plan: &plan,
-                phase: "workflow",
-            },
-            &mut child_executions,
-            &mut artifacts,
-            |node| {
-                vec![
-                    std::ffi::OsString::from("node"),
-                    std::ffi::OsString::from("run-loop"),
-                    std::ffi::OsString::from("--state-root"),
-                    node.state_root.as_os_str().to_os_string(),
-                    std::ffi::OsString::from("--max-requests"),
-                    std::ffi::OsString::from(WORKFLOW_MAX_REQUESTS),
-                    std::ffi::OsString::from("--receipt-out"),
-                    node.state_root.join("cluster-harness-workflow.preserves").into_os_string(),
-                    std::ffi::OsString::from("--heartbeat-out"),
-                    node.state_root.join("cluster-harness-heartbeat.preserves").into_os_string(),
-                ]
-            },
-        )?
+        execute_phase_for_nodes(step("workflow"), &mut child_executions, artifacts, workflow_node_args)?
     } else {
         diagnostics.push("cluster-harness-workflow-skipped-after-start-failure".to_string());
         false
     };
     let is_status_passed = if is_workflow_passed {
-        execute_phase_for_nodes(
-            PhaseStep {
-                input,
-                plan: &plan,
-                phase: "status",
-            },
-            &mut child_executions,
-            &mut artifacts,
-            |node| {
-                vec![
-                    std::ffi::OsString::from("node"),
-                    std::ffi::OsString::from("status"),
-                    std::ffi::OsString::from("--state-root"),
-                    node.state_root.as_os_str().to_os_string(),
-                ]
-            },
-        )?
+        execute_phase_for_nodes(step("status"), &mut child_executions, artifacts, status_node_args)?
     } else {
         diagnostics.push("cluster-harness-status-skipped-after-workflow-failure".to_string());
         false
     };
-
     let is_stop_passed = if is_start_passed {
-        execute_phase_for_nodes_reverse(
-            PhaseStep {
-                input,
-                plan: &plan,
-                phase: "stop",
-            },
-            &mut child_executions,
-            &mut artifacts,
-            |node| {
-                vec![
-                    std::ffi::OsString::from("node"),
-                    std::ffi::OsString::from("stop"),
-                    std::ffi::OsString::from("--state-root"),
-                    node.state_root.as_os_str().to_os_string(),
-                ]
-            },
-        )?
+        execute_phase_for_nodes_reverse(step("stop"), &mut child_executions, artifacts, stop_node_args)?
     } else {
         true
     };
+    Ok(LifecyclePhases {
+        child_executions,
+        diagnostics,
+        is_init_passed,
+        is_start_passed,
+        is_workflow_passed,
+        is_status_passed,
+        is_stop_passed,
+    })
+}
 
-    collect_child_diagnostics(&child_executions, &mut diagnostics);
+fn init_node_args(node: &crate::cluster::ClusterNodePlan) -> Vec<std::ffi::OsString> {
+    vec![
+        std::ffi::OsString::from("node"),
+        std::ffi::OsString::from("init"),
+        std::ffi::OsString::from("--state-root"),
+        node.state_root.as_os_str().to_os_string(),
+        std::ffi::OsString::from("--node-id"),
+        std::ffi::OsString::from(&node.node_id),
+    ]
+}
+
+fn start_node_args(node: &crate::cluster::ClusterNodePlan) -> Vec<std::ffi::OsString> {
+    vec![
+        std::ffi::OsString::from("node"),
+        std::ffi::OsString::from("run"),
+        std::ffi::OsString::from("--state-root"),
+        node.state_root.as_os_str().to_os_string(),
+    ]
+}
+
+fn workflow_node_args(node: &crate::cluster::ClusterNodePlan) -> Vec<std::ffi::OsString> {
+    vec![
+        std::ffi::OsString::from("node"),
+        std::ffi::OsString::from("run-loop"),
+        std::ffi::OsString::from("--state-root"),
+        node.state_root.as_os_str().to_os_string(),
+        std::ffi::OsString::from("--max-requests"),
+        std::ffi::OsString::from(WORKFLOW_MAX_REQUESTS),
+        std::ffi::OsString::from("--receipt-out"),
+        node.state_root.join("cluster-harness-workflow.preserves").into_os_string(),
+        std::ffi::OsString::from("--heartbeat-out"),
+        node.state_root.join("cluster-harness-heartbeat.preserves").into_os_string(),
+    ]
+}
+
+fn status_node_args(node: &crate::cluster::ClusterNodePlan) -> Vec<std::ffi::OsString> {
+    vec![
+        std::ffi::OsString::from("node"),
+        std::ffi::OsString::from("status"),
+        std::ffi::OsString::from("--state-root"),
+        node.state_root.as_os_str().to_os_string(),
+    ]
+}
+
+fn stop_node_args(node: &crate::cluster::ClusterNodePlan) -> Vec<std::ffi::OsString> {
+    vec![
+        std::ffi::OsString::from("node"),
+        std::ffi::OsString::from("stop"),
+        std::ffi::OsString::from("--state-root"),
+        node.state_root.as_os_str().to_os_string(),
+    ]
+}
+
+/// Everything the parent receipt, run index, and failure bundle are built from once the nodes have
+/// run.
+struct RunEvidence {
+    plan: PlannedRun,
+    child_executions: Vec<ChildExecution>,
+    diagnostics: Vec<String>,
+    child_process_refs: Vec<String>,
+    child_receipt_refs: Vec<String>,
+    cleanup_ref: String,
+    lifecycle_ref: String,
+    drift_ref: String,
+    local_plan_ref: String,
+    local_run_ref: String,
+}
+
+/// Runs the node phases, then captures node artifacts, cleans up, and records the cleanup,
+/// lifecycle, drift, and local executable run artifacts in that order.
+fn record_run_evidence(
+    input: &ClusterHarnessExecutionInput,
+    mut planned: PlannedRun,
+) -> crate::error::Result<RunEvidence> {
+    let mut phases = run_lifecycle_phases(input, &planned.plan, &mut planned.artifacts)?;
+    collect_child_diagnostics(&phases.child_executions, &mut phases.diagnostics);
     let mut child_receipt_refs = Vec::new();
-    let node_artifacts = plan
+    let node_artifacts = planned
+        .plan
         .nodes
         .iter()
-        .map(|node| capture_node_artifacts(node, &mut artifacts, &mut child_receipt_refs))
+        .map(|node| capture_node_artifacts(node, &mut planned.artifacts, &mut child_receipt_refs))
         .collect::<crate::error::Result<Vec<_>>>()?;
-
-    let cleanup_observation = cleanup_state_roots(&plan)?;
-    let child_process_refs = child_executions.iter().map(|child| child.process_ref.clone()).collect::<Vec<_>>();
+    let cleanup_observation = cleanup_state_roots(&planned.plan)?;
+    let child_process_refs = phases.child_executions.iter().map(|child| child.process_ref.clone()).collect::<Vec<_>>();
     child_receipt_refs.extend(child_process_refs.iter().cloned());
     child_receipt_refs.sort();
     child_receipt_refs.dedup();
-    let cleanup_input = ClusterHarnessCleanupInput {
-        child_process_refs: child_process_refs.clone(),
-        stopped_node_ids: if is_stop_passed {
-            plan.nodes.iter().rev().map(|node| node.node_id.clone()).collect()
+    let cleanup_input = run_cleanup_input(&planned, &phases, child_process_refs.clone(), cleanup_observation);
+    let cleanup = cleanup_value(&cleanup_input)?;
+    let cleanup_ref = crate::preserves_rail::canonical_hash(&cleanup)?;
+    push_artifact(&mut planned.artifacts, CLEANUP_FILE, CLEANUP_KIND, cleanup)?;
+
+    let lifecycle = build_lifecycle_artifacts(LifecycleArtifactsInput {
+        fixture_ref: &planned.fixture_ref,
+        node_ids: &planned.node_ids,
+        nodes: &node_artifacts,
+        child_executions: &phases.child_executions,
+        diagnostics: &phases.diagnostics,
+        phases_passed: phases.all_passed(),
+        caveats: &planned.caveats,
+    })?;
+    push_artifact(&mut planned.artifacts, LIFECYCLE_FILE, CLUSTER_LIFECYCLE_KIND, lifecycle.lifecycle_value)?;
+    push_artifact(&mut planned.artifacts, DRIFT_SUMMARY_FILE, DRIFT_SUMMARY_KIND, lifecycle.drift_value)?;
+    let local_executable = local_executable_run(&planned, &node_artifacts, &cleanup_input, &cleanup_ref, &phases)?;
+    if local_executable.decision != molten_core::cluster_harness::RUN_DIRECTORY_PASS {
+        phases
+            .diagnostics
+            .extend(local_executable.diagnostics.iter().map(|item| format!("local-run:{item}")));
+    }
+    push_artifact(
+        &mut planned.artifacts,
+        LOCAL_EXECUTABLE_RUN_FILE,
+        LOCAL_EXECUTABLE_RUN_KIND,
+        local_executable.value,
+    )?;
+    Ok(RunEvidence {
+        plan: planned,
+        child_executions: phases.child_executions,
+        diagnostics: phases.diagnostics,
+        child_process_refs,
+        child_receipt_refs,
+        cleanup_ref,
+        lifecycle_ref: lifecycle.lifecycle_ref,
+        drift_ref: lifecycle.drift_ref,
+        local_plan_ref: local_executable.plan_ref,
+        local_run_ref: local_executable.executable_ref,
+    })
+}
+
+/// The cleanup record: every child process, the nodes stopped in reverse order when stop passed,
+/// orphaned children, and the ticket cleanup observation.
+fn run_cleanup_input(
+    planned: &PlannedRun,
+    phases: &LifecyclePhases,
+    child_process_refs: Vec<String>,
+    cleanup_observation: CleanupObservation,
+) -> ClusterHarnessCleanupInput {
+    ClusterHarnessCleanupInput {
+        child_process_refs,
+        stopped_node_ids: if phases.is_stop_passed {
+            planned.plan.nodes.iter().rev().map(|node| node.node_id.clone()).collect()
         } else {
             Vec::new()
         },
-        orphaned_processes: child_executions
+        orphaned_processes: phases
+            .child_executions
             .iter()
             .filter(|child| child.orphaned)
             .map(|child| format!("{}:{}", child.phase, child.node_id))
             .collect(),
         removed_ticket_refs: cleanup_observation.removed_ticket_refs,
         remaining_ticket_paths: cleanup_observation.remaining_ticket_paths,
-        cleanup_succeeded: cleanup_observation.succeeded && is_stop_passed,
-        caveats: caveats.clone(),
-    };
-    let cleanup = cleanup_value(&cleanup_input)?;
-    let cleanup_ref = crate::preserves_rail::canonical_hash(&cleanup)?;
-    push_artifact(&mut artifacts, CLEANUP_FILE, CLEANUP_KIND, cleanup)?;
+        cleanup_succeeded: cleanup_observation.succeeded && phases.is_stop_passed,
+        caveats: planned.caveats.clone(),
+    }
+}
 
-    let lifecycle = build_lifecycle_artifacts(LifecycleArtifactsInput {
-        fixture_ref: &fixture_ref,
-        node_ids: &node_ids,
-        nodes: &node_artifacts,
-        child_executions: &child_executions,
-        diagnostics: &diagnostics,
-        phases_passed: is_init_passed && is_start_passed && is_workflow_passed && is_status_passed && is_stop_passed,
-        caveats: &caveats,
-    })?;
-    push_artifact(&mut artifacts, LIFECYCLE_FILE, CLUSTER_LIFECYCLE_KIND, lifecycle.lifecycle_value)?;
-    push_artifact(&mut artifacts, DRIFT_SUMMARY_FILE, DRIFT_SUMMARY_KIND, lifecycle.drift_value)?;
-
-    let local_executable = crate::multinode_core::build_local_multiprocess_executable_run(
+fn local_executable_run(
+    planned: &PlannedRun,
+    node_artifacts: &[NodeArtifacts],
+    cleanup_input: &ClusterHarnessCleanupInput,
+    cleanup_ref: &str,
+    phases: &LifecyclePhases,
+) -> crate::error::Result<crate::multinode_core::LocalMultiprocessExecutableRunReceipt> {
+    crate::multinode_core::build_local_multiprocess_executable_run(
         &crate::multinode_core::LocalMultiprocessExecutableRunInput {
-            plan: local_plan_input,
+            plan: planned.local_plan_input.clone(),
             startup_refs: node_artifacts.iter().filter_map(|node| node.startup_ref.clone()).collect(),
             workflow_refs: node_artifacts
                 .iter()
@@ -288,51 +388,146 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> crate::e
                 .flatten()
                 .collect(),
             shutdown_refs: node_artifacts.iter().filter_map(|node| node.shutdown_ref.clone()).collect(),
-            cleanup_refs: vec![cleanup_ref.clone()],
+            cleanup_refs: vec![cleanup_ref.to_string()],
             ticket_status: TICKET_STATUS_CURRENT.to_string(),
-            child_timed_out: child_executions.iter().any(|child| child.timed_out),
+            child_timed_out: phases.child_executions.iter().any(|child| child.timed_out),
             orphaned_processes: cleanup_input.orphaned_processes.clone(),
             cleanup_succeeded: cleanup_input.cleanup_succeeded,
-            diagnostics: diagnostics.clone(),
-            caveats: caveats.clone(),
+            diagnostics: phases.diagnostics.clone(),
+            caveats: planned.caveats.clone(),
         },
-    )?;
-    if local_executable.decision != molten_core::cluster_harness::RUN_DIRECTORY_PASS {
-        diagnostics.extend(local_executable.diagnostics.iter().map(|item| format!("local-run:{item}")));
-    }
-    push_artifact(&mut artifacts, LOCAL_EXECUTABLE_RUN_FILE, LOCAL_EXECUTABLE_RUN_KIND, local_executable.value)?;
+    )
+}
 
+/// Builds and records the parent receipt, writes the artifacts, run index, and verification, and
+/// writes a failure repro bundle when the parent or the verification denies.
+fn finish_run(
+    input: &ClusterHarnessExecutionInput,
+    evidence: RunEvidence,
+) -> crate::error::Result<ClusterHarnessExecution> {
+    let RunEvidence {
+        plan: mut planned,
+        child_executions,
+        mut diagnostics,
+        child_process_refs,
+        child_receipt_refs,
+        cleanup_ref,
+        lifecycle_ref,
+        drift_ref,
+        local_plan_ref,
+        local_run_ref,
+    } = evidence;
     let diagnostic_log_refs = child_executions
         .iter()
-        .map(|child| child_log_ref(child, &input.output_directory, &plan))
+        .map(|child| child_log_ref(child, &input.output_directory, &planned.plan))
         .collect::<crate::error::Result<Vec<_>>>()?;
-    let mut observed_kinds = artifacts.iter().map(|artifact| artifact.entry.artifact_kind.clone()).collect::<Vec<_>>();
-    observed_kinds.push(CLUSTER_RUN_KIND.to_string());
-    observed_kinds.sort();
-    observed_kinds.dedup();
+    let observed_kinds = observed_artifact_kinds(&planned.artifacts);
     diagnostics.sort();
     diagnostics.dedup();
     let parent = build_cluster_harness_parent(&ClusterHarnessParentInput {
-        fixture_ref: fixture_ref.clone(),
-        command_plan_ref: command_plan_ref.clone(),
-        local_plan_ref: local_executable.plan_ref.clone(),
-        local_run_ref: local_executable.executable_ref.clone(),
-        lifecycle_ref: lifecycle.lifecycle_ref.clone(),
-        drift_summary_ref: lifecycle.drift_ref.clone(),
+        fixture_ref: planned.fixture_ref.clone(),
+        command_plan_ref: planned.command_plan_ref.clone(),
+        local_plan_ref: local_plan_ref.clone(),
+        local_run_ref,
+        lifecycle_ref: lifecycle_ref.clone(),
+        drift_summary_ref: drift_ref.clone(),
         cleanup_ref,
         child_receipt_refs: child_receipt_refs.clone(),
         diagnostic_log_refs: diagnostic_log_refs.clone(),
         observed_artifact_kinds: observed_kinds,
-        required_artifact_kinds: expected_kinds,
+        required_artifact_kinds: planned.expected_kinds,
         unsupported_pass_claim: false,
         diagnostics,
-        caveats,
+        caveats: planned.caveats,
     })?;
-    push_artifact(&mut artifacts, PARENT_RUN_FILE, CLUSTER_RUN_KIND, parent.value.clone())?;
+    push_artifact(&mut planned.artifacts, PARENT_RUN_FILE, CLUSTER_RUN_KIND, parent.value.clone())?;
+    let verification = write_run_index_and_verification(input, planned.artifacts, &planned.plan)?;
 
+    let is_passed = parent.decision == molten_core::cluster_harness::RUN_DIRECTORY_PASS
+        && verification.decision == molten_core::cluster_harness::RUN_DIRECTORY_PASS;
+    let failure_bundle_ref = if is_passed {
+        None
+    } else {
+        Some(write_failure_bundle(input, &crate::multinode_core::FailureReproBundleInput {
+            scenario_fixture_ref: planned.fixture_ref,
+            topology_ref: local_plan_ref,
+            scheduler_ref: planned.command_plan_ref,
+            fault_plan_ref: parent.receipt_ref.clone(),
+            command_refs: child_process_refs,
+            node_summary_refs: vec![lifecycle_ref, drift_ref],
+            receipt_refs: child_receipt_refs,
+            diagnostic_refs: diagnostic_log_refs.clone(),
+            log_refs: diagnostic_log_refs,
+            ..sealed_failure_bundle_defaults()
+        })?)
+    };
+    let decision = if is_passed {
+        molten_core::cluster_harness::RUN_DIRECTORY_PASS
+    } else {
+        molten_core::cluster_harness::RUN_DIRECTORY_DENY
+    };
+    Ok(ClusterHarnessExecution {
+        decision: decision.to_string(),
+        parent_ref: parent.receipt_ref,
+        verification_ref: verification.verification_ref,
+        failure_bundle_ref,
+        diagnostics: sorted_union(parent.diagnostics, &verification.diagnostics),
+        output_directory: input.output_directory.clone(),
+    })
+}
+
+/// The sorted, deduplicated kinds of the prepared artifacts plus the parent run kind itself.
+fn observed_artifact_kinds(artifacts: &[PreparedArtifact]) -> Vec<String> {
+    let mut observed_kinds = artifacts.iter().map(|artifact| artifact.entry.artifact_kind.clone()).collect::<Vec<_>>();
+    observed_kinds.push(CLUSTER_RUN_KIND.to_string());
+    observed_kinds.sort();
+    observed_kinds.dedup();
+    observed_kinds
+}
+
+/// `first` extended with `second`, sorted and deduplicated.
+fn sorted_union(mut first: Vec<String>, second: &[String]) -> Vec<String> {
+    first.extend(second.iter().cloned());
+    first.sort();
+    first.dedup();
+    first
+}
+
+/// The fixed seed, redaction, replay, and sealing fields of a harness failure repro bundle; the
+/// refs are empty and filled in by the caller.
+fn sealed_failure_bundle_defaults() -> crate::multinode_core::FailureReproBundleInput {
+    crate::multinode_core::FailureReproBundleInput {
+        scenario_fixture_ref: String::new(),
+        topology_ref: String::new(),
+        scheduler_ref: String::new(),
+        seed_ref: content_ref_for_text(COMMAND_PROFILE_DOMAIN, "no-ambient-randomness"),
+        fault_plan_ref: String::new(),
+        command_refs: Vec::new(),
+        node_summary_refs: Vec::new(),
+        receipt_refs: Vec::new(),
+        diagnostic_refs: Vec::new(),
+        log_refs: Vec::new(),
+        redaction_policy_ref: content_ref_for_text(COMMAND_PROFILE_DOMAIN, "public-diagnostics-no-private-attachments"),
+        replay_status: "non-replayable-local-process-observation".to_string(),
+        diagnostic_only: true,
+        sealed: true,
+        private_attachment_refs: Vec::new(),
+        reveal_receipt_refs: Vec::new(),
+        claimed_payload_ref: None,
+        caveats: cluster_harness_caveats(),
+    }
+}
+
+/// Writes the prepared artifacts, appends their log entries, and writes the run index and its
+/// verification.
+fn write_run_index_and_verification(
+    input: &ClusterHarnessExecutionInput,
+    artifacts: Vec<PreparedArtifact>,
+    plan: &crate::cluster::ClusterPlan,
+) -> crate::error::Result<ClusterRunVerificationReceipt> {
     write_prepared_artifacts(&input.output_directory, &artifacts)?;
     let entries =
-        append_log_entries(&input.output_directory, artifacts.into_iter().map(|item| item.entry).collect(), &plan)?;
+        append_log_entries(&input.output_directory, artifacts.into_iter().map(|item| item.entry).collect(), plan)?;
     let index_text = render_run_index(&entries);
     let index_path = input.output_directory.join(RUN_INDEX_FILE);
     std::fs::write(&index_path, &index_text).map_err(crate::error::MoltenError::from)?;
@@ -340,63 +535,19 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> crate::e
     let assessment = assess_indexed_run_directory(&input.output_directory, &entries);
     let verification = cluster_run_verification_value(&index_ref, &assessment)?;
     write_preserves_path(&input.output_directory.join(VERIFICATION_FILE), &verification.value)?;
+    Ok(verification)
+}
 
-    let mut failure_bundle_ref = None;
-    if parent.decision != molten_core::cluster_harness::RUN_DIRECTORY_PASS
-        || verification.decision != molten_core::cluster_harness::RUN_DIRECTORY_PASS
-    {
-        let failure_input = crate::multinode_core::FailureReproBundleInput {
-            scenario_fixture_ref: fixture_ref,
-            topology_ref: local_executable.plan_ref,
-            scheduler_ref: command_plan_ref,
-            seed_ref: content_ref_for_text(COMMAND_PROFILE_DOMAIN, "no-ambient-randomness"),
-            fault_plan_ref: parent.receipt_ref.clone(),
-            command_refs: child_process_refs,
-            node_summary_refs: vec![lifecycle.lifecycle_ref, lifecycle.drift_ref],
-            receipt_refs: child_receipt_refs,
-            diagnostic_refs: diagnostic_log_refs.clone(),
-            log_refs: diagnostic_log_refs,
-            redaction_policy_ref: content_ref_for_text(
-                COMMAND_PROFILE_DOMAIN,
-                "public-diagnostics-no-private-attachments",
-            ),
-            replay_status: "non-replayable-local-process-observation".to_string(),
-            diagnostic_only: true,
-            sealed: true,
-            private_attachment_refs: Vec::new(),
-            reveal_receipt_refs: Vec::new(),
-            claimed_payload_ref: None,
-            caveats: cluster_harness_caveats(),
-        };
-        let bundle = crate::multinode_core::build_failure_repro_bundle(&failure_input)?;
-        let bundle_verification = crate::multinode_core::verify_failure_repro_bundle(&failure_input)?;
-        write_preserves_path(&input.output_directory.join(FAILURE_BUNDLE_FILE), &bundle.value)?;
-        write_preserves_path(
-            &input.output_directory.join(FAILURE_BUNDLE_VERIFICATION_FILE),
-            &bundle_verification.value,
-        )?;
-        failure_bundle_ref = Some(bundle.bundle_ref);
-    }
-
-    let decision = if parent.decision == molten_core::cluster_harness::RUN_DIRECTORY_PASS
-        && verification.decision == molten_core::cluster_harness::RUN_DIRECTORY_PASS
-    {
-        molten_core::cluster_harness::RUN_DIRECTORY_PASS.to_string()
-    } else {
-        molten_core::cluster_harness::RUN_DIRECTORY_DENY.to_string()
-    };
-    let mut final_diagnostics = parent.diagnostics;
-    final_diagnostics.extend(verification.diagnostics.clone());
-    final_diagnostics.sort();
-    final_diagnostics.dedup();
-    Ok(ClusterHarnessExecution {
-        decision,
-        parent_ref: parent.receipt_ref,
-        verification_ref: verification.verification_ref,
-        failure_bundle_ref,
-        diagnostics: final_diagnostics,
-        output_directory: input.output_directory.clone(),
-    })
+/// Builds, verifies, and writes the sealed diagnostic failure repro bundle, returning its ref.
+fn write_failure_bundle(
+    input: &ClusterHarnessExecutionInput,
+    failure_input: &crate::multinode_core::FailureReproBundleInput,
+) -> crate::error::Result<String> {
+    let bundle = crate::multinode_core::build_failure_repro_bundle(failure_input)?;
+    let bundle_verification = crate::multinode_core::verify_failure_repro_bundle(failure_input)?;
+    write_preserves_path(&input.output_directory.join(FAILURE_BUNDLE_FILE), &bundle.value)?;
+    write_preserves_path(&input.output_directory.join(FAILURE_BUNDLE_VERIFICATION_FILE), &bundle_verification.value)?;
+    Ok(bundle.bundle_ref)
 }
 
 // r[impl molten.testing.receipt_first_cluster_harness.run_artifact_directory]
@@ -838,29 +989,7 @@ fn build_lifecycle_artifacts(input: LifecycleArtifactsInput<'_>) -> crate::error
                 phase("status"),
                 phase("stop"),
             ],
-            node_summaries: node_ids
-                .iter()
-                .zip(nodes)
-                .map(|(node_id, node)| {
-                    let config_ref = node.config_ref.clone().ok_or_else(|| {
-                        crate::error::MoltenError::invalid_harness("complete cluster node has no config ref")
-                    })?;
-                    Ok(crate::cluster::ClusterLifecycleNodeSummary {
-                        node_id: node_id.clone(),
-                        manifest_ref: fixture_ref.to_string(),
-                        config_ref,
-                        identity_ref: node.identity_ref.clone(),
-                        startup_ref: node.startup_ref.clone(),
-                        health_ref: node.health_ref.clone(),
-                        queue_ref: None,
-                        control_ref: node.control_ref.clone(),
-                        heartbeat_ref: node.heartbeat_ref.clone(),
-                        shutdown_ref: node.shutdown_ref.clone(),
-                        stop_control_ref: node.stop_control_ref.clone(),
-                        already_running_ref: None,
-                    })
-                })
-                .collect::<crate::error::Result<Vec<_>>>()?,
+            node_summaries: lifecycle_node_summaries(fixture_ref, node_ids, nodes)?,
             already_running_refs: Vec::new(),
             stop_order: node_ids.iter().rev().cloned().collect(),
             diagnostics: diagnostics.to_vec(),
@@ -893,6 +1022,37 @@ fn build_lifecycle_artifacts(input: LifecycleArtifactsInput<'_>) -> crate::error
         drift_ref,
         drift_value,
     })
+}
+
+fn lifecycle_node_summaries(
+    fixture_ref: &str,
+    node_ids: &[String],
+    nodes: &[NodeArtifacts],
+) -> crate::error::Result<Vec<crate::cluster::ClusterLifecycleNodeSummary>> {
+    node_ids
+        .iter()
+        .zip(nodes)
+        .map(|(node_id, node)| {
+            let config_ref = node
+                .config_ref
+                .clone()
+                .ok_or_else(|| crate::error::MoltenError::invalid_harness("complete cluster node has no config ref"))?;
+            Ok(crate::cluster::ClusterLifecycleNodeSummary {
+                node_id: node_id.clone(),
+                manifest_ref: fixture_ref.to_string(),
+                config_ref,
+                identity_ref: node.identity_ref.clone(),
+                startup_ref: node.startup_ref.clone(),
+                health_ref: node.health_ref.clone(),
+                queue_ref: None,
+                control_ref: node.control_ref.clone(),
+                heartbeat_ref: node.heartbeat_ref.clone(),
+                shutdown_ref: node.shutdown_ref.clone(),
+                stop_control_ref: node.stop_control_ref.clone(),
+                already_running_ref: None,
+            })
+        })
+        .collect::<crate::error::Result<Vec<_>>>()
 }
 
 struct CleanupObservation {

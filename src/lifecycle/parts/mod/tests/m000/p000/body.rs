@@ -348,7 +348,7 @@
         let before_first = state.snapshot();
         let first_cleanup = state.cleanup_actor_scope("service:frontend").expect("first cleanup");
         let after_first = state.snapshot();
-        let first_receipt = super::scope_cleanup_receipt(&super::ScopeCleanupInput {
+        let first_input = super::ScopeCleanupInput {
             entity_kind: super::EntityKind::Service,
             entity_id: "service:frontend",
             cause: "stop",
@@ -359,23 +359,13 @@
             resource_refs: &[],
             evidence_refs: &[],
             logical_step: 12,
-        })
+        };
+        let first_receipt = super::scope_cleanup_receipt(&first_input)
         .expect("first service cleanup receipt");
         let before_second = state.snapshot();
         let second_cleanup = state.cleanup_actor_scope("service:frontend").expect("second cleanup");
         let after_second = state.snapshot();
-        let second_receipt = super::scope_cleanup_receipt(&super::ScopeCleanupInput {
-            entity_kind: super::EntityKind::Service,
-            entity_id: "service:frontend",
-            cause: "stop",
-            before: &before_second,
-            after_cleanup: &after_second,
-            cleanup: &second_cleanup,
-            live_ref_refs: &[],
-            resource_refs: &[],
-            evidence_refs: &[],
-            logical_step: 13,
-        })
+        let second_receipt = super::scope_cleanup_receipt(&super::ScopeCleanupInput { before: &before_second, after_cleanup: &after_second, cleanup: &second_cleanup, logical_step: 13, ..first_input })
         .expect("second service cleanup receipt");
         let stale_cleanup = crate::runtime::RuntimeScopeCleanup {
             actor: "service:frontend".to_owned(),
@@ -383,31 +373,9 @@
             observer_refs: Vec::new(),
             message_refs: Vec::new(),
         };
-        let stale_receipt = super::scope_cleanup_receipt(&super::ScopeCleanupInput {
-            entity_kind: super::EntityKind::Service,
-            entity_id: "service:frontend",
-            cause: "stale-cleanup",
-            before: &before_second,
-            after_cleanup: &after_second,
-            cleanup: &stale_cleanup,
-            live_ref_refs: &[],
-            resource_refs: &[],
-            evidence_refs: &[],
-            logical_step: 14,
-        })
+        let stale_receipt = super::scope_cleanup_receipt(&super::ScopeCleanupInput { cause: "stale-cleanup", before: &before_second, after_cleanup: &after_second, cleanup: &stale_cleanup, logical_step: 14, ..first_input })
         .expect("stale service cleanup receipt");
-        let non_owned_receipt = super::scope_cleanup_receipt(&super::ScopeCleanupInput {
-            entity_kind: super::EntityKind::Service,
-            entity_id: "service:backend",
-            cause: "wrong-owner",
-            before: &before_first,
-            after_cleanup: &after_first,
-            cleanup: &first_cleanup,
-            live_ref_refs: &[],
-            resource_refs: &[],
-            evidence_refs: &[],
-            logical_step: 15,
-        })
+        let non_owned_receipt = super::scope_cleanup_receipt(&super::ScopeCleanupInput { entity_id: "service:backend", cause: "wrong-owner", logical_step: 15, ..first_input })
         .expect("non-owned service cleanup receipt");
         assert_eq!(first_receipt.decision, "pass");
         assert_eq!(second_receipt.decision, "pass");

@@ -1,0 +1,34 @@
+# workspace (cargo octet check), base 8fbab9887 -> candidate
+lint                                     findings          sites
+path_segment_repetition             1877 -> 1886     1038 -> 1042   GREW
+excessive_file_length                548 -> 548       305 -> 305  
+function_length                      202 -> 0         127 -> 0    
+underscore_in_module_filename         31 -> 31         15 -> 15   
+module_file_count                     20 -> 20         11 -> 11   
+ambient_env                           14 -> 14          5 -> 5    
+TOTAL                               2692 -> 2499     1501 -> 1378 
+
+# -p molten --lib
+lint                                     findings          sites
+path_segment_repetition              794 -> 799       794 -> 799    GREW
+excessive_file_length                229 -> 229       229 -> 229  
+function_length                       70 -> 0          70 -> 0    
+underscore_in_module_filename          7 -> 7           7 -> 7    
+ambient_env                            6 -> 6           4 -> 4    
+module_file_count                      5 -> 5           5 -> 5    
+TOTAL                               1111 -> 1046     1109 -> 1044 
+
+# path_segment_repetition items (workspace)
+NEW	src/content_store_adapter/canonical.rs	content_store_port_descriptors	content	content_store_adapter
+NEW	src/fabric_membership/canonical.rs	fabric_membership_port_descriptors	fabric	fabric_membership
+NEW	src/fabric_observability/canonical.rs	fabric_observability_port_descriptors	fabric	fabric_observability
+NEW	src/fabric_time/canonical.rs	fabric_time_port_descriptors	fabric	fabric_time
+NEW	src/system_extension/fixture.rs	run_executable_system_extension_fixture	system	system_extension
+GONE	src/testing/distributed/parts/tests/p000/body.rs	NegativeFaultFixture	negative	direct_negative_fault_fixtures_deny_before_side_effects
+
+# path_segment_repetition items (lib)
+NEW	src/content_store_adapter/canonical.rs	content_store_port_descriptors	content	content_store_adapter
+NEW	src/fabric_membership/canonical.rs	fabric_membership_port_descriptors	fabric	fabric_membership
+NEW	src/fabric_observability/canonical.rs	fabric_observability_port_descriptors	fabric	fabric_observability
+NEW	src/fabric_time/canonical.rs	fabric_time_port_descriptors	fabric	fabric_time
+NEW	src/system_extension/fixture.rs	run_executable_system_extension_fixture	system	system_extension

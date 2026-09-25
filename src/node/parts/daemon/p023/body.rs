@@ -5,33 +5,7 @@ fn duplicate_control_live_send(
     ticket: &ControlLiveTicket,
     envelope: &ControlIngressEnvelope,
 ) -> Result<Option<ControlLiveSend>> {
-    let transport_receipt_value = live_transport_receipt_value(&LiveTransportReceiptValueInput {
-        operation: "publish",
-        decision: "pass",
-        node_id: input.from_peer,
-        delivered_from: None,
-        envelope,
-        ingress_receipt_ref: None,
-        topology_profile_ref: selected_topology_profile_ref(input),
-        transport_profile_ref: selected_transport_profile_ref(input),
-        effective_max_attempts: Some(effective_live_send_max_attempts(input)),
-        effective_join_timeout_ms: Some(effective_live_send_join_timeout_ms(input)),
-        diagnostics: &[],
-    })?;
-    let transport_receipt_ref = crate::preserves_rail::canonical_hash(&transport_receipt_value)?;
-    let send_receipt_value = live_send_receipt_value(&LiveSendReceiptValueInput {
-        decision: "pass",
-        from_peer: input.from_peer,
-        ticket,
-        envelope,
-        transport_receipt_ref: Some(&transport_receipt_ref),
-        topology_profile_ref: selected_topology_profile_ref(input),
-        transport_profile_ref: selected_transport_profile_ref(input),
-        effective_max_attempts: effective_live_send_max_attempts(input),
-        effective_join_timeout_ms: effective_live_send_join_timeout_ms(input),
-        diagnostics: &[],
-    })?;
-    let send_receipt_ref = crate::preserves_rail::canonical_hash(&send_receipt_value)?;
+    let (transport_receipt_value, transport_receipt_ref, send_receipt_ref) = pass_send_receipt_refs(input, ticket, envelope)?;
     let send_path = control_live_send_receipt_path(&send_receipt_ref)?;
     if !state_root.try_exists(&send_path)? {
         return Ok(None);
@@ -77,6 +51,42 @@ fn duplicate_control_live_send(
         send_receipt_ref,
         send_receipt_value: prior_send_value,
     }))
+}
+
+/// The transport receipt and the send receipt ref that a passing first send of this envelope would have recorded.
+fn pass_send_receipt_refs(
+    input: &ControlLiveSendInput<'_>,
+    ticket: &ControlLiveTicket,
+    envelope: &ControlIngressEnvelope,
+) -> Result<(IoValue, String, String)> {
+    let transport_receipt_value = live_transport_receipt_value(&LiveTransportReceiptValueInput {
+        operation: "publish",
+        decision: "pass",
+        node_id: input.from_peer,
+        delivered_from: None,
+        envelope,
+        ingress_receipt_ref: None,
+        topology_profile_ref: selected_topology_profile_ref(input),
+        transport_profile_ref: selected_transport_profile_ref(input),
+        effective_max_attempts: Some(effective_live_send_max_attempts(input)),
+        effective_join_timeout_ms: Some(effective_live_send_join_timeout_ms(input)),
+        diagnostics: &[],
+    })?;
+    let transport_receipt_ref = crate::preserves_rail::canonical_hash(&transport_receipt_value)?;
+    let send_receipt_value = live_send_receipt_value(&LiveSendReceiptValueInput {
+        decision: "pass",
+        from_peer: input.from_peer,
+        ticket,
+        envelope,
+        transport_receipt_ref: Some(&transport_receipt_ref),
+        topology_profile_ref: selected_topology_profile_ref(input),
+        transport_profile_ref: selected_transport_profile_ref(input),
+        effective_max_attempts: effective_live_send_max_attempts(input),
+        effective_join_timeout_ms: effective_live_send_join_timeout_ms(input),
+        diagnostics: &[],
+    })?;
+    let send_receipt_ref = crate::preserves_rail::canonical_hash(&send_receipt_value)?;
+    Ok((transport_receipt_value, transport_receipt_ref, send_receipt_ref))
 }
 
 fn denied_control_live_send_with_diagnostics(denied: DeniedLiveSendInput<'_>) -> Result<ControlLiveSend> {

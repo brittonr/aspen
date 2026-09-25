@@ -95,37 +95,7 @@ pub fn propose_control_registry_transition_core(
     let envelope = parse_raft_command_envelope(envelope_value)?;
     let (command, diagnostics) = admitted_command(&envelope.command);
     if let Some(duplicate) = duplicate_sequence(runtime, &envelope) {
-        let proposal = match duplicate {
-            DuplicateSequence::Replay(existing) => {
-                let commit_receipt = deny_commit_receipt(runtime, &envelope, "duplicate-client-sequence", &[])?;
-                ControlRegistryProposal {
-                    decision: existing.decision.clone(),
-                    duplicate: true,
-                    envelope,
-                    predicates: Vec::new(),
-                    log_entry: None,
-                    commit_receipt,
-                    registry_receipt: existing,
-                }
-            }
-            DuplicateSequence::Conflict(session) => {
-                let diagnostics = vec![format!(
-                    "conflicting duplicate client sequence {} for {}; prior command {}",
-                    envelope.sequence, envelope.client_session, session.result_command_ref
-                )];
-                let commit_receipt = deny_commit_receipt(runtime, &envelope, "duplicate-client-sequence", &diagnostics)?;
-                let registry_receipt = deny_duplicate_registry_receipt(runtime, &envelope, command.as_ref(), &diagnostics)?;
-                ControlRegistryProposal {
-                    decision: "deny".to_string(),
-                    duplicate: true,
-                    envelope,
-                    predicates: Vec::new(),
-                    log_entry: None,
-                    commit_receipt,
-                    registry_receipt,
-                }
-            }
-        };
+        let proposal = duplicate_proposal(runtime, envelope, duplicate, command.as_ref())?;
         return Ok(denied_transition(runtime, proposal));
     }
     let admission = proposal_diagnostics(ProposalDecisionInput {
@@ -175,6 +145,46 @@ pub fn propose_control_registry_transition_core(
         state_after: Some(state_after),
         next_committed_index: draft.next_index,
         next_last_log_ref,
+    })
+}
+
+/// A replayed duplicate returns its prior receipt; a conflicting duplicate is denied with the prior command named.
+fn duplicate_proposal(
+    runtime: &ControlRegistryRuntime,
+    envelope: RaftCommandEnvelope,
+    duplicate: DuplicateSequence,
+    command: Option<&ControlRegistryCommand>,
+) -> Result<ControlRegistryProposal> {
+    Ok(match duplicate {
+        DuplicateSequence::Replay(existing) => {
+            let commit_receipt = deny_commit_receipt(runtime, &envelope, "duplicate-client-sequence", &[])?;
+            ControlRegistryProposal {
+                decision: existing.decision.clone(),
+                duplicate: true,
+                envelope,
+                predicates: Vec::new(),
+                log_entry: None,
+                commit_receipt,
+                registry_receipt: existing,
+            }
+        }
+        DuplicateSequence::Conflict(session) => {
+            let diagnostics = vec![format!(
+                "conflicting duplicate client sequence {} for {}; prior command {}",
+                envelope.sequence, envelope.client_session, session.result_command_ref
+            )];
+            let commit_receipt = deny_commit_receipt(runtime, &envelope, "duplicate-client-sequence", &diagnostics)?;
+            let registry_receipt = deny_duplicate_registry_receipt(runtime, &envelope, command, &diagnostics)?;
+            ControlRegistryProposal {
+                decision: "deny".to_string(),
+                duplicate: true,
+                envelope,
+                predicates: Vec::new(),
+                log_entry: None,
+                commit_receipt,
+                registry_receipt,
+            }
+        }
     })
 }
 

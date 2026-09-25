@@ -596,6 +596,40 @@ pub struct OperatorStatusReadback {
     pub status_ref: String,
 }
 
+const READBACK_PHASES: [&str; 19] = [
+    "absent",
+    "installed",
+    "admitted",
+    "initializing",
+    "initialized",
+    "starting",
+    "running",
+    "checkpointing",
+    "recovering",
+    "draining",
+    "drained",
+    "failed",
+    "restarting",
+    "upgrading",
+    "rolling-back",
+    "shutting-down",
+    "quarantined",
+    "stopped",
+    "removed",
+];
+
+const READBACK_EXECUTION_PROFILES: [&str; 3] = ["in-process-native", "native-process", "sandboxed-component"];
+
+const READBACK_HEALTH_STATES: [&str; 7] = [
+    "unknown",
+    "starting",
+    "healthy",
+    "degraded",
+    "failed",
+    "quarantined",
+    "stopped",
+];
+
 // r[impl molten.system_extension.operator_readback]
 pub fn parse_operator_status_readback(value: &preserves::IOValue) -> crate::error::Result<OperatorStatusReadback> {
     const STATUS_FIELD_COUNT: usize = 16;
@@ -621,41 +655,9 @@ pub fn parse_operator_status_readback(value: &preserves::IOValue) -> crate::erro
     if let Some(checkpoint_ref) = &checkpoint_ref {
         crate::preserves_rail::validate_content_ref(checkpoint_ref)?;
     }
-    validate_readback_enum(&phase, "phase", &[
-        "absent",
-        "installed",
-        "admitted",
-        "initializing",
-        "initialized",
-        "starting",
-        "running",
-        "checkpointing",
-        "recovering",
-        "draining",
-        "drained",
-        "failed",
-        "restarting",
-        "upgrading",
-        "rolling-back",
-        "shutting-down",
-        "quarantined",
-        "stopped",
-        "removed",
-    ])?;
-    validate_readback_enum(&execution_profile, "execution-profile", &[
-        "in-process-native",
-        "native-process",
-        "sandboxed-component",
-    ])?;
-    validate_readback_enum(&health, "health", &[
-        "unknown",
-        "starting",
-        "healthy",
-        "degraded",
-        "failed",
-        "quarantined",
-        "stopped",
-    ])?;
+    validate_readback_enum(&phase, "phase", &READBACK_PHASES)?;
+    validate_readback_enum(&execution_profile, "execution-profile", &READBACK_EXECUTION_PROFILES)?;
+    validate_readback_enum(&health, "health", &READBACK_HEALTH_STATES)?;
     Ok(OperatorStatusReadback {
         extension_id,
         service_id,

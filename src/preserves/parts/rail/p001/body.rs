@@ -1901,7 +1901,12 @@ where
         }
     }
 
-    let children = if value.is_sequence() || value.is_set() {
+    Ok(StructuralNodeOutcome::Children(container_children(value, child_budget)))
+}
+
+/// The labelled items of a sequence or set, or the labelled keys and values of a dictionary, within the budget.
+fn container_children(value: &IoValue, child_budget: usize) -> Vec<(String, IoValue)> {
+    if value.is_sequence() || value.is_set() {
         value
             .iter()
             .enumerate()
@@ -1922,8 +1927,7 @@ where
             .collect()
     } else {
         Vec::new()
-    };
-    Ok(StructuralNodeOutcome::Children(children))
+    }
 }
 
 fn structural_match(kind: StructuralTokenKind, token: &str, path: &[String]) -> StructuralMatch {
@@ -2039,23 +2043,11 @@ mod tests {
                     super::string(boundary_test_ref("member")),
                 ]),
             ])]),
-            super::BoundaryFieldKind::HostcallDescriptorsRecord => super::record(field.label, vec![super::sequence(vec![
-                super::record("hostcall-descriptor", vec![
-                    super::record("operation", vec![super::string("storage.read")]),
-                    super::record("descriptor", vec![super::string(boundary_test_ref("descriptor"))]),
-                    super::record("input-schema", vec![super::string(boundary_test_ref("input-schema"))]),
-                    super::record("output-schema", vec![super::string(boundary_test_ref("output-schema"))]),
-                    super::record("authority", vec![super::sequence(vec![super::string(boundary_test_ref("authority"))])]),
-                    super::record("resource", vec![super::sequence(vec![super::string(boundary_test_ref("resource"))])]),
-                    super::record("effects", vec![super::sequence(vec![super::string(boundary_test_ref("effects"))])]),
-                    super::record("replay", vec![super::string("deterministic")]),
-                    super::record("errors", vec![super::sequence(vec![super::string(boundary_test_ref("errors"))])]),
-                ]),
-            ])]),
-            super::BoundaryFieldKind::NonEmptyRefSequenceRecord => super::record(field.label, vec![super::sequence(vec![
+            super::BoundaryFieldKind::HostcallDescriptorsRecord => hostcall_descriptors_fixture(field.label),
+            super::BoundaryFieldKind::NonEmptyRefSequenceRecord | super::BoundaryFieldKind::RefSequenceRecord | super::BoundaryFieldKind::UniqueRefSequenceRecord => super::record(field.label, vec![super::sequence(vec![
                 super::string(boundary_test_ref(field.label)),
             ])]),
-            super::BoundaryFieldKind::NonEmptyStringRecord => {
+            super::BoundaryFieldKind::NonEmptyStringRecord | super::BoundaryFieldKind::StableIdRecord | super::BoundaryFieldKind::StringRecord => {
                 super::record(field.label, vec![super::string(format!("{}-value", field.label))])
             }
             super::BoundaryFieldKind::ObjectRecord => super::record(field.label, vec![
@@ -2073,34 +2065,40 @@ mod tests {
             super::BoundaryFieldKind::RefRecord => {
                 super::record(field.label, vec![super::string(boundary_test_ref(field.label))])
             }
-            super::BoundaryFieldKind::RefSequenceRecord => super::record(field.label, vec![super::sequence(vec![
-                super::string(boundary_test_ref(field.label)),
-            ])]),
-            super::BoundaryFieldKind::StableIdRecord => {
-                super::record(field.label, vec![super::string(format!("{}-value", field.label))])
-            }
+
+
             super::BoundaryFieldKind::StringAndRefRecord => super::record(field.label, vec![
                 super::string(format!("{}-value", field.label)),
                 super::string(boundary_test_ref(field.label)),
             ]),
-            super::BoundaryFieldKind::StringRecord => {
-                super::record(field.label, vec![super::string(format!("{}-value", field.label))])
-            }
-            super::BoundaryFieldKind::StringSequenceRecord => super::record(field.label, vec![super::sequence(vec![
+
+            super::BoundaryFieldKind::StringSequenceRecord | super::BoundaryFieldKind::UniqueStringSequenceRecord => super::record(field.label, vec![super::sequence(vec![
                 super::string(format!("{}-item", field.label)),
             ])]),
-            super::BoundaryFieldKind::UniqueRefSequenceRecord => super::record(field.label, vec![super::sequence(vec![
-                super::string(boundary_test_ref(field.label)),
-            ])]),
-            super::BoundaryFieldKind::UniqueStringSequenceRecord => super::record(field.label, vec![super::sequence(vec![
-                super::string(format!("{}-item", field.label)),
-            ])]),
+
+
             super::BoundaryFieldKind::TwoRefsRecord => super::record(field.label, vec![
                 super::string(boundary_test_ref(&format!("{}-a", field.label))),
                 super::string(boundary_test_ref(&format!("{}-b", field.label))),
             ]),
             super::BoundaryFieldKind::U64Record => super::record(field.label, vec![super::u64_value(1)]),
         }
+    }
+
+    fn hostcall_descriptors_fixture(label: &'static str) -> preserves::IOValue {
+        super::record(label, vec![super::sequence(vec![
+                super::record("hostcall-descriptor", vec![
+                    super::record("operation", vec![super::string("storage.read")]),
+                    super::record("descriptor", vec![super::string(boundary_test_ref("descriptor"))]),
+                    super::record("input-schema", vec![super::string(boundary_test_ref("input-schema"))]),
+                    super::record("output-schema", vec![super::string(boundary_test_ref("output-schema"))]),
+                    super::record("authority", vec![super::sequence(vec![super::string(boundary_test_ref("authority"))])]),
+                    super::record("resource", vec![super::sequence(vec![super::string(boundary_test_ref("resource"))])]),
+                    super::record("effects", vec![super::sequence(vec![super::string(boundary_test_ref("effects"))])]),
+                    super::record("replay", vec![super::string("deterministic")]),
+                    super::record("errors", vec![super::sequence(vec![super::string(boundary_test_ref("errors"))])]),
+                ]),
+            ])])
     }
 
     fn boundary_fixture_fields(

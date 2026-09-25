@@ -126,16 +126,8 @@ mod tests {
         assert_eq!(exact.decision, "pass");
         assert!(exact.plaintext_authorized);
 
-        let wrong_encrypted_value = encrypted_ref_value(&EncryptedRefInput {
-            ciphertext_ref: fixture_ref("wrong-ciphertext"),
-            commitment_ref: run.encrypted.commitment_ref.clone(),
-            encryption_ref: run.encrypted.encryption_ref.clone(),
-            schema_ref: run.encrypted.schema_ref.clone(),
-            policy_refs: run.encrypted.policy_refs.clone(),
-            evidence_refs: run.encrypted.evidence_refs.clone(),
-        })
-        .expect("wrong encrypted value");
-        let wrong_encrypted = parse_encrypted_ref(&wrong_encrypted_value).expect("wrong encrypted");
+        let wrong_encrypted =
+            reencrypted_ref(&run.encrypted, fixture_ref("wrong-ciphertext"), run.encrypted.commitment_ref.clone());
         let wrong_encrypted_decision = evaluate_secret_access_binding(SecretAccessBindingInput {
             secret: &run.secret,
             encrypted: &wrong_encrypted,
@@ -151,16 +143,8 @@ mod tests {
             .iter()
             .any(|diagnostic| diagnostic == SECRET_ACCESS_DECRYPT_ENCRYPTED_MISMATCH));
 
-        let wrong_commitment_value = encrypted_ref_value(&EncryptedRefInput {
-            ciphertext_ref: fixture_ref("commitment-ciphertext"),
-            commitment_ref: fixture_ref("wrong-commitment"),
-            encryption_ref: run.encrypted.encryption_ref.clone(),
-            schema_ref: run.encrypted.schema_ref.clone(),
-            policy_refs: run.encrypted.policy_refs.clone(),
-            evidence_refs: run.encrypted.evidence_refs.clone(),
-        })
-        .expect("wrong commitment value");
-        let wrong_commitment = parse_encrypted_ref(&wrong_commitment_value).expect("wrong commitment");
+        let wrong_commitment =
+            reencrypted_ref(&run.encrypted, fixture_ref("commitment-ciphertext"), fixture_ref("wrong-commitment"));
         let wrong_commitment_decision = evaluate_secret_access_binding(SecretAccessBindingInput {
             secret: &run.secret,
             encrypted: &wrong_commitment,
@@ -188,6 +172,20 @@ mod tests {
             .diagnostics
             .iter()
             .any(|diagnostic| diagnostic == SECRET_ACCESS_REVEAL_FAILED));
+    }
+
+    /// `encrypted` with its ciphertext and commitment refs replaced, re-encoded and parsed.
+    fn reencrypted_ref(encrypted: &EncryptedRef, ciphertext_ref: String, commitment_ref: String) -> EncryptedRef {
+        let value = encrypted_ref_value(&EncryptedRefInput {
+            ciphertext_ref,
+            commitment_ref,
+            encryption_ref: encrypted.encryption_ref.clone(),
+            schema_ref: encrypted.schema_ref.clone(),
+            policy_refs: encrypted.policy_refs.clone(),
+            evidence_refs: encrypted.evidence_refs.clone(),
+        })
+        .expect("re-encrypted value");
+        parse_encrypted_ref(&value).expect("re-encrypted ref")
     }
 
     #[test]

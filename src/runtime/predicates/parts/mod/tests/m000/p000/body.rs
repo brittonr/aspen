@@ -124,104 +124,39 @@
         let message_body = RuntimeValue::string("service.payload").expect("message body");
         let mut state = RuntimeState::new(TURN_COMMIT_TEST_SEED);
 
-        let assert_step = RuntimeStep::Assert {
+        let assert = commit_bound_turn(&mut state, &RuntimeStep::Assert {
             actor: "svc".into(),
             value: ready.clone(),
-        };
-        let before_assert = state.snapshot();
-        let assert_turn = state.begin_turn(&assert_step);
-        assert_eq!(state.snapshot(), before_assert);
-        let expected_assert_after = committed_turn_snapshot(&before_assert, &assert_turn);
-        let (assert_events, assert_receipt) = state
-            .commit_turn_with_predicate_receipt(assert_turn.clone())
-            .expect("runtime predicate assert commit");
-        assert_eq!(state.snapshot(), expected_assert_after);
-        assert!(matches!(assert_events.as_slice(), [RuntimeEvent::AssertionCommitted { .. }]));
-        assert_turn_receipt_binds_transition(
-            &assert_receipt,
-            &before_assert,
-            &assert_turn,
-            &expected_assert_after,
-            TurnOutcome::Committed,
-            PredicateDecision::Pass,
-        );
-        let direct_assert = evaluate_turn_transition(
-            &before_assert,
-            &assert_turn,
-            &expected_assert_after,
-            TurnOutcome::Committed,
-        )
-        .expect("direct assert commit receipt");
-        assert_eq!(assert_receipt.receipt_ref, direct_assert.receipt_ref);
+        });
+        assert!(matches!(assert.events.as_slice(), [RuntimeEvent::AssertionCommitted { .. }]));
+        let direct_assert = evaluate_turn_transition(&assert.before, &assert.turn, &assert.after, TurnOutcome::Committed)
+            .expect("direct assert commit receipt");
+        assert_eq!(assert.receipt.receipt_ref, direct_assert.receipt_ref);
 
-        let observe_step = RuntimeStep::Observe {
+        let observe = commit_bound_turn(&mut state, &RuntimeStep::Observe {
             actor: "watcher".into(),
             pattern: ready.clone(),
-        };
-        let before_observe = state.snapshot();
-        let observe_turn = state.begin_turn(&observe_step);
-        let expected_observe_after = committed_turn_snapshot(&before_observe, &observe_turn);
-        let (observe_events, observe_receipt) = state
-            .commit_turn_with_predicate_receipt(observe_turn.clone())
-            .expect("runtime predicate observe commit");
-        assert_eq!(state.snapshot(), expected_observe_after);
-        assert!(observe_events.iter().any(|event| matches!(event, RuntimeEvent::ObserveRegistered { .. })));
-        assert!(observe_events.iter().any(|event| matches!(event, RuntimeEvent::AssertionObserved { .. })));
-        assert_turn_receipt_binds_transition(
-            &observe_receipt,
-            &before_observe,
-            &observe_turn,
-            &expected_observe_after,
-            TurnOutcome::Committed,
-            PredicateDecision::Pass,
-        );
+        });
+        assert!(observe.events.iter().any(|event| matches!(event, RuntimeEvent::ObserveRegistered { .. })));
+        assert!(observe.events.iter().any(|event| matches!(event, RuntimeEvent::AssertionObserved { .. })));
 
-        let send_step = RuntimeStep::Send {
+        let send = commit_bound_turn(&mut state, &RuntimeStep::Send {
             from: "svc".into(),
             to: "watcher".into(),
             body: message_body,
-        };
-        let before_send = state.snapshot();
-        let send_turn = state.begin_turn(&send_step);
-        let expected_send_after = committed_turn_snapshot(&before_send, &send_turn);
-        let (send_events, send_receipt) = state
-            .commit_turn_with_predicate_receipt(send_turn.clone())
-            .expect("runtime predicate send commit");
-        assert_eq!(state.snapshot(), expected_send_after);
-        assert!(matches!(send_events.as_slice(), [RuntimeEvent::MessageDelivered { .. }]));
-        assert_turn_receipt_binds_transition(
-            &send_receipt,
-            &before_send,
-            &send_turn,
-            &expected_send_after,
-            TurnOutcome::Committed,
-            PredicateDecision::Pass,
-        );
+        });
+        assert!(matches!(send.events.as_slice(), [RuntimeEvent::MessageDelivered { .. }]));
 
-        let retract_step = RuntimeStep::Retract {
+        let retract = commit_bound_turn(&mut state, &RuntimeStep::Retract {
             actor: "svc".into(),
             value: ready.clone(),
-        };
-        let before_retract = state.snapshot();
-        let retract_turn = state.begin_turn(&retract_step);
-        let expected_retract_after = committed_turn_snapshot(&before_retract, &retract_turn);
-        let (retract_events, retract_receipt) = state
-            .commit_turn_with_predicate_receipt(retract_turn.clone())
-            .expect("runtime predicate retract commit");
-        assert_eq!(state.snapshot(), expected_retract_after);
-        assert!(retract_events.iter().any(|event| matches!(event, RuntimeEvent::AssertionRetracted { .. })));
+        });
+        assert!(retract.events.iter().any(|event| matches!(event, RuntimeEvent::AssertionRetracted { .. })));
         assert!(
-            retract_events
+            retract
+                .events
                 .iter()
                 .any(|event| matches!(event, RuntimeEvent::AssertionRetractionObserved { .. }))
-        );
-        assert_turn_receipt_binds_transition(
-            &retract_receipt,
-            &before_retract,
-            &retract_turn,
-            &expected_retract_after,
-            TurnOutcome::Committed,
-            PredicateDecision::Pass,
         );
 
         let denied_step = RuntimeStep::Assert {
@@ -244,38 +179,52 @@
             PredicateDecision::Pass,
         );
         assert_eq!(rolled_back_turn_snapshot(&before_denied), before_denied);
-        let failed = evaluate_turn_transition(&before_denied, &denied_turn, &before_denied, TurnOutcome::Failed)
-            .expect("failed turn receipt");
-        assert_turn_receipt_binds_transition(
-            &failed,
-            &before_denied,
-            &denied_turn,
-            &before_denied,
-            TurnOutcome::Failed,
-            PredicateDecision::Pass,
-        );
-        let explicit_rollback =
-            evaluate_turn_transition(&before_denied, &denied_turn, &before_denied, TurnOutcome::RolledBack)
-                .expect("rolled-back turn receipt");
-        assert_turn_receipt_binds_transition(
-            &explicit_rollback,
-            &before_denied,
-            &denied_turn,
-            &before_denied,
-            TurnOutcome::RolledBack,
-            PredicateDecision::Pass,
-        );
+        assert_unchanged_turn_outcomes(&before_denied, &denied_turn);
+    }
 
-        let stale = evaluate_turn_transition(&before_denied, &denied_turn, &before_denied, TurnOutcome::Committed)
-            .expect("stale receipt");
+    /// The snapshots, pending turn, events, and predicate receipt of one committed turn.
+    struct CommittedTurn {
+        before: RuntimeSnapshot,
+        turn: PendingTurn,
+        after: RuntimeSnapshot,
+        events: Vec<RuntimeEvent>,
+        receipt: RuntimePredicateReceipt,
+    }
+
+    /// Stages and commits `step`; staging leaves the state unchanged, the commit reaches the expected snapshot, and
+    /// the receipt binds the committed transition.
+    fn commit_bound_turn(state: &mut RuntimeState, step: &RuntimeStep) -> CommittedTurn {
+        let before = state.snapshot();
+        let turn = state.begin_turn(step);
+        assert_eq!(state.snapshot(), before);
+        let after = committed_turn_snapshot(&before, &turn);
+        let (events, receipt) = state.commit_turn_with_predicate_receipt(turn.clone()).expect("runtime predicate commit");
+        assert_eq!(state.snapshot(), after);
         assert_turn_receipt_binds_transition(
-            &stale,
-            &before_denied,
-            &denied_turn,
-            &before_denied,
+            &receipt,
+            &before,
+            &turn,
+            &after,
             TurnOutcome::Committed,
-            PredicateDecision::Deny,
+            PredicateDecision::Pass,
         );
+        CommittedTurn {
+            before,
+            turn,
+            after,
+            events,
+            receipt,
+        }
+    }
+
+    /// Failed and rolled-back outcomes over an unchanged snapshot pass, and a committed outcome over it is stale.
+    fn assert_unchanged_turn_outcomes(before: &RuntimeSnapshot, turn: &PendingTurn) {
+        for outcome in [TurnOutcome::Failed, TurnOutcome::RolledBack] {
+            let receipt = evaluate_turn_transition(before, turn, before, outcome).expect("unchanged turn receipt");
+            assert_turn_receipt_binds_transition(&receipt, before, turn, before, outcome, PredicateDecision::Pass);
+        }
+        let stale = evaluate_turn_transition(before, turn, before, TurnOutcome::Committed).expect("stale receipt");
+        assert_turn_receipt_binds_transition(&stale, before, turn, before, TurnOutcome::Committed, PredicateDecision::Deny);
         assert!(stale.diagnostics.iter().any(|diagnostic| diagnostic == "turn-transition-state-mismatch"));
     }
 

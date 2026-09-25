@@ -392,19 +392,9 @@ fn public_shell_surface_contains_no_runtime_handle_accessor_or_ambient_fallback(
 async fn registered_effect_port_routes_a_live_cross_process_frame_without_consumer_iroh_branches() {
     use crate::system_extension::FabricEffectPort;
 
-    let mut listener = listener().await;
+    let listener = listener().await;
     let endpoint = listener.handoff().clone();
-    let listener_task = tokio::spawn(async move {
-        let frame = listener
-            .accept_one(SESSION_REF, REQUEST_REF, std::time::Duration::from_secs(TEST_TIMEOUT_SECONDS))
-            .await
-            .expect("effect-port listener frame");
-        let cleanup = listener
-            .drain_and_close(ListenerDrainReason::OperatorRequest)
-            .await
-            .expect("effect-port listener cleanup");
-        (frame, cleanup)
-    });
+    let listener_task = tokio::spawn(accept_one_and_drain(listener));
 
     let live_profile = profile();
     let context = ExtensionTransportContext::from_test_snapshot(&protocol().service_id, GENERATION, &live_profile);
@@ -419,45 +409,8 @@ async fn registered_effect_port_routes_a_live_cross_process_frame_without_consum
     let mut port = RegisteredCrossProcessTransportEffectPort::new(context, live_profile.clone(), protocol(), client)
         .expect("cross-process effect port");
     let binding = effect_binding(&live_profile);
-    let session_id = ScopedTransportId {
-        opaque_ref: SESSION_REF.to_string(),
-        service_id: protocol().service_id,
-        generation: GENERATION,
-    };
-    let stream_id = ScopedTransportId {
-        opaque_ref: WRONG_REF.to_string(),
-        service_id: session_id.service_id.clone(),
-        generation: GENERATION,
-    };
-    let setup = [
-        (PROFILE_REF, "register-protocol", TransportCommand::Register {
-            operation_id: AUTHORITY_REF.to_string(),
-            descriptor: protocol(),
-        }),
-        (FRAMING_REF, "open-session", TransportCommand::OpenSession {
-            operation_id: AUTHORITY_REF.to_string(),
-            session_id: session_id.clone(),
-            alpn: protocol().alpn,
-            direction: SessionDirection::Outbound,
-            peer: PeerIdentityRefs {
-                transport_identity_ref: PEER_CONTEXT_REF.to_string(),
-                membership_ref: Some(LOCATOR_COHORT_REF.to_string()),
-                application_principal_ref: Some(VALIDITY_REF.to_string()),
-                trust_decision_ref: Some(LISTENER_CAPABILITY_REF.to_string()),
-                capability_authority_ref: Some(CLIENT_CAPABILITY_REF.to_string()),
-                bootstrap_policy_ref: None,
-            },
-            observed_tick: OBSERVED_TICK,
-            deadline_tick: OBSERVED_TICK + DEADLINE_WINDOW,
-        }),
-        (AUTHORITY_REF, "open-stream", TransportCommand::OpenStream {
-            operation_id: AUTHORITY_REF.to_string(),
-            session_id: session_id.clone(),
-            stream_id: stream_id.clone(),
-            direction: StreamDirection::Bidirectional,
-            initial_credit_bytes: FRAME_LIMIT,
-        }),
-    ];
+    let (session_id, stream_id) = effect_port_ids();
+    let setup = setup_commands(&session_id, &stream_id);
     for (request_ref, operation, command) in setup {
         port.register(request_ref.to_string(), command, None).expect("register setup effect");
         let effect = effect_request(&binding, operation, request_ref, 0);
@@ -497,4 +450,70 @@ async fn registered_effect_port_routes_a_live_cross_process_frame_without_consum
     let (listener_frame, cleanup) = listener_task.await.expect("listener task");
     assert_eq!(listener_frame.payload_ref, client_frame.payload_ref);
     assert_eq!(cleanup.terminal_class, ListenerTerminalClass::Clean);
+}
+
+/// Accepts the one effect-port frame, then drains and closes the listener on operator request.
+async fn accept_one_and_drain(
+    mut listener: IrohCrossProcessListener,
+) -> (CrossProcessFrameEvidence, CrossProcessListenerCleanup) {
+    let frame = listener
+        .accept_one(SESSION_REF, REQUEST_REF, std::time::Duration::from_secs(TEST_TIMEOUT_SECONDS))
+        .await
+        .expect("effect-port listener frame");
+    let cleanup = listener
+        .drain_and_close(ListenerDrainReason::OperatorRequest)
+        .await
+        .expect("effect-port listener cleanup");
+    (frame, cleanup)
+}
+
+fn effect_port_ids() -> (ScopedTransportId, ScopedTransportId) {
+    let session_id = ScopedTransportId {
+        opaque_ref: SESSION_REF.to_string(),
+        service_id: protocol().service_id,
+        generation: GENERATION,
+    };
+    let stream_id = ScopedTransportId {
+        opaque_ref: WRONG_REF.to_string(),
+        service_id: session_id.service_id.clone(),
+        generation: GENERATION,
+    };
+    (session_id, stream_id)
+}
+
+/// Register-protocol, open-session, and open-stream setup effects with their request refs and
+/// operations.
+fn setup_commands(
+    session_id: &ScopedTransportId,
+    stream_id: &ScopedTransportId,
+) -> [(&'static str, &'static str, TransportCommand); 3] {
+    [
+        (PROFILE_REF, "register-protocol", TransportCommand::Register {
+            operation_id: AUTHORITY_REF.to_string(),
+            descriptor: protocol(),
+        }),
+        (FRAMING_REF, "open-session", TransportCommand::OpenSession {
+            operation_id: AUTHORITY_REF.to_string(),
+            session_id: session_id.clone(),
+            alpn: protocol().alpn,
+            direction: SessionDirection::Outbound,
+            peer: PeerIdentityRefs {
+                transport_identity_ref: PEER_CONTEXT_REF.to_string(),
+                membership_ref: Some(LOCATOR_COHORT_REF.to_string()),
+                application_principal_ref: Some(VALIDITY_REF.to_string()),
+                trust_decision_ref: Some(LISTENER_CAPABILITY_REF.to_string()),
+                capability_authority_ref: Some(CLIENT_CAPABILITY_REF.to_string()),
+                bootstrap_policy_ref: None,
+            },
+            observed_tick: OBSERVED_TICK,
+            deadline_tick: OBSERVED_TICK + DEADLINE_WINDOW,
+        }),
+        (AUTHORITY_REF, "open-stream", TransportCommand::OpenStream {
+            operation_id: AUTHORITY_REF.to_string(),
+            session_id: session_id.clone(),
+            stream_id: stream_id.clone(),
+            direction: StreamDirection::Bidirectional,
+            initial_credit_bytes: FRAME_LIMIT,
+        }),
+    ]
 }

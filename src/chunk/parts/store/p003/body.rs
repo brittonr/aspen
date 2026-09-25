@@ -271,3 +271,18 @@ pub fn missing_chunks_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) 
     index_set_manifest_chunk_availability(root, &manifest, &available, &missing, None)?;
     Ok(missing)
 }
+
+/// Hashes a manifest value and requires the codec facade to accept it as a chunk-store manifest.
+fn codec_checked_manifest_ref(value: &IoValue) -> Result<String> {
+    let manifest_ref = canonical_hash(value)?;
+    molten_core::codec::validate_domain_artifact(&molten_core::codec::DomainArtifactInput {
+        domain: "chunk-store",
+        label: "chunk-manifest-v1",
+        schema: CHUNK_MANIFEST_SCHEMA,
+        artifact_ref: &manifest_ref,
+        expected_schema: CHUNK_MANIFEST_SCHEMA,
+        supported_labels: &["chunk-manifest-v1"],
+    })
+    .map_err(|issue| MoltenError::invalid_harness(format!("chunk manifest codec facade rejected artifact: {issue}")))?;
+    Ok(manifest_ref)
+}

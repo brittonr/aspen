@@ -315,50 +315,7 @@ fn deferral_and_corruption_never_publish_false_completion() {
 // r[verify molten.dag_sync.domain_boundary]
 #[test]
 fn job_and_artifact_projections_preserve_domain_boundaries() {
-    let first_node = crate::workload::JobNode {
-        id: "source".to_string(),
-        kind: "fixture".to_string(),
-        stage_artifact_ref: Some(digest('d')),
-        input_ports: Vec::new(),
-        output_ports: vec!["out".to_string()],
-        config: crate::preserves_rail::record("fixture-config", Vec::new()),
-        effect_manifest_refs: Vec::new(),
-        policy_refs: Vec::new(),
-        evidence_refs: Vec::new(),
-        checks: Vec::new(),
-    };
-    let second_node = crate::workload::JobNode {
-        id: "sink".to_string(),
-        kind: "fixture".to_string(),
-        stage_artifact_ref: None,
-        input_ports: vec!["in".to_string()],
-        output_ports: Vec::new(),
-        config: crate::preserves_rail::record("fixture-config", Vec::new()),
-        effect_manifest_refs: Vec::new(),
-        policy_refs: Vec::new(),
-        evidence_refs: Vec::new(),
-        checks: Vec::new(),
-    };
-    let job = crate::workload::JobDag {
-        job_ref: digest('e'),
-        version: "v1".to_string(),
-        nodes: vec![first_node, second_node],
-        edges: vec![crate::workload::JobEdge {
-            from_node: "source".to_string(),
-            from_port: "out".to_string(),
-            to_node: "sink".to_string(),
-            to_port: "in".to_string(),
-            schema_ref: None,
-            partitioning: "single".to_string(),
-            materialization: "stream".to_string(),
-        }],
-        output_roots: vec!["sink".to_string()],
-        schema_refs: vec![digest('f')],
-        effect_manifest_refs: Vec::new(),
-        policy_refs: Vec::new(),
-        evidence_refs: Vec::new(),
-        value: crate::preserves_rail::record("fixture-job", Vec::new()),
-    };
+    let job = fixture_job_dag();
     let job_graph = project_job_dag(&job).expect("job projection");
     assert_eq!(job_graph.roots.len(), 1);
     assert_eq!(job_graph.nodes.len(), EXPECTED_PROJECTED_NODES);
@@ -388,6 +345,54 @@ fn job_and_artifact_projections_preserve_domain_boundaries() {
     assert_eq!(artifact_graph.roots.len(), 1);
     assert_eq!(artifact_graph.nodes.len(), EXPECTED_PROJECTED_NODES);
     assert_eq!(artifact_graph.roots.first().expect("root").domain, "molten-artifact-closure");
+}
+
+/// A two-node source-to-sink job DAG with one stream edge.
+fn fixture_job_dag() -> crate::workload::JobDag {
+    let first_node = crate::workload::JobNode {
+        id: "source".to_string(),
+        kind: "fixture".to_string(),
+        stage_artifact_ref: Some(digest('d')),
+        input_ports: Vec::new(),
+        output_ports: vec!["out".to_string()],
+        config: crate::preserves_rail::record("fixture-config", Vec::new()),
+        effect_manifest_refs: Vec::new(),
+        policy_refs: Vec::new(),
+        evidence_refs: Vec::new(),
+        checks: Vec::new(),
+    };
+    let second_node = crate::workload::JobNode {
+        id: "sink".to_string(),
+        kind: "fixture".to_string(),
+        stage_artifact_ref: None,
+        input_ports: vec!["in".to_string()],
+        output_ports: Vec::new(),
+        config: crate::preserves_rail::record("fixture-config", Vec::new()),
+        effect_manifest_refs: Vec::new(),
+        policy_refs: Vec::new(),
+        evidence_refs: Vec::new(),
+        checks: Vec::new(),
+    };
+    crate::workload::JobDag {
+        job_ref: digest('e'),
+        version: "v1".to_string(),
+        nodes: vec![first_node, second_node],
+        edges: vec![crate::workload::JobEdge {
+            from_node: "source".to_string(),
+            from_port: "out".to_string(),
+            to_node: "sink".to_string(),
+            to_port: "in".to_string(),
+            schema_ref: None,
+            partitioning: "single".to_string(),
+            materialization: "stream".to_string(),
+        }],
+        output_roots: vec!["sink".to_string()],
+        schema_refs: vec![digest('f')],
+        effect_manifest_refs: Vec::new(),
+        policy_refs: Vec::new(),
+        evidence_refs: Vec::new(),
+        value: crate::preserves_rail::record("fixture-job", Vec::new()),
+    }
 }
 
 fn conformance_outcome(kind: DagTransportFixtureKind) -> DagSyncOutcome {
@@ -572,7 +577,6 @@ fn peer_reassignment_requires_a_new_epoch_and_discards_old_progress() {
         DagPeerId::new("peer-a").expect("peer"),
         DagPeerId::new("peer-b").expect("peer"),
     ];
-    let events = Rc::new(RefCell::new(Vec::new()));
     let mut authority = Authority;
     let mut resources = Resources;
     let mut transport = DagFabricTransportAdapter::open(
@@ -583,13 +587,7 @@ fn peer_reassignment_requires_a_new_epoch_and_discards_old_progress() {
     )
     .expect("partitioned transport");
     let mut content = Content { corrupt: false };
-    let mut progress = Progress {
-        loaded: None,
-        stored: Vec::new(),
-        events: events.clone(),
-    };
-    let mut observations = Observations { events: events.clone() };
-    let mut receipts = Receipts { events, count: 0 };
+    let (mut progress, mut observations, mut receipts) = shared_event_ports();
     let _partial = run_dag_sync(&graph(), peer_request.clone(), DagSyncPorts {
         authority: &mut authority,
         resources: &mut resources,
@@ -619,19 +617,7 @@ fn peer_reassignment_requires_a_new_epoch_and_discards_old_progress() {
     assert_eq!(reassigned_transport.request_count(), 0);
 
     peer_request.epoch_ref = DagEpochRef::new(digest('9')).expect("new epoch");
-    let new_events = Rc::new(RefCell::new(Vec::new()));
-    let mut new_progress = Progress {
-        loaded: None,
-        stored: Vec::new(),
-        events: new_events.clone(),
-    };
-    let mut new_observations = Observations {
-        events: new_events.clone(),
-    };
-    let mut new_receipts = Receipts {
-        events: new_events,
-        count: 0,
-    };
+    let (mut new_progress, mut new_observations, mut new_receipts) = shared_event_ports();
     let restarted = run_dag_sync(&graph(), peer_request, DagSyncPorts {
         authority: &mut authority,
         resources: &mut resources,
@@ -643,6 +629,18 @@ fn peer_reassignment_requires_a_new_epoch_and_discards_old_progress() {
     })
     .expect("new epoch sync");
     assert_eq!(restarted.receipt.decision, DagSyncDecision::Complete);
+}
+
+/// Fresh progress, observation, and receipt ports that record into one shared event log.
+fn shared_event_ports() -> (Progress, Observations, Receipts) {
+    let events = Rc::new(RefCell::new(Vec::new()));
+    let progress = Progress {
+        loaded: None,
+        stored: Vec::new(),
+        events: events.clone(),
+    };
+    let observations = Observations { events: events.clone() };
+    (progress, observations, Receipts { events, count: 0 })
 }
 
 // r[verify molten.dag_sync.final_validation]

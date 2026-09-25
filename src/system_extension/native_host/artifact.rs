@@ -72,68 +72,27 @@ pub fn build_native_artifact_index(
     effect_completions: &[CanonicalEffectCompletion],
 ) -> crate::error::Result<CanonicalNativeArtifactIndex> {
     let state = canonical_native_instance_record(instance)?;
-    let estimated = observations
-        .len()
-        .checked_mul(2)
-        .and_then(|value| value.checked_add(callback_receipts.len()))
-        .and_then(|value| value.checked_add(effect_completions.len()))
-        .and_then(|value| value.checked_add(instance.unresolved.len()))
-        .and_then(|value| value.checked_add(instance.completed_operations.len()))
-        .and_then(|value| value.checked_add(instance.evidence_refs.len()))
-        .and_then(|value| value.checked_add(4))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("native artifact index member count overflow"))?;
+    let estimated = estimated_member_count(instance, observations, callback_receipts, effect_completions)?;
     let mut members = Vec::with_capacity(estimated);
-    members.push(NativeArtifactMember {
-        role: NativeArtifactRole::Executable,
-        artifact_ref: instance.executable_ref.clone(),
-        parent_ref: instance.manifest_ref.clone(),
-    });
-    members.push(NativeArtifactMember {
-        role: NativeArtifactRole::InstanceState,
-        artifact_ref: state.record_ref.clone(),
-        parent_ref: instance.manifest_ref.clone(),
-    });
+    members.push(member(NativeArtifactRole::Executable, &instance.executable_ref, &instance.manifest_ref));
+    members.push(member(NativeArtifactRole::InstanceState, &state.record_ref, &instance.manifest_ref));
     if let Some(state_ref) = &instance.state_ref {
-        members.push(NativeArtifactMember {
-            role: NativeArtifactRole::SemanticState,
-            artifact_ref: state_ref.clone(),
-            parent_ref: state.record_ref.clone(),
-        });
+        members.push(member(NativeArtifactRole::SemanticState, state_ref, &state.record_ref));
     }
     if let Some(checkpoint_ref) = &instance.checkpoint_ref {
-        members.push(NativeArtifactMember {
-            role: NativeArtifactRole::Checkpoint,
-            artifact_ref: checkpoint_ref.clone(),
-            parent_ref: state.record_ref.clone(),
-        });
+        members.push(member(NativeArtifactRole::Checkpoint, checkpoint_ref, &state.record_ref));
     }
     for observation in observations {
-        members.push(NativeArtifactMember {
-            role: NativeArtifactRole::CallbackEnvelope,
-            artifact_ref: observation.envelope_ref.clone(),
-            parent_ref: instance.manifest_ref.clone(),
-        });
+        members.push(member(NativeArtifactRole::CallbackEnvelope, &observation.envelope_ref, &instance.manifest_ref));
         if let Some(receipt_ref) = &observation.execution_receipt_ref {
-            members.push(NativeArtifactMember {
-                role: NativeArtifactRole::ExecutionReceipt,
-                artifact_ref: receipt_ref.clone(),
-                parent_ref: observation.envelope_ref.clone(),
-            });
+            members.push(member(NativeArtifactRole::ExecutionReceipt, receipt_ref, &observation.envelope_ref));
         }
     }
     for receipt in callback_receipts {
-        members.push(NativeArtifactMember {
-            role: NativeArtifactRole::CallbackReceipt,
-            artifact_ref: receipt.receipt_ref.clone(),
-            parent_ref: instance.manifest_ref.clone(),
-        });
+        members.push(member(NativeArtifactRole::CallbackReceipt, &receipt.receipt_ref, &instance.manifest_ref));
     }
     for completion in effect_completions {
-        members.push(NativeArtifactMember {
-            role: NativeArtifactRole::Effect,
-            artifact_ref: completion.completion_ref.clone(),
-            parent_ref: completion.callback_receipt_ref.clone(),
-        });
+        members.push(member(NativeArtifactRole::Effect, &completion.completion_ref, &completion.callback_receipt_ref));
     }
     for operation in &instance.unresolved {
         let role = match operation.kind {
@@ -153,22 +112,14 @@ pub fn build_native_artifact_index(
         if operation.kind == NativeOperationKind::ValuePublication
             && let Some(terminal_ref) = &operation.terminal_ref
         {
-            members.push(NativeArtifactMember {
-                role: NativeArtifactRole::ValuePublication,
-                artifact_ref: terminal_ref.clone(),
-                parent_ref: state.record_ref.clone(),
-            });
+            members.push(member(NativeArtifactRole::ValuePublication, terminal_ref, &state.record_ref));
         }
     }
     let mut represented_refs =
         members.iter().map(|member| member.artifact_ref.clone()).collect::<std::collections::BTreeSet<_>>();
     for evidence_ref in &instance.evidence_refs {
         if represented_refs.insert(evidence_ref.clone()) {
-            members.push(NativeArtifactMember {
-                role: NativeArtifactRole::LifecycleEvidence,
-                artifact_ref: evidence_ref.clone(),
-                parent_ref: state.record_ref.clone(),
-            });
+            members.push(member(NativeArtifactRole::LifecycleEvidence, evidence_ref, &state.record_ref));
         }
     }
     members.sort_by(|left, right| (left.role, &left.artifact_ref).cmp(&(right.role, &right.artifact_ref)));
@@ -185,6 +136,34 @@ pub fn build_native_artifact_index(
         crate::error::MoltenError::invalid_harness(format!("native artifact index denied: {issues:?}"))
     })?;
     Ok(index)
+}
+
+fn member(role: NativeArtifactRole, artifact_ref: &str, parent_ref: &str) -> NativeArtifactMember {
+    NativeArtifactMember {
+        role,
+        artifact_ref: artifact_ref.to_string(),
+        parent_ref: parent_ref.to_string(),
+    }
+}
+
+/// An upper bound on index members: two per invocation, one per receipt, completion, operation, and
+/// evidence ref, and four for the executable, instance state, semantic state, and checkpoint.
+fn estimated_member_count(
+    instance: &NativeInstanceRecord,
+    observations: &[NativeInvocationObservation],
+    callback_receipts: &[CanonicalCallbackReceipt],
+    effect_completions: &[CanonicalEffectCompletion],
+) -> crate::error::Result<usize> {
+    observations
+        .len()
+        .checked_mul(2)
+        .and_then(|value| value.checked_add(callback_receipts.len()))
+        .and_then(|value| value.checked_add(effect_completions.len()))
+        .and_then(|value| value.checked_add(instance.unresolved.len()))
+        .and_then(|value| value.checked_add(instance.completed_operations.len()))
+        .and_then(|value| value.checked_add(instance.evidence_refs.len()))
+        .and_then(|value| value.checked_add(4))
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("native artifact index member count overflow"))
 }
 
 // r[impl molten.system_extension.native_host.validation]

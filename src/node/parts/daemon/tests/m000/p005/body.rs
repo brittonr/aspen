@@ -100,7 +100,7 @@
     }
 
     fn assert_ticket_imports(case: &ImportCase) {
-        let imported_ticket = import_control_live_ticket(&ControlLiveTicketImportInput {
+        let import_input = ControlLiveTicketImportInput {
             state_root: &case.sender,
             ticket_value: &case.ticket.value,
             peer_admission_value: Some(&case.admission.value),
@@ -109,7 +109,8 @@
             expected_endpoint: Some(&case.ticket.live_endpoint_id),
             expected_peer: Some("peer:live-import"),
             as_of_sequence: 2,
-        })
+        };
+        let imported_ticket = import_control_live_ticket(&import_input)
         .expect("import ticket");
         assert_eq!(imported_ticket.decision, "pass");
         assert_eq!(imported_ticket.imported_refs.len(), 2);
@@ -127,37 +128,19 @@
                 .contains("import-receipt-is-not-authority")
         );
 
-        let stale_ticket = import_control_live_ticket(&ControlLiveTicketImportInput {
-            state_root: &case.sender,
-            ticket_value: &case.ticket.value,
-            peer_admission_value: Some(&case.admission.value),
-            expected_node: Some("node:live-import"),
-            expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-            expected_endpoint: Some(&case.ticket.live_endpoint_id),
-            expected_peer: Some("peer:live-import"),
-            as_of_sequence: 8,
-        })
+        let stale_ticket = import_control_live_ticket(&ControlLiveTicketImportInput { as_of_sequence: 8, ..import_input })
         .expect("stale ticket import receipt");
         assert_eq!(stale_ticket.decision, "deny");
         assert!(stale_ticket.imported_refs.is_empty());
         assert!(stale_ticket.diagnostics.iter().any(|value| value.contains("expired at sequence")));
 
-        let wrong_topic = import_control_live_ticket(&ControlLiveTicketImportInput {
-            state_root: &case.sender,
-            ticket_value: &case.ticket.value,
-            peer_admission_value: Some(&case.admission.value),
-            expected_node: Some("node:live-import"),
-            expected_topic: Some("wrong-topic"),
-            expected_endpoint: Some(&case.ticket.live_endpoint_id),
-            expected_peer: Some("peer:live-import"),
-            as_of_sequence: 2,
-        })
+        let wrong_topic = import_control_live_ticket(&ControlLiveTicketImportInput { expected_topic: Some("wrong-topic"), ..import_input })
         .expect("wrong topic ticket import receipt");
         assert_eq!(wrong_topic.decision, "deny");
         assert!(wrong_topic.imported_refs.is_empty());
         assert!(wrong_topic.diagnostics.iter().any(|value| value.contains("wrong-topic")));
 
-        let wrong_peer = evaluate_live_ticket_scope(LiveTicketScopeInput {
+        let scope_input = LiveTicketScopeInput {
             ticket: &case.ticket,
             admission: Some(&case.admission),
             expected_node: Some("node:live-import"),
@@ -166,21 +149,13 @@
             expected_peer: Some("peer:other-live-import"),
             as_of_sequence: 2,
             required_policy_refs: &case.policy_refs,
-        });
+        };
+        let wrong_peer = evaluate_live_ticket_scope(scope_input);
         assert_eq!(wrong_peer.decision, "deny");
         assert!(wrong_peer.diagnostics.iter().any(|value| value.contains("peer:other-live-import")));
 
         let wrong_policy = vec![local_ref("node-control-policy", "wrong-ticket-policy").expect("wrong policy ref")];
-        let policy_denied = evaluate_live_ticket_scope(LiveTicketScopeInput {
-            ticket: &case.ticket,
-            admission: Some(&case.admission),
-            expected_node: Some("node:live-import"),
-            expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-            expected_endpoint: Some(&case.ticket.live_endpoint_id),
-            expected_peer: Some("peer:live-import"),
-            as_of_sequence: 2,
-            required_policy_refs: &wrong_policy,
-        });
+        let policy_denied = evaluate_live_ticket_scope(LiveTicketScopeInput { expected_peer: Some("peer:live-import"), required_policy_refs: &wrong_policy, ..scope_input });
         assert_eq!(policy_denied.decision, "deny");
         assert!(policy_denied.diagnostics.iter().any(|value| value.contains("missing required policy")));
     }

@@ -41,6 +41,9 @@ mod evidence_tests;
 #[path = "executor/tests.rs"]
 mod executor_tests;
 #[cfg(test)]
+#[path = "iroh/bundle.rs"]
+mod iroh_bundle_tests;
+#[cfg(test)]
 #[path = "iroh/tests.rs"]
 mod iroh_tests;
 #[cfg(test)]

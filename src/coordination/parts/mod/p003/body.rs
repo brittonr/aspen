@@ -70,6 +70,11 @@ pub fn coordination_summary(value: &IoValue) -> Result<String> {
             request.operation_id_ref
         ));
     }
+    other_coordination_summary(value)
+}
+
+/// Summaries for fencing tokens, manifests, state snapshots, and status assertions.
+fn other_coordination_summary(value: &IoValue) -> Result<String> {
     if let Ok(token) = parse_fencing_token(value) {
         return Ok(format!(
             "coordination fencing token key={} owner={} token={} commit={}",
@@ -160,16 +165,7 @@ fn apply_coordination_read(
         },
         dataspace_assertion_refs: &assertion_refs,
         diagnostics: &diagnostics,
-        checks: &[
-            ("coordination-request-bound", "pass"),
-            ("read-consistency-declared", "pass"),
-            ("read-index-bound", if request.read_consistency_mode == READ_CONSISTENCY_LINEARIZABLE { "pass" } else { "diagnostic" }),
-            ("local-stale-non-authoritative", if request.read_consistency_mode == READ_CONSISTENCY_LOCAL_STALE { "pass" } else { "diagnostic" }),
-            ("control-plane-command", "pass"),
-            ("normalized-consensus-evidence", "pass"),
-            ("active-engine-epoch-bound", "pass"),
-            ("transition-kind-read-observe", "pass"),
-        ],
+        checks: &read_receipt_checks(&request.read_consistency_mode),
     })?;
     let receipt = parse_coordination_receipt(&receipt_value)?;
     let assertions = corrected_read_assertions(assertion, &fact, &receipt.receipt_ref)?;
@@ -181,6 +177,19 @@ fn apply_coordination_read(
         receipt,
         assertions,
     }))
+}
+
+fn read_receipt_checks(read_consistency_mode: &str) -> [(&'static str, &'static str); 8] {
+    [
+        ("coordination-request-bound", "pass"),
+        ("read-consistency-declared", "pass"),
+        ("read-index-bound", if read_consistency_mode == READ_CONSISTENCY_LINEARIZABLE { "pass" } else { "diagnostic" }),
+        ("local-stale-non-authoritative", if read_consistency_mode == READ_CONSISTENCY_LOCAL_STALE { "pass" } else { "diagnostic" }),
+        ("control-plane-command", "pass"),
+        ("normalized-consensus-evidence", "pass"),
+        ("active-engine-epoch-bound", "pass"),
+        ("transition-kind-read-observe", "pass"),
+    ]
 }
 
 struct ReadAssertionInput<'a> {

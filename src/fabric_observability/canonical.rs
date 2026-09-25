@@ -178,77 +178,85 @@ pub fn canonical_observation_snapshot(
 
 pub fn fabric_observability_port_descriptors(profile_ref: &str) -> Vec<crate::fabric::FabricPortDescriptor> {
     vec![
-        crate::fabric::FabricPortDescriptor {
-            schema: crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
-            port_id: FABRIC_OBSERVATION_PORT_ID.to_string(),
-            version: FABRIC_OBSERVABILITY_PORT_VERSION.to_string(),
-            class: crate::fabric::FabricPortClass::Evidence,
-            operation_classes: vec![
-                "emit-event".to_string(),
-                "emit-sample".to_string(),
-                "evaluate-health".to_string(),
-                "export".to_string(),
-                "snapshot".to_string(),
-                "status".to_string(),
-            ],
-            input_schema_refs: vec![METRIC_SAMPLE_SCHEMA.to_string(), OBSERVATION_PROFILE_SCHEMA.to_string()],
-            output_schema_refs: vec![
-                OBSERVATION_ADAPTER_STATUS_SCHEMA.to_string(),
-                OBSERVATION_SNAPSHOT_SCHEMA.to_string(),
-            ],
-            authority_requirements: vec![
-                crate::fabric::FabricAuthority::Time,
-                crate::fabric::FabricAuthority::Resources,
-                crate::fabric::FabricAuthority::Evidence,
-            ],
-            resource_requirements: vec![
-                crate::fabric::FabricResource::Memory,
-                crate::fabric::FabricResource::NetworkBytes,
-                crate::fabric::FabricResource::QueueDepth,
-                crate::fabric::FabricResource::LogicalTime,
-                crate::fabric::FabricResource::Diagnostics,
-            ],
-            determinism: crate::fabric::DeterminismClass::ExternalEffect,
-            replay: crate::fabric::ReplayClass::RecordedEffectRequired,
-            implementation_profile: "bounded-canonical-observation-adapter".to_string(),
-            conformance_refs: vec![profile_ref.to_string()],
-            non_claims: crate::fabric::REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
-            enabled: true,
-        },
-        crate::fabric::FabricPortDescriptor {
-            schema: crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
-            port_id: FABRIC_INTEGRITY_PORT_ID.to_string(),
-            version: FABRIC_OBSERVABILITY_PORT_VERSION.to_string(),
-            class: crate::fabric::FabricPortClass::Evidence,
-            operation_classes: vec![
-                "plan".to_string(),
-                "scan".to_string(),
-                "status".to_string(),
-                "verify".to_string(),
-            ],
-            input_schema_refs: vec![INTEGRITY_PLAN_SCHEMA.to_string()],
-            output_schema_refs: vec![
-                INTEGRITY_FINDING_SCHEMA.to_string(),
-                SCAN_OBSERVATION_SCHEMA.to_string(),
-            ],
-            authority_requirements: vec![
-                crate::fabric::FabricAuthority::DurableState,
-                crate::fabric::FabricAuthority::Resources,
-                crate::fabric::FabricAuthority::Evidence,
-            ],
-            resource_requirements: vec![
-                crate::fabric::FabricResource::Memory,
-                crate::fabric::FabricResource::StorageBytes,
-                crate::fabric::FabricResource::Diagnostics,
-            ],
-            determinism: crate::fabric::DeterminismClass::ExternalEffect,
-            replay: crate::fabric::ReplayClass::RecordedEffectRequired,
-            implementation_profile: "read-only-capability-rooted-scan".to_string(),
-            conformance_refs: vec![profile_ref.to_string()],
-            non_claims: crate::fabric::REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
-            enabled: true,
-        },
+        observation_port_descriptor(profile_ref),
+        integrity_port_descriptor(profile_ref),
     ]
+}
+
+fn observation_port_descriptor(profile_ref: &str) -> crate::fabric::FabricPortDescriptor {
+    crate::fabric::FabricPortDescriptor {
+        schema: crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
+        port_id: FABRIC_OBSERVATION_PORT_ID.to_string(),
+        version: FABRIC_OBSERVABILITY_PORT_VERSION.to_string(),
+        class: crate::fabric::FabricPortClass::Evidence,
+        operation_classes: vec![
+            "emit-event".to_string(),
+            "emit-sample".to_string(),
+            "evaluate-health".to_string(),
+            "export".to_string(),
+            "snapshot".to_string(),
+            "status".to_string(),
+        ],
+        input_schema_refs: vec![METRIC_SAMPLE_SCHEMA.to_string(), OBSERVATION_PROFILE_SCHEMA.to_string()],
+        output_schema_refs: vec![
+            OBSERVATION_ADAPTER_STATUS_SCHEMA.to_string(),
+            OBSERVATION_SNAPSHOT_SCHEMA.to_string(),
+        ],
+        authority_requirements: vec![
+            crate::fabric::FabricAuthority::Time,
+            crate::fabric::FabricAuthority::Resources,
+            crate::fabric::FabricAuthority::Evidence,
+        ],
+        resource_requirements: vec![
+            crate::fabric::FabricResource::Memory,
+            crate::fabric::FabricResource::NetworkBytes,
+            crate::fabric::FabricResource::QueueDepth,
+            crate::fabric::FabricResource::LogicalTime,
+            crate::fabric::FabricResource::Diagnostics,
+        ],
+        determinism: crate::fabric::DeterminismClass::ExternalEffect,
+        replay: crate::fabric::ReplayClass::RecordedEffectRequired,
+        implementation_profile: "bounded-canonical-observation-adapter".to_string(),
+        conformance_refs: vec![profile_ref.to_string()],
+        non_claims: crate::fabric::REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
+        enabled: true,
+    }
+}
+
+fn integrity_port_descriptor(profile_ref: &str) -> crate::fabric::FabricPortDescriptor {
+    crate::fabric::FabricPortDescriptor {
+        schema: crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
+        port_id: FABRIC_INTEGRITY_PORT_ID.to_string(),
+        version: FABRIC_OBSERVABILITY_PORT_VERSION.to_string(),
+        class: crate::fabric::FabricPortClass::Evidence,
+        operation_classes: vec![
+            "plan".to_string(),
+            "scan".to_string(),
+            "status".to_string(),
+            "verify".to_string(),
+        ],
+        input_schema_refs: vec![INTEGRITY_PLAN_SCHEMA.to_string()],
+        output_schema_refs: vec![
+            INTEGRITY_FINDING_SCHEMA.to_string(),
+            SCAN_OBSERVATION_SCHEMA.to_string(),
+        ],
+        authority_requirements: vec![
+            crate::fabric::FabricAuthority::DurableState,
+            crate::fabric::FabricAuthority::Resources,
+            crate::fabric::FabricAuthority::Evidence,
+        ],
+        resource_requirements: vec![
+            crate::fabric::FabricResource::Memory,
+            crate::fabric::FabricResource::StorageBytes,
+            crate::fabric::FabricResource::Diagnostics,
+        ],
+        determinism: crate::fabric::DeterminismClass::ExternalEffect,
+        replay: crate::fabric::ReplayClass::RecordedEffectRequired,
+        implementation_profile: "read-only-capability-rooted-scan".to_string(),
+        conformance_refs: vec![profile_ref.to_string()],
+        non_claims: crate::fabric::REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
+        enabled: true,
+    }
 }
 
 fn observation_profile_value(profile: &ObservationProfile) -> preserves::IOValue {

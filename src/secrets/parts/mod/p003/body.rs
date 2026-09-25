@@ -204,11 +204,7 @@ fn cleanup_retention_diagnostics(input: &SecretCleanupInput) -> Result<Vec<Strin
                     tombstone_receipt_refs.insert(tombstone.receipt_ref.clone());
                 }
             }
-            Err(_) => diagnostics.push_limited(
-                "secret cleanup retention tombstone invalid".to_string(),
-                MAX_SECRET_DIAGNOSTICS,
-                "secret cleanup diagnostics",
-            )?,
+            Err(_) => push_cleanup_diagnostic(&mut diagnostics, "secret cleanup retention tombstone invalid".to_string())?,
         }
     }
     for receipt_value in &input.retention_receipts {
@@ -229,11 +225,7 @@ fn cleanup_retention_diagnostics(input: &SecretCleanupInput) -> Result<Vec<Strin
                     matching_pass_refs.insert(receipt.receipt_ref.clone());
                 }
             }
-            Err(_) => diagnostics.push_limited(
-                "secret cleanup retention receipt invalid".to_string(),
-                MAX_SECRET_DIAGNOSTICS,
-                "secret cleanup diagnostics",
-            )?,
+            Err(_) => push_cleanup_diagnostic(&mut diagnostics, "secret cleanup retention receipt invalid".to_string())?,
         }
     }
     let has_matching_pass = !matching_pass_refs.is_empty();
@@ -241,33 +233,24 @@ fn cleanup_retention_diagnostics(input: &SecretCleanupInput) -> Result<Vec<Strin
         .iter()
         .any(|receipt_ref| tombstone_receipt_refs.contains(receipt_ref));
     if input.retention_receipts.is_empty() {
-        diagnostics.push_limited(
-            "secret cleanup requires retention receipt evidence".to_string(),
-            MAX_SECRET_DIAGNOSTICS,
-            "secret cleanup diagnostics",
-        )?;
+        push_cleanup_diagnostic(&mut diagnostics, "secret cleanup requires retention receipt evidence".to_string())?;
     }
     if expected_refs != actual_refs {
-        diagnostics.push_limited(
-            "secret cleanup retention receipt refs mismatch".to_string(),
-            MAX_SECRET_DIAGNOSTICS,
-            "secret cleanup diagnostics",
-        )?;
+        push_cleanup_diagnostic(&mut diagnostics, "secret cleanup retention receipt refs mismatch".to_string())?;
     }
     if !has_matching_pass {
-        diagnostics.push_limited(
-            "secret cleanup requires passing private-secret retention receipt".to_string(),
-            MAX_SECRET_DIAGNOSTICS,
-            "secret cleanup diagnostics",
-        )?;
+        push_cleanup_diagnostic(&mut diagnostics, "secret cleanup requires passing private-secret retention receipt".to_string())?;
     } else if !has_matching_tombstone {
-        diagnostics.push_limited(
-            "secret cleanup retention tombstone mismatch".to_string(),
-            MAX_SECRET_DIAGNOSTICS,
-            "secret cleanup diagnostics",
-        )?;
+        push_cleanup_diagnostic(&mut diagnostics, "secret cleanup retention tombstone mismatch".to_string())?;
     }
     Ok(diagnostics)
+}
+
+fn push_cleanup_diagnostic(
+    diagnostics: &mut impl crate::bounded::PushLimited<String>,
+    diagnostic: String,
+) -> Result<()> {
+    diagnostics.push_limited(diagnostic, MAX_SECRET_DIAGNOSTICS, "secret cleanup diagnostics")
 }
 
 pub fn parse_secret_cleanup_receipt(value: &IoValue) -> Result<SecretCleanupReceipt> {

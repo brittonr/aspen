@@ -152,37 +152,14 @@ pub fn run_simulation(input: &SimulationInput) -> Result<SimulationRun> {
         if evaluation.decision == DENY_DECISION {
             denied.insert(command.operation_id.clone());
         }
-        let event_value = simulation_event_value(SimulationEventValueInput {
-            tick,
-            operation_id: &command.operation_id,
-            kind: &evaluation.kind,
-            decision: &evaluation.decision,
-            diagnostic: &evaluation.diagnostic,
-            payload_ref: &command.payload_ref,
-            commit_ref: &command.commit_ref,
-        })?;
-        let event_ref = canonical_ref(&event_value)?;
-        event_outcomes.push(SimulationEventOutcome {
-            tick,
-            operation_id: command.operation_id.clone(),
-            kind: evaluation.kind,
-            decision: evaluation.decision,
-            diagnostic: evaluation.diagnostic,
-            event_ref,
-            value: event_value,
-        });
+        event_outcomes.push(simulation_event_outcome(tick, command, evaluation)?);
     }
 
     let event_refs = event_outcomes.iter().map(|outcome| outcome.event_ref.clone()).collect::<Vec<_>>();
     let committed_operation_ids = committed.into_iter().collect::<Vec<_>>();
     let denied_operation_ids = denied.into_iter().collect::<Vec<_>>();
     let diagnostics = diagnostics.into_iter().collect::<Vec<_>>();
-    let decision = if denied_operation_ids.is_empty() {
-        PASS_DECISION
-    } else {
-        DENY_DECISION
-    }
-    .to_string();
+    let decision = denial_decision(&denied_operation_ids);
     let final_state = final_state_value(&committed_operation_ids, &denied_operation_ids, &event_refs)?;
     let final_state_ref = canonical_ref(&final_state)?;
     let value = test_run_value(TestRunValueInput {
@@ -220,6 +197,37 @@ pub fn run_simulation(input: &SimulationInput) -> Result<SimulationRun> {
         diagnostics,
         receipt_ref,
         value,
+    })
+}
+
+/// A run passes only when no operation was denied.
+fn denial_decision(denied_operation_ids: &[String]) -> String {
+    if denied_operation_ids.is_empty() { PASS_DECISION } else { DENY_DECISION }.to_string()
+}
+
+fn simulation_event_outcome(
+    tick: u64,
+    command: &SimulationCommand,
+    evaluation: CommandEvaluation,
+) -> Result<SimulationEventOutcome> {
+    let event_value = simulation_event_value(SimulationEventValueInput {
+        tick,
+        operation_id: &command.operation_id,
+        kind: &evaluation.kind,
+        decision: &evaluation.decision,
+        diagnostic: &evaluation.diagnostic,
+        payload_ref: &command.payload_ref,
+        commit_ref: &command.commit_ref,
+    })?;
+    let event_ref = canonical_ref(&event_value)?;
+    Ok(SimulationEventOutcome {
+        tick,
+        operation_id: command.operation_id.clone(),
+        kind: evaluation.kind,
+        decision: evaluation.decision,
+        diagnostic: evaluation.diagnostic,
+        event_ref,
+        value: event_value,
     })
 }
 

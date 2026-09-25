@@ -1,0 +1,37 @@
+## src/content_store_adapter/canonical.rs::content_store_port_descriptors
+base 8fbab9887 line 63, candidate line 63; signature identical: True
+signature: pub fn content_store_port_descriptors(profile_ref: &str) -> Vec<FabricPortDescriptor>
+base snippet keyword lines (2):
+    determinism: DeterminismClass::ExternalEffect,
+candidate snippet keyword lines: 0
+
+## src/fabric_membership/canonical.rs::fabric_membership_port_descriptors
+base 8fbab9887 line 616, candidate line 622; signature identical: True
+signature: pub fn fabric_membership_port_descriptors( profile: &CanonicalMembershipProfile, ) -> Vec<crate::fabric::FabricPortDescriptor>
+base snippet keyword lines (2):
+    (crate::fabric::DeterminismClass::ExternalEffect, crate::fabric::ReplayClass::RecordedEffectRequired)
+    crate::fabric::DeterminismClass::ExternalEffect,
+candidate snippet keyword lines: 0
+
+## src/fabric_observability/canonical.rs::fabric_observability_port_descriptors
+base 8fbab9887 line 179, candidate line 179; signature identical: True
+signature: pub fn fabric_observability_port_descriptors(profile_ref: &str) -> Vec<crate::fabric::FabricPortDescriptor>
+base snippet keyword lines (2):
+    determinism: crate::fabric::DeterminismClass::ExternalEffect,
+candidate snippet keyword lines: 0
+
+## src/fabric_time/canonical.rs::fabric_time_port_descriptors
+base 8fbab9887 line 163, candidate line 163; signature identical: True
+signature: pub fn fabric_time_port_descriptors(profile: &CanonicalTimeProfile) -> Vec<crate::fabric::FabricPortDescriptor>
+base snippet keyword lines (1):
+    (crate::fabric::DeterminismClass::ExternalEffect, crate::fabric::ReplayClass::RecordedEffectRequired)
+candidate snippet keyword lines: 0
+
+## src/system_extension/fixture.rs::run_executable_system_extension_fixture
+base 8fbab9887 line 208, candidate line 208; signature identical: True
+signature: pub fn run_executable_system_extension_fixture( profile: super::ExecutionProfile, ) -> crate::error::Result<ExecutableSystemExtensionFixtureRun>
+base snippet keyword lines (2):
+    rollback_input.compatible_state_schemas = vec![STATE_SCHEMA.to_string(), UPGRADED_STATE_SCHEMA.to_string()];
+    upgrade_input.compatible_state_schemas = vec![STATE_SCHEMA.to_string(), UPGRADED_STATE_SCHEMA.to_string()];
+candidate snippet keyword lines: 0
+

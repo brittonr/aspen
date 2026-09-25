@@ -138,12 +138,9 @@ pub async fn publish_live_iroh_chunks(
     })
 }
 
-// r[impl molten.content_store_adapter.verify_before_available]
-// r[impl molten.content_store_adapter.live_sim_conformance]
-#[cfg_attr(
-    any(feature = "profiler", feature = "profiler-disabled"),
-    flux_profiler::timed("molten_iroh_stream_get")
-)]
+/// The profile, publication, command, generation, retained state, and timeout of one live Iroh
+/// stream get.
+#[derive(Clone, Copy)]
 pub struct StreamGetInput<'a> {
     pub profile: &'a ContentAdapterProfile,
     pub publication: &'a LiveIrohPublication,
@@ -153,6 +150,12 @@ pub struct StreamGetInput<'a> {
     pub timeout: std::time::Duration,
 }
 
+// r[impl molten.content_store_adapter.verify_before_available]
+// r[impl molten.content_store_adapter.live_sim_conformance]
+#[cfg_attr(
+    any(feature = "profiler", feature = "profiler-disabled"),
+    flux_profiler::timed("molten_iroh_stream_get")
+)]
 pub async fn execute_live_iroh_stream_get(input: StreamGetInput<'_>) -> crate::error::Result<LiveIrohContentExecution> {
     let StreamGetInput {
         profile,
@@ -160,7 +163,7 @@ pub async fn execute_live_iroh_stream_get(input: StreamGetInput<'_>) -> crate::e
         command,
         generation,
         retained,
-        timeout,
+        ..
     } = input;
     if profile.class != ContentAdapterClass::IrohBlobs {
         return Err(crate::error::MoltenError::invalid_harness("live Iroh get requires iroh-blobs adapter profile"));
@@ -187,127 +190,32 @@ pub async fn execute_live_iroh_stream_get(input: StreamGetInput<'_>) -> crate::e
     let mut events = Vec::with_capacity(remaining_locators);
     let mut verified_chunks = Vec::with_capacity(remaining_locators);
     for locator in publication.locators.iter().skip(resume_position) {
-        let Some(descriptor) = publication.manifest.chunks.get(locator.position) else {
-            state =
-                classify_content_failure(profile, &state, ContentFailure::AdapterFailure).map_err(transition_error)?;
-            events.push(terminal_event(profile, command, &publication.manifest, &state, None)?);
-            client.close().await;
-            return finish_live_execution(profile, publication, state, events, verified_chunks);
-        };
-        if descriptor.chunk_ref != locator.chunk_ref {
-            state = classify_content_failure(profile, &state, ContentFailure::StaleTicket).map_err(transition_error)?;
-            events.push(terminal_event(
-                profile,
-                command,
-                &publication.manifest,
-                &state,
-                Some(descriptor.chunk_ref.clone()),
-            )?);
-            client.close().await;
-            return finish_live_execution(profile, publication, state, events, verified_chunks);
-        }
-        let connection = match tokio::time::timeout(
-            timeout,
-            client.connect(locator.ticket.addr().clone(), iroh_blobs::ALPN),
-        )
-        .await
-        {
-            Ok(Ok(connection)) => connection,
-            Ok(Err(_)) => {
-                state = classify_content_failure(profile, &state, ContentFailure::TransportDisconnected)
-                    .map_err(transition_error)?;
-                events.push(terminal_event(profile, command, &publication.manifest, &state, None)?);
-                client.close().await;
-                return finish_live_execution(profile, publication, state, events, verified_chunks);
-            }
-            Err(_) => {
-                state = classify_content_failure(profile, &state, ContentFailure::Timeout).map_err(transition_error)?;
-                events.push(terminal_event(profile, command, &publication.manifest, &state, None)?);
-                client.close().await;
-                return finish_live_execution(profile, publication, state, events, verified_chunks);
-            }
-        };
-        let bytes = match tokio::time::timeout(
-            timeout,
-            receive_bounded_blob(connection, locator.ticket.hash(), profile.bounds.max_chunk_bytes),
-        )
-        .await
-        {
-            Ok(Ok(bytes)) => bytes,
-            Ok(Err(_)) => {
-                state =
-                    classify_content_failure(profile, &state, ContentFailure::StaleTicket).map_err(transition_error)?;
-                events.push(terminal_event(
-                    profile,
-                    command,
-                    &publication.manifest,
-                    &state,
-                    Some(descriptor.chunk_ref.clone()),
-                )?);
-                client.close().await;
-                return finish_live_execution(profile, publication, state, events, verified_chunks);
-            }
-            Err(_) => {
-                state = classify_content_failure(profile, &state, ContentFailure::Timeout).map_err(transition_error)?;
-                events.push(terminal_event(
-                    profile,
-                    command,
-                    &publication.manifest,
-                    &state,
-                    Some(descriptor.chunk_ref.clone()),
-                )?);
-                client.close().await;
-                return finish_live_execution(profile, publication, state, events, verified_chunks);
-            }
-        };
-        let sequence = next_sequence(&state)?;
-        let observation = ContentChunkObservation {
-            operation_ref: command.operation_ref.clone(),
-            manifest_ref: publication.manifest.manifest_ref.clone(),
-            sequence,
-            chunk_ref: descriptor.chunk_ref.clone(),
-            position: descriptor.position,
-            observed_content_ref: crate::chunk_store::hash_chunk(
-                &bytes,
-                usize::try_from(publication.manifest.chunk_size).map_err(|_| {
-                    crate::error::MoltenError::invalid_harness("live Iroh chunk size does not fit usize")
-                })?,
-            ),
-            observed_length: u64::try_from(bytes.len())
-                .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh chunk length does not fit u64"))?,
-        };
-        match apply_chunk_observation(profile, &publication.manifest, &state, &observation) {
-            Ok(next) => state = next,
-            Err(issues) => {
-                let failure = verification_failure(&issues);
+        let verified = match verify_located_chunk(&client, input, locator, &state).await? {
+            Ok(verified) => verified,
+            Err((failure, chunk_ref)) => {
                 state = classify_content_failure(profile, &state, failure).map_err(transition_error)?;
-                events.push(terminal_event(
-                    profile,
-                    command,
-                    &publication.manifest,
-                    &state,
-                    Some(descriptor.chunk_ref.clone()),
-                )?);
+                events.push(terminal_event(profile, command, &publication.manifest, &state, chunk_ref)?);
                 client.close().await;
                 return finish_live_execution(profile, publication, state, events, verified_chunks);
             }
-        }
+        };
+        state = verified.next_state;
         events.push(canonical_content_event(
             profile,
             &content_event(EventInput {
                 command,
-                sequence,
+                sequence: verified.observation.sequence,
                 terminal: state.terminal,
-                chunk_ref: Some(descriptor.chunk_ref.clone()),
-                observed_bytes: observation.observed_length,
+                chunk_ref: Some(verified.descriptor.chunk_ref.clone()),
+                observed_bytes: verified.observation.observed_length,
                 failure: None,
                 evidence_refs: &publication.manifest.evidence_refs,
             }),
         )?);
         verified_chunks.push(VerifiedChunkPayload {
-            chunk_ref: descriptor.chunk_ref.clone(),
-            position: descriptor.position,
-            bytes,
+            chunk_ref: verified.descriptor.chunk_ref.clone(),
+            position: verified.descriptor.position,
+            bytes: verified.bytes,
         });
     }
     client.close().await;
@@ -315,6 +223,82 @@ pub async fn execute_live_iroh_stream_get(input: StreamGetInput<'_>) -> crate::e
         return Err(crate::error::MoltenError::invalid_harness("live Iroh transfer ended before full verification"));
     }
     finish_live_execution(profile, publication, state, events, verified_chunks)
+}
+
+/// A located chunk that was fetched, measured, and admitted into the next partial state.
+struct VerifiedChunk<'a> {
+    descriptor: &'a ContentChunkDescriptor,
+    bytes: Vec<u8>,
+    observation: ContentChunkObservation,
+    next_state: ContentPartialState,
+}
+
+/// Why a located chunk could not be verified, with the chunk ref when the failure is tied to the
+/// chunk.
+type ChunkFailure = (ContentFailure, Option<String>);
+
+/// Fetches the chunk a locator names within the timeout, measures it, and applies it to `state`. A
+/// missing or stale descriptor, a failed or timed-out connection or read, or a verification failure
+/// yields the failure the stream terminates with.
+async fn verify_located_chunk<'a>(
+    client: &iroh::Endpoint,
+    input: StreamGetInput<'a>,
+    locator: &LiveChunkLocator,
+    state: &ContentPartialState,
+) -> crate::error::Result<std::result::Result<VerifiedChunk<'a>, ChunkFailure>> {
+    let StreamGetInput {
+        profile,
+        publication,
+        command,
+        timeout,
+        ..
+    } = input;
+    let Some(descriptor) = publication.manifest.chunks.get(locator.position) else {
+        return Ok(Err((ContentFailure::AdapterFailure, None)));
+    };
+    if descriptor.chunk_ref != locator.chunk_ref {
+        return Ok(Err((ContentFailure::StaleTicket, Some(descriptor.chunk_ref.clone()))));
+    }
+    let connection =
+        match tokio::time::timeout(timeout, client.connect(locator.ticket.addr().clone(), iroh_blobs::ALPN)).await {
+            Ok(Ok(connection)) => connection,
+            Ok(Err(_)) => return Ok(Err((ContentFailure::TransportDisconnected, None))),
+            Err(_) => return Ok(Err((ContentFailure::Timeout, None))),
+        };
+    let bytes = match tokio::time::timeout(
+        timeout,
+        receive_bounded_blob(connection, locator.ticket.hash(), profile.bounds.max_chunk_bytes),
+    )
+    .await
+    {
+        Ok(Ok(bytes)) => bytes,
+        Ok(Err(_)) => return Ok(Err((ContentFailure::StaleTicket, Some(descriptor.chunk_ref.clone())))),
+        Err(_) => return Ok(Err((ContentFailure::Timeout, Some(descriptor.chunk_ref.clone())))),
+    };
+    let sequence = next_sequence(state)?;
+    let observation = ContentChunkObservation {
+        operation_ref: command.operation_ref.clone(),
+        manifest_ref: publication.manifest.manifest_ref.clone(),
+        sequence,
+        chunk_ref: descriptor.chunk_ref.clone(),
+        position: descriptor.position,
+        observed_content_ref: crate::chunk_store::hash_chunk(
+            &bytes,
+            usize::try_from(publication.manifest.chunk_size)
+                .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh chunk size does not fit usize"))?,
+        ),
+        observed_length: u64::try_from(bytes.len())
+            .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh chunk length does not fit u64"))?,
+    };
+    match apply_chunk_observation(profile, &publication.manifest, state, &observation) {
+        Ok(next_state) => Ok(Ok(VerifiedChunk {
+            descriptor,
+            bytes,
+            observation,
+            next_state,
+        })),
+        Err(issues) => Ok(Err((verification_failure(&issues), Some(descriptor.chunk_ref.clone())))),
+    }
 }
 
 fn finish_live_execution(

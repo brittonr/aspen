@@ -179,22 +179,27 @@ fn transition_diagnostics(state: &ServiceFsmState, event: &ServiceFsmEvent) -> V
         (_, EVENT_FAILURE) => {}
         _ => diagnostics.push(format!("illegal-service-transition:{}->{}", state.state_name, event.event_name)),
     }
+    push_event_evidence_diagnostics(event, &mut diagnostics);
+    diagnostics
+}
+
+/// Evidence every event must carry regardless of the state it arrives in.
+fn push_event_evidence_diagnostics(event: &ServiceFsmEvent, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if event.event_name != EVENT_INIT && event.startup_ref.is_none() {
-        diagnostics.push("missing-startup-evidence".to_string());
+        diagnostics.push_item("missing-startup-evidence".to_string());
     }
     if event.duplicate_runner_observed && event.event_name != EVENT_DUPLICATE_RUNNER {
-        diagnostics.push("duplicate-runner-observed-on-non-duplicate-event".to_string());
+        diagnostics.push_item("duplicate-runner-observed-on-non-duplicate-event".to_string());
     }
     if event.event_name == EVENT_SERVE && event.authority_refs.is_empty() {
-        diagnostics.push("serve-missing-authority-ref".to_string());
+        diagnostics.push_item("serve-missing-authority-ref".to_string());
     }
     if event.event_name == EVENT_SERVE && event.policy_refs.is_empty() {
-        diagnostics.push("serve-missing-policy-ref".to_string());
+        diagnostics.push_item("serve-missing-policy-ref".to_string());
     }
     if event.event_name == EVENT_SERVE && event.resource_refs.is_empty() {
-        diagnostics.push("serve-missing-resource-ref".to_string());
+        diagnostics.push_item("serve-missing-resource-ref".to_string());
     }
-    diagnostics
 }
 
 fn require_startup(event: &ServiceFsmEvent, diagnostics: &mut impl crate::bounded::VecSink<String>) {

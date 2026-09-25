@@ -152,12 +152,7 @@ pub fn evaluate_restart_decision(input: &RestartDecisionInput) -> Result<Restart
 
     // Must have authority
     if input.authority_refs.is_empty() {
-        return Ok(RestartDecision {
-            decision: "deny".to_string(),
-            attempt_number: input.prior_restart_attempts,
-            diagnostics: vec!["missing restart authority evidence".to_string()],
-            status_condition_refs: Vec::new(),
-        });
+        return Ok(denied_restart(input.prior_restart_attempts, "missing restart authority evidence".to_string()));
     }
 
     // Validate backoff profile
@@ -178,28 +173,16 @@ pub fn evaluate_restart_decision(input: &RestartDecisionInput) -> Result<Restart
             profile.clone()
         }
         None => {
-            return Ok(RestartDecision {
-                decision: "deny".to_string(),
-                attempt_number: input.prior_restart_attempts,
-                diagnostics: vec![
-                    "unnamed backoff profile — restart must use a named profile".to_string(),
-                ],
-                status_condition_refs: Vec::new(),
-            });
+            return Ok(denied_restart(input.prior_restart_attempts, "unnamed backoff profile — restart must use a named profile".to_string()));
         }
     };
 
     // Check attempt budget
     if input.prior_restart_attempts >= profile.max_attempts {
-        return Ok(RestartDecision {
-            decision: "deny".to_string(),
-            attempt_number: input.prior_restart_attempts,
-            diagnostics: vec![format!(
+        return Ok(denied_restart(input.prior_restart_attempts, format!(
                 "restart budget exhausted: {} of {} attempts",
                 input.prior_restart_attempts, profile.max_attempts,
-            )],
-            status_condition_refs: Vec::new(),
-        });
+            )));
     }
 
     // Must have probe evidence for liveness failure
@@ -210,14 +193,7 @@ pub fn evaluate_restart_decision(input: &RestartDecisionInput) -> Result<Restart
         .collect();
 
     if liveness_failures.is_empty() && input.prior_restart_attempts > 0 {
-        return Ok(RestartDecision {
-            decision: "deny".to_string(),
-            attempt_number: input.prior_restart_attempts,
-            diagnostics: vec![
-                "restart requested without liveness probe evidence".to_string(),
-            ],
-            status_condition_refs: Vec::new(),
-        });
+        return Ok(denied_restart(input.prior_restart_attempts, "restart requested without liveness probe evidence".to_string()));
     }
 
     let next_attempt = input.prior_restart_attempts + 1;
@@ -228,6 +204,15 @@ pub fn evaluate_restart_decision(input: &RestartDecisionInput) -> Result<Restart
         diagnostics: Vec::new(),
         status_condition_refs: vec!["restarting".to_string()],
     })
+}
+
+fn denied_restart(attempt_number: u64, diagnostic: String) -> RestartDecision {
+    RestartDecision {
+        decision: "deny".to_string(),
+        attempt_number,
+        diagnostics: vec![diagnostic],
+        status_condition_refs: Vec::new(),
+    }
 }
 
 /// Evaluate a readiness transition from probe results.

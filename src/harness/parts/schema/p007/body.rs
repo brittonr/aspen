@@ -128,54 +128,65 @@ pub fn validate_admission_evidence(
                 "capability authority mismatch at observation {position}"
             )));
         }
-        if recorded_authority.capability_ref != capability_gate.capability_ref {
-            return Err(MoltenError::invalid_harness(format!(
-                "capability authority preflight ref mismatch at observation {position}"
-            )));
-        }
-        if recorded_authority.proofset_ref != capability_gate.proofset_ref {
-            return Err(MoltenError::invalid_harness(format!(
-                "capability authority proofset ref mismatch at observation {position}"
-            )));
-        }
-        let preflight_grant_refs: &[String] = capability_gate.grant_refs.as_slice();
-        if let Some(grant_ref) = recorded_authority.grant_ref.as_deref()
-            && !preflight_grant_refs.iter().any(|preflight_ref| preflight_ref.as_str() == grant_ref)
-        {
-            return Err(MoltenError::invalid_harness(format!(
-                "capability grant ref at observation {position} is not bound by authority preflight"
-            )));
-        }
-        for derived_grant_ref in &recorded_authority.derived_grant_refs {
-            if !capability_gate
-                .derived_grant_refs
-                .as_slice()
-                .iter()
-                .any(|gate_ref| gate_ref == derived_grant_ref)
-            {
-                return Err(MoltenError::invalid_harness(format!(
-                    "derived grant ref at observation {position} is not bound by capability gate"
-                )));
-            }
-        }
-        for verification_ref in &recorded_authority.ucan_verification_receipt_refs {
-            if !capability_gate
-                .ucan_verification_receipt_refs
-                .as_slice()
-                .iter()
-                .any(|gate_ref| gate_ref == verification_ref)
-            {
-                return Err(MoltenError::invalid_harness(format!(
-                    "UCAN verification receipt ref at observation {position} is not bound by capability gate"
-                )));
-            }
-        }
+        validate_authority_binding(position, recorded_authority, capability_gate)?;
         let expected_decision = suite.policy.decide_with_capabilities(&suite.capabilities, &expected_request);
         if recorded.decision != expected_decision {
             return Err(MoltenError::invalid_harness(format!("admission decision mismatch at observation {position}")));
         }
         if !recorded.decision.is_allowed() {
             validate_denied_observation_events(position, &observation.events[1..])?;
+        }
+    }
+    Ok(())
+}
+
+/// The recorded authority must name the preflight capability and proofset, and every grant, derived grant, and
+/// UCAN verification ref it carries must be bound by the capability gate.
+fn validate_authority_binding(
+    position: usize,
+    recorded_authority: &AdmissionAuthorityEvidence,
+    capability_gate: &CapabilityGateEvidence,
+) -> Result<()> {
+    if recorded_authority.capability_ref != capability_gate.capability_ref {
+        return Err(MoltenError::invalid_harness(format!(
+            "capability authority preflight ref mismatch at observation {position}"
+        )));
+    }
+    if recorded_authority.proofset_ref != capability_gate.proofset_ref {
+        return Err(MoltenError::invalid_harness(format!(
+            "capability authority proofset ref mismatch at observation {position}"
+        )));
+    }
+    let preflight_grant_refs: &[String] = capability_gate.grant_refs.as_slice();
+    if let Some(grant_ref) = recorded_authority.grant_ref.as_deref()
+        && !preflight_grant_refs.iter().any(|preflight_ref| preflight_ref.as_str() == grant_ref)
+    {
+        return Err(MoltenError::invalid_harness(format!(
+            "capability grant ref at observation {position} is not bound by authority preflight"
+        )));
+    }
+    for derived_grant_ref in &recorded_authority.derived_grant_refs {
+        if !capability_gate
+            .derived_grant_refs
+            .as_slice()
+            .iter()
+            .any(|gate_ref| gate_ref == derived_grant_ref)
+        {
+            return Err(MoltenError::invalid_harness(format!(
+                "derived grant ref at observation {position} is not bound by capability gate"
+            )));
+        }
+    }
+    for verification_ref in &recorded_authority.ucan_verification_receipt_refs {
+        if !capability_gate
+            .ucan_verification_receipt_refs
+            .as_slice()
+            .iter()
+            .any(|gate_ref| gate_ref == verification_ref)
+        {
+            return Err(MoltenError::invalid_harness(format!(
+                "UCAN verification receipt ref at observation {position} is not bound by capability gate"
+            )));
         }
     }
     Ok(())

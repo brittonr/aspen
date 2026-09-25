@@ -213,29 +213,7 @@ pub fn run_executable_system_extension_fixture(
             "the deterministic fixture admits in-process-native or sandboxed-component profiles only",
         ));
     }
-    let tier = crate::fabric::canonical_extension_tier_admission(&crate::fabric::ExtensionTierRequest {
-        tier: crate::fabric::ExtensionTier::SystemExtension,
-        requested_authorities: vec![
-            crate::fabric::FabricAuthority::Transport,
-            crate::fabric::FabricAuthority::Resources,
-            crate::fabric::FabricAuthority::Supervision,
-            crate::fabric::FabricAuthority::Evidence,
-        ],
-        admission_evidence: crate::fabric::REQUIRED_SYSTEM_EXTENSION_EVIDENCE.to_vec(),
-    })?;
-    let descriptors = [port_descriptor()];
-    let admitted =
-        super::canonical_admit_system_extension_manifest(&manifest_input(profile), &descriptors, &tier, &[profile])?;
-    let mut upgrade_input = manifest_input(profile);
-    upgrade_input.implementation_ref = HASH_B.to_string();
-    upgrade_input.state_schema = UPGRADED_STATE_SCHEMA.to_string();
-    upgrade_input.compatible_state_schemas = vec![STATE_SCHEMA.to_string(), UPGRADED_STATE_SCHEMA.to_string()];
-    let upgrade_manifest =
-        super::canonical_admit_system_extension_manifest(&upgrade_input, &descriptors, &tier, &[profile])?;
-    let mut rollback_input = manifest_input(profile);
-    rollback_input.compatible_state_schemas = vec![STATE_SCHEMA.to_string(), UPGRADED_STATE_SCHEMA.to_string()];
-    let rollback_manifest =
-        super::canonical_admit_system_extension_manifest(&rollback_input, &descriptors, &tier, &[profile])?;
+    let [admitted, upgrade_manifest, rollback_manifest] = fixture_manifests(profile)?;
     let manifest_ref = admitted.manifest_ref().to_string();
     let manifest_value = admitted.value().clone();
     let mut host = super::SystemExtensionHost::new(admitted, EchoExecutor::new(profile)?)?;
@@ -269,6 +247,62 @@ pub fn run_executable_system_extension_fixture(
         .status;
     host.dispatch_request(HASH_C, REQUEST_BYTES, POST_ROLLBACK_REQUEST_TICK)?
         .require_executed("post-rollback request")?;
+    let recovered_status = fail_and_recover(&mut host)?;
+    host.drain(DRAIN_TICK)?;
+    host.shutdown(SHUTDOWN_TICK)?;
+    let final_status = host.operator_status()?;
+
+    let conformance = validated_conformance(&host)?;
+
+    Ok(ExecutableSystemExtensionFixtureRun {
+        profile,
+        manifest_ref,
+        manifest_value,
+        evidence: host.evidence().to_vec(),
+        conformance,
+        first_request_effects,
+        first_effect_completions,
+        upgraded_status,
+        rolled_back_status,
+        recovered_status,
+        final_status,
+    })
+}
+
+/// The admitted fixture manifest, its upgraded successor, and the rollback manifest, in that order.
+fn fixture_manifests(
+    profile: super::ExecutionProfile,
+) -> crate::error::Result<[super::CanonicalAdmittedSystemExtensionManifest; 3]> {
+    let tier = crate::fabric::canonical_extension_tier_admission(&crate::fabric::ExtensionTierRequest {
+        tier: crate::fabric::ExtensionTier::SystemExtension,
+        requested_authorities: vec![
+            crate::fabric::FabricAuthority::Transport,
+            crate::fabric::FabricAuthority::Resources,
+            crate::fabric::FabricAuthority::Supervision,
+            crate::fabric::FabricAuthority::Evidence,
+        ],
+        admission_evidence: crate::fabric::REQUIRED_SYSTEM_EXTENSION_EVIDENCE.to_vec(),
+    })?;
+    let descriptors = [port_descriptor()];
+    let admitted =
+        super::canonical_admit_system_extension_manifest(&manifest_input(profile), &descriptors, &tier, &[profile])?;
+    let mut upgrade_input = manifest_input(profile);
+    upgrade_input.implementation_ref = HASH_B.to_string();
+    upgrade_input.state_schema = UPGRADED_STATE_SCHEMA.to_string();
+    upgrade_input.compatible_state_schemas = vec![STATE_SCHEMA.to_string(), UPGRADED_STATE_SCHEMA.to_string()];
+    let upgrade_manifest =
+        super::canonical_admit_system_extension_manifest(&upgrade_input, &descriptors, &tier, &[profile])?;
+    let mut rollback_input = manifest_input(profile);
+    rollback_input.compatible_state_schemas = vec![STATE_SCHEMA.to_string(), UPGRADED_STATE_SCHEMA.to_string()];
+    let rollback_manifest =
+        super::canonical_admit_system_extension_manifest(&rollback_input, &descriptors, &tier, &[profile])?;
+    Ok([admitted, upgrade_manifest, rollback_manifest])
+}
+
+/// A retryable request fails the host into the failed phase, and a restart recovers it to running.
+fn fail_and_recover(
+    host: &mut super::SystemExtensionHost<EchoExecutor>,
+) -> crate::error::Result<super::CanonicalOperatorStatus> {
     match host.dispatch_request(HASH_C, REQUEST_BYTES, FAILURE_TICK)? {
         super::HostDispatchResult::Failed { .. } => {}
         other => {
@@ -287,10 +321,12 @@ pub fn run_executable_system_extension_fixture(
     }
     host.dispatch_request(HASH_C, REQUEST_BYTES, POST_RECOVERY_TICK)?
         .require_executed("post-recovery request")?;
-    host.drain(DRAIN_TICK)?;
-    host.shutdown(SHUTDOWN_TICK)?;
-    let final_status = host.operator_status()?;
+    Ok(recovered_status)
+}
 
+fn validated_conformance(
+    host: &super::SystemExtensionHost<EchoExecutor>,
+) -> crate::error::Result<super::ExecutableConformanceInput> {
     let required_callbacks = vec![
         super::CallbackKind::Initialize,
         super::CallbackKind::Start,
@@ -308,20 +344,7 @@ pub fn run_executable_system_extension_fixture(
             "executable fixture conformance denied: {issues:?}"
         )));
     }
-
-    Ok(ExecutableSystemExtensionFixtureRun {
-        profile,
-        manifest_ref,
-        manifest_value,
-        evidence: host.evidence().to_vec(),
-        conformance,
-        first_request_effects,
-        first_effect_completions,
-        upgraded_status,
-        rolled_back_status,
-        recovered_status,
-        final_status,
-    })
+    Ok(conformance)
 }
 
 fn manifest_input(profile: super::ExecutionProfile) -> super::SystemExtensionManifestInput {

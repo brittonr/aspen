@@ -22,41 +22,24 @@ pub(crate) fn init(input: super::command::base::Init) -> molten::error::Result<(
         overrideable_fields,
         override_state_root_ref,
     } = input;
-    let init = if let Some(profile_ref) = profile_ref {
-        let profile = checked_node_profile_from_cli(CheckedNodeProfileCliInput {
-            profile_ref,
-            actual_profile_ref,
-            profile_source_kind,
-            profile_tier,
-            profile_schema_id,
-            profile_schema_version,
-            profile_source_language,
-            profile_identity,
-            profile_state_root_ref,
-            adapter_profiles,
-            policy_refs,
-            capability_refs,
-            resource_refs,
-            effect_profile_refs,
-            overrideable_fields,
-        })?;
-        let overrides = molten::node_profile_config::NodeProfileOverrides {
-            state_root_ref: override_state_root_ref,
-            adapters: None,
-            policy_refs: None,
-        };
-        molten::node_daemon::init_with_profile(&molten::node_daemon::ProfileInitInput {
-            state_root: &state_root,
-            node_id: &node_id,
-            profile: &profile,
-            overrides: &overrides,
-        })?
-    } else {
-        molten::node_daemon::init_local(&molten::node_daemon::InitInput {
-            state_root: &state_root,
-            node_id: &node_id,
-        })?
-    };
+    let profile = profile_ref.map(|profile_ref| CheckedNodeProfileCliInput {
+        profile_ref,
+        actual_profile_ref,
+        profile_source_kind,
+        profile_tier,
+        profile_schema_id,
+        profile_schema_version,
+        profile_source_language,
+        profile_identity,
+        profile_state_root_ref,
+        adapter_profiles,
+        policy_refs,
+        capability_refs,
+        resource_refs,
+        effect_profile_refs,
+        overrideable_fields,
+    });
+    let init = init_node(&state_root, &node_id, profile, override_state_root_ref)?;
     if let Some(path) = config_out.as_ref() {
         super::core::write_file(path, &molten::preserves_rail::to_text(&init.config_value)?)?;
     }
@@ -75,6 +58,30 @@ pub(crate) fn init(input: super::command::base::Init) -> molten::error::Result<(
         state_root.display()
     );
     Ok(())
+}
+
+/// Initializes the node from the checked profile when one is given, and as a local node otherwise.
+fn init_node(
+    state_root: &std::path::Path,
+    node_id: &str,
+    profile: Option<CheckedNodeProfileCliInput>,
+    override_state_root_ref: Option<String>,
+) -> molten::error::Result<molten::node_daemon::Init> {
+    let Some(profile) = profile else {
+        return molten::node_daemon::init_local(&molten::node_daemon::InitInput { state_root, node_id });
+    };
+    let profile = checked_node_profile_from_cli(profile)?;
+    let overrides = molten::node_profile_config::NodeProfileOverrides {
+        state_root_ref: override_state_root_ref,
+        adapters: None,
+        policy_refs: None,
+    };
+    molten::node_daemon::init_with_profile(&molten::node_daemon::ProfileInitInput {
+        state_root,
+        node_id,
+        profile: &profile,
+        overrides: &overrides,
+    })
 }
 
 struct CheckedNodeProfileCliInput {

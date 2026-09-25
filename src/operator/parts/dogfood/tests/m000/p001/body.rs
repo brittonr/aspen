@@ -311,6 +311,16 @@
             .iter()
             .any(|stage| stage == RELEASE_WORKFLOW_STAGE_ARCHIVE_VERIFY));
 
+        assert_premature_promotion_denied(case, signed_bundle_verify, &promotion.receipt_ref, &required_signed_member_refs);
+    }
+
+    /// Promotion is denied while the bundle verification it depends on is not passing.
+    fn assert_premature_promotion_denied(
+        case: &NixCase,
+        signed_bundle_verify: &ReleaseEvidenceBundleVerifyReceipt,
+        promotion_ref: &str,
+        required_signed_member_refs: &[String],
+    ) {
         let premature = evaluate_release_workflow_state(&ReleaseWorkflowStateInput {
             required_stage: RELEASE_WORKFLOW_STAGE_PROMOTION,
             dogfood_report_ref: Some(&case.parsed.report_ref),
@@ -319,9 +329,9 @@
             bundle_ref: Some(&case.parsed_bundle.bundle_ref),
             bundle_verify_ref: Some(&signed_bundle_verify.receipt_ref),
             bundle_verify_decision: "deny",
-            signed_member_refs: &required_signed_member_refs,
-            required_signed_member_refs: &required_signed_member_refs,
-            promotion_ref: Some(&promotion.receipt_ref),
+            signed_member_refs: required_signed_member_refs,
+            required_signed_member_refs,
+            promotion_ref: Some(promotion_ref),
             promotion_decision: "pass",
             signed_promotion_ref: None,
             signed_promotion_subject_ref: None,

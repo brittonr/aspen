@@ -225,7 +225,41 @@
     #[test]
     fn direct_negative_fault_fixtures_deny_before_side_effects() {
         // r[verify molten.testing.distributed_simulation.direct_fault_fixtures]
-        struct NegativeFaultFixture {
+        for fixture in negative_fault_fixtures() {
+            let mut candidate = command(fixture.operation_id);
+            candidate.requires_quorum = fixture.requires_quorum;
+            if fixture.drop_authority {
+                candidate.authority_ref = None;
+            }
+            let input = input_with(
+                FaultPlan {
+                    events: vec![fault(
+                        fixture.fault_kind,
+                        fixture.operation_id,
+                        fixture.fault_diagnostic,
+                    )],
+                    caveats: vec!["direct negative fixture".to_string()],
+                },
+                vec![candidate],
+            );
+            let (first, second) = run_twice(&input);
+
+            assert_stable_run_refs(&first, &second);
+            assert_eq!(first.decision, DENY_DECISION);
+            assert!(first.committed_operation_ids.is_empty());
+            assert_eq!(first.denied_operation_ids, vec![fixture.operation_id.to_string()]);
+            assert_event_outcome(
+                &first,
+                fixture.operation_id,
+                DENY_EVENT_KIND,
+                DENY_DECISION,
+                fixture.expected_diagnostic,
+            );
+            assert_diagnostic(&first, fixture.expected_diagnostic);
+        }
+    }
+
+    struct NegativeFaultFixture {
             fault_kind: &'static str,
             operation_id: &'static str,
             fault_diagnostic: &'static str,
@@ -234,7 +268,9 @@
             drop_authority: bool,
         }
 
-        let fixtures = [
+    /// One fixture per direct negative fault, each denied before any side effect.
+    fn negative_fault_fixtures() -> [NegativeFaultFixture; 6] {
+        [
             NegativeFaultFixture {
                 fault_kind: FAULT_STALE_EVIDENCE,
                 operation_id: "op-stale",
@@ -283,38 +319,5 @@
                 requires_quorum: true,
                 drop_authority: false,
             },
-        ];
-
-        for fixture in fixtures {
-            let mut candidate = command(fixture.operation_id);
-            candidate.requires_quorum = fixture.requires_quorum;
-            if fixture.drop_authority {
-                candidate.authority_ref = None;
-            }
-            let input = input_with(
-                FaultPlan {
-                    events: vec![fault(
-                        fixture.fault_kind,
-                        fixture.operation_id,
-                        fixture.fault_diagnostic,
-                    )],
-                    caveats: vec!["direct negative fixture".to_string()],
-                },
-                vec![candidate],
-            );
-            let (first, second) = run_twice(&input);
-
-            assert_stable_run_refs(&first, &second);
-            assert_eq!(first.decision, DENY_DECISION);
-            assert!(first.committed_operation_ids.is_empty());
-            assert_eq!(first.denied_operation_ids, vec![fixture.operation_id.to_string()]);
-            assert_event_outcome(
-                &first,
-                fixture.operation_id,
-                DENY_EVENT_KIND,
-                DENY_DECISION,
-                fixture.expected_diagnostic,
-            );
-            assert_diagnostic(&first, fixture.expected_diagnostic);
-        }
+        ]
     }

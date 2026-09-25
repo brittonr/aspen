@@ -121,54 +121,19 @@ pub fn evaluate_plugin_lifecycle_state(input: &PluginLifecycleStateInput<'_>) ->
     let is_negotiation_passes = plugin_negotiation_passes(input.negotiation, input.manifest, &mut diagnostics)?;
     let is_compatibility_passes = plugin_compatibility_passes(input.compatibility, input.manifest, &mut diagnostics)?;
 
-    if requires_permission(input.evaluation_kind) && !is_permission_passes {
-        diagnostics.push_limited(
-            PLUGIN_LIFECYCLE_PERMISSION_MISSING.to_string(),
-            MAX_PLUGIN_DIAGNOSTICS,
-            "plugin lifecycle diagnostics",
-        )?;
-    }
-    if requires_activation(input.evaluation_kind) && !is_activation_passes {
-        diagnostics.push_limited(
-            PLUGIN_LIFECYCLE_ACTIVATION_MISSING.to_string(),
-            MAX_PLUGIN_DIAGNOSTICS,
-            "plugin lifecycle diagnostics",
-        )?;
-    }
-    if requires_healthy_use(input.evaluation_kind) && !is_health_passes {
-        diagnostics.push_limited(
-            PLUGIN_LIFECYCLE_HEALTH_FAILED.to_string(),
-            MAX_PLUGIN_DIAGNOSTICS,
-            "plugin lifecycle diagnostics",
-        )?;
-    }
-    if requires_negotiation(input.evaluation_kind, input.manifest) && !is_negotiation_passes {
-        diagnostics.push_limited(
-            PLUGIN_LIFECYCLE_NEGOTIATION_MISSING.to_string(),
-            MAX_PLUGIN_DIAGNOSTICS,
-            "plugin lifecycle diagnostics",
-        )?;
-    }
-    if requires_extension_compatibility(input.evaluation_kind, input.manifest) && !is_compatibility_passes {
-        diagnostics.push_limited(
-            PLUGIN_LIFECYCLE_COMPATIBILITY_MISSING.to_string(),
-            MAX_PLUGIN_DIAGNOSTICS,
-            "plugin lifecycle diagnostics",
-        )?;
-    }
-    if matches!(input.evaluation_kind, PluginLifecycleEvaluationKind::HostcallRequest) && is_removal_passes {
-        diagnostics.push_limited(
-            PLUGIN_LIFECYCLE_AUTHORITY_CLOSED.to_string(),
-            MAX_PLUGIN_DIAGNOSTICS,
-            "plugin lifecycle diagnostics",
-        )?;
-    }
-    if matches!(input.evaluation_kind, PluginLifecycleEvaluationKind::UpgradeRequest) && is_removal_passes {
-        diagnostics.push_limited(
-            PLUGIN_LIFECYCLE_AUTHORITY_CLOSED.to_string(),
-            MAX_PLUGIN_DIAGNOSTICS,
-            "plugin lifecycle diagnostics",
-        )?;
+    let lifecycle_gaps = [
+        (requires_permission(input.evaluation_kind) && !is_permission_passes, PLUGIN_LIFECYCLE_PERMISSION_MISSING),
+        (requires_activation(input.evaluation_kind) && !is_activation_passes, PLUGIN_LIFECYCLE_ACTIVATION_MISSING),
+        (requires_healthy_use(input.evaluation_kind) && !is_health_passes, PLUGIN_LIFECYCLE_HEALTH_FAILED),
+        (requires_negotiation(input.evaluation_kind, input.manifest) && !is_negotiation_passes, PLUGIN_LIFECYCLE_NEGOTIATION_MISSING),
+        (requires_extension_compatibility(input.evaluation_kind, input.manifest) && !is_compatibility_passes, PLUGIN_LIFECYCLE_COMPATIBILITY_MISSING),
+        (matches!(input.evaluation_kind, PluginLifecycleEvaluationKind::HostcallRequest) && is_removal_passes, PLUGIN_LIFECYCLE_AUTHORITY_CLOSED),
+        (matches!(input.evaluation_kind, PluginLifecycleEvaluationKind::UpgradeRequest) && is_removal_passes, PLUGIN_LIFECYCLE_AUTHORITY_CLOSED),
+    ];
+    for (is_gap, diagnostic) in lifecycle_gaps {
+        if is_gap {
+            diagnostics.push_limited(diagnostic.to_string(), MAX_PLUGIN_DIAGNOSTICS, "plugin lifecycle diagnostics")?;
+        }
     }
 
     let guards = plugin_lifecycle_guard_snapshot(input, PluginLifecycleGuardBooleans {

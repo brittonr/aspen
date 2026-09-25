@@ -122,6 +122,22 @@ pub fn validate_performance_profile(profile: &super::model::PerformanceProfile) 
         },
         &mut blockers,
     );
+    validate_reviewed_limits(profile, &mut blockers);
+    if !profile.non_claims.iter().eq(PERFORMANCE_NON_CLAIMS) {
+        blockers.push("performance profile changes the required recorded-only non-claims".to_string());
+    }
+    if blockers.is_empty() {
+        Ok(())
+    } else {
+        Err(super::model::PerformanceDenial::from_blockers(blockers))
+    }
+}
+
+/// The comparison constants and optimization caps must equal the reviewed deterministic profile.
+fn validate_reviewed_limits(
+    profile: &super::model::PerformanceProfile,
+    blockers: &mut impl crate::bounded::VecSink<String>,
+) {
     let comparison = &profile.comparison;
     if comparison.parts_per_million != PARTS_PER_MILLION
         || comparison.basis_points != BASIS_POINTS
@@ -134,26 +150,10 @@ pub fn validate_performance_profile(profile: &super::model::PerformanceProfile) 
         || comparison.max_sightglass_benchmark_bytes != MAX_SIGHTGLASS_BENCHMARK_BYTES
         || comparison.max_sightglass_run_seconds != MAX_SIGHTGLASS_RUN_SECONDS
     {
-        blockers.push("performance comparison constants differ from the reviewed deterministic profile".to_string());
+        blockers.push_item("performance comparison constants differ from the reviewed deterministic profile".into());
     }
-    let optimization = &profile.optimization_limits;
-    if optimization.max_concurrency != MAX_OPTIMIZATION_CONCURRENCY
-        || optimization.max_queue_depth != MAX_OPTIMIZATION_QUEUE_DEPTH
-        || optimization.max_pool_memories != MAX_POOL_MEMORIES
-        || optimization.max_pool_tables != MAX_POOL_TABLES
-        || optimization.reviewed_profile_ids
-            != REVIEWED_OPTIMIZATION_PROFILE_IDS.iter().map(|value| (*value).to_string()).collect::<Vec<_>>()
-    {
-        blockers.push("performance optimization limits differ from the reviewed hard caps".to_string());
-    }
-    let expected_non_claims = PERFORMANCE_NON_CLAIMS.iter().map(|value| (*value).to_string()).collect::<Vec<_>>();
-    if profile.non_claims != expected_non_claims {
-        blockers.push("performance profile changes the required recorded-only non-claims".to_string());
-    }
-    if blockers.is_empty() {
-        Ok(())
-    } else {
-        Err(super::model::PerformanceDenial::from_blockers(blockers))
+    if !super::optimization::limits_match_reviewed_caps(&profile.optimization_limits) {
+        blockers.push_item("performance optimization limits differ from the reviewed hard caps".to_string());
     }
 }
 

@@ -107,18 +107,7 @@ pub fn verify_performance_materialization(
     }
     validate_bundle_identity_fields(bundle, &mut blockers);
     validate_artifact_kind(bundle, &mut blockers);
-    if matches!(
-        bundle.kind,
-        super::model::PerformanceArtifactKind::PortableComponent
-            | super::model::PerformanceArtifactKind::WizerComponent
-    ) && crate::wasm_component::classify_for_profile(
-        crate::wasm_component::RequestedExecutionProfile::ComponentV1,
-        artifact_bytes,
-    )
-    .is_err()
-    {
-        blockers.push("portable or Wizer performance artifact is not a valid component".to_string());
-    }
+    validate_component_bytes(bundle, artifact_bytes, &mut blockers);
     if !blockers.is_empty() {
         return Err(super::model::PerformanceDenial::from_blockers(blockers));
     }
@@ -139,6 +128,25 @@ pub fn verify_performance_materialization(
         cpu_features: bundle.cpu_features.clone(),
         _admission_seal: super::model::MaterializationAdmissionSeal,
     })
+}
+
+fn validate_component_bytes(
+    bundle: &PerformanceMaterializationBundle,
+    artifact_bytes: &[u8],
+    blockers: &mut impl crate::bounded::VecSink<String>,
+) {
+    if matches!(
+        bundle.kind,
+        super::model::PerformanceArtifactKind::PortableComponent
+            | super::model::PerformanceArtifactKind::WizerComponent
+    ) && crate::wasm_component::classify_for_profile(
+        crate::wasm_component::RequestedExecutionProfile::ComponentV1,
+        artifact_bytes,
+    )
+    .is_err()
+    {
+        blockers.push_item("portable or Wizer performance artifact is not a valid component".to_string());
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

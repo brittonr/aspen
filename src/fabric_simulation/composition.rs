@@ -444,41 +444,7 @@ pub fn build_reference_simulated_world() -> crate::error::Result<CanonicalSimula
 pub fn reference_world_manifest() -> crate::error::Result<SimulatedWorldManifest> {
     let profiles = reference_port_profiles();
     let operations = default_reference_operations();
-    let kinds = [
-        crate::fabric::ReferenceSystemKind::TransactionalKeyValue,
-        crate::fabric::ReferenceSystemKind::ReplicatedLog,
-        crate::fabric::ReferenceSystemKind::DistributedScheduler,
-    ];
-    let mut nodes = Vec::with_capacity(kinds.len());
-    for kind in kinds {
-        let implementation_ref = blake3_ref(format!("reference-implementation:{}", kind.as_str()).as_bytes());
-        let input = reference_manifest_input(kind, implementation_ref.clone(), &profiles)?;
-        let node_id = reference_node_id(kind);
-        let identity = ExtensionCoreIdentity {
-            implementation_ref,
-            manifest_ref: blake3_ref(format!("reference-manifest:{}", kind.as_str()).as_bytes()),
-            callback_dispatcher_ref: blake3_ref(b"system-extension-callback-dispatcher-v1"),
-            protocol_core_ref: blake3_ref(format!("reference-protocol-core:{}", kind.as_str()).as_bytes()),
-            state_machine_ref: blake3_ref(format!("reference-state-machine:{}", kind.as_str()).as_bytes()),
-            schema_set_ref: blake3_ref(format!("reference-schema-set:{}", kind.as_str()).as_bytes()),
-            port_contract_set_ref: blake3_ref(format!("reference-port-set:{}", kind.as_str()).as_bytes()),
-        };
-        nodes.push(SimulatedNode {
-            node_id,
-            extension_id: input.extension_id,
-            service_id: input.service_id,
-            generation: INITIAL_EXTENSION_GENERATION,
-            initial_state_ref: blake3_ref(b"reference-initial-state"),
-            membership_view_ref: blake3_ref(b"reference-membership-view"),
-            placement_ref: blake3_ref(format!("reference-placement:{}", kind.as_str()).as_bytes()),
-            consistency_profile_ref: blake3_ref(b"reference-consistency-profile"),
-            same_core: SameCoreWitness {
-                simulation: identity.clone(),
-                live: identity,
-            },
-            required_port_classes: reference_required_ports(kind),
-        });
-    }
+    let nodes = reference_nodes(&profiles)?;
     let workload = operations
         .iter()
         .enumerate()
@@ -537,6 +503,46 @@ pub fn reference_world_manifest() -> crate::error::Result<SimulatedWorldManifest
         non_claims: REQUIRED_SIMULATION_NON_CLAIMS.to_vec(),
         ambient_inputs: Vec::new(),
     })
+}
+
+/// One node per reference system, running the same extension core identity in simulation and live.
+fn reference_nodes(profiles: &[SimulatedPortProfile]) -> crate::error::Result<Vec<SimulatedNode>> {
+    let kinds = [
+        crate::fabric::ReferenceSystemKind::TransactionalKeyValue,
+        crate::fabric::ReferenceSystemKind::ReplicatedLog,
+        crate::fabric::ReferenceSystemKind::DistributedScheduler,
+    ];
+    let mut nodes = Vec::with_capacity(kinds.len());
+    for kind in kinds {
+        let implementation_ref = blake3_ref(format!("reference-implementation:{}", kind.as_str()).as_bytes());
+        let input = reference_manifest_input(kind, implementation_ref.clone(), profiles)?;
+        let node_id = reference_node_id(kind);
+        let identity = ExtensionCoreIdentity {
+            implementation_ref,
+            manifest_ref: blake3_ref(format!("reference-manifest:{}", kind.as_str()).as_bytes()),
+            callback_dispatcher_ref: blake3_ref(b"system-extension-callback-dispatcher-v1"),
+            protocol_core_ref: blake3_ref(format!("reference-protocol-core:{}", kind.as_str()).as_bytes()),
+            state_machine_ref: blake3_ref(format!("reference-state-machine:{}", kind.as_str()).as_bytes()),
+            schema_set_ref: blake3_ref(format!("reference-schema-set:{}", kind.as_str()).as_bytes()),
+            port_contract_set_ref: blake3_ref(format!("reference-port-set:{}", kind.as_str()).as_bytes()),
+        };
+        nodes.push(SimulatedNode {
+            node_id,
+            extension_id: input.extension_id,
+            service_id: input.service_id,
+            generation: INITIAL_EXTENSION_GENERATION,
+            initial_state_ref: blake3_ref(b"reference-initial-state"),
+            membership_view_ref: blake3_ref(b"reference-membership-view"),
+            placement_ref: blake3_ref(format!("reference-placement:{}", kind.as_str()).as_bytes()),
+            consistency_profile_ref: blake3_ref(b"reference-consistency-profile"),
+            same_core: SameCoreWitness {
+                simulation: identity.clone(),
+                live: identity,
+            },
+            required_port_classes: reference_required_ports(kind),
+        });
+    }
+    Ok(nodes)
 }
 
 // r[impl molten.fabric_simulation.stateful_storage]
@@ -717,165 +723,21 @@ fn run_prepared_reference_world(
     mut prepared: PreparedReferenceWorld,
     seed: u64,
 ) -> crate::error::Result<ReferenceSimulationFixtureRun> {
-    let mut pending = prepared.world.admitted.manifest.workload.clone();
-    let mut scheduler = SimulationSchedulerState::initial();
     let mut router = DeterministicSimulationPortRouter::new(&prepared.world);
-    let mut observations = Vec::new();
-    let mut choice_records = Vec::new();
-    // The admitted `max-choices` bound caps the recorded scheduler choices (the core scheduler enforces
-    // it too).
-    let max_choice_records = usize::try_from(prepared.world.admitted.manifest.bounds.max_choices).map_err(|_| {
-        crate::error::MoltenError::invalid_harness("reference world max-choices bound does not fit usize")
-    })?;
-    let mut crash_recoveries = Vec::with_capacity(prepared.world.admitted.manifest.faults.len());
-    let mut fired_recovery_faults = std::collections::BTreeSet::new();
-    let mut history_material = FIRST_HISTORY_MATERIAL.to_string();
-    loop {
-        router.begin_choice(scheduler.next_choice_position, scheduler.virtual_tick);
-        router.step_boundary_faults();
-        for fault in prepared.world.admitted.manifest.faults.clone() {
-            if !matches!(fault.kind, SimulationFaultKind::Crash | SimulationFaultKind::Restart)
-                || (scheduler.next_choice_position < fault.activate_at_choice
-                    && scheduler.virtual_tick < fault.activate_at_choice)
-            {
-                continue;
-            }
-            fired_recovery_faults.insert(fault.fault_id.clone());
-            let recovery = router.apply_crash(&fault).map_err(|error| {
-                crate::error::MoltenError::invalid_harness(format!("reference crash recovery denied: {error:?}"))
-            })?;
-            rebuild_hosts_from_image(&mut prepared, router.storage().durable_image())?;
-            crash_recoveries.push(recovery);
-        }
-        let mut eligible = Vec::new();
-        if let Some(step) = pending.first() {
-            eligible.push(workload_choice(step));
-        }
-        eligible.extend(router.storage().eligible_completions(scheduler.virtual_tick));
-        eligible.extend(router.transport().eligible_deliveries(scheduler.virtual_tick));
-        if eligible.is_empty() {
-            let mut readiness = Vec::new();
-            readiness.extend(router.storage().next_readiness(scheduler.virtual_tick));
-            readiness.extend(router.transport().next_readiness(scheduler.virtual_tick));
-            readiness.extend(
-                prepared
-                    .world
-                    .admitted
-                    .manifest
-                    .faults
-                    .iter()
-                    .filter(|fault| {
-                        matches!(fault.kind, SimulationFaultKind::Crash | SimulationFaultKind::Restart)
-                            && !fired_recovery_faults.contains(&fault.fault_id)
-                    })
-                    .map(|fault| fault.activate_at_choice),
-            );
-            let Some(next_tick) = readiness.into_iter().filter(|tick| *tick > scheduler.virtual_tick).min() else {
-                break;
-            };
-            scheduler = advance_simulation_time(&prepared.world.admitted, &scheduler, next_tick).map_err(|error| {
-                crate::error::MoltenError::invalid_harness(format!("reference time advance denied: {error:?}"))
-            })?;
-            continue;
-        }
-        eligible.sort();
-        let seeded_index = seeded_selection_index(seed, scheduler.next_choice_position, eligible.len());
-        let recorded_choice_id = eligible[seeded_index].choice_id.clone();
-        let mut transition =
-            select_simulation_choice(&prepared.world.admitted, &scheduler, &eligible, Some(&recorded_choice_id))
-                .map_err(|error| {
-                    crate::error::MoltenError::invalid_harness(format!("reference scheduler denied: {error:?}"))
-                })?;
-        let selected = transition.record.selected.clone();
-        router.begin_choice(transition.record.position, transition.next.virtual_tick);
-        router.step_boundary_faults();
-        let semantic_output_ref = match selected.kind {
-            SchedulerChoiceKind::Runnable => {
-                let step = pending.remove(0);
-                execute_workload_step(
-                    &mut WorkloadStepContext {
-                        prepared: &mut prepared,
-                        router: &mut router,
-                        observations: &mut observations,
-                        history_material: &mut history_material,
-                    },
-                    &step,
-                    &transition,
-                )?
-            }
-            SchedulerChoiceKind::StorageCompletion => {
-                let operation = router
-                    .storage()
-                    .submitted()
-                    .iter()
-                    .find(|operation| storage_completion_choice_id(&operation.operation_id) == selected.choice_id)
-                    .cloned()
-                    .ok_or_else(|| {
-                        crate::error::MoltenError::invalid_harness("selected storage completion disappeared")
-                    })?;
-                router.complete_storage_head(&operation.operation_id).map_err(|error| {
-                    crate::error::MoltenError::invalid_harness(format!(
-                        "reference storage completion denied: {error:?}"
-                    ))
-                })?
-            }
-            SchedulerChoiceKind::MessageDelivery => {
-                let transmission = router
-                    .transport()
-                    .pending()
-                    .iter()
-                    .find(|transmission| {
-                        message_delivery_choice_id(&transmission.transmission_id) == selected.choice_id
-                    })
-                    .cloned()
-                    .ok_or_else(|| {
-                        crate::error::MoltenError::invalid_harness("selected transport delivery disappeared")
-                    })?;
-                router.deliver_transmission(&transmission.transmission_id).map_err(|error| {
-                    crate::error::MoltenError::invalid_harness(format!(
-                        "reference transport delivery denied: {error:?}"
-                    ))
-                })?
-            }
-            other => {
-                return Err(crate::error::MoltenError::invalid_harness(format!(
-                    "reference runner cannot execute scheduler choice kind {}",
-                    other.as_str()
-                )));
-            }
-        };
-        transition.record.semantic_output_ref = semantic_output_ref;
-        if choice_records.len() >= max_choice_records {
-            return Err(crate::error::MoltenError::invalid_harness(
-                "reference world records at most max-choices scheduler choices",
-            ));
-        }
-        choice_records.push(transition.record);
-        scheduler = transition.next;
-    }
-    scheduler = finish_simulation_scheduler(&prepared.world.admitted, &scheduler).map_err(|error| {
+    let ReferenceChoiceTrace {
+        scheduler,
+        observations,
+        choice_records,
+        crash_recoveries,
+    } = run_reference_choices(&mut prepared, &mut router, seed)?;
+    let scheduler = finish_simulation_scheduler(&prepared.world.admitted, &scheduler).map_err(|error| {
         crate::error::MoltenError::invalid_harness(format!("reference scheduler finish denied: {error:?}"))
     })?;
-    let host_count = prepared.hosts.len();
-    let mut final_state_refs = Vec::with_capacity(host_count);
-    let mut host_evidence_refs = Vec::new();
-    let mut service_states = std::collections::BTreeMap::new();
-    for (node_id, host) in prepared.hosts.iter_mut() {
-        host.drain(scheduler.virtual_tick)?;
-        host.shutdown(scheduler.virtual_tick)?;
-        final_state_refs.push(blake3_ref(format!("{:?}", host.executor().state()).as_bytes()));
-        if service_states.len() >= host_count {
-            return Err(crate::error::MoltenError::invalid_harness(
-                "reference world reports at most one durable service state per host",
-            ));
-        }
-        service_states.insert(node_id.clone(), host.executor().state().clone());
-        let host_evidence = host.evidence();
-        host_evidence_refs.reserve(host_evidence.len());
-        host_evidence_refs.extend(host_evidence.iter().map(|item| item.evidence_ref().to_string()));
-    }
-    final_state_refs.sort();
-    host_evidence_refs.sort();
+    let FinishedReferenceHosts {
+        final_state_refs,
+        host_evidence_refs,
+        service_states,
+    } = finish_reference_hosts(&mut prepared, &scheduler)?;
     let plain_observations = observations.iter().map(|item| item.observation.clone()).collect::<Vec<_>>();
     let invariant_results = evaluate_invariants(&prepared.world.admitted.manifest.invariants, &plain_observations);
     let decision = if invariant_results.iter().all(|result| result.passed) {
@@ -883,19 +745,7 @@ fn run_prepared_reference_world(
     } else {
         SimulationDecision::InvariantFailed
     };
-    let choice_resource_units = u64::try_from(choice_records.len())
-        .map_err(|_| crate::error::MoltenError::invalid_harness("reference choice resource count overflow"))?
-        .checked_mul(RUN_RESOURCE_INCREMENT)
-        .ok_or_else(|| {
-            crate::error::MoltenError::invalid_harness("reference choice resource multiplication overflow")
-        })?;
-    let resource_units = router
-        .resource_units()
-        .checked_add(choice_resource_units)
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("reference run resource count overflow"))?;
-    if resource_units > prepared.world.admitted.manifest.bounds.max_resource_units {
-        return Err(crate::error::MoltenError::invalid_harness("reference run exceeded its resource envelope"));
-    }
+    let resource_units = reference_resource_units(&prepared, &router, choice_records.len())?;
     let summary = SimulationRunSummary {
         decision,
         choice_records,
@@ -927,6 +777,247 @@ fn run_prepared_reference_world(
         crash_recoveries,
         service_states,
     })
+}
+
+/// The scheduler state, observations, recorded choices, and crash recoveries of one seeded
+/// reference run.
+struct ReferenceChoiceTrace {
+    scheduler: SimulationSchedulerState,
+    observations: Vec<CanonicalSimulationObservation>,
+    choice_records: Vec<SchedulerChoiceRecord>,
+    crash_recoveries: Vec<ReferenceCrashRecovery>,
+}
+
+/// Drives the seeded scheduler until no choice is eligible and no fault or port becomes ready
+/// later.
+fn run_reference_choices(
+    prepared: &mut PreparedReferenceWorld,
+    router: &mut DeterministicSimulationPortRouter,
+    seed: u64,
+) -> crate::error::Result<ReferenceChoiceTrace> {
+    let mut pending = prepared.world.admitted.manifest.workload.clone();
+    let mut scheduler = SimulationSchedulerState::initial();
+    let mut observations = Vec::new();
+    let mut choice_records = Vec::new();
+    // The admitted `max-choices` bound caps the recorded scheduler choices (the core scheduler enforces
+    // it too).
+    let max_choice_records = usize::try_from(prepared.world.admitted.manifest.bounds.max_choices).map_err(|_| {
+        crate::error::MoltenError::invalid_harness("reference world max-choices bound does not fit usize")
+    })?;
+    let mut crash_recoveries = Vec::with_capacity(prepared.world.admitted.manifest.faults.len());
+    let mut fired_recovery_faults = std::collections::BTreeSet::new();
+    let mut history_material = FIRST_HISTORY_MATERIAL.to_string();
+    loop {
+        router.begin_choice(scheduler.next_choice_position, scheduler.virtual_tick);
+        router.step_boundary_faults();
+        apply_due_recovery_faults(prepared, router, &scheduler, &mut fired_recovery_faults, &mut crash_recoveries)?;
+        let mut eligible = Vec::new();
+        if let Some(step) = pending.first() {
+            eligible.push(workload_choice(step));
+        }
+        eligible.extend(router.storage().eligible_completions(scheduler.virtual_tick));
+        eligible.extend(router.transport().eligible_deliveries(scheduler.virtual_tick));
+        if eligible.is_empty() {
+            let Some(next_tick) = next_readiness_tick(prepared, router, &scheduler, &fired_recovery_faults) else {
+                break;
+            };
+            scheduler = advance_simulation_time(&prepared.world.admitted, &scheduler, next_tick).map_err(|error| {
+                crate::error::MoltenError::invalid_harness(format!("reference time advance denied: {error:?}"))
+            })?;
+            continue;
+        }
+        eligible.sort();
+        let seeded_index = seeded_selection_index(seed, scheduler.next_choice_position, eligible.len());
+        let recorded_choice_id = eligible[seeded_index].choice_id.clone();
+        let mut transition =
+            select_simulation_choice(&prepared.world.admitted, &scheduler, &eligible, Some(&recorded_choice_id))
+                .map_err(|error| {
+                    crate::error::MoltenError::invalid_harness(format!("reference scheduler denied: {error:?}"))
+                })?;
+        router.begin_choice(transition.record.position, transition.next.virtual_tick);
+        router.step_boundary_faults();
+        transition.record.semantic_output_ref = if transition.record.selected.kind == SchedulerChoiceKind::Runnable {
+            let step = pending.remove(0);
+            let mut context = WorkloadStepContext {
+                prepared: &mut *prepared,
+                router: &mut *router,
+                observations: &mut observations,
+                history_material: &mut history_material,
+            };
+            execute_workload_step(&mut context, &step, &transition)?
+        } else {
+            execute_port_choice(router, &transition)?
+        };
+        if choice_records.len() >= max_choice_records {
+            return Err(crate::error::MoltenError::invalid_harness(
+                "reference world records at most max-choices scheduler choices",
+            ));
+        }
+        choice_records.push(transition.record);
+        scheduler = transition.next;
+    }
+    Ok(ReferenceChoiceTrace {
+        scheduler,
+        observations,
+        choice_records,
+        crash_recoveries,
+    })
+}
+
+/// Applies every crash or restart fault whose activation choice or tick has been reached,
+/// rebuilding the hosts from the durable image after each recovery.
+fn apply_due_recovery_faults(
+    prepared: &mut PreparedReferenceWorld,
+    router: &mut DeterministicSimulationPortRouter,
+    scheduler: &SimulationSchedulerState,
+    fired_recovery_faults: &mut std::collections::BTreeSet<String>,
+    crash_recoveries: &mut impl crate::bounded::VecSink<ReferenceCrashRecovery>,
+) -> crate::error::Result<()> {
+    for fault in prepared.world.admitted.manifest.faults.clone() {
+        if !matches!(fault.kind, SimulationFaultKind::Crash | SimulationFaultKind::Restart)
+            || (scheduler.next_choice_position < fault.activate_at_choice
+                && scheduler.virtual_tick < fault.activate_at_choice)
+        {
+            continue;
+        }
+        fired_recovery_faults.insert(fault.fault_id.clone());
+        let recovery = router.apply_crash(&fault).map_err(|error| {
+            crate::error::MoltenError::invalid_harness(format!("reference crash recovery denied: {error:?}"))
+        })?;
+        rebuild_hosts_from_image(prepared, router.storage().durable_image())?;
+        crash_recoveries.push_item(recovery);
+    }
+    Ok(())
+}
+
+/// The earliest future tick at which storage, transport, or an unfired crash or restart fault
+/// becomes ready.
+fn next_readiness_tick(
+    prepared: &PreparedReferenceWorld,
+    router: &DeterministicSimulationPortRouter,
+    scheduler: &SimulationSchedulerState,
+    fired_recovery_faults: &std::collections::BTreeSet<String>,
+) -> Option<u64> {
+    let mut readiness = Vec::new();
+    readiness.extend(router.storage().next_readiness(scheduler.virtual_tick));
+    readiness.extend(router.transport().next_readiness(scheduler.virtual_tick));
+    readiness.extend(
+        prepared
+            .world
+            .admitted
+            .manifest
+            .faults
+            .iter()
+            .filter(|fault| {
+                matches!(fault.kind, SimulationFaultKind::Crash | SimulationFaultKind::Restart)
+                    && !fired_recovery_faults.contains(&fault.fault_id)
+            })
+            .map(|fault| fault.activate_at_choice),
+    );
+    readiness.into_iter().filter(|tick| *tick > scheduler.virtual_tick).min()
+}
+
+/// Completes the selected storage operation or delivers the selected message and returns its
+/// semantic output.
+fn execute_port_choice(
+    router: &mut DeterministicSimulationPortRouter,
+    transition: &SimulationSchedulerTransition,
+) -> crate::error::Result<String> {
+    let selected = &transition.record.selected;
+    match selected.kind {
+        SchedulerChoiceKind::StorageCompletion => {
+            let operation = router
+                .storage()
+                .submitted()
+                .iter()
+                .find(|operation| storage_completion_choice_id(&operation.operation_id) == selected.choice_id)
+                .cloned()
+                .ok_or_else(|| crate::error::MoltenError::invalid_harness("selected storage completion disappeared"))?;
+            router.complete_storage_head(&operation.operation_id).map_err(|error| {
+                crate::error::MoltenError::invalid_harness(format!("reference storage completion denied: {error:?}"))
+            })
+        }
+        SchedulerChoiceKind::MessageDelivery => {
+            let transmission = router
+                .transport()
+                .pending()
+                .iter()
+                .find(|transmission| message_delivery_choice_id(&transmission.transmission_id) == selected.choice_id)
+                .cloned()
+                .ok_or_else(|| crate::error::MoltenError::invalid_harness("selected transport delivery disappeared"))?;
+            router.deliver_transmission(&transmission.transmission_id).map_err(|error| {
+                crate::error::MoltenError::invalid_harness(format!("reference transport delivery denied: {error:?}"))
+            })
+        }
+        other => Err(crate::error::MoltenError::invalid_harness(format!(
+            "reference runner cannot execute scheduler choice kind {}",
+            other.as_str()
+        ))),
+    }
+}
+
+/// The sorted final state refs, sorted evidence refs, and durable service states of the shut-down
+/// hosts.
+struct FinishedReferenceHosts {
+    final_state_refs: Vec<String>,
+    host_evidence_refs: Vec<String>,
+    service_states: std::collections::BTreeMap<String, ReferenceServiceState>,
+}
+
+/// Drains and shuts down every host, returning their sorted final state refs, sorted evidence refs,
+/// and durable service states.
+fn finish_reference_hosts(
+    prepared: &mut PreparedReferenceWorld,
+    scheduler: &SimulationSchedulerState,
+) -> crate::error::Result<FinishedReferenceHosts> {
+    let host_count = prepared.hosts.len();
+    let mut final_state_refs = Vec::with_capacity(host_count);
+    let mut host_evidence_refs = Vec::new();
+    let mut service_states = std::collections::BTreeMap::new();
+    for (node_id, host) in prepared.hosts.iter_mut() {
+        host.drain(scheduler.virtual_tick)?;
+        host.shutdown(scheduler.virtual_tick)?;
+        final_state_refs.push(blake3_ref(format!("{:?}", host.executor().state()).as_bytes()));
+        if service_states.len() >= host_count {
+            return Err(crate::error::MoltenError::invalid_harness(
+                "reference world reports at most one durable service state per host",
+            ));
+        }
+        service_states.insert(node_id.clone(), host.executor().state().clone());
+        let host_evidence = host.evidence();
+        host_evidence_refs.reserve(host_evidence.len());
+        host_evidence_refs.extend(host_evidence.iter().map(|item| item.evidence_ref().to_string()));
+    }
+    final_state_refs.sort();
+    host_evidence_refs.sort();
+    Ok(FinishedReferenceHosts {
+        final_state_refs,
+        host_evidence_refs,
+        service_states,
+    })
+}
+
+/// The router's resource units plus a fixed increment per recorded choice, within the admitted
+/// envelope.
+fn reference_resource_units(
+    prepared: &PreparedReferenceWorld,
+    router: &DeterministicSimulationPortRouter,
+    choice_count: usize,
+) -> crate::error::Result<u64> {
+    let choice_resource_units = u64::try_from(choice_count)
+        .map_err(|_| crate::error::MoltenError::invalid_harness("reference choice resource count overflow"))?
+        .checked_mul(RUN_RESOURCE_INCREMENT)
+        .ok_or_else(|| {
+            crate::error::MoltenError::invalid_harness("reference choice resource multiplication overflow")
+        })?;
+    let resource_units = router
+        .resource_units()
+        .checked_add(choice_resource_units)
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("reference run resource count overflow"))?;
+    if resource_units > prepared.world.admitted.manifest.bounds.max_resource_units {
+        return Err(crate::error::MoltenError::invalid_harness("reference run exceeded its resource envelope"));
+    }
+    Ok(resource_units)
 }
 
 struct WorkloadStepContext<'a> {

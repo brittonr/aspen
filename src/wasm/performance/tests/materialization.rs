@@ -55,9 +55,14 @@ fn portable_wizer_and_precompiled_artifacts_require_exact_mantle_materialization
     };
     admit_wizer_artifact(&wizer, &wizer_manifest).expect("Wizer artifact admitted");
 
+    assert_precompiled_admission(&profile, source_ref);
+}
+
+/// A Mantle-materialized precompiled component is admitted and remeasured before deserialization.
+fn assert_precompiled_admission(profile: &PerformanceProfile, source_ref: String) {
     let precompiled_bytes = super::support::fixture_precompiled_component_bytes();
     let (_aot_suite, _aot_bundle, precompiled) = super::support::fixture_materialized(
-        &profile,
+        profile,
         PerformanceArtifactKind::PrecompiledComponent,
         &precompiled_bytes,
         source_ref,
@@ -137,12 +142,15 @@ fn local_tampered_incomplete_aot_and_wizer_artifacts_deny_before_use() {
     suite.materialization_bundle_refs = vec![bundle.bundle_ref.clone()];
     assert!(verify_performance_materialization(&suite, &bundle, &bytes).is_err());
 
-    let (_aot_suite, _aot_bundle, precompiled) = super::support::fixture_materialized(
-        &profile,
-        PerformanceArtifactKind::PrecompiledComponent,
-        &bytes,
-        source_ref.clone(),
-    );
+    assert_cross_target_precompile_denied(&profile, &bytes, source_ref.clone());
+    assert_drifting_wizer_denied(&profile, source_ref);
+}
+
+/// A precompiled component is denied for a runtime expectation that targets a different
+/// architecture.
+fn assert_cross_target_precompile_denied(profile: &PerformanceProfile, bytes: &[u8], source_ref: String) {
+    let (_aot_suite, _aot_bundle, precompiled) =
+        super::support::fixture_materialized(profile, PerformanceArtifactKind::PrecompiledComponent, bytes, source_ref);
     let manifest = PrecompiledComponentManifest {
         schema_id: PRECOMPILED_ADMISSION_SCHEMA.to_string(),
         source_component_ref: precompiled.source_component_ref.clone(),
@@ -165,10 +173,13 @@ fn local_tampered_incomplete_aot_and_wizer_artifacts_deny_before_use() {
     };
     cross_target.target = "aarch64-unknown-linux-gnu".to_string();
     assert!(admit_precompiled_component(&precompiled, &manifest, &cross_target).is_err());
+}
 
+/// A Wizer transform with drifting repeated outputs, or one that observed ambient state, is denied.
+fn assert_drifting_wizer_denied(profile: &PerformanceProfile, source_ref: String) {
     let wizer_bytes = super::support::fixture_alternate_component_bytes();
     let (_wizer_suite, _wizer_bundle, wizer) = super::support::fixture_materialized(
-        &profile,
+        profile,
         PerformanceArtifactKind::WizerComponent,
         &wizer_bytes,
         source_ref,

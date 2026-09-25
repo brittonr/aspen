@@ -74,28 +74,7 @@ pub fn validate_performance_receipt_against(
 
 pub fn performance_receipt_value(receipt: &PerformanceReceipt) -> preserves::IOValue {
     let run = &receipt.input.run;
-    let phases = run
-        .phases
-        .iter()
-        .map(|phase| {
-            let samples = phase
-                .samples
-                .iter()
-                .map(|sample| {
-                    crate::preserves_rail::record("sample", vec![
-                        crate::preserves_rail::u64_value(u64::from(sample.process)),
-                        crate::preserves_rail::u64_value(u64::from(sample.iteration)),
-                        crate::preserves_rail::u64_value(sample.count),
-                    ])
-                })
-                .collect();
-            crate::preserves_rail::record("phase", vec![
-                crate::preserves_rail::string(phase.phase.as_str()),
-                crate::preserves_rail::string(&phase.event),
-                crate::preserves_rail::sequence(samples),
-            ])
-        })
-        .collect();
+    let phases = phase_values(run);
     crate::preserves_rail::record("wasm-component-performance-receipt-v1", vec![
         crate::preserves_rail::record("schema", vec![crate::preserves_rail::string(PERFORMANCE_RECEIPT_SCHEMA)]),
         crate::preserves_rail::record("evidence-role", vec![crate::preserves_rail::string(
@@ -152,6 +131,30 @@ pub fn performance_receipt_value(receipt: &PerformanceReceipt) -> preserves::IOV
         )]),
         crate::preserves_rail::record("non-claims", vec![strings(&receipt.non_claims)]),
     ])
+}
+
+fn phase_values(run: &super::model::BenchmarkRun) -> Vec<preserves::IOValue> {
+    run.phases
+        .iter()
+        .map(|phase| {
+            let samples = phase
+                .samples
+                .iter()
+                .map(|sample| {
+                    crate::preserves_rail::record("sample", vec![
+                        crate::preserves_rail::u64_value(u64::from(sample.process)),
+                        crate::preserves_rail::u64_value(u64::from(sample.iteration)),
+                        crate::preserves_rail::u64_value(sample.count),
+                    ])
+                })
+                .collect();
+            crate::preserves_rail::record("phase", vec![
+                crate::preserves_rail::string(phase.phase.as_str()),
+                crate::preserves_rail::string(&phase.event),
+                crate::preserves_rail::sequence(samples),
+            ])
+        })
+        .collect()
 }
 
 pub fn performance_receipt_summary(receipt: &PerformanceReceipt) -> String {

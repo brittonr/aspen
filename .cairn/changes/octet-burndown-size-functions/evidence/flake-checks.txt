@@ -1,0 +1,23 @@
+# nix build --no-link .#checks.x86_64-linux.<name> (touched-surface checks)
+addressable-actor-octet-deny-all exit=0
+addressable-actor-profile exit=0
+content-store-adapter-profile exit=0
+coordination-delivery-octet-deny-all exit=0
+coordination-delivery-profile exit=0
+fabric-cryptographic-identity-profile exit=0
+fabric-execution-octet-deny-all exit=0
+fabric-execution-profile exit=0
+fabric-membership-placement-profile exit=0
+fabric-observability-profile exit=0
+fabric-port-boundaries exit=0
+native-system-extension-host-profile exit=0
+native-system-extension-octet-deny-all exit=0
+prolly-map-octet-deny-all exit=0
+world-head-octet-deny-all exit=0
+world-snapshot-octet-deny-all exit=0
+world-promotion-octet-deny-all exit=0
+wasm-component-profile exit=0
+wasm-component-performance-profile exit=0
+materialization-authority exit=0
+release-profile-validation exit=0
+requirement-traceability-gate exit=0

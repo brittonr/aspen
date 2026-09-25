@@ -64,57 +64,9 @@ pub fn simulate_actor_sequence(input: SequenceRunInput<'_>) -> ActorServiceResul
             },
             |published| published.state.clone(),
         );
-        let expected = commit.state.as_ref().map_or(
-            ExpectedActorState {
-                state_ref: None,
-                revision: ADDRESSABLE_ACTOR_INITIAL_REVISION,
-            },
-            |published| ExpectedActorState {
-                state_ref: Some(published.state_ref.clone()),
-                revision: published.revision,
-            },
-        );
-        let admission = ActorAdmissionFacts {
-            profile_ref: current.profile_ref.clone(),
-            system_extension_manifest_ref: current.system_extension_manifest_ref.clone(),
-            authority_ref: simulation_ref("authority"),
-            resource_ref: simulation_ref("resource"),
-            adapter_ref: simulation_ref("adapter"),
-            policy_current: true,
-            capability_current: true,
-            placement_current: true,
-            generation_current: true,
-            resources_admitted: true,
-            adapter_admitted: true,
-        };
-        let request = ActorRequest {
-            schema: ACTOR_REQUEST_SCHEMA.to_string(),
-            operation_id: step.operation_id.clone(),
-            actor_key_ref: current.actor_key_ref.clone(),
-            placement_ref: current.placement_ref.clone(),
-            extension_generation: current.extension_generation,
-            expected_lifecycle_sequence: current.lifecycle_sequence,
-            logical_tick: step.logical_tick,
-            admission,
-            operation: step.operation.clone(),
-        };
-        let host_binding = ActorHostBindingFacts {
-            schema: ACTOR_HOST_BINDING_SCHEMA.to_string(),
-            actor_key_ref: current.actor_key_ref.clone(),
-            profile_ref: current.profile_ref.clone(),
-            system_extension_manifest_ref: current.system_extension_manifest_ref.clone(),
-            placement_ref: current.placement_ref.clone(),
-            extension_generation: current.extension_generation,
-            system_extension_generation: current.extension_generation,
-            system_extension_phase: extension_phase(current.phase),
-            system_extension_checkpoint_ref: current.checkpoint_ref.clone(),
-            delivery_profile_ref: profile.delivery_profile_ref.clone(),
-            policy_current: true,
-            capability_current: true,
-            placement_current: true,
-            resources_admitted: true,
-            adapter_admitted: true,
-        };
+        let expected = expected_state(commit.state.as_ref());
+        let request = simulated_request(&current, step);
+        let host_binding = simulated_host_binding(&current, profile);
         let outcome = apply_actor_request(&mut commit, &mut effects, &mut statuses, &ActorServiceRequest {
             profile,
             actor_key,
@@ -148,6 +100,69 @@ pub fn simulate_actor_sequence(input: SequenceRunInput<'_>) -> ActorServiceResul
         deterministic: true,
         authorizes_production: false,
     })
+}
+
+fn expected_state(published: Option<&PublishedActorState>) -> ExpectedActorState {
+    published.map_or(
+        ExpectedActorState {
+            state_ref: None,
+            revision: ADDRESSABLE_ACTOR_INITIAL_REVISION,
+        },
+        |published| ExpectedActorState {
+            state_ref: Some(published.state_ref.clone()),
+            revision: published.revision,
+        },
+    )
+}
+
+/// The step's request against the current actor state, with every admission fact current.
+fn simulated_request(current: &ActorState, step: &ActorSimulationStep) -> ActorRequest {
+    let admission = ActorAdmissionFacts {
+        profile_ref: current.profile_ref.clone(),
+        system_extension_manifest_ref: current.system_extension_manifest_ref.clone(),
+        authority_ref: simulation_ref("authority"),
+        resource_ref: simulation_ref("resource"),
+        adapter_ref: simulation_ref("adapter"),
+        policy_current: true,
+        capability_current: true,
+        placement_current: true,
+        generation_current: true,
+        resources_admitted: true,
+        adapter_admitted: true,
+    };
+    ActorRequest {
+        schema: ACTOR_REQUEST_SCHEMA.to_string(),
+        operation_id: step.operation_id.clone(),
+        actor_key_ref: current.actor_key_ref.clone(),
+        placement_ref: current.placement_ref.clone(),
+        extension_generation: current.extension_generation,
+        expected_lifecycle_sequence: current.lifecycle_sequence,
+        logical_tick: step.logical_tick,
+        admission,
+        operation: step.operation.clone(),
+    }
+}
+
+/// Host binding facts for the current actor state under the profile's delivery profile, all
+/// admitted.
+fn simulated_host_binding(current: &ActorState, profile: &AddressableActorProfile) -> ActorHostBindingFacts {
+    ActorHostBindingFacts {
+        schema: ACTOR_HOST_BINDING_SCHEMA.to_string(),
+        actor_key_ref: current.actor_key_ref.clone(),
+        profile_ref: current.profile_ref.clone(),
+        system_extension_manifest_ref: current.system_extension_manifest_ref.clone(),
+        placement_ref: current.placement_ref.clone(),
+        extension_generation: current.extension_generation,
+        system_extension_generation: current.extension_generation,
+        system_extension_phase: extension_phase(current.phase),
+        system_extension_checkpoint_ref: current.checkpoint_ref.clone(),
+        delivery_profile_ref: profile.delivery_profile_ref.clone(),
+        policy_current: true,
+        capability_current: true,
+        placement_current: true,
+        resources_admitted: true,
+        adapter_admitted: true,
+    }
 }
 
 #[derive(Default)]

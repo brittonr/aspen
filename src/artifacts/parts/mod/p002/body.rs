@@ -223,20 +223,7 @@ pub fn release_snapshot_value_input_with_root(
 ) -> Result<ReleaseSnapshotValueInput> {
     validate_release_snapshot_draft(draft)?;
     let artifact_refs = sorted_unique(&draft.artifact_refs);
-    let (closure_refs, missing_refs) = compute_closure_refs(root, &artifact_refs)?;
-    if !missing_refs.is_empty() {
-        return Err(MoltenError::invalid_harness(format!(
-            "release snapshot cannot bind missing closure refs: {}",
-            missing_refs.join(", ")
-        )));
-    }
-    if closure_refs != artifact_refs {
-        return Err(MoltenError::invalid_harness(format!(
-            "release snapshot artifact refs must equal dependency closure: expected {}, got {}",
-            closure_refs.join(", "),
-            artifact_refs.join(", ")
-        )));
-    }
+    let closure_refs = require_exact_closure_refs(root, &artifact_refs)?;
     let no_missing_refs = Vec::new();
     let dependency_closure_digest = canonical_hash(&closure_value(&artifact_refs, &closure_refs, &no_missing_refs)?)?;
     let dependency_index_ref = release_snapshot_dependency_index_digest(root, &artifact_refs)?;
@@ -291,6 +278,25 @@ pub fn release_snapshot_value_input_with_root(
         signature_refs: sorted_unique(&draft.signature_refs),
         stale_evidence_refs: sorted_unique(&draft.stale_evidence_refs),
     })
+}
+
+/// Computes the dependency closure of `artifact_refs` and requires it to be complete and equal to the refs.
+fn require_exact_closure_refs(root: &CapabilityArtifactRoot, artifact_refs: &[String]) -> Result<Vec<String>> {
+    let (closure_refs, missing_refs) = compute_closure_refs(root, artifact_refs)?;
+    if !missing_refs.is_empty() {
+        return Err(MoltenError::invalid_harness(format!(
+            "release snapshot cannot bind missing closure refs: {}",
+            missing_refs.join(", ")
+        )));
+    }
+    if closure_refs != artifact_refs {
+        return Err(MoltenError::invalid_harness(format!(
+            "release snapshot artifact refs must equal dependency closure: expected {}, got {}",
+            closure_refs.join(", "),
+            artifact_refs.join(", ")
+        )));
+    }
+    Ok(closure_refs)
 }
 
 pub fn release_snapshot_value(input: &ReleaseSnapshotValueInput) -> Result<IoValue> {

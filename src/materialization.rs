@@ -252,30 +252,7 @@ pub fn plan_materialization(
     let mut total_bytes = 0u64;
     for input in inputs {
         let logical_path = MaterializationPath::parse_within(&input.logical_path, policy.max_path_bytes)?;
-        if reserved.contains(logical_path.top_level()) {
-            return Err(invalid(format!(
-                "materialization member {} uses reserved top-level name {}",
-                logical_path.as_str(),
-                logical_path.top_level()
-            )));
-        }
-        if input.kind != MaterializationMemberKind::RegularFile {
-            return Err(invalid(format!(
-                "materialization member {} has unsupported kind {}",
-                logical_path.as_str(),
-                input.kind.as_str()
-            )));
-        }
-        crate::preserves_rail::validate_content_ref(&input.expected_content_ref)
-            .map_err(|error| invalid(format!("materialization member content ref is invalid: {error}")))?;
-        if input.expected_size > policy.max_member_bytes {
-            return Err(invalid(format!(
-                "materialization member {} size {} exceeds maximum {}",
-                logical_path.as_str(),
-                input.expected_size,
-                policy.max_member_bytes
-            )));
-        }
+        validate_member_input(&policy, &reserved, &logical_path, input)?;
         total_bytes = total_bytes
             .checked_add(input.expected_size)
             .ok_or_else(|| invalid("materialization total byte count overflow"))?;
@@ -306,6 +283,41 @@ pub fn plan_materialization(
         plan_ref,
         value,
     })
+}
+
+/// Denies a member that uses a reserved top-level name, is not a regular file, has an invalid
+/// content ref, or exceeds the per-member byte bound.
+fn validate_member_input(
+    policy: &MaterializationPolicy,
+    reserved: &std::collections::BTreeSet<&str>,
+    logical_path: &MaterializationPath,
+    input: &MaterializationMemberInput,
+) -> crate::error::Result<()> {
+    if reserved.contains(logical_path.top_level()) {
+        return Err(invalid(format!(
+            "materialization member {} uses reserved top-level name {}",
+            logical_path.as_str(),
+            logical_path.top_level()
+        )));
+    }
+    if input.kind != MaterializationMemberKind::RegularFile {
+        return Err(invalid(format!(
+            "materialization member {} has unsupported kind {}",
+            logical_path.as_str(),
+            input.kind.as_str()
+        )));
+    }
+    crate::preserves_rail::validate_content_ref(&input.expected_content_ref)
+        .map_err(|error| invalid(format!("materialization member content ref is invalid: {error}")))?;
+    if input.expected_size > policy.max_member_bytes {
+        return Err(invalid(format!(
+            "materialization member {} size {} exceeds maximum {}",
+            logical_path.as_str(),
+            input.expected_size,
+            policy.max_member_bytes
+        )));
+    }
+    Ok(())
 }
 
 pub fn validate_materialization_plan(plan: &MaterializationPlan) -> crate::error::Result<()> {
@@ -1056,37 +1068,7 @@ fn parse_materialization_plan_value(value: &preserves::IOValue) -> crate::error:
     }
     let profile = required_named_string(profile_field, "profile")?;
     let replacement = parse_replacement_policy(&required_named_string(replacement_field, "replacement")?)?;
-    let member_fields = required_record_fields(members_field, "members", 1)?;
-    let member_values = member_fields[0]
-        .collect_sequence()
-        .ok_or_else(|| invalid("expected materialization plan member sequence"))?;
-    if member_values.len() > HARD_MAX_MATERIALIZATION_MEMBERS {
-        return Err(invalid("materialization plan member sequence exceeds item bound"));
-    }
-    let mut inputs = Vec::with_capacity(member_values.len());
-    for member_value in member_values.iter() {
-        let member_value = crate::preserves_rail::value_to_iovalue(member_value);
-        let member = member_value
-            .collect_simple_record("member", Some(MATERIALIZATION_PLAN_MEMBER_FIELD_COUNT))
-            .ok_or_else(|| invalid("expected materialization plan member"))?;
-        let member_fields = member.fields_iter().collect::<Vec<_>>();
-        let [path_field, kind_field, content_ref_field, size_field] = member_fields.as_slice() else {
-            return Err(invalid("materialization plan member field count changed after parsing"));
-        };
-        let kind = required_preserves_string(kind_field, "materialization plan member kind")?;
-        if kind != MaterializationMemberKind::RegularFile.as_str() {
-            return Err(invalid(format!("unsupported materialization plan member kind {kind}")));
-        }
-        inputs.push(MaterializationMemberInput {
-            logical_path: required_preserves_string(path_field, "materialization plan member path")?,
-            kind: MaterializationMemberKind::RegularFile,
-            expected_content_ref: required_preserves_string(
-                content_ref_field,
-                "materialization plan member content ref",
-            )?,
-            expected_size: required_preserves_u64(size_field, "materialization plan member size")?,
-        });
-    }
+    let inputs = parse_plan_members(members_field)?;
     let summary = required_record_fields(summary_field, "summary", MATERIALIZATION_SUMMARY_FIELD_COUNT)?;
     let [summary_count_field, summary_bytes_field] = summary.as_slice() else {
         return Err(invalid("materialization plan summary field count changed after parsing"));
@@ -1118,6 +1100,43 @@ fn parse_materialization_plan_value(value: &preserves::IOValue) -> crate::error:
         return Err(invalid("materialization plan summary or canonical value is inconsistent"));
     }
     Ok(plan)
+}
+
+fn parse_plan_members(
+    members_field: &preserves::Value<preserves::IOValue>,
+) -> crate::error::Result<Vec<MaterializationMemberInput>> {
+    let member_fields = required_record_fields(members_field, "members", 1)?;
+    let member_values = member_fields[0]
+        .collect_sequence()
+        .ok_or_else(|| invalid("expected materialization plan member sequence"))?;
+    if member_values.len() > HARD_MAX_MATERIALIZATION_MEMBERS {
+        return Err(invalid("materialization plan member sequence exceeds item bound"));
+    }
+    let mut inputs = Vec::with_capacity(member_values.len());
+    for member_value in member_values.iter() {
+        let member_value = crate::preserves_rail::value_to_iovalue(member_value);
+        let member = member_value
+            .collect_simple_record("member", Some(MATERIALIZATION_PLAN_MEMBER_FIELD_COUNT))
+            .ok_or_else(|| invalid("expected materialization plan member"))?;
+        let member_fields = member.fields_iter().collect::<Vec<_>>();
+        let [path_field, kind_field, content_ref_field, size_field] = member_fields.as_slice() else {
+            return Err(invalid("materialization plan member field count changed after parsing"));
+        };
+        let kind = required_preserves_string(kind_field, "materialization plan member kind")?;
+        if kind != MaterializationMemberKind::RegularFile.as_str() {
+            return Err(invalid(format!("unsupported materialization plan member kind {kind}")));
+        }
+        inputs.push(MaterializationMemberInput {
+            logical_path: required_preserves_string(path_field, "materialization plan member path")?,
+            kind: MaterializationMemberKind::RegularFile,
+            expected_content_ref: required_preserves_string(
+                content_ref_field,
+                "materialization plan member content ref",
+            )?,
+            expected_size: required_preserves_u64(size_field, "materialization plan member size")?,
+        });
+    }
+    Ok(inputs)
 }
 
 fn required_record_fields(

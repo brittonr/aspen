@@ -234,39 +234,19 @@ pub fn validate_worker_schedule_replay(
     }
     let mut diagnostics = Vec::new();
     if input.schedule.job_ref != input.request.job_ref {
-        push_bounded(
-            &mut diagnostics,
-            "job worker schedule job ref does not match request".to_string(),
-            MAX_JOB_REFS,
-            "job worker replay diagnostics",
-        )?;
+        push_replay_diagnostic(&mut diagnostics, "job worker schedule job ref does not match request".to_string())?;
     }
     if input.schedule.request_ref != input.request.request_ref {
-        push_bounded(
-            &mut diagnostics,
-            "job worker schedule request ref does not match request".to_string(),
-            MAX_JOB_REFS,
-            "job worker replay diagnostics",
-        )?;
+        push_replay_diagnostic(&mut diagnostics, "job worker schedule request ref does not match request".to_string())?;
     }
     if input.schedule.diagnostics != input.expected_diagnostics {
-        push_bounded(
-            &mut diagnostics,
-            "job worker schedule diagnostics diverge from replay expectation".to_string(),
-            MAX_JOB_REFS,
-            "job worker replay diagnostics",
-        )?;
+        push_replay_diagnostic(&mut diagnostics, "job worker schedule diagnostics diverge from replay expectation".to_string())?;
     }
     let mut completed_indices = Vec::new();
     match input.result {
         Some(result) => {
             if input.schedule.result_ref.as_deref() != Some(result.result_ref.as_str()) {
-                push_bounded(
-                    &mut diagnostics,
-                    "job worker schedule result ref does not match worker result".to_string(),
-                    MAX_JOB_REFS,
-                    "job worker replay diagnostics",
-                )?;
+                push_replay_diagnostic(&mut diagnostics, "job worker schedule result ref does not match worker result".to_string())?;
             }
             let actual_stage_order = result
                 .stage_receipt_refs
@@ -282,35 +262,40 @@ pub fn validate_worker_schedule_replay(
                 )?;
             }
             if actual_stage_order != input.expected_stage_order {
-                push_bounded(
-                    &mut diagnostics,
-                    "job worker schedule stage order does not match replay expectation".to_string(),
-                    MAX_JOB_REFS,
-                    "job worker replay diagnostics",
-                )?;
+                push_replay_diagnostic(&mut diagnostics, "job worker schedule stage order does not match replay expectation".to_string())?;
             }
             if result.output_refs != input.expected_output_refs {
-                push_bounded(
-                    &mut diagnostics,
-                    "job worker schedule output refs do not match replay expectation".to_string(),
-                    MAX_JOB_REFS,
-                    "job worker replay diagnostics",
-                )?;
+                push_replay_diagnostic(&mut diagnostics, "job worker schedule output refs do not match replay expectation".to_string())?;
             }
         }
         None => {
             if input.schedule.decision == "pass" {
-                push_bounded(
-                    &mut diagnostics,
-                    "passing job worker schedule replay requires worker result".to_string(),
-                    MAX_JOB_REFS,
-                    "job worker replay diagnostics",
-                )?;
+                push_replay_diagnostic(&mut diagnostics, "passing job worker schedule replay requires worker result".to_string())?;
             }
         }
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let value = crate::preserves_rail::record("job-worker-schedule-replay-v1", vec![
+    let value = replay_value(&input, decision, &completed_indices, &diagnostics);
+    Ok(JobWorkerScheduleReplayReport {
+        replay_ref: crate::preserves_rail::canonical_hash(&value)?,
+        decision: decision.to_string(),
+        completed_indices,
+        diagnostics,
+        value,
+    })
+}
+
+fn push_replay_diagnostic(diagnostics: &mut impl crate::bounded::VecSink<String>, diagnostic: String) -> Result<()> {
+    push_bounded(diagnostics, diagnostic, MAX_JOB_REFS, "job worker replay diagnostics")
+}
+
+fn replay_value(
+    input: &JobWorkerScheduleReplayInput<'_>,
+    decision: &str,
+    completed_indices: &[u64],
+    diagnostics: &[String],
+) -> IoValue {
+    crate::preserves_rail::record("job-worker-schedule-replay-v1", vec![
         crate::preserves_rail::record("decision", vec![crate::preserves_rail::string(decision)]),
         crate::preserves_rail::record("schedule", vec![crate::preserves_rail::string(&input.schedule.receipt_ref)]),
         crate::preserves_rail::record("request", vec![crate::preserves_rail::string(&input.request.request_ref)]),
@@ -325,14 +310,7 @@ pub fn validate_worker_schedule_replay(
             diagnostics.iter().map(crate::preserves_rail::string).collect(),
         )]),
         checks_value_from_pairs(&[("schedule-replay", decision), ("stage-order-bound", decision)]),
-    ]);
-    Ok(JobWorkerScheduleReplayReport {
-        replay_ref: crate::preserves_rail::canonical_hash(&value)?,
-        decision: decision.to_string(),
-        completed_indices,
-        diagnostics,
-        value,
-    })
+    ])
 }
 
 pub fn receipt_summary(value: &IoValue) -> Result<String> {

@@ -218,28 +218,13 @@
             checks: checkpoint_checks(),
         })
         .expect("accept checkpoint");
-        let signed_append = sign_chain_receipt(
+        let (signed_append_ref, signed_verify_ref) =
+            signed_receipt_refs(
+            &root,
             &second_append.receipt_value,
-            "node:local",
-            "root",
-            "key",
             std::slice::from_ref(&genesis_append.receipt_ref),
-        )
-        .expect("sign append receipt");
-        let signed_append_ref = crate::ledger::import_artifact(&root, &signed_append)
-            .expect("import signed append")
-            .artifact_ref;
-        let signed_verify = sign_chain_receipt(
             &verified.receipt_value,
-            "node:local",
-            "root",
-            "key",
-            std::slice::from_ref(&signed_append_ref),
-        )
-        .expect("sign verify receipt");
-        let signed_verify_ref = crate::ledger::import_artifact(&root, &signed_verify)
-            .expect("import signed verify")
-            .artifact_ref;
+        );
 
         CheckpointFixture {
             root,
@@ -258,6 +243,38 @@
             signed_append_ref,
             signed_verify_ref,
         }
+    }
+
+    /// Signs and imports the second append receipt, then the verify receipt with the signed append as its parent.
+    fn signed_receipt_refs(
+        root: &crate::test_support::ProcessWorkspace,
+        second_append_receipt: &IoValue,
+        append_parent_refs: &[String],
+        verify_receipt: &IoValue,
+    ) -> (String, String) {
+        let signed_append = sign_chain_receipt(
+            second_append_receipt,
+            "node:local",
+            "root",
+            "key",
+            append_parent_refs,
+        )
+        .expect("sign append receipt");
+        let signed_append_ref = crate::ledger::import_artifact(root, &signed_append)
+            .expect("import signed append")
+            .artifact_ref;
+        let signed_verify = sign_chain_receipt(
+            verify_receipt,
+            "node:local",
+            "root",
+            "key",
+            std::slice::from_ref(&signed_append_ref),
+        )
+        .expect("sign verify receipt");
+        let signed_verify_ref = crate::ledger::import_artifact(root, &signed_verify)
+            .expect("import signed verify")
+            .artifact_ref;
+        (signed_append_ref, signed_verify_ref)
     }
 
     fn pin_refs(root: &Path, refs: &[String]) {

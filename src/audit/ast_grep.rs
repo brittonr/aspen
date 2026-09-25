@@ -246,10 +246,34 @@ pub fn scan_scope_hash(surface_ids: &[String]) -> String {
 pub fn build_ast_grep_audit_receipt(input: AstGrepScanInput) -> AstGrepAuditReceipt {
     // r[impl aspen.ast_grep_runtime_authority_audits.identity]
     // r[impl aspen.ast_grep_runtime_authority_audits.evidence_gates]
+    let finding_rule_ids = finding_rule_ids(&input.findings);
+    let checks = audit_checks(&input);
+    let is_valid = checks.iter().all(|candidate| candidate.passed);
+    AstGrepAuditReceipt {
+        profile_id: input.profile.id,
+        ast_grep_version: input.ast_grep_version,
+        rule_bundle_hash: input.rule_bundle_hash,
+        scan_scope_hash: input.scan_scope_hash,
+        evidence_gate_run_ref: input.evidence_gate_run_ref,
+        decision: if is_valid {
+            RECEIPT_DECISION_EVIDENCE_ONLY.to_string()
+        } else {
+            RECEIPT_DECISION_INVALID.to_string()
+        },
+        claim_scope: CLAIM_SCOPE_STRUCTURAL_HYGIENE.to_string(),
+        finding_count: input.findings.len(),
+        finding_rule_ids,
+        non_claims: input.profile.non_claims,
+        checks,
+    }
+}
+
+/// The profile, tool, identity, finding, and non-claim checks of one structural audit scan, in
+/// receipt order.
+fn audit_checks(input: &AstGrepScanInput) -> Vec<ReceiptCheck> {
     let profile_validation = validate_ast_grep_profile(&input.profile);
     let known_rule_ids =
         input.profile.rules.iter().map(|rule| rule.id.as_str()).collect::<std::collections::BTreeSet<_>>();
-    let finding_rule_ids = finding_rule_ids(&input.findings);
     let is_findings_known = input.findings.iter().all(|finding| known_rule_ids.contains(finding.rule_id.as_str()));
     let blocking_rule_ids = input
         .profile
@@ -309,25 +333,7 @@ pub fn build_ast_grep_audit_receipt(input: AstGrepScanInput) -> AstGrepAuditRece
         "receipt must bind authority, replay, sealed-repro, UCAN, distributed-safety, and release non-claims"
             .to_string(),
     ));
-
-    let is_valid = checks.iter().all(|candidate| candidate.passed);
-    AstGrepAuditReceipt {
-        profile_id: input.profile.id,
-        ast_grep_version: input.ast_grep_version,
-        rule_bundle_hash: input.rule_bundle_hash,
-        scan_scope_hash: input.scan_scope_hash,
-        evidence_gate_run_ref: input.evidence_gate_run_ref,
-        decision: if is_valid {
-            RECEIPT_DECISION_EVIDENCE_ONLY.to_string()
-        } else {
-            RECEIPT_DECISION_INVALID.to_string()
-        },
-        claim_scope: CLAIM_SCOPE_STRUCTURAL_HYGIENE.to_string(),
-        finding_count: input.findings.len(),
-        finding_rule_ids,
-        non_claims: input.profile.non_claims,
-        checks,
-    }
+    checks
 }
 
 pub fn requires_fresh_scan(receipt: &AstGrepAuditReceipt, current_rule_bundle_hash: &str) -> bool {

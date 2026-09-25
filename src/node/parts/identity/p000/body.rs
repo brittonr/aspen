@@ -349,26 +349,14 @@ pub fn resolve_with_root(config: &Config, root: &crate::node_state::NodeStateNam
     });
     let backend_ref = selected_backend_ref(config, source_decision.key_source_class)?;
     let source_metadata_ref = source_metadata_ref(source_decision.key_source_class, &backend_ref)?;
-    match source_decision.kind {
+    let (secret_record, permission_status, is_first_boot) = match source_decision.kind {
         IrohSecretSourceDecisionKind::LoadExplicit => {
             let explicit_key = config
                 .explicit_key
                 .as_deref()
                 .ok_or_else(|| MoltenError::invalid_harness("explicit endpoint key metadata was selected but missing"))?;
             let secret_record = crate::fabric_crypto_identity::transport_key_record_from_secret_hex(explicit_key)?;
-            let material = derive_endpoint_material(&secret_record, &backend_ref)?;
-            finish_resolution(ResolutionInput {
-                config,
-                root,
-                operation: source_decision.key_source_class,
-                secret_record: &secret_record,
-                material: &material,
-                backend_ref: &backend_ref,
-                source_metadata_ref: &source_metadata_ref,
-                permission_status: source_decision.permission_status,
-                endpoint_path: &endpoint_path,
-                is_first_boot: false,
-            })
+            (secret_record, source_decision.permission_status, false)
         }
         IrohSecretSourceDecisionKind::LoadBackend => {
             let backend_key = config
@@ -376,55 +364,33 @@ pub fn resolve_with_root(config: &Config, root: &crate::node_state::NodeStateNam
                 .as_deref()
                 .ok_or_else(|| MoltenError::invalid_harness("managed endpoint secret backend was selected but missing"))?;
             let secret_record = crate::fabric_crypto_identity::transport_key_record_from_secret_hex(backend_key)?;
-            let material = derive_endpoint_material(&secret_record, &backend_ref)?;
-            finish_resolution(ResolutionInput {
-                config,
-                root,
-                operation: source_decision.key_source_class,
-                secret_record: &secret_record,
-                material: &material,
-                backend_ref: &backend_ref,
-                source_metadata_ref: &source_metadata_ref,
-                permission_status: source_decision.permission_status,
-                endpoint_path: &endpoint_path,
-                is_first_boot: false,
-            })
+            (secret_record, source_decision.permission_status, false)
         }
         IrohSecretSourceDecisionKind::LoadFile => {
-            let secret_record = read_observed_secret(secret_observation)?;
-            let material = derive_endpoint_material(&secret_record, &backend_ref)?;
-            finish_resolution(ResolutionInput {
-                config,
-                root,
-                operation: source_decision.key_source_class,
-                secret_record: &secret_record,
-                material: &material,
-                backend_ref: &backend_ref,
-                source_metadata_ref: &source_metadata_ref,
-                permission_status: source_decision.permission_status,
-                endpoint_path: &endpoint_path,
-                is_first_boot: false,
-            })
+            (read_observed_secret(secret_observation)?, source_decision.permission_status, false)
         }
         IrohSecretSourceDecisionKind::GenerateAndPersist => {
             let secret_record = crate::fabric_crypto_identity::generate_transport_key_record();
             write_secret_restricted(root, &secret_path, &secret_record)?;
-            let material = derive_endpoint_material(&secret_record, &backend_ref)?;
-            finish_resolution(ResolutionInput {
-                config,
-                root,
-                operation: source_decision.key_source_class,
-                secret_record: &secret_record,
-                material: &material,
-                backend_ref: &backend_ref,
-                source_metadata_ref: &source_metadata_ref,
-                permission_status: IrohSecretPermissionStatus::Restricted,
-                endpoint_path: &endpoint_path,
-                is_first_boot: true,
-            })
+            (secret_record, IrohSecretPermissionStatus::Restricted, true)
         }
-        IrohSecretSourceDecisionKind::Deny => source_denial(config, &backend_ref, &source_metadata_ref, &source_decision),
-    }
+        IrohSecretSourceDecisionKind::Deny => {
+            return source_denial(config, &backend_ref, &source_metadata_ref, &source_decision);
+        }
+    };
+    let material = derive_endpoint_material(&secret_record, &backend_ref)?;
+    finish_resolution(ResolutionInput {
+        config,
+        root,
+        operation: source_decision.key_source_class,
+        secret_record: &secret_record,
+        material: &material,
+        backend_ref: &backend_ref,
+        source_metadata_ref: &source_metadata_ref,
+        permission_status,
+        endpoint_path: &endpoint_path,
+        is_first_boot,
+    })
 }
 
 pub fn identity_value(

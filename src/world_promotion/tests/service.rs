@@ -176,10 +176,33 @@ fn effect_log_parity_binds_acknowledged_observation_to_follow_up_commit() {
     let acknowledged =
         acknowledge_attempt(dispatched.attempt.as_ref().expect("attempt")).expect("acknowledged attempt");
 
+    assert_effect_log_parity(promoted.plan.plan_ref.as_str(), &reservation, &acknowledged, &observation_ref);
+
+    let follow_up = plan_world_promotion_observation_commit(&WorldPromotionObservationCommitRequest {
+        reservation,
+        attempt: acknowledged,
+        successor_commit: WorldCommitRef::new(reference("observation-successor")).expect("successor"),
+        logical_profile_ref: SnapshotProfileRef::new(reference("logical-world-profile")).expect("profile"),
+        observation_schema_ref: reference("world-release-observation-schema"),
+        observation_byte_length: OBSERVATION_BYTES,
+    })
+    .expect("follow-up observation commit");
+    assert_eq!(follow_up.trace.steps[0].input.input_ref, observation_ref.as_str());
+    assert!(!follow_up.mutates_promoted_commit);
+    assert!(!follow_up.grants_dispatch_authority);
+}
+
+/// The effect log entry for the acknowledged release attempt validates against the consumed effect.
+fn assert_effect_log_parity(
+    plan_ref: &str,
+    reservation: &WorldReleaseReservation,
+    acknowledged: &WorldAttemptRecord,
+    observation_ref: &WorldReleaseObservationRef,
+) {
     let entry = EffectLogEntry {
         sequence: PROMOTION_EFFECT_SEQUENCE,
         effect_kind: "world-release".to_string(),
-        run_identity_ref: promoted.plan.plan_ref.as_str().to_string(),
+        run_identity_ref: plan_ref.to_string(),
         handler_profile_ref: reservation.handler_ref.as_str().to_string(),
         turn_ref: acknowledged.attempt_ref.as_str().to_string(),
         boundary_ref: reservation.reservation_ref.as_str().to_string(),
@@ -202,19 +225,6 @@ fn effect_log_parity_binds_acknowledged_observation_to_follow_up_commit() {
     })
     .expect("effect log validation");
     assert_eq!(validation.decision, "pass");
-
-    let follow_up = plan_world_promotion_observation_commit(&WorldPromotionObservationCommitRequest {
-        reservation,
-        attempt: acknowledged,
-        successor_commit: WorldCommitRef::new(reference("observation-successor")).expect("successor"),
-        logical_profile_ref: SnapshotProfileRef::new(reference("logical-world-profile")).expect("profile"),
-        observation_schema_ref: reference("world-release-observation-schema"),
-        observation_byte_length: OBSERVATION_BYTES,
-    })
-    .expect("follow-up observation commit");
-    assert_eq!(follow_up.trace.steps[0].input.input_ref, observation_ref.as_str());
-    assert!(!follow_up.mutates_promoted_commit);
-    assert!(!follow_up.grants_dispatch_authority);
 }
 
 // r[verify molten.world_promotion.verification]

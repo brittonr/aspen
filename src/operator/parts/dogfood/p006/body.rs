@@ -376,30 +376,7 @@ fn validate_release_workflow_stage(stage: &str) -> Result<()> {
 fn release_workflow_stage_results(
     input: &ReleaseWorkflowStateInput<'_>,
 ) -> Result<Vec<ReleaseWorkflowStageResult>> {
-    let is_dogfood_complete = input.dogfood_report_ref.is_some() && input.dogfood_report_decision == "pass";
-    let is_bundle_export_complete = is_dogfood_complete && input.release_gate_ref.is_some() && input.bundle_ref.is_some();
-    let is_bundle_verify_complete = is_bundle_export_complete
-        && input.bundle_verify_ref.is_some()
-        && input.bundle_verify_decision == "pass";
-    let is_signed_members_complete = is_bundle_verify_complete && signed_members_cover_required(input);
-    let is_promotion_complete = is_signed_members_complete
-        && input.promotion_ref.is_some()
-        && input.promotion_decision == "pass";
-    let is_signed_promotion_complete = is_promotion_complete
-        && input.signed_promotion_ref.is_some()
-        && input.signed_promotion_subject_ref == input.promotion_ref;
-    let is_summary_complete = is_signed_promotion_complete
-        && input.summary_ref.is_some()
-        && input.summary_decision == "pass"
-        && input.summary_promotion_ref == input.promotion_ref;
-    let is_archive_export_complete = is_summary_complete
-        && input.export_manifest_ref.is_some()
-        && input.export_manifest_summary_ref == input.summary_ref;
-    let is_archive_verify_complete = is_archive_export_complete
-        && input.export_verify_ref.is_some()
-        && input.export_verify_decision == "pass"
-        && input.export_verify_manifest_ref == input.export_manifest_ref;
-
+    let [is_dogfood_complete, is_bundle_export_complete, is_bundle_verify_complete, is_signed_members_complete, is_promotion_complete, is_signed_promotion_complete, is_summary_complete, is_archive_export_complete, is_archive_verify_complete] = release_workflow_completion(input);
     Ok(vec![
         workflow_stage_result(
             RELEASE_WORKFLOW_STAGE_DOGFOOD,
@@ -447,6 +424,34 @@ fn release_workflow_stage_results(
             archive_verify_diagnostics(input, is_archive_export_complete),
         )?,
     ])
+}
+
+/// Completion of each release workflow stage in order; a stage completes only after every earlier stage.
+fn release_workflow_completion(input: &ReleaseWorkflowStateInput<'_>) -> [bool; 9] {
+    let is_dogfood_complete = input.dogfood_report_ref.is_some() && input.dogfood_report_decision == "pass";
+    let is_bundle_export_complete = is_dogfood_complete && input.release_gate_ref.is_some() && input.bundle_ref.is_some();
+    let is_bundle_verify_complete = is_bundle_export_complete
+        && input.bundle_verify_ref.is_some()
+        && input.bundle_verify_decision == "pass";
+    let is_signed_members_complete = is_bundle_verify_complete && signed_members_cover_required(input);
+    let is_promotion_complete = is_signed_members_complete
+        && input.promotion_ref.is_some()
+        && input.promotion_decision == "pass";
+    let is_signed_promotion_complete = is_promotion_complete
+        && input.signed_promotion_ref.is_some()
+        && input.signed_promotion_subject_ref == input.promotion_ref;
+    let is_summary_complete = is_signed_promotion_complete
+        && input.summary_ref.is_some()
+        && input.summary_decision == "pass"
+        && input.summary_promotion_ref == input.promotion_ref;
+    let is_archive_export_complete = is_summary_complete
+        && input.export_manifest_ref.is_some()
+        && input.export_manifest_summary_ref == input.summary_ref;
+    let is_archive_verify_complete = is_archive_export_complete
+        && input.export_verify_ref.is_some()
+        && input.export_verify_decision == "pass"
+        && input.export_verify_manifest_ref == input.export_manifest_ref;
+    [is_dogfood_complete, is_bundle_export_complete, is_bundle_verify_complete, is_signed_members_complete, is_promotion_complete, is_signed_promotion_complete, is_summary_complete, is_archive_export_complete, is_archive_verify_complete]
 }
 
 fn workflow_stage_result(

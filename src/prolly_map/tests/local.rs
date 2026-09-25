@@ -29,23 +29,7 @@ fn local_store_stages_publishes_restarts_and_executes_revalidated_gc() {
     collided.bytes.push(0);
     assert!(store.stage_blocks(&[collided]).expect_err("block collision").code.contains("collision"));
 
-    let empty = build_map(&profile, &[]).expect("empty map");
-    let alternative = plan_edits(&profile, &empty.snapshot, &[MapEdit::Insert(SemanticEntry {
-        key: b"alternative".to_vec(),
-        value: b"state".to_vec(),
-    })])
-    .expect("alternative plan");
-    let stale = publish_prolly_edit(
-        &mut store,
-        MAP_ID,
-        &ExpectedProllyRoot {
-            root_ref: None,
-            generation: INITIAL_GENERATION,
-        },
-        &alternative,
-    )
-    .expect("stale publication receipt");
-    assert_eq!(stale.status, ProllyPublicationStatus::Stale);
+    assert_unexpected_generation_is_stale(&mut store, &profile);
 
     let first_snapshot = load_prolly_snapshot(&store, &profile, first.root.clone()).expect("load first snapshot");
     assert_eq!(first_snapshot.root.entry_count, u32::try_from(SHELL_ENTRY_COUNT).expect("entry count"));
@@ -94,6 +78,27 @@ fn local_store_stages_publishes_restarts_and_executes_revalidated_gc() {
     })
     .expect("admitted gc");
     assert!(reopened.read_block(&candidate).expect("candidate read").is_none());
+}
+
+/// Publishing against the initial generation after the first publication is stale.
+fn assert_unexpected_generation_is_stale(store: &mut LocalProllyBlockStore, profile: &ProllyProfile) {
+    let empty = build_map(profile, &[]).expect("empty map");
+    let alternative = plan_edits(profile, &empty.snapshot, &[MapEdit::Insert(SemanticEntry {
+        key: b"alternative".to_vec(),
+        value: b"state".to_vec(),
+    })])
+    .expect("alternative plan");
+    let stale = publish_prolly_edit(
+        store,
+        MAP_ID,
+        &ExpectedProllyRoot {
+            root_ref: None,
+            generation: INITIAL_GENERATION,
+        },
+        &alternative,
+    )
+    .expect("stale publication receipt");
+    assert_eq!(stale.status, ProllyPublicationStatus::Stale);
 }
 
 #[test]

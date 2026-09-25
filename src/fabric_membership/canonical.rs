@@ -262,58 +262,7 @@ pub fn canonical_placement_outcome(
 ) -> crate::error::Result<CanonicalPlacementOutcome> {
     let outcome =
         plan_placement(&view.admitted, request).map_err(|issues| validation_error("placement request", &issues))?;
-    let outcome_value = match &outcome {
-        PlacementOutcome::Planned(plan) => {
-            let roles = plan
-                .roles
-                .iter()
-                .map(|role| {
-                    crate::preserves_rail::record("fabric-planned-role-v1", vec![
-                        field("role-ordinal", crate::preserves_rail::u64_value(u64::from(role.role_ordinal))),
-                        field("node-id", crate::preserves_rail::string(&role.node_id)),
-                        field("descriptor-ref", crate::preserves_rail::string(&role.descriptor_ref)),
-                        field("resources", resource_value(role.resources)),
-                        field("preference-score", crate::preserves_rail::u64_value(role.preference_score)),
-                        field("reasons", strings_value(role.reasons.iter().map(String::as_str))),
-                    ])
-                })
-                .collect();
-            let residual = plan
-                .residual_capacity
-                .iter()
-                .map(|(node_id, resources)| {
-                    crate::preserves_rail::record("fabric-residual-capacity-v1", vec![
-                        crate::preserves_rail::string(node_id),
-                        resource_value(*resources),
-                    ])
-                })
-                .collect();
-            crate::preserves_rail::record("fabric-placement-plan-v1", vec![
-                field("schema", crate::preserves_rail::string(&plan.schema)),
-                field("roles", crate::preserves_rail::sequence(roles)),
-                field("residual-capacity", crate::preserves_rail::sequence(residual)),
-                field("degraded", crate::preserves_rail::bool_value(plan.degraded)),
-                field("advisory-only", crate::preserves_rail::bool_value(plan.advisory_only)),
-            ])
-        }
-        PlacementOutcome::Unsatisfied(unsatisfied) => {
-            let constraints = unsatisfied
-                .constraints
-                .iter()
-                .map(|constraint| {
-                    crate::preserves_rail::record("fabric-unsatisfied-constraint-v1", vec![
-                        crate::preserves_rail::string(constraint.kind.as_str()),
-                        crate::preserves_rail::string(&constraint.subject),
-                        crate::preserves_rail::string(&constraint.detail),
-                    ])
-                })
-                .collect();
-            crate::preserves_rail::record("fabric-unsatisfied-placement-v1", vec![
-                field("constraints", crate::preserves_rail::sequence(constraints)),
-                field("partial-selection", strings_value(unsatisfied.partial_selection.iter().map(String::as_str))),
-            ])
-        }
-    };
+    let outcome_value = placement_outcome_value(&outcome);
     let value = crate::preserves_rail::record(PLACEMENT_OUTCOME_RECORD, vec![
         crate::preserves_rail::string(PLACEMENT_PLAN_SCHEMA),
         field("view-ref", crate::preserves_rail::string(&view.view_ref)),
@@ -366,6 +315,63 @@ pub fn canonical_placement_outcome(
         outcome,
         value,
     })
+}
+
+/// The planned roles and residual capacity of a plan, or the unsatisfied constraints and partial
+/// selection.
+fn placement_outcome_value(outcome: &PlacementOutcome) -> preserves::IOValue {
+    match outcome {
+        PlacementOutcome::Planned(plan) => {
+            let roles = plan
+                .roles
+                .iter()
+                .map(|role| {
+                    crate::preserves_rail::record("fabric-planned-role-v1", vec![
+                        field("role-ordinal", crate::preserves_rail::u64_value(u64::from(role.role_ordinal))),
+                        field("node-id", crate::preserves_rail::string(&role.node_id)),
+                        field("descriptor-ref", crate::preserves_rail::string(&role.descriptor_ref)),
+                        field("resources", resource_value(role.resources)),
+                        field("preference-score", crate::preserves_rail::u64_value(role.preference_score)),
+                        field("reasons", strings_value(role.reasons.iter().map(String::as_str))),
+                    ])
+                })
+                .collect();
+            let residual = plan
+                .residual_capacity
+                .iter()
+                .map(|(node_id, resources)| {
+                    crate::preserves_rail::record("fabric-residual-capacity-v1", vec![
+                        crate::preserves_rail::string(node_id),
+                        resource_value(*resources),
+                    ])
+                })
+                .collect();
+            crate::preserves_rail::record("fabric-placement-plan-v1", vec![
+                field("schema", crate::preserves_rail::string(&plan.schema)),
+                field("roles", crate::preserves_rail::sequence(roles)),
+                field("residual-capacity", crate::preserves_rail::sequence(residual)),
+                field("degraded", crate::preserves_rail::bool_value(plan.degraded)),
+                field("advisory-only", crate::preserves_rail::bool_value(plan.advisory_only)),
+            ])
+        }
+        PlacementOutcome::Unsatisfied(unsatisfied) => {
+            let constraints = unsatisfied
+                .constraints
+                .iter()
+                .map(|constraint| {
+                    crate::preserves_rail::record("fabric-unsatisfied-constraint-v1", vec![
+                        crate::preserves_rail::string(constraint.kind.as_str()),
+                        crate::preserves_rail::string(&constraint.subject),
+                        crate::preserves_rail::string(&constraint.detail),
+                    ])
+                })
+                .collect();
+            crate::preserves_rail::record("fabric-unsatisfied-placement-v1", vec![
+                field("constraints", crate::preserves_rail::sequence(constraints)),
+                field("partial-selection", strings_value(unsatisfied.partial_selection.iter().map(String::as_str))),
+            ])
+        }
+    }
 }
 
 // r[impl molten.modularity.fabric_boundary.compatibility]
@@ -616,7 +622,49 @@ impl ExtensionMembershipPlacementContext {
 pub fn fabric_membership_port_descriptors(
     profile: &CanonicalMembershipProfile,
 ) -> Vec<crate::fabric::FabricPortDescriptor> {
-    let (provider_determinism, provider_replay) = match profile.profile.provider_kind {
+    let (provider_determinism, provider_replay) = provider_replay_classes(profile.profile.provider_kind);
+    let definitions = membership_port_definitions(provider_determinism, provider_replay);
+    let mut descriptors = Vec::with_capacity(MEMBERSHIP_PORT_COUNT);
+    for (port_id, class, operations, output_schema, determinism, replay, authorities) in definitions {
+        descriptors.push(crate::fabric::FabricPortDescriptor {
+            schema: crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
+            port_id: port_id.to_string(),
+            version: FABRIC_MEMBERSHIP_PORT_VERSION.to_string(),
+            class,
+            operation_classes: operations.into_iter().map(str::to_string).collect(),
+            input_schema_refs: vec![MEMBERSHIP_SOURCE_PROFILE_SCHEMA.to_string()],
+            output_schema_refs: vec![output_schema.to_string()],
+            authority_requirements: authorities,
+            resource_requirements: vec![
+                crate::fabric::FabricResource::Memory,
+                crate::fabric::FabricResource::LogicalTime,
+            ],
+            determinism,
+            replay,
+            implementation_profile: profile.profile.profile_id.clone(),
+            conformance_refs: vec![profile.admission_ref.clone(), profile.profile.profile_ref.clone()],
+            non_claims: crate::fabric::REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
+            enabled: true,
+        });
+    }
+    descriptors
+}
+
+/// A membership port's id, class, operations, output schema, determinism, replay, and authorities.
+type PortDefinition = (
+    &'static str,
+    crate::fabric::FabricPortClass,
+    Vec<&'static str>,
+    &'static str,
+    crate::fabric::DeterminismClass,
+    crate::fabric::ReplayClass,
+    Vec<crate::fabric::FabricAuthority>,
+);
+
+fn provider_replay_classes(
+    provider_kind: MembershipProviderKind,
+) -> (crate::fabric::DeterminismClass, crate::fabric::ReplayClass) {
+    match provider_kind {
         MembershipProviderKind::DeterministicSimulation => (
             crate::fabric::DeterminismClass::DeterministicWithRecordedInputs,
             crate::fabric::ReplayClass::Recompute,
@@ -628,8 +676,14 @@ pub fn fabric_membership_port_descriptors(
         MembershipProviderKind::PolicyManaged | MembershipProviderKind::ConsistencyBacked => {
             (crate::fabric::DeterminismClass::ExternalEffect, crate::fabric::ReplayClass::RecordedEffectRequired)
         }
-    };
-    let definitions = [
+    }
+}
+
+fn membership_port_definitions(
+    provider_determinism: crate::fabric::DeterminismClass,
+    provider_replay: crate::fabric::ReplayClass,
+) -> [PortDefinition; 4] {
+    [
         (
             FABRIC_MEMBERSHIP_PORT_ID,
             crate::fabric::FabricPortClass::Membership,
@@ -689,31 +743,7 @@ pub fn fabric_membership_port_descriptors(
                 crate::fabric::FabricAuthority::DurableState,
             ],
         ),
-    ];
-    let mut descriptors = Vec::with_capacity(MEMBERSHIP_PORT_COUNT);
-    for (port_id, class, operations, output_schema, determinism, replay, authorities) in definitions {
-        descriptors.push(crate::fabric::FabricPortDescriptor {
-            schema: crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
-            port_id: port_id.to_string(),
-            version: FABRIC_MEMBERSHIP_PORT_VERSION.to_string(),
-            class,
-            operation_classes: operations.into_iter().map(str::to_string).collect(),
-            input_schema_refs: vec![MEMBERSHIP_SOURCE_PROFILE_SCHEMA.to_string()],
-            output_schema_refs: vec![output_schema.to_string()],
-            authority_requirements: authorities,
-            resource_requirements: vec![
-                crate::fabric::FabricResource::Memory,
-                crate::fabric::FabricResource::LogicalTime,
-            ],
-            determinism,
-            replay,
-            implementation_profile: profile.profile.profile_id.clone(),
-            conformance_refs: vec![profile.admission_ref.clone(), profile.profile.profile_ref.clone()],
-            non_claims: crate::fabric::REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
-            enabled: true,
-        });
-    }
-    descriptors
+    ]
 }
 
 fn membership_port_ids() -> [&'static str; MEMBERSHIP_PORT_COUNT] {

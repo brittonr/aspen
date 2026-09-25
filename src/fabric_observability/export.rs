@@ -38,8 +38,6 @@ pub enum ExportFormat {
     TracingReference,
 }
 
-// r[impl molten.fabric_observability.adapter_contract]
-// r[impl molten.fabric_observability.failure_semantics]
 /// The admitted profile, adapter, delivery request, and shell state that bound one export attempt.
 #[derive(Clone, Copy)]
 pub struct AdapterDelivery<'a> {
@@ -56,6 +54,8 @@ struct RenderedPayload<'a> {
     payload_ref: String,
 }
 
+// r[impl molten.fabric_observability.adapter_contract]
+// r[impl molten.fabric_observability.failure_semantics]
 pub fn execute_snapshot_export(
     delivery: AdapterDelivery<'_>,
     snapshot: &ObservationSnapshot,

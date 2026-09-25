@@ -311,52 +311,12 @@ async fn run_iroh_loopback(
     let timeout = std::time::Duration::from_secs(LIVE_LOOPBACK_TIMEOUT_SECONDS);
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
     let alpn_bytes = alpn.as_bytes().to_vec();
-    let server = iroh::Endpoint::builder(iroh::endpoint::presets::Minimal)
-        .relay_mode(iroh::RelayMode::Disabled)
-        .address_lookup(lookup.clone())
-        .alpns(vec![alpn_bytes.clone()])
-        .bind()
-        .await
-        .map_err(iroh_error)?;
-    let client = iroh::Endpoint::builder(iroh::endpoint::presets::Minimal)
-        .relay_mode(iroh::RelayMode::Disabled)
-        .address_lookup(lookup.clone())
-        .alpns(vec![alpn_bytes.clone()])
-        .bind()
-        .await
-        .map_err(iroh_error)?;
+    let server = bind_loopback_endpoint(&lookup, &alpn_bytes).await?;
+    let client = bind_loopback_endpoint(&lookup, &alpn_bytes).await?;
     lookup.add_endpoint_info(server.addr());
     lookup.add_endpoint_info(client.addr());
 
-    let server_endpoint = server.clone();
-    let server_task = tokio::spawn(async move {
-        let incoming = tokio::time::timeout(timeout, server_endpoint.accept())
-            .await
-            .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh accept timed out"))?
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("live Iroh endpoint closed before accept"))?;
-        let connection = tokio::time::timeout(timeout, incoming)
-            .await
-            .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh handshake timed out"))?
-            .map_err(iroh_error)?;
-        let remote_transport_identity_ref = blake3_ref(connection.remote_id().to_string().as_bytes());
-        let (mut send, mut receive) = tokio::time::timeout(timeout, connection.accept_bi())
-            .await
-            .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh stream accept timed out"))?
-            .map_err(iroh_error)?;
-        let received = tokio::time::timeout(timeout, receive.read_to_end(read_limit))
-            .await
-            .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh bounded frame read timed out"))?
-            .map_err(iroh_error)?;
-        tokio::time::timeout(timeout, send.write_all(&received))
-            .await
-            .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh echo write timed out"))?
-            .map_err(iroh_error)?;
-        send.finish().map_err(iroh_error)?;
-        tokio::time::timeout(timeout, connection.closed())
-            .await
-            .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh peer close timed out"))?;
-        Ok::<_, crate::error::MoltenError>((received, remote_transport_identity_ref))
-    });
+    let server_task = tokio::spawn(echo_one_stream(server.clone(), timeout, read_limit));
 
     let client_result = async {
         let connection = tokio::time::timeout(timeout, client.connect(server.addr(), &alpn_bytes))
@@ -392,6 +352,54 @@ async fn run_iroh_loopback(
         return Err(crate::error::MoltenError::invalid_harness("live Iroh server observed a different frame"));
     }
     Ok((echoed, remote_transport_identity_ref))
+}
+
+async fn bind_loopback_endpoint(
+    lookup: &iroh::address_lookup::memory::MemoryLookup,
+    alpn_bytes: &[u8],
+) -> crate::error::Result<iroh::Endpoint> {
+    iroh::Endpoint::builder(iroh::endpoint::presets::Minimal)
+        .relay_mode(iroh::RelayMode::Disabled)
+        .address_lookup(lookup.clone())
+        .alpns(vec![alpn_bytes.to_vec()])
+        .bind()
+        .await
+        .map_err(iroh_error)
+}
+
+/// Accepts one connection and one bidirectional stream, echoes the bounded frame, and waits for the
+/// peer to close.
+async fn echo_one_stream(
+    server_endpoint: iroh::Endpoint,
+    timeout: std::time::Duration,
+    read_limit: usize,
+) -> crate::error::Result<(Vec<u8>, String)> {
+    let incoming = tokio::time::timeout(timeout, server_endpoint.accept())
+        .await
+        .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh accept timed out"))?
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness("live Iroh endpoint closed before accept"))?;
+    let connection = tokio::time::timeout(timeout, incoming)
+        .await
+        .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh handshake timed out"))?
+        .map_err(iroh_error)?;
+    let remote_transport_identity_ref = blake3_ref(connection.remote_id().to_string().as_bytes());
+    let (mut send, mut receive) = tokio::time::timeout(timeout, connection.accept_bi())
+        .await
+        .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh stream accept timed out"))?
+        .map_err(iroh_error)?;
+    let received = tokio::time::timeout(timeout, receive.read_to_end(read_limit))
+        .await
+        .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh bounded frame read timed out"))?
+        .map_err(iroh_error)?;
+    tokio::time::timeout(timeout, send.write_all(&received))
+        .await
+        .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh echo write timed out"))?
+        .map_err(iroh_error)?;
+    send.finish().map_err(iroh_error)?;
+    tokio::time::timeout(timeout, connection.closed())
+        .await
+        .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh peer close timed out"))?;
+    Ok((received, remote_transport_identity_ref))
 }
 
 fn command_session_id(command: &TransportCommand) -> Option<&ScopedTransportId> {

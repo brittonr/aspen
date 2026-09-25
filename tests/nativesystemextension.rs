@@ -104,6 +104,12 @@ fn separate_process_service_runs_lifecycle_effect_restart_and_removal() -> TestR
     tampered_index.members[0].parent_ref = HASH_F.to_string();
     assert!(verify_native_artifact_index(&tampered_index).is_err());
 
+    assert_restart_recovers_and_removes(&cohort, service)
+}
+
+/// The checkpointed instance recovers from the durable journal, restarts, drains, stops, and is
+/// removed, and the journal history records each callback intent before its publication.
+fn assert_restart_recovers_and_removes(cohort: &Cohort, service: Service) -> TestResult<()> {
     let instance_id = service.instance().or_fail("native instance")?.instance_id;
     assert!(service.instance().or_fail("checkpointed instance")?.checkpoint_ref.is_some());
     drop(service);

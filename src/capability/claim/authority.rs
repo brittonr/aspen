@@ -431,6 +431,11 @@ fn admission_diagnostics(input: &ClaimAdmissionInput, selector_ref: &str) -> Res
     {
         diagnostics.push("claim-capability-request-mismatch".to_string());
     }
+    validate_admission_refs(input)?;
+    Ok(diagnostics)
+}
+
+fn validate_admission_refs(input: &ClaimAdmissionInput) -> Result<()> {
     validate_refs(&input.ucan_verification_refs, "claim UCAN verification ref")?;
     validate_refs(&input.basalt_enforcement_refs, "claim Basalt enforcement ref")?;
     validate_refs(&input.freshness_refs, "claim freshness ref")?;
@@ -438,8 +443,7 @@ fn admission_diagnostics(input: &ClaimAdmissionInput, selector_ref: &str) -> Res
     validate_refs(&input.peer_context_refs, "claim peer context ref")?;
     validate_refs(&input.transport_observation_refs, "claim transport observation ref")?;
     validate_refs(&input.registry_discovery_refs, "claim registry discovery ref")?;
-    validate_refs(&input.local_fixture_grant_refs, "claim local fixture grant ref")?;
-    Ok(diagnostics)
+    validate_refs(&input.local_fixture_grant_refs, "claim local fixture grant ref")
 }
 
 fn denied_claim_admission(

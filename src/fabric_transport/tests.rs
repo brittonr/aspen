@@ -190,82 +190,84 @@ fn live_and_simulated_shells_emit_the_same_adapter_neutral_setup_trace() {
 // r[verify molten.fabric_transport.final_validation]
 #[test]
 fn shared_adapter_conformance_covers_flow_control_datagrams_cancellation_drain_and_cleanup() {
-    fn run<A: TransportCommandShell>(adapter: &mut A) -> (Vec<TransportEventKind>, TransportState) {
-        let _setup = apply_setup(adapter);
-        let payload_ref = format!("blake3:{}", blake3::hash(PAYLOAD).to_hex());
-        let payload_bytes = u64::try_from(PAYLOAD.len()).expect("payload length");
-        let descriptor = descriptor();
-        let commands = [
-            TransportCommand::SendFrame {
-                operation_id: OPERATION_REF.to_string(),
-                session_id: id(SESSION_REF, GENERATION),
-                stream_id: id(STREAM_REF, GENERATION),
-                payload_ref: payload_ref.clone(),
-                payload_bytes,
-                observed_tick: INITIAL_TICK,
-            },
-            TransportCommand::AcknowledgeFrame {
-                operation_id: OPERATION_REF.to_string(),
-                session_id: id(SESSION_REF, GENERATION),
-                stream_id: id(STREAM_REF, GENERATION),
-                payload_bytes,
-            },
-            TransportCommand::SendDatagram {
-                operation_id: OPERATION_REF.to_string(),
-                session_id: id(SESSION_REF, GENERATION),
-                payload_ref,
-                payload_bytes,
-                observed_tick: INITIAL_TICK,
-            },
-            TransportCommand::CompleteDatagram {
-                operation_id: OPERATION_REF.to_string(),
-                session_id: id(SESSION_REF, GENERATION),
-                payload_bytes,
-                delivered: true,
-            },
-            TransportCommand::Cancel {
-                operation_id: OPERATION_REF.to_string(),
-                target: CancelTarget::Stream {
-                    session_id: id(SESSION_REF, GENERATION),
-                    stream_id: id(STREAM_REF, GENERATION),
-                },
-            },
-            TransportCommand::BeginDrain {
-                operation_id: OPERATION_REF.to_string(),
-                alpn: descriptor.alpn.clone(),
-                service_id: descriptor.service_id.clone(),
-                generation: GENERATION,
-            },
-            TransportCommand::CloseSession {
-                operation_id: OPERATION_REF.to_string(),
-                session_id: id(SESSION_REF, GENERATION),
-            },
-            TransportCommand::CleanupListener {
-                operation_id: OPERATION_REF.to_string(),
-                alpn: descriptor.alpn,
-                service_id: descriptor.service_id,
-                generation: GENERATION,
-                cleanup_evidence_ref: REQUEST_REF.to_string(),
-            },
-        ];
-        let mut kinds = Vec::with_capacity(commands.len());
-        let mut state = TransportState::default();
-        for command in commands {
-            let transition = adapter.execute_command(&command).expect("shared conformance command");
-            kinds.push(transition.events[0].event.kind);
-            state = transition.state;
-        }
-        (kinds, state)
-    }
-
     let mut live = IrohTransportAdapter::new(profile(TransportAdapterKind::IrohLive)).expect("Iroh adapter");
     let mut simulated = DeterministicTransportAdapter::new(profile(TransportAdapterKind::DeterministicSimulation))
         .expect("simulated adapter");
-    let live_result = run(&mut live);
-    let simulated_result = run(&mut simulated);
+    let live_result = run_shared_conformance(&mut live);
+    let simulated_result = run_shared_conformance(&mut simulated);
     assert_eq!(live_result, simulated_result);
     assert!(live_result.1.protocols.is_empty());
     assert_eq!(live_result.1.counters.cancellations, 1);
+}
+
+/// Runs the shared conformance command sequence, returning the first event kind of each step and
+/// the final state.
+fn run_shared_conformance<A: TransportCommandShell>(adapter: &mut A) -> (Vec<TransportEventKind>, TransportState) {
+    let _setup = apply_setup(adapter);
+    let payload_ref = format!("blake3:{}", blake3::hash(PAYLOAD).to_hex());
+    let payload_bytes = u64::try_from(PAYLOAD.len()).expect("payload length");
+    let descriptor = descriptor();
+    let commands = [
+        TransportCommand::SendFrame {
+            operation_id: OPERATION_REF.to_string(),
+            session_id: id(SESSION_REF, GENERATION),
+            stream_id: id(STREAM_REF, GENERATION),
+            payload_ref: payload_ref.clone(),
+            payload_bytes,
+            observed_tick: INITIAL_TICK,
+        },
+        TransportCommand::AcknowledgeFrame {
+            operation_id: OPERATION_REF.to_string(),
+            session_id: id(SESSION_REF, GENERATION),
+            stream_id: id(STREAM_REF, GENERATION),
+            payload_bytes,
+        },
+        TransportCommand::SendDatagram {
+            operation_id: OPERATION_REF.to_string(),
+            session_id: id(SESSION_REF, GENERATION),
+            payload_ref,
+            payload_bytes,
+            observed_tick: INITIAL_TICK,
+        },
+        TransportCommand::CompleteDatagram {
+            operation_id: OPERATION_REF.to_string(),
+            session_id: id(SESSION_REF, GENERATION),
+            payload_bytes,
+            delivered: true,
+        },
+        TransportCommand::Cancel {
+            operation_id: OPERATION_REF.to_string(),
+            target: CancelTarget::Stream {
+                session_id: id(SESSION_REF, GENERATION),
+                stream_id: id(STREAM_REF, GENERATION),
+            },
+        },
+        TransportCommand::BeginDrain {
+            operation_id: OPERATION_REF.to_string(),
+            alpn: descriptor.alpn.clone(),
+            service_id: descriptor.service_id.clone(),
+            generation: GENERATION,
+        },
+        TransportCommand::CloseSession {
+            operation_id: OPERATION_REF.to_string(),
+            session_id: id(SESSION_REF, GENERATION),
+        },
+        TransportCommand::CleanupListener {
+            operation_id: OPERATION_REF.to_string(),
+            alpn: descriptor.alpn,
+            service_id: descriptor.service_id,
+            generation: GENERATION,
+            cleanup_evidence_ref: REQUEST_REF.to_string(),
+        },
+    ];
+    let mut kinds = Vec::with_capacity(commands.len());
+    let mut state = TransportState::default();
+    for command in commands {
+        let transition = adapter.execute_command(&command).expect("shared conformance command");
+        kinds.push(transition.events[0].event.kind);
+        state = transition.state;
+    }
+    (kinds, state)
 }
 
 // r[verify molten.fabric_transport.live_sim_parity]

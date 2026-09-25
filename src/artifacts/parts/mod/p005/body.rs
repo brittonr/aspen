@@ -298,6 +298,11 @@ mod tests {
         assert_eq!(stale.decision, "deny");
         assert!(stale.diagnostics.iter().any(|diagnostic| diagnostic.contains("stale")));
 
+        assert_name_use_requires_exact_ref(second.artifact_ref, scoped.resolution_ref);
+    }
+
+    /// Name-only use is denied; use bound to the exact ref, its resolution receipt, and policy evidence passes.
+    fn assert_name_use_requires_exact_ref(exact_artifact_ref: String, resolution_ref: String) {
         let name_only = name_view_use_receipt(&ArtifactNameUseInput {
             operation: "remote-execution-admission".to_string(),
             name: Some("trusted/release".to_string()),
@@ -316,8 +321,8 @@ mod tests {
         let admitted = name_view_use_receipt(&ArtifactNameUseInput {
             operation: "remote-execution-admission".to_string(),
             name: Some("policy/main".to_string()),
-            exact_artifact_ref: Some(second.artifact_ref),
-            resolution_receipt_ref: Some(scoped.resolution_ref),
+            exact_artifact_ref: Some(exact_artifact_ref),
+            resolution_receipt_ref: Some(resolution_ref),
             policy_refs: vec![test_ref("name-use-policy")],
             provenance_refs: vec![test_ref("name-use-provenance")],
             capability_refs: vec![test_ref("name-use-capability")],
@@ -510,8 +515,18 @@ mod tests {
         .expect_err("channel update without capability denies");
         assert!(unauthorized.to_string().contains("capability refs"));
 
+        assert_channel_admission_requires_evidence(&root, channel.pointer.pointer_ref, verified.receipt_ref);
+    }
+
+    /// A channel pointer alone is not admission authority; release evidence, policy, provenance, source gate,
+    /// authority, and resource refs admit it, and the catalog surfaces the snapshot caveat.
+    fn assert_channel_admission_requires_evidence(
+        root: &std::path::Path,
+        channel_pointer_ref: String,
+        verified_receipt_ref: String,
+    ) {
         let channel_only = release_channel_admission_receipt(&ReleaseChannelAdmissionInput {
-            channel_pointer_ref: channel.pointer.pointer_ref.clone(),
+            channel_pointer_ref: channel_pointer_ref.clone(),
             release_evidence_refs: Vec::new(),
             policy_refs: Vec::new(),
             provenance_refs: Vec::new(),
@@ -526,8 +541,8 @@ mod tests {
             .iter()
             .any(|diagnostic| diagnostic.contains("non-authority")));
         let admitted = release_channel_admission_receipt(&ReleaseChannelAdmissionInput {
-            channel_pointer_ref: channel.pointer.pointer_ref,
-            release_evidence_refs: vec![verified.receipt_ref],
+            channel_pointer_ref,
+            release_evidence_refs: vec![verified_receipt_ref],
             policy_refs: vec![test_ref("admission-policy")],
             provenance_refs: vec![test_ref("admission-provenance")],
             source_gate_refs: vec![test_ref("admission-source-gate")],
@@ -537,7 +552,7 @@ mod tests {
         .expect("fully evidenced admission receipt");
         assert_eq!(admitted.decision, "pass");
 
-        let catalog = crate::catalog::search(&root, None, &crate::catalog::SearchInput {
+        let catalog = crate::catalog::search(root, None, &crate::catalog::SearchInput {
             root_refs: Vec::new(),
             include_dependencies: true,
             include_dependents: true,
@@ -587,6 +602,11 @@ mod tests {
             .any(|diagnostic| diagnostic.contains("snapshot omitted closure member")));
         assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic.contains("stale evidence")));
 
+        assert_tampered_member_denied();
+    }
+
+    /// A snapshot whose member bytes were overwritten in the artifact index is denied as tampered.
+    fn assert_tampered_member_denied() {
         let tampered_root = temp_dir("release-snapshot-tampered");
         let tampered_base = install_artifact(&tampered_root, &test_input("schema", "tamper-base", &[]))
             .expect("tampered base artifact");

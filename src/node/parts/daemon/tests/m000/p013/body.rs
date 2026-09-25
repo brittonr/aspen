@@ -145,24 +145,34 @@
         assert!(text.contains(&profiled_attempts.to_string()));
         assert!(text.contains(&profiled_timeout_ms.to_string()));
 
+        assert_transport_receipt_binds_profiles(&input, &envelope, &topology_ref, &transport_ref);
+    }
+
+    /// The publish transport receipt carries the selected live topology and transport profile refs.
+    fn assert_transport_receipt_binds_profiles(
+        input: &ControlLiveSendInput<'_>,
+        envelope: &ControlIngressEnvelope,
+        topology_ref: &str,
+        transport_ref: &str,
+    ) {
         let transport_receipt = live_transport_receipt_value(&LiveTransportReceiptValueInput {
             operation: "publish",
             decision: "pass",
             node_id: input.from_peer,
             delivered_from: None,
-            envelope: &envelope,
+            envelope,
             ingress_receipt_ref: None,
-            topology_profile_ref: selected_topology_profile_ref(&input),
-            transport_profile_ref: selected_transport_profile_ref(&input),
-            effective_max_attempts: Some(effective_live_send_max_attempts(&input)),
-            effective_join_timeout_ms: Some(effective_live_send_join_timeout_ms(&input)),
+            topology_profile_ref: selected_topology_profile_ref(input),
+            transport_profile_ref: selected_transport_profile_ref(input),
+            effective_max_attempts: Some(effective_live_send_max_attempts(input)),
+            effective_join_timeout_ms: Some(effective_live_send_join_timeout_ms(input)),
             diagnostics: &[],
         })
         .expect("transport receipt");
         let transport_text = crate::preserves_rail::to_text(&transport_receipt).expect("transport text");
         assert!(transport_text.contains("live-profiles"));
-        assert!(transport_text.contains(&topology_ref));
-        assert!(transport_text.contains(&transport_ref));
+        assert!(transport_text.contains(topology_ref));
+        assert!(transport_text.contains(transport_ref));
     }
 
     #[test]

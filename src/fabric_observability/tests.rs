@@ -254,57 +254,7 @@ fn prometheus_opentelemetry_and_tracing_shells_export_only_bounded_public_views(
     }
     assert!(canonical_refs.windows(ADJACENT_PAIR_WIDTH).all(|pair| pair[0] == pair[1]));
 
-    let tracing_adapter = adapter(ObservationAdapterClass::Tracing);
-    let event = ObservationEvent {
-        schema: OBSERVATION_EVENT_SCHEMA.to_string(),
-        event_ref: test_ref("adapter-state-change"),
-        event_kind: "adapter-state-change".to_string(),
-        severity: EventSeverity::Info,
-        context: context(),
-        detail: "exporter admitted".to_string(),
-        attributes: vec![MetricLabel {
-            name: "service".to_string(),
-            value: "extension-a".to_string(),
-            class: LabelClass::Public,
-        }],
-    };
-    let canonical_event = canonical_observation_event(&profile, &event, OBSERVED_TICK).expect("canonical event");
-    let event_request = AdapterDeliveryRequest {
-        operation_ref: test_ref("event-export-operation"),
-        adapter_ref: tracing_adapter.adapter_ref.clone(),
-        payload_ref: canonical_event.artifact_ref.clone(),
-        payload_bytes: u64::try_from(canonical_event.artifact_ref.len()).expect("event reference length"),
-        submitted_tick: OBSERVED_TICK,
-        deadline_tick: OBSERVED_TICK + ADAPTER_TIMEOUT_TICKS,
-    };
-    let mut event_sink = success_sink();
-    let tracing_event = execute_event_export(
-        AdapterDelivery {
-            profile: &profile,
-            adapter: &tracing_adapter,
-            request: &event_request,
-            state: &shell_state(true, 0),
-            last_export_tick: None,
-        },
-        &event,
-        &mut event_sink,
-    )
-    .expect("tracing event export");
-    assert_eq!(tracing_event.payload, tracing_event.payload_ref.as_bytes());
-    assert!(
-        execute_event_export(
-            AdapterDelivery {
-                profile: &profile,
-                adapter: &adapter(ObservationAdapterClass::Prometheus),
-                request: &event_request,
-                state: &shell_state(true, 0),
-                last_export_tick: None
-            },
-            &event,
-            &mut event_sink
-        )
-        .is_err()
-    );
+    assert_tracing_event_export_only(&profile);
 
     let simulation_adapter = adapter(ObservationAdapterClass::DeterministicSimulation);
     let simulation_request = export_request(&simulation_adapter, &snapshot, ExportFormat::Prometheus);
@@ -326,6 +276,62 @@ fn prometheus_opentelemetry_and_tracing_shells_export_only_bounded_public_views(
     assert_eq!(simulation.outcome.artifact.kind, AdapterOutcomeKind::Exported);
     assert_eq!(simulation.payload, prometheus_payload);
     assert_eq!(simulation_sink.emitted_refs(), &[simulation.payload_ref]);
+}
+
+/// The tracing shell exports an event as its canonical reference, and a Prometheus shell refuses
+/// events.
+fn assert_tracing_event_export_only(profile: &ObservationProfile) {
+    let tracing_adapter = adapter(ObservationAdapterClass::Tracing);
+    let event = ObservationEvent {
+        schema: OBSERVATION_EVENT_SCHEMA.to_string(),
+        event_ref: test_ref("adapter-state-change"),
+        event_kind: "adapter-state-change".to_string(),
+        severity: EventSeverity::Info,
+        context: context(),
+        detail: "exporter admitted".to_string(),
+        attributes: vec![MetricLabel {
+            name: "service".to_string(),
+            value: "extension-a".to_string(),
+            class: LabelClass::Public,
+        }],
+    };
+    let canonical_event = canonical_observation_event(profile, &event, OBSERVED_TICK).expect("canonical event");
+    let event_request = AdapterDeliveryRequest {
+        operation_ref: test_ref("event-export-operation"),
+        adapter_ref: tracing_adapter.adapter_ref.clone(),
+        payload_ref: canonical_event.artifact_ref.clone(),
+        payload_bytes: u64::try_from(canonical_event.artifact_ref.len()).expect("event reference length"),
+        submitted_tick: OBSERVED_TICK,
+        deadline_tick: OBSERVED_TICK + ADAPTER_TIMEOUT_TICKS,
+    };
+    let mut event_sink = success_sink();
+    let tracing_event = execute_event_export(
+        AdapterDelivery {
+            profile,
+            adapter: &tracing_adapter,
+            request: &event_request,
+            state: &shell_state(true, 0),
+            last_export_tick: None,
+        },
+        &event,
+        &mut event_sink,
+    )
+    .expect("tracing event export");
+    assert_eq!(tracing_event.payload, tracing_event.payload_ref.as_bytes());
+    assert!(
+        execute_event_export(
+            AdapterDelivery {
+                profile,
+                adapter: &adapter(ObservationAdapterClass::Prometheus),
+                request: &event_request,
+                state: &shell_state(true, 0),
+                last_export_tick: None
+            },
+            &event,
+            &mut event_sink
+        )
+        .is_err()
+    );
 }
 
 // r[verify molten.fabric_observability.failure_semantics]
@@ -560,38 +566,7 @@ fn node_and_extension_health_project_to_scoped_canonical_readiness_and_operator_
     .expect("node health");
     canonical_health_input(&profile, &node, OBSERVED_TICK).expect("node health canonical");
 
-    let failed_extension = system_extension_health_input(
-        health_projection(
-            "extension-a",
-            &extension_source_ref,
-            &profile.profile_ref,
-            &resource_ref,
-            ClaimScope::SystemExtension,
-        ),
-        &crate::system_extension::LifecycleState {
-            generation: GENERATION_TWO,
-            phase: crate::system_extension::LifecyclePhase::Running,
-            restart_attempts: 1,
-            health: crate::system_extension::HealthState::Failed,
-            checkpoint_ref: None,
-        },
-    );
-    assert_eq!(failed_extension.state, HealthState::Failed);
-    assert_eq!(failed_extension.context.generation, GENERATION_TWO);
-    canonical_health_input(&profile, &failed_extension, OBSERVED_TICK).expect("failed extension health");
-    assert!(
-        node_health_input(
-            health_projection(
-                "node-a",
-                &node_source_ref,
-                &profile.profile_ref,
-                &resource_ref,
-                ClaimScope::LocalComponent,
-            ),
-            "ambient-healthy",
-        )
-        .is_err()
-    );
+    assert_failed_health_inputs(&profile, &extension_source_ref, &node_source_ref, &resource_ref);
 
     let policy = ReadinessPolicy {
         schema: READINESS_POLICY_SCHEMA.to_string(),
@@ -625,6 +600,48 @@ fn node_and_extension_health_project_to_scoped_canonical_readiness_and_operator_
     .expect("operator snapshot");
     assert_eq!(operator.artifact.scope, ClaimScope::SystemExtension);
     assert_eq!(observation_authority_decision(), AuthorityDecision::Deny);
+}
+
+/// A failed extension projects as failed at its new generation, and ambient node health is
+/// rejected.
+fn assert_failed_health_inputs(
+    profile: &ObservationProfile,
+    extension_source_ref: &str,
+    node_source_ref: &str,
+    resource_ref: &str,
+) {
+    let failed_extension = system_extension_health_input(
+        health_projection(
+            "extension-a",
+            extension_source_ref,
+            &profile.profile_ref,
+            resource_ref,
+            ClaimScope::SystemExtension,
+        ),
+        &crate::system_extension::LifecycleState {
+            generation: GENERATION_TWO,
+            phase: crate::system_extension::LifecyclePhase::Running,
+            restart_attempts: 1,
+            health: crate::system_extension::HealthState::Failed,
+            checkpoint_ref: None,
+        },
+    );
+    assert_eq!(failed_extension.state, HealthState::Failed);
+    assert_eq!(failed_extension.context.generation, GENERATION_TWO);
+    canonical_health_input(profile, &failed_extension, OBSERVED_TICK).expect("failed extension health");
+    assert!(
+        node_health_input(
+            health_projection(
+                "node-a",
+                node_source_ref,
+                &profile.profile_ref,
+                resource_ref,
+                ClaimScope::LocalComponent,
+            ),
+            "ambient-healthy",
+        )
+        .is_err()
+    );
 }
 
 fn health_projection<'a>(

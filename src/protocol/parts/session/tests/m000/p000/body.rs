@@ -326,50 +326,7 @@
 
     #[test]
     fn protocol_session_gate_accepts_generated_branch_offer_trace() {
-        let left = ProtocolBranchInput {
-            label: "left".to_string(),
-            steps: vec![ProtocolCommInput {
-                from_role: "client".to_string(),
-                to_role: "server".to_string(),
-                label: "left".to_string(),
-                payload_tag: "left".to_string(),
-            }],
-        };
-        let right = ProtocolBranchInput {
-            label: "right".to_string(),
-            steps: vec![ProtocolCommInput {
-                from_role: "client".to_string(),
-                to_role: "server".to_string(),
-                label: "right".to_string(),
-                payload_tag: "right".to_string(),
-            }],
-        };
-        let global = protocol_global_choice_value(&ProtocolChoiceInput {
-            decider: "client".to_string(),
-            branches: vec![left, right],
-        })
-        .expect("branch global");
-        let manifest_value = protocol_manifest_value(&ProtocolManifestInput {
-            protocol_id: "proto:branch-gate".to_string(),
-            roles: vec!["client".to_string(), "server".to_string()],
-            labels: vec!["left".to_string(), "right".to_string()],
-            payloads: vec![
-                ProtocolPayloadInput {
-                    tag: "left".to_string(),
-                    schema_ref: test_ref("left-schema"),
-                },
-                ProtocolPayloadInput {
-                    tag: "right".to_string(),
-                    schema_ref: test_ref("right-schema"),
-                },
-            ],
-            global,
-            policy_refs: vec![test_ref("policy")],
-            capability_refs: vec![test_ref("capability")],
-            resource_refs: vec![test_ref("resource")],
-        })
-        .expect("branch manifest");
-        let install = install_protocol_manifest_value(&manifest_value).expect("install branch");
+        let install = branch_gate_install();
         let client = start_protocol_session(&install, "client", "session:branch-gate", auth(), resources())
             .expect("client state");
         let server = start_protocol_session(&install, "server", "session:branch-gate", auth(), resources())
@@ -433,6 +390,54 @@
         let expected_terminal_roles = 2;
         assert_eq!(gate.decision, "pass");
         assert_eq!(gate.final_state_count, expected_terminal_roles);
+    }
+
+    /// Installs a client-decided left/right branch protocol with one client-to-server message per branch.
+    fn branch_gate_install() -> ProtocolInstallReceipt {
+        let left = ProtocolBranchInput {
+            label: "left".to_string(),
+            steps: vec![ProtocolCommInput {
+                from_role: "client".to_string(),
+                to_role: "server".to_string(),
+                label: "left".to_string(),
+                payload_tag: "left".to_string(),
+            }],
+        };
+        let right = ProtocolBranchInput {
+            label: "right".to_string(),
+            steps: vec![ProtocolCommInput {
+                from_role: "client".to_string(),
+                to_role: "server".to_string(),
+                label: "right".to_string(),
+                payload_tag: "right".to_string(),
+            }],
+        };
+        let global = protocol_global_choice_value(&ProtocolChoiceInput {
+            decider: "client".to_string(),
+            branches: vec![left, right],
+        })
+        .expect("branch global");
+        let manifest_value = protocol_manifest_value(&ProtocolManifestInput {
+            protocol_id: "proto:branch-gate".to_string(),
+            roles: vec!["client".to_string(), "server".to_string()],
+            labels: vec!["left".to_string(), "right".to_string()],
+            payloads: vec![
+                ProtocolPayloadInput {
+                    tag: "left".to_string(),
+                    schema_ref: test_ref("left-schema"),
+                },
+                ProtocolPayloadInput {
+                    tag: "right".to_string(),
+                    schema_ref: test_ref("right-schema"),
+                },
+            ],
+            global,
+            policy_refs: vec![test_ref("policy")],
+            capability_refs: vec![test_ref("capability")],
+            resource_refs: vec![test_ref("resource")],
+        })
+        .expect("branch manifest");
+        install_protocol_manifest_value(&manifest_value).expect("install branch")
     }
 
     #[test]

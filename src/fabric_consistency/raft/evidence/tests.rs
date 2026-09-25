@@ -65,6 +65,12 @@ fn selected_evidence_records_milestones_and_suppresses_heartbeat_receipts() {
             }),
         )
         .expect("selected read evidence");
+    assert_selected_quorum_reads(&ledger, &committed);
+}
+
+/// The commit and read records carry quorum evidence from both voters, and aggregate health stays
+/// unadmitted.
+fn assert_selected_quorum_reads(ledger: &ReplicaEvidenceLedger, committed: &ReplicaState) {
     let commit = ledger
         .records()
         .iter()
@@ -80,7 +86,7 @@ fn selected_evidence_records_milestones_and_suppresses_heartbeat_receipts() {
     assert!(read.quorum_evidence_ref.is_some());
     assert_eq!(read.quorum_members, vec![super::tests::NODE_A.to_string(), super::tests::NODE_B.to_string()]);
 
-    let health = ledger.aggregate_health(&committed, false).expect("aggregate health");
+    let health = ledger.aggregate_health(committed, false).expect("aggregate health");
     assert_eq!(health.status, "healthy");
     assert!(!health.production_admitted);
     crate::preserves_rail::validate_content_ref(&health.evidence_ref).expect("health evidence ref");

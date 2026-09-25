@@ -92,38 +92,20 @@ fn production_sign_verify_binds_domain_and_denies_wrong_purpose_or_payload() {
         domain(adapter.profile(), key.handle.handle.purpose, &key.handle.handle.public_key_ref, "inventory");
     let signature = sign_federation_payload(&adapter, &key.handle.handle, &signed_domain, &test_ref("sign-policy"))
         .expect("production federation signature");
-    let verified = adapter
-        .verify(&key.public_key, VerificationInput {
-            expected_domain: &signed_domain,
-            signature: &signature,
-            signer_currentness: KeyCurrentness::Current,
-            signer_generation: key.handle.handle.generation,
-            policy_ref: &test_ref("verify-policy"),
-        })
-        .expect("verification outcome");
+    let verify_policy_ref = test_ref("verify-policy");
+    let verify_input = VerificationInput {
+        expected_domain: &signed_domain,
+        signature: &signature,
+        signer_currentness: KeyCurrentness::Current,
+        signer_generation: key.handle.handle.generation,
+        policy_ref: &verify_policy_ref,
+    };
+    let verified = adapter.verify(&key.public_key, verify_input).expect("verification outcome");
     assert_eq!(verified.decision.kind, VerificationDecisionKind::Accept);
     admit_federation_verification(&verified).expect("federation verification admission");
 
-    let other_workspace = temp_dir("crypto-production-wrong-key");
-    let other_namespace = crate::node_state::NodeStateNamespace::open(
-        crate::node_state::NodeStateNamespaceKind::Secrets,
-        &other_workspace,
-    )
-    .expect("other secrets namespace");
-    let other_adapter = IrohEd25519FileAdapter::new(&other_namespace, profile(), test_ref("capability-file-backend"))
-        .expect("other file adapter");
-    let other_key = other_adapter
-        .resolve_or_generate(KeyPurpose::FederationOrigin, &test_ref("generation-policy"), true)
-        .expect("other federation key");
-    let wrong_key = adapter
-        .verify(&other_key.public_key, VerificationInput {
-            expected_domain: &signed_domain,
-            signature: &signature,
-            signer_currentness: KeyCurrentness::Current,
-            signer_generation: key.handle.handle.generation,
-            policy_ref: &test_ref("verify-policy"),
-        })
-        .expect("wrong key outcome");
+    let other_public_key = other_federation_public_key();
+    let wrong_key = adapter.verify(&other_public_key, verify_input).expect("wrong key outcome");
     assert_eq!(wrong_key.decision.kind, VerificationDecisionKind::Deny);
     assert!(wrong_key.decision.issues.contains(&CryptoIdentityIssue::SignerPublicRefMismatch));
 
@@ -131,11 +113,8 @@ fn production_sign_verify_binds_domain_and_denies_wrong_purpose_or_payload() {
     malformed_signature.signature = b"not-an-ed25519-signature".to_vec();
     let malformed = adapter
         .verify(&key.public_key, VerificationInput {
-            expected_domain: &signed_domain,
             signature: &malformed_signature,
-            signer_currentness: KeyCurrentness::Current,
-            signer_generation: key.handle.handle.generation,
-            policy_ref: &test_ref("verify-policy"),
+            ..verify_input
         })
         .expect_err("malformed signature outcome denied");
     assert!(malformed.to_string().contains("canonical Preserves identity"));
@@ -145,27 +124,31 @@ fn production_sign_verify_binds_domain_and_denies_wrong_purpose_or_payload() {
     let inconsistent = adapter
         .verify(&key.public_key, VerificationInput {
             expected_domain: &inconsistent_domain,
-            signature: &signature,
-            signer_currentness: KeyCurrentness::Current,
-            signer_generation: key.handle.handle.generation,
-            policy_ref: &test_ref("verify-policy"),
+            ..verify_input
         })
         .expect_err("inconsistent canonical domain denied");
     assert!(inconsistent.to_string().contains("canonical Preserves identity"));
 
     let revoked = adapter
         .verify(&key.public_key, VerificationInput {
-            expected_domain: &signed_domain,
-            signature: &signature,
             signer_currentness: KeyCurrentness::Revoked,
-            signer_generation: key.handle.handle.generation,
-            policy_ref: &test_ref("verify-policy"),
+            ..verify_input
         })
         .expect("revoked outcome");
     assert_eq!(revoked.decision.kind, VerificationDecisionKind::Deny);
     assert!(revoked.decision.issues.contains(&CryptoIdentityIssue::HandleNotCurrent(KeyCurrentness::Revoked)));
     assert!(admit_federation_verification(&revoked).is_err());
 
+    assert_cross_purpose_and_tampered_payload_denied(&adapter, &key, verify_input);
+}
+
+/// Signing under another purpose is denied, and a signature over a different payload fails
+/// verification.
+fn assert_cross_purpose_and_tampered_payload_denied(
+    adapter: &IrohEd25519FileAdapter<'_>,
+    key: &ResolvedProductionKey,
+    verify_input: VerificationInput<'_>,
+) {
     let wrong_domain =
         domain(adapter.profile(), KeyPurpose::Delegation, &key.handle.handle.public_key_ref, "inventory");
     let wrong_purpose = adapter
@@ -182,15 +165,28 @@ fn production_sign_verify_binds_domain_and_denies_wrong_purpose_or_payload() {
     let tampered = adapter
         .verify(&key.public_key, VerificationInput {
             expected_domain: &tampered_domain,
-            signature: &signature,
-            signer_currentness: KeyCurrentness::Current,
-            signer_generation: key.handle.handle.generation,
-            policy_ref: &test_ref("verify-policy"),
+            ..verify_input
         })
         .expect("tamper decision");
     assert_eq!(tampered.decision.kind, VerificationDecisionKind::Deny);
     assert!(tampered.decision.issues.contains(&CryptoIdentityIssue::PayloadRefMismatch));
     assert!(tampered.decision.issues.contains(&CryptoIdentityIssue::CryptographicVerificationFailed));
+}
+
+/// The public key of a federation-origin key generated in a separate secrets namespace.
+fn other_federation_public_key() -> String {
+    let other_workspace = temp_dir("crypto-production-wrong-key");
+    let other_namespace = crate::node_state::NodeStateNamespace::open(
+        crate::node_state::NodeStateNamespaceKind::Secrets,
+        &other_workspace,
+    )
+    .expect("other secrets namespace");
+    let other_adapter = IrohEd25519FileAdapter::new(&other_namespace, profile(), test_ref("capability-file-backend"))
+        .expect("other file adapter");
+    let other_key = other_adapter
+        .resolve_or_generate(KeyPurpose::FederationOrigin, &test_ref("generation-policy"), true)
+        .expect("other federation key");
+    other_key.public_key
 }
 
 // r[verify molten.crypto_identity.rotation_revocation]
@@ -436,9 +432,6 @@ fn artifact_auth_shell_signs_and_verifies_exact_statement_without_admitting_auth
 // r[verify molten.artifact_auth_shell.authority]
 #[test]
 fn artifact_auth_shell_rejects_tamper_wrong_preimage_key_currentness_and_false_parity() {
-    const SIGNATURE_TAMPER_MASK: u8 = 1;
-    const MALFORMED_SIGNATURE_BYTES: usize = 1;
-
     let workspace = temp_dir("artifact-auth-shell-negative");
     let namespace =
         crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Secrets, &workspace)
@@ -479,11 +472,8 @@ fn artifact_auth_shell_rejects_tamper_wrong_preimage_key_currentness_and_false_p
     let mut denied_signing_request = request.clone();
     denied_signing_request.observed.payload_ref = test_ref("denied-legacy-payload");
     let denied_signing_statement = MoltenArtifactAuthStatementInput {
-        profile: &adapter.profile().profile,
         request: &denied_signing_request,
-        producer_id: statement.producer_id,
-        key_id: statement.key_id,
-        currentness_ref: statement.currentness_ref,
+        ..statement
     };
     let denied_signing = sign_artifact_auth_for_dual_run(&adapter, &MoltenArtifactAuthShellInput {
         statement: denied_signing_statement,
@@ -493,26 +483,49 @@ fn artifact_auth_shell_rejects_tamper_wrong_preimage_key_currentness_and_false_p
     .expect_err("legacy rejection blocks standalone signing");
     assert!(denied_signing.to_string().contains("requires an accepted legacy observation"));
 
+    let wrong_key_carrier = assert_carrier_tampering_denied(&statement, &signed);
+    assert_currentness_enforced(&statement, &signed);
+
+    let mut unrelated_request = request.clone();
+    unrelated_request.observed.payload_ref = test_ref("legacy-unrelated-payload");
+    let unrelated_input = MoltenArtifactAuthStatementInput {
+        request: &unrelated_request,
+        ..statement
+    };
+    let unrelated = evaluate_artifact_auth_shell_dual_run(&unrelated_input, &wrong_key_carrier)
+        .expect("unrelated false parity decision");
+    assert_eq!(unrelated.dual_run.legacy.kind, VerificationDecisionKind::Deny);
+    assert!(unrelated.dual_run.standalone.as_ref().is_some_and(|decision| !decision.passed));
+    assert!(!unrelated.dual_run.compatibility.case_explained);
+    assert!(unrelated.dual_run.compatibility.blockers.contains(&"unrelated-rejection-causes".to_string()));
+    assert!(!unrelated.dual_run.compatibility.standalone_authority_admitted);
+}
+
+/// A tampered, wrong-preimage, wrong-key, malformed, or identity-drifted carrier fails standalone
+/// verification. Returns the wrong-key carrier for the false-parity check.
+fn assert_carrier_tampering_denied(
+    statement: &MoltenArtifactAuthStatementInput<'_>,
+    signed: &SignedArtifactAuthStatement,
+) -> SignedArtifactAuthStatement {
+    const SIGNATURE_TAMPER_MASK: u8 = 1;
+    const MALFORMED_SIGNATURE_BYTES: usize = 1;
     let mut tampered_signature = signed.clone();
     let mut tampered_bytes = tampered_signature.signature_bytes.clone();
     tampered_bytes[0] ^= SIGNATURE_TAMPER_MASK;
     tampered_signature.replace_signature_bytes_for_test(tampered_bytes);
     let tampered =
-        evaluate_artifact_auth_shell_dual_run(&statement, &tampered_signature).expect("tampered signature decision");
+        evaluate_artifact_auth_shell_dual_run(statement, &tampered_signature).expect("tampered signature decision");
     assert_eq!(tampered.cryptographic_failure_code.as_deref(), Some("ed25519.signature_invalid"));
     assert!(tampered.dual_run.compatibility.decision_drift);
     assert!(!tampered.dual_run.compatibility.case_explained);
     assert!(!tampered.dual_run.compatibility.standalone_authority_admitted);
 
-    let mut wrong_preimage_request = request.clone();
+    let mut wrong_preimage_request = statement.request.clone();
     wrong_preimage_request.expected_domain.payload_ref = test_ref("different-receipt");
     wrong_preimage_request.observed.payload_ref = wrong_preimage_request.expected_domain.payload_ref.clone();
     let wrong_preimage_input = MoltenArtifactAuthStatementInput {
-        profile: &adapter.profile().profile,
         request: &wrong_preimage_request,
-        producer_id: statement.producer_id,
-        key_id: statement.key_id,
-        currentness_ref: statement.currentness_ref,
+        ..*statement
     };
     let wrong_statement = map_artifact_auth_statement(&wrong_preimage_input).expect("wrong preimage statement");
     let wrong_statement_bytes =
@@ -527,7 +540,7 @@ fn artifact_auth_shell_rejects_tamper_wrong_preimage_key_currentness_and_false_p
 
     let mut wrong_key_carrier = signed.clone();
     wrong_key_carrier.replace_public_key_for_test(iroh::SecretKey::generate().public());
-    let wrong_key = evaluate_artifact_auth_shell_dual_run(&statement, &wrong_key_carrier).expect("wrong key decision");
+    let wrong_key = evaluate_artifact_auth_shell_dual_run(statement, &wrong_key_carrier).expect("wrong key decision");
     assert_eq!(wrong_key.cryptographic_failure_code.as_deref(), Some("ed25519.signature_invalid"));
     assert!(!wrong_key.dual_run.compatibility.identity_drift_explained);
     assert!(wrong_key.dual_run.compatibility.blockers.contains(&"identity-drift".to_string()));
@@ -535,25 +548,27 @@ fn artifact_auth_shell_rejects_tamper_wrong_preimage_key_currentness_and_false_p
     let mut malformed_carrier = signed.clone();
     malformed_carrier.replace_signature_bytes_for_test(vec![0_u8; MALFORMED_SIGNATURE_BYTES]);
     let malformed =
-        evaluate_artifact_auth_shell_dual_run(&statement, &malformed_carrier).expect("malformed signature decision");
+        evaluate_artifact_auth_shell_dual_run(statement, &malformed_carrier).expect("malformed signature decision");
     assert_eq!(malformed.cryptographic_failure_code.as_deref(), Some("ed25519.signature_length"));
 
     let mut carrier_drift = signed.clone();
     carrier_drift.signature_ref = test_ref("substituted-signature");
     let drift =
-        evaluate_artifact_auth_shell_dual_run(&statement, &carrier_drift).expect_err("carrier identity drift denied");
+        evaluate_artifact_auth_shell_dual_run(statement, &carrier_drift).expect_err("carrier identity drift denied");
     assert!(drift.to_string().contains("carrier signature identity mismatch"));
+    wrong_key_carrier
+}
 
-    let mut revoked_request = request.clone();
+/// A revoked signer is denied with an explained currentness cause, and an unknown currentness ref
+/// is refused.
+fn assert_currentness_enforced(statement: &MoltenArtifactAuthStatementInput<'_>, signed: &SignedArtifactAuthStatement) {
+    let mut revoked_request = statement.request.clone();
     revoked_request.signer_currentness = KeyCurrentness::Revoked;
     let revoked_input = MoltenArtifactAuthStatementInput {
-        profile: &adapter.profile().profile,
         request: &revoked_request,
-        producer_id: statement.producer_id,
-        key_id: statement.key_id,
-        currentness_ref: statement.currentness_ref,
+        ..*statement
     };
-    let revoked = evaluate_artifact_auth_shell_dual_run(&revoked_input, &signed).expect("revoked decision");
+    let revoked = evaluate_artifact_auth_shell_dual_run(&revoked_input, signed).expect("revoked decision");
     assert_eq!(revoked.dual_run.legacy.kind, VerificationDecisionKind::Deny);
     assert!(revoked.dual_run.standalone.as_ref().is_some_and(|decision| !decision.passed));
     assert!(revoked.dual_run.compatibility.case_explained);
@@ -561,28 +576,11 @@ fn artifact_auth_shell_rejects_tamper_wrong_preimage_key_currentness_and_false_p
 
     let unknown_currentness = MoltenArtifactAuthStatementInput {
         currentness_ref: "unknown-currentness",
-        ..statement
+        ..*statement
     };
-    let unknown = evaluate_artifact_auth_shell_dual_run(&unknown_currentness, &signed)
+    let unknown = evaluate_artifact_auth_shell_dual_run(&unknown_currentness, signed)
         .expect_err("unknown currentness reference denied");
     assert!(unknown.to_string().contains("currentness_ref:expected-blake3-ref"));
-
-    let mut unrelated_request = request.clone();
-    unrelated_request.observed.payload_ref = test_ref("legacy-unrelated-payload");
-    let unrelated_input = MoltenArtifactAuthStatementInput {
-        profile: &adapter.profile().profile,
-        request: &unrelated_request,
-        producer_id: statement.producer_id,
-        key_id: statement.key_id,
-        currentness_ref: statement.currentness_ref,
-    };
-    let unrelated = evaluate_artifact_auth_shell_dual_run(&unrelated_input, &wrong_key_carrier)
-        .expect("unrelated false parity decision");
-    assert_eq!(unrelated.dual_run.legacy.kind, VerificationDecisionKind::Deny);
-    assert!(unrelated.dual_run.standalone.as_ref().is_some_and(|decision| !decision.passed));
-    assert!(!unrelated.dual_run.compatibility.case_explained);
-    assert!(unrelated.dual_run.compatibility.blockers.contains(&"unrelated-rejection-causes".to_string()));
-    assert!(!unrelated.dual_run.compatibility.standalone_authority_admitted);
 }
 
 // r[verify molten.artifact_auth_operational_receipt.identity]

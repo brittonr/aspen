@@ -106,6 +106,16 @@ pub fn parse_migration_recipe_value(value: &IoValue) -> Result<MigrationRecipe> 
     })
 }
 
+const ENTRY_REF_REQUIRED_CHECKS: [&str; 7] = [
+    "typed-durable-ref",
+    "schema-identity-binding",
+    "producer-artifact-binding",
+    "retention-binding",
+    "provenance-binding",
+    "decoder-artifact-admission",
+    "handle-not-authority",
+];
+
 pub fn parse_entry_ref_value(value: &IoValue) -> Result<EntryRef> {
     validate_no_executable_authority(value, "typed storage ref")?;
     let fields = simple_record(value, "typed-storage-ref-v1", TYPED_STORAGE_REF_FIELD_COUNT)?;
@@ -125,13 +135,9 @@ pub fn parse_entry_ref_value(value: &IoValue) -> Result<EntryRef> {
     let capability_ref = required_ref(&authority[1], "typed storage capability ref")?;
     let effect_handle_ref = required_ref(&authority[2], "typed storage effect handle ref")?;
     let checks = parse_checks(&fields[11])?;
-    require_check(&checks, "typed-durable-ref", "typed storage ref")?;
-    require_check(&checks, "schema-identity-binding", "typed storage ref")?;
-    require_check(&checks, "producer-artifact-binding", "typed storage ref")?;
-    require_check(&checks, "retention-binding", "typed storage ref")?;
-    require_check(&checks, "provenance-binding", "typed storage ref")?;
-    require_check(&checks, "decoder-artifact-admission", "typed storage ref")?;
-    require_check(&checks, "handle-not-authority", "typed storage ref")?;
+    for expected in ENTRY_REF_REQUIRED_CHECKS {
+        require_check(&checks, expected, "typed storage ref")?;
+    }
     let schema_identity_mode = record_string(
         &fields[TYPED_STORAGE_REF_SCHEMA_IDENTITY_FIELD_INDEX],
         "schema-identity",

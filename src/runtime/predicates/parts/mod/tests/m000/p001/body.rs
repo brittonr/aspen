@@ -450,55 +450,22 @@
         assert_eq!(cleaned_result.receipt.decision, PredicateDecision::Pass);
 
         let leaked = RuntimeVatRollbackCleanupState {
-            rollback_receipt_ref: rollback_receipt.receipt_ref,
-            before_snapshot_ref: before_ref,
             final_snapshot_ref: deterministic_ref("rollback-mutated-final-snapshot"),
-            rolled_back_refs: sorted_refs(vec![
-                staged_assertion_ref.clone(),
-                staged_observer_ref.clone(),
-                staged_pending_call_ref.clone(),
-                staged_authority_snapshot_ref.clone(),
-            ]),
             remaining_assertion_refs: vec![staged_assertion_ref],
             remaining_observer_refs: vec![staged_observer_ref],
             remaining_pending_call_refs: vec![staged_pending_call_ref],
             remaining_authority_snapshot_refs: vec![staged_authority_snapshot_ref],
+            ..cleaned
         };
         let leaked_result = evaluate_vat_rollback_cleanup(&leaked).expect("leaked rollback cleanup");
         assert!(!leaked_result.is_allowed);
-        assert!(
-            leaked_result
-                .receipt
-                .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic == "vat-rollback-final-snapshot-changed")
-        );
-        assert!(
-            leaked_result
-                .receipt
-                .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic == "vat-rollback-assertion-leak")
-        );
-        assert!(
-            leaked_result
-                .receipt
-                .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic == "vat-rollback-observer-leak")
-        );
-        assert!(
-            leaked_result
-                .receipt
-                .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic == "vat-rollback-pending-call-leak")
-        );
-        assert!(
-            leaked_result
-                .receipt
-                .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic == "vat-rollback-authority-snapshot-leak")
-        );
+        for expected in [
+            "vat-rollback-final-snapshot-changed",
+            "vat-rollback-assertion-leak",
+            "vat-rollback-observer-leak",
+            "vat-rollback-pending-call-leak",
+            "vat-rollback-authority-snapshot-leak",
+        ] {
+            assert!(leaked_result.receipt.diagnostics.iter().any(|diagnostic| diagnostic == expected), "{expected}");
+        }
     }

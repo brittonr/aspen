@@ -132,27 +132,9 @@
     fn policy_aware_cache_keys_and_hit_freshness_bind_admission_context() {
         // r[verify molten.eval_cache.policy_aware_validation]
         let root = temp_dir("eval-cache-policy-aware");
-        let policy = test_ref("policy-v1");
-        let policy_export = test_ref("policy-export-v1");
-        let capability = test_ref("capability-context-v1");
-        let revocation_epoch = test_ref("revocation-epoch-v1");
-        let resource = test_ref("resource-profile-v1");
         let handler_profile = test_ref("handler-profile-v1");
-        let provenance = test_ref("provenance-v1");
-        let source_gate = test_ref("source-gate-v1");
-        let retention = test_ref("retention-v1");
         let evidence = test_ref("supporting-evidence-v1");
-        let mut key = key_input("normative-validation", "input", &[]);
-        key.policy_refs = vec![policy.clone()];
-        key.policy_export_refs = vec![policy_export.clone()];
-        key.capability_refs = vec![capability.clone()];
-        key.revocation_refs = vec![revocation_epoch.clone()];
-        key.resource_refs = vec![resource.clone()];
-        key.handler_profile_ref = Some(handler_profile.clone());
-        key.provenance_refs = vec![provenance.clone()];
-        key.source_gate_refs = vec![source_gate.clone()];
-        key.retention_refs = vec![retention.clone()];
-        key.evidence_refs = vec![evidence.clone()];
+        let key = policy_aware_key();
         let same_key = key_value(&key).expect("policy-aware key");
         let same_key_again = key_value(&key).expect("same key");
         assert_eq!(canonical_hash(&same_key).expect("same key ref"), canonical_hash(&same_key_again).expect("same key ref again"));
@@ -170,68 +152,29 @@
             &value_input(TIER_POLICY_CURRENT, STATUS_PASS, Some(record("valid", vec![string("ok")])), &key, std::slice::from_ref(&evidence)),
         )
         .expect("put policy-aware cache entry");
-        get(&root, &put.key.key_ref, &GetInput {
-            current_policy_refs: vec![policy.clone()],
-            current_policy_export_refs: vec![policy_export.clone()],
-            current_capability_refs: vec![capability.clone()],
-            current_revocation_refs: vec![revocation_epoch.clone()],
-            current_resource_refs: vec![resource.clone()],
-            current_handler_profile_ref: Some(handler_profile.clone()),
-            current_provenance_refs: vec![provenance.clone()],
-            current_source_gate_refs: vec![source_gate.clone()],
-            current_retention_refs: vec![retention.clone()],
-            current_evidence_refs: vec![evidence.clone()],
-            ..GetInput::default()
-        })
-        .expect("fresh policy-aware hit");
-        let stale_policy = get(&root, &put.key.key_ref, &GetInput {
-            current_policy_refs: vec![policy.clone()],
+        let fresh_get = current_get_input(&key);
+        get(&root, &put.key.key_ref, &fresh_get).expect("fresh policy-aware hit");
+        let stale_get = GetInput {
             current_policy_export_refs: vec![test_ref("policy-export-v2")],
-            current_capability_refs: vec![capability.clone()],
-            current_revocation_refs: vec![revocation_epoch.clone()],
-            current_resource_refs: vec![resource.clone()],
-            current_handler_profile_ref: Some(handler_profile.clone()),
-            current_provenance_refs: vec![provenance.clone()],
-            current_source_gate_refs: vec![source_gate.clone()],
-            current_retention_refs: vec![retention.clone()],
-            current_evidence_refs: vec![evidence.clone()],
-            ..GetInput::default()
-        })
-        .expect_err("stale policy export denies hit");
+            ..fresh_get
+        };
+        let stale_policy = get(&root, &put.key.key_ref, &stale_get).expect_err("stale policy export denies hit");
         let policy_message = stale_policy.to_string();
         let is_stale_explained = policy_message.contains("validity") || policy_message.contains("stale");
         assert!(is_stale_explained, "unexpected stale policy denial: {policy_message}");
 
         let changed_handler = test_ref("handler-profile-v2");
-        let denied_profile = evaluate_cache_hit_validity(CacheHitValidityInput {
-            current_policy_refs: std::slice::from_ref(&policy),
-            current_policy_export_refs: std::slice::from_ref(&policy_export),
-            current_capability_refs: std::slice::from_ref(&capability),
-            current_revocation_refs: std::slice::from_ref(&revocation_epoch),
-            current_resource_refs: std::slice::from_ref(&resource),
+        let changed_handler_input = CacheHitValidityInput {
             current_handler_profile_ref: Some(&changed_handler),
-            current_provenance_refs: std::slice::from_ref(&provenance),
-            current_source_gate_refs: std::slice::from_ref(&source_gate),
-            current_retention_refs: std::slice::from_ref(&retention),
-            current_evidence_refs: std::slice::from_ref(&evidence),
-            ..cache_hit_validity_input(&put.key, &put.value)
-        });
+            ..current_validity_input(&key, &put.key, &put.value)
+        };
+        let denied_profile = evaluate_cache_hit_validity(changed_handler_input);
         assert_eq!(denied_profile.decision, "deny");
         assert!(denied_profile.diagnostics.iter().any(|diagnostic| diagnostic == "handler-profile-changed"));
         let compatibility_refs = vec![handler_profile, changed_handler.clone()];
         let compatible_profile = evaluate_cache_hit_validity(CacheHitValidityInput {
-            current_policy_refs: std::slice::from_ref(&policy),
-            current_policy_export_refs: std::slice::from_ref(&policy_export),
-            current_capability_refs: std::slice::from_ref(&capability),
-            current_revocation_refs: std::slice::from_ref(&revocation_epoch),
-            current_resource_refs: std::slice::from_ref(&resource),
-            current_handler_profile_ref: Some(&changed_handler),
-            current_provenance_refs: std::slice::from_ref(&provenance),
-            current_source_gate_refs: std::slice::from_ref(&source_gate),
-            current_retention_refs: std::slice::from_ref(&retention),
-            current_evidence_refs: std::slice::from_ref(&evidence),
             compatibility_refs: &compatibility_refs,
-            ..cache_hit_validity_input(&put.key, &put.value)
+            ..changed_handler_input
         });
         assert_eq!(compatible_profile.decision, "pass");
         let missing_evidence = crate::eval_cache::put(&root, &KeyInput { evidence_refs: Vec::new(), ..key }, &ValueInput {
@@ -245,6 +188,57 @@
         })
         .expect_err("missing evidence denied");
         assert!(missing_evidence.to_string().contains("negative cache result evidence refs"));
+    }
+
+    /// A normative-validation key bound to one ref for each policy, capability, resource, provenance, retention, and
+    /// evidence context.
+    fn policy_aware_key() -> KeyInput {
+        let mut key = key_input("normative-validation", "input", &[]);
+        key.policy_refs = vec![test_ref("policy-v1")];
+        key.policy_export_refs = vec![test_ref("policy-export-v1")];
+        key.capability_refs = vec![test_ref("capability-context-v1")];
+        key.revocation_refs = vec![test_ref("revocation-epoch-v1")];
+        key.resource_refs = vec![test_ref("resource-profile-v1")];
+        key.handler_profile_ref = Some(test_ref("handler-profile-v1"));
+        key.provenance_refs = vec![test_ref("provenance-v1")];
+        key.source_gate_refs = vec![test_ref("source-gate-v1")];
+        key.retention_refs = vec![test_ref("retention-v1")];
+        key.evidence_refs = vec![test_ref("supporting-evidence-v1")];
+        key
+    }
+
+    /// A get whose current admission context equals the context `key` was cached under.
+    fn current_get_input(key: &KeyInput) -> GetInput {
+        GetInput {
+            current_policy_refs: key.policy_refs.clone(),
+            current_policy_export_refs: key.policy_export_refs.clone(),
+            current_capability_refs: key.capability_refs.clone(),
+            current_revocation_refs: key.revocation_refs.clone(),
+            current_resource_refs: key.resource_refs.clone(),
+            current_handler_profile_ref: key.handler_profile_ref.clone(),
+            current_provenance_refs: key.provenance_refs.clone(),
+            current_source_gate_refs: key.source_gate_refs.clone(),
+            current_retention_refs: key.retention_refs.clone(),
+            current_evidence_refs: key.evidence_refs.clone(),
+            ..GetInput::default()
+        }
+    }
+
+    /// A hit-validity input whose current admission context equals the context `key` was cached under.
+    fn current_validity_input<'a>(key: &'a KeyInput, cached: &'a Key, value: &'a Value) -> CacheHitValidityInput<'a> {
+        CacheHitValidityInput {
+            current_policy_refs: &key.policy_refs,
+            current_policy_export_refs: &key.policy_export_refs,
+            current_capability_refs: &key.capability_refs,
+            current_revocation_refs: &key.revocation_refs,
+            current_resource_refs: &key.resource_refs,
+            current_handler_profile_ref: key.handler_profile_ref.as_deref(),
+            current_provenance_refs: &key.provenance_refs,
+            current_source_gate_refs: &key.source_gate_refs,
+            current_retention_refs: &key.retention_refs,
+            current_evidence_refs: &key.evidence_refs,
+            ..cache_hit_validity_input(cached, value)
+        }
     }
 
     #[test]

@@ -24,15 +24,7 @@ pub fn migrate_value(
     let new_value_bytes = canonical_bytes(&new_value)?;
     let new_value_ref = canonical_hash(&new_value)?;
     let (payload, payload_details) = store_payload(root, &new_value_bytes)?;
-    let effect = effect_evidence(EffectEvidenceInput {
-        operation: "migrate",
-        namespace,
-        key,
-        schema_ref: &recipe.target_schema_ref,
-        producer_ref: &recipe.transformer_ref,
-        admission,
-        remote_use: false,
-    })?;
+    let effect = migration_effect(namespace, key, &recipe, admission)?;
     let revision = next_revision(root, &storage_key)?;
     let refs = entry_refs(&source.typed_ref, &recipe);
     let typed_ref_value = next_value(NextInput {
@@ -74,6 +66,19 @@ pub fn migrate_value(
         recipe_ref,
         typed_ref_value,
         receipt_value,
+    })
+}
+
+/// Local migrate effect evidence under the recipe's target schema and transformer.
+fn migration_effect(namespace: &str, key: &str, recipe: &MigrationRecipe, admission: &Admission) -> Result<EffectEvidence> {
+    effect_evidence(EffectEvidenceInput {
+        operation: "migrate",
+        namespace,
+        key,
+        schema_ref: &recipe.target_schema_ref,
+        producer_ref: &recipe.transformer_ref,
+        admission,
+        remote_use: false,
     })
 }
 

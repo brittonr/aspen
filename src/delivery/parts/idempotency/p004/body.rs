@@ -56,26 +56,14 @@ mod tests {
         let evidence_refs = vec![fake_ref("evidence")];
         let operation = operation_for(&scope, "peer:a/producer", FIRST_SEQUENCE, "payload", &policy_refs);
         let initial_window = parsed_window(&scope, FIRST_SEQUENCE, FIRST_SEQUENCE, &policy_refs);
-        let first = classify_idempotency_decision(DecisionLawInput {
-            operation: &operation,
-            window: &initial_window,
-            existing_entry: None,
-            evidence_refs: &evidence_refs,
-            gap_policy: GapPolicy::Deny,
-        })
+        let first = classify_law(&operation, &initial_window, None, &evidence_refs, GapPolicy::Deny)
         .expect("first law");
         assert_eq!(first.kind, IdempotencyDecisionKind::First);
         assert!(first.kind.should_commit_side_effect());
         assert!(first.should_commit_side_effect);
 
         let entry = entry_for(&operation, &evidence_refs, "first-receipt", "semantic-result");
-        let duplicate = classify_idempotency_decision(DecisionLawInput {
-            operation: &operation,
-            window: &initial_window,
-            existing_entry: Some(&entry),
-            evidence_refs: &evidence_refs,
-            gap_policy: GapPolicy::Deny,
-        })
+        let duplicate = classify_law(&operation, &initial_window, Some(&entry), &evidence_refs, GapPolicy::Deny)
         .expect("duplicate law");
         assert_eq!(duplicate.kind, IdempotencyDecisionKind::Duplicate);
         assert_eq!(duplicate.prior_receipt_ref.as_deref(), Some(entry.first_receipt_ref.as_str()));
@@ -83,13 +71,7 @@ mod tests {
         assert!(!duplicate.should_commit_side_effect);
 
         let changed_operation = operation_for(&scope, "peer:a/producer", FIRST_SEQUENCE, "changed-payload", &policy_refs);
-        let conflict = classify_idempotency_decision(DecisionLawInput {
-            operation: &changed_operation,
-            window: &initial_window,
-            existing_entry: Some(&entry),
-            evidence_refs: &evidence_refs,
-            gap_policy: GapPolicy::Deny,
-        })
+        let conflict = classify_law(&changed_operation, &initial_window, Some(&entry), &evidence_refs, GapPolicy::Deny)
         .expect("conflict law");
         assert_eq!(conflict.kind, IdempotencyDecisionKind::Conflict);
         assert!(conflict.diagnostics.iter().any(|diagnostic| diagnostic.contains("different payload")));
@@ -97,36 +79,34 @@ mod tests {
 
         let advanced_window = parsed_window(&scope, ADVANCED_NEXT_SEQUENCE, FIRST_SEQUENCE, &policy_refs);
         let stale_operation = operation_for(&scope, "peer:c/producer", FIRST_SEQUENCE, "stale-payload", &policy_refs);
-        let stale = classify_idempotency_decision(DecisionLawInput {
-            operation: &stale_operation,
-            window: &advanced_window,
-            existing_entry: None,
-            evidence_refs: &evidence_refs,
-            gap_policy: GapPolicy::Deny,
-        })
+        let stale = classify_law(&stale_operation, &advanced_window, None, &evidence_refs, GapPolicy::Deny)
         .expect("stale law");
         assert_eq!(stale.kind, IdempotencyDecisionKind::Stale);
         assert!(!stale.should_commit_side_effect);
 
         let gap_operation = operation_for(&scope, "peer:a/producer", GAP_SEQUENCE, "gap-payload", &policy_refs);
-        let gap = classify_idempotency_decision(DecisionLawInput {
-            operation: &gap_operation,
-            window: &advanced_window,
-            existing_entry: None,
-            evidence_refs: &evidence_refs,
-            gap_policy: GapPolicy::Deny,
-        })
+        let gap = classify_law(&gap_operation, &advanced_window, None, &evidence_refs, GapPolicy::Deny)
         .expect("gap law");
         assert_eq!(gap.kind, IdempotencyDecisionKind::Gap);
-        let retry = classify_idempotency_decision(DecisionLawInput {
-            operation: &gap_operation,
-            window: &advanced_window,
-            existing_entry: None,
-            evidence_refs: &evidence_refs,
-            gap_policy: GapPolicy::Retry,
-        })
+        let retry = classify_law(&gap_operation, &advanced_window, None, &evidence_refs, GapPolicy::Retry)
         .expect("retry law");
         assert_eq!(retry.kind, IdempotencyDecisionKind::Retry);
+    }
+
+    fn classify_law(
+        operation: &OperationId,
+        window: &Window,
+        existing_entry: Option<&DedupEntry>,
+        evidence_refs: &[String],
+        gap_policy: GapPolicy,
+    ) -> Result<IdempotencyDecisionLaw> {
+        classify_idempotency_decision(DecisionLawInput {
+            operation,
+            window,
+            existing_entry,
+            evidence_refs,
+            gap_policy,
+        })
     }
 
     #[test]
@@ -162,15 +142,54 @@ mod tests {
         // r[verify molten.delivery_state_machine_proof.first_commit_duplicate_suppression]
         // r[verify molten.delivery_state_machine_proof.denial_no_side_effect]
         // r[verify molten.delivery_state_machine_proof.generated_delivery_traces]
-        const FIRST_SEQUENCE: u64 = 1;
-        const SECOND_SEQUENCE: u64 = 2;
-        const GAP_SEQUENCE: u64 = 4;
         const EXPECTED_COMMITTED_SIDE_EFFECTS: usize = 2;
         const EXPECTED_SUPPRESSED_SIDE_EFFECTS: usize = 5;
         let root = temp_dir("delivery-generated-trace");
         let scope = remote_topic_scope_ref("services", "peer:b").expect("scope");
         let policy_refs = vec![fake_ref("policy")];
-        let trace = [
+        let trace = generated_trace();
+        let mut committed_side_effects = 0_usize;
+        let mut suppressed_side_effects = 0_usize;
+        for step in trace {
+            let evidence_refs = vec![fake_ref(step.evidence_label)];
+            let semantic_result_ref = fake_ref(&format!("result-{}", step.payload_label));
+            let decision = check(CheckInput {
+                root: &root,
+                scope_profile: SCOPE_REMOTE_TOPIC,
+                scope_ref: &scope,
+                producer: step.producer,
+                consumer: "peer:b",
+                sequence: step.sequence,
+                intent: "remote-dataspace-assert",
+                payload_ref: &fake_ref(step.payload_label),
+                policy_refs: &policy_refs,
+                evidence_refs: &evidence_refs,
+                semantic_result_ref: Some(&semantic_result_ref),
+                gap_policy: step.gap_policy,
+            })
+            .expect(step.expected_decision);
+            assert_eq!(decision.receipt.decision, step.expected_decision);
+            assert_eq!(decision.should_commit_side_effect, step.should_commit_side_effect);
+            if decision.should_commit_side_effect {
+                committed_side_effects += 1;
+            } else {
+                suppressed_side_effects += 1;
+                assert_eq!(decision.receipt.side_effect, "suppress");
+                if decision.receipt.decision != "duplicate" {
+                    assert!(!decision.receipt.diagnostics.is_empty());
+                }
+            }
+        }
+        assert_eq!(committed_side_effects, EXPECTED_COMMITTED_SIDE_EFFECTS);
+        assert_eq!(suppressed_side_effects, EXPECTED_SUPPRESSED_SIDE_EFFECTS);
+    }
+
+    /// A first commit, duplicate, conflict, gap, retry, second commit, and stale producer, in that order.
+    fn generated_trace() -> [TraceStep; 7] {
+        const FIRST_SEQUENCE: u64 = 1;
+        const SECOND_SEQUENCE: u64 = 2;
+        const GAP_SEQUENCE: u64 = 4;
+        [
             trace_step("peer:a/producer", FIRST_SEQUENCE, "payload-a", "evidence-a", GapPolicy::Deny, "first", true),
             trace_step(
                 "peer:a/producer",
@@ -210,41 +229,7 @@ mod tests {
                 true,
             ),
             trace_step("peer:c/producer", FIRST_SEQUENCE, "payload-c", "evidence-c", GapPolicy::Deny, "stale", false),
-        ];
-        let mut committed_side_effects = 0_usize;
-        let mut suppressed_side_effects = 0_usize;
-        for step in trace {
-            let evidence_refs = vec![fake_ref(step.evidence_label)];
-            let semantic_result_ref = fake_ref(&format!("result-{}", step.payload_label));
-            let decision = check(CheckInput {
-                root: &root,
-                scope_profile: SCOPE_REMOTE_TOPIC,
-                scope_ref: &scope,
-                producer: step.producer,
-                consumer: "peer:b",
-                sequence: step.sequence,
-                intent: "remote-dataspace-assert",
-                payload_ref: &fake_ref(step.payload_label),
-                policy_refs: &policy_refs,
-                evidence_refs: &evidence_refs,
-                semantic_result_ref: Some(&semantic_result_ref),
-                gap_policy: step.gap_policy,
-            })
-            .expect(step.expected_decision);
-            assert_eq!(decision.receipt.decision, step.expected_decision);
-            assert_eq!(decision.should_commit_side_effect, step.should_commit_side_effect);
-            if decision.should_commit_side_effect {
-                committed_side_effects += 1;
-            } else {
-                suppressed_side_effects += 1;
-                assert_eq!(decision.receipt.side_effect, "suppress");
-                if decision.receipt.decision != "duplicate" {
-                    assert!(!decision.receipt.diagnostics.is_empty());
-                }
-            }
-        }
-        assert_eq!(committed_side_effects, EXPECTED_COMMITTED_SIDE_EFFECTS);
-        assert_eq!(suppressed_side_effects, EXPECTED_SUPPRESSED_SIDE_EFFECTS);
+        ]
     }
 
     #[test]

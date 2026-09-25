@@ -437,24 +437,10 @@ async fn scoped_service_executes_startup_and_current_timer_through_separate_port
     .expect("host-backed replica start plan");
     let initial_timer_ref = plan.state.active_election_timer_ref.clone();
     let runtime_identity = runtime_identity(&plan);
-    let mut mismatched_identity = runtime_identity.clone();
-    mismatched_identity.protocol_ref = test_ref("substituted-runtime-protocol");
-    let mismatch = validate_replica_runtime_identity_for_start(&mismatched_identity, &plan)
-        .expect_err("substituted runtime identity must deny before effects");
-    assert!(mismatch.to_string().contains("does not match the admitted start plan"));
+    assert_substituted_identity_denied(&runtime_identity, &plan);
     let (event_sender, event_receiver) = tokio::sync::mpsc::channel(SERVICE_EVENT_CAPACITY);
     let (control_sender, _control_receiver) = tokio::sync::mpsc::channel(SERVICE_CONTROL_CAPACITY);
-    let application = AdmittedReplicaApplicationPort::new(
-        ReplicaApplicationConfig {
-            group_binding_ref: group.binding_ref.clone(),
-            application_manifest_ref: group.application_manifest_ref.clone(),
-            handler_ref: test_ref("service-application-binding"),
-            command_schema_refs: std::collections::BTreeSet::from([test_ref("service-command-schema")]),
-            initial_applied_index: INITIAL_COMMIT_INDEX,
-        },
-        ServiceApplicationHandler,
-    )
-    .expect("application port");
+    let application = application_port_for(&group);
     let control = ChannelReplicaControlPort::new(
         ReplicaControlConfig {
             service_id: group.service_id.clone(),
@@ -503,6 +489,28 @@ async fn scoped_service_executes_startup_and_current_timer_through_separate_port
     assert!(matches!(stale, ReplicaExecutionOutcome::Denied { .. }));
     assert_eq!(service.ports().transport.sent, EXPECTED_ELECTION_PORT_CALLS);
     assert_eq!(service.ports().durability.hard_state_writes, EXPECTED_ELECTION_PORT_CALLS);
+}
+
+fn assert_substituted_identity_denied(runtime_identity: &ReplicaRuntimePortIdentity, plan: &ReplicaStartPlan) {
+    let mut mismatched_identity = runtime_identity.clone();
+    mismatched_identity.protocol_ref = test_ref("substituted-runtime-protocol");
+    let mismatch = validate_replica_runtime_identity_for_start(&mismatched_identity, plan)
+        .expect_err("substituted runtime identity must deny before effects");
+    assert!(mismatch.to_string().contains("does not match the admitted start plan"));
+}
+
+fn application_port_for(group: &ConsistencyGroupBinding) -> AdmittedReplicaApplicationPort<ServiceApplicationHandler> {
+    AdmittedReplicaApplicationPort::new(
+        ReplicaApplicationConfig {
+            group_binding_ref: group.binding_ref.clone(),
+            application_manifest_ref: group.application_manifest_ref.clone(),
+            handler_ref: test_ref("service-application-binding"),
+            command_schema_refs: std::collections::BTreeSet::from([test_ref("service-command-schema")]),
+            initial_applied_index: INITIAL_COMMIT_INDEX,
+        },
+        ServiceApplicationHandler,
+    )
+    .expect("application port")
 }
 
 fn runtime_identity(plan: &ReplicaStartPlan) -> ReplicaRuntimePortIdentity {

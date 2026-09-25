@@ -62,84 +62,92 @@ pub fn canonical_content_status(
 
 pub fn content_store_port_descriptors(profile_ref: &str) -> Vec<FabricPortDescriptor> {
     vec![
-        FabricPortDescriptor {
-            schema: FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
-            port_id: "content-exchange".to_string(),
-            version: "v1".to_string(),
-            class: FabricPortClass::Transport,
-            operation_classes: vec![
-                "cancel".to_string(),
-                "export".to_string(),
-                "import".to_string(),
-                "stream-get".to_string(),
-            ],
-            input_schema_refs: vec![CONTENT_COMMAND_SCHEMA.to_string()],
-            output_schema_refs: vec![
-                CONTENT_EVENT_SCHEMA.to_string(),
-                CONTENT_PARTIAL_STATE_SCHEMA.to_string(),
-            ],
-            authority_requirements: vec![
-                FabricAuthority::Transport,
-                FabricAuthority::Policy,
-                FabricAuthority::Resources,
-                FabricAuthority::Evidence,
-            ],
-            resource_requirements: vec![
-                FabricResource::Memory,
-                FabricResource::NetworkBytes,
-                FabricResource::Concurrency,
-                FabricResource::QueueDepth,
-                FabricResource::LogicalTime,
-                FabricResource::Diagnostics,
-            ],
-            determinism: DeterminismClass::ExternalEffect,
-            replay: ReplayClass::RecordedEffectRequired,
-            implementation_profile: "bounded-verified-content-exchange".to_string(),
-            conformance_refs: vec![profile_ref.to_string()],
-            non_claims: REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
-            enabled: true,
-        },
-        FabricPortDescriptor {
-            schema: FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
-            port_id: "content-store".to_string(),
-            version: "v1".to_string(),
-            class: FabricPortClass::DurableState,
-            operation_classes: vec![
-                "availability".to_string(),
-                "protect".to_string(),
-                "range-read".to_string(),
-                "stream-get".to_string(),
-                "stream-put".to_string(),
-                "unprotect".to_string(),
-            ],
-            input_schema_refs: vec![CONTENT_COMMAND_SCHEMA.to_string()],
-            output_schema_refs: vec![
-                CONTENT_EVENT_SCHEMA.to_string(),
-                CONTENT_PARTIAL_STATE_SCHEMA.to_string(),
-                CONTENT_STATUS_SCHEMA.to_string(),
-            ],
-            authority_requirements: vec![
-                FabricAuthority::DurableState,
-                FabricAuthority::Policy,
-                FabricAuthority::Resources,
-                FabricAuthority::Evidence,
-            ],
-            resource_requirements: vec![
-                FabricResource::Memory,
-                FabricResource::StorageBytes,
-                FabricResource::Concurrency,
-                FabricResource::QueueDepth,
-                FabricResource::LogicalTime,
-                FabricResource::Diagnostics,
-            ],
-            determinism: DeterminismClass::ExternalEffect,
-            replay: ReplayClass::RecordedEffectRequired,
-            implementation_profile: "capability-rooted-verified-content-store".to_string(),
-            conformance_refs: vec![profile_ref.to_string()],
-            non_claims: REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
-            enabled: true,
-        },
+        content_exchange_port_descriptor(profile_ref),
+        content_store_port_descriptor(profile_ref),
     ]
+}
+
+fn content_exchange_port_descriptor(profile_ref: &str) -> FabricPortDescriptor {
+    FabricPortDescriptor {
+        schema: FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
+        port_id: "content-exchange".to_string(),
+        version: "v1".to_string(),
+        class: FabricPortClass::Transport,
+        operation_classes: vec![
+            "cancel".to_string(),
+            "export".to_string(),
+            "import".to_string(),
+            "stream-get".to_string(),
+        ],
+        input_schema_refs: vec![CONTENT_COMMAND_SCHEMA.to_string()],
+        output_schema_refs: vec![
+            CONTENT_EVENT_SCHEMA.to_string(),
+            CONTENT_PARTIAL_STATE_SCHEMA.to_string(),
+        ],
+        authority_requirements: vec![
+            FabricAuthority::Transport,
+            FabricAuthority::Policy,
+            FabricAuthority::Resources,
+            FabricAuthority::Evidence,
+        ],
+        resource_requirements: vec![
+            FabricResource::Memory,
+            FabricResource::NetworkBytes,
+            FabricResource::Concurrency,
+            FabricResource::QueueDepth,
+            FabricResource::LogicalTime,
+            FabricResource::Diagnostics,
+        ],
+        determinism: DeterminismClass::ExternalEffect,
+        replay: ReplayClass::RecordedEffectRequired,
+        implementation_profile: "bounded-verified-content-exchange".to_string(),
+        conformance_refs: vec![profile_ref.to_string()],
+        non_claims: REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
+        enabled: true,
+    }
+}
+
+fn content_store_port_descriptor(profile_ref: &str) -> FabricPortDescriptor {
+    FabricPortDescriptor {
+        schema: FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
+        port_id: "content-store".to_string(),
+        version: "v1".to_string(),
+        class: FabricPortClass::DurableState,
+        operation_classes: vec![
+            "availability".to_string(),
+            "protect".to_string(),
+            "range-read".to_string(),
+            "stream-get".to_string(),
+            "stream-put".to_string(),
+            "unprotect".to_string(),
+        ],
+        input_schema_refs: vec![CONTENT_COMMAND_SCHEMA.to_string()],
+        output_schema_refs: vec![
+            CONTENT_EVENT_SCHEMA.to_string(),
+            CONTENT_PARTIAL_STATE_SCHEMA.to_string(),
+            CONTENT_STATUS_SCHEMA.to_string(),
+        ],
+        authority_requirements: vec![
+            FabricAuthority::DurableState,
+            FabricAuthority::Policy,
+            FabricAuthority::Resources,
+            FabricAuthority::Evidence,
+        ],
+        resource_requirements: vec![
+            FabricResource::Memory,
+            FabricResource::StorageBytes,
+            FabricResource::Concurrency,
+            FabricResource::QueueDepth,
+            FabricResource::LogicalTime,
+            FabricResource::Diagnostics,
+        ],
+        determinism: DeterminismClass::ExternalEffect,
+        replay: ReplayClass::RecordedEffectRequired,
+        implementation_profile: "capability-rooted-verified-content-store".to_string(),
+        conformance_refs: vec![profile_ref.to_string()],
+        non_claims: REQUIRED_FABRIC_NON_CLAIMS.to_vec(),
+        enabled: true,
+    }
 }
 
 fn profile_value(profile: &ContentAdapterProfile) -> preserves::IOValue {

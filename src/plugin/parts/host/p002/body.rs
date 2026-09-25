@@ -82,12 +82,8 @@ fn hostcall_admission(manifest: &PluginManifest, input: &HostcallReceiptInput<'_
     let mut diagnostics = Vec::new();
     let is_primitive_ref_matches = primitive_hostcall_ref(input.operation)? == input.hostcall_ref;
     let is_primitive_declared = is_primitive_ref_matches && manifest.hostcall_refs.iter().any(|value| value == input.hostcall_ref);
-    let extension_descriptor = matching_bound_descriptor(
-        manifest,
-        input.extension_contracts,
-        input.operation,
-        input.hostcall_ref,
-    );
+    let extension_descriptor =
+        matching_bound_descriptor(manifest, input.extension_contracts, input.operation, input.hostcall_ref);
     let grant_match = extension_descriptor
         .as_ref()
         .map(|bound| matching_capability_grant(manifest, bound, input))
@@ -117,80 +113,23 @@ fn hostcall_admission(manifest: &PluginManifest, input: &HostcallReceiptInput<'_
     } else {
         is_primitive_declared
     };
-    if !is_declared_hostcall {
-        diagnostics.push_limited(
-            format!("plugin hostcall {} is not declared by active manifest or extension contracts", input.operation),
-            MAX_PLUGIN_DIAGNOSTICS,
-            "plugin hostcall diagnostics",
-        )?;
-    }
-    if !is_operation_ref_bound {
-        diagnostics.push_limited(
-            format!("plugin hostcall operation/ref binding mismatch for {}", input.operation),
-            MAX_PLUGIN_DIAGNOSTICS,
-            "plugin hostcall diagnostics",
-        )?;
-    }
-    if has_ambient_request && !is_declared_hostcall {
-        diagnostics.push_limited(
-            format!("ambient plugin hostcall {} denied before side effects", input.operation),
-            MAX_PLUGIN_DIAGNOSTICS,
-            "plugin hostcall diagnostics",
-        )?;
-    }
-    if !has_authority {
-        diagnostics.push_limited(
-            "plugin hostcall requires authority evidence".to_string(),
-            MAX_PLUGIN_DIAGNOSTICS,
-            "plugin hostcall diagnostics",
-        )?;
-    }
-    if !has_resources {
-        diagnostics.push_limited(
-            "plugin hostcall requires resource evidence".to_string(),
-            MAX_PLUGIN_DIAGNOSTICS,
-            "plugin hostcall diagnostics",
-        )?;
-    }
-    if extension_descriptor.is_some() && input.capability_grants.is_empty() {
-        diagnostics.push_limited(
-            format!("plugin hostcall {} missing typed capability grant", input.operation),
-            MAX_PLUGIN_DIAGNOSTICS,
-            "plugin hostcall diagnostics",
-        )?;
-    }
+    push_hostcall_gap(&mut diagnostics, !is_declared_hostcall, || format!("plugin hostcall {} is not declared by active manifest or extension contracts", input.operation))?;
+    push_hostcall_gap(&mut diagnostics, !is_operation_ref_bound, || format!("plugin hostcall operation/ref binding mismatch for {}", input.operation))?;
+    push_hostcall_gap(&mut diagnostics, has_ambient_request && !is_declared_hostcall, || format!("ambient plugin hostcall {} denied before side effects", input.operation))?;
+    push_hostcall_gap(&mut diagnostics, !has_authority, || "plugin hostcall requires authority evidence".to_string())?;
+    push_hostcall_gap(&mut diagnostics, !has_resources, || "plugin hostcall requires resource evidence".to_string())?;
+    push_hostcall_gap(&mut diagnostics, extension_descriptor.is_some() && input.capability_grants.is_empty(), || format!("plugin hostcall {} missing typed capability grant", input.operation))?;
     if let Some(bound) = extension_descriptor.as_ref()
         && !has_matching_capability_grant
         && !input.capability_grants.is_empty()
     {
         collect_capability_grant_mismatch_diagnostics(manifest, bound, input, &mut diagnostics)?;
-        diagnostics.push_limited(
-            format!("plugin hostcall {} has no matching capability grant", input.operation),
-            MAX_PLUGIN_DIAGNOSTICS,
-            "plugin hostcall diagnostics",
-        )?;
+        let diagnostic = format!("plugin hostcall {} has no matching capability grant", input.operation);
+        diagnostics.push_limited(diagnostic, MAX_PLUGIN_DIAGNOSTICS, "plugin hostcall diagnostics")?;
     }
-    if extension_descriptor.is_some() && !is_attenuation_valid {
-        diagnostics.push_limited(
-            format!("plugin hostcall {} capability grant attenuation is invalid", input.operation),
-            MAX_PLUGIN_DIAGNOSTICS,
-            "plugin hostcall diagnostics",
-        )?;
-    }
-    if extension_descriptor.is_some() && !is_revocation_valid {
-        diagnostics.push_limited(
-            format!("plugin hostcall {} capability grant is revoked", input.operation),
-            MAX_PLUGIN_DIAGNOSTICS,
-            "plugin hostcall diagnostics",
-        )?;
-    }
-    if !has_descriptor_requirements {
-        diagnostics.push_limited(
-            format!("plugin hostcall {} missing descriptor-specific requirements", input.operation),
-            MAX_PLUGIN_DIAGNOSTICS,
-            "plugin hostcall diagnostics",
-        )?;
-    }
+    push_hostcall_gap(&mut diagnostics, extension_descriptor.is_some() && !is_attenuation_valid, || format!("plugin hostcall {} capability grant attenuation is invalid", input.operation))?;
+    push_hostcall_gap(&mut diagnostics, extension_descriptor.is_some() && !is_revocation_valid, || format!("plugin hostcall {} capability grant is revoked", input.operation))?;
+    push_hostcall_gap(&mut diagnostics, !has_descriptor_requirements, || format!("plugin hostcall {} missing descriptor-specific requirements", input.operation))?;
     Ok(HostcallAdmission {
         diagnostics,
         is_declared_hostcall,
@@ -205,6 +144,17 @@ fn hostcall_admission(manifest: &PluginManifest, input: &HostcallReceiptInput<'_
         has_ambient_request,
         capability_grant_refs: capability_grant_refs(input.capability_grants),
     })
+}
+
+fn push_hostcall_gap(
+    diagnostics: &mut impl PushLimited<String>,
+    is_gap: bool,
+    diagnostic: impl FnOnce() -> String,
+) -> Result<()> {
+    if is_gap {
+        diagnostics.push_limited(diagnostic(), MAX_PLUGIN_DIAGNOSTICS, "plugin hostcall diagnostics")?;
+    }
+    Ok(())
 }
 
 fn matching_bound_descriptor<'a>(
@@ -343,35 +293,19 @@ fn collect_capability_grant_mismatch_diagnostics(
             || grant.plugin_id != manifest.plugin_id
             || grant.manifest_ref != manifest.manifest_ref
         {
-            diagnostics.push_limited(
-                format!("plugin hostcall {} wrong-manifest capability grant", input.operation),
-                MAX_PLUGIN_DIAGNOSTICS,
-                "plugin hostcall diagnostics",
-            )?;
+            push_grant_diagnostic(diagnostics, input.operation, "wrong-manifest")?;
             continue;
         }
         if grant.extension_contract_ref.as_deref() != Some(bound.contract_ref) {
-            diagnostics.push_limited(
-                format!("plugin hostcall {} wrong-extension capability grant", input.operation),
-                MAX_PLUGIN_DIAGNOSTICS,
-                "plugin hostcall diagnostics",
-            )?;
+            push_grant_diagnostic(diagnostics, input.operation, "wrong-extension")?;
             continue;
         }
         if grant.operation != bound.descriptor.operation {
-            diagnostics.push_limited(
-                format!("plugin hostcall {} wrong-operation capability grant", input.operation),
-                MAX_PLUGIN_DIAGNOSTICS,
-                "plugin hostcall diagnostics",
-            )?;
+            push_grant_diagnostic(diagnostics, input.operation, "wrong-operation")?;
             continue;
         }
         if grant.hostcall_descriptor_ref != bound.descriptor.descriptor_ref {
-            diagnostics.push_limited(
-                format!("plugin hostcall {} wrong-descriptor capability grant", input.operation),
-                MAX_PLUGIN_DIAGNOSTICS,
-                "plugin hostcall diagnostics",
-            )?;
+            push_grant_diagnostic(diagnostics, input.operation, "wrong-descriptor")?;
             continue;
         }
         if grant.input_schema_ref != bound.descriptor.input_schema_ref
@@ -379,47 +313,35 @@ fn collect_capability_grant_mismatch_diagnostics(
             || input.input_schema_ref != Some(grant.input_schema_ref.as_str())
             || input.output_schema_ref != Some(grant.output_schema_ref.as_str())
         {
-            diagnostics.push_limited(
-                format!("plugin hostcall {} wrong-schema capability grant", input.operation),
-                MAX_PLUGIN_DIAGNOSTICS,
-                "plugin hostcall diagnostics",
-            )?;
+            push_grant_diagnostic(diagnostics, input.operation, "wrong-schema")?;
         }
         if !contains_all(&grant.resource_refs, &bound.descriptor.resource_refs)
             || !contains_all(&grant.resource_refs, input.resource_refs)
             || !resource_scope_matches(&grant.resource_scope, input.resource_refs)
         {
-            diagnostics.push_limited(
-                format!("plugin hostcall {} wrong-resource capability grant", input.operation),
-                MAX_PLUGIN_DIAGNOSTICS,
-                "plugin hostcall diagnostics",
-            )?;
+            push_grant_diagnostic(diagnostics, input.operation, "wrong-resource")?;
         }
         if grant.attenuation.current_delegation_depth > grant.attenuation.max_delegation_depth {
-            diagnostics.push_limited(
-                format!("plugin hostcall {} over-delegated capability grant", input.operation),
-                MAX_PLUGIN_DIAGNOSTICS,
-                "plugin hostcall diagnostics",
-            )?;
+            push_grant_diagnostic(diagnostics, input.operation, "over-delegated")?;
         }
         if input.evaluation_turn < grant.attenuation.valid_from_turn
             || input.evaluation_turn > grant.attenuation.valid_until_turn
         {
-            diagnostics.push_limited(
-                format!("plugin hostcall {} expired capability grant", input.operation),
-                MAX_PLUGIN_DIAGNOSTICS,
-                "plugin hostcall diagnostics",
-            )?;
+            push_grant_diagnostic(diagnostics, input.operation, "expired")?;
         }
         if grant.revoked {
-            diagnostics.push_limited(
-                format!("plugin hostcall {} revoked capability grant", input.operation),
-                MAX_PLUGIN_DIAGNOSTICS,
-                "plugin hostcall diagnostics",
-            )?;
+            push_grant_diagnostic(diagnostics, input.operation, "revoked")?;
         }
     }
     Ok(())
+}
+
+fn push_grant_diagnostic(diagnostics: &mut impl PushLimited<String>, operation: &str, mismatch: &str) -> Result<()> {
+    diagnostics.push_limited(
+        format!("plugin hostcall {operation} {mismatch} capability grant"),
+        MAX_PLUGIN_DIAGNOSTICS,
+        "plugin hostcall diagnostics",
+    )
 }
 
 pub fn parse_plugin_hostcall_receipt(value: &IoValue) -> Result<PluginHostcallReceipt> {

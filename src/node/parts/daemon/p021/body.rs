@@ -263,27 +263,7 @@ fn preflight_control_live_send_with_root(
     input: &ControlLiveSendInput<'_>,
     state_root: Option<&crate::node_state::NodeStateRoot>,
 ) -> Result<ControlLiveSendPreflight> {
-    if let Some(path) = input.state_root {
-        validate_state_root(path)?;
-    }
-    if let Some(state_root) = state_root {
-        ensure_state_layout(state_root)?;
-    }
-    validate_node_id(input.from_peer)?;
-    validate_live_send_timeout(input.join_timeout_ms)?;
-    validate_live_send_attempts(input.max_attempts)?;
-    if let Some(operation_ref) = input.expected_operation_ref {
-        validate_ingress_ref(operation_ref, "node control live send operation id")?;
-    }
-    if let Some(node) = input.expected_receiver_node {
-        validate_node_id(node)?;
-    }
-    if let Some(topic) = input.expected_topic {
-        validate_node_id(topic)?;
-    }
-    if let Some(endpoint) = input.expected_endpoint {
-        validate_node_id(endpoint)?;
-    }
+    validate_live_send_request(input, state_root)?;
     let ticket = parse_control_live_ticket(input.receiver_ticket_value)?;
     let envelope = control_live_ingress_envelope(&ControlIngressEnvelopeInput {
         request_value: input.request_value,
@@ -338,4 +318,33 @@ fn preflight_control_live_send_with_root(
         effective_join_timeout_ms: profile.effective_join_timeout_ms,
         diagnostics,
     })
+}
+
+/// Validates the state root, the sender, the send bounds, and every expected identity the caller pinned.
+fn validate_live_send_request(
+    input: &ControlLiveSendInput<'_>,
+    state_root: Option<&crate::node_state::NodeStateRoot>,
+) -> Result<()> {
+    if let Some(path) = input.state_root {
+        validate_state_root(path)?;
+    }
+    if let Some(state_root) = state_root {
+        ensure_state_layout(state_root)?;
+    }
+    validate_node_id(input.from_peer)?;
+    validate_live_send_timeout(input.join_timeout_ms)?;
+    validate_live_send_attempts(input.max_attempts)?;
+    if let Some(operation_ref) = input.expected_operation_ref {
+        validate_ingress_ref(operation_ref, "node control live send operation id")?;
+    }
+    if let Some(node) = input.expected_receiver_node {
+        validate_node_id(node)?;
+    }
+    if let Some(topic) = input.expected_topic {
+        validate_node_id(topic)?;
+    }
+    if let Some(endpoint) = input.expected_endpoint {
+        validate_node_id(endpoint)?;
+    }
+    Ok(())
 }

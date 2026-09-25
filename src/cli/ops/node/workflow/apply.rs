@@ -40,31 +40,8 @@ fn execute(
     let profile_alpn_refs: Vec<&str> = profile_alpn_values.iter().map(String::as_str).collect();
     let topology_ticket_refs: Vec<String> = Vec::new();
     let topology_peer_admission_refs = input.peer_bootstrap_refs.clone();
-    let topology_profile = input
-        .topology_profile_ref
-        .as_deref()
-        .map(|profile_ref| {
-            Ok::<_, molten::error::MoltenError>(molten::node_daemon::LiveTopologyProfile {
-                profile_ref,
-                expected_node: input.expected_node.as_deref().ok_or_else(|| {
-                    molten::error::MoltenError::invalid_harness("--topology-profile-ref requires --expected-node")
-                })?,
-                expected_peer: input.from_peer.as_deref().or(input.expected_peer.as_deref()).ok_or_else(|| {
-                    molten::error::MoltenError::invalid_harness(
-                        "--topology-profile-ref requires --from-peer or --expected-peer",
-                    )
-                })?,
-                expected_topic: input.expected_topic.as_deref().ok_or_else(|| {
-                    molten::error::MoltenError::invalid_harness("--topology-profile-ref requires --expected-topic")
-                })?,
-                expected_endpoint: input.expected_endpoint.as_deref(),
-                allowed_alpns: &profile_alpn_refs,
-                ticket_refs: &topology_ticket_refs,
-                peer_admission_refs: &topology_peer_admission_refs,
-                role: input.topology_profile_role.as_deref(),
-            })
-        })
-        .transpose()?;
+    let topology_profile =
+        topology_profile(input, &profile_alpn_refs, &topology_ticket_refs, &topology_peer_admission_refs)?;
     let transport_profile =
         input.transport_profile_ref.as_deref().map(|profile_ref| molten::node_daemon::LiveTransportProfile {
             profile_ref,
@@ -108,6 +85,41 @@ fn execute(
             join_timeout_ms: input.join_timeout_ms,
         },
     ))
+}
+
+/// The live topology profile named by `--topology-profile-ref`, which requires the expected node,
+/// peer, and topic.
+fn topology_profile<'a>(
+    input: &'a super::super::command::live::Apply,
+    allowed_alpns: &'a [&'a str],
+    ticket_refs: &'a [String],
+    peer_admission_refs: &'a [String],
+) -> molten::error::Result<Option<molten::node_daemon::LiveTopologyProfile<'a>>> {
+    input
+        .topology_profile_ref
+        .as_deref()
+        .map(|profile_ref| {
+            Ok::<_, molten::error::MoltenError>(molten::node_daemon::LiveTopologyProfile {
+                profile_ref,
+                expected_node: input.expected_node.as_deref().ok_or_else(|| {
+                    molten::error::MoltenError::invalid_harness("--topology-profile-ref requires --expected-node")
+                })?,
+                expected_peer: input.from_peer.as_deref().or(input.expected_peer.as_deref()).ok_or_else(|| {
+                    molten::error::MoltenError::invalid_harness(
+                        "--topology-profile-ref requires --from-peer or --expected-peer",
+                    )
+                })?,
+                expected_topic: input.expected_topic.as_deref().ok_or_else(|| {
+                    molten::error::MoltenError::invalid_harness("--topology-profile-ref requires --expected-topic")
+                })?,
+                expected_endpoint: input.expected_endpoint.as_deref(),
+                allowed_alpns,
+                ticket_refs,
+                peer_admission_refs,
+                role: input.topology_profile_role.as_deref(),
+            })
+        })
+        .transpose()
 }
 
 fn write_outputs(

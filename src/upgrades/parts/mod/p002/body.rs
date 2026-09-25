@@ -375,14 +375,7 @@ fn evaluate_upgrade_drain_readiness(input: &UpgradeDrainReadinessInput<'_>) -> R
         note_protocol_drain_gate(gate, &expected_refs, DrainGateOutcome { is_decision_pass, is_terminal, is_protocol_match, diagnostics: &mut diagnostics })?;
         if is_decision_pass && is_terminal && is_protocol_match {
             has_drained_gate = true;
-            for terminal_state_ref in &gate.terminal_state_refs {
-                push_bounded(
-                    &mut terminal_state_refs,
-                    terminal_state_ref.clone(),
-                    MAX_UPGRADE_REFS,
-                    "upgrade protocol drain terminal state refs",
-                )?;
-            }
+            push_terminal_state_refs(&mut terminal_state_refs, gate)?;
         }
     }
     if !input.evidence_refs.is_empty() && !has_gate {
@@ -411,6 +404,21 @@ fn evaluate_upgrade_drain_readiness(input: &UpgradeDrainReadinessInput<'_>) -> R
         ],
         terminal_state_refs,
     })
+}
+
+fn push_terminal_state_refs(
+    terminal_state_refs: &mut impl crate::bounded::VecSink<String>,
+    gate: &ProtocolDrainGateEvidence,
+) -> Result<()> {
+    for terminal_state_ref in &gate.terminal_state_refs {
+        push_bounded(
+            terminal_state_refs,
+            terminal_state_ref.clone(),
+            MAX_UPGRADE_REFS,
+            "upgrade protocol drain terminal state refs",
+        )?;
+    }
+    Ok(())
 }
 
 fn validate_upgrade_drain_readiness_input(input: &UpgradeDrainReadinessInput<'_>) -> Result<()> {

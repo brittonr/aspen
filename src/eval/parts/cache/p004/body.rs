@@ -370,69 +370,20 @@ fn policy_current_refs_match_parts(key: &Key, input: CacheHitValidityInput<'_>) 
 fn admission_freshness_diagnostics(input: CacheHitValidityInput<'_>) -> Vec<String> {
     let compatibility_refs = sorted_unique(input.compatibility_refs);
     let mut diagnostics = Vec::new();
-    push_changed_ref_diagnostic(
-        &mut diagnostics,
-        "policy-ref-stale",
-        &input.key.policy_refs,
-        input.current_policy_refs,
-        &compatibility_refs,
-    );
-    push_changed_ref_diagnostic(
-        &mut diagnostics,
-        "policy-export-ref-stale",
-        &input.key.policy_export_refs,
-        input.current_policy_export_refs,
-        &compatibility_refs,
-    );
-    push_changed_ref_diagnostic(
-        &mut diagnostics,
-        "capability-context-stale",
-        &input.key.capability_refs,
-        input.current_capability_refs,
-        &compatibility_refs,
-    );
-    push_changed_ref_diagnostic(
-        &mut diagnostics,
-        "revocation-epoch-changed",
-        &input.key.revocation_refs,
-        input.current_revocation_refs,
-        &compatibility_refs,
-    );
-    push_changed_ref_diagnostic(
-        &mut diagnostics,
-        "resource-context-stale",
-        &input.key.resource_refs,
-        input.current_resource_refs,
-        &compatibility_refs,
-    );
-    push_changed_ref_diagnostic(
-        &mut diagnostics,
-        "provenance-context-stale",
-        &input.key.provenance_refs,
-        input.current_provenance_refs,
-        &compatibility_refs,
-    );
-    push_changed_ref_diagnostic(
-        &mut diagnostics,
-        "source-gate-context-stale",
-        &input.key.source_gate_refs,
-        input.current_source_gate_refs,
-        &compatibility_refs,
-    );
-    push_changed_ref_diagnostic(
-        &mut diagnostics,
-        "retention-context-stale",
-        &input.key.retention_refs,
-        input.current_retention_refs,
-        &compatibility_refs,
-    );
-    push_changed_ref_diagnostic(
-        &mut diagnostics,
-        "evidence-context-stale",
-        &input.key.evidence_refs,
-        input.current_evidence_refs,
-        &compatibility_refs,
-    );
+    let ref_checks: [(&str, &[String], &[String]); 9] = [
+        ("policy-ref-stale", &input.key.policy_refs, input.current_policy_refs),
+        ("policy-export-ref-stale", &input.key.policy_export_refs, input.current_policy_export_refs),
+        ("capability-context-stale", &input.key.capability_refs, input.current_capability_refs),
+        ("revocation-epoch-changed", &input.key.revocation_refs, input.current_revocation_refs),
+        ("resource-context-stale", &input.key.resource_refs, input.current_resource_refs),
+        ("provenance-context-stale", &input.key.provenance_refs, input.current_provenance_refs),
+        ("source-gate-context-stale", &input.key.source_gate_refs, input.current_source_gate_refs),
+        ("retention-context-stale", &input.key.retention_refs, input.current_retention_refs),
+        ("evidence-context-stale", &input.key.evidence_refs, input.current_evidence_refs),
+    ];
+    for (label, cached_refs, current_refs) in ref_checks {
+        push_changed_ref_diagnostic(&mut diagnostics, label, cached_refs, current_refs, &compatibility_refs);
+    }
     if input.key.handler_profile_ref.as_deref() != input.current_handler_profile_ref
         && !optional_ref_change_is_compatible(
             input.key.handler_profile_ref.as_deref(),

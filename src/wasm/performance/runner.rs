@@ -40,39 +40,8 @@ pub struct SightglassProcessResult {
 pub fn run_sightglass_process(
     invocation: &SightglassProcessInvocation<'_>,
 ) -> super::model::PerformanceResult<SightglassProcessResult> {
-    super::profile::validate_performance_profile(invocation.profile)?;
-    super::comparison::validate_suite_instance(invocation.profile, invocation.suite)?;
-    if invocation.expected_architecture.trim().is_empty()
-        || invocation.max_output_bytes == 0
-        || invocation.max_output_bytes > invocation.profile.comparison.max_sightglass_output_bytes
-    {
-        return Err(super::model::PerformanceDenial::new(
-            "Sightglass invocation requires an architecture and reviewed output bound",
-        ));
-    }
-    if !invocation.suite.workload_refs.iter().any(|value| value == invocation.benchmark_ref) {
-        return Err(super::model::PerformanceDenial::new(
-            "Sightglass benchmark identity is absent from the admitted suite",
-        ));
-    }
-    let runner_file = open_admitted_process_file(
-        invocation.program,
-        &invocation.suite.runner_artifact_ref,
-        invocation.profile.comparison.max_sightglass_runner_bytes,
-        "runner",
-    )?;
-    let engine_file = open_admitted_process_file(
-        invocation.engine,
-        &invocation.suite.engine_artifact_ref,
-        invocation.profile.comparison.max_sightglass_engine_bytes,
-        "engine",
-    )?;
-    let benchmark_file = open_admitted_process_file(
-        invocation.benchmark,
-        invocation.benchmark_ref,
-        invocation.profile.comparison.max_sightglass_benchmark_bytes,
-        "benchmark",
-    )?;
+    validate_invocation(invocation)?;
+    let [runner_file, engine_file, benchmark_file] = open_admitted_files(invocation)?;
     let stdout_limit = usize::try_from(invocation.max_output_bytes).map_err(|error| {
         super::model::PerformanceDenial::new(format!("Sightglass output bound is unsupported: {error}"))
     })?;
@@ -103,27 +72,8 @@ pub fn run_sightglass_process(
         total_stdout_bytes = total_stdout_bytes
             .checked_add(output.stdout.len())
             .ok_or_else(|| super::model::PerformanceDenial::new("Sightglass suite output accounting overflowed"))?;
-        let diagnostic_total = diagnostic_stderr_bytes
-            .len()
-            .checked_add(output.stderr.len())
-            .ok_or_else(|| super::model::PerformanceDenial::new("Sightglass diagnostic accounting overflowed"))?;
-        if diagnostic_total > MAX_DIAGNOSTIC_STDERR_BYTES {
-            return Err(super::model::PerformanceDenial::new(
-                "Sightglass suite diagnostic stderr exceeded its admitted bound",
-            ));
-        }
-        diagnostic_stderr_bytes.reserve(output.stderr.len());
-        diagnostic_stderr_bytes.extend(output.stderr);
-        let mut process_measurements: Vec<serde_json::Value> =
-            serde_json::from_slice(&output.stdout).map_err(|error| {
-                super::model::PerformanceDenial::new(format!("Sightglass raw JSON is malformed: {error}"))
-            })?;
-        for measurement in &mut process_measurements {
-            let process = measurement.get_mut("process").ok_or_else(|| {
-                super::model::PerformanceDenial::new("Sightglass raw JSON omits its diagnostic process")
-            })?;
-            *process = serde_json::Value::from(process_ordinal);
-        }
+        append_diagnostic_stderr(&mut diagnostic_stderr_bytes, output.stderr)?;
+        let process_measurements = process_measurements(&output.stdout, process_ordinal)?;
         raw_measurements.reserve(process_measurements.len());
         raw_measurements.extend(process_measurements);
     }
@@ -142,6 +92,85 @@ pub fn run_sightglass_process(
         phases,
         diagnostic_stderr,
     })
+}
+
+fn validate_invocation(invocation: &SightglassProcessInvocation<'_>) -> super::model::PerformanceResult<()> {
+    super::profile::validate_performance_profile(invocation.profile)?;
+    super::comparison::validate_suite_instance(invocation.profile, invocation.suite)?;
+    if invocation.expected_architecture.trim().is_empty()
+        || invocation.max_output_bytes == 0
+        || invocation.max_output_bytes > invocation.profile.comparison.max_sightglass_output_bytes
+    {
+        return Err(super::model::PerformanceDenial::new(
+            "Sightglass invocation requires an architecture and reviewed output bound",
+        ));
+    }
+    if !invocation.suite.workload_refs.iter().any(|value| value == invocation.benchmark_ref) {
+        return Err(super::model::PerformanceDenial::new(
+            "Sightglass benchmark identity is absent from the admitted suite",
+        ));
+    }
+    Ok(())
+}
+
+/// The runner, engine, and benchmark files, each opened against its admitted artifact ref and byte
+/// bound.
+fn open_admitted_files(
+    invocation: &SightglassProcessInvocation<'_>,
+) -> super::model::PerformanceResult<[AdmittedProcessFile; 3]> {
+    let runner_file = open_admitted_process_file(
+        invocation.program,
+        &invocation.suite.runner_artifact_ref,
+        invocation.profile.comparison.max_sightglass_runner_bytes,
+        "runner",
+    )?;
+    let engine_file = open_admitted_process_file(
+        invocation.engine,
+        &invocation.suite.engine_artifact_ref,
+        invocation.profile.comparison.max_sightglass_engine_bytes,
+        "engine",
+    )?;
+    let benchmark_file = open_admitted_process_file(
+        invocation.benchmark,
+        invocation.benchmark_ref,
+        invocation.profile.comparison.max_sightglass_benchmark_bytes,
+        "benchmark",
+    )?;
+    Ok([runner_file, engine_file, benchmark_file])
+}
+
+fn append_diagnostic_stderr(
+    diagnostic_stderr_bytes: &mut impl crate::bounded::VecSink<u8>,
+    stderr: Vec<u8>,
+) -> super::model::PerformanceResult<()> {
+    let diagnostic_total = diagnostic_stderr_bytes
+        .item_count()
+        .checked_add(stderr.len())
+        .ok_or_else(|| super::model::PerformanceDenial::new("Sightglass diagnostic accounting overflowed"))?;
+    if diagnostic_total > MAX_DIAGNOSTIC_STDERR_BYTES {
+        return Err(super::model::PerformanceDenial::new(
+            "Sightglass suite diagnostic stderr exceeded its admitted bound",
+        ));
+    }
+    diagnostic_stderr_bytes.reserve_items(stderr.len());
+    diagnostic_stderr_bytes.extend_items(stderr);
+    Ok(())
+}
+
+/// One process's raw Sightglass measurements, each relabelled with the diagnostic process ordinal.
+fn process_measurements(
+    stdout: &[u8],
+    process_ordinal: u32,
+) -> super::model::PerformanceResult<Vec<serde_json::Value>> {
+    let mut process_measurements: Vec<serde_json::Value> = serde_json::from_slice(stdout)
+        .map_err(|error| super::model::PerformanceDenial::new(format!("Sightglass raw JSON is malformed: {error}")))?;
+    for measurement in &mut process_measurements {
+        let process = measurement
+            .get_mut("process")
+            .ok_or_else(|| super::model::PerformanceDenial::new("Sightglass raw JSON omits its diagnostic process"))?;
+        *process = serde_json::Value::from(process_ordinal);
+    }
+    Ok(process_measurements)
 }
 
 pub fn sightglass_arguments(suite: &super::model::BenchmarkSuite) -> Vec<std::ffi::OsString> {
@@ -261,6 +290,18 @@ pub fn parse_sightglass_measurements(
     if measurements.is_empty() {
         return Err(super::model::PerformanceDenial::new("Sightglass raw JSON contains no measurements"));
     }
+    let process_ordinals = diagnostic_process_ordinals(&measurements, suite)?;
+    let mut phases = group_phase_samples(measurements, suite, expected_architecture, &process_ordinals)?;
+    validate_phase_grid(&mut phases, profile, suite)?;
+    Ok(phases)
+}
+
+/// Maps each diagnostic process that produced a selected-phase measurement to its dense ordinal,
+/// requiring exactly the suite's process count.
+fn diagnostic_process_ordinals(
+    measurements: &[RawSightglassMeasurement],
+    suite: &super::model::BenchmarkSuite,
+) -> super::model::PerformanceResult<std::collections::BTreeMap<u32, u32>> {
     let admitted_processes = measurements
         .iter()
         .filter(|measurement| measurement.event == suite.measurement)
@@ -278,7 +319,7 @@ pub fn parse_sightglass_measurements(
             "Sightglass raw JSON has an incomplete or extra diagnostic process set",
         ));
     }
-    let process_ordinals = admitted_processes
+    admitted_processes
         .into_iter()
         .enumerate()
         .map(|(ordinal, diagnostic_process)| {
@@ -286,7 +327,17 @@ pub fn parse_sightglass_measurements(
                 super::model::PerformanceDenial::new(format!("Sightglass process ordinal is unsupported: {error}"))
             })
         })
-        .collect::<super::model::PerformanceResult<std::collections::BTreeMap<_, _>>>()?;
+        .collect::<super::model::PerformanceResult<std::collections::BTreeMap<_, _>>>()
+}
+
+/// Groups the selected measurements by phase, requiring one host architecture and one diagnostic
+/// identity.
+fn group_phase_samples(
+    measurements: Vec<RawSightglassMeasurement>,
+    suite: &super::model::BenchmarkSuite,
+    expected_architecture: &str,
+    process_ordinals: &std::collections::BTreeMap<u32, u32>,
+) -> super::model::PerformanceResult<Vec<super::model::PhaseSamples>> {
     // Selected groups share the suite event and an admitted phase, so each suite phase yields at most
     // one group.
     let mut phases = Vec::<super::model::PhaseSamples>::with_capacity(suite.phases.len());
@@ -338,6 +389,16 @@ pub fn parse_sightglass_measurements(
             }),
         }
     }
+    Ok(phases)
+}
+
+/// Every admitted phase must hold a complete, duplicate-free, in-bound process-by-iteration sample
+/// grid.
+fn validate_phase_grid(
+    phases: &mut [super::model::PhaseSamples],
+    profile: &super::model::PerformanceProfile,
+    suite: &super::model::BenchmarkSuite,
+) -> super::model::PerformanceResult<()> {
     for required in &suite.phases {
         if !phases.iter().any(|group| group.phase == *required) {
             return Err(super::model::PerformanceDenial::new(format!(
@@ -358,7 +419,7 @@ pub fn parse_sightglass_measurements(
             "Sightglass output contains duplicate or extra phase/event groups",
         ));
     }
-    for phase in &mut phases {
+    for phase in phases.iter_mut() {
         phase.samples.sort_by_key(|sample| (sample.process, sample.iteration));
         let is_complete_coordinate_grid = (0..suite.sampling.processes).all(|process| {
             let iterations = phase
@@ -387,7 +448,7 @@ pub fn parse_sightglass_measurements(
             )));
         }
     }
-    Ok(phases)
+    Ok(())
 }
 
 const fn absent_engine_flags() -> Option<String> {

@@ -33,34 +33,8 @@ pub fn iroh_experiment_adoption_fixture() -> Result<IrohExperimentAdoptionFixtur
         policy_refs: &[],
         resource_refs: &[],
     })?;
-    let descriptor = crate::remote_dataspace::TraversalDescriptor {
-        traversal_kind: "artifact-closure".to_string(),
-        root_refs: vec![subject_ref.clone()],
-        visited_refs: Vec::new(),
-        order: "lexicographic".to_string(),
-        filters: Vec::new(),
-        inline_policy: "metadata-only".to_string(),
-        resource_bound: 1,
-        replay_bound: 1,
-        policy_refs: vec![adoption_fixture_ref("policy")],
-        evidence_refs: vec![evidence_ref.clone()],
-    };
-    let traversal = crate::remote_dataspace::plan_traversal(
-        &descriptor,
-        &crate::remote_dataspace::LocalInventorySummary {
-            verified_refs: Vec::new(),
-            chunk_refs: Vec::new(),
-        },
-    )?;
-    let bytes = b"iroh adoption bytes";
-    let content_ref = crate::preserves_rail::content_ref_from_bytes(bytes);
-    let digest = crate::remote_dataspace::validate_external_digest_mapping(&crate::remote_dataspace::ExternalDigestMappingInput {
-        algorithm: "cid-sha2-256",
-        external_digest: &crate::remote_dataspace::external_digest_for("cid-sha2-256", bytes),
-        bytes,
-        expected_content_ref: &content_ref,
-        evidence_refs: std::slice::from_ref(&evidence_ref),
-    })?;
+    let traversal = adoption_traversal(&subject_ref, &evidence_ref)?;
+    let digest = adoption_digest(std::slice::from_ref(&evidence_ref))?;
     let traversal_receipt_ref = crate::preserves_rail::canonical_hash(&traversal.receipt_value)?;
     let digest_receipt_ref = crate::preserves_rail::canonical_hash(&digest.receipt_value)?;
     let locator_denial_ref = crate::preserves_rail::canonical_hash(&locator_denial.value)?;
@@ -102,6 +76,42 @@ pub fn iroh_experiment_adoption_fixture() -> Result<IrohExperimentAdoptionFixtur
         locator_denial_ref,
         diagnostics,
         receipt_value,
+    })
+}
+
+/// A one-root, metadata-only deterministic traversal of the adoption subject.
+fn adoption_traversal(subject_ref: &str, evidence_ref: &str) -> Result<crate::remote_dataspace::TraversalPlan> {
+    let descriptor = crate::remote_dataspace::TraversalDescriptor {
+        traversal_kind: "artifact-closure".to_string(),
+        root_refs: vec![subject_ref.to_string()],
+        visited_refs: Vec::new(),
+        order: "lexicographic".to_string(),
+        filters: Vec::new(),
+        inline_policy: "metadata-only".to_string(),
+        resource_bound: 1,
+        replay_bound: 1,
+        policy_refs: vec![adoption_fixture_ref("policy")],
+        evidence_refs: vec![evidence_ref.to_string()],
+    };
+    crate::remote_dataspace::plan_traversal(
+        &descriptor,
+        &crate::remote_dataspace::LocalInventorySummary {
+            verified_refs: Vec::new(),
+            chunk_refs: Vec::new(),
+        },
+    )
+}
+
+/// The external CID digest mapping for the adoption bytes, verified against their content ref.
+fn adoption_digest(evidence_refs: &[String]) -> Result<crate::remote_dataspace::ExternalDigestMappingReceipt> {
+    let bytes = b"iroh adoption bytes";
+    let content_ref = crate::preserves_rail::content_ref_from_bytes(bytes);
+    crate::remote_dataspace::validate_external_digest_mapping(&crate::remote_dataspace::ExternalDigestMappingInput {
+        algorithm: "cid-sha2-256",
+        external_digest: &crate::remote_dataspace::external_digest_for("cid-sha2-256", bytes),
+        bytes,
+        expected_content_ref: &content_ref,
+        evidence_refs,
     })
 }
 

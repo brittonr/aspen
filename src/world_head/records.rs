@@ -233,15 +233,7 @@ pub fn parse_canonical_world_head_claim(bytes: &[u8]) -> Result<CanonicalWorldHe
         "world-head policy ref",
     )?)
     .map_err(reference_error)?;
-    let source_heads_field = named_field_value(&fields[9], "source-heads")?;
-    let source_values = crate::preserves_rail::required_sequence_field(&source_heads_field, "world-head source heads")?;
-    let source_heads = source_values
-        .iter()
-        .map(|value| {
-            crate::preserves_rail::required_content_ref_string(value, "world-head source head")
-                .and_then(|reference| WorldCommitRef::new(reference).map_err(world_commit_reference_error))
-        })
-        .collect::<Result<Vec<_>>>()?;
+    let source_heads = parse_source_heads(&named_field_value(&fields[9], "source-heads")?)?;
     let claim = WorldHeadClaim {
         branch_id,
         branch_class,
@@ -258,6 +250,17 @@ pub fn parse_canonical_world_head_claim(bytes: &[u8]) -> Result<CanonicalWorldHe
         return Err(MoltenError::invalid_harness("world-head claim bytes are not canonical"));
     }
     Ok(canonical)
+}
+
+fn parse_source_heads(source_heads_field: &preserves::Value<IOValue>) -> Result<Vec<WorldCommitRef>> {
+    let source_values = crate::preserves_rail::required_sequence_field(source_heads_field, "world-head source heads")?;
+    source_values
+        .iter()
+        .map(|value| {
+            crate::preserves_rail::required_content_ref_string(value, "world-head source head")
+                .and_then(|reference| WorldCommitRef::new(reference).map_err(world_commit_reference_error))
+        })
+        .collect::<Result<Vec<_>>>()
 }
 
 pub fn world_head_authentication_scope(claim: &CanonicalWorldHeadClaim) -> Result<AuthenticationScope> {

@@ -453,97 +453,47 @@ mod tests {
         let mut runtime = new_control_registry_runtime(&manifest).expect("runtime");
         let mut sequence = RAFT_TEST_INITIAL_SEQUENCE;
         let first_sequence = next_raft_sequence(&mut sequence);
-        let first_envelope = envelope_for(
-            &runtime,
-            "client:duplicate-proof",
-            first_sequence,
-            command_for_receipt_index("duplicate-scope", "duplicate-target-v1"),
-        );
+        let first_envelope = duplicate_proof_envelope(&runtime, first_sequence, "duplicate-scope", "duplicate-target-v1");
         let first = propose_control_registry_command(&mut runtime, &first_envelope).expect("first proposal");
         assert_eq!(first.decision, RAFT_DECISION_PASS);
-        let state_after_first = runtime.state.state_ref.clone();
-        let log_count_after_first = runtime.log_entries.len();
-        let commit_count_after_first = runtime.commit_receipts.len();
-        let registry_count_after_first = runtime.registry_receipts.len();
+        let after_first = RuntimeMark::of(&runtime);
 
         let replay = propose_control_registry_command(&mut runtime, &first_envelope).expect("duplicate replay");
         assert!(replay.duplicate);
         assert_eq!(replay.decision, RAFT_DECISION_PASS);
         assert_eq!(replay.registry_receipt.receipt_ref, first.registry_receipt.receipt_ref);
-        assert_eq!(runtime.state.state_ref, state_after_first);
-        assert_eq!(runtime.log_entries.len(), log_count_after_first);
-        assert_eq!(runtime.commit_receipts.len(), commit_count_after_first);
-        assert_eq!(runtime.registry_receipts.len(), registry_count_after_first);
+        after_first.assert_all_unchanged(&runtime);
 
-        let conflicting_envelope = envelope_for(
-            &runtime,
-            "client:duplicate-proof",
-            first_sequence,
-            command_for_receipt_index("duplicate-scope", "duplicate-target-v2"),
-        );
+        let conflicting_envelope = duplicate_proof_envelope(&runtime, first_sequence, "duplicate-scope", "duplicate-target-v2");
         let conflict = propose_control_registry_command(&mut runtime, &conflicting_envelope).expect("conflict denial");
         assert!(conflict.duplicate);
         assert_eq!(conflict.decision, RAFT_DECISION_DENY);
         assert_eq!(conflict.registry_receipt.decision, RAFT_DECISION_DENY);
         assert!(conflict.log_entry.is_none());
-        assert_eq!(runtime.state.state_ref, state_after_first);
-        assert_eq!(runtime.log_entries.len(), log_count_after_first);
+        after_first.assert_state_and_log_unchanged(&runtime);
         assert!(conflict
             .registry_receipt
             .diagnostics
             .iter()
             .any(|diagnostic| diagnostic.contains("conflicting duplicate client sequence")));
 
-        let second_envelope = envelope_for(
-            &runtime,
-            "client:duplicate-proof",
-            next_raft_sequence(&mut sequence),
-            command_for_receipt_index("later-scope", "later-target"),
-        );
+        let second_envelope = duplicate_proof_envelope(&runtime, next_raft_sequence(&mut sequence), "later-scope", "later-target");
         let second = propose_control_registry_command(&mut runtime, &second_envelope).expect("second sequence pass");
         assert_eq!(second.decision, RAFT_DECISION_PASS);
-        let state_after_second = runtime.state.state_ref.clone();
-        let log_count_after_second = runtime.log_entries.len();
-        let commit_count_after_second = runtime.commit_receipts.len();
-        let registry_count_after_second = runtime.registry_receipts.len();
+        let after_second = RuntimeMark::of(&runtime);
 
         let old_replay = propose_control_registry_command(&mut runtime, &first_envelope).expect("old sequence replay");
         assert!(old_replay.duplicate);
         assert_eq!(old_replay.decision, RAFT_DECISION_PASS);
         assert_eq!(old_replay.registry_receipt.receipt_ref, first.registry_receipt.receipt_ref);
         assert!(old_replay.log_entry.is_none());
-        assert_eq!(runtime.state.state_ref, state_after_second);
-        assert_eq!(runtime.log_entries.len(), log_count_after_second);
-        assert_eq!(runtime.commit_receipts.len(), commit_count_after_second);
-        assert_eq!(runtime.registry_receipts.len(), registry_count_after_second);
+        after_second.assert_all_unchanged(&runtime);
 
-        let old_conflict_envelope = envelope_for(
-            &runtime,
-            "client:duplicate-proof",
-            first_sequence,
-            command_for_receipt_index("duplicate-scope", "duplicate-target-v3"),
-        );
-        let old_conflict =
-            propose_control_registry_command(&mut runtime, &old_conflict_envelope).expect("old conflict denial");
-        assert!(old_conflict.duplicate);
-        assert_eq!(old_conflict.decision, RAFT_DECISION_DENY);
-        assert!(old_conflict.log_entry.is_none());
-        assert_eq!(runtime.state.state_ref, state_after_second);
-        assert_eq!(runtime.log_entries.len(), log_count_after_second);
+        let old_conflict_envelope = duplicate_proof_envelope(&runtime, first_sequence, "duplicate-scope", "duplicate-target-v3");
+        assert_duplicate_denied_without_advance(&mut runtime, &old_conflict_envelope, &after_second);
 
-        let stale_unseen_envelope = envelope_for(
-            &runtime,
-            "client:duplicate-proof",
-            STALE_RAFT_SEQUENCE_BEFORE_INITIAL,
-            command_for_receipt_index("stale-scope", "stale-target"),
-        );
-        let stale_unseen =
-            propose_control_registry_command(&mut runtime, &stale_unseen_envelope).expect("stale unseen denial");
-        assert!(stale_unseen.duplicate);
-        assert_eq!(stale_unseen.decision, RAFT_DECISION_DENY);
-        assert!(stale_unseen.log_entry.is_none());
-        assert_eq!(runtime.state.state_ref, state_after_second);
-        assert_eq!(runtime.log_entries.len(), log_count_after_second);
+        let stale_unseen_envelope = duplicate_proof_envelope(&runtime, STALE_RAFT_SEQUENCE_BEFORE_INITIAL, "stale-scope", "stale-target");
+        assert_duplicate_denied_without_advance(&mut runtime, &stale_unseen_envelope, &after_second);
 
         let malformed_envelope = envelope_for(
             &runtime,
@@ -553,16 +503,61 @@ mod tests {
         );
         let malformed = propose_control_registry_command(&mut runtime, &malformed_envelope).expect("malformed denial");
         assert_eq!(malformed.decision, RAFT_DECISION_DENY);
-        assert_eq!(runtime.state.state_ref, state_after_second);
-        assert_eq!(runtime.log_entries.len(), log_count_after_second);
-        assert_eq!(runtime.commit_receipts.len(), commit_count_after_second);
-        assert_eq!(runtime.registry_receipts.len(), registry_count_after_second);
+        after_second.assert_all_unchanged(&runtime);
         assert!(malformed
             .registry_receipt
             .diagnostics
             .iter()
             .any(|diagnostic| diagnostic.contains("unknown Raft command schema")));
 
+        assert_stale_read_and_unsupported_state_machine_denied(&runtime);
+    }
+
+    /// The runtime state ref and log, commit, and registry receipt counts at one point of a test.
+    struct RuntimeMark {
+        state_ref: String,
+        log_entries: usize,
+        commit_receipts: usize,
+        registry_receipts: usize,
+    }
+
+    impl RuntimeMark {
+        fn of(runtime: &ControlRegistryRuntime) -> Self {
+            Self {
+                state_ref: runtime.state.state_ref.clone(),
+                log_entries: runtime.log_entries.len(),
+                commit_receipts: runtime.commit_receipts.len(),
+                registry_receipts: runtime.registry_receipts.len(),
+            }
+        }
+
+        fn assert_state_and_log_unchanged(&self, runtime: &ControlRegistryRuntime) {
+            assert_eq!(runtime.state.state_ref, self.state_ref);
+            assert_eq!(runtime.log_entries.len(), self.log_entries);
+        }
+
+        fn assert_all_unchanged(&self, runtime: &ControlRegistryRuntime) {
+            self.assert_state_and_log_unchanged(runtime);
+            assert_eq!(runtime.commit_receipts.len(), self.commit_receipts);
+            assert_eq!(runtime.registry_receipts.len(), self.registry_receipts);
+        }
+    }
+
+    fn duplicate_proof_envelope(runtime: &ControlRegistryRuntime, sequence: u64, scope: &str, target: &str) -> IoValue {
+        envelope_for(runtime, "client:duplicate-proof", sequence, command_for_receipt_index(scope, target))
+    }
+
+    /// A duplicate-sequence proposal is denied without a log entry and without advancing state or the log.
+    fn assert_duplicate_denied_without_advance(runtime: &mut ControlRegistryRuntime, envelope: &IoValue, mark: &RuntimeMark) {
+        let proposal = propose_control_registry_command(runtime, envelope).expect("duplicate denial");
+        assert!(proposal.duplicate);
+        assert_eq!(proposal.decision, RAFT_DECISION_DENY);
+        assert!(proposal.log_entry.is_none());
+        mark.assert_state_and_log_unchanged(runtime);
+    }
+
+    /// A read behind the commit index is stale, and a group manifest naming an unsupported state machine is refused.
+    fn assert_stale_read_and_unsupported_state_machine_denied(runtime: &ControlRegistryRuntime) {
         let stale_read = read_control_registry(&ControlRegistryReadInput {
             state: runtime.state.value.clone(),
             group_ref: runtime.manifest.manifest_ref.clone(),
@@ -799,7 +794,7 @@ mod tests {
         // r[verify molten.testing.leaderless_experimental_fixtures]
         // r[verify molten.testing.consensus_placement_fixtures]
         let members = vec![test_ref("member-a"), test_ref("member-b"), test_ref("member-c")];
-        let placement = consensus_placement_report(&ConsensusPlacementInput {
+        let placement_input = ConsensusPlacementInput {
             group_id: DEFAULT_GROUP_ID.to_string(),
             candidate_members: members.clone(),
             admitted_members: members.clone(),
@@ -811,29 +806,24 @@ mod tests {
             latency_diagnostics: vec!["bounded-fixture-latency".to_string()],
             denied_candidates: Vec::new(),
             refresh_refs: vec![test_ref("refresh")],
-        })
-        .expect("placement pass");
+        };
+        let placement = consensus_placement_report(&placement_input).expect("placement pass");
         assert_eq!(placement.decision, RAFT_DECISION_PASS);
         assert_eq!(crate::ledger::artifact_kind(&placement.value), "consensus-placement-report");
 
         let unsafe_placement = consensus_placement_report(&ConsensusPlacementInput {
-            group_id: DEFAULT_GROUP_ID.to_string(),
-            candidate_members: members.clone(),
-            admitted_members: members.clone(),
             fault_domain_refs: vec![test_ref("domain-shared")],
-            fault_domain_policy_ref: test_ref("fault-policy"),
             membership_refs: Vec::new(),
-            placement_policy_refs: vec![test_ref("placement-policy")],
             majority_reachable: false,
             latency_diagnostics: Vec::new(),
-            denied_candidates: Vec::new(),
             refresh_refs: Vec::new(),
+            ..placement_input
         })
         .expect("placement deny");
         assert_eq!(unsafe_placement.decision, RAFT_DECISION_DENY);
         assert!(unsafe_placement.diagnostics.join(";").contains("majority"));
 
-        let majority = run_consensus_simulation(&ConsensusSimulationInput {
+        let majority_input = ConsensusSimulationInput {
             scenario: SCENARIO_MAJORITY_PROGRESS.to_string(),
             algorithm_profile: CONSENSUS_PROFILE_RAFT.to_string(),
             topology_ref: test_ref("topology"),
@@ -846,95 +836,69 @@ mod tests {
             placement_ref: Some(placement.report_ref.clone()),
             local_state_fresh: true,
             requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
-        })
-        .expect("majority simulation");
+        };
+        let majority = run_consensus_simulation(&majority_input).expect("majority simulation");
         assert_eq!(majority.decision, RAFT_DECISION_PASS);
         assert!(majority.final_state_ref.is_some());
         assert_eq!(crate::ledger::artifact_kind(&majority.value), "consensus-simulation-receipt");
 
         let minority = run_consensus_simulation(&ConsensusSimulationInput {
             scenario: SCENARIO_MINORITY_DENIAL.to_string(),
-            algorithm_profile: CONSENSUS_PROFILE_RAFT.to_string(),
-            topology_ref: test_ref("topology"),
-            membership_refs: members.clone(),
             fault_plan_ref: test_ref("minority-fault"),
-            operation_ids: vec![test_ref("operation")],
             connected_replicas: MINORITY_CONNECTED_REPLICAS,
-            proposer_ref: Some(test_ref("member-a")),
-            required_evidence_refs: vec![test_ref("raft-evidence")],
-            placement_ref: Some(placement.report_ref.clone()),
             local_state_fresh: false,
-            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+            ..majority_input.clone()
         })
         .expect("minority simulation");
         assert_eq!(minority.decision, RAFT_DECISION_PASS);
         assert!(minority.final_state_ref.is_some());
 
-        let stale_linearizable = run_consensus_simulation(&ConsensusSimulationInput {
+        assert_stale_reads_classified(&majority_input);
+        assert_leaderless_progress_requires_evidence(majority_input);
+    }
+
+    /// A stale linearizable read is denied for freshness, and the same read at local-stale consistency passes.
+    fn assert_stale_reads_classified(majority_input: &ConsensusSimulationInput) {
+        let stale_input = ConsensusSimulationInput {
             scenario: SCENARIO_STALE_READ_CLASSIFICATION.to_string(),
-            algorithm_profile: CONSENSUS_PROFILE_RAFT.to_string(),
-            topology_ref: test_ref("topology"),
-            membership_refs: members.clone(),
             fault_plan_ref: test_ref("stale-read"),
             operation_ids: Vec::new(),
-            connected_replicas: members.len(),
             proposer_ref: None,
-            required_evidence_refs: vec![test_ref("raft-evidence")],
-            placement_ref: Some(placement.report_ref.clone()),
             local_state_fresh: false,
-            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
-        })
-        .expect("stale linearizable");
+            ..majority_input.clone()
+        };
+        let stale_linearizable = run_consensus_simulation(&stale_input).expect("stale linearizable");
         assert_eq!(stale_linearizable.decision, RAFT_DECISION_DENY);
         assert!(stale_linearizable.diagnostics.join(";").contains("freshness"));
 
         let local_stale = run_consensus_simulation(&ConsensusSimulationInput {
-            scenario: SCENARIO_STALE_READ_CLASSIFICATION.to_string(),
-            algorithm_profile: CONSENSUS_PROFILE_RAFT.to_string(),
-            topology_ref: test_ref("topology"),
-            membership_refs: members.clone(),
-            fault_plan_ref: test_ref("stale-read"),
-            operation_ids: Vec::new(),
-            connected_replicas: members.len(),
-            proposer_ref: None,
-            required_evidence_refs: vec![test_ref("raft-evidence")],
-            placement_ref: Some(placement.report_ref.clone()),
-            local_state_fresh: false,
             requested_read_consistency: READ_CONSISTENCY_LOCAL_STALE.to_string(),
+            ..stale_input
         })
         .expect("local stale simulation");
         assert_eq!(local_stale.decision, RAFT_DECISION_PASS);
+    }
 
-        let leaderless = run_consensus_simulation(&ConsensusSimulationInput {
+    /// Leaderless experimental progress from a non-leader passes with proof and simulation evidence, and is denied
+    /// without it.
+    fn assert_leaderless_progress_requires_evidence(majority_input: ConsensusSimulationInput) {
+        let leaderless_input = ConsensusSimulationInput {
             scenario: SCENARIO_LEADERLESS_NON_LEADER_PROGRESS.to_string(),
             algorithm_profile: CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL.to_string(),
-            topology_ref: test_ref("topology"),
-            membership_refs: members.clone(),
             fault_plan_ref: test_ref("leaderless-fault"),
             operation_ids: vec![test_ref("leaderless-operation")],
-            connected_replicas: members.len(),
             proposer_ref: Some(test_ref("member-b")),
             required_evidence_refs: vec![test_ref("proof"), test_ref("simulation")],
-            placement_ref: Some(placement.report_ref),
-            local_state_fresh: true,
-            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
-        })
-        .expect("leaderless experimental simulation");
+            ..majority_input
+        };
+        let leaderless = run_consensus_simulation(&leaderless_input).expect("leaderless experimental simulation");
         assert_eq!(leaderless.decision, RAFT_DECISION_PASS);
 
         let missing_leaderless_evidence = run_consensus_simulation(&ConsensusSimulationInput {
-            scenario: SCENARIO_LEADERLESS_NON_LEADER_PROGRESS.to_string(),
-            algorithm_profile: CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL.to_string(),
-            topology_ref: test_ref("topology"),
-            membership_refs: members,
-            fault_plan_ref: test_ref("leaderless-fault"),
-            operation_ids: vec![test_ref("leaderless-operation")],
             connected_replicas: EXPERIMENTAL_CONNECTED_REPLICAS,
-            proposer_ref: Some(test_ref("member-b")),
             required_evidence_refs: Vec::new(),
             placement_ref: None,
-            local_state_fresh: true,
-            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+            ..leaderless_input
         })
         .expect("leaderless missing evidence");
         assert_eq!(missing_leaderless_evidence.decision, RAFT_DECISION_DENY);
@@ -951,24 +915,21 @@ mod tests {
         assert_eq!(crate::ledger::artifact_kind(&registry.value), "consensus-engine-registry");
 
         let required = vec![ENGINE_CAPABILITY_PROPOSAL.to_string(), ENGINE_CAPABILITY_LINEARIZABLE_READ.to_string()];
-        let production_admission = admit_consensus_engine(&registry, &ConsensusEngineAdmissionInput {
-            algorithm_profile: CONSENSUS_PROFILE_RAFT.to_string(),
-            profile_version: CONSENSUS_PROFILE_VERSION_RAFT.to_string(),
-            requested_environment: CONSENSUS_ENVIRONMENT_PRODUCTION.to_string(),
-            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
-            required_capabilities: required.clone(),
-        })
+        let admit = |algorithm_profile: &str, profile_version: &str, environment: &str, required_capabilities| {
+            admit_consensus_engine(&registry, &ConsensusEngineAdmissionInput {
+                algorithm_profile: algorithm_profile.to_string(),
+                profile_version: profile_version.to_string(),
+                requested_environment: environment.to_string(),
+                requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
+                required_capabilities,
+            })
+        };
+        let production_admission = admit(CONSENSUS_PROFILE_RAFT, CONSENSUS_PROFILE_VERSION_RAFT, CONSENSUS_ENVIRONMENT_PRODUCTION, required.clone())
         .expect("production admission receipt");
         assert_eq!(production_admission.decision, ENGINE_DECISION_DENY);
         assert!(production_admission.diagnostics.join(";").contains("not admitted for production runtime"));
 
-        let model_admission = admit_consensus_engine(&registry, &ConsensusEngineAdmissionInput {
-            algorithm_profile: CONSENSUS_PROFILE_RAFT.to_string(),
-            profile_version: CONSENSUS_PROFILE_VERSION_RAFT.to_string(),
-            requested_environment: CONSENSUS_ENVIRONMENT_MODEL.to_string(),
-            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
-            required_capabilities: required.clone(),
-        })
+        let model_admission = admit(CONSENSUS_PROFILE_RAFT, CONSENSUS_PROFILE_VERSION_RAFT, CONSENSUS_ENVIRONMENT_MODEL, required.clone())
         .expect("model admission");
         assert_eq!(model_admission.decision, ENGINE_DECISION_PASS);
         assert!(model_admission.descriptor.is_some());
@@ -982,46 +943,22 @@ mod tests {
         let production = new_control_registry_production_runtime(&manifest).expect_err("model profile denied in production");
         assert!(production.to_string().contains("not admitted for production runtime"));
 
-        let unknown = admit_consensus_engine(&registry, &ConsensusEngineAdmissionInput {
-            algorithm_profile: "unknown-profile".to_string(),
-            profile_version: "unknown-v1".to_string(),
-            requested_environment: CONSENSUS_ENVIRONMENT_PRODUCTION.to_string(),
-            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
-            required_capabilities: required.clone(),
-        })
+        let unknown = admit("unknown-profile", "unknown-v1", CONSENSUS_ENVIRONMENT_PRODUCTION, required.clone())
         .expect("unknown admission");
         assert_eq!(unknown.decision, ENGINE_DECISION_DENY);
         assert!(unknown.diagnostics.join(";").contains("unsupported consensus engine profile"));
 
-        let disabled = admit_consensus_engine(&registry, &ConsensusEngineAdmissionInput {
-            algorithm_profile: "disabled-fixture-engine".to_string(),
-            profile_version: "disabled-fixture-v1".to_string(),
-            requested_environment: CONSENSUS_ENVIRONMENT_PRODUCTION.to_string(),
-            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
-            required_capabilities: required.clone(),
-        })
+        let disabled = admit("disabled-fixture-engine", "disabled-fixture-v1", CONSENSUS_ENVIRONMENT_PRODUCTION, required.clone())
         .expect("disabled admission");
         assert_eq!(disabled.decision, ENGINE_DECISION_DENY);
         assert!(disabled.diagnostics.join(";").contains("disabled"));
 
-        let leaderless = admit_consensus_engine(&registry, &ConsensusEngineAdmissionInput {
-            algorithm_profile: CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL.to_string(),
-            profile_version: CONSENSUS_PROFILE_VERSION_LEADERLESS_EXPERIMENTAL.to_string(),
-            requested_environment: CONSENSUS_ENVIRONMENT_PRODUCTION.to_string(),
-            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
-            required_capabilities: required,
-        })
+        let leaderless = admit(CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL, CONSENSUS_PROFILE_VERSION_LEADERLESS_EXPERIMENTAL, CONSENSUS_ENVIRONMENT_PRODUCTION, required)
         .expect("leaderless admission");
         assert_eq!(leaderless.decision, ENGINE_DECISION_DENY);
         assert!(leaderless.diagnostics.join(";").contains("not admitted for production"));
 
-        let mismatch = admit_consensus_engine(&registry, &ConsensusEngineAdmissionInput {
-            algorithm_profile: CONSENSUS_PROFILE_RAFT.to_string(),
-            profile_version: "wrong-version".to_string(),
-            requested_environment: CONSENSUS_ENVIRONMENT_PRODUCTION.to_string(),
-            requested_read_consistency: READ_CONSISTENCY_LINEARIZABLE.to_string(),
-            required_capabilities: vec![ENGINE_CAPABILITY_PROPOSAL.to_string()],
-        })
+        let mismatch = admit(CONSENSUS_PROFILE_RAFT, "wrong-version", CONSENSUS_ENVIRONMENT_PRODUCTION, vec![ENGINE_CAPABILITY_PROPOSAL.to_string()])
         .expect("version mismatch");
         assert_eq!(mismatch.decision, ENGINE_DECISION_DENY);
         assert!(mismatch.diagnostics.join(";").contains("version mismatch"));
@@ -1091,6 +1028,12 @@ mod tests {
         assert_eq!(production_switchover.decision, ENGINE_DECISION_DENY);
         assert!(production_switchover.diagnostics.join(";").contains("target engine admission denied"));
 
+        assert_unsafe_switchover_and_stale_epochs_denied(&runtime.state.state_ref, next_epoch, &switchover.receipt_ref);
+    }
+
+    /// An unsafe switchover is denied, a writer on the old epoch is fenced, and the target engine cannot serve a
+    /// linearizable read before activation.
+    fn assert_unsafe_switchover_and_stale_epochs_denied(state_ref: &str, next_epoch: u64, activation_receipt_ref: &str) {
         let unsafe_switchover = consensus_engine_switchover_receipt(&ConsensusEngineSwitchoverInput {
             source_profile: CONSENSUS_PROFILE_RAFT.to_string(),
             source_version: CONSENSUS_PROFILE_VERSION_RAFT.to_string(),
@@ -1098,8 +1041,8 @@ mod tests {
             target_version: CONSENSUS_PROFILE_VERSION_LEADERLESS_EXPERIMENTAL.to_string(),
             active_engine_epoch: INITIAL_CONSENSUS_ENGINE_EPOCH,
             target_engine_epoch: INITIAL_CONSENSUS_ENGINE_EPOCH,
-            source_state_ref: runtime.state.state_ref.clone(),
-            target_bootstrap_state_ref: runtime.state.state_ref.clone(),
+            source_state_ref: state_ref.to_string(),
+            target_bootstrap_state_ref: state_ref.to_string(),
             membership_refs: Vec::new(),
             placement_refs: Vec::new(),
             replay_conformance_refs: Vec::new(),
@@ -1117,7 +1060,7 @@ mod tests {
             active_engine_epoch: next_epoch,
             presented_profile: CONSENSUS_PROFILE_RAFT.to_string(),
             presented_engine_epoch: INITIAL_CONSENSUS_ENGINE_EPOCH,
-            activation_receipt_ref: Some(switchover.receipt_ref.clone()),
+            activation_receipt_ref: Some(activation_receipt_ref.to_string()),
         })
         .expect("stale writer gate");
         assert_eq!(stale_writer.decision, ENGINE_DECISION_DENY);

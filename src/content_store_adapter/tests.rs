@@ -186,7 +186,7 @@ fn deterministic_simulation_matches_verified_trace_and_models_failure_without_ex
     let simulation_profile = profile(ContentAdapterClass::DeterministicSimulation);
     let simulation_command = command(&simulation_profile, &manifest, ContentOperation::Get, None);
     let chunks = fixture_chunks(&manifest);
-    let simulated = execute_simulated_stream(SimulatedStreamInput {
+    let stream_input = SimulatedStreamInput {
         profile: &simulation_profile,
         manifest: &manifest,
         command: &simulation_command,
@@ -194,8 +194,8 @@ fn deterministic_simulation_matches_verified_trace_and_models_failure_without_ex
         retained: None,
         chunks: &chunks,
         fault: None,
-    })
-    .expect("simulation");
+    };
+    let simulated = execute_simulated_stream(stream_input).expect("simulation");
     assert_eq!(simulated.state.artifact.verified_chunk_refs, local.state.artifact.verified_chunk_refs);
     assert_eq!(
         assemble_verified_content(&manifest, &simulated.state.artifact, &simulated.verified_chunks).unwrap(),
@@ -203,13 +203,8 @@ fn deterministic_simulation_matches_verified_trace_and_models_failure_without_ex
     );
 
     let corrupt = execute_simulated_stream(SimulatedStreamInput {
-        profile: &simulation_profile,
-        manifest: &manifest,
-        command: &simulation_command,
-        generation: GENERATION_ONE,
-        retained: None,
-        chunks: &chunks,
         fault: Some(SimulationFault::CorruptAt(1)),
+        ..stream_input
     })
     .expect("corrupt simulation outcome");
     assert_eq!(corrupt.state.artifact.terminal, ContentTerminal::Failed);
@@ -217,78 +212,79 @@ fn deterministic_simulation_matches_verified_trace_and_models_failure_without_ex
     assert!(assemble_verified_content(&manifest, &corrupt.state.artifact, &corrupt.verified_chunks).is_err());
 
     let capacity = execute_simulated_stream(SimulatedStreamInput {
-        profile: &simulation_profile,
-        manifest: &manifest,
-        command: &simulation_command,
-        generation: GENERATION_ONE,
-        retained: None,
-        chunks: &chunks,
         fault: Some(SimulationFault::CapacityExceeded),
+        ..stream_input
     })
     .expect("capacity outcome");
     assert_eq!(capacity.state.artifact.terminal, ContentTerminal::Retryable);
     let delayed = execute_simulated_stream(SimulatedStreamInput {
-        profile: &simulation_profile,
-        manifest: &manifest,
-        command: &simulation_command,
-        generation: GENERATION_ONE,
-        retained: None,
-        chunks: &chunks,
         fault: Some(SimulationFault::LatencyTicks(SIMULATION_TIMEOUT_LATENCY)),
+        ..stream_input
     })
     .expect("latency outcome");
     assert_eq!(delayed.state.artifact.terminal, ContentTerminal::Uncertain);
 
     let cancelled = execute_simulated_stream(SimulatedStreamInput {
-        profile: &simulation_profile,
-        manifest: &manifest,
-        command: &simulation_command,
-        generation: GENERATION_ONE,
-        retained: None,
-        chunks: &chunks,
         fault: Some(SimulationFault::CancelAt(1)),
+        ..stream_input
     })
     .expect("cancelled outcome");
     assert_eq!(cancelled.state.artifact.terminal, ContentTerminal::Cancelled);
+    assert_cancelled_stream_resumes_from_partial_state(stream_input, cancelled);
+    std::fs::remove_dir_all(workspace).expect("remove simulation fixture");
+}
+
+/// A cancelled stream's partial state persists and reloads exactly, a state for another manifest is
+/// refused, and resuming from the reloaded state completes the content.
+fn assert_cancelled_stream_resumes_from_partial_state(
+    stream_input: SimulatedStreamInput<'_>,
+    cancelled: SimulationContentExecution,
+) {
     let partial_workspace = temp_dir("content-adapter-partial-state");
     let partial_namespace = crate::node_state::NodeStateNamespace::open(
         crate::node_state::NodeStateNamespaceKind::Ledger,
         &partial_workspace,
     )
     .expect("partial-state namespace");
-    persist_partial_state(&partial_namespace, &simulation_profile, &manifest, &cancelled.state.artifact)
+    persist_partial_state(&partial_namespace, stream_input.profile, stream_input.manifest, &cancelled.state.artifact)
         .expect("persist partial state");
-    let loaded =
-        load_partial_state(&partial_namespace, &simulation_profile, &manifest, &simulation_command.operation_ref)
-            .expect("load partial state")
-            .expect("persisted state");
+    let loaded = load_partial_state(
+        &partial_namespace,
+        stream_input.profile,
+        stream_input.manifest,
+        &stream_input.command.operation_ref,
+    )
+    .expect("load partial state")
+    .expect("persisted state");
     assert_eq!(loaded, cancelled.state.artifact);
     let mut invalid_state = loaded.clone();
     invalid_state.manifest_ref = test_ref("wrong-manifest");
-    assert!(persist_partial_state(&partial_namespace, &simulation_profile, &manifest, &invalid_state).is_err());
+    assert!(
+        persist_partial_state(&partial_namespace, stream_input.profile, stream_input.manifest, &invalid_state).is_err()
+    );
     let resumed = execute_simulated_stream(SimulatedStreamInput {
-        profile: &simulation_profile,
-        manifest: &manifest,
-        command: &simulation_command,
-        generation: GENERATION_ONE,
         retained: Some(&loaded),
-        chunks: &chunks,
-        fault: None,
+        ..stream_input
     })
     .expect("resumed outcome");
     let mut resumed_chunks = cancelled.verified_chunks;
     resumed_chunks.extend(resumed.verified_chunks.clone());
     assert_eq!(
-        assemble_verified_content(&manifest, &resumed.state.artifact, &resumed_chunks).expect("resumed content"),
+        assemble_verified_content(stream_input.manifest, &resumed.state.artifact, &resumed_chunks)
+            .expect("resumed content"),
         b"aaaabbbbcccc"
     );
-    remove_partial_state(&partial_namespace, &simulation_command.operation_ref).expect("remove partial state");
+    remove_partial_state(&partial_namespace, &stream_input.command.operation_ref).expect("remove partial state");
     assert!(
-        load_partial_state(&partial_namespace, &simulation_profile, &manifest, &simulation_command.operation_ref,)
-            .expect("load removed state")
-            .is_none()
+        load_partial_state(
+            &partial_namespace,
+            stream_input.profile,
+            stream_input.manifest,
+            &stream_input.command.operation_ref,
+        )
+        .expect("load removed state")
+        .is_none()
     );
-    std::fs::remove_dir_all(workspace).expect("remove simulation fixture");
     std::fs::remove_dir_all(partial_workspace).expect("remove partial-state fixture");
 }
 
@@ -298,33 +294,7 @@ fn deterministic_simulation_matches_verified_trace_and_models_failure_without_ex
 async fn live_iroh_blobs_stream_preserves_molten_identity_and_uses_opaque_admitted_transport_key() {
     let (workspace, root, manifest) = fixture_store("content-adapter-live-iroh");
     let identity_workspace = temp_dir("content-adapter-live-identity");
-    let namespace = crate::node_state::NodeStateNamespace::open(
-        crate::node_state::NodeStateNamespaceKind::Identity,
-        &identity_workspace,
-    )
-    .expect("identity namespace");
-    let crypto_profile = crate::fabric_crypto_identity::canonical_crypto_profile(
-        &crate::fabric_crypto_identity::production_ed25519_profile(
-            test_ref("content-crypto-profile"),
-            test_ref("content-crypto-entropy"),
-        ),
-    )
-    .expect("crypto profile");
-    let backend_ref = test_ref("content-identity-backend");
-    let adapter =
-        crate::fabric_crypto_identity::IrohEd25519FileAdapter::new(&namespace, crypto_profile, backend_ref.clone())
-            .expect("crypto adapter");
-    adapter
-        .resolve_or_generate(
-            crate::fabric_crypto_identity::KeyPurpose::TransportEndpoint,
-            &test_ref("content-key-policy"),
-            true,
-        )
-        .expect("transport identity");
-    let key_path = crate::fabric_crypto_identity::transport_key_path().expect("transport key path");
-    let key_record = namespace.read(&key_path, crate::node_state::MAX_NODE_SECRET_BYTES).expect("transport key record");
-    let material = crate::fabric_crypto_identity::transport_endpoint_material(&key_record, &backend_ref)
-        .expect("transport endpoint material");
+    let (namespace, backend_ref, material) = live_transport_identity(&identity_workspace);
     let endpoint_id = material.endpoint_id.clone();
     let profile = profile(ContentAdapterClass::IrohBlobs);
     assert!(
@@ -382,6 +352,45 @@ async fn live_iroh_blobs_stream_preserves_molten_identity_and_uses_opaque_admitt
     publication.shutdown().await.expect("shutdown publication");
     std::fs::remove_dir_all(workspace).expect("remove live fixture");
     std::fs::remove_dir_all(identity_workspace).expect("remove identity fixture");
+}
+
+/// A generated production Ed25519 transport identity in a fresh identity namespace, with its
+/// backend ref and endpoint key material.
+fn live_transport_identity(
+    identity_workspace: &std::path::Path,
+) -> (
+    crate::node_state::NodeStateNamespace,
+    String,
+    crate::fabric_crypto_identity::TransportEndpointKeyMaterial,
+) {
+    let namespace = crate::node_state::NodeStateNamespace::open(
+        crate::node_state::NodeStateNamespaceKind::Identity,
+        identity_workspace,
+    )
+    .expect("identity namespace");
+    let crypto_profile = crate::fabric_crypto_identity::canonical_crypto_profile(
+        &crate::fabric_crypto_identity::production_ed25519_profile(
+            test_ref("content-crypto-profile"),
+            test_ref("content-crypto-entropy"),
+        ),
+    )
+    .expect("crypto profile");
+    let backend_ref = test_ref("content-identity-backend");
+    let adapter =
+        crate::fabric_crypto_identity::IrohEd25519FileAdapter::new(&namespace, crypto_profile, backend_ref.clone())
+            .expect("crypto adapter");
+    adapter
+        .resolve_or_generate(
+            crate::fabric_crypto_identity::KeyPurpose::TransportEndpoint,
+            &test_ref("content-key-policy"),
+            true,
+        )
+        .expect("transport identity");
+    let key_path = crate::fabric_crypto_identity::transport_key_path().expect("transport key path");
+    let key_record = namespace.read(&key_path, crate::node_state::MAX_NODE_SECRET_BYTES).expect("transport key record");
+    let material = crate::fabric_crypto_identity::transport_endpoint_material(&key_record, &backend_ref)
+        .expect("transport endpoint material");
+    (namespace, backend_ref, material)
 }
 
 // r[verify molten.content_store_adapter.retention_boundary]

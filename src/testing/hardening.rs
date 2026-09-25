@@ -567,6 +567,13 @@ pub fn build_replay_smoke_gate(input: &ReplaySmokeInput) -> Result<ReplaySmokeGa
 }
 
 pub fn reviewed_nextest_profile_rows() -> Vec<SemanticProfileInput> {
+    let mut rows = subsystem_profile_rows();
+    rows.extend(platform_and_aggregate_profile_rows());
+    rows
+}
+
+/// The deterministic fast-core, harness, CLI, and distributed-simulation profile rows.
+fn subsystem_profile_rows() -> Vec<SemanticProfileInput> {
     vec![
         semantic_profile_row(ProfileRowInput {
             profile_id: "fast-core",
@@ -618,6 +625,12 @@ pub fn reviewed_nextest_profile_rows() -> Vec<SemanticProfileInput> {
             platform_required: false,
             platform_available: true,
         }),
+    ]
+}
+
+/// The VM, dogfood soak, CI, deterministic aggregate, and exploratory profile rows.
+fn platform_and_aggregate_profile_rows() -> Vec<SemanticProfileInput> {
+    vec![
         semantic_profile_row(ProfileRowInput {
             profile_id: "vm-platform",
             evidence_scope: "vm",

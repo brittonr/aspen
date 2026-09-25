@@ -268,20 +268,7 @@ mod tests {
             manifest_ref: stale_manifest_ref.clone(),
             ..fixture.hostcall.clone()
         };
-        let hostcall_decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput {
-            evaluation_kind: PluginLifecycleEvaluationKind::HostcallRequest,
-            manifest: &fixture.manifest,
-            install: Some(&fixture.install),
-            permission: Some(&fixture.permission),
-            activation: Some(&fixture.start),
-            hostcall: Some(&stale_hostcall),
-            health: Some(&fixture.health),
-            removal: None,
-            upgrade: None,
-            negotiation: None,
-            compatibility: None,
-            recovery_receipt_ref: None,
-        })
+        let hostcall_decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput { hostcall: Some(&stale_hostcall), ..fixture_lifecycle_input(&fixture, PluginLifecycleEvaluationKind::HostcallRequest) })
         .expect("evaluate stale hostcall");
         assert_eq!(hostcall_decision.decision, PLUGIN_DECISION_DENY);
         assert!(hostcall_decision
@@ -293,20 +280,7 @@ mod tests {
             manifest_ref: stale_manifest_ref.clone(),
             ..fixture.health.clone()
         };
-        let health_decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput {
-            evaluation_kind: PluginLifecycleEvaluationKind::UpgradeRequest,
-            manifest: &fixture.manifest,
-            install: Some(&fixture.install),
-            permission: Some(&fixture.permission),
-            activation: Some(&fixture.start),
-            hostcall: None,
-            health: Some(&stale_health),
-            removal: None,
-            upgrade: Some(&fixture.upgrade),
-            negotiation: None,
-            compatibility: None,
-            recovery_receipt_ref: None,
-        })
+        let health_decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput { health: Some(&stale_health), upgrade: Some(&fixture.upgrade), ..fixture_lifecycle_input(&fixture, PluginLifecycleEvaluationKind::UpgradeRequest) })
         .expect("evaluate stale health");
         assert_eq!(health_decision.decision, PLUGIN_DECISION_DENY);
         assert!(health_decision
@@ -318,20 +292,7 @@ mod tests {
             manifest_ref: stale_manifest_ref,
             ..fixture.removal.clone()
         };
-        let removal_decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput {
-            evaluation_kind: PluginLifecycleEvaluationKind::RemovalRequest,
-            manifest: &fixture.manifest,
-            install: Some(&fixture.install),
-            permission: Some(&fixture.permission),
-            activation: Some(&fixture.start),
-            hostcall: None,
-            health: Some(&fixture.health),
-            removal: Some(&stale_removal),
-            upgrade: None,
-            negotiation: None,
-            compatibility: None,
-            recovery_receipt_ref: None,
-        })
+        let removal_decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput { removal: Some(&stale_removal), ..fixture_lifecycle_input(&fixture, PluginLifecycleEvaluationKind::RemovalRequest) })
         .expect("evaluate stale removal");
         assert_eq!(removal_decision.decision, PLUGIN_DECISION_DENY);
         assert!(removal_decision
@@ -498,52 +459,67 @@ mod tests {
         assert!(plugin_summary(&matching_grant.value)
             .expect("grant summary")
             .contains("plugin capability grant"));
+        let assert_denied = |grant: &PluginCapabilityGrant, evaluation_turn: u64, expected_diagnostic: &str| {
+            let receipt = hostcall_receipt_with_grant(&manifest_value, &contract, descriptor, grant, evaluation_turn);
+            assert_eq!(receipt.decision, PLUGIN_DECISION_DENY);
+            assert!(
+                receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains(expected_diagnostic)),
+                "{expected_diagnostic}"
+            );
+        };
+        let grant_with = |operation: &str, resource_refs: &[String], valid_until_turn: u64, delegation_depth: u64| {
+            capability_grant_fixture(
+                &manifest_value,
+                &contract,
+                descriptor,
+                operation,
+                resource_refs,
+                false,
+                valid_until_turn,
+                delegation_depth,
+                TEST_GRANT_MAX_DELEGATION_DEPTH,
+            )
+        };
 
         let mut wrong_manifest_grant = matching_grant.clone();
         wrong_manifest_grant.manifest_ref = test_ref("wrong-manifest");
-        let wrong_manifest = hostcall_receipt_with_grant(
-            &manifest_value,
-            &contract,
-            descriptor,
-            &wrong_manifest_grant,
-            PLUGIN_INITIAL_TURN,
-        );
-        assert_eq!(wrong_manifest.decision, PLUGIN_DECISION_DENY);
-        assert!(wrong_manifest
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.contains("wrong-manifest")));
-
+        assert_denied(&wrong_manifest_grant, PLUGIN_INITIAL_TURN, "wrong-manifest");
         let mut wrong_descriptor_grant = matching_grant.clone();
         wrong_descriptor_grant.hostcall_descriptor_ref = test_ref("wrong-descriptor");
-        let wrong_descriptor = hostcall_receipt_with_grant(
-            &manifest_value,
-            &contract,
-            descriptor,
-            &wrong_descriptor_grant,
-            PLUGIN_INITIAL_TURN,
-        );
-        assert_eq!(wrong_descriptor.decision, PLUGIN_DECISION_DENY);
-        assert!(wrong_descriptor
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.contains("wrong-descriptor")));
-
+        assert_denied(&wrong_descriptor_grant, PLUGIN_INITIAL_TURN, "wrong-descriptor");
         let mut wrong_schema_grant = matching_grant.clone();
         wrong_schema_grant.input_schema_ref = test_ref("wrong-schema");
-        let wrong_schema = hostcall_receipt_with_grant(
-            &manifest_value,
-            &contract,
-            descriptor,
-            &wrong_schema_grant,
-            PLUGIN_INITIAL_TURN,
-        );
-        assert_eq!(wrong_schema.decision, PLUGIN_DECISION_DENY);
-        assert!(wrong_schema
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.contains("wrong-schema")));
+        assert_denied(&wrong_schema_grant, PLUGIN_INITIAL_TURN, "wrong-schema");
 
+        assert_empty_budget_grant_rejected(&manifest_value, &contract, descriptor);
+
+        let wrong_operation_grant =
+            grant_with("storage.write", &descriptor.resource_refs, TEST_GRANT_VALID_UNTIL_TURN, PLUGIN_INITIAL_TURN);
+        assert_denied(&wrong_operation_grant, PLUGIN_INITIAL_TURN, "wrong-operation");
+        let wrong_resource_refs = vec![test_ref("wrong-resource")];
+        let wrong_resource_grant =
+            grant_with(&descriptor.operation, &wrong_resource_refs, TEST_GRANT_VALID_UNTIL_TURN, PLUGIN_INITIAL_TURN);
+        assert_denied(&wrong_resource_grant, PLUGIN_INITIAL_TURN, "wrong-resource");
+        let over_delegated_grant = grant_with(
+            &descriptor.operation,
+            &descriptor.resource_refs,
+            TEST_GRANT_VALID_UNTIL_TURN,
+            TEST_GRANT_MAX_DELEGATION_DEPTH + 1,
+        );
+        assert_denied(&over_delegated_grant, PLUGIN_INITIAL_TURN, "over-delegated");
+        let revoked_grant = matching_capability_grant_fixture(&manifest_value, &contract, descriptor, true);
+        assert_denied(&revoked_grant, PLUGIN_INITIAL_TURN, "revoked");
+        let expired_grant =
+            grant_with(&descriptor.operation, &descriptor.resource_refs, PLUGIN_INITIAL_TURN, PLUGIN_INITIAL_TURN);
+        assert_denied(&expired_grant, TEST_GRANT_EXPIRED_TURN, "expired");
+    }
+
+    /// A grant whose attenuation names no budget refs cannot be encoded.
+    fn assert_empty_budget_grant_rejected(
+        manifest_value: &IoValue,
+        contract: &PluginExtensionContract,
+        descriptor: &PluginHostcallDescriptor,
+    ) {
         let empty_budget_refs = Vec::new();
         let empty_budget_attenuation = PluginCapabilityGrantAttenuationInput {
             delegated_scope: &descriptor.resource_refs[0],
@@ -553,7 +529,7 @@ mod tests {
             valid_from_turn: PLUGIN_INITIAL_TURN,
             valid_until_turn: TEST_GRANT_VALID_UNTIL_TURN,
         };
-        let manifest = parse_plugin_manifest(&manifest_value).expect("parse manifest for budget negative");
+        let manifest = parse_plugin_manifest(manifest_value).expect("parse manifest for budget negative");
         let empty_budget_value = plugin_capability_grant_value(&PluginCapabilityGrantInput {
             plugin_ref: &manifest.plugin_ref,
             plugin_id: &manifest.plugin_id,
@@ -576,156 +552,6 @@ mod tests {
             replay_class: &descriptor.replay_class,
         });
         assert!(empty_budget_value.is_err());
-
-        let wrong_operation_grant = capability_grant_fixture(
-            &manifest_value,
-            &contract,
-            descriptor,
-            "storage.write",
-            &descriptor.resource_refs,
-            false,
-            TEST_GRANT_VALID_UNTIL_TURN,
-            PLUGIN_INITIAL_TURN,
-            TEST_GRANT_MAX_DELEGATION_DEPTH,
-        );
-        let wrong_operation = plugin_hostcall_receipt_value(&HostcallReceiptInput {
-            manifest_value: &manifest_value,
-            operation: &descriptor.operation,
-            hostcall_ref: &descriptor.descriptor_ref,
-            executor_receipt_ref: &test_ref("executor"),
-            effect_receipt_ref: &test_ref("effect-receipt"),
-            authority_refs: &descriptor.authority_refs,
-            capability_grants: std::slice::from_ref(&wrong_operation_grant),
-            resource_refs: &descriptor.resource_refs,
-            extension_contracts: std::slice::from_ref(&contract),
-            input_schema_ref: Some(&descriptor.input_schema_ref),
-            output_schema_ref: Some(&descriptor.output_schema_ref),
-            evaluation_turn: PLUGIN_INITIAL_TURN,
-        })
-        .expect("wrong operation grant receipt");
-        let wrong_operation = parse_plugin_hostcall_receipt(&wrong_operation).expect("parse wrong operation");
-        assert_eq!(wrong_operation.decision, PLUGIN_DECISION_DENY);
-        assert!(wrong_operation
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.contains("wrong-operation")));
-
-        let wrong_resource_refs = vec![test_ref("wrong-resource")];
-        let wrong_resource_grant = capability_grant_fixture(
-            &manifest_value,
-            &contract,
-            descriptor,
-            &descriptor.operation,
-            &wrong_resource_refs,
-            false,
-            TEST_GRANT_VALID_UNTIL_TURN,
-            PLUGIN_INITIAL_TURN,
-            TEST_GRANT_MAX_DELEGATION_DEPTH,
-        );
-        let wrong_resource = plugin_hostcall_receipt_value(&HostcallReceiptInput {
-            manifest_value: &manifest_value,
-            operation: &descriptor.operation,
-            hostcall_ref: &descriptor.descriptor_ref,
-            executor_receipt_ref: &test_ref("executor"),
-            effect_receipt_ref: &test_ref("effect-receipt"),
-            authority_refs: &descriptor.authority_refs,
-            capability_grants: std::slice::from_ref(&wrong_resource_grant),
-            resource_refs: &descriptor.resource_refs,
-            extension_contracts: std::slice::from_ref(&contract),
-            input_schema_ref: Some(&descriptor.input_schema_ref),
-            output_schema_ref: Some(&descriptor.output_schema_ref),
-            evaluation_turn: PLUGIN_INITIAL_TURN,
-        })
-        .expect("wrong resource grant receipt");
-        let wrong_resource = parse_plugin_hostcall_receipt(&wrong_resource).expect("parse wrong resource");
-        assert_eq!(wrong_resource.decision, PLUGIN_DECISION_DENY);
-        assert!(wrong_resource
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.contains("wrong-resource")));
-
-        let over_delegated_grant = capability_grant_fixture(
-            &manifest_value,
-            &contract,
-            descriptor,
-            &descriptor.operation,
-            &descriptor.resource_refs,
-            false,
-            TEST_GRANT_VALID_UNTIL_TURN,
-            TEST_GRANT_MAX_DELEGATION_DEPTH + 1,
-            TEST_GRANT_MAX_DELEGATION_DEPTH,
-        );
-        let over_delegated = plugin_hostcall_receipt_value(&HostcallReceiptInput {
-            manifest_value: &manifest_value,
-            operation: &descriptor.operation,
-            hostcall_ref: &descriptor.descriptor_ref,
-            executor_receipt_ref: &test_ref("executor"),
-            effect_receipt_ref: &test_ref("effect-receipt"),
-            authority_refs: &descriptor.authority_refs,
-            capability_grants: std::slice::from_ref(&over_delegated_grant),
-            resource_refs: &descriptor.resource_refs,
-            extension_contracts: std::slice::from_ref(&contract),
-            input_schema_ref: Some(&descriptor.input_schema_ref),
-            output_schema_ref: Some(&descriptor.output_schema_ref),
-            evaluation_turn: PLUGIN_INITIAL_TURN,
-        })
-        .expect("over-delegated grant receipt");
-        let over_delegated = parse_plugin_hostcall_receipt(&over_delegated).expect("parse over-delegated");
-        assert_eq!(over_delegated.decision, PLUGIN_DECISION_DENY);
-        assert!(over_delegated
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.contains("over-delegated")));
-
-        let revoked_grant = matching_capability_grant_fixture(&manifest_value, &contract, descriptor, true);
-        let revoked = plugin_hostcall_receipt_value(&HostcallReceiptInput {
-            manifest_value: &manifest_value,
-            operation: &descriptor.operation,
-            hostcall_ref: &descriptor.descriptor_ref,
-            executor_receipt_ref: &test_ref("executor"),
-            effect_receipt_ref: &test_ref("effect-receipt"),
-            authority_refs: &descriptor.authority_refs,
-            capability_grants: std::slice::from_ref(&revoked_grant),
-            resource_refs: &descriptor.resource_refs,
-            extension_contracts: std::slice::from_ref(&contract),
-            input_schema_ref: Some(&descriptor.input_schema_ref),
-            output_schema_ref: Some(&descriptor.output_schema_ref),
-            evaluation_turn: PLUGIN_INITIAL_TURN,
-        })
-        .expect("revoked grant receipt");
-        let revoked = parse_plugin_hostcall_receipt(&revoked).expect("parse revoked");
-        assert_eq!(revoked.decision, PLUGIN_DECISION_DENY);
-        assert!(revoked.diagnostics.iter().any(|diagnostic| diagnostic.contains("revoked")));
-
-        let expired_grant = capability_grant_fixture(
-            &manifest_value,
-            &contract,
-            descriptor,
-            &descriptor.operation,
-            &descriptor.resource_refs,
-            false,
-            PLUGIN_INITIAL_TURN,
-            PLUGIN_INITIAL_TURN,
-            TEST_GRANT_MAX_DELEGATION_DEPTH,
-        );
-        let expired = plugin_hostcall_receipt_value(&HostcallReceiptInput {
-            manifest_value: &manifest_value,
-            operation: &descriptor.operation,
-            hostcall_ref: &descriptor.descriptor_ref,
-            executor_receipt_ref: &test_ref("executor"),
-            effect_receipt_ref: &test_ref("effect-receipt"),
-            authority_refs: &descriptor.authority_refs,
-            capability_grants: std::slice::from_ref(&expired_grant),
-            resource_refs: &descriptor.resource_refs,
-            extension_contracts: std::slice::from_ref(&contract),
-            input_schema_ref: Some(&descriptor.input_schema_ref),
-            output_schema_ref: Some(&descriptor.output_schema_ref),
-            evaluation_turn: TEST_GRANT_EXPIRED_TURN,
-        })
-        .expect("expired grant receipt");
-        let expired = parse_plugin_hostcall_receipt(&expired).expect("parse expired");
-        assert_eq!(expired.decision, PLUGIN_DECISION_DENY);
-        assert!(expired.diagnostics.iter().any(|diagnostic| diagnostic.contains("expired")));
     }
 
     #[test]
@@ -940,20 +766,7 @@ mod tests {
     #[test]
     fn plugin_lifecycle_state_core_accepts_complete_ordered_trace() {
         let fixture = lifecycle_proof_fixture("plugin-lifecycle-complete");
-        let decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput {
-            evaluation_kind: PluginLifecycleEvaluationKind::CompleteTrace,
-            manifest: &fixture.manifest,
-            install: Some(&fixture.install),
-            permission: Some(&fixture.permission),
-            activation: Some(&fixture.start),
-            hostcall: Some(&fixture.hostcall),
-            health: Some(&fixture.health),
-            removal: Some(&fixture.removal),
-            upgrade: Some(&fixture.upgrade),
-            negotiation: None,
-            compatibility: None,
-            recovery_receipt_ref: None,
-        })
+        let decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput { hostcall: Some(&fixture.hostcall), removal: Some(&fixture.removal), upgrade: Some(&fixture.upgrade), ..fixture_lifecycle_input(&fixture, PluginLifecycleEvaluationKind::CompleteTrace) })
         .expect("evaluate lifecycle state");
         assert_eq!(decision.decision, PLUGIN_DECISION_PASS);
         assert!(decision.side_effect_authorized);
@@ -972,20 +785,7 @@ mod tests {
     #[test]
     fn plugin_lifecycle_state_core_denies_hostcall_before_permission() {
         let fixture = lifecycle_proof_fixture("plugin-lifecycle-permission-deny");
-        let decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput {
-            evaluation_kind: PluginLifecycleEvaluationKind::HostcallRequest,
-            manifest: &fixture.manifest,
-            install: Some(&fixture.install),
-            permission: None,
-            activation: Some(&fixture.start),
-            hostcall: Some(&fixture.hostcall),
-            health: Some(&fixture.health),
-            removal: None,
-            upgrade: None,
-            negotiation: None,
-            compatibility: None,
-            recovery_receipt_ref: None,
-        })
+        let decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput { permission: None, hostcall: Some(&fixture.hostcall), ..fixture_lifecycle_input(&fixture, PluginLifecycleEvaluationKind::HostcallRequest) })
         .expect("evaluate lifecycle state");
         assert_eq!(decision.decision, PLUGIN_DECISION_DENY);
         assert!(!decision.side_effect_authorized);
@@ -1010,20 +810,7 @@ mod tests {
         })
         .expect("failed health receipt");
         let failed_health = parse_plugin_health_receipt(&failed_health_value).expect("parse failed health");
-        let decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput {
-            evaluation_kind: PluginLifecycleEvaluationKind::UpgradeRequest,
-            manifest: &fixture.manifest,
-            install: Some(&fixture.install),
-            permission: Some(&fixture.permission),
-            activation: Some(&fixture.start),
-            hostcall: None,
-            health: Some(&failed_health),
-            removal: None,
-            upgrade: Some(&fixture.upgrade),
-            negotiation: None,
-            compatibility: None,
-            recovery_receipt_ref: None,
-        })
+        let decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput { health: Some(&failed_health), upgrade: Some(&fixture.upgrade), ..fixture_lifecycle_input(&fixture, PluginLifecycleEvaluationKind::UpgradeRequest) })
         .expect("evaluate lifecycle state");
         assert_eq!(decision.decision, PLUGIN_DECISION_DENY);
         assert!(!decision.side_effect_authorized);
@@ -1038,20 +825,7 @@ mod tests {
     #[test]
     fn plugin_lifecycle_state_core_denies_hostcall_after_removal() {
         let fixture = lifecycle_proof_fixture("plugin-lifecycle-removal-deny");
-        let decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput {
-            evaluation_kind: PluginLifecycleEvaluationKind::HostcallRequest,
-            manifest: &fixture.manifest,
-            install: Some(&fixture.install),
-            permission: Some(&fixture.permission),
-            activation: Some(&fixture.start),
-            hostcall: Some(&fixture.hostcall),
-            health: Some(&fixture.health),
-            removal: Some(&fixture.removal),
-            upgrade: None,
-            negotiation: None,
-            compatibility: None,
-            recovery_receipt_ref: None,
-        })
+        let decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput { hostcall: Some(&fixture.hostcall), removal: Some(&fixture.removal), ..fixture_lifecycle_input(&fixture, PluginLifecycleEvaluationKind::HostcallRequest) })
         .expect("evaluate lifecycle state");
         assert_eq!(decision.decision, PLUGIN_DECISION_DENY);
         assert!(!decision.side_effect_authorized);
@@ -1079,20 +853,7 @@ mod tests {
         .expect("incomplete removal receipt");
         let incomplete_removal = parse_plugin_removal_receipt(&incomplete_removal_value)
             .expect("parse incomplete removal receipt");
-        let decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput {
-            evaluation_kind: PluginLifecycleEvaluationKind::RemovalRequest,
-            manifest: &fixture.manifest,
-            install: Some(&fixture.install),
-            permission: Some(&fixture.permission),
-            activation: Some(&fixture.start),
-            hostcall: None,
-            health: Some(&fixture.health),
-            removal: Some(&incomplete_removal),
-            upgrade: None,
-            negotiation: None,
-            compatibility: None,
-            recovery_receipt_ref: None,
-        })
+        let decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput { removal: Some(&incomplete_removal), ..fixture_lifecycle_input(&fixture, PluginLifecycleEvaluationKind::RemovalRequest) })
         .expect("evaluate lifecycle state");
         assert_eq!(decision.decision, PLUGIN_DECISION_DENY);
         assert!(!decision.side_effect_authorized);
@@ -1183,6 +944,27 @@ mod tests {
             health,
             removal,
             upgrade,
+        }
+    }
+
+    /// Lifecycle input with the fixture's install, permission, start, and health receipts and no later receipts.
+    fn fixture_lifecycle_input(
+        fixture: &LifecycleProofFixture,
+        evaluation_kind: PluginLifecycleEvaluationKind,
+    ) -> PluginLifecycleStateInput<'_> {
+        PluginLifecycleStateInput {
+            evaluation_kind,
+            manifest: &fixture.manifest,
+            install: Some(&fixture.install),
+            permission: Some(&fixture.permission),
+            activation: Some(&fixture.start),
+            hostcall: None,
+            health: Some(&fixture.health),
+            removal: None,
+            upgrade: None,
+            negotiation: None,
+            compatibility: None,
+            recovery_receipt_ref: None,
         }
     }
 

@@ -76,7 +76,7 @@
         let base_refs = refs(&["base"]);
         let diagnostics = texts(&["queue pressure"]);
         let profile_ref = reference("profile-export");
-        let missing_profile = deployment_profile_value(&DeploymentProfileInput {
+        let profile_input = DeploymentProfileInput {
             decision: "pass",
             profile_name: "pilot-node",
             schema_id: PROD_OPS_DEPLOYMENT_PROFILE_SCHEMA,
@@ -84,7 +84,7 @@
             source_language: PRODUCTION_PROFILE_SOURCE_LANGUAGE,
             profile_identity: "pilot-node",
             profile_ref: &profile_ref,
-            state_layout_refs: &[],
+            state_layout_refs: &base_refs,
             required_adapter_refs: &base_refs,
             source_gate_refs: &base_refs,
             resource_limit_refs: &base_refs,
@@ -93,8 +93,8 @@
             startup_expectation_refs: &base_refs,
             shutdown_expectation_refs: &base_refs,
             diagnostics: &diagnostics,
-        });
-        let degraded_pass = observability_slo_value(&ObservabilitySloInput {
+        };
+        let slo_input = ObservabilitySloInput {
             decision: "pass",
             snapshot_name: "over-limit",
             adapter_health_refs: &base_refs,
@@ -107,80 +107,18 @@
             live_transport_refs: &base_refs,
             import_export_failure_refs: &base_refs,
             diagnostics: &diagnostics,
-        });
-        let mismatched_metadata = deployment_profile_value(&DeploymentProfileInput {
-            decision: "pass",
-            profile_name: "pilot-node",
-            schema_id: PROD_OPS_DEPLOYMENT_PROFILE_SCHEMA,
-            schema_version: PRODUCTION_PROFILE_SCHEMA_VERSION,
-            source_language: PRODUCTION_PROFILE_SOURCE_LANGUAGE,
-            profile_identity: "other-node",
-            profile_ref: &profile_ref,
-            state_layout_refs: &base_refs,
-            required_adapter_refs: &base_refs,
-            source_gate_refs: &base_refs,
-            resource_limit_refs: &base_refs,
-            redaction_setting_refs: &base_refs,
-            live_transport_refs: &base_refs,
-            startup_expectation_refs: &base_refs,
-            shutdown_expectation_refs: &base_refs,
-            diagnostics: &diagnostics,
-        });
-        let unsupported_metadata = deployment_profile_value(&DeploymentProfileInput {
-            decision: "pass",
-            profile_name: "pilot-node",
-            schema_id: PROD_OPS_DEPLOYMENT_PROFILE_SCHEMA,
-            schema_version: PRODUCTION_PROFILE_SCHEMA_VERSION + 1,
-            source_language: PRODUCTION_PROFILE_SOURCE_LANGUAGE,
-            profile_identity: "pilot-node",
-            profile_ref: &profile_ref,
-            state_layout_refs: &base_refs,
-            required_adapter_refs: &base_refs,
-            source_gate_refs: &base_refs,
-            resource_limit_refs: &base_refs,
-            redaction_setting_refs: &base_refs,
-            live_transport_refs: &base_refs,
-            startup_expectation_refs: &base_refs,
-            shutdown_expectation_refs: &base_refs,
-            diagnostics: &diagnostics,
-        });
-        let tampered_profile_ref = deployment_profile_value(&DeploymentProfileInput {
-            decision: "pass",
-            profile_name: "pilot-node",
-            schema_id: PROD_OPS_DEPLOYMENT_PROFILE_SCHEMA,
-            schema_version: PRODUCTION_PROFILE_SCHEMA_VERSION,
-            source_language: PRODUCTION_PROFILE_SOURCE_LANGUAGE,
-            profile_identity: "pilot-node",
-            profile_ref: "not-a-content-ref",
-            state_layout_refs: &base_refs,
-            required_adapter_refs: &base_refs,
-            source_gate_refs: &base_refs,
-            resource_limit_refs: &base_refs,
-            redaction_setting_refs: &base_refs,
-            live_transport_refs: &base_refs,
-            startup_expectation_refs: &base_refs,
-            shutdown_expectation_refs: &base_refs,
-            diagnostics: &diagnostics,
-        });
+        };
+        let missing_profile = deployment_profile_value(&DeploymentProfileInput { state_layout_refs: &[], ..profile_input });
+        let degraded_pass = observability_slo_value(&slo_input);
+        let mismatched_metadata = deployment_profile_value(&DeploymentProfileInput { profile_identity: "other-node", ..profile_input });
+        let unsupported_metadata = deployment_profile_value(&DeploymentProfileInput { schema_version: PRODUCTION_PROFILE_SCHEMA_VERSION + 1, ..profile_input });
+        let tampered_profile_ref = deployment_profile_value(&DeploymentProfileInput { profile_ref: "not-a-content-ref", ..profile_input });
         assert!(missing_profile.is_err());
         assert!(degraded_pass.is_err());
         assert!(mismatched_metadata.is_err());
         assert!(unsupported_metadata.is_err());
         assert!(tampered_profile_ref.is_err());
-        observability_slo_value(&ObservabilitySloInput {
-            decision: "degraded",
-            snapshot_name: "over-limit",
-            adapter_health_refs: &base_refs,
-            queue_depth: OVER_LIMIT_QUEUE_DEPTH,
-            max_queue_depth: MAX_QUEUE_DEPTH,
-            control_loop_refs: &base_refs,
-            resource_pressure_refs: &base_refs,
-            retention_drift_refs: &base_refs,
-            source_gate_freshness_refs: &base_refs,
-            live_transport_refs: &base_refs,
-            import_export_failure_refs: &base_refs,
-            diagnostics: &diagnostics,
-        })
+        observability_slo_value(&ObservabilitySloInput { decision: "degraded", ..slo_input })
         .expect("degraded snapshot can be emitted");
     }
 
@@ -345,7 +283,7 @@
             caveats: &caveats,
             diagnostics: &diagnostics,
         });
-        let missing_source_caveat = release_candidate_gate_value(&ReleaseCandidateGateInput {
+        let candidate_input = ReleaseCandidateGateInput {
             decision: "pass",
             candidate: "bad-candidate",
             source_ref: &source_ref,
@@ -362,43 +300,10 @@
             source_gate_caveats: &[],
             pilot_decision_evidence: &evidence,
             diagnostics: &diagnostics,
-        });
-        let missing_matrix = release_candidate_gate_value(&ReleaseCandidateGateInput {
-            decision: "pass",
-            candidate: "bad-candidate",
-            source_ref: &source_ref,
-            rust_validation_evidence: &[],
-            nextest_evidence: &evidence,
-            nix_check_evidence: &evidence,
-            cairn_validation_evidence: &evidence,
-            octet_evidence: &evidence,
-            dogfood_evidence: &evidence,
-            bundle_verify_evidence: &evidence,
-            promotion_evidence: &evidence,
-            export_verify_evidence: &evidence,
-            source_gate_status: SOURCE_REMEDIATED_ZERO_STATUS,
-            source_gate_caveats: &[],
-            pilot_decision_evidence: &evidence,
-            diagnostics: &diagnostics,
-        });
-        let mismatch = release_candidate_gate_value(&ReleaseCandidateGateInput {
-            decision: "pass",
-            candidate: "bad-candidate",
-            source_ref: &source_ref,
-            rust_validation_evidence: &mismatched_evidence,
-            nextest_evidence: &evidence,
-            nix_check_evidence: &evidence,
-            cairn_validation_evidence: &evidence,
-            octet_evidence: &evidence,
-            dogfood_evidence: &evidence,
-            bundle_verify_evidence: &evidence,
-            promotion_evidence: &evidence,
-            export_verify_evidence: &evidence,
-            source_gate_status: SOURCE_REMEDIATED_ZERO_STATUS,
-            source_gate_caveats: &[],
-            pilot_decision_evidence: &evidence,
-            diagnostics: &diagnostics,
-        });
+        };
+        let missing_source_caveat = release_candidate_gate_value(&candidate_input);
+        let missing_matrix = release_candidate_gate_value(&ReleaseCandidateGateInput { rust_validation_evidence: &[], source_gate_status: SOURCE_REMEDIATED_ZERO_STATUS, ..candidate_input });
+        let mismatch = release_candidate_gate_value(&ReleaseCandidateGateInput { rust_validation_evidence: &mismatched_evidence, source_gate_status: SOURCE_REMEDIATED_ZERO_STATUS, ..candidate_input });
         assert!(broad.is_err());
         assert!(missing_source_caveat.is_err());
         assert!(missing_matrix

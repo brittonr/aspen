@@ -293,7 +293,6 @@ mod tests {
 
     #[test]
     fn grant_currentness_checks_scope_epoch_keys_and_revocation() {
-        const VALID_START: u64 = 2;
         const EXPIRES_AT: u64 = 8;
         const GRANT_EPOCH: u64 = 4;
         const MINIMUM_EPOCH: u64 = 3;
@@ -305,23 +304,8 @@ mod tests {
         let current_key = ref_for("current-key");
         let other_key = ref_for("other-key");
         let delegation = ref_for("delegation");
-        let context_value = context_value(ContextValueInput {
-            subject_ref: &subject,
-            capabilities: &[Capability {
-                capability: "node-control:status".to_string(),
-                scope: "node:control".to_string(),
-                attenuation: "scoped".to_string(),
-            }],
-            delegation_refs: std::slice::from_ref(&delegation),
-            not_before: Some(VALID_START),
-            expires_at: Some(EXPIRES_AT),
-            revocation_refs: &[],
-            key_refs: std::slice::from_ref(&current_key),
-            policy_refs: &[ref_for("policy")],
-            evidence_refs: &[ref_for("evidence")],
-        })
-        .expect("context");
-        let context = parse_context(&context_value).expect("parse context");
+        let context =
+            currentness_context(&subject, std::slice::from_ref(&current_key), std::slice::from_ref(&delegation));
         let input = AuthorityGrantCurrentnessInput {
             context: &context,
             requested_principal_ref: &subject,
@@ -379,6 +363,29 @@ mod tests {
             ..input
         };
         assert_diagnostic(revoked, "revoked");
+    }
+
+    /// A scoped node-control status context for `subject`, delegated once and valid over [2, 8).
+    fn currentness_context(subject: &str, key_refs: &[String], delegation_refs: &[String]) -> Context {
+        const CONTEXT_VALID_START: u64 = 2;
+        const CONTEXT_EXPIRES_AT: u64 = 8;
+        let context_value = context_value(ContextValueInput {
+            subject_ref: subject,
+            capabilities: &[Capability {
+                capability: "node-control:status".to_string(),
+                scope: "node:control".to_string(),
+                attenuation: "scoped".to_string(),
+            }],
+            delegation_refs,
+            not_before: Some(CONTEXT_VALID_START),
+            expires_at: Some(CONTEXT_EXPIRES_AT),
+            revocation_refs: &[],
+            key_refs,
+            policy_refs: &[ref_for("policy")],
+            evidence_refs: &[ref_for("evidence")],
+        })
+        .expect("context");
+        parse_context(&context_value).expect("parse context")
     }
 
     fn assert_diagnostic(input: AuthorityGrantCurrentnessInput<'_>, expected: &str) {

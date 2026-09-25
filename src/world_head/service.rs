@@ -189,21 +189,7 @@ where
     };
     let decision = plan_world_head_transition(&plan_request);
     let WorldHeadDecision::Admitted(plan) = decision else {
-        let issues = decision_issues(decision);
-        let receipt = transition_receipt(TransitionReceiptInput {
-            decision: DECISION_DENIED,
-            plan: None,
-            claim: &canonical,
-            authentication: &authentication,
-            authority_ref: authority_observation.authority_ref.as_str(),
-            issues: &issues,
-        })?;
-        return Ok(WorldHeadExecutionResult {
-            status: WorldHeadExecutionStatus::Denied,
-            plan: None,
-            issues,
-            receipt,
-        });
+        return denied_execution(decision, &canonical, &authentication, authority_observation.authority_ref.as_str());
     };
     let admitted_receipt = transition_receipt(TransitionReceiptInput {
         decision: DECISION_ADMITTED,
@@ -249,6 +235,29 @@ where
         plan: Some(plan),
         issues: Vec::new(),
         receipt: admitted_receipt,
+    })
+}
+
+fn denied_execution(
+    decision: WorldHeadDecision,
+    canonical: &CanonicalWorldHeadClaim,
+    authentication: &WorldHeadAuthenticationResult,
+    authority_ref: &str,
+) -> Result<WorldHeadExecutionResult> {
+    let issues = decision_issues(decision);
+    let receipt = transition_receipt(TransitionReceiptInput {
+        decision: DECISION_DENIED,
+        plan: None,
+        claim: canonical,
+        authentication,
+        authority_ref,
+        issues: &issues,
+    })?;
+    Ok(WorldHeadExecutionResult {
+        status: WorldHeadExecutionStatus::Denied,
+        plan: None,
+        issues,
+        receipt,
     })
 }
 

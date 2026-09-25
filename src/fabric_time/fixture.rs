@@ -74,14 +74,7 @@ pub struct ExecutableFabricTimeFixtureRun {
 pub fn run_executable_fabric_time_fixture(
     selection: FabricTimeFixtureSelection,
 ) -> crate::error::Result<ExecutableFabricTimeFixtureRun> {
-    let live_profile =
-        canonical_admit_time_profile(&fixture_profile("molten.fabric-time.live", HASH_A, TimeProfileKind::Live, None))?;
-    let simulation_profile = canonical_admit_time_profile(&fixture_profile(
-        "molten.fabric-time.simulation",
-        HASH_B,
-        TimeProfileKind::DeterministicSimulation,
-        Some(PROFILE_FAIRNESS_TURNS),
-    ))?;
+    let [live_profile, simulation_profile] = admitted_profiles()?;
     let port_descriptor_refs = validate_fixture_ports(&live_profile, &simulation_profile)?;
 
     let mut live_clock = LiveClockAdapter::new(&live_profile.profile, PROFILE_MAX_TICKS)?;
@@ -89,12 +82,7 @@ pub fn run_executable_fabric_time_fixture(
     let live_conformance =
         run_timer_adapter_conformance(&live_profile.profile, &mut live_clock, FIXTURE_SERVICE_ID, FIXTURE_GENERATION)?;
     let second_live_wall = live_clock.observe_wall()?;
-    let live_wall_decision =
-        classify_wall_clock_observation(&first_live_wall, &second_live_wall, WallClockAnomalyPolicy {
-            max_forward_jump_nanos: u64::MAX,
-            max_uncertainty_nanos: PROFILE_MAX_TICKS,
-        })
-        .map_err(|error| core_error("classify live wall clock", error))?;
+    let live_wall_decision = classify_live_wall(&first_live_wall, &second_live_wall)?;
 
     let mut virtual_clock = VirtualClockAdapter::new(&simulation_profile.profile, 0, WALL_BASE_NANOS)?;
     let simulation_conformance = run_timer_adapter_conformance(
@@ -105,78 +93,115 @@ pub fn run_executable_fabric_time_fixture(
     )?;
     ensure_shared_conformance(&live_conformance, &simulation_conformance)?;
 
+    let (live_ref, simulation_ref) = (&live_profile.profile_ref, &simulation_profile.profile_ref);
     let live_final_ticks = live_clock.now_ticks()?;
     let simulation_initial_ticks = virtual_clock.now_ticks()?;
-    let live_initial = canonical_named_event(EventHeader {
-        profile_ref: &live_profile.profile_ref,
-        kind: CanonicalTimeEventKind::Conformance,
-        generation: FIXTURE_GENERATION,
-        subject: "live-run-state",
-        action: "initialized",
-        ticks: live_final_ticks,
-    })?;
-    let simulation_initial = canonical_named_event(EventHeader {
-        profile_ref: &simulation_profile.profile_ref,
-        kind: CanonicalTimeEventKind::Conformance,
-        generation: FIXTURE_GENERATION,
-        subject: "simulation-run-state",
-        action: "initialized",
-        ticks: simulation_initial_ticks,
-    })?;
+    let live_initial = conformance_event(live_ref, "live-run-state", "initialized", live_final_ticks)?;
+    let simulation_initial =
+        conformance_event(simulation_ref, "simulation-run-state", "initialized", simulation_initial_ticks)?;
     let mut events = vec![live_initial.clone(), simulation_initial.clone()];
-    events.push(canonical_named_event(EventHeader {
-        profile_ref: &live_profile.profile_ref,
-        kind: CanonicalTimeEventKind::Conformance,
-        generation: FIXTURE_GENERATION,
-        subject: "live-adapter",
-        action: "passed",
-        ticks: live_final_ticks,
-    })?);
-    events.push(canonical_named_event(EventHeader {
-        profile_ref: &simulation_profile.profile_ref,
-        kind: CanonicalTimeEventKind::Conformance,
-        generation: FIXTURE_GENERATION,
-        subject: "simulation-adapter",
-        action: "passed",
-        ticks: simulation_initial_ticks,
-    })?);
-    events.push(canonical_clock_anomaly_event(&live_profile.profile_ref, FIXTURE_GENERATION, &live_wall_decision)?);
+    events.push(conformance_event(live_ref, "live-adapter", "passed", live_final_ticks)?);
+    events.push(conformance_event(simulation_ref, "simulation-adapter", "passed", simulation_initial_ticks)?);
+    events.push(canonical_clock_anomaly_event(live_ref, FIXTURE_GENERATION, &live_wall_decision)?);
     events.push(run_live_scheduler_scenario(&live_profile)?);
 
     let _counters = run_simulation_scenarios(&simulation_profile, &mut virtual_clock, &mut events)?;
     let production_entropy_source = run_production_entropy_scenario(&live_profile, &mut events)?;
-    let live_terminal = canonical_named_event(EventHeader {
-        profile_ref: &live_profile.profile_ref,
-        kind: CanonicalTimeEventKind::Conformance,
-        generation: FIXTURE_GENERATION,
-        subject: "live-run-state",
-        action: "completed",
-        ticks: live_final_ticks,
-    })?;
-    let simulation_terminal = canonical_named_event(EventHeader {
-        profile_ref: &simulation_profile.profile_ref,
-        kind: CanonicalTimeEventKind::Conformance,
-        generation: FIXTURE_GENERATION,
-        subject: "simulation-run-state",
-        action: "completed",
-        ticks: virtual_clock.now_ticks()?,
-    })?;
+    let live_terminal = conformance_event(live_ref, "live-run-state", "completed", live_final_ticks)?;
+    let simulation_terminal =
+        conformance_event(simulation_ref, "simulation-run-state", "completed", virtual_clock.now_ticks()?)?;
     events.push(live_terminal.clone());
     events.push(simulation_terminal.clone());
 
+    let final_time_ticks = match selection {
+        FabricTimeFixtureSelection::Live => live_final_ticks,
+        FabricTimeFixtureSelection::DeterministicSimulation | FabricTimeFixtureSelection::Both => {
+            virtual_clock.now_ticks()?
+        }
+    };
+    let boundaries = [&live_initial, &simulation_initial, &live_terminal, &simulation_terminal];
+    let profile_refs = [
+        live_profile.profile_ref.as_str(),
+        simulation_profile.profile_ref.as_str(),
+    ];
+    let report = run_report(selection, &events, profile_refs, final_time_ticks, boundaries)?;
+
+    Ok(ExecutableFabricTimeFixtureRun {
+        selection,
+        live_profile,
+        simulation_profile,
+        port_descriptor_refs,
+        live_conformance,
+        simulation_conformance,
+        events,
+        report,
+        production_entropy_source,
+    })
+}
+
+fn conformance_event(
+    profile_ref: &str,
+    subject: &str,
+    action: &str,
+    ticks: u64,
+) -> crate::error::Result<CanonicalTimeEvent> {
+    canonical_named_event(EventHeader {
+        profile_ref,
+        kind: CanonicalTimeEventKind::Conformance,
+        generation: FIXTURE_GENERATION,
+        subject,
+        action,
+        ticks,
+    })
+}
+
+/// The admitted live profile and the admitted deterministic simulation profile, in that order.
+fn admitted_profiles() -> crate::error::Result<[CanonicalTimeProfile; 2]> {
+    let live_profile =
+        canonical_admit_time_profile(&fixture_profile("molten.fabric-time.live", HASH_A, TimeProfileKind::Live, None))?;
+    let simulation_profile = canonical_admit_time_profile(&fixture_profile(
+        "molten.fabric-time.simulation",
+        HASH_B,
+        TimeProfileKind::DeterministicSimulation,
+        Some(PROFILE_FAIRNESS_TURNS),
+    ))?;
+    Ok([live_profile, simulation_profile])
+}
+
+fn classify_live_wall(
+    first: &WallClockObservation,
+    second: &WallClockObservation,
+) -> crate::error::Result<WallClockAnomalyDecision> {
+    classify_wall_clock_observation(first, second, WallClockAnomalyPolicy {
+        max_forward_jump_nanos: u64::MAX,
+        max_uncertainty_nanos: PROFILE_MAX_TICKS,
+    })
+    .map_err(|error| core_error("classify live wall clock", error))
+}
+
+/// The run report over the events the selection covers, bounded by the selected initial and
+/// terminal events. `boundaries` holds the live and simulation initial events, then the live and
+/// simulation terminal events.
+fn run_report(
+    selection: FabricTimeFixtureSelection,
+    events: &[CanonicalTimeEvent],
+    [live_profile_ref, simulation_profile_ref]: [&str; 2],
+    final_time_ticks: u64,
+    [live_initial, simulation_initial, live_terminal, simulation_terminal]: [&CanonicalTimeEvent; 4],
+) -> crate::error::Result<CanonicalFabricTimeRun> {
     let selected_events = events
         .iter()
         .filter(|event| match selection {
-            FabricTimeFixtureSelection::Live => event.profile_ref == live_profile.profile_ref,
-            FabricTimeFixtureSelection::DeterministicSimulation => event.profile_ref == simulation_profile.profile_ref,
+            FabricTimeFixtureSelection::Live => event.profile_ref == live_profile_ref,
+            FabricTimeFixtureSelection::DeterministicSimulation => event.profile_ref == simulation_profile_ref,
             FabricTimeFixtureSelection::Both => true,
         })
         .collect::<Vec<_>>();
     let evidence_refs = selected_events.iter().map(|event| event.evidence_ref.clone()).collect::<Vec<_>>();
-    let (profile_ref, final_time_ticks) = match selection {
-        FabricTimeFixtureSelection::Live => (live_profile.profile_ref.clone(), live_final_ticks),
+    let profile_ref = match selection {
+        FabricTimeFixtureSelection::Live => live_profile_ref.to_string(),
         FabricTimeFixtureSelection::DeterministicSimulation | FabricTimeFixtureSelection::Both => {
-            (simulation_profile.profile_ref.clone(), virtual_clock.now_ticks()?)
+            simulation_profile_ref.to_string()
         }
     };
     let initial_state_ref =
@@ -196,7 +221,7 @@ pub fn run_executable_fabric_time_fixture(
         &[CanonicalTimeEventKind::Fault, CanonicalTimeEventKind::ClockAnomaly],
         "fault-plan",
     )?;
-    let report = canonical_fabric_time_run(FabricTimeRunReport {
+    canonical_fabric_time_run(FabricTimeRunReport {
         profile_ref,
         profile_kind: selection.as_str().to_string(),
         generation: FIXTURE_GENERATION,
@@ -218,18 +243,6 @@ pub fn run_executable_fabric_time_fixture(
         shared_conformance_passed: true,
         evidence_refs,
         non_claims: REQUIRED_TIME_NON_CLAIMS.to_vec(),
-    })?;
-
-    Ok(ExecutableFabricTimeFixtureRun {
-        selection,
-        live_profile,
-        simulation_profile,
-        port_descriptor_refs,
-        live_conformance,
-        simulation_conformance,
-        events,
-        report,
-        production_entropy_source,
     })
 }
 
@@ -337,6 +350,35 @@ fn run_simulation_scenarios(
     counters.timer_events = checked_increment(counters.timer_events, "timer event count")?;
     counters.fault_events = checked_increment(counters.fault_events, "fault event count")?;
 
+    run_timer_drop_and_cancel_faults(profile, events, &mut counters)?;
+
+    let cleaned = cleanup_generation(&[periodic_transition.next, delayed_transition.next], FIXTURE_GENERATION);
+    if cleaned.iter().any(|timer| timer.phase != TimerPhase::Cancelled) {
+        return Err(crate::error::MoltenError::invalid_harness("fixture generation cleanup leaked an active timer"));
+    }
+    events.push_item(canonical_named_event(EventHeader {
+        profile_ref: &profile.profile_ref,
+        kind: CanonicalTimeEventKind::Timer,
+        generation: FIXTURE_GENERATION,
+        subject: "timer-generation-cleanup",
+        action: "no-leaks",
+        ticks: clock.now_ticks()?,
+    })?);
+    counters.timer_events = checked_increment(counters.timer_events, "timer event count")?;
+
+    run_scheduler_scenario(profile, events, &mut counters)?;
+    run_deterministic_entropy_scenario(profile, events, &mut counters)?;
+    run_deadline_lease_scenario(profile, events, &mut counters)?;
+    run_clock_partition_faults(profile, clock, events, &mut counters)?;
+    Ok(counters)
+}
+
+/// A dropped delivery is recorded as a fault, and a cancellation racing the deadline wins.
+fn run_timer_drop_and_cancel_faults(
+    profile: &CanonicalTimeProfile,
+    events: &mut impl crate::bounded::VecSink<CanonicalTimeEvent>,
+    counters: &mut ScenarioCounters,
+) -> crate::error::Result<()> {
     let dropped = schedule_timer(
         &profile.profile,
         FIXTURE_GENERATION,
@@ -394,26 +436,7 @@ fn run_simulation_scenarios(
     })?);
     counters.timer_events = checked_increment(counters.timer_events, "timer event count")?;
     counters.fault_events = checked_increment(counters.fault_events, "fault event count")?;
-
-    let cleaned = cleanup_generation(&[periodic_transition.next, delayed_transition.next], FIXTURE_GENERATION);
-    if cleaned.iter().any(|timer| timer.phase != TimerPhase::Cancelled) {
-        return Err(crate::error::MoltenError::invalid_harness("fixture generation cleanup leaked an active timer"));
-    }
-    events.push_item(canonical_named_event(EventHeader {
-        profile_ref: &profile.profile_ref,
-        kind: CanonicalTimeEventKind::Timer,
-        generation: FIXTURE_GENERATION,
-        subject: "timer-generation-cleanup",
-        action: "no-leaks",
-        ticks: clock.now_ticks()?,
-    })?);
-    counters.timer_events = checked_increment(counters.timer_events, "timer event count")?;
-
-    run_scheduler_scenario(profile, events, &mut counters)?;
-    run_deterministic_entropy_scenario(profile, events, &mut counters)?;
-    run_deadline_lease_scenario(profile, events, &mut counters)?;
-    run_clock_partition_faults(profile, clock, events, &mut counters)?;
-    Ok(counters)
+    Ok(())
 }
 
 fn run_scheduler_scenario(
@@ -480,6 +503,17 @@ fn run_scheduler_scenario(
     events.push_item(canonical_scheduler_transition(&profile.profile_ref, &yielded)?);
     counters.scheduler_events = checked_increment(counters.scheduler_events, "scheduler event count")?;
 
+    run_scheduler_saturation(profile, policy, events, counters)
+}
+
+/// Fills the scheduler queue to its admitted depth and requires one more wake to be rejected as
+/// overload.
+fn run_scheduler_saturation(
+    profile: &CanonicalTimeProfile,
+    policy: SchedulerPolicy,
+    events: &mut impl crate::bounded::VecSink<CanonicalTimeEvent>,
+    counters: &mut ScenarioCounters,
+) -> crate::error::Result<()> {
     let saturation_fault = FabricTimeFault::SaturateSchedulerQueue;
     let mut saturated = new_scheduler_state(&profile.profile, FIXTURE_GENERATION);
     for index in 0..profile.profile.max_scheduler_queue_depth {
@@ -705,6 +739,17 @@ fn run_clock_partition_faults(
     })?);
     counters.fault_events = checked_increment(counters.fault_events, "fault event count")?;
 
+    run_partition_fault(profile, clock, events, counters)
+}
+
+/// Injects a partition window and requires a deadline coupled to it to be indeterminate while it
+/// lasts.
+fn run_partition_fault(
+    profile: &CanonicalTimeProfile,
+    clock: &mut VirtualClockAdapter,
+    events: &mut impl crate::bounded::VecSink<CanonicalTimeEvent>,
+    counters: &mut ScenarioCounters,
+) -> crate::error::Result<()> {
     let partition_until = clock
         .now_ticks()?
         .checked_add(TIMER_PERIOD)

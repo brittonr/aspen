@@ -302,20 +302,7 @@ pub fn build_cluster_harness_parent(
     validate_non_empty_strings("cluster run observed artifact kind", &input.observed_artifact_kinds)?;
     validate_non_empty_strings("cluster run caveat", &input.caveats)?;
 
-    let mut diagnostics = input.diagnostics.clone();
-    if input.unsupported_pass_claim {
-        diagnostics.push("cluster-run-unsupported-pass-claim".to_string());
-    }
-    for required in &input.required_artifact_kinds {
-        if !input.observed_artifact_kinds.contains(required) {
-            diagnostics.push(format!("cluster-run-missing-required-artifact-kind:{required}"));
-        }
-    }
-    if input.child_receipt_refs.is_empty() {
-        diagnostics.push("cluster-run-missing-child-receipts".to_string());
-    }
-    diagnostics.sort();
-    diagnostics.dedup();
+    let diagnostics = parent_diagnostics(input);
     let is_all_required_kinds_observed =
         !diagnostics.iter().any(|diagnostic| diagnostic.contains("missing-required-artifact-kind"));
     let decision = if diagnostics.is_empty() {
@@ -358,6 +345,24 @@ pub fn build_cluster_harness_parent(
         receipt_ref,
         value,
     })
+}
+
+fn parent_diagnostics(input: &ClusterHarnessParentInput) -> Vec<String> {
+    let mut diagnostics = input.diagnostics.clone();
+    if input.unsupported_pass_claim {
+        diagnostics.push("cluster-run-unsupported-pass-claim".to_string());
+    }
+    for required in &input.required_artifact_kinds {
+        if !input.observed_artifact_kinds.contains(required) {
+            diagnostics.push(format!("cluster-run-missing-required-artifact-kind:{required}"));
+        }
+    }
+    if input.child_receipt_refs.is_empty() {
+        diagnostics.push("cluster-run-missing-child-receipts".to_string());
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    diagnostics
 }
 
 // r[impl molten.testing.receipt_first_cluster_harness.run_artifact_directory]

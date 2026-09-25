@@ -103,16 +103,7 @@ pub fn parse_manifest_value(value: &IoValue, expected_manifest_ref: Option<&str>
     validate_content_ref_sequence(&policy_refs, "chunk manifest policy-ref")?;
     validate_content_ref_field(&root_ref, "chunk manifest root-ref")?;
     validate_content_ref_sequence(&evidence_refs, "chunk manifest evidence-ref")?;
-    let manifest_ref = canonical_hash(value)?;
-    molten_core::codec::validate_domain_artifact(&molten_core::codec::DomainArtifactInput {
-        domain: "chunk-store",
-        label: "chunk-manifest-v1",
-        schema: CHUNK_MANIFEST_SCHEMA,
-        artifact_ref: &manifest_ref,
-        expected_schema: CHUNK_MANIFEST_SCHEMA,
-        supported_labels: &["chunk-manifest-v1"],
-    })
-    .map_err(|issue| MoltenError::invalid_harness(format!("chunk manifest codec facade rejected artifact: {issue}")))?;
+    let manifest_ref = codec_checked_manifest_ref(value)?;
     if let Some(expected) = expected_manifest_ref
         && manifest_ref != expected
     {
@@ -120,12 +111,7 @@ pub fn parse_manifest_value(value: &IoValue, expected_manifest_ref: Option<&str>
             "chunk manifest hash mismatch: got {manifest_ref}, expected {expected}"
         )));
     }
-    if chunker != FIXED_V1_CHUNKER {
-        return Err(MoltenError::invalid_harness(format!("unsupported chunker {chunker}")));
-    }
-    if chunk_size == 0 {
-        return Err(MoltenError::invalid_harness("chunk manifest chunk-size must be non-zero"));
-    }
+    validate_chunker_shape(&chunker, chunk_size)?;
     validate_transform_shape(&transforms)?;
     let chunks = refs_from_values(&chunk_values, chunk_size, &transforms)?;
     validate_fixed_chunk_lengths(total_len, chunk_size, &chunks)?;
@@ -150,6 +136,16 @@ pub fn parse_manifest_value(value: &IoValue, expected_manifest_ref: Option<&str>
         evidence_refs,
         value: value.clone(),
     })
+}
+
+fn validate_chunker_shape(chunker: &str, chunk_size: u64) -> Result<()> {
+    if chunker != FIXED_V1_CHUNKER {
+        return Err(MoltenError::invalid_harness(format!("unsupported chunker {chunker}")));
+    }
+    if chunk_size == 0 {
+        return Err(MoltenError::invalid_harness("chunk manifest chunk-size must be non-zero"));
+    }
+    Ok(())
 }
 
 fn refs_from_values(values: &[IoValue], chunk_size: u64, transforms: &ChunkTransforms) -> Result<Vec<ChunkRef>> {

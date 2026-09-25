@@ -81,6 +81,9 @@ pub struct IrohEd25519FileAdapter<'a> {
     backend_ref: String,
 }
 
+/// The domain, signature, signer currentness and generation, and policy a verification is evaluated
+/// against.
+#[derive(Clone, Copy)]
 pub struct VerificationInput<'a> {
     pub expected_domain: &'a CanonicalSignatureDomain,
     pub signature: &'a CanonicalSignatureOutcome,

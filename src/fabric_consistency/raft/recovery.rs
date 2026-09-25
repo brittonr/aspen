@@ -23,24 +23,7 @@ pub fn plan_replica_recovery(
     snapshot_bytes: Option<&[u8]>,
 ) -> crate::error::Result<ReplicaRecoveryPlan> {
     let mut state = reset_recovery_state(&start_plan.state)?;
-    let mut expected_sequence = 0_u64;
-    let mut durable_commit_index = INITIAL_COMMIT_INDEX;
-    let mut durable_record_refs = Vec::with_capacity(durable_records.len());
-    for record in durable_records {
-        if record.sequence != expected_sequence {
-            return Err(crate::error::MoltenError::invalid_harness("live Raft recovery durable sequence has a gap"));
-        }
-        expected_sequence = expected_sequence.checked_add(NEXT_LOG_INDEX_STEP).ok_or_else(|| {
-            crate::error::MoltenError::invalid_harness("live Raft recovery durable sequence overflow")
-        })?;
-        if crate::preserves_rail::content_ref_from_bytes(&record.value) != record.value_ref {
-            return Err(crate::error::MoltenError::invalid_harness(
-                "live Raft recovery durable record content ref mismatch",
-            ));
-        }
-        replay_record(&mut state, &mut durable_commit_index, &record.value)?;
-        durable_record_refs.push(record.value_ref.clone());
-    }
+    let (mut durable_commit_index, durable_record_refs) = replay_durable_records(&mut state, durable_records)?;
     let snapshot = snapshot_bytes.map(parse_snapshot).transpose()?;
     if let Some(snapshot) = &snapshot {
         durable_commit_index = durable_commit_index.max(snapshot.last_included_index);
@@ -100,6 +83,33 @@ pub fn plan_replica_recovery(
         durable_commit_index,
         replay_entry_count: replay_entries.len(),
     })
+}
+
+/// Replays the gap-free, content-verified durable records into `state`, returning the durable
+/// commit index and the replayed record refs.
+fn replay_durable_records(
+    state: &mut ReplicaState,
+    durable_records: &[crate::fabric_durability::LogRecord],
+) -> crate::error::Result<(u64, Vec<String>)> {
+    let mut expected_sequence = 0_u64;
+    let mut durable_commit_index = INITIAL_COMMIT_INDEX;
+    let mut durable_record_refs = Vec::with_capacity(durable_records.len());
+    for record in durable_records {
+        if record.sequence != expected_sequence {
+            return Err(crate::error::MoltenError::invalid_harness("live Raft recovery durable sequence has a gap"));
+        }
+        expected_sequence = expected_sequence.checked_add(NEXT_LOG_INDEX_STEP).ok_or_else(|| {
+            crate::error::MoltenError::invalid_harness("live Raft recovery durable sequence overflow")
+        })?;
+        if crate::preserves_rail::content_ref_from_bytes(&record.value) != record.value_ref {
+            return Err(crate::error::MoltenError::invalid_harness(
+                "live Raft recovery durable record content ref mismatch",
+            ));
+        }
+        replay_record(state, &mut durable_commit_index, &record.value)?;
+        durable_record_refs.push(record.value_ref.clone());
+    }
+    Ok((durable_commit_index, durable_record_refs))
 }
 
 fn reset_recovery_state(initial: &ReplicaState) -> crate::error::Result<ReplicaState> {

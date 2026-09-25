@@ -5,83 +5,118 @@ pub fn minimal_plugin_fixture(root: &std::path::Path) -> Result<PluginFixtureRun
     let seed = seed_refs()?;
     let manifest_value = executor_manifest(&registry, &seed, "minimal")?;
     let manifest = parse_plugin_manifest(&manifest_value)?;
-    let install = install_plugin(&registry, &manifest_value)?;
-    let permission = permission_step(&manifest_value, &seed)?;
-    let lifecycle = life_steps(&manifest_value, &permission.receipt_ref, &seed)?;
-    let call = call_step(&manifest_value, &seed)?;
-    let service_ref = plugin_ref("service-supervision")?;
-    let health = health_step(&manifest_value, &lifecycle.start.receipt_ref, &service_ref)?;
-    let removal = removal_step(&manifest_value, &lifecycle.remove.receipt_ref, &service_ref)?;
-    let upgraded_manifest_value = executor_manifest(&registry, &seed, "minimal-v2")?;
-    let upgrade = upgrade_step(&manifest_value, &upgraded_manifest_value, &removal.receipt_ref)?;
+    let trace = run_fixture_trace(&registry, &manifest_value, &seed)?;
     let lifecycle_decision = evaluate_plugin_lifecycle_state(&PluginLifecycleStateInput {
         evaluation_kind: PluginLifecycleEvaluationKind::CompleteTrace,
         manifest: &manifest,
-        install: Some(&install),
-        permission: Some(&permission),
-        activation: Some(&lifecycle.start),
-        hostcall: Some(&call),
-        health: Some(&health),
-        removal: Some(&removal),
-        upgrade: Some(&upgrade),
+        install: Some(&trace.install),
+        permission: Some(&trace.permission),
+        activation: Some(&trace.lifecycle.start),
+        hostcall: Some(&trace.call),
+        health: Some(&trace.health),
+        removal: Some(&trace.removal),
+        upgrade: Some(&trace.upgrade),
         negotiation: None,
         compatibility: None,
         recovery_receipt_ref: None,
     })?;
     let evidence_values = vec![
         manifest_value.clone(),
-        install.value.clone(),
-        permission.value.clone(),
-        lifecycle.init.value.clone(),
-        lifecycle.start.value.clone(),
-        call.value.clone(),
-        health.value.clone(),
-        lifecycle.stop.value.clone(),
-        lifecycle.remove.value.clone(),
-        removal.value.clone(),
-        upgraded_manifest_value.clone(),
-        upgrade.value.clone(),
+        trace.install.value.clone(),
+        trace.permission.value.clone(),
+        trace.lifecycle.init.value.clone(),
+        trace.lifecycle.start.value.clone(),
+        trace.call.value.clone(),
+        trace.health.value.clone(),
+        trace.lifecycle.stop.value.clone(),
+        trace.lifecycle.remove.value.clone(),
+        trace.removal.value.clone(),
+        trace.upgraded_manifest_value.clone(),
+        trace.upgrade.value.clone(),
     ];
     for value in &evidence_values {
         let _ = crate::ledger::import_artifact(&ledger_root, value)?;
     }
     let report_value = plugin_fixture_report_value(&PluginFixtureReportInput {
         manifest_ref: &manifest.manifest_ref,
-        install_receipt_ref: &install.receipt_ref,
-        permission_receipt_ref: &permission.receipt_ref,
-        start_receipt_ref: &lifecycle.start.receipt_ref,
-        hostcall_receipt_ref: &call.receipt_ref,
-        health_receipt_ref: &health.receipt_ref,
-        stop_receipt_ref: &lifecycle.stop.receipt_ref,
-        removal_receipt_ref: &removal.receipt_ref,
-        upgrade_receipt_ref: &upgrade.receipt_ref,
+        install_receipt_ref: &trace.install.receipt_ref,
+        permission_receipt_ref: &trace.permission.receipt_ref,
+        start_receipt_ref: &trace.lifecycle.start.receipt_ref,
+        hostcall_receipt_ref: &trace.call.receipt_ref,
+        health_receipt_ref: &trace.health.receipt_ref,
+        stop_receipt_ref: &trace.lifecycle.stop.receipt_ref,
+        removal_receipt_ref: &trace.removal.receipt_ref,
+        upgrade_receipt_ref: &trace.upgrade.receipt_ref,
     })?;
-    let decision = run_decision(&[
-        install.decision.as_str(),
-        permission.decision.as_str(),
-        lifecycle.init.decision.as_str(),
-        lifecycle.start.decision.as_str(),
-        call.decision.as_str(),
-        health.decision.as_str(),
-        lifecycle.stop.decision.as_str(),
-        removal.decision.as_str(),
-        upgrade.decision.as_str(),
-        lifecycle_decision.decision.as_str(),
-    ]);
+    let decision = trace_decision(&trace, &lifecycle_decision.decision);
     Ok(PluginFixtureRun {
         decision,
         manifest_ref: manifest.manifest_ref,
-        install_receipt_ref: install.receipt_ref,
-        permission_receipt_ref: permission.receipt_ref,
-        start_receipt_ref: lifecycle.start.receipt_ref,
-        hostcall_receipt_ref: call.receipt_ref,
-        health_receipt_ref: health.receipt_ref,
-        stop_receipt_ref: lifecycle.stop.receipt_ref,
-        removal_receipt_ref: removal.receipt_ref,
-        upgrade_receipt_ref: upgrade.receipt_ref,
+        install_receipt_ref: trace.install.receipt_ref,
+        permission_receipt_ref: trace.permission.receipt_ref,
+        start_receipt_ref: trace.lifecycle.start.receipt_ref,
+        hostcall_receipt_ref: trace.call.receipt_ref,
+        health_receipt_ref: trace.health.receipt_ref,
+        stop_receipt_ref: trace.lifecycle.stop.receipt_ref,
+        removal_receipt_ref: trace.removal.receipt_ref,
+        upgrade_receipt_ref: trace.upgrade.receipt_ref,
         report_value,
         evidence_values,
     })
+}
+
+/// The receipts of one install, permission, lifecycle, hostcall, health, removal, and upgrade trace, and the
+/// upgraded manifest installed between removal and upgrade.
+struct FixtureTrace {
+    install: PluginInstallReceipt,
+    permission: PluginPermissionReceipt,
+    lifecycle: LifeSteps,
+    call: PluginHostcallReceipt,
+    health: PluginHealthReceipt,
+    removal: PluginRemovalReceipt,
+    upgrade: PluginUpgradeReceipt,
+    upgraded_manifest_value: IoValue,
+}
+
+fn run_fixture_trace(
+    registry: &std::path::Path,
+    manifest_value: &IoValue,
+    seed: &SeedRefs,
+) -> Result<FixtureTrace> {
+    let install = install_plugin(registry, manifest_value)?;
+    let permission = permission_step(manifest_value, seed)?;
+    let lifecycle = life_steps(manifest_value, &permission.receipt_ref, seed)?;
+    let call = call_step(manifest_value, seed)?;
+    let service_ref = plugin_ref("service-supervision")?;
+    let health = health_step(manifest_value, &lifecycle.start.receipt_ref, &service_ref)?;
+    let removal = removal_step(manifest_value, &lifecycle.remove.receipt_ref, &service_ref)?;
+    let upgraded_manifest_value = executor_manifest(registry, seed, "minimal-v2")?;
+    let upgrade = upgrade_step(manifest_value, &upgraded_manifest_value, &removal.receipt_ref)?;
+    Ok(FixtureTrace {
+        install,
+        permission,
+        lifecycle,
+        call,
+        health,
+        removal,
+        upgrade,
+        upgraded_manifest_value,
+    })
+}
+
+fn trace_decision(trace: &FixtureTrace, lifecycle_decision: &str) -> String {
+    run_decision(&[
+        trace.install.decision.as_str(),
+        trace.permission.decision.as_str(),
+        trace.lifecycle.init.decision.as_str(),
+        trace.lifecycle.start.decision.as_str(),
+        trace.call.decision.as_str(),
+        trace.health.decision.as_str(),
+        trace.lifecycle.stop.decision.as_str(),
+        trace.removal.decision.as_str(),
+        trace.upgrade.decision.as_str(),
+        lifecycle_decision,
+    ])
 }
 
 struct SeedRefs {

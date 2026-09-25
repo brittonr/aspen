@@ -106,6 +106,11 @@ fn execute_expectation(state: &RunnerState, content: &str) -> Result<Option<IoVa
         expect_failure_class(state, &expected)?;
         return Ok(Some(expectation));
     }
+    execute_state_expectation(state, expectation)
+}
+
+/// Trace-marker, absent-output, kind, error, and raw-output expectations.
+fn execute_state_expectation(state: &RunnerState, expectation: IoValue) -> Result<Option<IoValue>> {
     if let Some(fields) = expectation.collect_simple_record("expect-trace-marker", Some(1)) {
         expect_trace_marker(state, &required_ref(&fields[0], "expected trace marker")?)?;
         return Ok(Some(expectation));

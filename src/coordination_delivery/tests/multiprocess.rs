@@ -31,56 +31,24 @@ fn multiprocess_restart_recovers_claim_and_fences_stale_consumer() {
     let time = time_profile(&manifest);
     let mut timers = timer_port(false);
     let mut statuses = MemoryStatusPort::default();
+    let mut apply = |expected, request| {
+        apply_local(&storage, &mut timers, &mut statuses, &manifest, &policy, &time, expected, request)
+    };
 
-    let enqueued = apply_local(
-        &storage,
-        &mut timers,
-        &mut statuses,
-        &manifest,
-        &policy,
-        &time,
-        empty_expected(),
-        &enqueue_request(&manifest, '1'),
-    );
+    let enqueue = enqueue_request(&manifest, '1');
+    let enqueued = apply(empty_expected(), &enqueue);
     let claim = request(&manifest, '2', INITIAL_TICK, DeliveryOperation::Claim);
-    let first_claim = apply_local(
-        &storage,
-        &mut timers,
-        &mut statuses,
-        &manifest,
-        &policy,
-        &time,
-        expected_from_outcome(&enqueued),
-        &claim,
-    );
+    let first_claim = apply(expected_from_outcome(&enqueued), &claim);
     let first_token = first_claim.transition.token.clone().expect("first token");
 
     let mut expiry = request(&manifest, '3', first_token.visibility_deadline_tick, DeliveryOperation::ExpireLease {
         token: first_token.clone(),
     });
     expiry.authority_refs.push(policy.expiry_authority_ref.clone());
-    let expired = apply_local(
-        &storage,
-        &mut timers,
-        &mut statuses,
-        &manifest,
-        &policy,
-        &time,
-        expected_from_outcome(&first_claim),
-        &expiry,
-    );
+    let expired = apply(expected_from_outcome(&first_claim), &expiry);
     let retry_tick = expired.transition.next_state.ready.values().next().expect("retry").eligible_at_tick;
     let second_claim_request = request(&manifest, '4', retry_tick, DeliveryOperation::Claim);
-    let second_claim = apply_local(
-        &storage,
-        &mut timers,
-        &mut statuses,
-        &manifest,
-        &policy,
-        &time,
-        expected_from_outcome(&expired),
-        &second_claim_request,
-    );
+    let second_claim = apply(expected_from_outcome(&expired), &second_claim_request);
     let second_token = second_claim.transition.token.clone().expect("second token");
     drop(storage);
 

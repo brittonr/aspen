@@ -263,6 +263,13 @@ fn parse_message(value: &preserves::Value<preserves::IOValue>) -> crate::error::
         let fields = fields.iter().collect::<Vec<_>>();
         return parse_append_entries(&fields);
     }
+    parse_response_or_snapshot_message(value)
+}
+
+/// Parses the append-response, read, and snapshot Raft message variants.
+fn parse_response_or_snapshot_message(
+    value: &preserves::Value<preserves::IOValue>,
+) -> crate::error::Result<RaftMessage> {
     if let Some(fields) = value.collect_simple_record("append-response", Some(APPEND_RESPONSE_ARITY)) {
         return Ok(RaftMessage::AppendResponse {
             term: required_u64(&fields[0], "Raft append response term")?,

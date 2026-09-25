@@ -678,6 +678,13 @@ struct ParticipantInput<'a> {
     handoff_ref: &'a str,
 }
 
+const PARTICIPANT_CHECKS: [&str; 4] = [
+    "canonical-frame-observed",
+    "terminal-cleanup-observed",
+    "payload-bytes-excluded",
+    "runtime-handles-excluded",
+];
+
 fn participant_artifact(input: ParticipantInput<'_>) -> crate::error::Result<ParticipantArtifact> {
     let ParticipantInput {
         role,
@@ -716,12 +723,7 @@ fn participant_artifact(input: ParticipantInput<'_>) -> crate::error::Result<Par
         crate::preserves_rail::string(endpoint_cleanup_ref),
         crate::preserves_rail::string(drain_reason.map_or(NOT_APPLICABLE, ListenerDrainReason::as_str)),
         strings_value(profile.non_claims.iter().map(|claim| claim.as_str())),
-        checks(&[
-            "canonical-frame-observed",
-            "terminal-cleanup-observed",
-            "payload-bytes-excluded",
-            "runtime-handles-excluded",
-        ]),
+        checks(&PARTICIPANT_CHECKS),
     ]);
     let artifact_ref = crate::preserves_rail::canonical_hash(&value)?;
     Ok(ParticipantArtifact {

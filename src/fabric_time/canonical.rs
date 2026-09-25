@@ -161,15 +161,7 @@ pub fn canonical_duration(
 
 // r[impl molten.fabric_time.live_sim_parity]
 pub fn fabric_time_port_descriptors(profile: &CanonicalTimeProfile) -> Vec<crate::fabric::FabricPortDescriptor> {
-    let (determinism, replay) = match profile.profile.kind {
-        super::TimeProfileKind::Live => {
-            (crate::fabric::DeterminismClass::ExternalEffect, crate::fabric::ReplayClass::RecordedEffectRequired)
-        }
-        super::TimeProfileKind::DeterministicSimulation => (
-            crate::fabric::DeterminismClass::DeterministicWithRecordedInputs,
-            crate::fabric::ReplayClass::Recompute,
-        ),
-    };
+    let (determinism, replay) = replay_classes(profile.profile.kind);
     vec![
         port_descriptor(PortDescriptorInput {
             port_id: FABRIC_CLOCK_PORT_ID,
@@ -232,6 +224,18 @@ pub fn fabric_time_port_descriptors(profile: &CanonicalTimeProfile) -> Vec<crate
             profile,
         }),
     ]
+}
+
+fn replay_classes(kind: super::TimeProfileKind) -> (crate::fabric::DeterminismClass, crate::fabric::ReplayClass) {
+    match kind {
+        super::TimeProfileKind::Live => {
+            (crate::fabric::DeterminismClass::ExternalEffect, crate::fabric::ReplayClass::RecordedEffectRequired)
+        }
+        super::TimeProfileKind::DeterministicSimulation => (
+            crate::fabric::DeterminismClass::DeterministicWithRecordedInputs,
+            crate::fabric::ReplayClass::Recompute,
+        ),
+    }
 }
 
 // r[impl molten.fabric_time.timers]

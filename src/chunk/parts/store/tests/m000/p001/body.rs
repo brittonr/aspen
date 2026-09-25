@@ -130,17 +130,7 @@
             .map(|chunk| chunk_ref_value(&chunk.chunk_ref, chunk.length, chunk_size, &manifest.transforms))
             .collect::<Vec<_>>();
         let uppercase_metadata_ref = manifest.metadata_ref.to_ascii_uppercase();
-        let uppercase_manifest_value = manifest_value(&ChunkManifestValueInput {
-            object_kind: &manifest.object_kind,
-            total_len: manifest.total_len,
-            chunk_size: manifest.chunk_size,
-            transforms: &manifest.transforms,
-            metadata_ref: &uppercase_metadata_ref,
-            policy_refs: &manifest.policy_refs,
-            chunks: &chunk_values,
-            root_ref: &manifest.root_ref,
-            evidence_refs: &manifest.evidence_refs,
-        });
+        let uppercase_manifest_value = manifest_value_with(&manifest, &uppercase_metadata_ref, &manifest.policy_refs, &chunk_values);
         assert!(
             parse_manifest_value(&uppercase_manifest_value, None)
                 .expect_err("uppercase metadata ref is rejected")
@@ -149,17 +139,7 @@
         );
 
         let non_blake3_policy_refs = vec!["sha256:abc123".to_string()];
-        let non_blake3_manifest_value = manifest_value(&ChunkManifestValueInput {
-            object_kind: &manifest.object_kind,
-            total_len: manifest.total_len,
-            chunk_size: manifest.chunk_size,
-            transforms: &manifest.transforms,
-            metadata_ref: &manifest.metadata_ref,
-            policy_refs: &non_blake3_policy_refs,
-            chunks: &chunk_values,
-            root_ref: &manifest.root_ref,
-            evidence_refs: &manifest.evidence_refs,
-        });
+        let non_blake3_manifest_value = manifest_value_with(&manifest, &manifest.metadata_ref, &non_blake3_policy_refs, &chunk_values);
         assert!(
             parse_manifest_value(&non_blake3_manifest_value, None)
                 .expect_err("non-blake3 policy ref is rejected")
@@ -174,23 +154,33 @@
             chunk_size,
             &manifest.transforms,
         );
-        let malformed_chunk_manifest_value = manifest_value(&ChunkManifestValueInput {
-            object_kind: &manifest.object_kind,
-            total_len: manifest.total_len,
-            chunk_size: manifest.chunk_size,
-            transforms: &manifest.transforms,
-            metadata_ref: &manifest.metadata_ref,
-            policy_refs: &manifest.policy_refs,
-            chunks: &invalid_chunk_values,
-            root_ref: &manifest.root_ref,
-            evidence_refs: &manifest.evidence_refs,
-        });
+        let malformed_chunk_manifest_value = manifest_value_with(&manifest, &manifest.metadata_ref, &manifest.policy_refs, &invalid_chunk_values);
         assert!(
             parse_manifest_value(&malformed_chunk_manifest_value, None)
                 .expect_err("malformed chunk ref is rejected")
                 .to_string()
                 .contains("chunk ref hash is invalid")
         );
+    }
+
+    /// Re-encodes `manifest` with the given metadata ref, policy refs, and chunk values.
+    fn manifest_value_with(
+        manifest: &ChunkManifest,
+        metadata_ref: &str,
+        policy_refs: &[String],
+        chunks: &[IoValue],
+    ) -> IoValue {
+        manifest_value(&ChunkManifestValueInput {
+            object_kind: &manifest.object_kind,
+            total_len: manifest.total_len,
+            chunk_size: manifest.chunk_size,
+            transforms: &manifest.transforms,
+            metadata_ref,
+            policy_refs,
+            chunks,
+            root_ref: &manifest.root_ref,
+            evidence_refs: &manifest.evidence_refs,
+        })
     }
 
     fn assert_confidential_write_denials() {

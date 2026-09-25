@@ -58,52 +58,8 @@ pub(crate) enum TraceabilityCommand {
         #[arg(long = "readback-out")]
         readback_out: Option<FilePath>,
     },
-    VerificationRun {
-        #[arg(long)]
-        requirement: String,
-        #[arg(long = "coverage-kind")]
-        coverage_kind: String,
-        #[arg(long)]
-        target: String,
-        #[arg(long = "argv")]
-        argv: Vec<String>,
-        #[arg(long = "profile-ref")]
-        profile_ref: String,
-        #[arg(long = "toolchain-ref")]
-        toolchain_refs: Vec<String>,
-        #[arg(long = "exit-status")]
-        exit_status: i64,
-        #[arg(long = "stdout-ref")]
-        stdout_ref: String,
-        #[arg(long = "stderr-ref")]
-        stderr_ref: String,
-        #[arg(long = "artifact-ref")]
-        artifact_refs: Vec<String>,
-        #[arg(long)]
-        out: Option<FilePath>,
-    },
-    CiRunReceipt {
-        #[arg(long = "source-marker")]
-        source_marker: String,
-        #[arg(long = "profile-id")]
-        profile_id: String,
-        #[arg(long = "command-surface")]
-        command_surface: String,
-        #[arg(long = "nextest-config")]
-        nextest_config: FilePath,
-        #[arg(long = "cargo-metadata")]
-        cargo_metadata: FilePath,
-        #[arg(long = "binaries-metadata")]
-        binaries_metadata: FilePath,
-        #[arg(long)]
-        junit: FilePath,
-        #[arg(long, default_value = "pass")]
-        decision: String,
-        #[arg(long = "caveat")]
-        caveats: Vec<String>,
-        #[arg(long)]
-        out: Option<FilePath>,
-    },
+    VerificationRun(VerificationRunCommandInput),
+    CiRunReceipt(CiRunReceiptCommandInput),
     NextestProfileMatrix {
         #[arg(long = "nextest-config")]
         nextest_config: FilePath,
@@ -132,44 +88,7 @@ pub(crate) enum TraceabilityCommand {
         #[arg(long = "summary-out")]
         summary_out: Option<FilePath>,
     },
-    ContextProfile {
-        #[arg(long = "profile-id")]
-        profile_id: String,
-        #[arg(long = "profile-tier", default_value = "local")]
-        profile_tier: String,
-        #[arg(long = "allowed-operation")]
-        allowed_operations: Vec<String>,
-        #[arg(long)]
-        operation: String,
-        #[arg(long = "policy-ref")]
-        policy_refs: Vec<String>,
-        #[arg(long = "authority-ref")]
-        authority_refs: Vec<String>,
-        #[arg(long = "resource-ref")]
-        resource_refs: Vec<String>,
-        #[arg(long = "evidence-ref")]
-        evidence_refs: Vec<String>,
-        #[arg(long = "retention-ref")]
-        retention_refs: Vec<String>,
-        #[arg(long = "override-authority-ref")]
-        override_authority_refs: Vec<String>,
-        #[arg(long = "override-evidence-ref")]
-        override_evidence_refs: Vec<String>,
-        #[arg(long = "require-policy")]
-        require_policy: bool,
-        #[arg(long = "require-authority")]
-        require_authority: bool,
-        #[arg(long = "require-resource")]
-        require_resource: bool,
-        #[arg(long = "require-evidence")]
-        require_evidence: bool,
-        #[arg(long = "require-retention")]
-        require_retention: bool,
-        #[arg(long)]
-        out: Option<FilePath>,
-        #[arg(long = "summary-out")]
-        summary_out: Option<FilePath>,
-    },
+    ContextProfile(ContextProfileCommandInput),
 }
 
 pub(crate) fn run_traceability_command(command: TraceabilityCommand) -> Outcome<()> {
@@ -195,54 +114,8 @@ pub(crate) fn run_traceability_command(command: TraceabilityCommand) -> Outcome<
             summary_out,
             readback_out,
         }),
-        TraceabilityCommand::VerificationRun {
-            requirement,
-            coverage_kind,
-            target,
-            argv,
-            profile_ref,
-            toolchain_refs,
-            exit_status,
-            stdout_ref,
-            stderr_ref,
-            artifact_refs,
-            out,
-        } => run_verification_run(VerificationRunCommandInput {
-            requirement,
-            coverage_kind,
-            target,
-            argv,
-            profile_ref,
-            toolchain_refs,
-            exit_status,
-            stdout_ref,
-            stderr_ref,
-            artifact_refs,
-            out,
-        }),
-        TraceabilityCommand::CiRunReceipt {
-            source_marker,
-            profile_id,
-            command_surface,
-            nextest_config,
-            cargo_metadata,
-            binaries_metadata,
-            junit,
-            decision,
-            caveats,
-            out,
-        } => run_ci_run_receipt(CiRunReceiptCommandInput {
-            source_marker,
-            profile_id,
-            command_surface,
-            nextest_config,
-            cargo_metadata,
-            binaries_metadata,
-            junit,
-            decision,
-            caveats,
-            out,
-        }),
+        TraceabilityCommand::VerificationRun(input) => run_verification_run(input),
+        TraceabilityCommand::CiRunReceipt(input) => run_ci_run_receipt(input),
         TraceabilityCommand::NextestProfileMatrix {
             nextest_config,
             out,
@@ -268,45 +141,7 @@ pub(crate) fn run_traceability_command(command: TraceabilityCommand) -> Outcome<
             out,
             summary_out,
         }),
-        TraceabilityCommand::ContextProfile {
-            profile_id,
-            profile_tier,
-            allowed_operations,
-            operation,
-            policy_refs,
-            authority_refs,
-            resource_refs,
-            evidence_refs,
-            retention_refs,
-            override_authority_refs,
-            override_evidence_refs,
-            require_policy,
-            require_authority,
-            require_resource,
-            require_evidence,
-            require_retention,
-            out,
-            summary_out,
-        } => run_context_profile(ContextProfileCommandInput {
-            profile_id,
-            profile_tier,
-            allowed_operations,
-            operation,
-            policy_refs,
-            authority_refs,
-            resource_refs,
-            evidence_refs,
-            retention_refs,
-            override_authority_refs,
-            override_evidence_refs,
-            require_policy,
-            require_authority,
-            require_resource,
-            require_evidence,
-            require_retention,
-            out,
-            summary_out,
-        }),
+        TraceabilityCommand::ContextProfile(input) => run_context_profile(input),
     }
 }
 
@@ -322,30 +157,53 @@ struct ScanInput {
     readback_out: Option<FilePath>,
 }
 
-struct VerificationRunCommandInput {
+#[derive(Debug, clap::Args)]
+pub(crate) struct VerificationRunCommandInput {
+    #[arg(long)]
     requirement: String,
+    #[arg(long = "coverage-kind")]
     coverage_kind: String,
+    #[arg(long)]
     target: String,
+    #[arg(long = "argv")]
     argv: Vec<String>,
+    #[arg(long = "profile-ref")]
     profile_ref: String,
+    #[arg(long = "toolchain-ref")]
     toolchain_refs: Vec<String>,
+    #[arg(long = "exit-status")]
     exit_status: i64,
+    #[arg(long = "stdout-ref")]
     stdout_ref: String,
+    #[arg(long = "stderr-ref")]
     stderr_ref: String,
+    #[arg(long = "artifact-ref")]
     artifact_refs: Vec<String>,
+    #[arg(long)]
     out: Option<FilePath>,
 }
 
-struct CiRunReceiptCommandInput {
+#[derive(Debug, clap::Args)]
+pub(crate) struct CiRunReceiptCommandInput {
+    #[arg(long = "source-marker")]
     source_marker: String,
+    #[arg(long = "profile-id")]
     profile_id: String,
+    #[arg(long = "command-surface")]
     command_surface: String,
+    #[arg(long = "nextest-config")]
     nextest_config: FilePath,
+    #[arg(long = "cargo-metadata")]
     cargo_metadata: FilePath,
+    #[arg(long = "binaries-metadata")]
     binaries_metadata: FilePath,
+    #[arg(long)]
     junit: FilePath,
+    #[arg(long, default_value = "pass")]
     decision: String,
+    #[arg(long = "caveat")]
     caveats: Vec<String>,
+    #[arg(long)]
     out: Option<FilePath>,
 }
 
@@ -369,24 +227,43 @@ struct EffectiveConfigCommandInput {
     summary_out: Option<FilePath>,
 }
 
-struct ContextProfileCommandInput {
+#[derive(Debug, clap::Args)]
+pub(crate) struct ContextProfileCommandInput {
+    #[arg(long = "profile-id")]
     profile_id: String,
+    #[arg(long = "profile-tier", default_value = "local")]
     profile_tier: String,
+    #[arg(long = "allowed-operation")]
     allowed_operations: Vec<String>,
+    #[arg(long)]
     operation: String,
+    #[arg(long = "policy-ref")]
     policy_refs: Vec<String>,
+    #[arg(long = "authority-ref")]
     authority_refs: Vec<String>,
+    #[arg(long = "resource-ref")]
     resource_refs: Vec<String>,
+    #[arg(long = "evidence-ref")]
     evidence_refs: Vec<String>,
+    #[arg(long = "retention-ref")]
     retention_refs: Vec<String>,
+    #[arg(long = "override-authority-ref")]
     override_authority_refs: Vec<String>,
+    #[arg(long = "override-evidence-ref")]
     override_evidence_refs: Vec<String>,
+    #[arg(long = "require-policy")]
     require_policy: bool,
+    #[arg(long = "require-authority")]
     require_authority: bool,
+    #[arg(long = "require-resource")]
     require_resource: bool,
+    #[arg(long = "require-evidence")]
     require_evidence: bool,
+    #[arg(long = "require-retention")]
     require_retention: bool,
+    #[arg(long)]
     out: Option<FilePath>,
+    #[arg(long = "summary-out")]
     summary_out: Option<FilePath>,
 }
 

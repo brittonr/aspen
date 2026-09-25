@@ -179,6 +179,57 @@
         .expect("worker execution");
         assert_eq!(worker.result.decision, JOB_DECISION_PASS, "{:?}", worker.result.diagnostics);
         let request = parse_job_worker_request_value(&fixture.worker_request).expect("worker request");
+        let schedule = local_schedule_receipt(&fixture, &request, &worker);
+        let empty_diagnostics = Vec::<String>::new();
+
+        let pass_input = JobWorkerScheduleReplayInput {
+            schedule: &schedule,
+            request: &request,
+            result: Some(&worker.result),
+            expected_stage_order: &fixture.admission.plan.stage_order,
+            expected_output_refs: &worker.result.output_refs,
+            expected_diagnostics: &empty_diagnostics,
+        };
+        let pass = validate_worker_schedule_replay(pass_input).expect("schedule replay pass");
+        assert_eq!(pass.decision, JOB_DECISION_PASS);
+        assert_eq!(pass.completed_indices.len(), fixture.admission.plan.stage_order.len());
+
+        let mut reordered = fixture.admission.plan.stage_order.clone();
+        reordered.reverse();
+        assert_replay_denied(
+            JobWorkerScheduleReplayInput {
+                expected_stage_order: &reordered,
+                ..pass_input
+            },
+            "stage order",
+        );
+
+        let wrong_outputs = vec![test_ref("wrong-worker-output")];
+        assert_replay_denied(
+            JobWorkerScheduleReplayInput {
+                expected_output_refs: &wrong_outputs,
+                ..pass_input
+            },
+            "output refs",
+        );
+
+        let mut stale_request = request.clone();
+        stale_request.request_ref = test_ref("stale-worker-request");
+        assert_replay_denied(
+            JobWorkerScheduleReplayInput {
+                request: &stale_request,
+                ..pass_input
+            },
+            "request ref",
+        );
+    }
+
+    /// A passing local worker schedule receipt that binds the worker receipt, result, outputs, and stage receipts.
+    fn local_schedule_receipt(
+        fixture: &WorkerFixture,
+        request: &JobWorkerRequest,
+        worker: &JobWorkerExecution,
+    ) -> JobWorkerScheduleReceipt {
         let mut refs = fixture.evidence_refs.clone();
         refs.push(worker.receipt_ref.clone());
         refs.push(worker.result.result_ref.clone());
@@ -186,7 +237,7 @@
         for (_, receipt_ref) in &worker.result.stage_receipt_refs {
             refs.push(receipt_ref.clone());
         }
-        let empty_diagnostics = Vec::<String>::new();
+        let no_diagnostics = Vec::<String>::new();
         let schedule_value = job_worker_schedule_receipt_value(JobWorkerScheduleReceiptValueInput {
             operation: "worker-schedule-local",
             decision: JOB_DECISION_PASS,
@@ -204,71 +255,19 @@
             token_ref: Some(&test_ref("schedule-token")),
             worker_receipt_ref: Some(&worker.receipt_ref),
             result_ref: Some(&worker.result.result_ref),
-            diagnostics: &empty_diagnostics,
+            diagnostics: &no_diagnostics,
             refs: &refs,
             checks: &[("worker-result-bound", "pass")],
         })
         .expect("schedule receipt value");
-        let schedule = parse_job_worker_schedule_receipt_value(&schedule_value).expect("schedule receipt");
-        let pass = validate_worker_schedule_replay(JobWorkerScheduleReplayInput {
-            schedule: &schedule,
-            request: &request,
-            result: Some(&worker.result),
-            expected_stage_order: &fixture.admission.plan.stage_order,
-            expected_output_refs: &worker.result.output_refs,
-            expected_diagnostics: &empty_diagnostics,
-        })
-        .expect("schedule replay pass");
-        assert_eq!(pass.decision, JOB_DECISION_PASS);
-        assert_eq!(pass.completed_indices.len(), fixture.admission.plan.stage_order.len());
+        parse_job_worker_schedule_receipt_value(&schedule_value).expect("schedule receipt")
+    }
 
-        let mut reordered = fixture.admission.plan.stage_order.clone();
-        reordered.reverse();
-        let reordered_report = validate_worker_schedule_replay(JobWorkerScheduleReplayInput {
-            schedule: &schedule,
-            request: &request,
-            result: Some(&worker.result),
-            expected_stage_order: &reordered,
-            expected_output_refs: &worker.result.output_refs,
-            expected_diagnostics: &empty_diagnostics,
-        })
-        .expect("reordered replay report");
-        assert_eq!(reordered_report.decision, JOB_DECISION_DENY);
-        assert!(reordered_report
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.contains("stage order")));
-
-        let wrong_outputs = vec![test_ref("wrong-worker-output")];
-        let output_report = validate_worker_schedule_replay(JobWorkerScheduleReplayInput {
-            schedule: &schedule,
-            request: &request,
-            result: Some(&worker.result),
-            expected_stage_order: &fixture.admission.plan.stage_order,
-            expected_output_refs: &wrong_outputs,
-            expected_diagnostics: &empty_diagnostics,
-        })
-        .expect("output replay report");
-        assert_eq!(output_report.decision, JOB_DECISION_DENY);
-        assert!(output_report
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.contains("output refs")));
-
-        let mut stale_request = request.clone();
-        stale_request.request_ref = test_ref("stale-worker-request");
-        let stale_report = validate_worker_schedule_replay(JobWorkerScheduleReplayInput {
-            schedule: &schedule,
-            request: &stale_request,
-            result: Some(&worker.result),
-            expected_stage_order: &fixture.admission.plan.stage_order,
-            expected_output_refs: &worker.result.output_refs,
-            expected_diagnostics: &empty_diagnostics,
-        })
-        .expect("stale replay report");
-        assert_eq!(stale_report.decision, JOB_DECISION_DENY);
-        assert!(stale_report
-            .diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.contains("request ref")));
+    fn assert_replay_denied(input: JobWorkerScheduleReplayInput<'_>, expected_diagnostic: &str) {
+        let report = validate_worker_schedule_replay(input).expect("replay report");
+        assert_eq!(report.decision, JOB_DECISION_DENY);
+        assert!(
+            report.diagnostics.iter().any(|diagnostic| diagnostic.contains(expected_diagnostic)),
+            "{expected_diagnostic}"
+        );
     }

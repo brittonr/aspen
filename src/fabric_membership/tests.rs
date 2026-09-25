@@ -349,56 +349,7 @@ fn assignment_shell_records_intent_before_effect_and_surfaces_uncertainty() {
     assert_eq!(persistence.intents.len(), 1);
     assert_eq!(persistence.commits.len(), 1);
 
-    let mut uncertain_lifecycle = RecordingLifecycle {
-        fail_activate: true,
-        ..RecordingLifecycle::default()
-    };
-    let mut uncertain_persistence = InMemoryAssignmentPersistence::default();
-    let uncertain = execute_assignment_command(
-        &mut uncertain_persistence,
-        &mut uncertain_lifecycle,
-        &assignment,
-        &activate,
-        &authority,
-    )
-    .expect("valid transition with uncertain shell result");
-    let AssignmentExecutionOutcome::Uncertain(uncertain) = uncertain else {
-        panic!("failed activation must be uncertain")
-    };
-    assert_eq!(uncertain.phase, AssignmentExecutionPhase::RoleEffect);
-    assert!(uncertain.effect_may_have_happened);
-    assert!(uncertain.intent_ref.is_some());
-    assert!(uncertain_persistence.commits.is_empty());
-
-    let mut commit_failure = InMemoryAssignmentPersistence {
-        fail_commit: true,
-        ..InMemoryAssignmentPersistence::default()
-    };
-    let mut successful_effect = RecordingLifecycle::default();
-    let uncertain_commit =
-        execute_assignment_command(&mut commit_failure, &mut successful_effect, &assignment, &activate, &authority)
-            .expect("valid transition with commit uncertainty");
-    let AssignmentExecutionOutcome::Uncertain(uncertain_commit) = uncertain_commit else {
-        panic!("commit failure after effect must be uncertain")
-    };
-    assert_eq!(uncertain_commit.phase, AssignmentExecutionPhase::CommitPersistence);
-    assert!(uncertain_commit.role_effect_ref.is_some());
-    assert!(uncertain_commit.effect_may_have_happened);
-
-    let mut malformed_effect = RecordingLifecycle {
-        malformed_activate_ref: true,
-        ..RecordingLifecycle::default()
-    };
-    let mut no_commit = InMemoryAssignmentPersistence::default();
-    let malformed =
-        execute_assignment_command(&mut no_commit, &mut malformed_effect, &assignment, &activate, &authority)
-            .expect("valid transition with malformed effect evidence");
-    let AssignmentExecutionOutcome::Uncertain(malformed) = malformed else {
-        panic!("malformed effect evidence must be uncertain")
-    };
-    assert_eq!(malformed.phase, AssignmentExecutionPhase::RoleEffect);
-    assert!(malformed.effect_may_have_happened);
-    assert!(no_commit.commits.is_empty());
+    assert_failed_shell_steps_are_uncertain(&assignment, &activate, &authority);
 
     let mut stale_authority = authority;
     stale_authority.enforced_assignment_epoch = ASSIGNMENT_EPOCH + 1;
@@ -415,4 +366,62 @@ fn assignment_shell_records_intent_before_effect_and_surfaces_uncertainty() {
     assert!(stale.iter().any(|issue| matches!(issue, AssignmentIssue::StaleAssignmentEpoch { .. })));
     assert!(untouched_persistence.intents.is_empty());
     assert!(untouched_lifecycle.calls.is_empty());
+}
+
+/// A failed role effect, a failed commit after the effect, and malformed effect evidence are each
+/// uncertain.
+fn assert_failed_shell_steps_are_uncertain(
+    assignment: &RoleAssignment,
+    activate: &AssignmentCommand,
+    authority: &AssignmentAuthoritySnapshot,
+) {
+    let mut uncertain_lifecycle = RecordingLifecycle {
+        fail_activate: true,
+        ..RecordingLifecycle::default()
+    };
+    let mut uncertain_persistence = InMemoryAssignmentPersistence::default();
+    let uncertain = execute_assignment_command(
+        &mut uncertain_persistence,
+        &mut uncertain_lifecycle,
+        assignment,
+        activate,
+        authority,
+    )
+    .expect("valid transition with uncertain shell result");
+    let AssignmentExecutionOutcome::Uncertain(uncertain) = uncertain else {
+        panic!("failed activation must be uncertain")
+    };
+    assert_eq!(uncertain.phase, AssignmentExecutionPhase::RoleEffect);
+    assert!(uncertain.effect_may_have_happened);
+    assert!(uncertain.intent_ref.is_some());
+    assert!(uncertain_persistence.commits.is_empty());
+
+    let mut commit_failure = InMemoryAssignmentPersistence {
+        fail_commit: true,
+        ..InMemoryAssignmentPersistence::default()
+    };
+    let mut successful_effect = RecordingLifecycle::default();
+    let uncertain_commit =
+        execute_assignment_command(&mut commit_failure, &mut successful_effect, assignment, activate, authority)
+            .expect("valid transition with commit uncertainty");
+    let AssignmentExecutionOutcome::Uncertain(uncertain_commit) = uncertain_commit else {
+        panic!("commit failure after effect must be uncertain")
+    };
+    assert_eq!(uncertain_commit.phase, AssignmentExecutionPhase::CommitPersistence);
+    assert!(uncertain_commit.role_effect_ref.is_some());
+    assert!(uncertain_commit.effect_may_have_happened);
+
+    let mut malformed_effect = RecordingLifecycle {
+        malformed_activate_ref: true,
+        ..RecordingLifecycle::default()
+    };
+    let mut no_commit = InMemoryAssignmentPersistence::default();
+    let malformed = execute_assignment_command(&mut no_commit, &mut malformed_effect, assignment, activate, authority)
+        .expect("valid transition with malformed effect evidence");
+    let AssignmentExecutionOutcome::Uncertain(malformed) = malformed else {
+        panic!("malformed effect evidence must be uncertain")
+    };
+    assert_eq!(malformed.phase, AssignmentExecutionPhase::RoleEffect);
+    assert!(malformed.effect_may_have_happened);
+    assert!(no_commit.commits.is_empty());
 }

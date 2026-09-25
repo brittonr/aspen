@@ -56,24 +56,7 @@ fn run() -> Result<(), String> {
     let checkpoint =
         (envelope.invocation.callback == molten::system_extension::CallbackKind::Checkpoint).then(|| state.clone());
     let effects = if envelope.invocation.callback == molten::system_extension::CallbackKind::Request {
-        let request = value(format!("effect\0{}", envelope.invocation.event_ref).into_bytes());
-        let accounted_bytes =
-            u64::try_from(request.bytes.len()).map_err(|_| "effect request byte count does not fit u64".to_string())?;
-        vec![molten::system_extension::NativeMaterializedEffectRequest {
-            effect: molten::system_extension::TypedEffectRequest {
-                target: molten::system_extension::EffectTarget::FabricPort(molten::fabric::FabricPortKey {
-                    port_id: EFFECT_PORT_ID.to_string(),
-                    version: EFFECT_PORT_VERSION.to_string(),
-                }),
-                operation: EFFECT_OPERATION.to_string(),
-                input_schema_ref: EFFECT_INPUT_SCHEMA.to_string(),
-                output_schema_ref: EFFECT_OUTPUT_SCHEMA.to_string(),
-                request_ref: request.value_ref.clone(),
-                generation: envelope.invocation.generation,
-                accounted_bytes,
-            },
-            request,
-        }]
+        vec![effect_request(&envelope)?]
     } else {
         Vec::new()
     };
@@ -89,6 +72,31 @@ fn run() -> Result<(), String> {
     .map_err(|error| error.to_string())?;
     std::io::stdout().write_all(&output).map_err(|error| format!("write callback output: {error}"))?;
     std::io::stdout().flush().map_err(|error| format!("flush callback output: {error}"))
+}
+
+/// The one fabric-port effect a request callback emits, keyed by the invocation's event ref and
+/// generation.
+fn effect_request(
+    envelope: &molten::system_extension::DecodedNativeCallbackEnvelope,
+) -> Result<molten::system_extension::NativeMaterializedEffectRequest, String> {
+    let request = value(format!("effect\0{}", envelope.invocation.event_ref).into_bytes());
+    let accounted_bytes =
+        u64::try_from(request.bytes.len()).map_err(|_| "effect request byte count does not fit u64".to_string())?;
+    Ok(molten::system_extension::NativeMaterializedEffectRequest {
+        effect: molten::system_extension::TypedEffectRequest {
+            target: molten::system_extension::EffectTarget::FabricPort(molten::fabric::FabricPortKey {
+                port_id: EFFECT_PORT_ID.to_string(),
+                version: EFFECT_PORT_VERSION.to_string(),
+            }),
+            operation: EFFECT_OPERATION.to_string(),
+            input_schema_ref: EFFECT_INPUT_SCHEMA.to_string(),
+            output_schema_ref: EFFECT_OUTPUT_SCHEMA.to_string(),
+            request_ref: request.value_ref.clone(),
+            generation: envelope.invocation.generation,
+            accounted_bytes,
+        },
+        request,
+    })
 }
 
 fn value(bytes: Vec<u8>) -> molten::system_extension::NativeCallbackValue {

@@ -204,21 +204,9 @@ pub fn run_vat_promise_fixture() -> Result<VatPromiseFixture> {
     let changed_terminal = crate::runtime::RuntimePromiseState::broken("promise:far-call", "late failure", Vec::new());
 
     let resolve_receipt = crate::runtime::evaluate_promise_state_transition(&pending, &resolved)?.receipt;
-    let broken_receipt = crate::runtime::evaluate_promise_state_transition(
-        &crate::runtime::RuntimePromiseState::pending("promise:failed-call"),
-        &broken,
-    )?
-    .receipt;
-    let cancel_receipt = crate::runtime::evaluate_promise_state_transition(
-        &crate::runtime::RuntimePromiseState::pending("promise:cancelled-call"),
-        &cancelled,
-    )?
-    .receipt;
-    let timeout_receipt = crate::runtime::evaluate_promise_state_transition(
-        &crate::runtime::RuntimePromiseState::pending("promise:timeout-call"),
-        &timed_out,
-    )?
-    .receipt;
+    let broken_receipt = settle_pending("promise:failed-call", &broken)?;
+    let cancel_receipt = settle_pending("promise:cancelled-call", &cancelled)?;
+    let timeout_receipt = settle_pending("promise:timeout-call", &timed_out)?;
     let terminal_denial = crate::runtime::evaluate_promise_state_transition(&resolved, &changed_terminal)?.receipt;
     let pipeline_cleanup = crate::runtime::evaluate_promise_pipeline(
         &crate::runtime::RuntimePromisePipelineState::new(broken, PIPELINE_MAX_QUEUE, vec![
@@ -272,6 +260,18 @@ pub fn run_vat_promise_fixture() -> Result<VatPromiseFixture> {
         receipts,
         diagnostics,
     })
+}
+
+/// The receipt for settling the pending promise `promise_id` into `terminal`.
+fn settle_pending(
+    promise_id: &str,
+    terminal: &crate::runtime::RuntimePromiseState,
+) -> Result<crate::runtime::RuntimePredicateReceipt> {
+    Ok(crate::runtime::evaluate_promise_state_transition(
+        &crate::runtime::RuntimePromiseState::pending(promise_id),
+        terminal,
+    )?
+    .receipt)
 }
 
 struct DistRefs {

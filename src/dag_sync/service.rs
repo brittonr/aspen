@@ -61,17 +61,7 @@ where
     validate_authority(&authority, &plan)?;
     let resources = ports.resources.reserve(&plan)?;
     validate_resources(&resources, &plan)?;
-    let mut progress = request.progress.unwrap_or_else(|| DagSyncProgress {
-        epoch_ref: plan.epoch_ref.clone(),
-        generation: plan.generation,
-        strategy: plan.strategy,
-        policy_ref: request.policy_ref.clone(),
-        root_refs: plan.roots.clone(),
-        schema_refs: plan.schema_refs.clone(),
-        peers: plan.peers.clone(),
-        verified: Vec::new(),
-        steps_completed: 0,
-    });
+    let mut progress = request.progress.unwrap_or_else(|| initial_progress(&plan, &request.policy_ref));
     let mut terminal_issue = None;
     let mut evidence_refs = vec![authority.authority_ref.clone(), resources.reservation_ref.clone()];
 
@@ -79,16 +69,10 @@ where
         if progress.verified.contains(&fetch.object_ref) {
             continue;
         }
-        let envelope = match ports.transport.request(fetch)? {
-            DagTransferOutcome::Received(envelope) => envelope,
-            DagTransferOutcome::Deferred(observation_ref) => {
-                validate_ref(&observation_ref, "DAG transfer deferral")?;
-                terminal_issue = Some(DagSyncIssue::TransferDeferred);
-                break;
-            }
-            DagTransferOutcome::Cancelled(observation_ref) => {
-                validate_ref(&observation_ref, "DAG transfer cancellation")?;
-                terminal_issue = Some(DagSyncIssue::TransferCancelled);
+        let envelope = match received_envelope(ports.transport.request(fetch)?)? {
+            Ok(envelope) => envelope,
+            Err(issue) => {
+                terminal_issue = Some(issue);
                 break;
             }
         };
@@ -109,30 +93,7 @@ where
         progress = next;
     }
 
-    let missing = plan
-        .missing
-        .iter()
-        .filter(|object| !progress.verified.contains(object))
-        .cloned()
-        .collect::<Vec<_>>();
-    let decision = if missing.is_empty() {
-        DagSyncDecision::Complete
-    } else {
-        DagSyncDecision::Partial
-    };
-    let issues = terminal_issue.into_iter().collect::<Vec<_>>();
-    let receipt = DagSyncReceipt {
-        decision,
-        plan_ref: Some(plan.plan_ref.clone()),
-        epoch_ref: plan.epoch_ref.clone(),
-        generation: plan.generation,
-        strategy: plan.strategy,
-        requested: plan.requests.len(),
-        verified: progress.verified.len(),
-        missing,
-        issues,
-        non_claims: DAG_SYNC_NON_CLAIMS.iter().map(ToString::to_string).collect(),
-    };
+    let receipt = sync_receipt(&plan, &progress, terminal_issue);
     let canonical_receipt = canonical_dag_receipt(&receipt)?;
     ports.receipts.publish_receipt(&canonical_receipt)?;
     evidence_refs.push(canonical_receipt.record_ref.clone());
@@ -147,6 +108,66 @@ where
         evidence_refs,
         canonical_receipt,
     })
+}
+
+fn initial_progress(plan: &DagSyncPlan, policy_ref: &DagPolicyRef) -> DagSyncProgress {
+    DagSyncProgress {
+        epoch_ref: plan.epoch_ref.clone(),
+        generation: plan.generation,
+        strategy: plan.strategy,
+        policy_ref: policy_ref.clone(),
+        root_refs: plan.roots.clone(),
+        schema_refs: plan.schema_refs.clone(),
+        peers: plan.peers.clone(),
+        verified: Vec::new(),
+        steps_completed: 0,
+    }
+}
+
+/// The received envelope, or the terminal issue for a validated deferral or cancellation.
+fn received_envelope(outcome: DagTransferOutcome) -> Result<std::result::Result<DagTransportEnvelope, DagSyncIssue>> {
+    match outcome {
+        DagTransferOutcome::Received(envelope) => Ok(Ok(envelope)),
+        DagTransferOutcome::Deferred(observation_ref) => {
+            validate_ref(&observation_ref, "DAG transfer deferral")?;
+            Ok(Err(DagSyncIssue::TransferDeferred))
+        }
+        DagTransferOutcome::Cancelled(observation_ref) => {
+            validate_ref(&observation_ref, "DAG transfer cancellation")?;
+            Ok(Err(DagSyncIssue::TransferCancelled))
+        }
+    }
+}
+
+/// A complete receipt when every missing object was verified, and a partial one otherwise.
+fn sync_receipt(
+    plan: &DagSyncPlan,
+    progress: &DagSyncProgress,
+    terminal_issue: Option<DagSyncIssue>,
+) -> DagSyncReceipt {
+    let missing = plan
+        .missing
+        .iter()
+        .filter(|object| !progress.verified.contains(object))
+        .cloned()
+        .collect::<Vec<_>>();
+    let decision = if missing.is_empty() {
+        DagSyncDecision::Complete
+    } else {
+        DagSyncDecision::Partial
+    };
+    DagSyncReceipt {
+        decision,
+        plan_ref: Some(plan.plan_ref.clone()),
+        epoch_ref: plan.epoch_ref.clone(),
+        generation: plan.generation,
+        strategy: plan.strategy,
+        requested: plan.requests.len(),
+        verified: progress.verified.len(),
+        missing,
+        issues: terminal_issue.into_iter().collect::<Vec<_>>(),
+        non_claims: DAG_SYNC_NON_CLAIMS.iter().map(ToString::to_string).collect(),
+    }
 }
 
 fn validate_authority(observation: &DagAuthorityObservation, plan: &DagSyncPlan) -> Result<()> {

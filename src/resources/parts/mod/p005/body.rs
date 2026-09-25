@@ -243,126 +243,66 @@ pub fn evaluate_admission_chain(input: &AdmissionChainInput) -> AdmissionChainRe
 fn evaluate_single_phase(phase: AdmissionPhase, input: &AdmissionChainInput) -> PhaseResult {
     match phase {
         AdmissionPhase::EnvelopeDecode => {
-            if let Some(ref evidence) = input.envelope_decode_passed {
-                PhaseResult {
-                    phase,
-                    decision: PhaseDecision::Pass,
-                    evidence_refs: evidence.evidence_refs.clone(),
-                    diagnostics: Vec::new(),
-                }
-            } else {
-                PhaseResult {
-                    phase,
-                    decision: PhaseDecision::Deny,
-                    evidence_refs: Vec::new(),
-                    diagnostics: vec!["missing envelope decode evidence".to_string()],
-                }
-            }
+            evidence_phase(phase, input.envelope_decode_passed.as_ref(), "missing envelope decode evidence")
         }
         AdmissionPhase::SchemaValidation => {
-            if let Some(ref evidence) = input.schema_validation_passed {
-                PhaseResult {
-                    phase,
-                    decision: PhaseDecision::Pass,
-                    evidence_refs: evidence.evidence_refs.clone(),
-                    diagnostics: Vec::new(),
-                }
-            } else {
-                PhaseResult {
-                    phase,
-                    decision: PhaseDecision::Deny,
-                    evidence_refs: Vec::new(),
-                    diagnostics: vec!["missing schema validation evidence".to_string()],
-                }
-            }
+            evidence_phase(phase, input.schema_validation_passed.as_ref(), "missing schema validation evidence")
         }
         AdmissionPhase::AuthorityPreflight => {
-            if let Some(ref evidence) = input.authority_preflight_passed {
-                PhaseResult {
-                    phase,
-                    decision: PhaseDecision::Pass,
-                    evidence_refs: evidence.evidence_refs.clone(),
-                    diagnostics: Vec::new(),
-                }
-            } else {
-                PhaseResult {
-                    phase,
-                    decision: PhaseDecision::Deny,
-                    evidence_refs: Vec::new(),
-                    diagnostics: vec!["missing authority preflight evidence".to_string()],
-                }
-            }
+            evidence_phase(phase, input.authority_preflight_passed.as_ref(), "missing authority preflight evidence")
         }
         AdmissionPhase::Defaulting => {
             // Defaulting may be skipped if the resource has no defaults to apply
             if input.operation == ResourceOperation::Status || input.operation == ResourceOperation::Delete {
-                PhaseResult {
-                    phase,
-                    decision: PhaseDecision::Skip,
-                    evidence_refs: Vec::new(),
-                    diagnostics: vec!["defaulting skipped for status/delete operation".to_string()],
-                }
+                unpassed_phase(phase, PhaseDecision::Skip, "defaulting skipped for status/delete operation")
             } else if let Some(ref evidence) = input.defaulting_evidence {
-                PhaseResult {
-                    phase,
-                    decision: PhaseDecision::Pass,
-                    evidence_refs: vec![evidence.rule_ref.clone()],
-                    diagnostics: Vec::new(),
-                }
+                passed_phase(phase, vec![evidence.rule_ref.clone()])
             } else {
-                PhaseResult {
-                    phase,
-                    decision: PhaseDecision::Skip,
-                    evidence_refs: Vec::new(),
-                    diagnostics: vec!["no defaulting evidence (resource may have none)".to_string()],
-                }
+                unpassed_phase(phase, PhaseDecision::Skip, "no defaulting evidence (resource may have none)")
             }
         }
         AdmissionPhase::ReviewedMutation => reviewed_mutation_result(phase, input),
         AdmissionPhase::FinalValidation => {
-            if let Some(ref evidence) = input.final_validation_passed {
-                PhaseResult {
-                    phase,
-                    decision: PhaseDecision::Pass,
-                    evidence_refs: evidence.evidence_refs.clone(),
-                    diagnostics: Vec::new(),
-                }
-            } else {
-                PhaseResult {
-                    phase,
-                    decision: PhaseDecision::Deny,
-                    evidence_refs: Vec::new(),
-                    diagnostics: vec!["missing final validation evidence".to_string()],
-                }
-            }
+            evidence_phase(phase, input.final_validation_passed.as_ref(), "missing final validation evidence")
         }
         AdmissionPhase::PolicyEvidenceGates => {
             if input.policy_evidence_gates.is_empty() {
-                PhaseResult {
-                    phase,
-                    decision: PhaseDecision::Deny,
-                    evidence_refs: Vec::new(),
-                    diagnostics: vec!["no policy evidence gates passed".to_string()],
-                }
+                unpassed_phase(phase, PhaseDecision::Deny, "no policy evidence gates passed")
             } else {
-                PhaseResult {
-                    phase,
-                    decision: PhaseDecision::Pass,
-                    evidence_refs: input.policy_evidence_gates.clone(),
-                    diagnostics: Vec::new(),
-                }
+                passed_phase(phase, input.policy_evidence_gates.clone())
             }
         }
         AdmissionPhase::CommitPlan => {
             // Commit plan phase is always a pass if we get here — the plan ref
             // is generated by the caller using the chain result
-            PhaseResult {
-                phase,
-                decision: PhaseDecision::Pass,
-                evidence_refs: Vec::new(),
-                diagnostics: Vec::new(),
-            }
+            passed_phase(phase, Vec::new())
         }
+    }
+}
+
+fn passed_phase(phase: AdmissionPhase, evidence_refs: Vec<String>) -> PhaseResult {
+    PhaseResult {
+        phase,
+        decision: PhaseDecision::Pass,
+        evidence_refs,
+        diagnostics: Vec::new(),
+    }
+}
+
+fn unpassed_phase(phase: AdmissionPhase, decision: PhaseDecision, diagnostic: &str) -> PhaseResult {
+    PhaseResult {
+        phase,
+        decision,
+        evidence_refs: Vec::new(),
+        diagnostics: vec![diagnostic.to_string()],
+    }
+}
+
+/// A pass carrying the phase's evidence refs, or a denial naming the missing evidence.
+fn evidence_phase(phase: AdmissionPhase, evidence: Option<&PhaseEvidence>, missing: &str) -> PhaseResult {
+    match evidence {
+        Some(evidence) => passed_phase(phase, evidence.evidence_refs.clone()),
+        None => unpassed_phase(phase, PhaseDecision::Deny, missing),
     }
 }
 

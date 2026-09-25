@@ -170,6 +170,11 @@
         assert!(plan.checks.contains(&"structured-session-surfaces".to_string()));
         assert!(plan.checks.contains(&"external-workflows-not-replaced".to_string()));
 
+        assert_source_control_replacement_claim_denied();
+    }
+
+    /// A plan that claims to replace source control or human review is denied.
+    fn assert_source_control_replacement_claim_denied() {
         let denied = upgrade_plan_value(&UpgradePlanInput {
             session_id: "session-bad-claim".to_string(),
             reason: "compatible with UCM".to_string(),

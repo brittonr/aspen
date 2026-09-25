@@ -198,3 +198,13 @@ fn validate_named_shape(
         blockers.push_item("Wasm optimization profile name and enabled knobs disagree".to_string());
     }
 }
+
+/// Whether the optimization limits equal the reviewed hard caps and reviewed optimization profile
+/// ids.
+pub(super) fn limits_match_reviewed_caps(optimization: &super::model::OptimizationLimits) -> bool {
+    optimization.max_concurrency == super::profile::MAX_OPTIMIZATION_CONCURRENCY
+        && optimization.max_queue_depth == super::profile::MAX_OPTIMIZATION_QUEUE_DEPTH
+        && optimization.max_pool_memories == super::profile::MAX_POOL_MEMORIES
+        && optimization.max_pool_tables == super::profile::MAX_POOL_TABLES
+        && optimization.reviewed_profile_ids.iter().eq(super::profile::REVIEWED_OPTIMIZATION_PROFILE_IDS)
+}
