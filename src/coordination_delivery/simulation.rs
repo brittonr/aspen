@@ -24,6 +24,10 @@ pub enum DeliverySimulationError {
     UnsupportedFault(molten_core::fabric_simulation::SimulationFaultKind),
 }
 
+/// A crash-restart action records both a crash and a restart fault class; other actions record at
+/// most one.
+const MAX_FAULT_CLASSES_PER_ACTION: usize = 2;
+
 // r[impl molten.coordination_delivery.final_validation]
 pub fn run_delivery_simulation(
     manifest: &DeliveryManifest,
@@ -35,7 +39,7 @@ pub fn run_delivery_simulation(
     let mut state = initial;
     let mut transitions = Vec::new();
     let mut state_refs = vec![identify_delivery_state(&state)];
-    let mut fault_classes = Vec::new();
+    let mut fault_classes = Vec::with_capacity(actions.len().saturating_mul(MAX_FAULT_CLASSES_PER_ACTION));
     for action in actions {
         match action {
             DeliverySimulationAction::Request(request) => {

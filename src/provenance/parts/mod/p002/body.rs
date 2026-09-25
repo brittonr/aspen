@@ -140,6 +140,9 @@ fn push_missing_boundary_diagnostic(diagnostics: &mut Vec<String>, operation: &s
     }
 }
 
+/// Checks per receipt that can each add one diagnostic: decision, artifact match, and build record binding.
+const BUILD_RECEIPT_CHECK_COUNT: usize = 3;
+
 pub fn evaluate_build_verification_binding(
     record: &Record,
     artifact_ref: &str,
@@ -169,7 +172,7 @@ pub fn evaluate_build_verification_binding(
             )],
         };
     }
-    let mut candidate_diagnostics = Vec::new();
+    let mut candidate_diagnostics = Vec::with_capacity(receipts.len().saturating_mul(BUILD_RECEIPT_CHECK_COUNT));
     for receipt in receipts {
         let mut receipt_diagnostics = Vec::new();
         if receipt.decision != "pass" {

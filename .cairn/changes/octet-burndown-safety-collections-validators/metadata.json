@@ -1,0 +1,9 @@
+{
+  "spec_effect": "none",
+  "spec_effect_rationale": "Iterator rewrites and exact reservations over already-bounded inputs preserve every accepted output; accepted requirements are unchanged.",
+  "workflow_profile": {
+    "id": "no-spec-delta",
+    "source": "change_create",
+    "version": 1
+  }
+}

@@ -1079,12 +1079,11 @@ fn validate_conformance_input(input: &ConsensusEngineConformanceInput) -> Result
 }
 
 fn conformance_diagnostics(input: &ConsensusEngineConformanceInput) -> Result<Vec<String>> {
-    let mut diagnostics = Vec::new();
-    for required in required_conformance_cases() {
-        if !input.passed_cases.iter().any(|value| value == required) {
-            diagnostics.push(format!("missing consensus engine conformance case {required}"));
-        }
-    }
+    let mut diagnostics = required_conformance_cases()
+        .iter()
+        .filter(|required| !input.passed_cases.iter().any(|value| value == *required))
+        .map(|required| format!("missing consensus engine conformance case {required}"))
+        .collect::<Vec<_>>();
     if input.expected_state_ref != input.actual_state_ref {
         diagnostics.push(format!(
             "consensus engine replay state mismatch expected {} actual {}",

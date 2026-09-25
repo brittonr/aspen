@@ -241,11 +241,13 @@ fn placement_diagnostics(input: &ConsensusPlacementInput) -> Result<Vec<String>>
     if input.admitted_members.is_empty() {
         diagnostics.push("consensus placement requires admitted members".to_string());
     }
-    for member in &input.admitted_members {
-        if !input.candidate_members.iter().any(|candidate| candidate == member) {
-            diagnostics.push(format!("admitted member {member} is not a placement candidate"));
-        }
-    }
+    diagnostics.extend(
+        input
+            .admitted_members
+            .iter()
+            .filter(|member| !input.candidate_members.iter().any(|candidate| candidate == *member))
+            .map(|member| format!("admitted member {member} is not a placement candidate")),
+    );
     if input.membership_refs.is_empty() {
         diagnostics.push("consensus placement requires membership evidence".to_string());
     }

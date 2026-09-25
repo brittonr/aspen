@@ -136,41 +136,40 @@ fn evidence_refs(report: &super::schema::Report) -> Result<EvidenceRefs> {
 }
 
 fn authority_aggregate_refs(observations: &[super::schema::Observation]) -> Result<AuthorityAggregateRefs> {
-    let mut ucan_verification_receipt_refs: Vec<String> = Vec::new();
-    let mut derived_grant_refs: Vec<String> = Vec::new();
-    let mut authority_receipt_refs: Vec<String> = Vec::new();
-    let mut request_refs: Vec<String> = Vec::new();
-    for observation in observations {
-        for event in &observation.events {
-            if super::schema::event_boundary(event) != super::schema::EventBoundary::PolicyDecision {
-                continue;
-            }
-            let admission = super::schema::parse_admission_decision_event(event)?;
-            let Some(authority) = admission.authority else {
-                continue;
-            };
-            ucan_verification_receipt_refs.extend(authority.ucan_verification_receipt_refs);
-            derived_grant_refs.extend(authority.derived_grant_refs);
-            authority_receipt_refs.push(authority.basalt_enforcement_receipt_ref);
-            request_refs.push(authority.request_ref);
-        }
-    }
+    let authorities = observations
+        .iter()
+        .flat_map(|observation| observation.events.iter())
+        .filter(|event| super::schema::event_boundary(event) == super::schema::EventBoundary::PolicyDecision)
+        .filter_map(|event| {
+            super::schema::parse_admission_decision_event(event).map(|admission| admission.authority).transpose()
+        })
+        .collect::<Result<Vec<_>>>()?;
     Ok(AuthorityAggregateRefs {
         ucan_verification_receipts_ref: canonical_hash(&record(
             "ucan-verification-receipts",
-            vec![sequence(ucan_verification_receipt_refs.as_slice().iter().map(string).collect())],
+            vec![sequence(
+                authorities
+                    .iter()
+                    .flat_map(|authority| authority.ucan_verification_receipt_refs.as_slice())
+                    .map(string)
+                    .collect(),
+            )],
         ))?,
         derived_grants_ref: canonical_hash(&record(
             "derived-grants",
-            vec![sequence(derived_grant_refs.as_slice().iter().map(string).collect())],
+            vec![sequence(
+                authorities.iter().flat_map(|authority| authority.derived_grant_refs.as_slice()).map(string).collect(),
+            )],
         ))?,
         authority_receipts_ref: canonical_hash(&record(
             "basalt-enforcement-receipts",
-            vec![sequence(authority_receipt_refs.as_slice().iter().map(string).collect())],
+            vec![sequence(
+                authorities.iter().map(|authority| string(&authority.basalt_enforcement_receipt_ref)).collect(),
+            )],
         ))?,
         request_refs_ref: canonical_hash(&record(
             "authority-requests",
-            vec![sequence(request_refs.as_slice().iter().map(string).collect())],
+            vec![sequence(authorities.iter().map(|authority| string(&authority.request_ref)).collect())],
         ))?,
     })
 }

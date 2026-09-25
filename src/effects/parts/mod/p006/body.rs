@@ -269,13 +269,11 @@ pub fn unison_effect_compatibility_claim_diagnostics(metadata: &str) -> Vec<Stri
         "unison runtime compatibility",
         "compatible with unison runtime",
     ];
-    let mut diagnostics = Vec::new();
-    for marker in denied {
-        if lower.contains(marker) {
-            diagnostics.push("Molten effect manifests treat Unison abilities as prior art only".to_string());
-        }
-    }
-    diagnostics
+    denied
+        .into_iter()
+        .filter(|marker| lower.contains(marker))
+        .map(|_| "Molten effect manifests treat Unison abilities as prior art only".to_string())
+        .collect()
 }
 
 fn handler_profile_admission_receipt_value(input: &HandlerProfileAdmissionValueInput<'_>) -> Result<IoValue> {
@@ -360,7 +358,7 @@ fn handler_profile_admission_diagnostics(
 }
 
 fn effect_support_diagnostics(manifest: &EffectManifest, supported_effects: &[DeclaredEffect]) -> Vec<String> {
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(manifest.declared_effects.len());
     for declared in &manifest.declared_effects {
         let mut is_saw_effect_operation = false;
         let mut is_saw_exact = false;
@@ -402,16 +400,17 @@ fn declared_effect_for_request<'a>(manifest: &'a EffectManifest, request: &Effec
 }
 
 fn missing_capability_diagnostics(effect: &DeclaredEffect, request: &EffectRequest) -> Vec<String> {
-    let mut diagnostics = Vec::new();
-    for required in &effect.capability_refs {
-        if !request.capability_refs.iter().any(|candidate| candidate == required) {
-            diagnostics.push(format!(
+    effect
+        .capability_refs
+        .iter()
+        .filter(|required| !request.capability_refs.iter().any(|candidate| candidate == *required))
+        .map(|_| {
+            format!(
                 "effect request missing required capability for effect {} operation {}",
                 effect.effect_id, effect.operation
-            ));
-        }
-    }
-    diagnostics
+            )
+        })
+        .collect()
 }
 
 fn effect_profile_replay_binding_diagnostics(input: &EffectProfileReplayBindingInput) -> Vec<String> {

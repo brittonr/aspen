@@ -388,8 +388,11 @@ pub fn validate_status_condition(
 
 /// Evaluate deletion eligibility from owner refs, finalizers, pins, retention, and authority.
 pub fn evaluate_deletion_gate(input: &DeletionGateInput) -> Result<DeletionDecision> {
-    let mut cleared = Vec::new();
-    let mut unresolved = Vec::new();
+    let mut cleared =
+        Vec::with_capacity(input.owner_refs.len() + input.finalizers.len() + input.deletion_authority_refs.len());
+    let mut unresolved = Vec::with_capacity(
+        input.owner_refs.len() + input.finalizers.len() + input.pin_refs.len() + input.retention_policy_refs.len() + 1,
+    );
 
     for owner_ref in &input.owner_refs {
         if input.live_owner_refs.contains(&owner_ref.resource_ref) {

@@ -10,6 +10,8 @@ const EFFECTIVE_CONFIG_AUTHORIZATION_SCHEMA: &str = "molten.project.effective-co
 const DECISION_PASS: &str = "pass";
 const DECISION_DENY: &str = "deny";
 const NONE_REF: &str = "none";
+/// Each field name can add a changed-value, a changed-source, and a changed-caveats diagnostic.
+const DIAGNOSTICS_PER_CONFIG_FIELD: usize = 3;
 const MAX_PROFILE_REFS: usize = 128;
 const MAX_SOURCES: usize = 512;
 const MAX_FIELDS: usize = 512;
@@ -137,7 +139,7 @@ pub fn diff_effective_config_readbacks(
     let mut names = OrderedSet::new();
     names.extend(left_fields.keys().cloned());
     names.extend(right_fields.keys().cloned());
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(names.len().saturating_mul(DIAGNOSTICS_PER_CONFIG_FIELD));
     for name in names {
         match (left_fields.get(&name), right_fields.get(&name)) {
             (Some(left), Some(right)) => {

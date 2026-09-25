@@ -3,6 +3,8 @@ type Result<T> = crate::error::Result<T>;
 
 const PEER_PROMOTION_RECEIPT_SCHEMA: &str = "molten.peer-promotion-receipt.v1";
 const PEER_DEMOTION_RECEIPT_SCHEMA: &str = "molten.peer-demotion-receipt.v1";
+/// Each requested role can add a Raft-role, a missing-approval, and an out-of-scope diagnostic.
+const DIAGNOSTICS_PER_REQUESTED_ROLE: usize = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PeerPromotionRequest {
@@ -50,6 +52,7 @@ pub fn preflight_peer_promotion(input: &PeerPromotionRequest) -> Result<PeerProm
     if input.revocation_refs.iter().any(|reference| reference == &input.issuer_ref) {
         diagnostics.push("revoked promotion issuer".to_string());
     }
+    diagnostics.reserve(input.requested_roles.len().saturating_mul(DIAGNOSTICS_PER_REQUESTED_ROLE));
     for role in &input.requested_roles {
         if is_raft_role(role) {
             diagnostics.push(format!("Raft role {role} requires separate membership admission"));

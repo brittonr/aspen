@@ -185,15 +185,21 @@ pub fn validate_ast_grep_profile(profile: &AstGrepAuditProfile) -> AuditProfileV
     );
     require_items("non-claim", REQUIRED_NON_CLAIMS, profile.non_claims.iter().map(String::as_str), &mut diagnostics);
 
-    for rule in &profile.rules {
-        if rule.posture.requires_fixtures() && (rule.positive_fixture.is_none() || rule.negative_fixture.is_none()) {
-            diagnostics.push(format!(
-                "rule {} cannot become {} without positive and negative fixtures",
-                rule.id,
-                rule.posture.as_str()
-            ));
-        }
-    }
+    diagnostics.extend(
+        profile
+            .rules
+            .iter()
+            .filter(|rule| {
+                rule.posture.requires_fixtures() && (rule.positive_fixture.is_none() || rule.negative_fixture.is_none())
+            })
+            .map(|rule| {
+                format!(
+                    "rule {} cannot become {} without positive and negative fixtures",
+                    rule.id,
+                    rule.posture.as_str()
+                )
+            }),
+    );
 
     AuditProfileValidation {
         valid: diagnostics.is_empty(),

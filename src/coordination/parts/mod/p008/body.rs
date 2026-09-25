@@ -95,19 +95,20 @@ pub fn apply_coordination_batch(
     let mut evidence_values = Vec::new();
     evidence_values.push(envelope.value.clone());
     let mut results = Vec::with_capacity(envelope.requests.len());
-    let mut receipt_refs = Vec::with_capacity(envelope.requests.len());
-    let mut assertion_refs = Vec::new();
     let mut decision = "pass";
     for request in &envelope.requests {
         let result = apply_coordination_request(runtime, request)?;
         if result.receipt.decision != "pass" {
             decision = "deny";
         }
-        receipt_refs.push(result.receipt.receipt_ref.clone());
-        assertion_refs.extend(result.assertions.iter().map(|assertion| assertion.assertion_ref.clone()));
-        evidence_values.extend(result.evidence_values.iter().cloned());
         results.push(result);
     }
+    let receipt_refs = results.iter().map(|result| result.receipt.receipt_ref.clone()).collect::<Vec<_>>();
+    let assertion_refs = results
+        .iter()
+        .flat_map(|result| result.assertions.iter().map(|assertion| assertion.assertion_ref.clone()))
+        .collect::<Vec<_>>();
+    evidence_values.extend(results.iter().flat_map(|result| result.evidence_values.iter().cloned()));
     let final_state = snapshot_from_state(&runtime.state)?;
     evidence_values.push(final_state.value.clone());
     let evidence_refs = evidence_values.iter().map(canonical_hash).collect::<Result<Vec<_>>>()?;
@@ -147,6 +148,7 @@ fn batch_preflight(runtime: &CoordinationRuntime, envelope: &CoordinationBatchEn
         ));
     }
     let mut operation_ids = OrderedSet::new();
+    diagnostics.reserve(envelope.requests.len());
     for request_value in &envelope.requests {
         let request = parse_coordination_request(request_value)?;
         if !operation_ids.insert(request.operation_id_ref.clone()) {

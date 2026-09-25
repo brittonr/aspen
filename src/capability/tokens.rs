@@ -214,10 +214,17 @@ pub fn admit_capability(
     validate_request_refs(request)?;
     let mut diagnostics = Vec::new();
     proofset_boundary_diagnostics(proofset, request, &mut diagnostics);
-    let mut admitted_token_refs = Vec::new();
-    for token in &proofset.tokens {
-        let token_ref = crate::preserves_rail::canonical_hash(&capability_token_value(token)?)?;
-        let token_diagnostics = token_diagnostics(token, proofset, request);
+    let token_outcomes = proofset
+        .tokens
+        .iter()
+        .map(|token| {
+            let token_ref = crate::preserves_rail::canonical_hash(&capability_token_value(token)?)?;
+            Ok((token_ref, token_diagnostics(token, proofset, request)))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let mut admitted_token_refs = Vec::with_capacity(token_outcomes.len());
+    diagnostics.reserve(token_outcomes.iter().map(|(_, token_diagnostics)| token_diagnostics.len()).sum());
+    for (token_ref, token_diagnostics) in token_outcomes {
         if token_diagnostics.is_empty() {
             admitted_token_refs.push(token_ref);
         } else {
@@ -425,11 +432,13 @@ fn token_diagnostics(
     {
         diagnostics.push("delegation revoked".to_string());
     }
-    for caveat in &token.caveats {
-        if !request.caveat_context.iter().any(|available| available == caveat) {
-            diagnostics.push(format!("caveat unsatisfied {caveat}"));
-        }
-    }
+    diagnostics.extend(
+        token
+            .caveats
+            .iter()
+            .filter(|caveat| !request.caveat_context.iter().any(|available| available == *caveat))
+            .map(|caveat| format!("caveat unsatisfied {caveat}")),
+    );
     diagnostics
 }
 
@@ -459,12 +468,11 @@ fn validate_ref_slice(refs: &[String]) -> Result<()> {
 }
 
 fn ucan_verification_diagnostics(input: &UcanVerificationInput) -> Vec<String> {
-    let mut diagnostics = Vec::new();
-    for (name, predicate) in UCAN_CHECKS {
-        if !predicate(&input.checks) {
-            diagnostics.push(format!("UCAN {name} check failed"));
-        }
-    }
+    let mut diagnostics = UCAN_CHECKS
+        .iter()
+        .filter(|(_, predicate)| !predicate(&input.checks))
+        .map(|(name, _)| format!("UCAN {name} check failed"))
+        .collect::<Vec<_>>();
     if input.proof_refs.is_empty() {
         diagnostics.push("UCAN proof refs are required".to_string());
     }

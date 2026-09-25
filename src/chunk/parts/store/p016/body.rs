@@ -335,7 +335,7 @@ fn required_chunks_for_remote_range(
     if end > manifest.total_len {
         diagnostics.push("remote byte-source range exceeds manifest length".to_string());
     }
-    let mut refs = Vec::new();
+    let mut refs = Vec::with_capacity(manifest.chunks.len());
     let mut chunk_start = 0_u64;
     for chunk in &manifest.chunks {
         let chunk_end = chunk_start

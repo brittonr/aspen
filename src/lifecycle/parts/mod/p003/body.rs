@@ -92,7 +92,7 @@ pub fn validate_probe_results(
     probes: &[LifecycleProbe],
     current_generation: u64,
 ) -> Result<Vec<String>> {
-    let mut status_refs = Vec::new();
+    let mut status_refs = Vec::with_capacity(probes.len());
 
     for probe in probes {
         require_ref(&probe.probe_evidence_ref, "probe evidence ref")?;

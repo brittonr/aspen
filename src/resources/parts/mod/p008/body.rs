@@ -319,6 +319,7 @@ pub fn validate_reconcile_completion(
     }
 
     // Every required effect intent must have a receipt
+    diagnostics.reserve(input.required_effect_intents.len());
     for required in &input.required_effect_intents {
         if !input
             .has_effect_receipts

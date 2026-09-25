@@ -3,6 +3,8 @@ type Result<T> = crate::error::Result<T>;
 
 const PEER_HANDOFF_BUNDLE_SCHEMA: &str = "molten.peer-handoff-bundle.v1";
 const PEER_HANDOFF_VERIFY_SCHEMA: &str = "molten.peer-handoff-verify-receipt.v1";
+/// Each bundle member can add a duplicate-name and a wrong-scope diagnostic.
+const DIAGNOSTICS_PER_BUNDLE_MEMBER: usize = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PeerHandoffMember {
@@ -71,7 +73,8 @@ pub fn verify_peer_handoff(input: &PeerHandoffVerifyInput) -> Result<PeerHandoff
         diagnostics.push("stale handoff ticket".to_string());
     }
     let mut names = std::collections::BTreeSet::new();
-    let mut imported_member_refs = Vec::new();
+    let mut imported_member_refs = Vec::with_capacity(input.bundle.members.len());
+    diagnostics.reserve(input.bundle.members.len().saturating_mul(DIAGNOSTICS_PER_BUNDLE_MEMBER));
     for member in &input.bundle.members {
         crate::preserves_rail::validate_content_ref(&member.member_ref)?;
         if !names.insert(member.name.clone()) {
@@ -82,11 +85,13 @@ pub fn verify_peer_handoff(input: &PeerHandoffVerifyInput) -> Result<PeerHandoff
         }
         imported_member_refs.push(member.member_ref.clone());
     }
-    for required in &input.required_member_names {
-        if !names.contains(required) {
-            diagnostics.push(format!("missing bundle member {required}"));
-        }
-    }
+    diagnostics.extend(
+        input
+            .required_member_names
+            .iter()
+            .filter(|required| !names.contains(*required))
+            .map(|required| format!("missing bundle member {required}")),
+    );
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let value = receipt_value(decision, &diagnostics, &imported_member_refs, &input.bundle);
     let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;

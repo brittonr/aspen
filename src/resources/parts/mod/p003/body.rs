@@ -385,10 +385,9 @@ mod tests {
 
     #[test]
     fn too_many_labels_denies() {
-        let mut labels = std::collections::BTreeMap::new();
-        for i in 0..MAX_LABEL_COUNT + 1 {
-            labels.insert(format!("key-{i}"), "value".to_string());
-        }
+        let labels = (0..=MAX_LABEL_COUNT)
+            .map(|i| (format!("key-{i}"), "value".to_string()))
+            .collect();
         let metadata = ResourceMetadata {
             labels,
             annotations: std::collections::BTreeMap::new(),

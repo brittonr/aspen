@@ -54,15 +54,14 @@ pub(super) fn read(path: &std::path::Path) -> molten::error::Result<Read> {
     };
     let mut manifest_value = None;
     let mut member_refs = Vec::with_capacity(verified.payloads.len());
-    let mut diagnostics = Vec::new();
+    let mut is_manifest_invalid = false;
     for payload in verified.payloads {
         if payload.logical_path == RELEASE_ARCHIVE_MANIFEST {
             manifest_value = String::from_utf8(payload.bytes)
                 .ok()
                 .and_then(|text| molten::preserves_rail::parse_text(&text).ok());
-            if manifest_value.is_none() {
-                diagnostics.push("release-export-manifest-invalid".to_string());
-            }
+            // verify_archive rejects duplicate members, so the manifest is seen at most once.
+            is_manifest_invalid = manifest_value.is_none();
         } else {
             let reference = molten::operator_dogfood::release_export_file_ref(&payload.logical_path, &payload.bytes);
             member_refs.push((payload.logical_path, reference));
@@ -72,7 +71,11 @@ pub(super) fn read(path: &std::path::Path) -> molten::error::Result<Read> {
     Ok(Read {
         manifest_value,
         member_refs,
-        diagnostics,
+        diagnostics: if is_manifest_invalid {
+            vec!["release-export-manifest-invalid".to_string()]
+        } else {
+            Vec::new()
+        },
     })
 }
 

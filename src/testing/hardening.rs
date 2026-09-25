@@ -20,6 +20,8 @@ const NEXTEST_PROFILE_MATRIX_SCHEMA: &str = "molten.testing.nextest-profile-matr
 const CLI_RECEIPT_FIRST_SCHEMA: &str = "molten.testing.cli-receipt-first-gate.v1";
 const MAX_ITEMS: usize = 4096;
 const MAX_REFS: usize = 256;
+/// Each covered requirement can add a missing-positive and a missing-negative diagnostic.
+const MISSING_COVERAGE_DIAGNOSTICS_PER_REQUIREMENT: usize = 2;
 const MINIMUM_CI_TOTAL_FOR_PASS: u64 = 1;
 const ZERO_COUNT: u64 = 0;
 const PROFILE_METADATA_ARTIFACT: &str = "profile-metadata";
@@ -329,7 +331,8 @@ pub fn build_boundary_coverage_gate(input: &BoundaryCoverageGateInput) -> Result
         validate_boundary_exemption(item, &mut diagnostics)?;
         exemptions.insert(item.class.clone());
     }
-    let mut missing = Vec::new();
+    let mut missing = Vec::with_capacity(input.required.len());
+    diagnostics.reserve(input.required.len());
     for requirement in &input.required {
         validate_boundary_requirement(requirement)?;
         let key = boundary_key(&requirement.class, &requirement.polarity);
@@ -364,6 +367,7 @@ pub fn build_evidence_matrix_manifest(input: &EvidenceMatrixInput) -> Result<Evi
     let mut duplicate_keys = OrderedSet::new();
     let mut positive = OrderedSet::new();
     let mut negative = OrderedSet::new();
+    diagnostics.reserve(input.entries.len());
     for entry in &input.entries {
         validate_matrix_entry(entry, &requirement_map, &mut diagnostics)?;
         let key = format!("{}|{}|{}|{}", entry.requirement_id, entry.coverage_kind, entry.evidence_scope, entry.target);
@@ -385,8 +389,9 @@ pub fn build_evidence_matrix_manifest(input: &EvidenceMatrixInput) -> Result<Evi
         validate_matrix_exemption(exemption, &requirement_map, &mut diagnostics)?;
         exempt.insert(exemption.requirement_id.clone());
     }
-    let mut missing_positive = Vec::new();
-    let mut missing_negative = Vec::new();
+    let mut missing_positive = Vec::with_capacity(requirement_map.len());
+    let mut missing_negative = Vec::with_capacity(requirement_map.len());
+    diagnostics.reserve(requirement_map.len().saturating_mul(MISSING_COVERAGE_DIAGNOSTICS_PER_REQUIREMENT));
     for requirement in requirement_map.values() {
         if !requires_matrix_coverage(requirement) || exempt.contains(&requirement.id) {
             continue;
@@ -443,6 +448,7 @@ pub fn build_tamper_matrix(input: &TamperMatrixInput) -> Result<TamperMatrix> {
     let mut diagnostics = Vec::new();
     let families = family_map(&input.families, &mut diagnostics)?;
     let mut seen = OrderedSet::new();
+    diagnostics.reserve(input.cases.len());
     for case in &input.cases {
         validate_tamper_case(case, &families, &mut diagnostics)?;
         let key = format!("{}|{}", case.family, case.mutation);
@@ -450,14 +456,13 @@ pub fn build_tamper_matrix(input: &TamperMatrixInput) -> Result<TamperMatrix> {
             diagnostics.push(format!("duplicate-tamper-case:{key}"));
         }
     }
-    for family in families.keys() {
-        for mutation in required_tamper_mutations() {
-            let key = format!("{family}|{mutation}");
-            if !seen.contains(&key) {
-                diagnostics.push(format!("missing-tamper-case:{key}"));
-            }
-        }
-    }
+    diagnostics.extend(
+        families
+            .keys()
+            .flat_map(|family| required_tamper_mutations().iter().map(move |mutation| format!("{family}|{mutation}")))
+            .filter(|key| !seen.contains(key))
+            .map(|key| format!("missing-tamper-case:{key}")),
+    );
     diagnostics.sort();
     diagnostics.dedup();
     let decision = decision_for(&diagnostics);
@@ -678,7 +683,7 @@ pub fn reviewed_nextest_profile_rows() -> Vec<SemanticProfileInput> {
 
 pub fn build_nextest_profile_matrix(input: &NextestProfileMatrixInput) -> Result<NextestProfileMatrix> {
     ensure_bound(input.profiles.len(), "nextest profiles")?;
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(input.profiles.len());
     let mut seen = OrderedSet::new();
     for profile in &input.profiles {
         validate_profile(profile, &mut diagnostics)?;
@@ -686,11 +691,12 @@ pub fn build_nextest_profile_matrix(input: &NextestProfileMatrixInput) -> Result
             diagnostics.push(format!("duplicate-profile:{}", profile.profile_id));
         }
     }
-    for required in required_semantic_profiles() {
-        if !seen.contains(*required) {
-            diagnostics.push(format!("missing-profile:{required}"));
-        }
-    }
+    diagnostics.extend(
+        required_semantic_profiles()
+            .iter()
+            .filter(|required| !seen.contains(**required))
+            .map(|required| format!("missing-profile:{required}")),
+    );
     diagnostics.sort();
     diagnostics.dedup();
     let decision = decision_for(&diagnostics);

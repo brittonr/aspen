@@ -189,16 +189,16 @@ pub struct AdmissionChainResult {
 /// Returns an `AdmissionChainResult` with per-phase decisions.
 /// A later phase MUST NOT claim success when an earlier phase denied.
 pub fn evaluate_admission_chain(input: &AdmissionChainInput) -> AdmissionChainResult {
-    let mut phase_results = Vec::new();
+    let mut phase_results = Vec::with_capacity(AdmissionPhase::all().len());
     let mut is_overall_pass = true;
-    let mut diagnostics = Vec::new();
+    let mut denial_diagnostic = None;
 
     for phase in AdmissionPhase::all() {
         let result = evaluate_single_phase(*phase, input);
         let is_denied = matches!(result.decision, PhaseDecision::Deny);
         if is_denied {
             is_overall_pass = false;
-            diagnostics.push(format!(
+            denial_diagnostic = Some(format!(
                 "phase {} denied: {}",
                 result.phase.as_str(),
                 result.diagnostics.join(", ")
@@ -236,7 +236,7 @@ pub fn evaluate_admission_chain(input: &AdmissionChainInput) -> AdmissionChainRe
         pass: is_overall_pass,
         phase_results,
         commit_plan_ref,
-        diagnostics,
+        diagnostics: denial_diagnostic.into_iter().collect(),
     }
 }
 

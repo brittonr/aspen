@@ -177,7 +177,7 @@ fn parse_ucan_verification_receipts(
         ));
     }
     let mut verification_receipt_refs = Vec::with_capacity(receipts.len());
-    let mut derived_grant_refs = Vec::new();
+    let mut derived_grant_ref_sets = Vec::with_capacity(receipts.len());
     for receipt in receipts.as_ref() {
         let receipt_value = value_to_iovalue(receipt);
         let parsed = crate::capability_tokens::parse_ucan_verification_receipt_value(&receipt_value)?;
@@ -202,11 +202,11 @@ fn parse_ucan_verification_receipts(
             ));
         }
         verification_receipt_refs.push(parsed.receipt_ref);
-        derived_grant_refs.extend(parsed.derived_grant_refs);
+        derived_grant_ref_sets.push(parsed.derived_grant_refs);
     }
     Ok(ParsedUcanVerificationReceipts {
         verification_receipt_refs,
-        derived_grant_refs,
+        derived_grant_refs: derived_grant_ref_sets.into_iter().flatten().collect(),
     })
 }
 

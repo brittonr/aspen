@@ -56,16 +56,18 @@ fn write_bundle_value(root: &CapabilityBundleRoot, path: &LocalStorePath, value:
 }
 
 fn bundle_materialization_path(path: &LocalStorePath) -> Result<String> {
-    let mut components = Vec::new();
-    for component in path.as_path().components() {
-        let std::path::Component::Normal(component) = component else {
-            return Err(MoltenError::invalid_harness("retention bundle path is not normalized"));
-        };
-        let component = component
-            .to_str()
-            .ok_or_else(|| MoltenError::invalid_harness("retention bundle path must be UTF-8"))?;
-        components.push(component);
-    }
+    let components = path
+        .as_path()
+        .components()
+        .map(|component| {
+            let std::path::Component::Normal(component) = component else {
+                return Err(MoltenError::invalid_harness("retention bundle path is not normalized"));
+            };
+            component
+                .to_str()
+                .ok_or_else(|| MoltenError::invalid_harness("retention bundle path must be UTF-8"))
+        })
+        .collect::<Result<Vec<_>>>()?;
     Ok(components.join("/"))
 }
 

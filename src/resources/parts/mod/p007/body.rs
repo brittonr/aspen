@@ -245,30 +245,28 @@ pub fn evaluate_taint_toleration_match(
         )));
     }
 
-    let mut unmatched_effects = Vec::new();
-
-    for taint in taints {
-        let is_tolerated = tolerations.iter().any(|tol| {
-            let is_key_match = match tol.operator {
-                TolerationOperator::Equal => tol.key == taint.key,
-                TolerationOperator::Exists => true,
-            };
-            let is_value_match = match (&tol.operator, &tol.value) {
-                (TolerationOperator::Equal, Some(v)) => v == &taint.value,
-                (TolerationOperator::Exists, _) => true,
-                _ => false,
-            };
-            let is_effect_match = match (&tol.effect, &taint.effect) {
-                (Some(tol_effect), _) => *tol_effect == taint.effect,
-                (None, _) => true,
-            };
-            is_key_match && is_value_match && is_effect_match
-        });
-
-        if !is_tolerated {
-            unmatched_effects.push(taint.effect);
-        }
-    }
+    let unmatched_effects = taints
+        .iter()
+        .filter(|taint| {
+            !tolerations.iter().any(|tol| {
+                let is_key_match = match tol.operator {
+                    TolerationOperator::Equal => tol.key == taint.key,
+                    TolerationOperator::Exists => true,
+                };
+                let is_value_match = match (&tol.operator, &tol.value) {
+                    (TolerationOperator::Equal, Some(v)) => v == &taint.value,
+                    (TolerationOperator::Exists, _) => true,
+                    _ => false,
+                };
+                let is_effect_match = match (&tol.effect, &taint.effect) {
+                    (Some(tol_effect), _) => *tol_effect == taint.effect,
+                    (None, _) => true,
+                };
+                is_key_match && is_value_match && is_effect_match
+            })
+        })
+        .map(|taint| taint.effect)
+        .collect();
 
     Ok(unmatched_effects)
 }
@@ -279,7 +277,7 @@ pub fn evaluate_placement(
     explicit_target_properties: &[(String, String)],
 ) -> PlacementDecision {
     // Check constraints against explicit target properties
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(request.constraints.len());
 
     for constraint in &request.constraints {
         let is_satisfied = match constraint.kind {
