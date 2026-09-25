@@ -277,19 +277,32 @@ pub enum AuthorityDecision {
     Deny,
 }
 
+/// Independent facts; positionally interchangeable booleans cannot select authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AuthorityDecisionFacts {
+    pub is_policy_allowed: bool,
+    pub is_expired: bool,
+    pub is_revoked: bool,
+}
+
 pub fn decide_authority(
     supplied: &AuthorityReferenceSet,
     expected: &AuthorityReferenceSet,
-    policy_allows: bool,
-    is_expired: bool,
-    is_revoked: bool,
+    facts: AuthorityDecisionFacts,
 ) -> AuthorityDecision {
-    let exact_roles_match = supplied == expected;
-    if exact_roles_match && policy_allows && !is_expired && !is_revoked {
-        AuthorityDecision::Allow
-    } else {
-        AuthorityDecision::Deny
+    if supplied != expected {
+        return AuthorityDecision::Deny;
     }
+    if !facts.is_policy_allowed {
+        return AuthorityDecision::Deny;
+    }
+    if facts.is_expired {
+        return AuthorityDecision::Deny;
+    }
+    if facts.is_revoked {
+        return AuthorityDecision::Deny;
+    }
+    AuthorityDecision::Allow
 }
 
 pub const fn historical_replay_is_evidence_only(references: &HistoricalReferenceSet) -> bool {
@@ -354,10 +367,13 @@ fn validate_entity<D: ReferenceDomain>(value: &str) -> Result<(), ReferenceError
             maximum: MAX_ENTITY_REF_BYTES,
         });
     }
-    let valid = value.bytes().all(|byte| {
+    let has_valid_characters = value.bytes().all(|byte| {
         byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'-' | b'_' | b'.' | b':' | b'/')
     });
-    if !valid || value.starts_with(['-', '_', '.', ':', '/']) || value.ends_with(['-', '_', '.', ':', '/']) {
+    if !has_valid_characters
+        || value.starts_with(['-', '_', '.', ':', '/'])
+        || value.ends_with(['-', '_', '.', ':', '/'])
+    {
         return Err(ReferenceError::InvalidSpelling { domain: D::NAME });
     }
     Ok(())
@@ -444,25 +460,53 @@ mod tests {
     #[test]
     fn valid_reference_possession_does_not_bypass_authority_policy() {
         let supplied = authority_set();
-        assert_eq!(decide_authority(&supplied, &supplied, false, false, false), AuthorityDecision::Deny);
-        assert_eq!(decide_authority(&supplied, &supplied, true, true, false), AuthorityDecision::Deny);
-        assert_eq!(decide_authority(&supplied, &supplied, true, false, true), AuthorityDecision::Deny);
-        assert_eq!(decide_authority(&supplied, &supplied, true, false, false), AuthorityDecision::Allow);
+        let admitted = AuthorityDecisionFacts {
+            is_policy_allowed: true,
+            is_expired: false,
+            is_revoked: false,
+        };
+        assert_eq!(
+            decide_authority(&supplied, &supplied, AuthorityDecisionFacts {
+                is_policy_allowed: false,
+                ..admitted
+            }),
+            AuthorityDecision::Deny
+        );
+        assert_eq!(
+            decide_authority(&supplied, &supplied, AuthorityDecisionFacts {
+                is_expired: true,
+                ..admitted
+            }),
+            AuthorityDecision::Deny
+        );
+        assert_eq!(
+            decide_authority(&supplied, &supplied, AuthorityDecisionFacts {
+                is_revoked: true,
+                ..admitted
+            }),
+            AuthorityDecision::Deny
+        );
+        assert_eq!(decide_authority(&supplied, &supplied, admitted), AuthorityDecision::Allow);
     }
 
     #[test]
     fn exact_authority_roles_fail_closed_on_holder_session_and_policy_drift() {
         let expected = authority_set();
+        let admitted = AuthorityDecisionFacts {
+            is_policy_allowed: true,
+            is_expired: false,
+            is_revoked: false,
+        };
         let mut supplied = expected.clone();
         supplied.holder = PrincipalRef::new("principal-b").expect("principal");
-        assert_eq!(decide_authority(&supplied, &expected, true, false, false), AuthorityDecision::Deny);
+        assert_eq!(decide_authority(&supplied, &expected, admitted), AuthorityDecision::Deny);
         supplied = expected.clone();
         supplied.session = SessionRef::new("session-b").expect("session");
-        assert_eq!(decide_authority(&supplied, &expected, true, false, false), AuthorityDecision::Deny);
+        assert_eq!(decide_authority(&supplied, &expected, admitted), AuthorityDecision::Deny);
         supplied = expected.clone();
         supplied.policy =
             PolicyRef::new("blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").expect("policy");
-        assert_eq!(decide_authority(&supplied, &expected, true, false, false), AuthorityDecision::Deny);
+        assert_eq!(decide_authority(&supplied, &expected, admitted), AuthorityDecision::Deny);
     }
 
     #[test]

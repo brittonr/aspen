@@ -126,23 +126,22 @@ fn map_statement_and_policy(
     Vec<String>,
 > {
     let request = input.request;
-    let key_identity =
-        artifact_ref(
-            artifact_auth_core::ED25519_PUBLIC_KEY_PROFILE_V1,
-            &request.observed.signer_public_ref,
-            "observed.signer_public_ref",
-        )?;
-    let subject = artifact_ref(
+    let key_identity = parse_ref(
+        artifact_auth_core::ED25519_PUBLIC_KEY_PROFILE_V1,
+        &request.observed.signer_public_ref,
+        "observed.signer_public_ref",
+    )?;
+    let subject = parse_ref(
         &request.expected_domain.payload_schema,
         &request.expected_domain.payload_ref,
         "expected_domain.payload_ref",
     )?;
-    let verifier_context = artifact_ref(
+    let verifier_context = parse_ref(
         MOLTEN_VERIFIER_CONTEXT_PROFILE,
         &request.expected_domain.verifier_context_ref,
         "expected_domain.verifier_context_ref",
     )?;
-    let currentness_ref = artifact_ref(MOLTEN_CURRENTNESS_PROFILE, input.currentness_ref, "currentness_ref")?;
+    let currentness_ref = parse_ref(MOLTEN_CURRENTNESS_PROFILE, input.currentness_ref, "currentness_ref")?;
     if input.profile.algorithm != super::CryptoAlgorithm::Ed25519Iroh {
         return Err(vec!["unsupported-production-algorithm".to_string()]);
     }
@@ -178,7 +177,7 @@ fn map_statement_and_policy(
     Ok((policy, scope, statement))
 }
 
-fn artifact_ref(profile: &str, value: &str, field: &str) -> Result<artifact_auth_core::ArtifactRef, Vec<String>> {
+fn parse_ref(profile: &str, value: &str, field: &str) -> Result<artifact_auth_core::ArtifactRef, Vec<String>> {
     let Some(digest_hex) = value.strip_prefix(BLAKE3_REF_PREFIX) else {
         return Err(vec![format!("{field}:expected-blake3-ref")]);
     };
@@ -209,22 +208,22 @@ fn compare_decisions(
 ) -> MoltenArtifactAuthCompatibility {
     let causes = legacy.issues.iter().map(issue_class).collect::<std::collections::BTreeSet<_>>();
     let standalone_causes = standalone.map_or_else(std::collections::BTreeSet::new, standalone_failure_causes);
-    let legacy_passed = legacy.kind == super::VerificationDecisionKind::Accept;
-    let standalone_passed = standalone.is_some_and(|decision| decision.passed);
-    let decision_drift = standalone.is_some() && legacy_passed != standalone_passed;
+    let is_legacy_accepted = legacy.kind == super::VerificationDecisionKind::Accept;
+    let is_standalone_accepted = standalone.is_some_and(|decision| decision.passed);
+    let has_decision_drift = standalone.is_some() && is_legacy_accepted != is_standalone_accepted;
     if standalone.is_none() {
         blockers.push("standalone-evaluation-unavailable".to_string());
     }
-    if decision_drift {
+    if has_decision_drift {
         blockers.push("decision-drift".to_string());
     }
-    if !legacy_passed && !standalone_passed && causes.is_empty() {
+    if !is_legacy_accepted && !is_standalone_accepted && causes.is_empty() {
         blockers.push("unclassified-rejection".to_string());
     }
-    if !legacy_passed && !standalone_passed && causes.is_disjoint(&standalone_causes) {
+    if !is_legacy_accepted && !is_standalone_accepted && causes.is_disjoint(&standalone_causes) {
         blockers.push("unrelated-rejection-causes".to_string());
     }
-    let identity_drift_explained = observation
+    let is_identity_drift_explained = observation
         .request
         .observed
         .signer_public_ref
@@ -233,16 +232,17 @@ fn compare_decisions(
             crate::fabric::valid_blake3_ref(&observation.request.observed.signer_public_ref)
                 && observation.standalone_cryptographic.key_identity.digest_hex == digest
         });
-    if !identity_drift_explained {
+    if !is_identity_drift_explained {
         blockers.push("identity-drift".to_string());
     }
-    let non_claim_drift = standalone.is_none_or(|decision| decision.non_claims != artifact_auth_core::required_non_claims());
-    if non_claim_drift {
+    let has_non_claim_drift =
+        standalone.is_none_or(|decision| decision.non_claims != artifact_auth_core::required_non_claims());
+    if has_non_claim_drift {
         blockers.push("non-claim-drift".to_string());
     }
     blockers.sort();
     blockers.dedup();
-    let issue_class = if legacy_passed && standalone_passed {
+    let issue_class = if is_legacy_accepted && is_standalone_accepted {
         ISSUE_CLASS_PARITY
     } else {
         ISSUE_CLASS_MAPPED_REJECTION
@@ -250,12 +250,12 @@ fn compare_decisions(
     MoltenArtifactAuthCompatibility {
         case_explained: blockers.is_empty(),
         preimage_class: PREIMAGE_CLASS.to_string(),
-        identity_drift_explained,
-        decision_drift,
+        identity_drift_explained: is_identity_drift_explained,
+        decision_drift: has_decision_drift,
         issue_class: issue_class.to_string(),
         mapped_failure_causes: causes.into_iter().map(str::to_string).collect(),
         standalone_failure_causes: standalone_causes.into_iter().map(str::to_string).collect(),
-        non_claim_drift,
+        non_claim_drift: has_non_claim_drift,
         blockers,
         legacy_authoritative: true,
         standalone_authority_admitted: false,
@@ -285,7 +285,7 @@ fn standalone_issue_class(issue_code: &str) -> &'static str {
     "standalone-policy"
 }
 
-fn issue_class(issue: &super::CryptoIdentityIssue) -> &'static str {
+const fn issue_class(issue: &super::CryptoIdentityIssue) -> &'static str {
     match issue {
         super::CryptoIdentityIssue::PurposeMismatch | super::CryptoIdentityIssue::UnsupportedPurpose(_) => "purpose",
         super::CryptoIdentityIssue::PayloadRefMismatch | super::CryptoIdentityIssue::PayloadSchemaMismatch => "payload",
@@ -306,9 +306,8 @@ pub fn standalone_observation(
     key_ref: &str,
     verified: bool,
 ) -> Result<artifact_auth_core::CryptographicObservation, String> {
-    let key_identity =
-        artifact_ref(artifact_auth_core::ED25519_PUBLIC_KEY_PROFILE_V1, key_ref, "key_ref")
-            .map_err(|issues| issues.join(","))?;
+    let key_identity = parse_ref(artifact_auth_core::ED25519_PUBLIC_KEY_PROFILE_V1, key_ref, "key_ref")
+        .map_err(|issues| issues.join(","))?;
     Ok(artifact_auth_core::CryptographicObservation {
         algorithm: artifact_auth_core::ALGORITHM_ED25519.to_string(),
         key_identity,

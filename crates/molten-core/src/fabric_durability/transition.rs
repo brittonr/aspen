@@ -174,8 +174,7 @@ pub fn scan_log(state: &DurableState, start_sequence: u64, limit: u64) -> Result
     if limit > MAX_DURABILITY_COLLECTION_ITEMS {
         return Err(DurabilityIssue::CollectionLimitExceeded);
     }
-    let mut records =
-        Vec::with_capacity(limit.min(state.durable_log.len().saturating_add(state.buffered_log.len())));
+    let mut records = Vec::with_capacity(limit.min(state.durable_log.len().saturating_add(state.buffered_log.len())));
     let mut continuation = None;
     for record in state
         .durable_log
@@ -387,12 +386,12 @@ pub fn plan_snapshot_restore(
     if snapshot.value_schema_ref != state.descriptor.value_schema_ref {
         issues.push(DurabilityIssue::SnapshotSchemaMismatch);
     }
-    let current_or_next = state
+    let is_current_or_next = state
         .descriptor
         .generation
         .checked_add(SINGLE_AFFECTED_ITEM)
         .is_some_and(|next| target_generation == state.descriptor.generation || target_generation == next);
-    if !current_or_next {
+    if !is_current_or_next {
         issues.push(DurabilityIssue::GenerationMismatch {
             expected: state.descriptor.generation,
             actual: target_generation,
@@ -766,7 +765,7 @@ fn transition_effect(
         return Err(vec![DurabilityIssue::EffectNotFound]);
     };
     if current.phase.is_terminal() {
-        let duplicate_matches = matches!(
+        let is_duplicate_action = matches!(
             (current.phase, action),
             (EffectTransactionPhase::Committed, EffectAction::Commit)
                 | (EffectTransactionPhase::Aborted, EffectAction::Abort)
@@ -774,7 +773,7 @@ fn transition_effect(
                 | (EffectTransactionPhase::ReconciledCommitted, EffectAction::Reconcile(true))
                 | (EffectTransactionPhase::ReconciledAborted, EffectAction::Reconcile(false))
         );
-        if duplicate_matches && current.profile.idempotent_commit {
+        if is_duplicate_action && current.profile.idempotent_commit {
             return Ok(effect_transition(
                 state.clone(),
                 "effect-duplicate-terminal",
@@ -812,7 +811,7 @@ fn transition_effect(
     let mut next = state.clone();
     let effect = next.effects.get_mut(transaction_id).ok_or_else(|| vec![DurabilityIssue::EffectNotFound])?;
     effect.phase = next_phase;
-    let uncertain = next_phase == EffectTransactionPhase::Uncertain;
+    let is_uncertain = next_phase == EffectTransactionPhase::Uncertain;
     Ok(effect_transition(
         next,
         match action {
@@ -822,12 +821,12 @@ fn transition_effect(
             EffectAction::MarkUncertain => "effect-uncertain",
             EffectAction::Reconcile(_) => "effect-reconcile",
         },
-        if uncertain {
+        if is_uncertain {
             MutationOutcome::Uncertain
         } else {
             MutationOutcome::Durable
         },
-        uncertain,
+        is_uncertain,
     ))
 }
 

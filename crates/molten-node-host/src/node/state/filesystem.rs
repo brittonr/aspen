@@ -146,7 +146,7 @@ fn observe_regular_handle(
     let unix_mode = None;
     Ok(super::authority::AcquiredFile {
         file,
-        size: metadata.len(),
+        size_bytes: metadata.len(),
         unix_mode,
     })
 }

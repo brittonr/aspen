@@ -34,6 +34,10 @@ They are not part of this migration.
 `molten_core::nominal` owns the pure generic families, marker domains, aliases, parsing, role enum, admitted sets, and bounded decisions.
 All stored text is private.
 Callers use checked constructors, `as_str`, `domain`, or consuming conversion.
+`decide_authority(supplied, expected, AuthorityDecisionFacts { is_policy_allowed, is_expired, is_revoked })`
+requires named policy/currentness facts rather than three swappable positional booleans.
+It denies on any mismatched reference, disallowed policy, expiry, or revocation;
+this local decision does not replace UCAN/Basalt authority verification.
 
 `authority::nominal` owns Preserves-facing wire DTO admission and exact projection.
 Wire records keep their existing strings and schema versions.

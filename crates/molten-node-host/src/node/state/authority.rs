@@ -78,7 +78,7 @@ pub enum FileObservation {
 
 pub struct AcquiredFile {
     pub(super) file: cap_std::fs::File,
-    pub(super) size: u64,
+    pub(super) size_bytes: u64,
     pub(super) unix_mode: Option<u32>,
 }
 
@@ -86,7 +86,7 @@ impl std::fmt::Debug for AcquiredFile {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("AcquiredFile")
-            .field("size", &self.size)
+            .field("size_bytes", &self.size_bytes)
             .field("unix_mode", &self.unix_mode)
             .finish_non_exhaustive()
     }
@@ -98,7 +98,7 @@ impl AcquiredFile {
     }
 
     pub fn size(&self) -> u64 {
-        self.size
+        self.size_bytes
     }
 
     /// Consume an already-open file under both observed-size and actual-read bounds.
@@ -112,8 +112,8 @@ impl AcquiredFile {
             )));
         }
         let label = "observed node state file";
-        if self.size > max_bytes {
-            return Err(super::invalid(format!("{label} size {} exceeds bound {max_bytes}", self.size)));
+        if self.size_bytes > max_bytes {
+            return Err(super::invalid(format!("{label} size {} exceeds bound {max_bytes}", self.size_bytes)));
         }
         let limit_bytes = max_bytes.checked_add(1).ok_or_else(|| super::invalid("node state read bound overflow"))?;
         let mut bytes = Vec::new();
