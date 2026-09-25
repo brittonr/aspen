@@ -164,6 +164,8 @@ fn expected_shape(
         Some(range) => {
             let chunk_count = required_chunk_count_for_range(profile, manifest, range)
                 .map_err(|issue| Failure::invalid_harness(format!("content range denied: {issue:?}")))?;
+            let chunk_count = usize::try_from(chunk_count)
+                .map_err(|_| Failure::invalid_harness("content range chunk count exceeds addressable size"))?;
             Ok((range.length, chunk_count))
         }
         None => Ok((manifest.total_length, manifest.chunks.len())),

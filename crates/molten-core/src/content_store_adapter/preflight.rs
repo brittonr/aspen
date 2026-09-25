@@ -67,8 +67,8 @@ pub fn required_chunk_count_for_range(
     profile: &ContentAdapterProfile,
     manifest: &ContentManifestDescriptor,
     range: ContentRange,
-) -> Result<usize, ContentIssue> {
-    let mut count = 0;
+) -> Result<u64, ContentIssue> {
+    let mut count = 0_u64;
     visit_required_chunks(profile, manifest, range, |_| count += 1)?;
     Ok(count)
 }

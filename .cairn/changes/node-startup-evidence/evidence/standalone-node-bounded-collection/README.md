@@ -156,7 +156,7 @@ The `source-refactor-expanded-` four files retain the later 308-error run
 `8488a3d0738a190245d4f279c8bf753070c19bed276dcf228cc18b17f8840cd3`,
 `2bd0b9f4ad4b4088ce1069fa70bfcbf7ce11eb1c7837a3f7f429151ad5058111`.
 
-Final source BLAKE3:
+Source BLAKE3 for this checkpoint:
 `preflight.rs` `bf1f8c34f5947e342d748b643379d6de84ed047c827e3cf48ef7c096e0b49d34`,
 `validation.rs` `9bba8153e94fb114c13b8f5ba871f6243a381817e38022b65bbb4e5bc8f99d3e`,
 `node_startup.rs` `1bfef9b5746f95c1c9b6ef0eb5e3959307810a9433ba61b2905f0058dd63b117`,
@@ -165,3 +165,74 @@ Final source BLAKE3:
 The three touched test files' hashes are retained in the verification
 transcript. Strict denial precedes compiler-dependency collection and VM
 startup; neither task checkbox, consumer approval, nor Cairn archive moves.
+
+## Portable count and non-const comparison review (2026-09-25)
+
+In the next local producer edit, `required_chunk_count_for_range` returns
+`u64` rather than a platform-width public `usize`. The root command adapter
+checks conversion into its existing `usize` command field; the range visitor
+still enforces the admitted profile's `max_chunk_count` first. Source BLAKE3:
+`preflight.rs` `a400ca07fbf7811a6edde379480d784ab31589a44877a68507bc977a80342433`;
+`src/content_store_adapter/integration.rs`
+`e62edff8d0a0ff343bc5ff1d3af5fe144cd0383b400ccdbd870fdbe93bacdaf2`.
+Pinned offline `molten-core --lib` tests passed **390/390**, the focused
+`molten --lib` command-boundary test passed **1/1** (1361 filtered), and
+`cargo build --offline --locked -p molten --lib -p molten-core` succeeded.
+A separately linked throwaway executable called the current public
+`u64` count and command APIs and printed
+`range_count=1 command_chunks=1 direct_range_denied=true ranged_command_denied=true full_command_denied=true`.
+Its source and executable were removed.
+
+The published Octet review commit is still `08f7784bc314620511c466ca948565429c6aba6c`;
+the corrected owner commit `da4d7f44548a9344460f717feb5b1135c492632c`
+is a **local candidate**, not a release or a consumer pin. The pinned old
+library incorrectly suggested `const fn` for `&str`
+equality: the direct Dylint UI fixture emitted two suggestions, including
+`compares_text`, while the same installed Rust compiler rejected a real
+`const fn` version with E0658, "`PartialEq` is not yet stable as a const
+trait". The owner now excludes binary operations with non-scalar operands
+from its conservative const suggestion, while still warning for primitive
+arithmetic. With the corrected library, the same fixture emitted only
+the intended one warning. Owner source, fixture, and lint-reference BLAKE3:
+`9d2aacc976a99aeeb2f4ed913d777be6e62b3d19f66563467c4d695f6e25f51d`,
+`b95b8ef884e6d44bb473498862060bc0eb414b4de61c8ad6a068d91331c626dc`,
+`be02c298d2890c2fb3dd592ee879eaf97588139affa18d67eb9cae5aa060b72f`.
+After a dry-run listed only the Octet derivation and no compiler or Stage0
+work, `nix build .#octet --offline -o target/const-lint-result` built the
+library, BLAKE3 `59ee6216e010d2f6e27672a7dc8eaaa2259338f5e626482fd67a6c7569616865`.
+The owner Nix `ui`, `fmt`, and `nextest` checks passed after separate
+bootstrap-free dry-runs; `nextest` ran **263 passed**, five skipped, across
+six binaries. The generic workspace Clippy check was not rerun for this
+candidate; its earlier 23 unrelated `missing_errors_doc` diagnostics
+remain a known separate failure.
+
+The unchanged installed hook from the full command above was rerun in the
+producer worktree, with the same target dir, driver, CLI, Rust and metadata
+hashes. Its `TIGERSTYLE_LINT_LIB` was changed only to the locally built
+`/home/brittonr/git/octet-worktrees/molten-reviewed-20260925/target/const-lint-lib/liboctet@nightly-2026-03-21-x86_64-unknown-linux-gnu.so`.
+The first portable-count run used the previous owner library and
+`--artifact-dir target/octet-portable-count`: exit **2**, Cargo **101**,
+**307 errors** (259 `molten_node_core`, 48 `leaves`). The corrected-owner
+run used `--artifact-dir target/octet-const-corrected`: exit **2**, Cargo
+**101**, **285 errors** (258 `molten_node_core`, 27 `classifications`).
+The precise node-core delta is the single E0658-backed false positive;
+overall totals differ because cached Cargo work caused different test
+crates to compile. Both runs remain denied before runtime.
+
+The exact four-file runner bundles are adjacent as `portable-count-*` and
+`const-corrected-*`. BLAKE3 for command/status/summary/provenance, respectively:
+
+| Bundle | Command | Status | Summary | Provenance |
+| --- | --- | --- | --- | --- |
+| `portable-count` | `13e84e760866d11bf9f393c29d6bf118ea8336188436294d7ece67d8d2331836` | `2afe7b1ad7361460395b48df847ecc1a8388ad67acb40108933d58eec90cc435` | `3fcaa8ac0b7f2d3c2b83d317e50ff2a4ee9fc7a0e72c18578e4252a9bad885a6` | `cc2032ec63880b0a0460b43602dbab20000f491815bf98ab0c1a25c2d365dd27` |
+| `const-corrected` | `0fc37fa9ec9fdf533a8f5f8ccdd1186a6e1eeb48d0f3a1b7a80cf52cc2767f53` | `27037f7234ae68a5eac666e19017fd22fd8157a80bea72a5452d25d300b73d0f` | `4b54ece40b83eb21bd21f6d438312dca80debd5e6d73a2938517c201a1d41814` | `83250566a2dbe8cca037576116b260c8bb617243ef9c435001659dd0d8869345` |
+
+The remaining selected-source denial includes 97 repeated-path names, 63
+low-assertion-density advisories and 51 exhaustive-enum advisories.
+Octet's `assertion_density` and `fragile_exhaustive_enum_match` definitions
+default to advisory `allow`, but the installed strict hook explicitly
+promotes both with `-D`; changing that policy, inserting panic assertions,
+or adding catch-all enum arms just to clear the gate is not an approved
+startup route. Exact reviewed policy or semantics-preserving source
+resolution is still required before an independently bound executable
+cohort and real normal-node VM evidence can exist.
