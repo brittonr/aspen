@@ -1,0 +1,9 @@
+resolves molten.blob_ref_jobs.content_verification
+resolves molten.blob_ref_jobs.local_tests
+resolves molten.blob_ref_jobs.local_worker
+resolves molten.blob_ref_jobs.no_inline_large_bytes
+resolves molten.blob_ref_jobs.payload_model
+resolves molten.blob_ref_jobs.property_tests
+resolves molten.blob_ref_jobs.provenance_policy
+resolves molten.blob_ref_jobs.receipts
+resolves molten.blob_ref_jobs.retention_pins

@@ -1,0 +1,9 @@
+{
+  "spec_effect": "none",
+  "spec_effect_rationale": "Accepted requirement meaning is unchanged. Under a bounded one-time exception recorded in design.md, the change edits the accepted spec .cairn/specs/runtime-spine/spec.md directly, only to split four legacy multi-id blob-ref blocks into one requirement per existing id. The id set, requirement sentences, and scenario steps are preserved, and no obligation is added.",
+  "workflow_profile": {
+    "id": "no-spec-delta",
+    "source": "change_create",
+    "version": 1
+  }
+}

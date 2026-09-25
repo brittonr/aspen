@@ -1,0 +1,270 @@
+{
+  "acceptance_ids": [
+    "split-runtime-spine-blob-ref-requirement-ids.identity",
+    "split-runtime-spine-blob-ref-requirement-ids.meaning",
+    "split-runtime-spine-blob-ref-requirement-ids.merge",
+    "split-runtime-spine-blob-ref-requirement-ids.traceability"
+  ],
+  "actions": [
+    {
+      "description": "move active change to archive: split-runtime-spine-blob-ref-requirement-ids",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids"
+    }
+  ],
+  "blocked": false,
+  "change": "split-runtime-spine-blob-ref-requirement-ids",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "b5ca68361b4f222dad09b20595e142ce1f60a192203a08f533b5fd581555104c",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "f04ab9ed13fc8c263f5d67773ff94b93ec616825ab25b571ef5327e470fa48de",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids/acceptance.md"
+        },
+        {
+          "content_hash": "a1315f621f2044c4600535926b1f52d317d0ab6ba468e669d291d6a1e4117df2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids/design.md"
+        },
+        {
+          "content_hash": "0a9116dba95d28d704394604d05b1038b78edffd6d402d78a87cc59a8fff8f98",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids/evidence/blob-ref-marker-resolution.txt"
+        },
+        {
+          "content_hash": "1ea65dafc0e68fa646a010a5c90837a746a00e275c2dc141bd40f4e227d90516",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "8a9ee4d43ab98a8cd4078dfa8e8a72292f1f4ab596f450d9793cab0ab682254a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "9d8d50554563a375e36bc0ae5b04c8d620912531bf8090d54070297c05497a7c",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "027c69e86672633fcc160549100007add0ed88a9d7855a90dedbe6d00ec35988",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids/evidence/original-blob-ref-blocks.md"
+        },
+        {
+          "content_hash": "8bb35836d9de5afaab4be30d54ea6381f2e8ce8dde84cd904fa05b0e9c0a3d13",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids/evidence/own-remote-sync-preview-after-split.json"
+        },
+        {
+          "content_hash": "ea16d8c473e5ab1879ecc301d3e965561ea5852ea335398c01a82cf20d46060e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids/evidence/own-remote-sync-preview-before-split.json"
+        },
+        {
+          "content_hash": "e0149fdfc782a7e6be80052d30f99ea804bac0f0e84c7e18049ac566111191a5",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids/evidence/requirement-ids-after.txt"
+        },
+        {
+          "content_hash": "e0149fdfc782a7e6be80052d30f99ea804bac0f0e84c7e18049ac566111191a5",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids/evidence/requirement-ids-before.txt"
+        },
+        {
+          "content_hash": "39996283f80b91d0b75bffab795636791c5eb266229fad9070d0542235613458",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids/evidence/split-blob-ref-blocks.md"
+        },
+        {
+          "content_hash": "efa88da06fcde30f6a466368fde4ab5003f8cd8fb5fbfb7d4c2fef44ff253312",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "367ba2703c72369fc8a740bc7293472cb9dbf0e8321738e599fc5916b56b021b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "6caf2e80d0d7421db1d65e1b3a71be6d7767908d0494c1bb79557ca76d640ac0",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids/evidence/verification.md"
+        },
+        {
+          "content_hash": "40d3f1f96b387267545b112c79944bfd9da3ec5f4138f534a6b2a326773d11b2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids/metadata.json"
+        },
+        {
+          "content_hash": "7e8bbbc22920c978ef0e7fa1447fb967b5a27ae6308ad05628b7a818322f159b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids/proposal.md"
+        },
+        {
+          "content_hash": "3975955f3b6c28ad3c09ed833c5a4eafd84b9642f03212bc6613041295427a22",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "94396b90944ab381fa8a207d8d61df690833d697bb06a7790e39d73be6a5e3ce",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-split-runtime-spine-blob-ref-requirement-ids/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids"
+        }
+      ],
+      "manifest_hash": "ddb68a9c0704e0fab990ef7fc1fb0de06f767bfcf0d474f8c62abc8d6712232d"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "f04ab9ed13fc8c263f5d67773ff94b93ec616825ab25b571ef5327e470fa48de",
+          "exists": true,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids/acceptance.md"
+        },
+        {
+          "content_hash": "a1315f621f2044c4600535926b1f52d317d0ab6ba468e669d291d6a1e4117df2",
+          "exists": true,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids/design.md"
+        },
+        {
+          "content_hash": "0a9116dba95d28d704394604d05b1038b78edffd6d402d78a87cc59a8fff8f98",
+          "exists": true,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids/evidence/blob-ref-marker-resolution.txt"
+        },
+        {
+          "content_hash": "1ea65dafc0e68fa646a010a5c90837a746a00e275c2dc141bd40f4e227d90516",
+          "exists": true,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "8a9ee4d43ab98a8cd4078dfa8e8a72292f1f4ab596f450d9793cab0ab682254a",
+          "exists": true,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "9d8d50554563a375e36bc0ae5b04c8d620912531bf8090d54070297c05497a7c",
+          "exists": true,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "027c69e86672633fcc160549100007add0ed88a9d7855a90dedbe6d00ec35988",
+          "exists": true,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids/evidence/original-blob-ref-blocks.md"
+        },
+        {
+          "content_hash": "8bb35836d9de5afaab4be30d54ea6381f2e8ce8dde84cd904fa05b0e9c0a3d13",
+          "exists": true,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids/evidence/own-remote-sync-preview-after-split.json"
+        },
+        {
+          "content_hash": "ea16d8c473e5ab1879ecc301d3e965561ea5852ea335398c01a82cf20d46060e",
+          "exists": true,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids/evidence/own-remote-sync-preview-before-split.json"
+        },
+        {
+          "content_hash": "e0149fdfc782a7e6be80052d30f99ea804bac0f0e84c7e18049ac566111191a5",
+          "exists": true,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids/evidence/requirement-ids-after.txt"
+        },
+        {
+          "content_hash": "e0149fdfc782a7e6be80052d30f99ea804bac0f0e84c7e18049ac566111191a5",
+          "exists": true,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids/evidence/requirement-ids-before.txt"
+        },
+        {
+          "content_hash": "39996283f80b91d0b75bffab795636791c5eb266229fad9070d0542235613458",
+          "exists": true,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids/evidence/split-blob-ref-blocks.md"
+        },
+        {
+          "content_hash": "efa88da06fcde30f6a466368fde4ab5003f8cd8fb5fbfb7d4c2fef44ff253312",
+          "exists": true,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "367ba2703c72369fc8a740bc7293472cb9dbf0e8321738e599fc5916b56b021b",
+          "exists": true,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "6caf2e80d0d7421db1d65e1b3a71be6d7767908d0494c1bb79557ca76d640ac0",
+          "exists": true,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids/evidence/verification.md"
+        },
+        {
+          "content_hash": "40d3f1f96b387267545b112c79944bfd9da3ec5f4138f534a6b2a326773d11b2",
+          "exists": true,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids/metadata.json"
+        },
+        {
+          "content_hash": "7e8bbbc22920c978ef0e7fa1447fb967b5a27ae6308ad05628b7a818322f159b",
+          "exists": true,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids/proposal.md"
+        },
+        {
+          "content_hash": "3975955f3b6c28ad3c09ed833c5a4eafd84b9642f03212bc6613041295427a22",
+          "exists": true,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "94396b90944ab381fa8a207d8d61df690833d697bb06a7790e39d73be6a5e3ce",
+          "exists": true,
+          "path": "./.cairn/changes/split-runtime-spine-blob-ref-requirement-ids/tasks.md"
+        }
+      ],
+      "manifest_hash": "c5e1b3bcfd0d43545dba984e89990fc9b5c1df5958eb538d239c9732cd72b8c8"
+    },
+    "kind": "archive",
+    "manifest_hash": "d0333b788d6b6a14be7741060bdfc294806a88b23af5e48bbf527309dec44c34"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts",
+    "no-spec profile conformance does not prove zero behavior effect or semantic correctness",
+    "change-local a[...] acceptance IDs are not accepted r[...] requirements and sync never promotes them"
+  ],
+  "plan_hash": "208db7b1025efb1625af09cd45f76e5f7aa3a33265c25eb6839895948767c1b6",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "d37454fe15f39e37c2850a92fbe9813ac24f1f59989ac23c4a0ee9ae67866601",
+  "reasons": [],
+  "receipt_hash": "35df95b989df938f91c70664953e58cea3fe38dc4d69f49fd6742f07092baa45",
+  "review_receipt_hashes": [
+    "a518bdb4cfa237910294124b2f2b01f7d0bd4e74856b261f994a6037715ffb6b"
+  ],
+  "spec_effect": "none",
+  "workflow_profile": "no-spec-delta",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

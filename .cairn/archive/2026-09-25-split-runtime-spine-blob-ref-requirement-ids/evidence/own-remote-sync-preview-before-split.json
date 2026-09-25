@@ -1,0 +1,96 @@
+{
+  "acceptance_ids": [],
+  "actions": [],
+  "blocked": true,
+  "change": "own-remote-assertions-per-session",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/own-remote-assertions-per-session/specs/runtime-spine/spec.md"
+  ],
+  "dry_run": true,
+  "input_hash": "246b09525a524d35faeaecbf47a514e2f00e1b3cb1729fde0a52d74df3bebbad",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "ae802d0a875b185b2f2d889d62051bfe097d6246617d86e1b0e24d45bac50d09",
+        "blocked": true,
+        "changed": false,
+        "delta_hash": "6b9553a29a0334e2101ee03f417040ea6c6bfcac1e9d6501f6b6c418233f27cb",
+        "destination": ".cairn/specs/runtime-spine/spec.md",
+        "diagnostics": [
+          {
+            "code": "delta_merge.accepted_identity_cardinality",
+            "message": "accepted requirement `### Requirement: Blob-ref job DAG integration` must carry exactly one valid bare r[...] requirement ID before its first scenario; found 3"
+          },
+          {
+            "code": "delta_merge.accepted_identity_cardinality",
+            "message": "accepted requirement `### Requirement: Blob-ref job status and receipt evidence` must carry exactly one valid bare r[...] requirement ID before its first scenario; found 3"
+          },
+          {
+            "code": "delta_merge.accepted_identity_cardinality",
+            "message": "accepted requirement `### Requirement: Blob-ref job submissions` must carry exactly one valid bare r[...] requirement ID before its first scenario; found 2"
+          },
+          {
+            "code": "delta_merge.accepted_identity_cardinality",
+            "message": "accepted requirement `### Requirement: Blob-ref worker fetch and verification` must carry exactly one valid bare r[...] requirement ID before its first scenario; found 4"
+          }
+        ],
+        "expected_after_hash": "ae802d0a875b185b2f2d889d62051bfe097d6246617d86e1b0e24d45bac50d09",
+        "operations": [
+          {
+            "block_hash": "638a30292abbb3d8a007fafb8ae2bcb4313a4bfabdafbdd0769e9f90116b9a90",
+            "heading": "### Requirement: Remote assertions are session-owned",
+            "kind": "added",
+            "requirement_id": "molten.runtime_spine.remote_assertion_ownership"
+          }
+        ],
+        "outcomes": [],
+        "source": ".cairn/changes/own-remote-assertions-per-session/specs/runtime-spine/spec.md"
+      }
+    ]
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "f1d4fd02f34ce0c9d82e2e962789e57d216a4d5b6056930a1e1614e1dc2893e7",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "34c37ef6cdb232221860a5b31dc3e3f3d3b35cb9786c0a3b5f56e3b3e73db715",
+  "reasons": [
+    ".cairn/changes/own-remote-assertions-per-session/specs/runtime-spine/spec.md: delta_merge.accepted_identity_cardinality: accepted requirement `### Requirement: Blob-ref job DAG integration` must carry exactly one valid bare r[...] requirement ID before its first scenario; found 3",
+    ".cairn/changes/own-remote-assertions-per-session/specs/runtime-spine/spec.md: delta_merge.accepted_identity_cardinality: accepted requirement `### Requirement: Blob-ref job status and receipt evidence` must carry exactly one valid bare r[...] requirement ID before its first scenario; found 3",
+    ".cairn/changes/own-remote-assertions-per-session/specs/runtime-spine/spec.md: delta_merge.accepted_identity_cardinality: accepted requirement `### Requirement: Blob-ref job submissions` must carry exactly one valid bare r[...] requirement ID before its first scenario; found 2",
+    ".cairn/changes/own-remote-assertions-per-session/specs/runtime-spine/spec.md: delta_merge.accepted_identity_cardinality: accepted requirement `### Requirement: Blob-ref worker fetch and verification` must carry exactly one valid bare r[...] requirement ID before its first scenario; found 4"
+  ],
+  "receipt_hash": "65b117665f544ecd2d8c3e56175534b698b56354e0f948ce2cd276c58a95a067",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
