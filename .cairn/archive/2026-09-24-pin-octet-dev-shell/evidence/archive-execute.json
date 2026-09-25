@@ -1,0 +1,219 @@
+{
+  "acceptance_ids": [
+    "pin-octet-dev-shell.gate-evidence",
+    "pin-octet-dev-shell.pinned-tool",
+    "pin-octet-dev-shell.truthful-readme"
+  ],
+  "actions": [
+    {
+      "description": "move active change to archive: pin-octet-dev-shell",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-09-24-pin-octet-dev-shell"
+    }
+  ],
+  "blocked": false,
+  "change": "pin-octet-dev-shell",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "314072a41f9f9868abea06fcca10f9f9ec35911e37a1df66168b79ebe9fa3015",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "fcbad61b001ccbfccb467f8cb08f108681f6023f3e61bb5084e8d74496260fcb",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-pin-octet-dev-shell/acceptance.md"
+        },
+        {
+          "content_hash": "c8fbb5885debd0cb3b1d32518060251ea6d5920ea1354d25f6bf4b09dcf11a53",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-pin-octet-dev-shell/design.md"
+        },
+        {
+          "content_hash": "268058ba8918d2635854905ee0e638c73e5d78c76a9a555436d83d16f4535be2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-pin-octet-dev-shell/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "d45d952ab7d5504d04480f96c5b70c2d75b4f5473044968037e906d85e87d605",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-pin-octet-dev-shell/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "fac553b8bd6df66ead2b9a9dc9b7b3fe9bb7d9ad2e630909e09ec6f8807c7947",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-pin-octet-dev-shell/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "dde3816d22abbe40afdd2dd7e3938de032b324c3109d6f9f30a46a6b096131f4",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-pin-octet-dev-shell/evidence/octet-lib-summary.txt"
+        },
+        {
+          "content_hash": "93b352e9e87df74c86a286e36e8ea6c4bee548e57049e4c848ae3156673ca6d2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-pin-octet-dev-shell/evidence/octet-root-summary.txt"
+        },
+        {
+          "content_hash": "fcfa414b4a2d683d03d5711f83c2607f595482ad4eb795af8e6acb2fee4953c4",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-pin-octet-dev-shell/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "5e428b7515d7f11e2593da8c82846fef7870983db0c389b9101381a5d04f09d2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-pin-octet-dev-shell/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "a4de2fd4609f068a215eb42b6e2b233e7eee1ba6c0d6dd0ba4aa5a4f5afe3e4f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-pin-octet-dev-shell/evidence/verification.md"
+        },
+        {
+          "content_hash": "10b8019bbdde44763278d94011855ba7a67610507d56807226ff72ba2020e328",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-pin-octet-dev-shell/metadata.json"
+        },
+        {
+          "content_hash": "802e83ecd9f01d9a4010dacc4c04eef662922ccf6745a7745c5fb3c42673c844",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-pin-octet-dev-shell/proposal.md"
+        },
+        {
+          "content_hash": "9a9d7afdf9e5bec2a081e5b0ba42fd70cd2f505672b8132db44a8fd7043cca95",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-pin-octet-dev-shell/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "aa83c7fb9ee6b7373cd106fd1951f908d0660398d667b4dbd3ec58ef28b71a3c",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-pin-octet-dev-shell/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/pin-octet-dev-shell"
+        }
+      ],
+      "manifest_hash": "84f6acd0e7d902fe83f6699f74ba437248a4955b06b16633ad30b4dd1ea43f18"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "fcbad61b001ccbfccb467f8cb08f108681f6023f3e61bb5084e8d74496260fcb",
+          "exists": true,
+          "path": "./.cairn/changes/pin-octet-dev-shell/acceptance.md"
+        },
+        {
+          "content_hash": "c8fbb5885debd0cb3b1d32518060251ea6d5920ea1354d25f6bf4b09dcf11a53",
+          "exists": true,
+          "path": "./.cairn/changes/pin-octet-dev-shell/design.md"
+        },
+        {
+          "content_hash": "268058ba8918d2635854905ee0e638c73e5d78c76a9a555436d83d16f4535be2",
+          "exists": true,
+          "path": "./.cairn/changes/pin-octet-dev-shell/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "d45d952ab7d5504d04480f96c5b70c2d75b4f5473044968037e906d85e87d605",
+          "exists": true,
+          "path": "./.cairn/changes/pin-octet-dev-shell/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "fac553b8bd6df66ead2b9a9dc9b7b3fe9bb7d9ad2e630909e09ec6f8807c7947",
+          "exists": true,
+          "path": "./.cairn/changes/pin-octet-dev-shell/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "dde3816d22abbe40afdd2dd7e3938de032b324c3109d6f9f30a46a6b096131f4",
+          "exists": true,
+          "path": "./.cairn/changes/pin-octet-dev-shell/evidence/octet-lib-summary.txt"
+        },
+        {
+          "content_hash": "93b352e9e87df74c86a286e36e8ea6c4bee548e57049e4c848ae3156673ca6d2",
+          "exists": true,
+          "path": "./.cairn/changes/pin-octet-dev-shell/evidence/octet-root-summary.txt"
+        },
+        {
+          "content_hash": "fcfa414b4a2d683d03d5711f83c2607f595482ad4eb795af8e6acb2fee4953c4",
+          "exists": true,
+          "path": "./.cairn/changes/pin-octet-dev-shell/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "5e428b7515d7f11e2593da8c82846fef7870983db0c389b9101381a5d04f09d2",
+          "exists": true,
+          "path": "./.cairn/changes/pin-octet-dev-shell/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "a4de2fd4609f068a215eb42b6e2b233e7eee1ba6c0d6dd0ba4aa5a4f5afe3e4f",
+          "exists": true,
+          "path": "./.cairn/changes/pin-octet-dev-shell/evidence/verification.md"
+        },
+        {
+          "content_hash": "10b8019bbdde44763278d94011855ba7a67610507d56807226ff72ba2020e328",
+          "exists": true,
+          "path": "./.cairn/changes/pin-octet-dev-shell/metadata.json"
+        },
+        {
+          "content_hash": "802e83ecd9f01d9a4010dacc4c04eef662922ccf6745a7745c5fb3c42673c844",
+          "exists": true,
+          "path": "./.cairn/changes/pin-octet-dev-shell/proposal.md"
+        },
+        {
+          "content_hash": "9a9d7afdf9e5bec2a081e5b0ba42fd70cd2f505672b8132db44a8fd7043cca95",
+          "exists": true,
+          "path": "./.cairn/changes/pin-octet-dev-shell/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "aa83c7fb9ee6b7373cd106fd1951f908d0660398d667b4dbd3ec58ef28b71a3c",
+          "exists": true,
+          "path": "./.cairn/changes/pin-octet-dev-shell/tasks.md"
+        }
+      ],
+      "manifest_hash": "a186e05382b672a7c01c103f832d8807b26d4930cd9fed4a0472f2eeff1e1e3f"
+    },
+    "kind": "archive",
+    "manifest_hash": "cce53698e025f09e804a8fc794778de0848619c49ca58bc5cd9b969c0c8148db"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts",
+    "no-spec profile conformance does not prove zero behavior effect or semantic correctness",
+    "change-local a[...] acceptance IDs are not accepted r[...] requirements and sync never promotes them"
+  ],
+  "plan_hash": "1b8ea014dc5cd3e7c5c73413e68ae8750ec957ca5deb24a3b4075813c0c0001e",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "9f05f4bbb7b09076207b3562f84257a92c396cdfc4dad1e6c5a08ca8c7767ded",
+  "reasons": [],
+  "receipt_hash": "184c6f0ec9c0f6995ea42c97c5754a4e6c6739216e9ac291e9734748fd370112",
+  "review_receipt_hashes": [
+    "0fb1fe30c81066b8d342ae9ac8694b22504e1355b8703cf1ac665f397b83e290"
+  ],
+  "spec_effect": "none",
+  "workflow_profile": "no-spec-delta",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
