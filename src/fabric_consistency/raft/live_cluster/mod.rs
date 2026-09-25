@@ -41,7 +41,7 @@ pub(super) struct LiveNode {
     pub(super) session_ref: String,
     pub(super) recovery_ref: Option<String>,
     _workspace: Option<crate::test_support::ProcessWorkspace>,
-    _control_receiver: tokio::sync::mpsc::UnboundedReceiver<ReplicaControlObservation>,
+    _control_receiver: tokio::sync::mpsc::Receiver<ReplicaControlObservation>,
 }
 
 // r[verify molten.fabric_consistency.live_raft]

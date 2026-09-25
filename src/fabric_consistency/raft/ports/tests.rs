@@ -3,6 +3,7 @@ use super::*;
 const FIRST_INDEX: u64 = 1;
 const SECOND_INDEX: u64 = 2;
 const SERVICE_GENERATION: u64 = 1;
+const CONTROL_TEST_CAPACITY: usize = 2;
 
 #[derive(Debug, Default)]
 struct RecordingBatchHandler {
@@ -97,7 +98,7 @@ fn application_port_denies_gap_and_handler_failure_without_advancing_index() {
 // r[verify molten.fabric_consistency.live_service_ports]
 #[test]
 fn channel_control_port_publishes_bound_receipt_and_reports_closed_supervisor() {
-    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (sender, mut receiver) = tokio::sync::mpsc::channel(CONTROL_TEST_CAPACITY);
     let config = control_config();
     let mut port = ChannelReplicaControlPort::new(config.clone(), sender).expect("control port");
     let request_ref = super::tests::test_ref("proposal-control-request");
@@ -119,8 +120,31 @@ fn channel_control_port_publishes_bound_receipt_and_reports_closed_supervisor() 
 
 // r[verify molten.fabric_consistency.live_service_ports]
 #[test]
+fn full_supervision_queue_denies_publication_without_enqueueing() {
+    let (sender, mut receiver) = tokio::sync::mpsc::channel(CONTROL_TEST_CAPACITY);
+    let mut port = ChannelReplicaControlPort::new(control_config(), sender).expect("control port");
+    let receipt_refs = (0..CONTROL_TEST_CAPACITY)
+        .map(|_| port.lifecycle_changed(ReplicaLifecycle::Draining).expect("observation within capacity"))
+        .collect::<Vec<_>>();
+    assert_eq!(receiver.len(), CONTROL_TEST_CAPACITY);
+
+    let error = port.lifecycle_changed(ReplicaLifecycle::Stopped).expect_err("full supervision queue must deny");
+    assert!(error.to_string().contains("supervision queue is full"), "unexpected error: {error}");
+    assert_eq!(receiver.len(), CONTROL_TEST_CAPACITY);
+    for receipt_ref in receipt_refs {
+        let observation = receiver.try_recv().expect("queued observation");
+        assert_eq!(observation.receipt_ref, receipt_ref);
+        assert_eq!(observation.kind, ReplicaControlObservationKind::Lifecycle {
+            lifecycle: ReplicaLifecycle::Draining,
+        });
+    }
+    assert!(receiver.try_recv().is_err());
+}
+
+// r[verify molten.fabric_consistency.live_service_ports]
+#[test]
 fn channel_control_port_denies_zero_generation_before_publication() {
-    let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (sender, _receiver) = tokio::sync::mpsc::channel(CONTROL_TEST_CAPACITY);
     let mut config = control_config();
     config.service_generation = 0;
     let result = ChannelReplicaControlPort::new(config, sender);

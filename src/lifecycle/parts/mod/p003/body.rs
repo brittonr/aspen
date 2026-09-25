@@ -114,22 +114,21 @@ pub fn validate_probe_results(
 }
 
 /// Detect flapping probes — rapid alternation between success/failure.
-pub fn detect_flapping_probes(probes: &[LifecycleProbe], threshold: usize) -> Vec<String> {
-    if probes.len() < 2 || probes.len() <= threshold {
-        return Vec::new();
+pub fn detect_flapping_probes(probes: &[LifecycleProbe], threshold: u64) -> Result<Vec<String>> {
+    let probe_count = crate::bounded::u64_from_usize(probes.len(), "lifecycle probe count")?;
+    if probe_count < 2 || probe_count <= threshold {
+        return Ok(Vec::new());
     }
 
-    let mut changes = 0usize;
-    for window in probes.windows(2) {
-        if window[0].success != window[1].success {
-            changes += 1;
-        }
-    }
+    let changes = crate::bounded::u64_from_usize(
+        probes.windows(2).filter(|window| window[0].success != window[1].success).count(),
+        "lifecycle probe transition count",
+    )?;
 
     if changes >= threshold {
-        vec!["flapping probes detected: rapid success/failure alternation".to_string()]
+        Ok(vec!["flapping probes detected: rapid success/failure alternation".to_string()])
     } else {
-        Vec::new()
+        Ok(Vec::new())
     }
 }
 

@@ -27,6 +27,8 @@ const ACTIVATION_TICK: u64 = 1;
 const SERVICE_EVENT_TIMEOUT_MILLISECONDS: u64 = 200;
 const EXPECTED_STARTUP_OBSERVATIONS: usize = 2;
 const EXPECTED_ELECTION_PORT_CALLS: usize = 2;
+const SERVICE_EVENT_CAPACITY: usize = 1;
+const SERVICE_CONTROL_CAPACITY: usize = 1;
 
 #[derive(Debug, Clone)]
 struct TestPortSpec {
@@ -440,8 +442,8 @@ async fn scoped_service_executes_startup_and_current_timer_through_separate_port
     let mismatch = validate_replica_runtime_identity_for_start(&mismatched_identity, &plan)
         .expect_err("substituted runtime identity must deny before effects");
     assert!(mismatch.to_string().contains("does not match the admitted start plan"));
-    let (event_sender, event_receiver) = tokio::sync::mpsc::unbounded_channel();
-    let (control_sender, _control_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (event_sender, event_receiver) = tokio::sync::mpsc::channel(SERVICE_EVENT_CAPACITY);
+    let (control_sender, _control_receiver) = tokio::sync::mpsc::channel(SERVICE_CONTROL_CAPACITY);
     let application = AdmittedReplicaApplicationPort::new(
         ReplicaApplicationConfig {
             group_binding_ref: group.binding_ref.clone(),
@@ -479,7 +481,7 @@ async fn scoped_service_executes_startup_and_current_timer_through_separate_port
     assert_eq!(service.ports().time.election_timer_refs, vec![initial_timer_ref.clone()]);
 
     event_sender
-        .send(ReplicaEvent::ElectionTimeout {
+        .try_send(ReplicaEvent::ElectionTimeout {
             timer_ref: initial_timer_ref.clone(),
         })
         .expect("queue election timeout");

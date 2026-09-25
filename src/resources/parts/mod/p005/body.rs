@@ -85,7 +85,7 @@ impl AdmissionPhase {
         }
     }
 
-    pub fn index(self) -> usize {
+    pub fn index(self) -> u32 {
         match self {
             AdmissionPhase::EnvelopeDecode => 0,
             AdmissionPhase::SchemaValidation => 1,

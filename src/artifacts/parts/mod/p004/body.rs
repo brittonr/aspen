@@ -351,7 +351,12 @@ fn record_optional_string(value: &RailValue, label: &str) -> Result<Option<Strin
 }
 
 fn record_ref_sequence(value: &RailValue, label: &str) -> Result<Vec<String>> {
-    crate::preserves_rail::record_content_ref_strings(value, label, label, MAX_ARTIFACT_REF_LIST)
+    crate::preserves_rail::record_content_ref_strings(
+        value,
+        label,
+        label,
+        crate::bounded::u64_from_usize(MAX_ARTIFACT_REF_LIST, "artifact ref list bound")?,
+    )
 }
 
 fn record_strings(value: &RailValue, label: &str) -> Result<Vec<String>> {
@@ -385,7 +390,11 @@ fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IoValue {
 }
 
 fn parse_checks(value: &RailValue) -> Result<Vec<String>> {
-    let parsed = crate::preserves_rail::parse_checks_record(value, MAX_ARTIFACT_CHECKS, "artifact registry")?;
+    let parsed = crate::preserves_rail::parse_checks_record(
+        value,
+        crate::bounded::u64_from_usize(MAX_ARTIFACT_CHECKS, "artifact check bound")?,
+        "artifact registry",
+    )?;
     let mut names = Vec::with_capacity(parsed.len());
     for check in parsed {
         if check.status != "pass" && check.status != "fail" {
@@ -421,7 +430,7 @@ fn simple_record<'a>(
     label: &str,
     arity: usize,
 ) -> Result<std::borrow::Cow<'a, preserves::Record<RailValue>>> {
-    crate::preserves_rail::simple_record_fields(value, label, arity)
+    crate::preserves_rail::simple_record_fields(value, label, crate::bounded::u64_from_usize(arity, "artifact record arity")?)
 }
 
 #[allow(clippy::owned_cow)]

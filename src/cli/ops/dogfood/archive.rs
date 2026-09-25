@@ -21,8 +21,10 @@ pub(super) fn write(
         RELEASE_ARCHIVE_MANIFEST,
         molten::preserves_rail::to_text(&manifest.value)?.into_bytes(),
     )];
+    let max_path_bytes = u64::try_from(policy.max_path_bytes)
+        .map_err(|_| molten::error::MoltenError::invalid_harness("release archive path byte bound does not fit u64"))?;
     for (name, expected_ref) in &manifest.member_refs {
-        let logical_path = molten::materialization::MaterializationPath::parse(name, policy.max_path_bytes)?;
+        let logical_path = molten::materialization::MaterializationPath::parse(name, max_path_bytes)?;
         let bytes = source.read_path(&logical_path, policy.max_member_bytes)?;
         let actual_ref = molten::operator_dogfood::release_export_file_ref(name, &bytes);
         if actual_ref != *expected_ref {

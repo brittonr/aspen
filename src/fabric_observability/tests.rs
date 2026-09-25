@@ -3,7 +3,7 @@ use super::*;
 const GENERATION_ONE: u64 = 1;
 const GENERATION_TWO: u64 = GENERATION_ONE + 1;
 const ADJACENT_PAIR_WIDTH: usize = 2;
-const SIMULATION_RECORD_LIMIT: usize = 1;
+const SIMULATION_RECORD_LIMIT: u64 = 1;
 const OBSERVABILITY_PORT_COUNT: usize = 2;
 const OBSERVED_TICK: u64 = 100;
 const FRESH_UNTIL_TICK: u64 = 200;

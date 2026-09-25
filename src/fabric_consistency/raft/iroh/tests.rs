@@ -11,6 +11,8 @@ const ASSEMBLY_FABRIC_BINDING_COUNT: usize = 7;
 const ASSEMBLY_STARTUP_OBSERVATIONS: usize = 2;
 const INGRESS_TEST_CAPACITY: usize = 4;
 const INGRESS_TEST_DELIVERY_LIMIT: u64 = 4;
+const ASSEMBLY_EVENT_CAPACITY: usize = 4;
+const ASSEMBLY_CONTROL_CAPACITY: usize = 4;
 
 #[derive(Debug, Default)]
 struct AssemblyApplicationHandler;
@@ -109,7 +111,7 @@ async fn concrete_port_assembly_denies_substitution_then_executes_bound_startup(
 
     let canonical_time = crate::fabric_time::tests::live_profile().profile;
     let timer_profile_ref = canonical_time.profile_ref.clone();
-    let (event_sender, event_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (event_sender, event_receiver) = tokio::sync::mpsc::channel(ASSEMBLY_EVENT_CAPACITY);
     let time = TokioReplicaTimePort::new_operating_system(
         TokioReplicaTimeConfig {
             profile: canonical_time,
@@ -136,7 +138,7 @@ async fn concrete_port_assembly_denies_substitution_then_executes_bound_startup(
         AssemblyApplicationHandler,
     )
     .expect("assembled application port");
-    let (control_sender, _control_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (control_sender, _control_receiver) = tokio::sync::mpsc::channel(ASSEMBLY_CONTROL_CAPACITY);
     let control = ChannelReplicaControlPort::new(
         ReplicaControlConfig {
             service_id: service_id.clone(),

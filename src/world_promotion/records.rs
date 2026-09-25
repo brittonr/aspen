@@ -19,8 +19,8 @@ const RESERVATION_RECORD: &str = "world-release-reservation";
 const ATTEMPT_RECORD: &str = "world-release-attempt";
 const OBSERVATION_RECORD: &str = "world-release-observation";
 const RECONCILIATION_RECORD: &str = "world-promotion-reconciliation";
-const RESERVATION_FIELD_COUNT: usize = 11;
-const ATTEMPT_FIELD_COUNT: usize = 7;
+const RESERVATION_FIELD_COUNT: u64 = 11;
+const ATTEMPT_FIELD_COUNT: u64 = 7;
 
 #[derive(Debug, Clone)]
 pub struct CanonicalWorldPromotionRecord {

@@ -8,6 +8,8 @@ const ELECTION_MAX_TICKS: u64 = 3;
 const TICK_MILLISECONDS: u64 = 1;
 const EVENT_TIMEOUT_MILLISECONDS: u64 = 200;
 const EVENT_QUIET_MILLISECONDS: u64 = 20;
+const EVENT_POLL_MILLISECONDS: u64 = 1;
+const TIME_TEST_EVENT_CAPACITY: usize = 1;
 const ENTROPY_BINDING_LABEL: &str = "admitted-entropy-binding";
 
 #[derive(Debug, Default)]
@@ -77,6 +79,37 @@ async fn rearming_election_timer_cancels_the_superseded_delivery() {
 }
 
 // r[verify molten.fabric_consistency.live_service_ports]
+#[tokio::test]
+async fn full_event_queue_parks_timer_delivery_until_drained() {
+    let (mut port, mut receiver) =
+        time_port(HEARTBEAT_TICKS, ELECTION_MIN_TICKS, ELECTION_MAX_TICKS).expect("Tokio replica time port");
+    let timer_ref = super::tests::test_ref("backpressured-timer-token");
+    port.arm_heartbeat_timer().expect("heartbeat timer");
+    port.arm_election_timer(&timer_ref).expect("election timer");
+    tokio::time::timeout(std::time::Duration::from_millis(EVENT_TIMEOUT_MILLISECONDS), async {
+        while receiver.len() < TIME_TEST_EVENT_CAPACITY {
+            tokio::time::sleep(std::time::Duration::from_millis(EVENT_POLL_MILLISECONDS)).await;
+        }
+    })
+    .await
+    .expect("queue fills to capacity");
+    tokio::time::sleep(std::time::Duration::from_millis(EVENT_QUIET_MILLISECONDS)).await;
+    assert_eq!(receiver.len(), TIME_TEST_EVENT_CAPACITY);
+
+    let mut delivered = Vec::with_capacity(TIME_TEST_EVENT_CAPACITY + 1);
+    for _event in 0..=TIME_TEST_EVENT_CAPACITY {
+        let event = tokio::time::timeout(std::time::Duration::from_millis(EVENT_TIMEOUT_MILLISECONDS), receiver.recv())
+            .await
+            .expect("bounded parked delivery wait")
+            .expect("parked timer event");
+        delivered.push(event);
+    }
+    assert!(delivered.contains(&ReplicaEvent::HeartbeatTimeout));
+    assert!(delivered.contains(&ReplicaEvent::ElectionTimeout { timer_ref }));
+    assert!(receiver.try_recv().is_err());
+}
+
+// r[verify molten.fabric_consistency.live_service_ports]
 #[test]
 fn tokio_replica_time_port_denies_unsafe_timer_bounds_before_activation() {
     let result = time_port(HEARTBEAT_TICKS, HEARTBEAT_TICKS, ELECTION_MAX_TICKS);
@@ -98,9 +131,8 @@ fn time_port(
     heartbeat_ticks: u64,
     election_min_ticks: u64,
     election_max_ticks: u64,
-) -> crate::error::Result<(TokioReplicaTimePort<FixedEntropySource>, tokio::sync::mpsc::UnboundedReceiver<ReplicaEvent>)>
-{
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+) -> crate::error::Result<(TokioReplicaTimePort<FixedEntropySource>, tokio::sync::mpsc::Receiver<ReplicaEvent>)> {
+    let (sender, receiver) = tokio::sync::mpsc::channel(TIME_TEST_EVENT_CAPACITY);
     let profile = crate::fabric_time::tests::live_profile().profile;
     let config = TokioReplicaTimeConfig {
         profile,

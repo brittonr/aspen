@@ -30,7 +30,7 @@ pub struct TokioReplicaTimePort<S: CryptographicEntropySource> {
     entropy_binding_ref: String,
     entropy: crate::fabric_time::ProductionEntropyAdapter<S>,
     entropy_stream: crate::fabric_time::EntropyStreamState,
-    sender: tokio::sync::mpsc::UnboundedSender<ReplicaEvent>,
+    sender: tokio::sync::mpsc::Sender<ReplicaEvent>,
     next_timer_sequence: u64,
     election_handle: Option<tokio::task::JoinHandle<()>>,
     heartbeat_handle: Option<tokio::task::JoinHandle<()>>,
@@ -40,7 +40,7 @@ impl<S: CryptographicEntropySource> TokioReplicaTimePort<S> {
     pub fn new(
         config: TokioReplicaTimeConfig,
         source: S,
-        sender: tokio::sync::mpsc::UnboundedSender<ReplicaEvent>,
+        sender: tokio::sync::mpsc::Sender<ReplicaEvent>,
     ) -> crate::error::Result<Self> {
         validate_time_configuration(&config)?;
         let entropy_stream = crate::fabric_time::open_entropy_stream(
@@ -171,7 +171,7 @@ impl<S: CryptographicEntropySource> TokioReplicaTimePort<S> {
 impl TokioReplicaTimePort<crate::fabric_time::OperatingSystemEntropySource> {
     pub fn new_operating_system(
         config: TokioReplicaTimeConfig,
-        sender: tokio::sync::mpsc::UnboundedSender<ReplicaEvent>,
+        sender: tokio::sync::mpsc::Sender<ReplicaEvent>,
     ) -> crate::error::Result<Self> {
         Self::new(config, crate::fabric_time::OperatingSystemEntropySource, sender)
     }
@@ -192,6 +192,7 @@ impl<S: CryptographicEntropySource> ReplicaTimeEffects for TokioReplicaTimePort<
                 .send(ReplicaEvent::ElectionTimeout {
                     timer_ref: event_timer_ref,
                 })
+                .await
                 .err();
         }));
         combined_timer_ref(
@@ -210,7 +211,7 @@ impl<S: CryptographicEntropySource> ReplicaTimeEffects for TokioReplicaTimePort<
         let sender = self.sender.clone();
         self.heartbeat_handle = Some(tokio::spawn(async move {
             tokio::time::sleep(duration).await;
-            let _closed_event = sender.send(ReplicaEvent::HeartbeatTimeout).err();
+            let _closed_event = sender.send(ReplicaEvent::HeartbeatTimeout).await.err();
         }));
         combined_timer_ref("heartbeat", &timer_evidence_ref, None, &self.entropy_binding_ref, None)
     }

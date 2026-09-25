@@ -55,7 +55,7 @@ pub struct DagFabricTransportAdapter {
     fault: Option<DagTransportFixtureFault>,
     session_id: ScopedTransportId,
     stream_id: ScopedTransportId,
-    request_count: usize,
+    request_count: u64,
 }
 
 impl DagFabricTransportAdapter {
@@ -91,7 +91,7 @@ impl DagFabricTransportAdapter {
         Ok(adapter)
     }
 
-    pub const fn request_count(&self) -> usize {
+    pub const fn request_count(&self) -> u64 {
         self.request_count
     }
 

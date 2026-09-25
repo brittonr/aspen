@@ -9,7 +9,7 @@ pub struct ReplicaIngressExecution {
 pub struct ScopedLiveReplicaService<P: BoundLiveReplicaEffectPorts> {
     state: ReplicaState,
     ports: P,
-    inbox: tokio::sync::mpsc::UnboundedReceiver<ReplicaEvent>,
+    inbox: tokio::sync::mpsc::Receiver<ReplicaEvent>,
     startup_observations: Vec<ReplicaEffectObservation>,
     evidence: ReplicaEvidenceLedger,
     production_admitted: bool,
@@ -19,7 +19,7 @@ impl<P: BoundLiveReplicaEffectPorts> ScopedLiveReplicaService<P> {
     pub async fn start(
         plan: ReplicaStartPlan,
         mut ports: P,
-        inbox: tokio::sync::mpsc::UnboundedReceiver<ReplicaEvent>,
+        inbox: tokio::sync::mpsc::Receiver<ReplicaEvent>,
     ) -> crate::error::Result<Self> {
         ports.validate_start(&plan)?;
         let evidence = ReplicaEvidenceLedger::new(&plan)?;

@@ -177,7 +177,7 @@ pub fn canonical_world_sync_receipt(
     plan: &WorldClosurePlan,
     dag_receipt_ref: &str,
     complete: bool,
-    verified: usize,
+    verified: u64,
 ) -> Result<CanonicalWorldDistributionRecord> {
     crate::preserves_rail::validate_content_ref(dag_receipt_ref)
         .map_err(|_| MoltenError::invalid_harness("world sync DAG receipt ref is invalid"))?;
@@ -189,7 +189,7 @@ pub fn canonical_world_sync_receipt(
             field("dag-plan-ref", string(plan.shared_plan.plan_ref.as_str())),
             field("dag-receipt-ref", string(dag_receipt_ref)),
             field("complete", boolean(complete)),
-            field("verified", usize_value(verified)?),
+            field("verified", crate::preserves_rail::u64_value(verified)),
             field("activation-authorized", boolean(false)),
             non_claims(),
         ]),

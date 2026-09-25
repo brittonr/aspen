@@ -14,7 +14,7 @@ use molten_core::world_commit::plan_capture;
 use super::*;
 
 const INITIAL_REVISION: u64 = 1;
-const WORLD_COMMIT_FIELD_COUNT: usize = 6;
+const WORLD_COMMIT_FIELD_COUNT: u64 = 6;
 const WORLD_COMMIT_SCHEMA_ARTIFACT_COUNT: usize = 4;
 const WORLD_COMMIT_SCHEMA_ARTIFACTS: [&str; WORLD_COMMIT_SCHEMA_ARTIFACT_COUNT] = [
     include_str!("../../schemas/preserves-boundaries/molten-world-commit-v1.preserves"),
@@ -164,7 +164,7 @@ fn codec_rejects_stale_schema_embedded_evidence_and_non_normalized_roots() {
     let fields = preserves::ValueImpl::collect_simple_record(
         &canonical.value,
         WORLD_COMMIT_RECORD,
-        Some(WORLD_COMMIT_FIELD_COUNT),
+        Some(usize::try_from(WORLD_COMMIT_FIELD_COUNT).expect("world commit field count fits usize")),
     )
     .expect("world commit fields");
 

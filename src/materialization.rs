@@ -94,7 +94,11 @@ pub struct MaterializationPath {
 }
 
 impl MaterializationPath {
-    pub fn parse(value: &str, max_path_bytes: usize) -> crate::error::Result<Self> {
+    pub fn parse(value: &str, max_path_bytes: u64) -> crate::error::Result<Self> {
+        Self::parse_within(value, crate::bounded::usize_from_u64(max_path_bytes, "materialization path byte bound")?)
+    }
+
+    pub(crate) fn parse_within(value: &str, max_path_bytes: usize) -> crate::error::Result<Self> {
         validate_materialization_path(value, max_path_bytes)?;
         Ok(Self {
             normalized: value.to_string(),
@@ -141,11 +145,13 @@ impl MaterializationPolicy {
 
     pub fn with_bounds(
         mut self,
-        max_members: usize,
+        max_members: u64,
         max_member_bytes: u64,
         max_total_bytes: u64,
-        max_path_bytes: usize,
+        max_path_bytes: u64,
     ) -> crate::error::Result<Self> {
+        let max_members = crate::bounded::usize_from_u64(max_members, "materialization member bound")?;
+        let max_path_bytes = crate::bounded::usize_from_u64(max_path_bytes, "materialization path byte bound")?;
         validate_bounds(max_members, max_member_bytes, max_total_bytes, max_path_bytes)?;
         self.max_members = max_members;
         self.max_member_bytes = max_member_bytes;
@@ -245,7 +251,7 @@ pub fn plan_materialization(
     let mut seen = std::collections::BTreeSet::new();
     let mut total_bytes = 0u64;
     for input in inputs {
-        let logical_path = MaterializationPath::parse(&input.logical_path, policy.max_path_bytes)?;
+        let logical_path = MaterializationPath::parse_within(&input.logical_path, policy.max_path_bytes)?;
         if reserved.contains(logical_path.top_level()) {
             return Err(invalid(format!(
                 "materialization member {} uses reserved top-level name {}",
@@ -712,7 +718,7 @@ impl SourceDirectoryRoot {
                     let rendered = logical_path_from_relative_path(&relative)?;
                     crate::bounded::push_bounded(
                         &mut files,
-                        MaterializationPath::parse(&rendered, policy.max_path_bytes)?,
+                        MaterializationPath::parse_within(&rendered, policy.max_path_bytes)?,
                         policy.max_members,
                         "materialization source files",
                     )?;
@@ -788,7 +794,7 @@ pub fn verify_archive<R: Read>(reader: R, policy: &MaterializationPolicy) -> cra
         }
         let raw_name = entry.path_bytes();
         let name = std::str::from_utf8(raw_name.as_ref()).map_err(|_| invalid("archive member name must be UTF-8"))?;
-        let logical_path = MaterializationPath::parse(name, policy.max_path_bytes)?;
+        let logical_path = MaterializationPath::parse_within(name, policy.max_path_bytes)?;
         if policy.reserved_top_level_names.iter().any(|reserved| reserved == logical_path.top_level()) {
             return Err(invalid("archive member uses a reserved materialization name"));
         }
@@ -930,7 +936,7 @@ pub fn validate_materialization_receipt(receipt: &MaterializationReceipt) -> cra
     }
     let mut previous = None;
     for (path, reference) in &receipt.member_refs {
-        MaterializationPath::parse(path, HARD_MAX_MATERIALIZATION_PATH_BYTES)?;
+        MaterializationPath::parse_within(path, HARD_MAX_MATERIALIZATION_PATH_BYTES)?;
         crate::preserves_rail::validate_content_ref(reference)?;
         if previous.as_ref().is_some_and(|previous: &&String| *previous >= path) {
             return Err(invalid("materialization receipt members are not uniquely sorted"));
@@ -1740,12 +1746,17 @@ mod tests {
     const SMALL_MAX_MEMBERS: usize = 8;
     const SMALL_MAX_MEMBER_BYTES: u64 = 1_024;
     const SMALL_MAX_TOTAL_BYTES: u64 = 4_096;
-    const SMALL_MAX_PATH_BYTES: usize = 128;
+    const SMALL_MAX_PATH_BYTES: u64 = 128;
 
     fn policy(replacement: ReplacementPolicy) -> MaterializationPolicy {
         MaterializationPolicy::bounded("test-bundle-v1", replacement)
             .expect("base policy")
-            .with_bounds(SMALL_MAX_MEMBERS, SMALL_MAX_MEMBER_BYTES, SMALL_MAX_TOTAL_BYTES, SMALL_MAX_PATH_BYTES)
+            .with_bounds(
+                u64::try_from(SMALL_MAX_MEMBERS).expect("member bound fits u64"),
+                SMALL_MAX_MEMBER_BYTES,
+                SMALL_MAX_TOTAL_BYTES,
+                SMALL_MAX_PATH_BYTES,
+            )
             .expect("bounded policy")
     }
 
@@ -1833,10 +1844,10 @@ mod tests {
         let hard_ceiling = MaterializationPolicy::bounded("hard-ceiling-test-v1", ReplacementPolicy::NoReplace)
             .expect("hard-ceiling base policy")
             .with_bounds(
-                HARD_MAX_MATERIALIZATION_MEMBERS.saturating_add(1),
+                u64::try_from(HARD_MAX_MATERIALIZATION_MEMBERS.saturating_add(1)).expect("member bound fits u64"),
                 DEFAULT_MAX_MATERIALIZATION_MEMBER_BYTES,
                 DEFAULT_MAX_MATERIALIZATION_TOTAL_BYTES,
-                DEFAULT_MAX_MATERIALIZATION_PATH_BYTES,
+                u64::try_from(DEFAULT_MAX_MATERIALIZATION_PATH_BYTES).expect("path bound fits u64"),
             );
         assert!(hard_ceiling.is_err());
     }
@@ -1857,7 +1868,8 @@ mod tests {
         let reparsed_value = crate::preserves_rail::parse_text(&receipt_text).expect("receipt Preserves parse");
         let reparsed = parse_materialization_receipt(&reparsed_value).expect("typed receipt parse");
         assert_eq!(reparsed, receipt);
-        let first_path = MaterializationPath::parse("a.txt", no_replace.max_path_bytes).expect("first payload path");
+        let first_path =
+            MaterializationPath::parse_within("a.txt", no_replace.max_path_bytes).expect("first payload path");
         assert_eq!(root.read(&first_path).expect("read"), b"alpha");
 
         let replacement = [MaterializationPayload::new("a.txt", b"replacement".to_vec())];
@@ -1990,7 +2002,7 @@ mod tests {
         std::fs::create_dir(&*source_path).expect("replacement source root");
         std::fs::write(source_path.join("member"), b"substitute").expect("substitute member");
         let policy = policy(ReplacementPolicy::NoReplace);
-        let member = MaterializationPath::parse("member", policy.max_path_bytes).expect("member path");
+        let member = MaterializationPath::parse_within("member", policy.max_path_bytes).expect("member path");
         assert_eq!(source.read_path(&member, policy.max_member_bytes).expect("anchored read"), b"anchored");
 
         std::os::unix::fs::symlink(moved.join("member"), moved.join("linked")).expect("source link");
@@ -2031,10 +2043,10 @@ mod tests {
         };
         assert!(verify_archive(std::io::Cursor::new(traversal_bytes), &policy).is_err());
 
-        const TINY_MAX_MEMBERS: usize = 1;
+        const TINY_MAX_MEMBERS: u64 = 1;
         const TINY_MAX_MEMBER_BYTES: u64 = 4;
         const TINY_MAX_TOTAL_BYTES: u64 = 4;
-        const TINY_MAX_PATH_BYTES: usize = 128;
+        const TINY_MAX_PATH_BYTES: u64 = 128;
         let tiny = MaterializationPolicy::bounded("tiny-archive-v1", ReplacementPolicy::NoReplace)
             .expect("tiny policy")
             .with_bounds(TINY_MAX_MEMBERS, TINY_MAX_MEMBER_BYTES, TINY_MAX_TOTAL_BYTES, TINY_MAX_PATH_BYTES)

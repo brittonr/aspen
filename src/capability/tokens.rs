@@ -10,7 +10,7 @@ const CHECK_STATUS_PASS: &str = "pass";
 const CHECK_STATUS_FAIL: &str = "fail";
 const DECISION_PASS: &str = "pass";
 const DECISION_DENY: &str = "deny";
-const MAX_UCAN_RECEIPT_REFS: usize = 1024;
+const MAX_UCAN_RECEIPT_REFS: u64 = 1024;
 
 type UcanCheckEvaluator = fn(&UcanVerificationChecks) -> bool;
 type UcanCheckSpec = (&'static str, UcanCheckEvaluator);
@@ -485,7 +485,7 @@ fn ucan_verification_diagnostics(input: &UcanVerificationInput) -> Vec<String> {
     diagnostics
 }
 
-const UCAN_VERIFICATION_RECEIPT_ARITY: usize = 19;
+const UCAN_VERIFICATION_RECEIPT_ARITY: u64 = 19;
 const UCAN_VERIFICATION_SCHEMA_INDEX: usize = 0;
 const UCAN_VERIFICATION_DECISION_INDEX: usize = 1;
 const UCAN_VERIFICATION_DIAGNOSTICS_INDEX: usize = 2;

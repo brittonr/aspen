@@ -210,7 +210,7 @@ pub fn redb_index_content_status(
 pub fn bounded_content_status(
     profile: &ContentAdapterProfile,
     generation: u64,
-    active_operations: usize,
+    active_operations: u64,
     queued_bytes: u64,
     mut terminal_counts: Vec<(ContentTerminal, u64)>,
     backend_label: &str,
@@ -222,7 +222,7 @@ pub fn bounded_content_status(
         profile_ref: profile.profile_ref.clone(),
         class: profile.class,
         generation,
-        active_operations,
+        active_operations: crate::bounded::usize_from_u64(active_operations, "content active operations")?,
         queued_bytes,
         terminal_counts,
         backend_hint_ref: Some(backend_hint_ref(profile.class, backend_label)),

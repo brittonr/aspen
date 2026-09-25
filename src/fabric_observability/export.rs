@@ -253,7 +253,8 @@ pub struct DeterministicSimulationSink {
 }
 
 impl DeterministicSimulationSink {
-    pub fn new(completion_tick: u64, max_records: usize) -> crate::error::Result<Self> {
+    pub fn new(completion_tick: u64, max_records: u64) -> crate::error::Result<Self> {
+        let max_records = crate::bounded::usize_from_u64(max_records, "deterministic observation sink record bound")?;
         if max_records == 0 {
             return Err(crate::error::MoltenError::invalid_harness(
                 "deterministic observation sink record bound must be positive",

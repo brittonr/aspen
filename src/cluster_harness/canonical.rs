@@ -23,12 +23,12 @@ const PASS_DECISION: &str = "pass";
 const DENY_DECISION: &str = "deny";
 const NONE_VALUE: &str = "none";
 const DIAGNOSTIC_ONLY: &str = "diagnostic-only";
-const CLUSTER_RUN_RECORD_ARITY: usize = 16;
-const LOCAL_PLAN_RECORD_ARITY: usize = 10;
-const LOCAL_EXECUTABLE_RUN_RECORD_ARITY: usize = 15;
-const CLUSTER_LIFECYCLE_RECORD_ARITY: usize = 12;
-const CHILD_PROCESS_RECORD_ARITY: usize = 10;
-const CLEANUP_RECORD_ARITY: usize = 9;
+const CLUSTER_RUN_RECORD_ARITY: u64 = 16;
+const LOCAL_PLAN_RECORD_ARITY: u64 = 10;
+const LOCAL_EXECUTABLE_RUN_RECORD_ARITY: u64 = 15;
+const CLUSTER_LIFECYCLE_RECORD_ARITY: u64 = 12;
+const CHILD_PROCESS_RECORD_ARITY: u64 = 10;
+const CLEANUP_RECORD_ARITY: u64 = 9;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClusterHarnessChildProcessInput {

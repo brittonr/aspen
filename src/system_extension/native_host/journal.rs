@@ -11,10 +11,10 @@ const USAGE_RECORD: &str = "native-instance-usage-v2";
 const OPERATION_RECORD: &str = "native-instance-operation-v2";
 const NONE_RECORD: &str = "none";
 const SOME_RECORD: &str = "some";
-const INSTANCE_FIELD_COUNT: usize = 19;
-const LIFECYCLE_FIELD_COUNT: usize = 5;
-const USAGE_FIELD_COUNT: usize = 6;
-const OPERATION_FIELD_COUNT: usize = 8;
+const INSTANCE_FIELD_COUNT: u64 = 19;
+const LIFECYCLE_FIELD_COUNT: u64 = 5;
+const USAGE_FIELD_COUNT: u64 = 6;
+const OPERATION_FIELD_COUNT: u64 = 8;
 const MAX_INSTANCE_COLLECTION_ITEMS: usize = 1_024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

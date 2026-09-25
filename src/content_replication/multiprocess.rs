@@ -31,7 +31,7 @@ pub struct DistinctProcessTransferAdapter {
     generation: u64,
     membership_epoch: u64,
     placement_epoch: u64,
-    call_count: usize,
+    call_count: u64,
 }
 
 impl DistinctProcessTransferAdapter {
@@ -82,7 +82,7 @@ impl DistinctProcessTransferAdapter {
         })
     }
 
-    pub const fn call_count(&self) -> usize {
+    pub const fn call_count(&self) -> u64 {
         self.call_count
     }
 }

@@ -1,0 +1,9 @@
+{
+  "spec_effect": "none",
+  "spec_effect_rationale": "Bounded channels with explicit backpressure or denial and fixed-width public integers preserve accepted behavior and canonical encodings; accepted requirements are unchanged.",
+  "workflow_profile": {
+    "id": "no-spec-delta",
+    "source": "change_create",
+    "version": 1
+  }
+}

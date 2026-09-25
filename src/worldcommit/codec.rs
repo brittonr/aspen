@@ -19,9 +19,9 @@ use super::canonical_world_commit;
 use crate::error::MoltenError;
 use crate::error::Result;
 
-const WORLD_COMMIT_RECORD_ARITY: usize = 6;
-const PROFILE_RECORD_ARITY: usize = 3;
-const TYPED_ROOT_RECORD_ARITY: usize = 2;
+const WORLD_COMMIT_RECORD_ARITY: u64 = 6;
+const PROFILE_RECORD_ARITY: u64 = 3;
+const TYPED_ROOT_RECORD_ARITY: u64 = 2;
 
 // r[impl molten.world_commit.core]
 // r[impl molten.world_commit.verification]
@@ -141,7 +141,7 @@ fn parse_optional_ref(value: &Value<IOValue>, field: &str) -> Result<Option<Stri
     crate::preserves_rail::required_content_ref_string(&fields[0], field).map(Some)
 }
 
-fn wrapped_fields(value: &Value<IOValue>, label: &str, arity: usize) -> Result<Vec<Value<IOValue>>> {
+fn wrapped_fields(value: &Value<IOValue>, label: &str, arity: u64) -> Result<Vec<Value<IOValue>>> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = crate::preserves_rail::simple_record_fields(&value, label, arity)?;
     Ok(fields.fields_iter().cloned().collect())

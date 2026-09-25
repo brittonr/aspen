@@ -531,10 +531,11 @@ pub struct ParsedCheck {
 pub fn simple_record_fields<'a>(
     value: &'a IoValue,
     label: &str,
-    arity: usize,
+    arity: u64,
 ) -> Result<std::borrow::Cow<'a, preserves::Record<Value<IoValue>>>> {
+    let expected_arity = crate::bounded::usize_from_u64(arity, "record arity")?;
     value
-        .collect_simple_record(label, Some(arity))
+        .collect_simple_record(label, Some(expected_arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
@@ -599,8 +600,9 @@ pub fn record_content_ref_sequence(
     value: &Value<IoValue>,
     record_name: &str,
     field: &str,
-    maximum: usize,
+    maximum: u64,
 ) -> Result<Vec<ContentRef>> {
+    let maximum = crate::bounded::usize_from_u64(maximum, field)?;
     let value = value_to_iovalue(value);
     let record = simple_record_fields(&value, record_name, 1)?;
     let values = required_sequence_field(&record[0], field)?;
@@ -616,7 +618,7 @@ pub fn record_content_ref_strings(
     value: &Value<IoValue>,
     record_name: &str,
     field: &str,
-    maximum: usize,
+    maximum: u64,
 ) -> Result<Vec<String>> {
     Ok(record_content_ref_sequence(value, record_name, field, maximum)?
         .into_iter()
@@ -641,9 +643,10 @@ pub fn checks_value(checks: &[(&str, &str)]) -> IoValue {
 
 pub fn parse_checks_record(
     value: &Value<IoValue>,
-    maximum: usize,
+    maximum: u64,
     context: &str,
 ) -> Result<Vec<ParsedCheck>> {
+    let maximum = crate::bounded::usize_from_u64(maximum, "checks")?;
     let value = value_to_iovalue(value);
     let record = simple_record_fields(&value, "checks", 1)?;
     let values = required_sequence_field(&record[0], "checks")?;
@@ -727,8 +730,8 @@ pub struct BoundarySchemaSpec {
 }
 
 impl BoundarySchemaSpec {
-    pub fn arity(&self) -> usize {
-        self.fields.len()
+    pub fn arity(&self) -> Result<u64> {
+        crate::bounded::u64_from_usize(self.fields.len(), "boundary schema arity")
     }
 }
 
@@ -895,9 +898,7 @@ pub const OPERATOR_RELEASE_EVIDENCE_BUNDLE_BOUNDARY_SCHEMA: BoundarySchemaSpec =
 
 // r[impl molten.preserves_schema_boundaries.schema_artifacts]
 pub fn boundary_schema_artifact_value(spec: &BoundarySchemaSpec) -> Result<IoValue> {
-    let arity = u64::try_from(spec.arity()).map_err(|error| {
-        MoltenError::invalid_harness(format!("boundary schema arity cannot convert to u64: {error}"))
-    })?;
+    let arity = spec.arity()?;
     Ok(record("preserves-boundary-schema-artifact-v1", vec![
         record("family", vec![string(spec.family)]),
         record("version", vec![string(spec.version)]),
@@ -1008,7 +1009,7 @@ fn boundary_field_constraints(kind: BoundaryFieldKind) -> &'static [&'static str
 pub fn validate_boundary_schema(value: &IoValue, spec: &BoundarySchemaSpec) -> Result<BoundarySchemaValidation> {
     let schema_ref = boundary_schema_ref(spec)?;
     let value_ref = canonical_content_ref(value)?;
-    let arity = spec.arity();
+    let arity = spec.fields.len();
     let fields = value.collect_simple_record(spec.record_label, Some(arity)).ok_or_else(|| {
         MoltenError::invalid_harness(format!(
             "{} schema validation deny: expected <{} ...> with arity {} using schema {}",
@@ -2105,10 +2106,10 @@ mod tests {
         spec: &super::BoundarySchemaSpec,
     ) -> Vec<preserves::IOValue> {
         let record = value
-            .collect_simple_record(spec.record_label, Some(spec.arity()))
+            .collect_simple_record(spec.record_label, Some(spec.fields.len()))
             .expect("boundary fixture record");
-        let mut fields = Vec::with_capacity(spec.arity());
-        for index in 0..spec.arity() {
+        let mut fields = Vec::with_capacity(spec.fields.len());
+        for index in 0..spec.fields.len() {
             fields.push(super::value_to_iovalue(&record[index]));
         }
         fields
@@ -2505,7 +2506,7 @@ mod tests {
 
     #[test]
     fn parser_toolkit_builds_and_parses_common_ref_shapes() {
-        const MAX_REFS: usize = 4;
+        const MAX_REFS: u64 = 4;
         let first = super::content_ref_from_bytes(b"toolkit-first-ref");
         let second = super::content_ref_from_bytes(b"toolkit-second-ref");
         let record = super::record("refs", vec![super::refs_sequence(&[first.clone(), second.clone()])]);
@@ -2526,7 +2527,7 @@ mod tests {
         // r[verify molten.preserves_rail_toolkit.parser_builders]
         // r[verify molten.preserves_rail_toolkit.check_sets]
         // r[verify molten.preserves_rail_toolkit.negative_shapes]
-        const MAX_REFS: usize = 4;
+        const MAX_REFS: u64 = 4;
         let wrong_label = super::record("wrong", Vec::new());
         assert!(super::simple_record_fields(&wrong_label, "expected", 0).is_err());
 

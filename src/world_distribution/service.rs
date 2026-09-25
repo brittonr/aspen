@@ -72,7 +72,7 @@ where
         &initial_plan,
         &dag.canonical_receipt.record_ref,
         is_complete,
-        dag.receipt.verified,
+        crate::bounded::u64_from_usize(dag.receipt.verified, "world sync verified objects")?,
     )?;
     ports.receipts.publish_world_distribution_receipt(&canonical_receipt)?;
     Ok(WorldSyncOutcome {

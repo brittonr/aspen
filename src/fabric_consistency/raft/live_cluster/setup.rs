@@ -1,5 +1,10 @@
 use super::*;
 
+/// A live node publishes at most one observation per client Propose/Read event plus one per
+/// committed entry: 2 proposals + 2 reads + 2 committed entries = 6 in the bounded
+/// live-cluster/live-process workflows, which never drain.
+const LIVE_CONTROL_OBSERVATION_CAPACITY: usize = 32;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NodeStartupMode {
     Fresh,
@@ -201,9 +206,18 @@ fn time_for(
     entropy_binding_ref: String,
 ) -> crate::error::Result<(
     TokioReplicaTimePort<crate::fabric_time::OperatingSystemEntropySource>,
-    tokio::sync::mpsc::UnboundedReceiver<ReplicaEvent>,
+    tokio::sync::mpsc::Receiver<ReplicaEvent>,
 )> {
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+    // The replica inbox is the time profile's scheduler queue: its admitted depth bounds undrained
+    // timer events. At most one election and one heartbeat timer task is armed per port; a full
+    // inbox parks the timer task, so events are delayed, never dropped.
+    let capacity = usize::try_from(time_profile.max_scheduler_queue_depth)
+        .ok()
+        .filter(|capacity| *capacity > 0)
+        .ok_or_else(|| {
+            crate::error::MoltenError::invalid_harness("live Raft inbox needs a positive admitted queue depth")
+        })?;
+    let (sender, receiver) = tokio::sync::mpsc::channel(capacity);
     let config = TokioReplicaTimeConfig {
         profile: time_profile,
         generation: group.service_generation,
@@ -238,9 +252,8 @@ fn application_for(
 fn control_for(
     group: &crate::fabric_consistency::ConsistencyGroupBinding,
     supervision_ref: String,
-) -> crate::error::Result<(ChannelReplicaControlPort, tokio::sync::mpsc::UnboundedReceiver<ReplicaControlObservation>)>
-{
-    let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+) -> crate::error::Result<(ChannelReplicaControlPort, tokio::sync::mpsc::Receiver<ReplicaControlObservation>)> {
+    let (sender, receiver) = tokio::sync::mpsc::channel(LIVE_CONTROL_OBSERVATION_CAPACITY);
     let port = ChannelReplicaControlPort::new(
         ReplicaControlConfig {
             service_id: group.service_id.clone(),

@@ -33,13 +33,13 @@ pub enum ReplicaControlObservationKind {
 
 pub struct ChannelReplicaControlPort {
     config: ReplicaControlConfig,
-    sender: tokio::sync::mpsc::UnboundedSender<ReplicaControlObservation>,
+    sender: tokio::sync::mpsc::Sender<ReplicaControlObservation>,
 }
 
 impl ChannelReplicaControlPort {
     pub fn new(
         config: ReplicaControlConfig,
-        sender: tokio::sync::mpsc::UnboundedSender<ReplicaControlObservation>,
+        sender: tokio::sync::mpsc::Sender<ReplicaControlObservation>,
     ) -> crate::error::Result<Self> {
         validate_control_config(&config)?;
         Ok(Self { config, sender })
@@ -60,11 +60,18 @@ impl ChannelReplicaControlPort {
     fn publish(&self, kind: ReplicaControlObservationKind) -> crate::error::Result<String> {
         let receipt_ref = control_receipt_ref(&self.config, &kind)?;
         self.sender
-            .send(ReplicaControlObservation {
+            .try_send(ReplicaControlObservation {
                 receipt_ref: receipt_ref.clone(),
                 kind,
             })
-            .map_err(|_| crate::error::MoltenError::invalid_harness("live Raft supervision receiver is unavailable"))?;
+            .map_err(|error| match error {
+                tokio::sync::mpsc::error::TrySendError::Full(_) => {
+                    crate::error::MoltenError::invalid_harness("live Raft supervision queue is full")
+                }
+                tokio::sync::mpsc::error::TrySendError::Closed(_) => {
+                    crate::error::MoltenError::invalid_harness("live Raft supervision receiver is unavailable")
+                }
+            })?;
         Ok(receipt_ref)
     }
 }

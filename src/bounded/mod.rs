@@ -42,6 +42,20 @@ pub(crate) fn checked_count_sum(left: usize, right: usize, maximum: usize, label
     Ok(total)
 }
 
+/// Converts a public `u64` bound or count into the host `usize`, denying values the platform cannot
+/// index.
+pub(crate) fn usize_from_u64(value: u64, label: &str) -> crate::error::Result<usize> {
+    usize::try_from(value)
+        .map_err(|_| crate::error::MoltenError::invalid_harness(format!("{label} {value} does not fit usize")))
+}
+
+/// Converts a host `usize` count into the public `u64` representation, denying a count that does
+/// not fit.
+pub(crate) fn u64_from_usize(value: usize, label: &str) -> crate::error::Result<u64> {
+    u64::try_from(value)
+        .map_err(|_| crate::error::MoltenError::invalid_harness(format!("{label} {value} does not fit u64")))
+}
+
 pub(crate) fn push_bounded<T>(
     values: &mut impl VecSink<T>,
     value: T,

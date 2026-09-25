@@ -30,7 +30,7 @@ fn read_store_value_with_root(root: &CapabilityRetentionRoot, path: &LocalStoreP
 
 fn bundle_path(path: &str) -> Result<LocalStorePath> {
     // r[impl molten.filesystem_materialization.archive_members]
-    crate::materialization::MaterializationPath::parse(
+    crate::materialization::MaterializationPath::parse_within(
         path,
         crate::materialization::DEFAULT_MAX_MATERIALIZATION_PATH_BYTES,
     )?;

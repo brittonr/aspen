@@ -8,7 +8,7 @@ use molten_core::world_merge::*;
 use super::*;
 
 const MERGE_SCHEMA_COUNT: usize = 4;
-const MERGE_SCHEMA_FIELD_COUNT: usize = 6;
+const MERGE_SCHEMA_FIELD_COUNT: u64 = 6;
 const SCHEMA_ID_FIELD_INDEX: usize = 4;
 const MERGE_SCHEMA_ARTIFACTS: [&str; MERGE_SCHEMA_COUNT] = [
     include_str!("../../schemas/preserves-boundaries/molten-world-diff-v1.preserves"),

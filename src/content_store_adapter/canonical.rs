@@ -26,9 +26,10 @@ pub fn canonical_content_command(
     profile: &ContentAdapterProfile,
     manifest: &ContentManifestDescriptor,
     command: &ContentCommand,
-    active_operations: usize,
+    active_operations: u64,
     queued_bytes: u64,
 ) -> crate::error::Result<CanonicalContentArtifact<ContentCommand>> {
+    let active_operations = crate::bounded::usize_from_u64(active_operations, "content active operations")?;
     let preflight = preflight_content_operation(profile, manifest, command, active_operations, queued_bytes);
     require_valid("content command", &preflight.issues)?;
     canonical_artifact(command.clone(), command_value(command))

@@ -12,11 +12,11 @@ const PORT_TARGET_RECORD: &str = "native-callback-port-target-v2";
 const VALUE_RECORD: &str = "native-callback-value-v2";
 const NONE_RECORD: &str = "none";
 const SOME_RECORD: &str = "some";
-const ENVELOPE_FIELD_COUNT: usize = 18;
-const OUTCOME_FIELD_COUNT: usize = 6;
-const EFFECT_FIELD_COUNT: usize = 8;
-const PORT_TARGET_FIELD_COUNT: usize = 2;
-const VALUE_FIELD_COUNT: usize = 2;
+const ENVELOPE_FIELD_COUNT: u64 = 18;
+const OUTCOME_FIELD_COUNT: u64 = 6;
+const EFFECT_FIELD_COUNT: u64 = 8;
+const PORT_TARGET_FIELD_COUNT: u64 = 2;
+const VALUE_FIELD_COUNT: u64 = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NativeCallbackContext {

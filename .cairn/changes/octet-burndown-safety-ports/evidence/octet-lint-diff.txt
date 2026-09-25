@@ -1,0 +1,26 @@
+# workspace (cargo octet check), base = integration/stack-20260925 9602f924c
+lint                                     findings          sites
+path_segment_repetition             1878 -> 1878     1039 -> 1039 
+excessive_file_length                551 -> 551       307 -> 307  
+borrowed_argument_types              368 -> 368       184 -> 184  
+function_length                      204 -> 204       128 -> 128  
+too_many_parameters                  143 -> 143        72 -> 72   
+usize_in_public_api                   32 -> 0          16 -> 0    
+underscore_in_module_filename         31 -> 31         15 -> 15   
+module_file_count                     20 -> 20         11 -> 11   
+ambient_env                           14 -> 14          5 -> 5    
+unbounded_channel                      9 -> 0           9 -> 0    
+TOTAL                               3250 -> 3209     1786 -> 1761 
+
+# -p molten --lib
+lint                                     findings          sites
+path_segment_repetition              794 -> 794       794 -> 794  
+excessive_file_length                230 -> 230       230 -> 230  
+borrowed_argument_types              180 -> 180       180 -> 180  
+function_length                       71 -> 71         71 -> 71   
+too_many_parameters                   70 -> 70         70 -> 70   
+usize_in_public_api                   16 -> 0          16 -> 0    
+underscore_in_module_filename          7 -> 7           7 -> 7    
+ambient_env                            6 -> 6           4 -> 4    
+module_file_count                      5 -> 5           5 -> 5    
+TOTAL                               1379 -> 1363     1377 -> 1361 

@@ -12,11 +12,11 @@ pub const SNAPSHOT_RESTORE_PLAN_RECORD: &str = "molten-world-snapshot-restore-pl
 pub const SNAPSHOT_CLONE_PLAN_RECORD: &str = "molten-world-snapshot-clone-plan-v1";
 pub const SNAPSHOT_RECEIPT_RECORD: &str = "molten-world-snapshot-receipt-v1";
 
-const SNAPSHOT_DESCRIPTOR_ARITY: usize = 9;
-const COHORT_FACT_ARITY: usize = 2;
-const SNAPSHOT_COMPONENT_ARITY: usize = 4;
-const TYPED_ROOT_ARITY: usize = 2;
-const SYNCHRONIZATION_ARITY: usize = 3;
+const SNAPSHOT_DESCRIPTOR_ARITY: u64 = 9;
+const COHORT_FACT_ARITY: u64 = 2;
+const SNAPSHOT_COMPONENT_ARITY: u64 = 4;
+const TYPED_ROOT_ARITY: u64 = 2;
+const SYNCHRONIZATION_ARITY: u64 = 3;
 
 #[derive(Debug, Clone)]
 pub struct CanonicalSnapshotArtifact {

@@ -44,10 +44,10 @@ pub enum TransferProfile {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransferFault {
-    CancelAt { call: usize },
-    PartitionAt { call: usize },
-    TimeoutAt { call: usize },
-    UnavailableAt { call: usize },
+    CancelAt { call: u64 },
+    PartitionAt { call: u64 },
+    TimeoutAt { call: u64 },
+    UnavailableAt { call: u64 },
 }
 
 enum Mechanism {
@@ -66,7 +66,7 @@ pub struct FabricTransferAdapter {
     membership_epoch: u64,
     placement_epoch: u64,
     fault: Option<TransferFault>,
-    call_count: usize,
+    call_count: u64,
     session_id: ScopedTransportId,
     stream_id: ScopedTransportId,
 }
@@ -112,7 +112,7 @@ impl FabricTransferAdapter {
         Ok(opened)
     }
 
-    pub const fn call_count(&self) -> usize {
+    pub const fn call_count(&self) -> u64 {
         self.call_count
     }
 
@@ -162,7 +162,7 @@ impl FabricTransferAdapter {
                         OPERATION_REF,
                         ALPN,
                         &payload,
-                        observed_tick(self.call_count)?,
+                        observed_tick(crate::bounded::usize_from_u64(self.call_count, "replication call count")?)?,
                     ))?
                     .acknowledged
                     .transition_ref
@@ -242,7 +242,7 @@ impl TransportPort for FabricTransferAdapter {
     }
 }
 
-fn fault_call(fault: TransferFault) -> usize {
+fn fault_call(fault: TransferFault) -> u64 {
     match fault {
         TransferFault::CancelAt { call }
         | TransferFault::PartitionAt { call }
