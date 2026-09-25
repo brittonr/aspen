@@ -280,7 +280,7 @@ struct LiveControlRequestInput<'a> {
 }
 
 fn remote_clearance_live_control_request_value(input: &LiveControlRequestInput<'_>) -> Result<(String, IoValue)> {
-    let value = crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
+    let value = molten_node_runtime::node_runtime::control_request_value(&molten_node_runtime::node_runtime::ControlRequestValueInput {
         operation: "gate",
         target_ref: Some(input.target_ref),
         payload_ref: input.payload_ref,

@@ -24,10 +24,6 @@ pub(super) enum Top {
         #[command(subcommand)]
         command: crate::cli_receipts::ReceiptsCommand,
     },
-    Node {
-        #[command(subcommand)]
-        command: crate::cli_node::Command,
-    },
     Peer {
         #[command(subcommand)]
         command: crate::cli_peer::Command,
@@ -234,10 +230,6 @@ pub(crate) enum Test {
     Octet {
         #[command(subcommand)]
         command: crate::cli_octet::OctetCommand,
-    },
-    Node {
-        #[command(subcommand)]
-        command: crate::cli_node::Command,
     },
     Repro {
         #[command(subcommand)]

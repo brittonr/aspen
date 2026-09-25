@@ -2,16 +2,17 @@ const CLUSTER_HARNESS_FIXTURE: &str = "tests/fixtures/cluster-harness/two-node.c
 const CLUSTER_HARNESS_TEST_TIMEOUT_MS: &str = "30000";
 
 #[test]
-fn cli_cluster_harness_executes_checked_fixture_and_verifies_offline() -> CliResult<()> {
+fn cli_cluster_harness_records_child_failure_and_verifies_offline() -> CliResult<()> {
     // r[verify molten.testing.receipt_first_cluster_harness.cli_receipt_surface]
     // r[verify molten.testing.receipt_first_cluster_harness.run_artifact_directory]
     // r[verify molten.testing.receipt_first_cluster_harness.fixture_executable_runner]
     // r[verify molten.testing.fixture_driven_cluster_execution.fixture_source_of_truth]
     // r[verify molten.testing.fixture_driven_cluster_execution.observation_gate]
     // r[verify molten.testing.local_multiprocess_cluster_tier.middle_tier]
-    let root = temp_dir("cli-cluster-harness-success")?;
+    let root = temp_dir("cli-cluster-harness-child-denied")?;
     let state_root = root.join("state");
     let run_dir = root.join("run");
+    let missing_binary = root.join("missing-node-binary");
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(CLUSTER_HARNESS_FIXTURE);
     let run = molten_cmd()
         .args(["cluster", "harness-run", "--fixture"])
@@ -20,10 +21,12 @@ fn cli_cluster_harness_executes_checked_fixture_and_verifies_offline() -> CliRes
         .arg(&state_root)
         .args(["--run-dir"])
         .arg(&run_dir)
+        .args(["--node-binary"])
+        .arg(&missing_binary)
         .args(["--child-timeout-ms", CLUSTER_HARNESS_TEST_TIMEOUT_MS])
         .output()?;
-    assert_success(&run, "cluster harness checked fixture run");
-    assert!(stdout(&run).contains("decision=pass"));
+    assert_failure(&run, "cluster harness checked fixture cannot spawn unavailable children");
+    assert!(stdout(&run).contains("decision=deny"));
     for artifact in [
         "artifact-index.tsv",
         "fixture-metadata.preserves",
@@ -33,30 +36,24 @@ fn cli_cluster_harness_executes_checked_fixture_and_verifies_offline() -> CliRes
         "drift-summary.preserves",
         "cluster-run-receipt.preserves",
         "verification.preserves",
+        "failure-repro-bundle.preserves",
+        "failure-repro-verification.preserves",
     ] {
         assert!(run_dir.join(artifact).exists(), "missing cluster harness artifact {artifact}");
     }
-    let parent_text =
-        molten::preserves_rail::to_text(&read_preserves(&run_dir.join("cluster-run-receipt.preserves"))?)?;
-    let drift_text = molten::preserves_rail::to_text(&read_preserves(&run_dir.join("drift-summary.preserves"))?)?;
-    let node_a_startup =
-        read_preserves(&run_dir.join("children/receipts/fixture-a/startup-receipt.preserves"))?;
-    let node_b_startup =
-        read_preserves(&run_dir.join("children/receipts/fixture-b/startup-receipt.preserves"))?;
-    assert_ne!(
-        molten::preserves_rail::canonical_hash(&node_a_startup)?,
-        molten::preserves_rail::canonical_hash(&node_b_startup)?
-    );
-    assert!(parent_text.contains("child-receipts"));
-    assert!(drift_text.contains("expected-equalities"));
-    assert!(drift_text.contains("allowed-variances"));
+    for node in ["fixture-a", "fixture-b"] {
+        assert!(!run_dir.join("children/receipts").join(node).exists());
+        assert!(!state_root.join(node).join("startup-receipt.preserves").exists());
+        let log = std::fs::read_to_string(run_dir.join(format!("logs/init-{node}.log")))?;
+        assert!(log.contains("spawn failed"));
+    }
 
     let verify = molten_cmd()
         .args(["cluster", "harness-verify", "--run-dir"])
         .arg(&run_dir)
         .output()?;
-    assert_success(&verify, "cluster harness offline verification");
-    assert!(stdout(&verify).contains("decision=pass"));
+    assert_failure(&verify, "cluster harness offline verification of denied run");
+    assert!(stdout(&verify).contains("decision=deny"));
     Ok(())
 }
 
@@ -100,6 +97,7 @@ fn cli_cluster_harness_offline_verifier_denies_tampered_artifact() -> CliResult<
     let root = temp_dir("cli-cluster-harness-tamper")?;
     let state_root = root.join("state");
     let run_dir = root.join("run");
+    let missing_binary = root.join("missing-node-binary");
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(CLUSTER_HARNESS_FIXTURE);
     let run = molten_cmd()
         .args(["cluster", "harness-run", "--fixture"])
@@ -108,9 +106,12 @@ fn cli_cluster_harness_offline_verifier_denies_tampered_artifact() -> CliResult<
         .arg(&state_root)
         .args(["--run-dir"])
         .arg(&run_dir)
+        .args(["--node-binary"])
+        .arg(&missing_binary)
         .args(["--child-timeout-ms", CLUSTER_HARNESS_TEST_TIMEOUT_MS])
         .output()?;
-    assert_success(&run, "cluster harness run before tamper");
+    assert_failure(&run, "cluster harness denied run before tamper");
+    assert!(stdout(&run).contains("decision=deny"));
 
     let drift_path = run_dir.join("drift-summary.preserves");
     let canonical_drift_text = std::fs::read_to_string(&drift_path)?;

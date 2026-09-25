@@ -4,13 +4,13 @@ The normal CLI contains an optional protected content listener and a bounded cli
 
 The first VM attempt found a pre-existing production call to `synthetic_clean_octet_gate_receipt_for_tests()`. It failed at an ambient `/Cargo.toml` read. That helper declares clean findings and creates test artifact references. Neither a minimal workspace manifest nor the older Onix adapter workaround is acceptable evidence.
 
-Production `node run` now rejects before state creation. Protected content serving rejects before the state root or listener opens. Unit-test startup fixtures remain under `cfg(test)`. No flag or environment variable bypasses these guards.
+Production `molten-node run` rejects before state creation. Protected `molten-node serve --content-config` rejects before the state root or listener opens. Unit-test startup fixtures remain under `cfg(test)`. No flag or environment variable bypasses these guards.
 
 ## Implemented boundary
 
 `NodeContentConfig` and `NodeContentPlan` own closed input admission, explicit read grants, address checks, and a finite tick-wait budget. The existing content adapter owns canonical manifests, verified chunks, bounded handoffs, and Iroh transport.
 
-`src/node/content.rs` derives chunk and identity capabilities from `node_state::Root`. It uses the normal node identity rather than a separate fixture key. The daemon starts the listener after startup and service-lock admission, runs it inside its tick loop, and closes it before service completion. These hooks remain behind the guard until real startup evidence exists.
+`crates/molten-node-runtime/src/node/content.rs` derives chunk and identity capabilities from `node_state::Root`. It uses the normal node identity rather than a separate fixture key. The daemon starts the listener after startup and service-lock admission, runs it inside its tick loop, and closes it before service completion. These hooks remain behind the guard until real startup evidence exists.
 
 `molten-node-host` owns atomic regular-leaf writes. It does not expose raw directory capabilities. The client publishes complete verified bytes through a no-replace hard link. Existing outputs remain unchanged.
 

@@ -60,7 +60,6 @@ pub(crate) fn run() -> molten::error::Result<()> {
         Some(command::Top::Test { command }) => run_test_command(command),
         Some(command::Top::Dogfood { command }) => crate::cli_dogfood::run_dogfood_command(command),
         Some(command::Top::Receipts { command }) => crate::cli_receipts::run_receipts_command(command),
-        Some(command::Top::Node { command }) => crate::cli_node::run(command),
         Some(command::Top::Peer { command }) => crate::cli_peer::run(command),
         Some(command::Top::Runtime { command }) => run_runtime_command(command),
         Some(command::Top::FabricTime { command }) => crate::cli_fabric_time::run_fabric_time_command(command),
@@ -141,7 +140,6 @@ pub(crate) fn run_test_command(command: command::Test) -> molten::error::Result<
         command::Test::Traceability { command } => crate::cli_traceability::run_traceability_command(command),
         command::Test::ProdSoak { command } => crate::cli_prod_soak::run_prod_soak_command(command),
         command::Test::Octet { command } => crate::cli_octet::run_octet_command(command),
-        command::Test::Node { command } => crate::cli_node::run(command),
         command::Test::Repro { command } => crate::cli_repro::run_repro_command(command),
     }
 }

@@ -6,6 +6,6 @@ The preceding pilot proved real Molten transport between VMs through an example 
 
 ## Scope
 
-Recover exact pinned dependencies without source substitutions. Resolve validation prerequisites without weakening policy or lints. Compose the existing content adapter with `molten node serve`, capability-rooted state, explicit read grants, normal startup/stop behavior, and bounded receipts. Verify the normal commands in separate storage/client VMs.
+Recover exact pinned dependencies without source substitutions. Resolve validation prerequisites without weakening policy or lints. Compose the existing content adapter with the standalone `molten-node serve` executable, capability-rooted state, explicit read grants, normal startup/stop behavior, and bounded receipts. Verify the normal commands in separate storage/client VMs after the complete executable's strict source/build/binary cohort is approved.
 
 The existing Darkhttpd archive, Mantle binaries, package toolchain, and historical evidence remain unchanged. This change does not deploy a host service, use Stage0, or grant physical/default/release admission.

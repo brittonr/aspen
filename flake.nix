@@ -677,8 +677,10 @@
             '';
           };
         moltenPkg = ws.workspaceMembers."molten".build;
+        moltenNodePkg = ws.workspaceMembers."molten-node-runtime".build;
         moltenNodeHostPkg = ws.workspaceMembers."molten-node-host".build;
         moltenNodeHostTests = ws.test.workspaceMembers."molten-node-host".build;
+        moltenNodeRuntimeTests = ws.test.workspaceMembers."molten-node-runtime".build;
         releasePolicyPkg = releasePolicyWs.rootCrate.build;
         moltenTestBinaries = (ws.test.workspaceMembers."molten".build).override { buildTests = true; };
         targetTriple = pkgs.stdenv.hostPlatform.rust.rustcTarget;
@@ -960,6 +962,7 @@
             '';
             environment.systemPackages = [
               moltenPkg
+              moltenNodePkg
               pkgs.coreutils
               pkgs.gnugrep
               pkgs.iputils
@@ -971,6 +974,7 @@
               wants = [ "network-online.target" ];
               path = [
                 moltenPkg
+                moltenNodePkg
                 pkgs.coreutils
                 pkgs.gnugrep
               ];
@@ -979,7 +983,7 @@
                 RemainAfterExit = true;
                 StateDirectory = "molten";
                 WorkingDirectory = "${sourceForConfigChecks}";
-                ExecStop = "${moltenPkg}/bin/molten node stop --state-root /var/lib/molten --shutdown-out /var/lib/molten/vm-evidence/shutdown.preserves --receipt-out /var/lib/molten/vm-evidence/shutdown-control.preserves";
+                ExecStop = "${moltenNodePkg}/bin/molten-node stop --state-root /var/lib/molten --shutdown-out /var/lib/molten/vm-evidence/shutdown.preserves --receipt-out /var/lib/molten/vm-evidence/shutdown-control.preserves";
               };
               script = ''
                 set -euo pipefail
@@ -987,23 +991,23 @@
                 evidence="$state/vm-evidence"
                 mkdir -p "$evidence"
                 if [ ! -f "$state/config.preserves" ]; then
-                  molten node init \
+                  molten-node init \
                     --state-root "$state" \
                     --node-id "node:${nodeId}" \
                     --config-out "$evidence/node-config.preserves" \
                     --identity-receipt-out "$evidence/identity.preserves" \
                     > "$evidence/init.txt"
                 fi
-                molten node run \
+                molten-node run \
                   --state-root "$state" \
                   --startup-out "$evidence/startup.preserves" \
                   > "$evidence/run.txt"
-                molten node status \
+                molten-node status \
                   --state-root "$state" \
                   --health-out "$evidence/health.preserves" \
                   --receipt-out "$evidence/status.preserves" \
                   > "$evidence/status.txt"
-                molten node run-loop \
+                molten-node run-loop \
                   --state-root "$state" \
                   --max-requests 1 \
                   --receipt-out "$evidence/control-loop.preserves" \
@@ -1018,6 +1022,7 @@
         packages = {
           default = moltenPkg;
           molten = moltenPkg;
+          molten-node = moltenNodePkg;
           molten-node-host = moltenNodeHostPkg;
           molten-release-policy = releasePolicyPkg;
           doltlite-oracle = doltliteOracle;
@@ -2258,6 +2263,7 @@
             # using CARGO_BIN_EXE_molten; the raw unit2nix libtest runner does not.
             molten = nextest;
             molten-node-host = moltenNodeHostTests;
+            molten-node-runtime = moltenNodeRuntimeTests;
             clippy = ws.clippy.allWorkspaceMembers;
             executable-extent-consumer =
               assert executableExtentSource != null;
@@ -3865,17 +3871,17 @@
                   evidence=/var/lib/molten/vm-evidence/live-control
                   rm -rf "$root" "$evidence"
                   mkdir -p "$evidence"
-                  molten node init \
+                  molten-node init \
                     --state-root "$root" \
                     --node-id node:node-b \
                     --config-out "$evidence/node-config.preserves" \
                     --identity-receipt-out "$evidence/identity.preserves" \
                     > "$evidence/init.txt"
-                  molten node run \
+                  molten-node run \
                     --state-root "$root" \
                     --startup-out "$evidence/startup.preserves" \
                     > "$evidence/run.txt"
-                  molten node serve \
+                  molten-node serve \
                     --state-root "$root" \
                     --live-iroh \
                     --live-max-events 1 \
@@ -3885,13 +3891,13 @@
                     --live-ticket-out "$evidence/ticket.preserves" \
                     --receipt-out "$evidence/listener.preserves" \
                     > "$evidence/live-serve.txt"
-                  molten node live-peer-admit \
+                  molten-node live-peer-admit \
                     --state-root "$root" \
                     --peer node:node-a \
                     --receipt-out "$evidence/peer-admission.preserves" \
                     "$evidence/ticket.preserves" \
                     > "$evidence/admit.txt"
-                  molten node authority-grant-fixture \
+                  molten-node authority-grant-fixture \
                     --state-root "$root" \
                     --peer node:node-a \
                     --node node:node-b \
@@ -3908,14 +3914,14 @@
                   authority_ref=''${authority_ref%% *}
                   printf '%s\n' "$peer_ref" > "$evidence/peer.ref"
                   printf '%s\n' "$authority_ref" > "$evidence/authority.ref"
-                  molten node control-request \
+                  molten-node control-request \
                     --operation status \
                     --authority "$authority_ref" \
                     --policy "$peer_ref" \
                     --resource "$authority_ref" \
                     --out "$evidence/request.preserves" \
                     > "$evidence/request.txt"
-                  molten node control-ingress-live-loopback \
+                  molten-node control-ingress-live-loopback \
                     --state-root "$root" \
                     "$evidence/request.preserves" \
                     --from-peer node:node-a \
@@ -3928,7 +3934,7 @@
                     --publish-receipt-out "$evidence/live-publish.preserves" \
                     --receive-receipt-out "$evidence/live-receive.preserves" \
                     > "$evidence/live-loopback.txt"
-                  molten node run-loop \
+                  molten-node run-loop \
                     --state-root "$root" \
                     --max-requests 1 \
                     --receipt-out "$evidence/live-control-loop.preserves" \
@@ -3937,7 +3943,7 @@
                   cp "$root"/control/iroh-ingress/receipts/*.deliver.receipt.preserves "$evidence/ingress.preserves"
                   cp "$root"/control/inbox/*.queue-receipt.preserves "$evidence/queue.preserves"
                   cp "$root"/control/outbox/*.control-receipt.preserves "$evidence/control.preserves"
-                  molten node live-workflow-bundle-export \
+                  molten-node live-workflow-bundle-export \
                     --ticket "$evidence/ticket.preserves" \
                     --peer-admission "$evidence/peer-admission.preserves" \
                     --authority-grant "$evidence/authority-grant.preserves" \
@@ -3974,24 +3980,24 @@
                   peer_ref=$(cat "$evidence/peer.ref")
                   authority_ref=$(cat "$evidence/authority.ref")
                   rm -rf "$root"
-                  molten node init \
+                  molten-node init \
                     --state-root "$root" \
                     --node-id node:node-a \
                     --config-out "$evidence/sender-node-config.preserves" \
                     --identity-receipt-out "$evidence/sender-identity.preserves" \
                     > "$evidence/sender-init.txt"
-                  molten node run \
+                  molten-node run \
                     --state-root "$root" \
                     --startup-out "$evidence/sender-startup.preserves" \
                     > "$evidence/sender-run.txt"
-                  molten node live-workflow-bundle-verify \
+                  molten-node live-workflow-bundle-verify \
                     "$evidence/bundle.preserves" \
                     --expected-node node:node-b \
                     --expected-peer node:node-a \
                     --operation status \
                     --receipt-out "$evidence/verify.preserves" \
                     > "$evidence/verify.txt"
-                  molten node live-workflow-bundle-gate \
+                  molten-node live-workflow-bundle-gate \
                     "$evidence/bundle.preserves" \
                     --verify-receipt "$evidence/verify.preserves" \
                     --require-verify-receipt \
@@ -4000,7 +4006,7 @@
                     --operation status \
                     --receipt-out "$evidence/gate.preserves" \
                     > "$evidence/gate.txt"
-                  molten node live-workflow-bundle-apply \
+                  molten-node live-workflow-bundle-apply \
                     --state-root "$root" \
                     "$evidence/bundle.preserves" \
                     --gate-receipt "$evidence/gate.preserves" \
@@ -4017,14 +4023,14 @@
                     --operation status \
                     --receipt-out "$evidence/apply.preserves" \
                     > "$evidence/apply.txt"
-                  molten node live-workflow-bundle-reconcile \
+                  molten-node live-workflow-bundle-reconcile \
                     "$evidence/apply.preserves" \
                     --ingress-receipt "$evidence/ingress.preserves" \
                     --queue-receipt "$evidence/queue.preserves" \
                     --control-receipt "$evidence/control.preserves" \
                     --receipt-out "$evidence/reconcile.preserves" \
                     > "$evidence/reconcile.txt"
-                  molten node live-workflow-bundle-ack-export \
+                  molten-node live-workflow-bundle-ack-export \
                     "$evidence/apply.preserves" \
                     --ingress-receipt "$evidence/ingress.preserves" \
                     --queue-receipt "$evidence/queue.preserves" \
@@ -4033,12 +4039,12 @@
                     --out "$evidence/ack.preserves" \
                     --receipt-out "$evidence/ack-export.preserves" \
                     > "$evidence/ack-export.txt"
-                  molten node live-workflow-bundle-ack-import \
+                  molten-node live-workflow-bundle-ack-import \
                     --state-root "$root" \
                     "$evidence/ack.preserves" \
                     --receipt-out "$evidence/ack-import.preserves" \
                     > "$evidence/ack-import.txt"
-                  molten node live-workflow-bundle-protocol-gate \
+                  molten-node live-workflow-bundle-protocol-gate \
                     "$evidence/bundle.preserves" \
                     --gate-receipt "$evidence/gate.preserves" \
                     --apply-receipt "$evidence/apply.preserves" \
@@ -4227,10 +4233,10 @@
                     node_a.succeed(f"cat > /var/lib/molten/vm-evidence/service-job/{artifact} <<'EOF'\n" + content + "\nEOF")
 
                 node_b.succeed("""
-                  molten node control-request \
+                  molten-node control-request \
                     --operation status \
                     --out /var/lib/molten/vm-evidence/restart-status-request.preserves
-                  molten node control-submit \
+                  molten-node control-submit \
                     --state-root /var/lib/molten \
                     /var/lib/molten/vm-evidence/restart-status-request.preserves \
                     --receipt-out /var/lib/molten/vm-evidence/restart-queue.preserves
@@ -4250,8 +4256,8 @@
                   molten test nixos-vm topology \
                     --node node_a \
                     --node node_b \
-                    --package-ref 'store:${moltenPkg}' \
-                    --package-path '${moltenPkg}' \
+                    --package-ref 'store:${moltenNodePkg}' \
+                    --package-path '${moltenNodePkg}' \
                     --network nixos-test-private \
                     --nix-input 'source:${sourceForConfigChecks}' \
                     --caveat 'vm evidence is platform integration evidence only' \
@@ -4314,7 +4320,7 @@
                   authority_ref=''${authority_ref%% *}
                   fault_dir=/var/lib/molten/vm-evidence/prod-soak-faults
                   mkdir -p "$fault_dir"
-                  molten node live-workflow-bundle-gate \
+                  molten-node live-workflow-bundle-gate \
                     /var/lib/molten/vm-evidence/live-control/bundle.preserves \
                     --expected-peer node:stale-peer \
                     --receipt-out "$fault_dir/stale-ticket-gate.preserves" \
@@ -4323,7 +4329,7 @@
                   stale_summary=$(molten test prod-soak show "$fault_dir/stale-ticket-gate.preserves")
                   stale_denial_ref=''${stale_summary#* ref=}
                   stale_denial_ref=''${stale_denial_ref%% *}
-                  molten node live-workflow-bundle-gate \
+                  molten-node live-workflow-bundle-gate \
                     /var/lib/molten/vm-evidence/live-control/bundle.preserves \
                     --expected-node node:wrong-authority \
                     --receipt-out "$fault_dir/wrong-authority-gate.preserves" \
@@ -4747,6 +4753,13 @@
             program = "${moltenPkg}/bin/molten";
             meta = {
               description = "Run the Molten CLI";
+            };
+          };
+          molten-node = {
+            type = "app";
+            program = "${moltenNodePkg}/bin/molten-node";
+            meta = {
+              description = "Run the Molten node CLI";
             };
           };
           nextest-ci = {

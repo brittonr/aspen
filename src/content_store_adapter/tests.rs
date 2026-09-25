@@ -100,11 +100,11 @@ fn fixture_chunks(manifest: &ContentManifestDescriptor) -> BTreeMap<String, Vec<
 fn content_store_and_exchange_ports_are_exact_versioned_and_backend_neutral() {
     let profile = profile(ContentAdapterClass::CapabilityLocal);
     let descriptors = content_store_port_descriptors(&profile.profile_ref);
-    let registry = crate::fabric::build_fabric_port_registry(&descriptors).expect("content port registry");
+    let registry = molten_core::fabric::build_fabric_port_registry(&descriptors).expect("content port registry");
     assert_eq!(registry.descriptors().len(), CONTENT_PORT_COUNT);
     let mut malformed = descriptors;
     malformed[0].conformance_refs.clear();
-    assert!(crate::fabric::build_fabric_port_registry(&malformed).is_err());
+    assert!(molten_core::fabric::build_fabric_port_registry(&malformed).is_err());
 }
 
 // r[verify molten.content_store_adapter.port_contract]
@@ -241,8 +241,8 @@ fn deterministic_simulation_matches_verified_trace_and_models_failure_without_ex
     .expect("cancelled outcome");
     assert_eq!(cancelled.state.artifact.terminal, ContentTerminal::Cancelled);
     let partial_workspace = temp_dir("content-adapter-partial-state");
-    let partial_namespace = crate::node_state::DirectoryView::open(
-        crate::node_state::NamespaceKind::Ledger,
+    let partial_namespace = molten_node_host::node_state::DirectoryView::open(
+        molten_node_host::node_state::NamespaceKind::Ledger,
         &partial_workspace,
     )
     .expect("partial-state namespace");
@@ -288,8 +288,8 @@ fn deterministic_simulation_matches_verified_trace_and_models_failure_without_ex
 async fn live_iroh_blobs_stream_preserves_molten_identity_and_uses_opaque_admitted_transport_key() {
     let (workspace, root, manifest) = fixture_store("content-adapter-live-iroh");
     let identity_workspace = temp_dir("content-adapter-live-identity");
-    let namespace = crate::node_state::DirectoryView::open(
-        crate::node_state::NamespaceKind::Identity,
+    let namespace = molten_node_host::node_state::DirectoryView::open(
+        molten_node_host::node_state::NamespaceKind::Identity,
         &identity_workspace,
     )
     .expect("identity namespace");
@@ -312,7 +312,7 @@ async fn live_iroh_blobs_stream_preserves_molten_identity_and_uses_opaque_admitt
         )
         .expect("transport identity");
     let key_path = crate::fabric_crypto_identity::transport_key_path().expect("transport key path");
-    let key_record = namespace.read(&key_path, crate::node_state::MAX_NODE_SECRET_BYTES).expect("transport key record");
+    let key_record = namespace.read(&key_path, molten_node_host::node_state::MAX_NODE_SECRET_BYTES).expect("transport key record");
     let material = crate::fabric_crypto_identity::transport_endpoint_material(&key_record, &backend_ref)
         .expect("transport endpoint material");
     let endpoint_id = material.endpoint_id.clone();

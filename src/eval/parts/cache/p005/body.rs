@@ -96,30 +96,6 @@ fn validate_output_ref(output: &OutputRef) -> Result<()> {
     }
 }
 
-fn validate_invalidate_input(input: &InvalidateInput) -> Result<()> {
-    if let Some(key_ref) = input.key_ref.as_ref() {
-        validate_ref(key_ref, "invalidate key ref")?;
-    }
-    if let Some(dependency_ref) = input.dependency_ref.as_ref() {
-        validate_ref(dependency_ref, "invalidate dependency ref")?;
-    }
-    if let Some(policy_ref) = input.policy_ref.as_ref() {
-        validate_ref(policy_ref, "invalidate policy ref")?;
-    }
-    if let Some(capability_ref) = input.capability_ref.as_ref() {
-        validate_ref(capability_ref, "invalidate capability ref")?;
-    }
-    if let Some(revocation_ref) = input.revocation_ref.as_ref() {
-        validate_ref(revocation_ref, "invalidate revocation ref")?;
-    }
-    if let Some(operation) = input.operation.as_ref() {
-        validate_operation(operation)?;
-    }
-    validate_refs(&input.apply_refs, "invalidate apply ref")?;
-    crate::retention::validate_destructive_evidence(&input.retention_evidence)?;
-    Ok(())
-}
-
 fn validate_operation(operation: &str) -> Result<()> {
     validate_non_empty(operation, "eval cache operation")?;
     if operation.chars().all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_') {

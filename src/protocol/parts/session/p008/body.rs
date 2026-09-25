@@ -286,10 +286,3 @@ fn ensure_count_at_most(actual: usize, maximum: usize, label: &str) -> Result<()
 fn synthetic_ref(label: &str) -> Result<String> {
     canonical_hash(&record("protocol-fixture-ref", vec![string(label)]))
 }
-
-#[cfg(test)]
-mod tests {
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/tests/m000/p000/body.rs"));
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/tests/m000/p001/body.rs"));
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/tests/m000/p002/body.rs"));
-}

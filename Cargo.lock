@@ -4426,6 +4426,7 @@ dependencies = [
  "kamacite-core",
  "molten-core",
  "molten-node-host",
+ "molten-node-runtime",
  "n0-future",
  "nickel-lang",
  "preserves 5.0.0-rc.7",
@@ -4481,6 +4482,47 @@ dependencies = [
  "cap-tempfile",
  "molten-core",
  "toml",
+]
+
+[[package]]
+name = "molten-node-runtime"
+version = "0.1.0"
+dependencies = [
+ "artifact-auth-core",
+ "artifact-auth-ed25519",
+ "artifact-binding-core",
+ "bao-tree",
+ "blake3",
+ "cap-fs-ext",
+ "cap-std",
+ "cap-tempfile",
+ "clap 4.6.1",
+ "flux-profiler",
+ "hegeltest",
+ "iroh",
+ "iroh-blobs",
+ "iroh-docs",
+ "iroh-gossip",
+ "kamacite-core",
+ "molten-core",
+ "molten-node-host",
+ "n0-future",
+ "preserves 5.0.0-rc.7",
+ "preserves-schema",
+ "redb 4.1.0",
+ "serde",
+ "serde_json",
+ "snafu",
+ "steel-core",
+ "syndicate",
+ "tokio",
+ "toml",
+ "tracing",
+ "verified-logic",
+ "wasmparser 0.240.0",
+ "wasmtime",
+ "wasmtime-wasi",
+ "zstd",
 ]
 
 [[package]]

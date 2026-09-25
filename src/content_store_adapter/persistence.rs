@@ -2,9 +2,9 @@ use molten_core::content_store_adapter::*;
 
 use crate::error::Failure;
 use crate::error::Result;
-use crate::node_state::FileObservation;
-use crate::node_state::DirectoryView;
-use crate::node_state::RelativePath;
+use molten_node_host::node_state::FileObservation;
+use molten_node_host::node_state::DirectoryView;
+use molten_node_host::node_state::RelativePath;
 
 const PARTIAL_STATE_MAGIC: &str = "MCPS001";
 const BLAKE3_HEX_LENGTH: usize = 64;

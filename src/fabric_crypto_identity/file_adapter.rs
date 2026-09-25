@@ -3,10 +3,10 @@ use std::str::FromStr;
 use super::*;
 use crate::error::Failure;
 use crate::error::Result;
-use crate::node_state::MAX_NODE_SECRET_BYTES;
-use crate::node_state::FileObservation;
-use crate::node_state::DirectoryView;
-use crate::node_state::RelativePath;
+use molten_node_host::node_state::MAX_NODE_SECRET_BYTES;
+use molten_node_host::node_state::FileObservation;
+use molten_node_host::node_state::DirectoryView;
+use molten_node_host::node_state::RelativePath;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::content_ref_from_bytes;
 use crate::preserves_rail::record;
@@ -19,11 +19,11 @@ const GROUP_OR_OTHER_PERMISSION_BITS: u32 = 0o077;
 const KEY_RECORD_SCHEMA_BYTES: usize = 8;
 const KEY_RECORD_SCHEMA: &[u8; KEY_RECORD_SCHEMA_BYTES] = b"MCKEY001";
 const KEY_GENERATION_BYTES: usize = std::mem::size_of::<u64>();
-const ED25519_SECRET_BYTES: usize = 32;
+pub(crate) const ED25519_SECRET_BYTES: usize = 32;
 const KEY_GENERATION_START: usize = KEY_RECORD_SCHEMA.len();
 const KEY_SECRET_START: usize = KEY_GENERATION_START + KEY_GENERATION_BYTES;
 const KEY_RECORD_BYTES: usize = KEY_SECRET_START + ED25519_SECRET_BYTES;
-const FIRST_KEY_GENERATION: u64 = 1;
+pub(crate) const FIRST_KEY_GENERATION: u64 = 1;
 const REVOCATION_MARKER_SUFFIX: &str = ".revoked";
 const NODE_TRANSPORT_PROFILE_LABEL: &[u8] = b"molten.node.transport.crypto-profile.v1";
 const NODE_TRANSPORT_ENTROPY_LABEL: &[u8] = b"molten.node.transport.os-csprng.v1";
@@ -76,9 +76,9 @@ pub(crate) struct TransportEndpointKeyMaterial {
 }
 
 #[derive(Debug)]
-struct KeyRecord {
-    generation: u64,
-    secret_key: iroh::SecretKey,
+pub(crate) struct KeyRecord {
+    pub(crate) generation: u64,
+    pub(crate) secret_key: iroh::SecretKey,
 }
 
 pub(crate) struct ExactArtifactAuthSignature {
@@ -105,8 +105,8 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         }
         require_blake3_ref("crypto file backend", &backend_ref)?;
         match namespace.kind() {
-            crate::node_state::NamespaceKind::Identity
-            | crate::node_state::NamespaceKind::Secrets => {}
+            molten_node_host::node_state::NamespaceKind::Identity
+            | molten_node_host::node_state::NamespaceKind::Secrets => {}
             other => {
                 return Err(Failure::invalid_harness(format!(
                     "crypto file adapter requires identity or secrets namespace, got {other:?}"
@@ -489,23 +489,6 @@ pub(crate) fn transport_key_path() -> Result<RelativePath> {
     key_path(KeyPurpose::TransportEndpoint)
 }
 
-pub(crate) fn generate_transport_key_record() -> Vec<u8> {
-    encode_key_record(&KeyRecord {
-        generation: FIRST_KEY_GENERATION,
-        secret_key: iroh::SecretKey::generate(),
-    })
-    .to_vec()
-}
-
-pub(crate) fn transport_key_record_from_secret_hex(secret: &str) -> Result<Vec<u8>> {
-    let secret_bytes = decode_secret_hex(secret)?;
-    Ok(encode_key_record(&KeyRecord {
-        generation: FIRST_KEY_GENERATION,
-        secret_key: iroh::SecretKey::from_bytes(&secret_bytes),
-    })
-    .to_vec())
-}
-
 pub(crate) fn transport_endpoint_material(
     record_bytes: &[u8],
     backend_ref: &str,
@@ -614,7 +597,7 @@ fn require_current_handle(requested: &OpaqueKeyHandle, current: &OpaqueKeyHandle
     Ok(())
 }
 
-fn encode_key_record(record: &KeyRecord) -> [u8; KEY_RECORD_BYTES] {
+pub(crate) fn encode_key_record(record: &KeyRecord) -> [u8; KEY_RECORD_BYTES] {
     let mut bytes = [0u8; KEY_RECORD_BYTES];
     bytes[..KEY_GENERATION_START].copy_from_slice(KEY_RECORD_SCHEMA);
     bytes[KEY_GENERATION_START..KEY_SECRET_START].copy_from_slice(&record.generation.to_be_bytes());
@@ -645,33 +628,6 @@ fn decode_key_record(bytes: &[u8]) -> Result<KeyRecord> {
     })
 }
 
-fn decode_secret_hex(secret: &str) -> Result<[u8; ED25519_SECRET_BYTES]> {
-    const HEX_CHARS_PER_BYTE: usize = 2;
-    const HEX_RADIX: u32 = 16;
-    const EXPECTED_HEX_CHARS: usize = ED25519_SECRET_BYTES * HEX_CHARS_PER_BYTE;
-    let secret = secret.trim();
-    if secret.len() != EXPECTED_HEX_CHARS {
-        return Err(Failure::invalid_harness(format!(
-            "explicit Ed25519 secret must contain exactly {EXPECTED_HEX_CHARS} lowercase hexadecimal characters"
-        )));
-    }
-    let mut bytes = [0u8; ED25519_SECRET_BYTES];
-    for (index, slot) in bytes.iter_mut().enumerate() {
-        let offset = index
-            .checked_mul(HEX_CHARS_PER_BYTE)
-            .ok_or_else(|| Failure::invalid_harness("secret hex offset overflow"))?;
-        let pair = &secret[offset..offset + HEX_CHARS_PER_BYTE];
-        if !pair.chars().all(|character| matches!(character, '0'..='9' | 'a'..='f')) {
-            return Err(Failure::invalid_harness(
-                "explicit Ed25519 secret must use lowercase hexadecimal characters",
-            ));
-        }
-        *slot = u8::from_str_radix(pair, HEX_RADIX)
-            .map_err(|_| Failure::invalid_harness("explicit Ed25519 secret contains malformed hex"))?;
-    }
-    Ok(bytes)
-}
-
 fn currentness_evidence_ref(
     profile_ref: &str,
     purpose: KeyPurpose,
@@ -689,7 +645,7 @@ fn currentness_evidence_ref(
     ]))
 }
 
-fn permission_status(file: &crate::node_state::AcquiredFile) -> KeyPermissionStatus {
+fn permission_status(file: &molten_node_host::node_state::AcquiredFile) -> KeyPermissionStatus {
     #[cfg(unix)]
     {
         match file.unix_mode() {

@@ -198,11 +198,6 @@ fn chunk_path(chunk_ref: &str) -> Result<StorePath> {
     store_path("chunks")?.join(&filename_for_ref(chunk_ref)?)
 }
 
-#[cfg(test)]
-fn test_chunk_path(root: &Path, chunk_ref: &str) -> Result<PathBuf> {
-    Ok(root.join("chunks").join(filename_for_ref(chunk_ref)?))
-}
-
 fn iroh_blob_path(blob_ref: &str) -> Result<StorePath> {
     store_path("blobs")?.join(&filename_for_ref(blob_ref)?)
 }
@@ -213,11 +208,6 @@ fn iroh_ticket_path(manifest_ref: &str) -> Result<StorePath> {
 
 fn manifest_path(manifest_ref: &str) -> Result<StorePath> {
     store_path("manifests")?.join(&filename_for_ref(manifest_ref)?)
-}
-
-#[cfg(test)]
-fn test_manifest_path(root: &Path, manifest_ref: &str) -> Result<PathBuf> {
-    Ok(root.join("manifests").join(filename_for_ref(manifest_ref)?))
 }
 
 fn metadata_path(metadata_ref: &str) -> Result<StorePath> {

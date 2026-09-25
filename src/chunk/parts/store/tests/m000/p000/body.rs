@@ -1,5 +1,3 @@
-    use super::*;
-
     fn parse_text(source: &str) -> Result<IoValue> {
         crate::preserves_rail::parse_text(source)
     }

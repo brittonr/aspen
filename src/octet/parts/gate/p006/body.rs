@@ -93,6 +93,22 @@ fn validate_object_corpus(
     checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Option<ObjectCorpusReceipt> {
+    validate_object_corpus_with_scope(
+        object_corpus,
+        REQUIRED_OBJECT_CORPUS_SOURCE_PATHS,
+        SOURCE_GATE_SOURCE_SCOPE_PATHS,
+        checks,
+        diagnostics,
+    )
+}
+
+fn validate_object_corpus_with_scope(
+    object_corpus: Option<&GateFile>,
+    critical_paths: &[&str],
+    required_source_paths: &[&str],
+    checks: &mut impl crate::bounded::VecSink<Check>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> Option<ObjectCorpusReceipt> {
     let Some(object_corpus) = object_corpus else {
         push_check(checks, "object-corpus-json-parse", false);
         push_check(checks, "object-corpus-schema", false);
@@ -119,10 +135,10 @@ fn validate_object_corpus(
     let has_object_set_fingerprint = receipt.object_set_hash.as_deref().is_some_and(is_b3_ref);
     let coverage_paths = object_corpus_coverage_paths(&receipt);
     let has_required_source_paths = coverage_paths.as_ref().is_some_and(|paths| {
-        REQUIRED_OBJECT_CORPUS_SOURCE_PATHS.iter().all(|required| paths.iter().any(|path| path == required))
+        critical_paths.iter().all(|required| paths.iter().any(|path| path == required))
     });
     let has_source_scope_paths = coverage_paths.as_ref().is_some_and(|paths| {
-        SOURCE_GATE_SOURCE_SCOPE_PATHS.iter().all(|required| paths.iter().any(|path| path == required))
+        required_source_paths.iter().all(|required| paths.iter().any(|path| path == required))
     });
     push_check(checks, "object-corpus-json-parse", true);
     push_check(checks, "object-corpus-schema", has_supported_schema);
@@ -280,10 +296,11 @@ fn validate_metadata_against_expected(
 }
 
 fn expected_metadata_for_command(command: &str) -> std::result::Result<ExpectedMetadata, String> {
-    let workspace_root = std::env::current_dir().map_err(|error| format!("current_dir: {error}"))?;
-    let workspace_config = load_workspace_octet_config(&workspace_root)?;
+    let cwd = std::env::current_dir().map_err(|error| format!("current_dir: {error}"))?;
+    let workspace_root = cwd.ancestors().find(|ancestor| ancestor.join("dylint.toml").is_file()).unwrap_or(&cwd);
+    let workspace_config = load_workspace_octet_config(workspace_root)?;
     let effective = parse_effective_command(command, &workspace_config)?;
-    let config_hash = current_config_hash(&workspace_root, &effective.scope_args, &effective.cargo_check_args)?;
+    let config_hash = current_config_hash(workspace_root, &effective.scope_args, &effective.cargo_check_args)?;
     let profile_hash = current_profile_hash(
         &effective.scope_args,
         &effective.cargo_check_args,

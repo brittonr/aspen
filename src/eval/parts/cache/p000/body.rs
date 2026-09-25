@@ -304,28 +304,6 @@ pub struct EntrySummary {
     pub tombstoned: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct InvalidateInput {
-    pub key_ref: Option<String>,
-    pub dependency_ref: Option<String>,
-    pub policy_ref: Option<String>,
-    pub capability_ref: Option<String>,
-    pub revocation_ref: Option<String>,
-    pub operation: Option<String>,
-    pub reason: String,
-    pub retention_evidence: crate::retention::DestructiveEvidence,
-    pub apply_refs: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Invalidation {
-    pub decision: String,
-    pub invalidated_key_refs: Vec<String>,
-    pub retention_receipt_refs: Vec<String>,
-    pub execution_gate_refs: Vec<String>,
-    pub receipt_value: IoValue,
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct SchemaCompatibilityKeyInput<'a> {
     pub expected_identity_ref: &'a str,

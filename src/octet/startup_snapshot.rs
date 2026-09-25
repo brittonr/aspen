@@ -1,7 +1,7 @@
 //! Pure re-evaluation of a measured portable snapshot. No cwd, filesystem, or process access.
 //! Success is verification-only; it is not a source execution attestation or startup capability.
 use super::*;
-use molten_core::node_startup::{EvidencePlan, SourceFile};
+use molten_core::node_startup::{BuildInputs, EvidencePlan, SourceFile};
 
 pub struct Snapshot<'a> {
     pub plan: &'a EvidencePlan,
@@ -24,6 +24,10 @@ pub fn evaluate(snapshot: Snapshot<'_>) -> Result<OctetGateEvaluation> {
         .map_err(|_| Failure::invalid_harness("startup-evidence-source-inventory"))?;
     molten_core::node_startup::validate_source_inventory(snapshot.plan, &source_files)
         .map_err(|_| Failure::invalid_harness("startup-evidence-source-context"))?;
+    let build_inputs: BuildInputs = serde_json::from_slice(&snapshot.members[10])
+        .map_err(|_| Failure::invalid_harness("startup-evidence-build-inputs"))?;
+    molten_core::node_startup::validate_build_inputs(&source_files, &build_inputs)
+        .map_err(|_| Failure::invalid_harness("startup-evidence-build-coverage"))?;
     let text = |index: usize| -> Result<&str> {
         std::str::from_utf8(&snapshot.members[index]).map_err(|_| Failure::invalid_harness("startup-evidence-utf8"))
     };
@@ -58,18 +62,7 @@ pub fn evaluate(snapshot: Snapshot<'_>) -> Result<OctetGateEvaluation> {
         .ok_or_else(|| Failure::invalid_harness("startup-evidence-source-coverage"))?;
     if paths.len() > molten_core::node_startup::MAX_SOURCE_FILES
         || paths.iter().any(|path| source_files.binary_search_by(|file| file.name.cmp(path)).is_err())
-        || SOURCE_GATE_SOURCE_SCOPE_PATHS.iter().any(|required| !paths.iter().any(|p| p == required))
-        || [
-            "src/node/content.rs",
-            "src/node/startup_evidence.rs",
-            "src/octet/startup_snapshot.rs",
-            "crates/molten-core/src/node_startup.rs",
-            "crates/molten-core/src/content_store_adapter/node_service.rs",
-            "src/node/parts/daemon/p018/body.rs",
-            "src/node/parts/daemon/p019/body.rs",
-        ]
-        .iter()
-        .any(|required| !paths.iter().any(|p| p == required))
+        || NODE_SOURCE_GATE_SCOPE_PATHS.iter().any(|required| !paths.iter().any(|p| p == required))
     {
         return Err(Failure::invalid_harness("startup-evidence-source-coverage"));
     }
@@ -116,7 +109,7 @@ pub fn evaluate(snapshot: Snapshot<'_>) -> Result<OctetGateEvaluation> {
     ] {
         initial_checks.push(Check { name, status: "pass" });
     }
-    evaluate_octet_gate_files(
+    evaluate_octet_gate_files_with_scope(
         &OctetGateInput {
             artifacts_dir: PathBuf::from("target/octet"),
             profile: STRICT_PROFILE.into(),
@@ -125,6 +118,7 @@ pub fn evaluate(snapshot: Snapshot<'_>) -> Result<OctetGateEvaluation> {
         initial_checks,
         Vec::new(),
         Ok(expected),
+        NODE_SOURCE_GATE_SCOPE_PATHS,
     )
 }
 
@@ -140,7 +134,14 @@ fn explicit_metadata(manifest: &str, dylint: &[u8], command: &str) -> std::resul
         return Err("startup-evidence-dylint-suppression".into());
     }
     let effective = parse_effective_command(command, &config)?;
-    if effective.scope_args != ["-p", "molten", "-p", "molten-node-host"]
+    if effective.scope_args != [
+        "-p",
+        "molten-node-runtime",
+        "-p",
+        "molten-core",
+        "-p",
+        "molten-node-host",
+    ]
         || effective.cargo_check_args != ["--all-targets"]
         || effective.output_format != "human"
     {
@@ -171,4 +172,5 @@ fn explicit_metadata(manifest: &str, dylint: &[u8], command: &str) -> std::resul
 }
 
 #[cfg(test)]
+#[path = "startup_snapshot/tests.rs"]
 pub(crate) mod tests;

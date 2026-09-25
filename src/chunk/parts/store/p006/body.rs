@@ -319,17 +319,3 @@ pub fn chunk_is_pinned_with_root(root: &CapabilityChunkRoot, chunk_ref: &str) ->
         .map_err(|error| Failure::invalid_harness(format!("chunk pin ref is invalid: {error}")))?;
     root.root().try_exists(&chunk_pin_path(chunk_ref)?)
 }
-
-fn pass_or_fail(value: bool) -> &'static str {
-    if value { "pass" } else { "fail" }
-}
-
-struct ApplyRefMatchInput<'a> {
-    root: &'a crate::local_store::RetentionStoreRoot,
-    apply_refs: &'a [String],
-    subsystem: &'a str,
-    action: &'a str,
-    object_ref: &'a str,
-    object_kind: &'a str,
-    retention_class: &'a str,
-}

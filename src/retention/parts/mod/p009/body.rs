@@ -5,8 +5,8 @@ struct LoopbackValueInput<'a> {
     import_value: &'a IoValue,
     request_control_ref: &'a str,
     response_control_ref: &'a str,
-    request_live: &'a crate::node_daemon::ControlLiveLoopback,
-    response_live: &'a crate::node_daemon::ControlLiveLoopback,
+    request_live: &'a molten_node_runtime::node_daemon::ControlLiveLoopback,
+    response_live: &'a molten_node_runtime::node_daemon::ControlLiveLoopback,
     transport_diagnostics: &'a [String],
 }
 
@@ -63,8 +63,8 @@ async fn request_leg(
     input: &RemoteGcClearanceLiveLoopbackInput<'_>,
     control_value: &IoValue,
     evidence_refs: &[String],
-) -> Result<crate::node_daemon::ControlLiveLoopback> {
-    crate::node_daemon::control_live_iroh_loopback(&crate::node_daemon::ControlLiveLoopbackInput {
+) -> Result<molten_node_runtime::node_daemon::ControlLiveLoopback> {
+    molten_node_runtime::node_daemon::control_live_iroh_loopback(&molten_node_runtime::node_daemon::ControlLiveLoopbackInput {
         state_root: input.peer_node_root,
         request_value: control_value,
         from_peer: input.requester_node_id,
@@ -84,8 +84,8 @@ async fn response_leg(
     input: &RemoteGcClearanceLiveLoopbackInput<'_>,
     control_value: &IoValue,
     evidence_refs: &[String],
-) -> Result<crate::node_daemon::ControlLiveLoopback> {
-    crate::node_daemon::control_live_iroh_loopback(&crate::node_daemon::ControlLiveLoopbackInput {
+) -> Result<molten_node_runtime::node_daemon::ControlLiveLoopback> {
+    molten_node_runtime::node_daemon::control_live_iroh_loopback(&molten_node_runtime::node_daemon::ControlLiveLoopbackInput {
         state_root: input.requester_node_root,
         request_value: control_value,
         from_peer: input.peer_node_id,
@@ -102,8 +102,8 @@ async fn response_leg(
 }
 
 fn transport_notes(
-    request_live: &crate::node_daemon::ControlLiveLoopback,
-    response_live: &crate::node_daemon::ControlLiveLoopback,
+    request_live: &molten_node_runtime::node_daemon::ControlLiveLoopback,
+    response_live: &molten_node_runtime::node_daemon::ControlLiveLoopback,
 ) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
     extend_bounded(

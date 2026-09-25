@@ -1,0 +1,17 @@
+// Reuse the real workspace implementation without the root package dependency.
+include!("../../../src/deterministic/parts/replay/p000/body.rs");
+include!("../../../src/deterministic/parts/replay/p001/body.rs");
+include!("../../../src/deterministic/parts/replay/p002/body.rs");
+include!("../../../src/deterministic/parts/replay/p003/body.rs");
+include!("../../../src/deterministic/parts/replay/p004/body.rs");
+include!("../../../src/deterministic/parts/replay/p005/body.rs");
+include!("../../../src/deterministic/parts/replay/p006/body.rs");
+include!("../../../src/deterministic/parts/replay/p007/body.rs");
+include!("../../../src/deterministic/parts/replay/p008/body.rs");
+include!("../../../src/deterministic/parts/replay/p009/body.rs");
+include!("../../../src/deterministic/parts/replay/p010/body.rs");
+include!("../../../src/deterministic/parts/replay/p011/body.rs");
+include!("../../../src/deterministic/parts/replay/p012/body.rs");
+include!("../../../src/deterministic/parts/replay/p013/body.rs");
+include!("../../../src/deterministic/parts/replay/p014/body.rs");
+include!("../../../src/deterministic/parts/replay/p015/body.rs");

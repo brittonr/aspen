@@ -226,7 +226,7 @@ pub struct RemoteGcClearanceLiveRequestSend {
     pub request: RemoteGcClearanceRequest,
     pub control_ref: String,
     pub control_value: IoValue,
-    pub send: crate::node_daemon::ControlLiveSend,
+    pub send: molten_node_runtime::node_daemon::ControlLiveSend,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -234,7 +234,7 @@ pub struct RemoteGcClearanceLiveResponseSend {
     pub response: RemoteGcClearanceResponse,
     pub control_ref: String,
     pub control_value: IoValue,
-    pub send: crate::node_daemon::ControlLiveSend,
+    pub send: molten_node_runtime::node_daemon::ControlLiveSend,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

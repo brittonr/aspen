@@ -84,8 +84,6 @@ pub mod mesh;
 compat_module!(federation, mesh);
 pub mod content_replication;
 pub mod content_store_adapter;
-#[path = "node/startup_evidence.rs"]
-pub mod node_startup_evidence;
 pub mod dag_sync;
 #[cfg(feature = "executable-extents")]
 pub mod executable_extent;
@@ -148,35 +146,8 @@ compat_module!(lifecycle, phases);
 pub mod machine;
 compat_module!(nixos_vm, machine);
 #[doc(hidden)]
-#[path = "node/daemon.rs"]
-pub mod daemon_core;
 #[path = "node/nativesystemextension.rs"]
 pub mod nativehostnode;
-#[path = "node/state.rs"]
-pub mod node_state;
-#[path = "node/content.rs"]
-pub mod node_content;
-compat_module!(node_daemon, daemon_core);
-#[doc(hidden)]
-#[path = "node/identity.rs"]
-pub mod credential;
-compat_module!(node_identity, credential);
-#[doc(hidden)]
-#[path = "node/iroh.rs"]
-pub mod transport;
-compat_module!(node_iroh, transport);
-#[doc(hidden)]
-#[path = "node/runtime.rs"]
-pub mod kernel;
-compat_module!(node_runtime, kernel);
-#[doc(hidden)]
-#[path = "node/profile_config.rs"]
-pub mod node_profile_config_core;
-compat_module!(node_profile_config, node_profile_config_core);
-#[doc(hidden)]
-#[path = "node/service_fsm.rs"]
-pub mod node_service_fsm_core;
-compat_module!(node_service_fsm, node_service_fsm_core);
 #[doc(hidden)]
 #[path = "octet/gate.rs"]
 pub mod quality;

@@ -2,8 +2,8 @@
     struct TicketPair {
         requester_root: PathBuf,
         peer_root: PathBuf,
-        peer_ticket: crate::node_daemon::ControlLiveTicket,
-        requester_ticket: crate::node_daemon::ControlLiveTicket,
+        peer_ticket: molten_node_runtime::node_daemon::ControlLiveTicket,
+        requester_ticket: molten_node_runtime::node_daemon::ControlLiveTicket,
     }
 
     struct NoEndpointCase {
@@ -21,12 +21,12 @@
     fn ticket_pair() -> TicketPair {
         let requester_root = temp_dir("retention-remote-clearance-live-multihost-requester");
         let peer_root = temp_dir("retention-remote-clearance-live-multihost-peer");
-        crate::node_daemon::init_local(&crate::node_daemon::InitInput {
+        molten_node_runtime::node_daemon::init_local(&molten_node_runtime::node_daemon::InitInput {
             state_root: &requester_root,
             node_id: "requester-node",
         })
         .expect("init requester node");
-        crate::node_daemon::init_local(&crate::node_daemon::InitInput {
+        molten_node_runtime::node_daemon::init_local(&molten_node_runtime::node_daemon::InitInput {
             state_root: &peer_root,
             node_id: "peer-node",
         })
@@ -34,17 +34,17 @@
         let policy = vec![fake_ref("multihost-ticket-policy")];
         let evidence = vec![fake_ref("multihost-ticket-evidence")];
         let peer_ticket =
-            crate::node_daemon::export_control_live_ticket(&crate::node_daemon::ControlLiveTicketExportInput {
+            molten_node_runtime::node_daemon::export_control_live_ticket(&molten_node_runtime::node_daemon::ControlLiveTicketExportInput {
                 state_root: &peer_root,
-                topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
+                topic: molten_node_runtime::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
                 policy_refs: &policy,
                 evidence_refs: &evidence,
             })
             .expect("peer ticket");
         let requester_ticket =
-            crate::node_daemon::export_control_live_ticket(&crate::node_daemon::ControlLiveTicketExportInput {
+            molten_node_runtime::node_daemon::export_control_live_ticket(&molten_node_runtime::node_daemon::ControlLiveTicketExportInput {
                 state_root: &requester_root,
-                topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
+                topic: molten_node_runtime::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
                 policy_refs: &policy,
                 evidence_refs: &evidence,
             })
@@ -79,7 +79,7 @@
                 peer_ticket_value: &case.nodes.peer_ticket.value,
                 requester_node_id: "requester-node",
                 peer_node_id: "peer-node",
-                topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
+                topic: molten_node_runtime::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
                 sequence: 1,
                 max_attempts: 1,
                 join_timeout_ms: 1,
@@ -115,7 +115,7 @@
                 request_value: &request.request.value,
                 peer_node_id: "peer-node",
                 requester_node_id: "requester-node",
-                topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
+                topic: molten_node_runtime::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
                 sequence: 1,
                 max_attempts: 1,
                 join_timeout_ms: 1,
@@ -134,7 +134,7 @@
     }
 
     fn assert_send_denial(value: &IoValue, expected: Option<&str>) {
-        let receipt = crate::node_daemon::parse_control_live_send_receipt(value).expect("send receipt");
+        let receipt = molten_node_runtime::node_daemon::parse_control_live_send_receipt(value).expect("send receipt");
         assert_eq!(receipt.decision, "deny");
         if let Some(needle) = expected {
             assert!(receipt.diagnostics.iter().any(|value| value.contains(needle)));

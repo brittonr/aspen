@@ -11,7 +11,7 @@
             crate::preserves_rail::record("decision", vec![crate::preserves_rail::string("pass")]),
             crate::preserves_rail::record("transport", vec![crate::preserves_rail::string("iroh-gossip")]),
             crate::preserves_rail::record("topic", vec![crate::preserves_rail::string(
-                crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
+                molten_node_runtime::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
             )]),
             crate::preserves_rail::record("from-peer", vec![crate::preserves_rail::string(from_peer)]),
             crate::preserves_rail::record("to-node", vec![crate::preserves_rail::string(to_node)]),

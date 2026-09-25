@@ -3,7 +3,7 @@ use molten_core::node_startup::{BUNDLE_SCHEMA, Cohort, Descriptor, Member, POLIC
 
 // In-memory test data only. No fixture exporter, startup token, or runtime activation path.
 pub(crate) fn fixture() -> (TrustedCohort, Descriptor, Vec<Vec<u8>>) {
-    let manifest = b"[workspace.metadata.octet]\ndefault_scope = [\"-p\", \"molten\", \"-p\", \"molten-node-host\"]\ncargo_check_args = [\"--all-targets\"]\n";
+    let manifest = b"[workspace.metadata.octet]\ndefault_scope = [\"-p\", \"molten-node-runtime\", \"-p\", \"molten-core\", \"-p\", \"molten-node-host\"]\ncargo_check_args = [\"--all-targets\"]\n";
     let dylint = b"[octet]\ndisabled_lints = []\n";
     let expected = explicit_metadata(std::str::from_utf8(manifest).unwrap(), dylint, DEFAULT_GATE_COMMAND).unwrap();
     let mut members = vec![
@@ -14,19 +14,24 @@ pub(crate) fn fixture() -> (TrustedCohort, Descriptor, Vec<Vec<u8>>) {
         b"[toolchain]\nchannel = \"nightly-2026-05-26\"\n".to_vec(),
     ];
     let paths = [
-        "src/job/dag.rs",
-        "src/main.rs",
-        "src/node/daemon.rs",
-        "src/node/runtime.rs",
-        "src/octet/gate.rs",
-        "src/upgrades/mod.rs",
-        "src/node/content.rs",
-        "src/node/startup_evidence.rs",
+        "crates/molten-core/Cargo.toml",
+        "crates/molten-core/src/lib.rs",
+        "crates/molten-node-host/Cargo.toml",
+        "crates/molten-node-host/src/lib.rs",
+        "crates/molten-node-runtime/Cargo.toml",
+        "crates/molten-node-runtime/src/lib.rs",
+        "crates/molten-node-runtime/src/bin/molten-node.rs",
+        "crates/molten-node-runtime/src/node/daemon.rs",
+        "crates/molten-node-runtime/src/node/runtime.rs",
+        "crates/molten-node-runtime/src/node/content.rs",
+        "crates/molten-node-runtime/src/node/startup_evidence.rs",
+        "crates/molten-node-runtime/src/node/parts/daemon/p018/body.rs",
+        "crates/molten-node-runtime/src/node/parts/daemon/p019/body.rs",
+        "crates/molten-node-runtime/src/source_gate.rs",
         "src/octet/startup_snapshot.rs",
         "crates/molten-core/src/node_startup.rs",
         "crates/molten-core/src/content_store_adapter/node_service.rs",
-        "src/node/parts/daemon/p018/body.rs",
-        "src/node/parts/daemon/p019/body.rs",
+        "crates/molten-node-host/src/node/state.rs",
     ];
     let mut sources: Vec<SourceFile> = members
         .iter()
@@ -52,8 +57,41 @@ pub(crate) fn fixture() -> (TrustedCohort, Descriptor, Vec<Vec<u8>>) {
         "toolchain":"nightly-2026-03-21-x86_64-unknown-linux-gnu", "config_hash":expected.config_hash,"profile_hash":expected.profile_hash},
         "total_findings":0,"warning_findings":0,"error_findings":0,"autofixable_findings":0})).unwrap());
     members.push(b"Findings: 0\n\nBy lint:\n\nIndex:\n".to_vec());
+    let object_source_paths: Vec<&str> = paths.iter().copied().filter(|path| path.ends_with(".rs")).collect();
     members.push(serde_json::to_vec(&serde_json::json!({"schema":"octet.function-object-corpus-receipt.v1", "schema_version":1,
-        "object_count":13, "source_paths":paths, "object_set_hash":format!("b3:{}", "a".repeat(64)), "pure_cache_blocked_count":0})).unwrap());
+        "object_count":object_source_paths.len(), "source_paths":object_source_paths,
+        "object_set_hash":format!("b3:{}", "a".repeat(64)), "pure_cache_blocked_count":0})).unwrap());
+    let package_paths = |prefix: &str| {
+        let mut selected: Vec<&str> = paths
+            .iter()
+            .copied()
+            .filter(|path| path.starts_with(prefix) && path.ends_with(".rs"))
+            .collect();
+        selected.sort_unstable();
+        selected
+    };
+    let mut runtime_paths: Vec<&str> = paths
+        .iter()
+        .copied()
+        .filter(|path| {
+            (path.starts_with("crates/molten-node-runtime/src/")
+                && path.ends_with(".rs")
+                && !path.starts_with("crates/molten-node-runtime/src/bin/"))
+                || path.starts_with("src/octet/")
+        })
+        .collect();
+    runtime_paths.sort_unstable();
+    members.push(serde_json::to_vec(&serde_json::json!({
+        "schema": "molten.node-build-inputs.v1",
+        "executable_target": "molten-node",
+        "units": [
+            {"package": "molten-core", "target": "lib", "source_paths": package_paths("crates/molten-core/")},
+            {"package": "molten-node-host", "target": "lib", "source_paths": package_paths("crates/molten-node-host/")},
+            {"package": "molten-node-runtime", "target": "bin/molten-node",
+                "source_paths": ["crates/molten-node-runtime/src/bin/molten-node.rs"]},
+            {"package": "molten-node-runtime", "target": "lib", "source_paths": runtime_paths}
+        ]
+    })).unwrap());
     let cohort = Cohort {
         source_revision: "a".repeat(40),
         source_inventory_blake3: blake3::hash(&members[5]).to_hex().to_string(),
@@ -171,8 +209,8 @@ fn synthetic_toolchain_findings_and_inconsistent_summary_deny() {
 fn replay_command_is_not_source_coverage() {
     let (mut p, mut d, mut m) = fixture();
     let mut corpus: serde_json::Value = serde_json::from_slice(&m[9]).unwrap();
-    corpus["source_paths"] = serde_json::json!(["src/main.rs"]);
-    corpus["replay"] = serde_json::json!({"command": SOURCE_GATE_SOURCE_SCOPE_PATHS.join(" ")});
+    corpus["source_paths"] = serde_json::json!(["crates/molten-node-runtime/src/bin/molten-node.rs"]);
+    corpus["replay"] = serde_json::json!({"command": NODE_SOURCE_GATE_SCOPE_PATHS.join(" ")});
     m[9] = serde_json::to_vec(&corpus).unwrap();
     repin_test_data(&mut p, &mut d, &m);
     assert!(evaluate_data(&p, d, &m).unwrap_err().to_string().contains("source-coverage"));
@@ -202,4 +240,20 @@ fn missing_source_and_changed_member_deny() {
     let (p, d, mut m) = fixture();
     m[0].push(b'!');
     assert!(evaluate_data(&p, d, &m).unwrap_err().to_string().contains("member-identity"));
+}
+
+#[test]
+fn omitted_compiler_input_denies_even_when_all_gate_counts_are_zero() {
+    let (mut policy, mut descriptor, mut members) = fixture();
+    let mut units: serde_json::Value = serde_json::from_slice(&members[10]).unwrap();
+    units["units"][3]["source_paths"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|path| path.as_str() != Some("crates/molten-node-runtime/src/node/parts/daemon/p019/body.rs"));
+    members[10] = serde_json::to_vec(&units).unwrap();
+    repin_test_data(&mut policy, &mut descriptor, &members);
+    assert!(evaluate_data(&policy, descriptor, &members)
+        .unwrap_err()
+        .to_string()
+        .contains("build-coverage"));
 }

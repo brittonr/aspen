@@ -3,16 +3,17 @@
 The receipt-first cluster harness runs a checked cluster manifest through isolated local node processes and makes the durable run directory—not terminal output—the review surface.
 
 ```sh
-cargo run -- cluster harness-run \
+cargo run --bin molten -- cluster harness-run \
+  --node-binary target/debug/molten-node \
   --fixture tests/fixtures/cluster-harness/two-node.cluster \
   --state-root target/cluster-harness-state \
   --run-dir target/cluster-harness-run
 
-cargo run -- cluster harness-verify \
+cargo run --bin molten -- cluster harness-verify \
   --run-dir target/cluster-harness-run
 ```
 
-`--child-timeout-ms` is explicit and bounded. Existing state or run directories are denied unless `--force` is supplied. Each node receives an isolated state root and logical local-process transport handle. This tier exercises real child-process startup, bounded workflow, status, reverse-order shutdown, and cleanup; it is not VM, live-network, consensus, or production evidence.
+`--child-timeout-ms` is explicit and bounded. Existing state or run directories are denied unless `--force` is supplied. Each node receives an isolated state root and logical local-process transport handle. The root harness launches the separate `molten-node` binary; it must not launch `molten node` or interpret the old root executable as normal-node evidence. A successful tier would exercise real child-process startup, bounded workflow, status, reverse-order shutdown, and cleanup; startup remains denied until an independently approved exact cohort exists. This tier is not VM, live-network, consensus, or production evidence.
 
 ## Run directory
 

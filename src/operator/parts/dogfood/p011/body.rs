@@ -122,7 +122,7 @@ struct FinishInput<'a> {
     ledger_root: &'a Path,
     state_root_ref: &'a str,
     startup_ref: &'a str,
-    node_started: &'a crate::node_runtime::NodeRuntimeStart,
+    node_started: &'a molten_node_runtime::node_runtime::NodeRuntimeStart,
     installed: &'a crate::artifacts::ArtifactInstall,
     job: &'a JobRun,
     retention_gc: &'a GcRun,
@@ -141,7 +141,7 @@ struct FinishInput<'a> {
 struct ReplayShutdownInput<'a> {
     state_root_ref: &'a str,
     startup_ref: &'a str,
-    node_started: &'a crate::node_runtime::NodeRuntimeStart,
+    node_started: &'a molten_node_runtime::node_runtime::NodeRuntimeStart,
     installed: &'a crate::artifacts::ArtifactInstall,
     job: &'a JobRun,
     step_checkpoints: StepCheckpointBuffers,
@@ -166,7 +166,7 @@ struct ReplayStep {
 struct ShutdownStepInput<'a> {
     state_root_ref: &'a str,
     startup_ref: &'a str,
-    node_started: &'a crate::node_runtime::NodeRuntimeStart,
+    node_started: &'a molten_node_runtime::node_runtime::NodeRuntimeStart,
     installed: &'a crate::artifacts::ArtifactInstall,
     job: &'a JobRun,
     checkpoints: &'a mut StepCheckpointBuffers,
@@ -243,7 +243,7 @@ fn record_replay_step(
 }
 
 fn record_shutdown_step(input: ShutdownStepInput<'_>) -> Result<ShutdownStep> {
-    let shutdown = crate::node_runtime::node_shutdown_receipt_value(&crate::node_runtime::ShutdownReceiptValueInput {
+    let shutdown = molten_node_runtime::node_runtime::node_shutdown_receipt_value(&molten_node_runtime::node_runtime::ShutdownReceiptValueInput {
         decision: "pass",
         startup_receipt_ref: input.startup_ref,
         adapter_receipts: &input.node_started.adapter_receipts,
@@ -253,7 +253,7 @@ fn record_shutdown_step(input: ShutdownStepInput<'_>) -> Result<ShutdownStep> {
     })?;
     let shutdown_ref = crate::preserves_rail::canonical_hash(&shutdown)?;
     let health =
-        crate::node_runtime::node_restart_health_receipt_value(&crate::node_runtime::RestartHealthReceiptValueInput {
+        molten_node_runtime::node_runtime::node_restart_health_receipt_value(&molten_node_runtime::node_runtime::RestartHealthReceiptValueInput {
             startup_receipt: &input.node_started.startup_receipt,
             shutdown_receipt_ref: Some(&shutdown_ref),
             index_receipt_refs: &[dogfood_ref("restart-health-index")?],

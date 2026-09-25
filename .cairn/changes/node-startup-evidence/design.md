@@ -16,9 +16,11 @@ Review uses one agent and correlated adversarial passes. Budget: one implementat
 
 ## Ownership
 
-`molten-core::node_startup` owns descriptor admission, exact cohort matching, finite member plans, source-inventory constraints, and measurement comparisons. It performs no I/O. The root adapter owns a no-follow capability directory, bounded reads, JSON decoding, current executable measurement, and report serialization. The Octet module owns strict receipt reconstruction and metadata formulas; the new snapshot path supplies bytes explicitly and does not change process cwd.
+`molten-core::node_startup` owns descriptor admission, exact cohort matching, finite member plans, source-inventory constraints, and measurement comparisons. It performs no I/O. The `molten-node-runtime` adapter owns a no-follow capability directory, bounded reads, JSON decoding, current executable measurement, and report serialization. The Octet module owns strict receipt reconstruction and metadata formulas; the snapshot path supplies bytes explicitly and does not change process cwd.
 
-The descriptor contains roles, hashes, lengths, source revision, and separate build-compiler and Octet-tool identities. It contains no host paths or credentials. Member names are fixed by role, never supplied by untrusted metadata. Source inventory entries are relative names plus byte identities, not read capabilities. A digest preserves approved identity; it is not proof that Octet executed or that the binary came from the claimed source.
+A digest preserves approved identity; it is not proof that Octet executed or that the binary came from the claimed source.
+
+The unchanged root `molten` executable compiled a broad unrelated closure; the pinned strict Octet gate reported 14,529 errors on that boundary. The operator selected a separate complete `molten-node` executable with no root-crate dependency instead of excluding root source from the unchanged executable's evidence. The standalone executable still needs a real compiler source-unit inventory, including local dependency, test, build-script, and generated inputs relevant to the checked target, and a strict Octet check of every selected first-party package. `build-inputs.json` is an exact, closed claim whose union must match the bound `.rs` inventory; independent review must compare it with actual compiler inputs, link source bytes to the build, and bind the resulting executable before approval. No snapshot JSON can self-attest those facts.
 
 ## Negative cases
 

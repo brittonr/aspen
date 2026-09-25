@@ -3,9 +3,9 @@ use std::collections::BTreeMap;
 use super::*;
 use crate::error::Failure;
 use crate::error::Result;
-use crate::node_state::FileObservation;
-use crate::node_state::DirectoryView;
-use crate::node_state::RelativePath;
+use molten_node_host::node_state::FileObservation;
+use molten_node_host::node_state::DirectoryView;
+use molten_node_host::node_state::RelativePath;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScanShellControl {

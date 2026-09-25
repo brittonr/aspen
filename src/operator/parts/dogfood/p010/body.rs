@@ -199,26 +199,26 @@ fn dirty_state_report(state_root_ref: &str, diagnostic: String) -> Result<LocalN
     })
 }
 
-fn resolve_identity(state_root: &Path, policy_refs: &[String]) -> Result<crate::node_identity::Resolution> {
-    let mut config = crate::node_identity::Config::new("node:dogfood-local", state_root.join("identity"));
+fn resolve_identity(state_root: &Path, policy_refs: &[String]) -> Result<molten_node_runtime::node_identity::Resolution> {
+    let mut config = molten_node_runtime::node_identity::Config::new("node:dogfood-local", state_root.join("identity"));
     config.policy_refs = policy_refs.to_vec();
-    crate::node_identity::resolve(&config)
+    molten_node_runtime::node_identity::resolve(&config)
 }
 
 fn start_node(
-    identity: &crate::node_identity::Identity,
+    identity: &molten_node_runtime::node_identity::Identity,
     identity_receipt_ref: &str,
     policy_refs: &[String],
     capability_refs: &[String],
     resource_refs: &[String],
-) -> Result<crate::node_runtime::NodeRuntimeStart> {
-    let adapter_bindings = crate::node_runtime::REQUIRED_RUNTIME_ADAPTERS
+) -> Result<molten_node_runtime::node_runtime::NodeRuntimeStart> {
+    let adapter_bindings = molten_node_runtime::node_runtime::REQUIRED_RUNTIME_ADAPTERS
         .iter()
-        .map(|adapter| crate::node_runtime::node_adapter_binding(adapter, &dogfood_ref(&format!("adapter:{adapter}"))?))
+        .map(|adapter| molten_node_runtime::node_runtime::node_adapter_binding(adapter, &dogfood_ref(&format!("adapter:{adapter}"))?))
         .collect::<Result<Vec<_>>>()?;
     let state_root_ref = dogfood_ref("node-state-root")?;
     let effects_ref = dogfood_ref("effect-profile")?;
-    let config_value = crate::node_runtime::node_config_value(&crate::node_runtime::ConfigValueInput {
+    let config_value = molten_node_runtime::node_runtime::node_config_value(&molten_node_runtime::node_runtime::ConfigValueInput {
         identity_ref: &identity.identity_ref,
         state_root_ref: &state_root_ref,
         adapters: &adapter_bindings,
@@ -229,7 +229,7 @@ fn start_node(
     })?;
     let source_gate_value = crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests()?;
     let source_gate_ref = crate::preserves_rail::canonical_hash(&source_gate_value)?;
-    crate::node_runtime::start_node_runtime(&crate::node_runtime::NodeRuntimeStartInput {
+    molten_node_runtime::node_runtime::start_node_runtime(&molten_node_runtime::node_runtime::NodeRuntimeStartInput {
         config_value,
         identity_receipt_ref: identity_receipt_ref.to_string(),
         index_receipt_refs: vec![dogfood_ref("adapter-index")?],

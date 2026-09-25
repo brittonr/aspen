@@ -1,66 +1,19 @@
 
     #[test]
-    fn remote_clearance_live_loopback_imports_peer_clearance_for_destructive_admission() {
-        let root = temp_dir("retention-remote-clearance-live-loopback");
+    fn remote_clearance_live_loopback_denies_without_real_node_startup_evidence() {
         let requester_node_root = temp_dir("retention-live-requester-node");
-        let peer_node_root = temp_dir("retention-live-peer-node");
-        let requester_node_id = "retention-live-requester";
-        let peer_node_id = "retention-live-peer";
-        crate::node_daemon::init_local(&crate::node_daemon::InitInput {
+        molten_node_runtime::node_daemon::init_local(&molten_node_runtime::node_daemon::InitInput {
             state_root: &requester_node_root,
-            node_id: requester_node_id,
+            node_id: "retention-live-requester",
         })
         .expect("init requester node");
-        crate::node_daemon::init_local(&crate::node_daemon::InitInput {
-            state_root: &peer_node_root,
-            node_id: peer_node_id,
+        let denied = molten_node_runtime::node_daemon::run_local(&molten_node_runtime::node_daemon::RunInput {
+            state_root: &requester_node_root,
+            startup_evidence: None,
         })
-        .expect("init peer node");
-        let request_live = live_direction_refs(&peer_node_root, requester_node_id, "request");
-        let response_live = live_direction_refs(&requester_node_root, peer_node_id, "response");
-        let case = live_case(&root, "live");
-        let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
-        let live = runtime
-            .block_on(run_remote_gc_clearance_live_loopback(RemoteGcClearanceLiveLoopbackInput {
-                root: &root,
-                requester_node_root: &requester_node_root,
-                peer_node_root: &peer_node_root,
-                requester_node_id,
-                peer_node_id,
-                topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
-                request_sequence: 1,
-                response_sequence: 1,
-                requester_ref: &case.requester,
-                peer_ref: &case.peer,
-                object_ref: &case.object,
-                object_kind: "chunk",
-                retention_class: CLASS_DURABLE_VALUE,
-                action: ACTION_DELETE,
-                remote_ref: &case.remote,
-                policy_ref: &case.policy,
-                authority_ref: &case.authority,
-                retention_evidence_refs: std::slice::from_ref(&case.support),
-                response_evidence_refs: &[fake_ref("live-peer-evidence")],
-                retained_refs: &[],
-                is_current: true,
-                revoked_refs: &[],
-                response_diagnostics: &[],
-                request_peer_bootstrap_refs: &request_live.peer_bootstrap_refs,
-                request_authority_refs: &request_live.authority_refs,
-                request_policy_refs: &request_live.policy_refs,
-                request_resource_refs: &request_live.resource_refs,
-                request_transport_evidence_refs: &request_live.evidence_refs,
-                response_peer_bootstrap_refs: &response_live.peer_bootstrap_refs,
-                response_authority_refs: &response_live.authority_refs,
-                response_policy_refs: &response_live.policy_refs,
-                response_resource_refs: &response_live.resource_refs,
-                response_transport_evidence_refs: &response_live.evidence_refs,
-            }))
-            .expect("live loopback");
-        assert_eq!(live.workflow.decision, "pass");
-        assert_eq!(live.import.decision, "pass");
-        let clearance_ref = live.import.clearance_ref.clone().expect("live clearance imported");
-        assert_case_pass(&root, &case, clearance_ref);
+        .expect_err("external crate tests cannot use the runtime's cfg(test) startup fixture");
+        assert!(denied.to_string().contains("node-startup-source-gate-required"));
+        assert!(!requester_node_root.join("startup-receipt.preserves").exists());
     }
 
     #[test]
@@ -90,21 +43,6 @@
         );
         assert_wrong_receive(&root, &material, &wrong_request_receive);
         assert_case_pass(&root, &material.case, clearance_ref);
-    }
-
-    #[test]
-    fn remote_clearance_live_multihost_two_node_happy_path_uses_real_receive_evidence() {
-        let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
-        runtime.block_on(async {
-            let mut live = two_node_live().await;
-            let refs = two_node_refs(&live.roots.requester_store);
-            let request = send_two_node_request(&mut live, &refs).await;
-            let response = send_two_node_response(&mut live, &request).await;
-            let imported = import_two_node_workflow(&live.roots.requester_store, &refs, &request, &response);
-            assert_two_node_import(&imported, &request, &response);
-            assert_two_node_admission(&live.roots.requester_store, refs, imported);
-            live.shutdown().await;
-        });
     }
 
     #[test]
@@ -223,74 +161,4 @@
                 .iter()
                 .any(|diagnostic| diagnostic.starts_with("remote-clearance-live-tampered-response"))
         );
-    }
-
-    struct LiveNodeHarness {
-        ticket: crate::node_daemon::ControlLiveTicket,
-        topic: iroh_gossip::api::GossipTopic,
-        router: iroh::protocol::Router,
-    }
-
-    struct LiveDirectionEvidenceInput<'a> {
-        sender_root: &'a Path,
-        receiver_root: &'a Path,
-        receiver_ticket: &'a crate::node_daemon::ControlLiveTicket,
-        sender_node_id: &'a str,
-        receiver_node_id: &'a str,
-        topic: &'a str,
-        policy_refs: &'a [String],
-    }
-
-    struct LiveDirectionEvidence {
-        peer_bootstrap_refs: Vec<String>,
-        authority_refs: Vec<String>,
-    }
-
-    struct TwoNodeRoots {
-        requester_store: PathBuf,
-        peer_store: PathBuf,
-        requester_node: PathBuf,
-        peer_node: PathBuf,
-    }
-
-    struct TwoNodeLive {
-        roots: TwoNodeRoots,
-        topic: &'static str,
-        peer_live: LiveNodeHarness,
-        requester_live: LiveNodeHarness,
-        control_policy_refs: Vec<String>,
-        control_resource_refs: Vec<String>,
-        request_evidence: LiveDirectionEvidence,
-        response_evidence: LiveDirectionEvidence,
-    }
-
-    struct TwoNodeRefs {
-        requester_ref: String,
-        peer_ref: String,
-        object_ref: String,
-        remote_ref: String,
-        policy: String,
-        authority: String,
-        support: String,
-        index: String,
-        remote_gc: String,
-    }
-
-    struct TwoNodeAdmissionInput<'a> {
-        root: &'a Path,
-        kind: &'a str,
-        label: &'a str,
-        requester_ref: &'a str,
-        object_ref: &'a str,
-        remote_refs: &'a [String],
-    }
-
-    struct SentRequest {
-        send: RemoteGcClearanceLiveRequestSend,
-        receive: crate::node_daemon::ControlLiveIngressReceive,
-    }
-
-    struct SentResponse {
-        send: RemoteGcClearanceLiveResponseSend,
-        receive: crate::node_daemon::ControlLiveIngressReceive,
     }

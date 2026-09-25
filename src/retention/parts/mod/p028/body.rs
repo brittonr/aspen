@@ -225,7 +225,7 @@ fn require_check(checks: &[(String, String)], name: &str, label: &str) -> Result
     }
 }
 
-fn live_send_publish_ref(send: &crate::node_daemon::ControlLiveSendReceipt) -> String {
+fn live_send_publish_ref(send: &molten_node_runtime::node_daemon::ControlLiveSendReceipt) -> String {
     send.transport_receipt_ref.clone().unwrap_or_else(|| send.receipt_ref.clone())
 }
 
@@ -266,7 +266,7 @@ fn parse_node_live_transport_receipt(value: &IoValue) -> Result<NodeLiveTranspor
 
 fn node_live_control_diagnostics(
     phase: &str,
-    control: &crate::node_runtime::ControlRequest,
+    control: &molten_node_runtime::node_runtime::ControlRequest,
     expected_target_ref: &str,
     expected_payload_ref: Option<&str>,
 ) -> Vec<String> {
@@ -283,7 +283,7 @@ fn node_live_control_diagnostics(
     diagnostics
 }
 
-fn node_live_send_diagnostics(phase: &str, send: &crate::node_daemon::ControlLiveSendReceipt) -> Vec<String> {
+fn node_live_send_diagnostics(phase: &str, send: &molten_node_runtime::node_daemon::ControlLiveSendReceipt) -> Vec<String> {
     let mut diagnostics = Vec::with_capacity(send.diagnostics.len().saturating_add(2));
     for diagnostic in &send.diagnostics {
         diagnostics.push(format!("remote-clearance-live-{phase}:{diagnostic}"));
@@ -325,7 +325,7 @@ fn node_live_transport_diagnostics_from(phase: &str, receipt: &NodeLiveTransport
 
 fn node_live_receive_binding_diagnostics(
     phase: &str,
-    send: &crate::node_daemon::ControlLiveSendReceipt,
+    send: &molten_node_runtime::node_daemon::ControlLiveSendReceipt,
     receive: &NodeLiveTransportReceipt,
     expected_ingress_ref: &str,
 ) -> Vec<String> {

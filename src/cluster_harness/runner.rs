@@ -139,7 +139,6 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
     let mut diagnostics = Vec::new();
     let init_passed = execute_phase_for_nodes(input, &plan, "init", &mut child_executions, &mut artifacts, |node| {
         vec![
-            OsString::from("node"),
             OsString::from("init"),
             OsString::from("--state-root"),
             node.state_root.as_os_str().to_os_string(),
@@ -150,7 +149,6 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
     let start_passed = if init_passed {
         execute_phase_for_nodes(input, &plan, "start", &mut child_executions, &mut artifacts, |node| {
             vec![
-                OsString::from("node"),
                 OsString::from("run"),
                 OsString::from("--state-root"),
                 node.state_root.as_os_str().to_os_string(),
@@ -163,7 +161,6 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
     let workflow_passed = if start_passed {
         execute_phase_for_nodes(input, &plan, "workflow", &mut child_executions, &mut artifacts, |node| {
             vec![
-                OsString::from("node"),
                 OsString::from("run-loop"),
                 OsString::from("--state-root"),
                 node.state_root.as_os_str().to_os_string(),
@@ -182,7 +179,6 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
     let status_passed = if workflow_passed {
         execute_phase_for_nodes(input, &plan, "status", &mut child_executions, &mut artifacts, |node| {
             vec![
-                OsString::from("node"),
                 OsString::from("status"),
                 OsString::from("--state-root"),
                 node.state_root.as_os_str().to_os_string(),
@@ -196,7 +192,6 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
     let stop_passed = if start_passed {
         execute_phase_for_nodes_reverse(input, &plan, "stop", &mut child_executions, &mut artifacts, |node| {
             vec![
-                OsString::from("node"),
                 OsString::from("stop"),
                 OsString::from("--state-root"),
                 node.state_root.as_os_str().to_os_string(),

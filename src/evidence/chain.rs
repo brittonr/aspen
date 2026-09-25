@@ -6,12 +6,21 @@
 //! authority. A link's identity is only the Blake3 hash of its canonical
 //! Preserves bytes; linking names payload refs without rewriting the payloads.
 
-include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p000/body.rs"));
-include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p001/body.rs"));
-include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p002/body.rs"));
-include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p003/body.rs"));
-include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p004/body.rs"));
-include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p005/body.rs"));
-include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p006/body.rs"));
-include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p007/body.rs"));
-include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p008/body.rs"));
+include!("parts/chain/p000/body.rs");
+include!("parts/chain/p001/body.rs");
+include!("parts/chain/p002/body.rs");
+include!("parts/chain/p003/body.rs");
+include!("parts/chain/p004/body.rs");
+include!("parts/chain/p005/body.rs");
+include!("parts/chain/p006/body.rs");
+include!("parts/chain/p007/body.rs");
+include!("parts/chain/p008/body.rs");
+
+#[cfg(test)]
+mod tests {
+    include!("parts/chain/tests/m000/p000/body.rs");
+    include!("parts/chain/tests/m000/p001/body.rs");
+    include!("parts/chain/tests/m000/p002/body.rs");
+    include!("parts/chain/tests/m000/p003/body.rs");
+    include!("parts/chain/tests/m000/p004/body.rs");
+}

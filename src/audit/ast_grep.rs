@@ -332,12 +332,16 @@ pub fn requires_fresh_scan(receipt: &AstGrepAuditReceipt, current_rule_bundle_ha
 
 fn required_surfaces() -> Vec<AuditSurface> {
     vec![
-        surface("core-runtime", &["src/runtime/**/*.rs", "src/node/runtime.rs"]),
-        surface("node-control", &["src/node/**/*.rs", "src/cli/ops/node/**/*.rs"]),
+        surface("core-runtime", &["src/runtime/**/*.rs", "crates/molten-node-runtime/src/node/runtime.rs"]),
+        surface("node-control", &[
+            "crates/molten-node-runtime/src/node/**/*.rs",
+            "crates/molten-node-runtime/src/cli/node.rs",
+            "crates/molten-node-runtime/src/cli/node/**/*.rs",
+        ]),
         surface("effect-handlers", &["src/effects/**/*.rs", "src/resources/**/*.rs"]),
         surface("plugin-host", &["src/plugin/**/*.rs", "docs/plugin-extension-contracts/**/*.ncl"]),
         surface("sealed-repro", &["src/harness/**/*.rs", "src/cli/runtime/repro/**/*.rs"]),
-        surface("iroh-transport", &["src/iroh/**/*.rs", "src/node/iroh.rs"]),
+        surface("iroh-transport", &["src/iroh/**/*.rs", "crates/molten-node-runtime/src/node/iroh.rs"]),
         surface("policy-evidence-gates", &["src/evidence/**/*.rs", "cairn-policy/**/*.ncl"]),
         surface("operator-workflow", &["src/operator/**/*.rs", "docs/production-*.ncl"]),
         surface("local-store-adapters", &[

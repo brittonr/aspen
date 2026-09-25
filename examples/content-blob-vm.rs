@@ -2,7 +2,7 @@
 //! All networking goes through the production Molten content adapter.
 use clap::{Parser, Subcommand};
 use molten::content_store_adapter::*;
-use molten::node_state::{DirectoryView, NamespaceKind};
+use molten_node_host::node_state::{DirectoryView, NamespaceKind};
 use molten::{chunk_store as chunks, fabric_crypto_identity as crypto, preserves_rail as rail};
 use serde::Deserialize;
 use serde_json::json;

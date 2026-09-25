@@ -103,41 +103,6 @@ fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
     })
 }
 
-struct ApplyRefMatchInput<'a> {
-    root: &'a Path,
-    apply_refs: &'a [String],
-    subsystem: &'a str,
-    action: &'a str,
-    object_ref: &'a str,
-    object_kind: &'a str,
-    retention_class: &'a str,
-}
-
-fn matching_apply_ref<'a>(input: ApplyRefMatchInput<'a>) -> Option<&'a str> {
-    let mut fallback_ref = None;
-    for apply_ref in input.apply_refs {
-        let Ok(apply) = crate::retention::read_gc_apply(input.root, apply_ref) else {
-            if fallback_ref.is_none() {
-                fallback_ref = Some(apply_ref.as_str());
-            }
-            continue;
-        };
-        if apply.decision == "pass"
-            && apply.subsystem == input.subsystem
-            && apply.action == input.action
-            && apply.object_ref == input.object_ref
-            && apply.object_kind == input.object_kind
-            && apply.retention_class == input.retention_class
-        {
-            return Some(apply_ref.as_str());
-        }
-        if fallback_ref.is_none() {
-            fallback_ref = Some(apply_ref.as_str());
-        }
-    }
-    fallback_ref
-}
-
 fn validate_refs(refs: &[String], field: &str) -> Result<()> {
     for value_ref in refs {
         validate_ref(value_ref, field)?;
@@ -155,11 +120,4 @@ fn validate_non_empty(value: &str, field: &str) -> Result<()> {
 
 fn index_error(error: impl std::fmt::Display) -> Failure {
     Failure::invalid_harness(format!("eval cache redb index error: {error}"))
-}
-
-#[cfg(test)]
-mod tests {
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/eval/parts/cache/tests/m000/p000/body.rs"));
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/eval/parts/cache/tests/m000/p001/body.rs"));
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/eval/parts/cache/tests/m000/p002/body.rs"));
 }

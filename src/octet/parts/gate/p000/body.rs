@@ -8,27 +8,12 @@ type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 mod fs {
-    #[cfg(test)]
-    pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-        std::fs::create_dir_all(path)
-    }
-
     pub(super) fn read(path: impl AsRef<std::path::Path>) -> std::io::Result<Vec<u8>> {
         std::fs::read(path)
     }
 
     pub(super) fn read_to_string(path: impl AsRef<std::path::Path>) -> std::io::Result<String> {
         std::fs::read_to_string(path)
-    }
-
-    #[cfg(test)]
-    pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-        std::fs::remove_dir_all(path)
-    }
-
-    #[cfg(test)]
-    pub(super) fn write(path: impl AsRef<std::path::Path>, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
-        std::fs::write(path, contents)
     }
 }
 
@@ -96,14 +81,26 @@ const SOURCE_SCOPE_OBJECT_CORPUS_CHECK: &str = "object-corpus-source-scope";
 const _: () = assert!(MAX_OCTET_IMPORTED_REFS <= MAX_OCTET_ARTIFACT_VALUES);
 const _: () = assert!(MAX_OCTET_SUMMARY_LINTS > 0);
 const _: () = assert!(MAX_OCTET_COMMAND_TOKENS > 0);
-const REQUIRED_OBJECT_CORPUS_SOURCE_PATHS: &[&str] = &["src/job/dag.rs", "src/main.rs", "src/node/runtime.rs"];
+const REQUIRED_OBJECT_CORPUS_SOURCE_PATHS: &[&str] = &["src/job/dag.rs", "src/main.rs", "src/upgrades/mod.rs"];
 const SOURCE_GATE_SOURCE_SCOPE_PATHS: &[&str] = &[
     "src/job/dag.rs",
     "src/main.rs",
-    "src/node/daemon.rs",
-    "src/node/runtime.rs",
     "src/octet/gate.rs",
     "src/upgrades/mod.rs",
+];
+const NODE_SOURCE_GATE_SCOPE_PATHS: &[&str] = &[
+    "crates/molten-node-runtime/src/bin/molten-node.rs",
+    "crates/molten-node-runtime/src/node/daemon.rs",
+    "crates/molten-node-runtime/src/node/runtime.rs",
+    "crates/molten-node-runtime/src/node/content.rs",
+    "crates/molten-node-runtime/src/node/startup_evidence.rs",
+    "crates/molten-node-runtime/src/node/parts/daemon/p018/body.rs",
+    "crates/molten-node-runtime/src/node/parts/daemon/p019/body.rs",
+    "crates/molten-node-runtime/src/source_gate.rs",
+    "src/octet/startup_snapshot.rs",
+    "crates/molten-core/src/node_startup.rs",
+    "crates/molten-core/src/content_store_adapter/node_service.rs",
+    "crates/molten-node-host/src/node/state.rs",
 ];
 const DEFAULT_GATE_COMMAND: &str = "cargo octet check --artifact-dir target/octet";
 const SOURCE_GATE_CONSUMERS: &[&str] = &[
@@ -254,6 +251,7 @@ struct ReceiptCheckInput<'a> {
     parsed: Option<&'a ParsedOctetGateReceipt>,
     expected: Option<&'a ExpectedMetadata>,
     source_scope: &'a [String],
+    consumer: &'a str,
 }
 
 struct SourceSetup {

@@ -197,7 +197,7 @@ struct StartStepInput<'a> {
 }
 
 struct StartSteps {
-    node_started: crate::node_runtime::NodeRuntimeStart,
+    node_started: molten_node_runtime::node_runtime::NodeRuntimeStart,
     startup_ref: String,
 }
 
@@ -216,7 +216,7 @@ fn record_start_steps(input: StartStepInput<'_>) -> Result<StartSteps> {
         .clone()
         .ok_or_else(|| Failure::invalid_harness("local dogfood identity resolution denied"))?;
     let identity_startup =
-        crate::node_identity::startup_evidence_value(&identity.identity_ref, &identity_resolution.receipt_ref)?;
+        molten_node_runtime::node_identity::startup_evidence_value(&identity.identity_ref, &identity_resolution.receipt_ref)?;
     let identity_startup_ref = crate::preserves_rail::canonical_hash(&identity_startup)?;
     push_step_checkpoint(checkpoints, StepCheckpointInput {
         name: "clean-state",

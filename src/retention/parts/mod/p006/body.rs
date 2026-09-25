@@ -30,7 +30,7 @@ pub async fn send_remote_gc_clearance_live_request(
         resource_refs: input.resource_refs,
         evidence_refs: &control_evidence,
     })?;
-    let send = crate::node_daemon::send_control_live_ingress(&crate::node_daemon::ControlLiveSendInput {
+    let send = molten_node_runtime::node_daemon::send_control_live_ingress(&molten_node_runtime::node_daemon::ControlLiveSendInput {
         state_root: input.requester_node_root,
         request_value: &control_value,
         receiver_ticket_value: input.peer_ticket_value,
@@ -88,7 +88,7 @@ pub async fn send_remote_gc_clearance_live_response(
         resource_refs: input.resource_refs,
         evidence_refs: &control_evidence,
     })?;
-    let send = crate::node_daemon::send_control_live_ingress(&crate::node_daemon::ControlLiveSendInput {
+    let send = molten_node_runtime::node_daemon::send_control_live_ingress(&molten_node_runtime::node_daemon::ControlLiveSendInput {
         state_root: input.peer_node_root,
         request_value: &control_value,
         receiver_ticket_value: input.requester_ticket_value,
@@ -132,12 +132,12 @@ pub fn import_remote_gc_clearance_live_workflow(
         expected_peer_ref: input.expected_peer_ref,
         expected_remote_ref: input.expected_remote_ref,
     })?;
-    let request_control = crate::node_runtime::parse_control_request(input.request_control_value)?;
-    let response_control = crate::node_runtime::parse_control_request(input.response_control_value)?;
+    let request_control = molten_node_runtime::node_runtime::parse_control_request(input.request_control_value)?;
+    let response_control = molten_node_runtime::node_runtime::parse_control_request(input.response_control_value)?;
     let request_control_ref = crate::preserves_rail::canonical_hash(input.request_control_value)?;
     let response_control_ref = crate::preserves_rail::canonical_hash(input.response_control_value)?;
-    let request_send = crate::node_daemon::parse_control_live_send_receipt(input.request_send_receipt_value)?;
-    let response_send = crate::node_daemon::parse_control_live_send_receipt(input.response_send_receipt_value)?;
+    let request_send = molten_node_runtime::node_daemon::parse_control_live_send_receipt(input.request_send_receipt_value)?;
+    let response_send = molten_node_runtime::node_daemon::parse_control_live_send_receipt(input.response_send_receipt_value)?;
     let request_receive = parse_node_live_transport_receipt(input.request_receive_receipt_value)?;
     let response_receive = parse_node_live_transport_receipt(input.response_receive_receipt_value)?;
     let diagnostics = live_import_diagnostics(LiveImportDiagnosticsInput {
@@ -182,10 +182,10 @@ pub fn import_remote_gc_clearance_live_workflow(
 struct LiveImportDiagnosticsInput<'a> {
     request: &'a RemoteGcClearanceRequest,
     response_ref: &'a str,
-    request_control: &'a crate::node_runtime::ControlRequest,
-    response_control: &'a crate::node_runtime::ControlRequest,
-    request_send: &'a crate::node_daemon::ControlLiveSendReceipt,
-    response_send: &'a crate::node_daemon::ControlLiveSendReceipt,
+    request_control: &'a molten_node_runtime::node_runtime::ControlRequest,
+    response_control: &'a molten_node_runtime::node_runtime::ControlRequest,
+    request_send: &'a molten_node_runtime::node_daemon::ControlLiveSendReceipt,
+    response_send: &'a molten_node_runtime::node_daemon::ControlLiveSendReceipt,
     request_receive: &'a NodeLiveTransportReceipt,
     response_receive: &'a NodeLiveTransportReceipt,
     request_ingress_ref: &'a str,

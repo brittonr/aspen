@@ -42,11 +42,11 @@ fn exact_plan_and_measured_members() {
     let (policy, descriptor) = fixture();
     policy.check_descriptor_bytes(b"fixture").unwrap();
     let plan = EvidencePlan::admit(&policy, descriptor, &policy.cohort.executable_blake3).unwrap();
-    assert_eq!(plan.members().len(), 10);
-    for index in 0..10 {
+    assert_eq!(plan.members().len(), ROLES.len());
+    for index in 0..ROLES.len() {
         plan.verify_member(index, b"fixture").unwrap();
     }
-    assert_eq!(plan.verify_member(10, b"fixture"), Err(Rejection::MemberInventory));
+    assert_eq!(plan.verify_member(ROLES.len(), b"fixture"), Err(Rejection::MemberInventory));
     assert_eq!(plan.verify_member(0, b"changed"), Err(Rejection::MemberIdentity));
     assert_eq!(plan.verify_member(0, b"fixture!"), Err(Rejection::MemberIdentity));
 }
@@ -124,19 +124,24 @@ fn source_fixture(plan: &EvidencePlan) -> Vec<SourceFile> {
         })
         .collect();
     for name in [
-        "src/job/dag.rs",
-        "src/main.rs",
-        "src/node/daemon.rs",
-        "src/node/runtime.rs",
-        "src/octet/gate.rs",
-        "src/upgrades/mod.rs",
-        "src/node/content.rs",
-        "src/node/parts/daemon/p018/body.rs",
-        "src/node/parts/daemon/p019/body.rs",
+        "crates/molten-core/Cargo.toml",
+        "crates/molten-core/src/lib.rs",
+        "crates/molten-node-host/Cargo.toml",
+        "crates/molten-node-host/src/lib.rs",
+        "crates/molten-node-runtime/Cargo.toml",
+        "crates/molten-node-runtime/src/lib.rs",
+        "crates/molten-node-runtime/src/bin/molten-node.rs",
+        "crates/molten-node-runtime/src/node/daemon.rs",
+        "crates/molten-node-runtime/src/node/runtime.rs",
+        "crates/molten-node-runtime/src/node/content.rs",
+        "crates/molten-node-runtime/src/node/startup_evidence.rs",
+        "crates/molten-node-runtime/src/node/parts/daemon/p018/body.rs",
+        "crates/molten-node-runtime/src/node/parts/daemon/p019/body.rs",
+        "crates/molten-node-runtime/src/source_gate.rs",
         "crates/molten-core/src/content_store_adapter/node_service.rs",
         "crates/molten-core/src/node_startup.rs",
         "src/octet/startup_snapshot.rs",
-        "src/node/startup_evidence.rs",
+        "crates/molten-node-host/src/node/state.rs",
     ] {
         files.push(SourceFile {
             name: name.into(),
@@ -168,4 +173,86 @@ fn source_context_and_raw_inventory_are_bound() {
         changed[0].name = name.into();
         assert_eq!(validate_source_inventory(&plan, &changed), Err(Rejection::SourceInventory));
     }
+}
+
+fn build_input_fixture(files: &[SourceFile]) -> BuildInputs {
+    let paths_for = |prefix: &str| {
+        files
+            .iter()
+            .filter(|file| file.name.ends_with(".rs") && file.name.starts_with(prefix))
+            .map(|file| file.name.clone())
+            .collect()
+    };
+    let mut runtime_paths: Vec<String> = files
+        .iter()
+        .filter(|file| {
+            file.name.ends_with(".rs")
+                && ((file.name.starts_with("crates/molten-node-runtime/src/")
+                    && !file.name.starts_with("crates/molten-node-runtime/src/bin/"))
+                    || file.name.starts_with("src/octet/"))
+        })
+        .map(|file| file.name.clone())
+        .collect();
+    runtime_paths.sort();
+    BuildInputs {
+        schema: BUILD_INPUTS_SCHEMA.into(),
+        executable_target: "molten-node".into(),
+        units: vec![
+            BuildUnit {
+                package: "molten-core".into(),
+                target: "lib".into(),
+                source_paths: paths_for("crates/molten-core/"),
+            },
+            BuildUnit {
+                package: "molten-node-host".into(),
+                target: "lib".into(),
+                source_paths: paths_for("crates/molten-node-host/"),
+            },
+            BuildUnit {
+                package: "molten-node-runtime".into(),
+                target: "bin/molten-node".into(),
+                source_paths: vec!["crates/molten-node-runtime/src/bin/molten-node.rs".into()],
+            },
+            BuildUnit {
+                package: "molten-node-runtime".into(),
+                target: "lib".into(),
+                source_paths: runtime_paths,
+            },
+        ],
+    }
+}
+
+#[test]
+fn compiler_input_union_binds_every_inventoried_rust_source() {
+    let (policy, descriptor) = fixture();
+    let plan = EvidencePlan::admit(&policy, descriptor, &policy.cohort.executable_blake3).unwrap();
+    let files = source_fixture(&plan);
+    let inputs = build_input_fixture(&files);
+    validate_build_inputs(&files, &inputs).unwrap();
+
+    let mut missing = inputs.clone();
+    missing.units[3].source_paths.retain(|path| !path.ends_with("/p019/body.rs"));
+    assert_eq!(validate_build_inputs(&files, &missing), Err(Rejection::SourceContext));
+
+    let mut uninventoryed = inputs.clone();
+    uninventoryed.units[3]
+        .source_paths
+        .push("crates/molten-node-runtime/src/node/parts/daemon/p020/body.rs".into());
+    assert_eq!(validate_build_inputs(&files, &uninventoryed), Err(Rejection::SourceContext));
+
+    let mut mislabeled_binary = inputs.clone();
+    let bin_source = mislabeled_binary.units[2].source_paths.pop().unwrap();
+    let library_source = mislabeled_binary.units[3].source_paths.pop().unwrap();
+    mislabeled_binary.units[2].source_paths.push(library_source);
+    mislabeled_binary.units[3].source_paths.push(bin_source);
+    mislabeled_binary.units[3].source_paths.sort();
+    assert_eq!(validate_build_inputs(&files, &mislabeled_binary), Err(Rejection::SourceContext));
+
+    let mut mislabeled_library = inputs.clone();
+    mislabeled_library.units[0].target = "bin/core".into();
+    assert_eq!(validate_build_inputs(&files, &mislabeled_library), Err(Rejection::SourceContext));
+
+    let mut root_binary = inputs;
+    root_binary.units[2].package = "molten".into();
+    assert_eq!(validate_build_inputs(&files, &root_binary), Err(Rejection::SourceContext));
 }

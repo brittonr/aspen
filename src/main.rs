@@ -80,11 +80,6 @@ mod machine_port;
 mod cli_nixos_vm {
     pub(crate) use super::machine_port::*;
 }
-#[path = "cli/ops/node.rs"]
-mod kernel_shell;
-mod cli_node {
-    pub(crate) use super::kernel_shell::*;
-}
 #[path = "cli/ops/octet.rs"]
 mod quality_port;
 mod cli_octet {

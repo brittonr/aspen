@@ -25,7 +25,7 @@ use super::*;
 use crate::chunk_store::CapabilityChunkRoot;
 use crate::error::Failure;
 use crate::error::Result;
-use crate::node_state::DirectoryView;
+use molten_node_host::node_state::DirectoryView;
 
 #[derive(Debug, Clone)]
 struct LiveChunkLocator {
@@ -55,7 +55,7 @@ pub fn inspect_live_iroh_identity(
     backend_ref: &str,
 ) -> Result<LiveIrohIdentitySummary> {
     let path = crate::fabric_crypto_identity::transport_key_path()?;
-    let bytes = namespace.read(&path, crate::node_state::MAX_NODE_SECRET_BYTES)?;
+    let bytes = namespace.read(&path, molten_node_host::node_state::MAX_NODE_SECRET_BYTES)?;
     let material = crate::fabric_crypto_identity::transport_endpoint_material(&bytes, backend_ref)?;
     // Reuse the owner's permission/currentness/identity check before readback.
     let _key = crate::fabric_crypto_identity::load_transport_secret_for_identity(

@@ -17,6 +17,7 @@ pub fn validate_octet_source_gate(input: &OctetSourceGateValidationInput) -> Res
             parsed: parsed.as_ref(),
             expected: setup.expected.as_ref(),
             source_scope: &setup.source_scope,
+            consumer: &input.consumer,
         },
         &mut checks,
         &mut diagnostics,
@@ -78,7 +79,7 @@ fn prepare_source_validation(
     if !is_subject_ref_valid {
         push_diagnostic(diagnostics, format!("invalid octet source-gate subject ref {}", input.subject_ref));
     }
-    let is_source_scope_supported = source_scope_in_configured_inventory(&source_scope);
+    let is_source_scope_supported = source_scope_in_configured_inventory(&input.consumer, &source_scope);
     push_check(checks, "source-gate-source-scope-supported", is_source_scope_supported);
     if !is_source_scope_supported {
         push_diagnostic(
@@ -131,7 +132,7 @@ fn validate_source_receipt(
     };
     let refs = receipt_refs(parsed);
     check_receipt_basics(parsed, checks, diagnostics);
-    check_receipt_freshness(parsed, input.expected, input.source_scope, checks, diagnostics);
+    check_receipt_freshness(parsed, input.expected, input.consumer, input.source_scope, checks, diagnostics);
     refs
 }
 
@@ -210,6 +211,7 @@ fn check_receipt_basics(
 fn check_receipt_freshness(
     parsed: &ParsedOctetGateReceipt,
     expected: Option<&ExpectedMetadata>,
+    consumer: &str,
     source_scope: &[String],
     checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
@@ -230,7 +232,7 @@ fn check_receipt_freshness(
     }
     let has_scope_fingerprint_coverage = parsed.fingerprint_ref.as_deref().is_some_and(is_content_ref)
         && parsed.object_corpus_ref.as_deref().is_some_and(is_content_ref)
-        && source_scope_in_configured_inventory(source_scope)
+        && source_scope_in_configured_inventory(consumer, source_scope)
         && parsed_check_pass(parsed, "fingerprint-evidence-bound")
         && parsed_check_pass(parsed, "object-corpus-critical-paths")
         && parsed_check_pass(parsed, SOURCE_SCOPE_OBJECT_CORPUS_CHECK)

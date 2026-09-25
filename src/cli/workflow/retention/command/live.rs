@@ -12,11 +12,11 @@ pub(crate) struct RequestSend {
     pub(crate) requester_node_id: String,
     #[arg(long)]
     pub(crate) peer_node_id: String,
-    #[arg(long, default_value = molten::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]
+    #[arg(long, default_value = molten_node_runtime::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]
     pub(crate) topic: String,
     #[arg(long, default_value_t = 1)]
     pub(crate) sequence: u64,
-    #[arg(long, default_value_t = molten::node_daemon::DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS)]
+    #[arg(long, default_value_t = molten_node_runtime::node_daemon::DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS)]
     pub(crate) max_attempts: u64,
     #[arg(long, default_value_t = 10_000)]
     pub(crate) join_timeout_ms: u64,
@@ -73,11 +73,11 @@ pub(crate) struct ResponseSend {
     pub(crate) peer_node_id: String,
     #[arg(long)]
     pub(crate) requester_node_id: String,
-    #[arg(long, default_value = molten::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]
+    #[arg(long, default_value = molten_node_runtime::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]
     pub(crate) topic: String,
     #[arg(long, default_value_t = 1)]
     pub(crate) sequence: u64,
-    #[arg(long, default_value_t = molten::node_daemon::DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS)]
+    #[arg(long, default_value_t = molten_node_runtime::node_daemon::DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS)]
     pub(crate) max_attempts: u64,
     #[arg(long, default_value_t = 10_000)]
     pub(crate) join_timeout_ms: u64,
@@ -157,7 +157,7 @@ pub(crate) struct Loopback {
     pub(crate) requester_node_id: String,
     #[arg(long)]
     pub(crate) peer_node_id: String,
-    #[arg(long, default_value = molten::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]
+    #[arg(long, default_value = molten_node_runtime::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]
     pub(crate) topic: String,
     #[arg(long, default_value_t = 1)]
     pub(crate) request_sequence: u64,

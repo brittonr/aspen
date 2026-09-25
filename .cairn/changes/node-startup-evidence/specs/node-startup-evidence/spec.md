@@ -14,13 +14,19 @@ THEN verification MUST deny before any evidence-member read or node-state effect
 
 ### Requirement: Explicit strict evaluation [r[molten.startup_evidence.strict]]
 
-The verifier MUST reconstruct strict Octet gate results from complete, bounded, measured input bytes. It MUST derive metadata from the selected source context, not ambient cwd. Synthetic receipts, warning budgets, incomplete membership, and caller-asserted clean counts MUST NOT replace the full checks.
+The verifier MUST reconstruct strict Octet gate results from complete, bounded, measured input bytes for the separate `molten-node` executable and its selected first-party package set. It MUST derive metadata from the selected source context, not ambient cwd. The build-input declaration MUST bind the complete Rust source inventory claimed for the binary, including declared compiler dependencies, and MUST reject an omitted source even when Octet counts are zero. Synthetic receipts, warning budgets, incomplete membership, and caller-asserted clean counts MUST NOT replace the full checks. A build-input declaration MUST NOT be mistaken for independent proof that the compiler ran, the declared closure is exhaustive, or the resulting executable matches it.
 
 #### Scenario: Stale source metadata
 
 GIVEN status metadata for a different Cargo or dylint snapshot
 WHEN portable verification evaluates the bundle
 THEN it MUST reject the stale context without changing the workspace or node state.
+
+#### Scenario: Missing compiled source in the build declaration
+
+GIVEN an otherwise clean strict snapshot whose declared compiler input union omits one inventoried Rust source
+WHEN portable verification evaluates the bundle
+THEN it MUST deny before any normal-node startup or listener effect.
 
 ### Requirement: Verification is not startup authority [r[molten.startup_evidence.scope]]
 

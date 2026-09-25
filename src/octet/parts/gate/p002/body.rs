@@ -14,13 +14,30 @@ pub fn evaluate_octet_gate(input: &OctetGateInput) -> Result<OctetGateEvaluation
 fn evaluate_octet_gate_files(
     input: &OctetGateInput,
     files: InputFiles,
+    checks: Vec<Check>,
+    diagnostics: Vec<String>,
+    expected: std::result::Result<ExpectedMetadata, String>,
+) -> Result<OctetGateEvaluation> {
+    evaluate_octet_gate_files_with_scope(input, files, checks, diagnostics, expected, SOURCE_GATE_SOURCE_SCOPE_PATHS)
+}
+
+fn evaluate_octet_gate_files_with_scope(
+    input: &OctetGateInput,
+    files: InputFiles,
     mut checks: Vec<Check>,
     mut diagnostics: Vec<String>,
     expected: std::result::Result<ExpectedMetadata, String>,
+    required_source_paths: &[&str],
 ) -> Result<OctetGateEvaluation> {
     let status = parse_status(files.status_file.as_ref(), &mut checks, &mut diagnostics);
     let lint_counts = parse_summary_lints(files.summary.as_ref(), &mut checks, &mut diagnostics);
-    let object_corpus_receipt = validate_object_corpus(files.object_corpus.as_ref(), &mut checks, &mut diagnostics);
+    let object_corpus_receipt = validate_object_corpus_with_scope(
+        files.object_corpus.as_ref(),
+        required_source_paths,
+        required_source_paths,
+        &mut checks,
+        &mut diagnostics,
+    );
     let has_valid_object_corpus = object_corpus_receipt.is_some();
     let has_valid_command_shape = validate_command(files.command.as_ref(), &mut checks, &mut diagnostics);
     let has_current_metadata_binding = match status.as_ref() {

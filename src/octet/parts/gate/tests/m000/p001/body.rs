@@ -263,14 +263,14 @@
 
     fn object_corpus_json() -> String {
         format!(
-            r#"{{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":6,"source_paths":["src/job/dag.rs","src/main.rs","src/node/daemon.rs","src/node/runtime.rs","src/octet/gate.rs","src/upgrades/mod.rs"],"object_set_hash":"{}","pure_cache_blocked_count":6}}"#,
+            r#"{{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":4,"source_paths":["src/job/dag.rs","src/main.rs","src/octet/gate.rs","src/upgrades/mod.rs"],"object_set_hash":"{}","pure_cache_blocked_count":4}}"#,
             test_b3_ref("object-set")
         )
     }
 
     fn object_corpus_with_replay_inventory_json() -> String {
         format!(
-            r#"{{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":1,"source_paths":["src/main.rs"],"object_set_hash":"{}","pure_cache_blocked_count":1,"replay":{{"command":"cargo octet object corpus receipt --output RECEIPT.json src/job/dag.rs src/main.rs src/node/daemon.rs src/node/runtime.rs src/octet/gate.rs src/upgrades/mod.rs"}}}}"#,
+            r#"{{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":1,"source_paths":["src/main.rs"],"object_set_hash":"{}","pure_cache_blocked_count":1,"replay":{{"command":"cargo octet object corpus receipt --output RECEIPT.json src/job/dag.rs src/main.rs src/octet/gate.rs src/upgrades/mod.rs"}}}}"#,
             test_b3_ref("object-set")
         )
     }
@@ -283,7 +283,7 @@
     }
 
     fn object_corpus_with_malformed_object_set_hash_json() -> &'static str {
-        r#"{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":6,"source_paths":["src/job/dag.rs","src/main.rs","src/node/daemon.rs","src/node/runtime.rs","src/octet/gate.rs","src/upgrades/mod.rs"],"object_set_hash":"b3:test-object-set","pure_cache_blocked_count":6}"#
+        r#"{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":4,"source_paths":["src/job/dag.rs","src/main.rs","src/octet/gate.rs","src/upgrades/mod.rs"],"object_set_hash":"b3:test-object-set","pure_cache_blocked_count":4}"#
     }
 
     fn temp_dir(label: &str) -> PathBuf {

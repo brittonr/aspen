@@ -1,13 +1,15 @@
 //! Exact portable input plans. These values grant no startup or execution authority.
 use serde::{Deserialize, Serialize};
 
-pub const POLICY_SCHEMA: &str = "molten.node-startup-cohort.v1";
-pub const BUNDLE_SCHEMA: &str = "molten.node-startup-bundle.v1";
+pub const POLICY_SCHEMA: &str = "molten.node-startup-cohort.v2";
+pub const BUNDLE_SCHEMA: &str = "molten.node-startup-bundle.v2";
+pub const BUILD_INPUTS_SCHEMA: &str = "molten.node-build-inputs.v1";
 pub const OCTET_REVISION: &str = "c9b06bcf565c51d4a77d210e61b69ae51db9df25";
 pub const MAX_DESCRIPTOR_BYTES: usize = 32 * 1024;
 pub const MAX_MEMBER_BYTES: u64 = 8 * 1024 * 1024;
 pub const MAX_BUNDLE_BYTES: u64 = 32 * 1024 * 1024;
 pub const MAX_SOURCE_FILES: usize = 32_768;
+pub const MAX_BUILD_UNITS: usize = 2_048;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -46,9 +48,10 @@ pub enum MemberRole {
     Status,
     Summary,
     ObjectCorpus,
+    BuildInputs,
 }
 
-pub const ROLES: [MemberRole; 10] = [
+pub const ROLES: [MemberRole; 11] = [
     MemberRole::CargoManifest,
     MemberRole::DylintConfig,
     MemberRole::CargoLock,
@@ -59,6 +62,7 @@ pub const ROLES: [MemberRole; 10] = [
     MemberRole::Status,
     MemberRole::Summary,
     MemberRole::ObjectCorpus,
+    MemberRole::BuildInputs,
 ];
 
 impl MemberRole {
@@ -74,6 +78,7 @@ impl MemberRole {
             Self::Status => "status.json",
             Self::Summary => "summary.txt",
             Self::ObjectCorpus => "object-corpus-receipt.json",
+            Self::BuildInputs => "build-inputs.json",
         }
     }
 }
@@ -223,6 +228,97 @@ pub struct SourceFile {
     pub bytes: u64,
 }
 
+/// Normalized first-party and dependency compiler inputs from an independently
+/// retained build. This record binds claimed coverage, not compiler execution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BuildInputs {
+    pub schema: String,
+    pub executable_target: String,
+    pub units: Vec<BuildUnit>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BuildUnit {
+    pub package: String,
+    pub target: String,
+    pub source_paths: Vec<String>,
+}
+
+pub fn validate_build_inputs(files: &[SourceFile], inputs: &BuildInputs) -> Result<(), Rejection> {
+    if inputs.schema != BUILD_INPUTS_SCHEMA
+        || inputs.executable_target != "molten-node"
+        || inputs.units.is_empty()
+        || inputs.units.len() > MAX_BUILD_UNITS
+    {
+        return Err(Rejection::SourceContext);
+    }
+    let mut prior: Option<(&str, &str)> = None;
+    let mut has_binary = false;
+    let mut libraries = [false; 3];
+    let mut source_paths = Vec::new();
+    for unit in &inputs.units {
+        let package_index = match unit.package.as_str() {
+            "molten-core" => Some(0),
+            "molten-node-host" => Some(1),
+            "molten-node-runtime" => Some(2),
+            _ => None,
+        };
+        if prior.is_some_and(|prev| prev >= (unit.package.as_str(), unit.target.as_str()))
+            || unit.package == "molten"
+            || unit.package.is_empty()
+            || unit.package.len() > 256
+            || !unit.package.bytes().all(|byte| byte.is_ascii_graphic())
+            || unit.target.is_empty()
+            || unit.target.len() > 256
+            || !unit.target.bytes().all(|byte| byte.is_ascii_graphic())
+            || unit.source_paths.is_empty()
+            || unit.source_paths.len() > MAX_SOURCE_FILES
+        {
+            return Err(Rejection::SourceContext);
+        }
+        prior = Some((&unit.package, &unit.target));
+        if let Some(index) = package_index {
+            let library_root = match index {
+                0 => "crates/molten-core/src/lib.rs",
+                1 => "crates/molten-node-host/src/lib.rs",
+                _ => "crates/molten-node-runtime/src/lib.rs",
+            };
+            if unit.target == "lib" && unit.source_paths.iter().any(|path| path == library_root) {
+                libraries[index] = true;
+            }
+        }
+        if unit.package == "molten-node-runtime" && unit.target == "bin/molten-node" {
+            has_binary = unit
+                .source_paths
+                .iter()
+                .any(|path| path == "crates/molten-node-runtime/src/bin/molten-node.rs");
+        }
+        let mut previous_path: Option<&str> = None;
+        for path in &unit.source_paths {
+            if !path.ends_with(".rs")
+                || previous_path.is_some_and(|previous| previous >= path.as_str())
+                || files.binary_search_by(|file| file.name.cmp(path)).is_err()
+            {
+                return Err(Rejection::SourceContext);
+            }
+            previous_path = Some(path);
+            source_paths.push(path.as_str());
+        }
+    }
+    if !has_binary || libraries.contains(&false) || source_paths.len() > MAX_SOURCE_FILES {
+        return Err(Rejection::SourceContext);
+    }
+    source_paths.sort_unstable();
+    source_paths.dedup();
+    if !source_paths.into_iter().eq(files.iter().filter(|file| file.name.ends_with(".rs")).map(|file| file.name.as_str()))
+    {
+        return Err(Rejection::SourceContext);
+    }
+    Ok(())
+}
+
 /// This inventory binds the approved source snapshot. It never authorizes source-file reads.
 // r[impl molten.startup_evidence.inputs]
 pub fn validate_source_inventory(plan: &EvidencePlan, files: &[SourceFile]) -> Result<(), Rejection> {
@@ -249,21 +345,27 @@ pub fn validate_source_inventory(plan: &EvidencePlan, files: &[SourceFile]) -> R
             return Err(Rejection::SourceContext);
         }
     }
-    // Include both the historical gate scopes and the new source owners, not just facade names.
+    // These anchors are necessary, not sufficient: the complete compiled closure
+    // must also be independently reviewed against build inputs before approval.
     for required in [
-        "src/job/dag.rs",
-        "src/main.rs",
-        "src/node/daemon.rs",
-        "src/node/runtime.rs",
-        "src/octet/gate.rs",
-        "src/upgrades/mod.rs",
-        "src/node/content.rs",
-        "src/node/parts/daemon/p018/body.rs",
-        "src/node/parts/daemon/p019/body.rs",
+        "crates/molten-core/Cargo.toml",
+        "crates/molten-core/src/lib.rs",
+        "crates/molten-node-host/Cargo.toml",
+        "crates/molten-node-host/src/lib.rs",
+        "crates/molten-node-runtime/Cargo.toml",
+        "crates/molten-node-runtime/src/lib.rs",
+        "crates/molten-node-runtime/src/bin/molten-node.rs",
+        "crates/molten-node-runtime/src/node/daemon.rs",
+        "crates/molten-node-runtime/src/node/runtime.rs",
+        "crates/molten-node-runtime/src/node/content.rs",
+        "crates/molten-node-runtime/src/node/startup_evidence.rs",
+        "crates/molten-node-runtime/src/node/parts/daemon/p018/body.rs",
+        "crates/molten-node-runtime/src/node/parts/daemon/p019/body.rs",
+        "crates/molten-node-runtime/src/source_gate.rs",
         "crates/molten-core/src/content_store_adapter/node_service.rs",
         "crates/molten-core/src/node_startup.rs",
         "src/octet/startup_snapshot.rs",
-        "src/node/startup_evidence.rs",
+        "crates/molten-node-host/src/node/state.rs",
     ] {
         if !files.iter().any(|file| file.name == required) {
             return Err(Rejection::SourceContext);

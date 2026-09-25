@@ -28,16 +28,3 @@ fn local_ref(kind: &str, label: &str) -> Result<String> {
 fn sorted_unique(refs: &[String]) -> Vec<String> {
     refs.iter().cloned().collect::<OrderedSet<_>>().into_iter().collect()
 }
-
-#[cfg(test)]
-mod tests {
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/tests/m000/p000/body.rs"));
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/tests/m000/p001/body.rs"));
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/tests/m000/p002/body.rs"));
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/tests/m000/p003/body.rs"));
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/tests/m000/p004/body.rs"));
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/tests/m000/p005/body.rs"));
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/tests/m000/p006/body.rs"));
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/tests/m000/p007/body.rs"));
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/job/parts/dag/tests/m000/p008/body.rs"));
-}

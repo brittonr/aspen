@@ -8,12 +8,12 @@ r[impl aspen.ast_grep_runtime_authority_audits.profile] The `runtime-authority` 
 
 | Surface | Example scope |
 | --- | --- |
-| `core-runtime` | `src/runtime/**/*.rs`, `src/node/runtime.rs` |
-| `node-control` | `src/node/**/*.rs`, `src/cli/ops/node/**/*.rs` |
+| `core-runtime` | `src/runtime/**/*.rs`, `crates/molten-node-runtime/src/node/runtime.rs` |
+| `node-control` | `crates/molten-node-runtime/src/node/**/*.rs`, `crates/molten-node-runtime/src/cli/node.rs`, `crates/molten-node-runtime/src/cli/node/**/*.rs` |
 | `effect-handlers` | `src/effects/**/*.rs`, `src/resources/**/*.rs` |
 | `plugin-host` | `src/plugin/**/*.rs`, `docs/plugin-extension-contracts/**/*.ncl` |
 | `sealed-repro` | `src/harness/**/*.rs`, `src/cli/runtime/repro/**/*.rs` |
-| `iroh-transport` | `src/iroh/**/*.rs`, `src/node/iroh.rs` |
+| `iroh-transport` | `src/iroh/**/*.rs`, `crates/molten-node-runtime/src/node/iroh.rs` |
 | `policy-evidence-gates` | `src/evidence/**/*.rs`, `cairn-policy/**/*.ncl` |
 | `operator-workflow` | `src/operator/**/*.rs`, `docs/production-*.ncl` |
 | `local-store-adapters` | Converted artifact, chunk, retention, dataspace, and exchange adapter pages |

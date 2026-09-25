@@ -6,10 +6,6 @@ use redb::ReadableTable;
 use redb::ReadableTableMetadata;
 
 type Path = std::path::Path;
-#[cfg(test)]
-type PathBuf = std::path::PathBuf;
-#[cfg(test)]
-use std::fs;
 type StorePath = crate::local_store::RelativeLocator;
 type StoreEntryKind = crate::local_store::ObjectKind;
 type CompoundClass = preserves::CompoundClass;
@@ -230,24 +226,6 @@ struct IrohChunkTicket {
     manifest_ref: String,
     manifest_blob_ref: String,
     chunks: Vec<IrohChunkBlob>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChunkStoreGc {
-    pub dry_run: bool,
-    pub decision: String,
-    pub removed_manifests: Vec<String>,
-    pub removed_chunks: Vec<String>,
-    pub retention_receipt_refs: Vec<String>,
-    pub execution_gate_refs: Vec<String>,
-    pub receipt_value: IoValue,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct ChunkStoreGcInput<'a> {
-    pub dry_run: bool,
-    pub retention_evidence: &'a crate::retention::DestructiveEvidence,
-    pub apply_refs: &'a [String],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

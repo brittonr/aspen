@@ -1,5 +1,3 @@
-    use n0_future::StreamExt;
-
     use super::*;
     use std::fs;
 
@@ -54,8 +52,6 @@
     }
 
     type AtomicU64 = std::sync::atomic::AtomicU64;
-    type Duration = std::time::Duration;
-    type Ipv4Addr = std::net::Ipv4Addr;
     type Ordering = std::sync::atomic::Ordering;
 
     #[test]

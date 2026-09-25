@@ -2,7 +2,7 @@
 
 mod artifact_auth;
 mod canonical;
-mod file_adapter;
+pub(crate) mod file_adapter;
 mod integration;
 
 pub use artifact_auth::*;

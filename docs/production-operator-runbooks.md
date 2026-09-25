@@ -85,7 +85,7 @@ Canonical review artifact: `target/prod/deployment-profile.preserves`.
 Profile-backed daemon init consumes checked exports or reviewed refs only; it does not evaluate Nickel at runtime. Supply all selected adapter/profile refs explicitly and retain the profile-resolution artifact for startup review:
 
 ```sh
-molten node init \
+molten-node init \
   --state-root target/node \
   --node-id node:pilot \
   --profile-ref "$PROFILE_REF" \
@@ -113,17 +113,17 @@ molten node init \
   --profile-resolution-out target/prod/node-profile-resolution.preserves
 ```
 
-No-profile `molten node init` remains available for local fixtures, but the stored profile resolution carries the `local-fixture-config` caveat and cannot satisfy release profile evidence.
+No-profile `molten-node init` remains available for local fixtures, but the stored profile resolution carries the `local-fixture-config` caveat and cannot satisfy release profile evidence.
 
 ## Init, run, status, stop
 
 Follow the normal node path and bind the profile/source-gate receipts in the operator review bundle:
 
 ```sh
-molten node init --state-root target/node --node-id node:pilot
-molten node run --state-root target/node
-molten node status --state-root target/node --health-out target/node.health.preserves
-molten node stop --state-root target/node --shutdown-out target/node.shutdown.preserves
+molten-node init --state-root target/node --node-id node:pilot
+molten-node run --state-root target/node
+molten-node status --state-root target/node --health-out target/node.health.preserves
+molten-node stop --state-root target/node --shutdown-out target/node.shutdown.preserves
 molten test prod-soak runbook-check \
   --runbook-name node-lifecycle \
   --operation init-run-status-stop \
@@ -336,7 +336,7 @@ If Octet source-remediated-zero evidence is unavailable, the candidate receipt c
 ## Emergency stop
 
 ```sh
-molten node stop --state-root target/node --shutdown-out target/node.shutdown.preserves
+molten-node stop --state-root target/node --shutdown-out target/node.shutdown.preserves
 molten test prod-soak incident-response-drill \
   --incident-kind emergency-stop \
   --scenario operator-emergency-stop \

@@ -1,4 +1,5 @@
     use super::*;
+    use std::fs;
 
     const EXPECTED_OCTET_CONFIG_PAYLOAD: &str =
         "{\"effective_cargo_check_args\":[\"--all-targets\"],\"effective_scope_args\":[\"-p\",\"molten\"],\"files\":[{\"hash\":\"b3:cargo\",\"path\":\"Cargo.toml\"},{\"hash\":\"b3:dylint\",\"path\":\"dylint.toml\"}]}";
@@ -109,6 +110,31 @@
         assert_eq!(validation.decision, "pass");
         assert!(to_text(&validation.value).expect("validation text").contains("octet-source-gate-validation-v1"));
         assert_eq!(crate::ledger::artifact_kind(&validation.value), "octet-source-gate-validation");
+    }
+
+    #[test]
+    fn node_control_gate_requires_the_standalone_source_gate() {
+        let accepted = validate_octet_source_gate(&OctetSourceGateValidationInput {
+            consumer: "node-control-gate".to_string(),
+            subject_ref: test_ref("node-control"),
+            receipt_value: Some(synthetic_clean_octet_gate_receipt_for_tests().expect("clean gate fixture")),
+            source_scope: Vec::new(),
+        })
+        .expect("validate default node control scope");
+        assert_eq!(accepted.decision, "pass");
+
+        let rejected = validate_octet_source_gate(&OctetSourceGateValidationInput {
+            consumer: "node-control-gate".to_string(),
+            subject_ref: test_ref("node-control"),
+            receipt_value: Some(synthetic_clean_octet_gate_receipt_for_tests().expect("clean gate fixture")),
+            source_scope: vec!["src/octet/gate.rs".to_string()],
+        })
+        .expect("validate legacy root scope");
+        assert_eq!(rejected.decision, "deny");
+        assert!(rejected
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("outside configured Octet source-gate coverage")));
     }
 
     #[test]

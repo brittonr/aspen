@@ -5,9 +5,9 @@ let Hash = Prelude.contract (fun value => std.is_string value && std.string.is_m
 let Revision = Prelude.contract (fun value => std.is_string value && std.string.is_match "^[0-9a-f]{40}$" value) in
 {
   schema
-    | Prelude.contract (Prelude.is_exact_string "molten.node-startup-cohort.v1")
+    | Prelude.contract (Prelude.is_exact_string "molten.node-startup-cohort.v2")
     | doc "Version of the exact operator cohort, not a startup grant."
-    | default = "molten.node-startup-cohort.v1",
+    | default = "molten.node-startup-cohort.v2",
   descriptor_blake3 | Hash
     | doc "Independently approved digest of bundle.json. Never derive trust from the supplied bundle.",
   cohort
@@ -15,7 +15,7 @@ let Revision = Prelude.contract (fun value => std.is_string value && std.string.
     = {
       source_revision | Revision | doc "Exact reviewed Molten Git revision.",
       source_inventory_blake3 | Hash | doc "Digest of the complete approved source-inventory.json bytes.",
-      executable_blake3 | Hash | doc "Digest of the running Molten executable, not the source or archive.",
+      executable_blake3 | Hash | doc "Digest of the running molten-node executable, not the root molten CLI, source, or archive.",
       build_rustc_blake3 | Hash | doc "Observed digest of the compiler used to build Molten.",
       build_toolchain
         | Prelude.contract (Prelude.is_exact_string "nightly-2026-05-26")

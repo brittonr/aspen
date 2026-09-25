@@ -14,10 +14,10 @@ use serde::Serialize;
 use super::IrohEd25519FileAdapter;
 use crate::error::Failure;
 use crate::error::Result;
-use crate::node_state::MAX_NODE_STATE_FILE_BYTES;
-use crate::node_state::DirectoryView;
-use crate::node_state::NamespaceKind;
-use crate::node_state::RelativePath;
+use molten_node_host::node_state::MAX_NODE_STATE_FILE_BYTES;
+use molten_node_host::node_state::DirectoryView;
+use molten_node_host::node_state::NamespaceKind;
+use molten_node_host::node_state::RelativePath;
 use crate::preserves_rail::content_ref_from_bytes;
 
 mod operational;

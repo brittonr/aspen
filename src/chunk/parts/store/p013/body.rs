@@ -166,45 +166,6 @@ fn index_set_pin(
     write_txn.commit().map_err(index_error)
 }
 
-struct IndexApplyGcInput<'a> {
-    root: &'a CapabilityChunkRoot,
-    dry_run: bool,
-    removed_manifests: &'a [String],
-    removed_chunks: &'a [String],
-    receipt_value: &'a IoValue,
-    tombstone_receipt: Option<&'a IoValue>,
-}
-
-fn index_apply_gc(input: &IndexApplyGcInput<'_>) -> Result<()> {
-    let db = ensure_index_tables(input.root)?;
-    let write_txn = db.begin_write().map_err(index_error)?;
-    if !input.dry_run {
-        {
-            let mut manifests = write_txn.open_table(INDEX_MANIFESTS).map_err(index_error)?;
-            let mut partial_fetches = write_txn.open_table(INDEX_PARTIAL_FETCHES).map_err(index_error)?;
-            for manifest_ref in input.removed_manifests {
-                manifests.remove(manifest_ref.as_str()).map_err(index_error)?;
-                partial_fetches.remove(manifest_ref.as_str()).map_err(index_error)?;
-            }
-        }
-        {
-            let mut chunks = write_txn.open_table(INDEX_CHUNKS).map_err(index_error)?;
-            let mut availability = write_txn.open_table(INDEX_AVAILABILITY).map_err(index_error)?;
-            let mut pins = write_txn.open_table(INDEX_PINS).map_err(index_error)?;
-            for chunk_ref in input.removed_chunks {
-                chunks.remove(chunk_ref.as_str()).map_err(index_error)?;
-                availability.remove(chunk_ref.as_str()).map_err(index_error)?;
-                pins.remove(pin_key("chunk", chunk_ref).as_str()).map_err(index_error)?;
-            }
-        }
-    }
-    store_receipt_in_tx(&write_txn, input.receipt_value)?;
-    if let Some(tombstone_receipt) = input.tombstone_receipt {
-        store_receipt_in_tx(&write_txn, tombstone_receipt)?;
-    }
-    write_txn.commit().map_err(index_error)
-}
-
 fn store_receipt(root: &CapabilityChunkRoot, receipt_value: &IoValue) -> Result<()> {
     let db = ensure_index_tables(root)?;
     let write_txn = db.begin_write().map_err(index_error)?;

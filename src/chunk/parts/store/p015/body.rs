@@ -101,11 +101,3 @@ fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
         .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {field}")))?
         .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
-
-#[cfg(test)]
-mod tests {
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/chunk/parts/store/tests/m000/p000/body.rs"));
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/chunk/parts/store/tests/m000/p001/body.rs"));
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/chunk/parts/store/tests/m000/p002/body.rs"));
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/chunk/parts/store/tests/m000/p003/body.rs"));
-}

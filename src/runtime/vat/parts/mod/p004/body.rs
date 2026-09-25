@@ -281,6 +281,6 @@ fn fixture_diagnostics(receipts: &[crate::runtime::RuntimePredicateReceipt]) -> 
 
 #[cfg(test)]
 mod tests {
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/vat/parts/mod/tests/m000/p000/body.rs"));
-    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/vat/parts/mod/tests/m000/p001/body.rs"));
+    include!("../tests/m000/p000/body.rs");
+    include!("../tests/m000/p001/body.rs");
 }
