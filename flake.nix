@@ -4822,6 +4822,8 @@
             # scripts/git-source-hashes.sh binds metadata-free git source hashes for unit2nix.
             pkgs.nix-prefetch-git
             pkgs.jq
+            # Octet lint evidence comes from the catalogued octet-toolchain pin, never an ambient install.
+            octet-toolchain.packages.${system}.cargo-octet
           ]
           ++ pkgs.lib.optional (system == "x86_64-linux") fluxProfilerCli;
 

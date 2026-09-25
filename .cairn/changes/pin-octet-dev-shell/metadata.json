@@ -1,0 +1,9 @@
+{
+  "spec_effect": "none",
+  "spec_effect_rationale": "The change selects the already catalogued Octet tool pin for the dev shell and corrects README evidence; accepted requirements are unchanged.",
+  "workflow_profile": {
+    "id": "no-spec-delta",
+    "source": "change_create",
+    "version": 1
+  }
+}
