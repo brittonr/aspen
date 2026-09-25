@@ -1,0 +1,260 @@
+{
+  "acceptance_ids": [
+    "octet-burndown-safety-clock.allows",
+    "octet-burndown-safety-clock.behavior",
+    "octet-burndown-safety-clock.bounds",
+    "octet-burndown-safety-clock.zero"
+  ],
+  "actions": [
+    {
+      "description": "move active change to archive: octet-burndown-safety-clock",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-09-25-octet-burndown-safety-clock"
+    }
+  ],
+  "blocked": false,
+  "change": "octet-burndown-safety-clock",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "ef5caedb85e45fbc2ad7ccad6a556ab01c08d0a93c87d81ff6b67b8571abe076",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "4d37ef6deb6fb348d5831292eb61abddf0b7e9b3fcce9a34bcdfcc245386ab7b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-safety-clock/acceptance.md"
+        },
+        {
+          "content_hash": "a117d7868d09861c5b9b38d08b330c659d0e2dc2009d4b3f1d7f84d5ec8934f7",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-safety-clock/design.md"
+        },
+        {
+          "content_hash": "984a82fb6eb5e101e3c4c7e68bec6b155c29ad21fa156e0ddfd928e0328110a5",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-safety-clock/evidence/fixture-receipt-comparison.txt"
+        },
+        {
+          "content_hash": "14e94f2dd8b94146e31acce5a4f85af16263ae205fe361d20c07dbf393feb4e0",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-safety-clock/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "e04e7d3c162c8d393e5853a4a80b5661f98f17d46e6f8b66d844a1d28a3dac0f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-safety-clock/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "46edb2305954db1ee6fd1d53f9d6994ca66649c4a44179bfb8b50cf390172d50",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-safety-clock/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "0678a9b7a95427ed7a43e7644337f7024fd5d09bda3eed389d58a52690460bf3",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-safety-clock/evidence/octet-lib-summary.txt"
+        },
+        {
+          "content_hash": "9b0ab98ee17f924bc7292cdec138ab98558f1e384b6b3629872c5f0029d9b466",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-safety-clock/evidence/octet-lint-diff.txt"
+        },
+        {
+          "content_hash": "007b0bbb3a7405d0ab20cdb05852925fa0230b2b64d52ba45c6f9ccd90a48b68",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-safety-clock/evidence/octet-root-summary.txt"
+        },
+        {
+          "content_hash": "ccf68238ad818a9f7ed35bf477c47c2d476b36b835eeb68a9e974e119bf09052",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-safety-clock/evidence/simulation-fixture-comparison.txt"
+        },
+        {
+          "content_hash": "32c98a99516c220404a5c7ad3c688fdd1185538265c9f6959567062e3ee2d8d1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-safety-clock/evidence/structural-scan-differential.txt"
+        },
+        {
+          "content_hash": "213a69f030e9d39dba4f3494229c2ed4a51d73ee6987c35e656b7fb82cdff5c3",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-safety-clock/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "3a2b865ba6083e1bdcff247ce569d1b1e15801a6e84d266ae72fa2df17b2731a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-safety-clock/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "b6a63dcfc9a9856cece96449e5e2b14d23c4cdb305bdea780fea43e4f78d23ec",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-safety-clock/evidence/verification.md"
+        },
+        {
+          "content_hash": "1ff5d544e7ffde6692bd05d18857cdfe49251204130269bf80cfb178f681eb43",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-safety-clock/metadata.json"
+        },
+        {
+          "content_hash": "d7de99302fdabae490a66c7bfd767d97113722129379bdc51e61e5be4161f8ee",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-safety-clock/proposal.md"
+        },
+        {
+          "content_hash": "b262325f2895b186dad92f60d63fcbc4c81f0ac5cf4befac1235ae5fe98344a7",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-safety-clock/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "e3b63438ad491e66e3d933d1cd008c15c0dcac8c29a2a1cf2448419a3348d1b8",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-safety-clock/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/octet-burndown-safety-clock"
+        }
+      ],
+      "manifest_hash": "34cc8e5fca586aa025fd8971b0c3064978ec2b7e0d177aacf449311d7c969ccc"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "4d37ef6deb6fb348d5831292eb61abddf0b7e9b3fcce9a34bcdfcc245386ab7b",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-safety-clock/acceptance.md"
+        },
+        {
+          "content_hash": "a117d7868d09861c5b9b38d08b330c659d0e2dc2009d4b3f1d7f84d5ec8934f7",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-safety-clock/design.md"
+        },
+        {
+          "content_hash": "984a82fb6eb5e101e3c4c7e68bec6b155c29ad21fa156e0ddfd928e0328110a5",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-safety-clock/evidence/fixture-receipt-comparison.txt"
+        },
+        {
+          "content_hash": "14e94f2dd8b94146e31acce5a4f85af16263ae205fe361d20c07dbf393feb4e0",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-safety-clock/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "e04e7d3c162c8d393e5853a4a80b5661f98f17d46e6f8b66d844a1d28a3dac0f",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-safety-clock/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "46edb2305954db1ee6fd1d53f9d6994ca66649c4a44179bfb8b50cf390172d50",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-safety-clock/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "0678a9b7a95427ed7a43e7644337f7024fd5d09bda3eed389d58a52690460bf3",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-safety-clock/evidence/octet-lib-summary.txt"
+        },
+        {
+          "content_hash": "9b0ab98ee17f924bc7292cdec138ab98558f1e384b6b3629872c5f0029d9b466",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-safety-clock/evidence/octet-lint-diff.txt"
+        },
+        {
+          "content_hash": "007b0bbb3a7405d0ab20cdb05852925fa0230b2b64d52ba45c6f9ccd90a48b68",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-safety-clock/evidence/octet-root-summary.txt"
+        },
+        {
+          "content_hash": "ccf68238ad818a9f7ed35bf477c47c2d476b36b835eeb68a9e974e119bf09052",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-safety-clock/evidence/simulation-fixture-comparison.txt"
+        },
+        {
+          "content_hash": "32c98a99516c220404a5c7ad3c688fdd1185538265c9f6959567062e3ee2d8d1",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-safety-clock/evidence/structural-scan-differential.txt"
+        },
+        {
+          "content_hash": "213a69f030e9d39dba4f3494229c2ed4a51d73ee6987c35e656b7fb82cdff5c3",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-safety-clock/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "3a2b865ba6083e1bdcff247ce569d1b1e15801a6e84d266ae72fa2df17b2731a",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-safety-clock/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "b6a63dcfc9a9856cece96449e5e2b14d23c4cdb305bdea780fea43e4f78d23ec",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-safety-clock/evidence/verification.md"
+        },
+        {
+          "content_hash": "1ff5d544e7ffde6692bd05d18857cdfe49251204130269bf80cfb178f681eb43",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-safety-clock/metadata.json"
+        },
+        {
+          "content_hash": "d7de99302fdabae490a66c7bfd767d97113722129379bdc51e61e5be4161f8ee",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-safety-clock/proposal.md"
+        },
+        {
+          "content_hash": "b262325f2895b186dad92f60d63fcbc4c81f0ac5cf4befac1235ae5fe98344a7",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-safety-clock/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "e3b63438ad491e66e3d933d1cd008c15c0dcac8c29a2a1cf2448419a3348d1b8",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-safety-clock/tasks.md"
+        }
+      ],
+      "manifest_hash": "25214e87c46a779cec5517f410023440b1343a61f3512feb33353669a34d960e"
+    },
+    "kind": "archive",
+    "manifest_hash": "7675fd0f235f64c5bca4da882277d0b9ecb9654a36c49c14ec100905e6bb95d3"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts",
+    "no-spec profile conformance does not prove zero behavior effect or semantic correctness",
+    "change-local a[...] acceptance IDs are not accepted r[...] requirements and sync never promotes them"
+  ],
+  "plan_hash": "a1c8c5a7f50c1fa0479f3abfaedff372fe762e4061e02d04d63ccf22e2d71513",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "543c07ec263fc7911cab3d62057bb571d2df754f471bc3066a65c241954ce137",
+  "reasons": [],
+  "receipt_hash": "ee368c6776c73dc265d0333add3b394651eccb74a79dfe09a3d10651ad659170",
+  "review_receipt_hashes": [
+    "eed6c15e88cc46c15cb513b711c41723382bfc83023a7d0ca1af7b3ebdd8b648"
+  ],
+  "spec_effect": "none",
+  "workflow_profile": "no-spec-delta",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

@@ -1,0 +1,60 @@
+{
+  "acceptance_ids": [
+    "octet-burndown-safety-clock.allows",
+    "octet-burndown-safety-clock.behavior",
+    "octet-burndown-safety-clock.bounds",
+    "octet-burndown-safety-clock.zero"
+  ],
+  "actions": [],
+  "blocked": false,
+  "change": "octet-burndown-safety-clock",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [],
+  "dry_run": false,
+  "input_hash": "b1271416c47adfa51408235cd0b8ef7fc1c24976ae3073269c198fd582411eb2",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": []
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts",
+    "no-spec profile conformance does not prove zero behavior effect or semantic correctness",
+    "change-local a[...] acceptance IDs are not accepted r[...] requirements and sync never promotes them"
+  ],
+  "plan_hash": "bf6d6697269cd0e0fafa8ddbf9fde45f2545901412145430c6ff8eee5520c688",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "543c07ec263fc7911cab3d62057bb571d2df754f471bc3066a65c241954ce137",
+  "reasons": [],
+  "receipt_hash": "11a48848dcaaff53ddad72c1f6fcdaea0fe0cb369ae8359ab8b8327a74222356",
+  "review_receipt_hashes": [
+    "eed6c15e88cc46c15cb513b711c41723382bfc83023a7d0ca1af7b3ebdd8b648"
+  ],
+  "spec_effect": "none",
+  "workflow_profile": "no-spec-delta",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
