@@ -31,7 +31,7 @@ They handle fallible external facts and already return errors; arbitrary input a
 Any further decomposition must separate genuine responsibilities while preserving bounds, error precedence, no-follow behavior, acquired-handle metadata, and operation order.
 The 496-line local-store module also needs responsibility review, not formatting changes or path-based exclusion.
 
-That review was implemented and remeasured on producer commit `9bb4b648c0ce73a3591d9e42dbbcfd71e436f9bd`; the unchanged pinned gate now reports 14 public naming errors only. See `../naming-review/README.md` and the retained `~/.local/state/onix/molten-node-vm/source-refactor-20260924-86d3694a-linked/artifacts-final/summary.txt`. The run17 result above is historical, not a statement about the final source.
+That review was implemented and remeasured on producer commit `9bb4b648c0ce73a3591d9e42dbbcfd71e436f9bd`; at that revision, the unchanged pinned gate reported 14 public naming errors only. See `../naming-review/README.md` and the retained `~/.local/state/onix/molten-node-vm/source-refactor-20260924-86d3694a-linked/artifacts-final/summary.txt`. The run17 result above is historical, not a statement about the current source. After the approved breaking rename at `cd6690493`, the canonical gate reported zero host-crate findings but 14,529 root-producer errors; the earlier host-only result was not a workspace-clean proof. The current raw result is retained under `~/.local/state/onix/molten-node-vm/public-api-cutover-20260924/strict-cd6690493/`.
 
 The naming-owner false-negative controls are retained in ../naming-review/. They require an owner repair before trusting future clean coverage.
 No naming exception was adopted, no clean workspace/cohort is claimed, and startup remains denied.
