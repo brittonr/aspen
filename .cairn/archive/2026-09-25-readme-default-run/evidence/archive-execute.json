@@ -1,0 +1,209 @@
+{
+  "acceptance_ids": [
+    "readme-default-run.commands",
+    "readme-default-run.plans",
+    "readme-default-run.state"
+  ],
+  "actions": [
+    {
+      "description": "move active change to archive: readme-default-run",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-09-25-readme-default-run"
+    }
+  ],
+  "blocked": false,
+  "change": "readme-default-run",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "2330dec6d7e79bb3c122795b89e52467fe817c6d9a38ed6f4295e39799b4eb67",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "c2257196dccd570a866f45418c460efef093eead68146418db6d407fa1287921",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-readme-default-run/acceptance.md"
+        },
+        {
+          "content_hash": "0d1aed08c0968c99a1ccce864d1372b53d4555ceb164a51ea33a0aef309e00a8",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-readme-default-run/design.md"
+        },
+        {
+          "content_hash": "f0e3915b41d0964ee4e0973a4f12a7462ae95ae359ac91274593c377aee91d0b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-readme-default-run/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "798410502dbd3467d2224fe76677d3f577d984db3f96460609cfc397ba862804",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-readme-default-run/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "94e45a05faae6a82e63dfc27951f730a45c2700492aa3a6d19b2bd4dedc295db",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-readme-default-run/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "65406e3f8c6c67d902108dff95b3620cccc69fbba8c7847af16b5120089e5a2b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-readme-default-run/evidence/spot-runs.txt"
+        },
+        {
+          "content_hash": "8a8fe55d2ad3bcf2c00296cc78eaec2e2bf9fe0ff4f27e4744c322ee9427b334",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-readme-default-run/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "0d9172565aace24e59f1567db15f5e75bd6bec66039020fb6e7a66ae402bfaaa",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-readme-default-run/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "31dfa36ffa73b1f4f02507fc59821fbe9543ef1b778acff2beb7e17c9d9915a5",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-readme-default-run/evidence/verification.md"
+        },
+        {
+          "content_hash": "e08da15d8482be1fbeba779fbe7de9d5cb246c41773218f0b9ff9a12283d69d0",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-readme-default-run/metadata.json"
+        },
+        {
+          "content_hash": "7408304250a39e124a8ee0142cfe1f3a3f94e2f44157aca026b3ebd5a3bc68cf",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-readme-default-run/proposal.md"
+        },
+        {
+          "content_hash": "6cbc2d8e62cfeacc00347290110fd9b010ce724004127af2e974ebc31214d061",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-readme-default-run/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "3b224cb49f87fe3f0c52138d0afb22c9750cb4c58d126c370d4e676b221f2d73",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-readme-default-run/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/readme-default-run"
+        }
+      ],
+      "manifest_hash": "e8ddead32da2a341a171e035b022d82b2a6490cd205a788ca2077e21636c9515"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "c2257196dccd570a866f45418c460efef093eead68146418db6d407fa1287921",
+          "exists": true,
+          "path": "./.cairn/changes/readme-default-run/acceptance.md"
+        },
+        {
+          "content_hash": "0d1aed08c0968c99a1ccce864d1372b53d4555ceb164a51ea33a0aef309e00a8",
+          "exists": true,
+          "path": "./.cairn/changes/readme-default-run/design.md"
+        },
+        {
+          "content_hash": "f0e3915b41d0964ee4e0973a4f12a7462ae95ae359ac91274593c377aee91d0b",
+          "exists": true,
+          "path": "./.cairn/changes/readme-default-run/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "798410502dbd3467d2224fe76677d3f577d984db3f96460609cfc397ba862804",
+          "exists": true,
+          "path": "./.cairn/changes/readme-default-run/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "94e45a05faae6a82e63dfc27951f730a45c2700492aa3a6d19b2bd4dedc295db",
+          "exists": true,
+          "path": "./.cairn/changes/readme-default-run/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "65406e3f8c6c67d902108dff95b3620cccc69fbba8c7847af16b5120089e5a2b",
+          "exists": true,
+          "path": "./.cairn/changes/readme-default-run/evidence/spot-runs.txt"
+        },
+        {
+          "content_hash": "8a8fe55d2ad3bcf2c00296cc78eaec2e2bf9fe0ff4f27e4744c322ee9427b334",
+          "exists": true,
+          "path": "./.cairn/changes/readme-default-run/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "0d9172565aace24e59f1567db15f5e75bd6bec66039020fb6e7a66ae402bfaaa",
+          "exists": true,
+          "path": "./.cairn/changes/readme-default-run/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "31dfa36ffa73b1f4f02507fc59821fbe9543ef1b778acff2beb7e17c9d9915a5",
+          "exists": true,
+          "path": "./.cairn/changes/readme-default-run/evidence/verification.md"
+        },
+        {
+          "content_hash": "e08da15d8482be1fbeba779fbe7de9d5cb246c41773218f0b9ff9a12283d69d0",
+          "exists": true,
+          "path": "./.cairn/changes/readme-default-run/metadata.json"
+        },
+        {
+          "content_hash": "7408304250a39e124a8ee0142cfe1f3a3f94e2f44157aca026b3ebd5a3bc68cf",
+          "exists": true,
+          "path": "./.cairn/changes/readme-default-run/proposal.md"
+        },
+        {
+          "content_hash": "6cbc2d8e62cfeacc00347290110fd9b010ce724004127af2e974ebc31214d061",
+          "exists": true,
+          "path": "./.cairn/changes/readme-default-run/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "3b224cb49f87fe3f0c52138d0afb22c9750cb4c58d126c370d4e676b221f2d73",
+          "exists": true,
+          "path": "./.cairn/changes/readme-default-run/tasks.md"
+        }
+      ],
+      "manifest_hash": "62da4300177896dfcf942bdaf11ff6603e4dea17d32a5c147e9c2968f0fa7921"
+    },
+    "kind": "archive",
+    "manifest_hash": "95eabb99437563351f836dcf4a942ba82064ca0dac93ac329670109f92798916"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts",
+    "no-spec profile conformance does not prove zero behavior effect or semantic correctness",
+    "change-local a[...] acceptance IDs are not accepted r[...] requirements and sync never promotes them"
+  ],
+  "plan_hash": "459df8f88aa4b45f72b91af4d1705b99ab450d1c17c35544148604884188172a",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "8b5e0559687f54f84f5b2f7b92f7dd364b1336c77b0059d4f8df49e0e9a93379",
+  "reasons": [],
+  "receipt_hash": "a3df1b4c4aed5a1d2cba06bd182b45b73a5b36b4614668653a98fd18836dcf25",
+  "review_receipt_hashes": [
+    "db60390916ea64e11b44d67100d9146c3037bdbeb8d9e60ab4abddb4d38bac2c"
+  ],
+  "spec_effect": "none",
+  "workflow_profile": "no-spec-delta",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
