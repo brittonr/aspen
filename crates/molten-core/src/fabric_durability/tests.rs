@@ -233,6 +233,109 @@ fn recovery_quarantines_unrepresentable_log_successor() {
     assert!(decision.diagnostics.contains(&DurabilityIssue::SequenceOverflow));
 }
 
+#[test]
+fn recovery_denies_excess_snapshot_or_log_diagnostics_even_with_quarantine_permission() {
+    let mut populated = state();
+    for index in 0..=MAX_DURABILITY_COLLECTION_ITEMS {
+        let snapshot_ref = format!("snapshot-{index}");
+        populated.snapshots.insert(snapshot_ref.clone(), SnapshotRecord {
+            kind: SnapshotKind::Snapshot,
+            snapshot_ref,
+            content_ref: SNAPSHOT_REF.to_string(),
+            source_namespace: populated.descriptor.namespace_id.clone(),
+            source_generation: GENERATION,
+            value_schema_ref: VALUE_SCHEMA_REF.to_string(),
+            covered_log_sequence: None,
+            ordered_state_ref: ORDERED_REF.to_string(),
+            durability: DurabilityLevel::ProcessLoss,
+            corrupted: true,
+        });
+    }
+    let decision = evaluate_recovery(&populated, &RecoveryInventory {
+        active_generation: GENERATION,
+        expected_schema_ref: VALUE_SCHEMA_REF.to_string(),
+        permit_repair: true,
+        permit_quarantine: true,
+    });
+    assert_eq!(decision.disposition, RecoveryDisposition::Deny);
+    assert_eq!(decision.snapshot_count, (MAX_DURABILITY_COLLECTION_ITEMS + 1) as u64);
+    assert_eq!(decision.diagnostics.len(), MAX_DURABILITY_COLLECTION_ITEMS + 1);
+    assert_eq!(decision.diagnostics.last(), Some(&DurabilityIssue::CollectionLimitExceeded));
+
+    populated.snapshots.clear();
+    for index in 0..=MAX_DURABILITY_COLLECTION_ITEMS + 1 {
+        populated.durable_log.push(LogRecord {
+            sequence: (index as u64) * 2,
+            value: Vec::new(),
+            value_ref: VALUE_REF.to_string(),
+            durability: DurabilityLevel::ProcessLoss,
+        });
+    }
+    let decision = evaluate_recovery(&populated, &RecoveryInventory {
+        active_generation: GENERATION,
+        expected_schema_ref: VALUE_SCHEMA_REF.to_string(),
+        permit_repair: true,
+        permit_quarantine: true,
+    });
+    assert_eq!(decision.disposition, RecoveryDisposition::Deny);
+    assert_eq!(decision.diagnostics.len(), MAX_DURABILITY_COLLECTION_ITEMS + 1);
+    assert_eq!(decision.diagnostics.last(), Some(&DurabilityIssue::CollectionLimitExceeded));
+}
+
+#[test]
+fn recovery_denies_excess_or_oversized_unresolved_effect_diagnostics() {
+    let mut populated = state();
+    for index in 0..=MAX_DURABILITY_COLLECTION_ITEMS {
+        let transaction_id = format!("effect-{index}");
+        populated.effects.insert(transaction_id.clone(), EffectTransactionState {
+            transaction_id,
+            generation: GENERATION,
+            operation_ref: OPERATION_REF.to_string(),
+            phase: EffectTransactionPhase::Uncertain,
+            expires_at_tick: None,
+            profile: EffectTransactionProfile {
+                durable_reservation: true,
+                exclusive: false,
+                expiring: false,
+                idempotent_commit: false,
+                compensating_abort: true,
+            },
+        });
+    }
+    let inventory = RecoveryInventory {
+        active_generation: GENERATION,
+        expected_schema_ref: VALUE_SCHEMA_REF.to_string(),
+        permit_repair: true,
+        permit_quarantine: true,
+    };
+    let decision = evaluate_recovery(&populated, &inventory);
+    assert_eq!(decision.disposition, RecoveryDisposition::Deny);
+    assert_eq!(decision.unresolved_effect_count, (MAX_DURABILITY_COLLECTION_ITEMS + 1) as u64);
+    assert_eq!(decision.diagnostics.len(), MAX_DURABILITY_COLLECTION_ITEMS + 1);
+    assert_eq!(decision.diagnostics.last(), Some(&DurabilityIssue::CollectionLimitExceeded));
+
+    populated.effects.clear();
+    let oversized_id = "e".repeat(MAX_DURABILITY_TEXT_BYTES + 1);
+    populated.effects.insert(oversized_id.clone(), EffectTransactionState {
+        transaction_id: oversized_id,
+        generation: GENERATION,
+        operation_ref: OPERATION_REF.to_string(),
+        phase: EffectTransactionPhase::Reserved,
+        expires_at_tick: None,
+        profile: EffectTransactionProfile {
+            durable_reservation: true,
+            exclusive: false,
+            expiring: false,
+            idempotent_commit: false,
+            compensating_abort: true,
+        },
+    });
+    let decision = evaluate_recovery(&populated, &inventory);
+    assert_eq!(decision.disposition, RecoveryDisposition::Deny);
+    assert_eq!(decision.unresolved_effect_count, 1);
+    assert_eq!(decision.diagnostics, vec![DurabilityIssue::CollectionLimitExceeded]);
+}
+
 // r[verify molten.fabric_durability.ordered_store]
 // r[verify molten.fabric_durability.atomic_batch]
 #[test]

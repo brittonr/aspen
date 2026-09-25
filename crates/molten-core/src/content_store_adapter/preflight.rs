@@ -10,6 +10,20 @@ pub fn preflight_content_operation(
     queued_bytes: u64,
 ) -> ContentPreflight {
     let mut issues = validate_content_profile(profile);
+    if manifest.chunks.len() > profile.bounds.max_chunk_count {
+        issues.push(ContentIssue::ChunkCountExceeded);
+        let terminal = if command.cancelled || command.operation == ContentOperation::Cancel {
+            issues.push(ContentIssue::Cancelled);
+            ContentTerminal::Cancelled
+        } else {
+            ContentTerminal::Denied
+        };
+        return ContentPreflight {
+            terminal,
+            required_chunk_refs: Vec::new(),
+            issues,
+        };
+    }
     issues.extend(validate_manifest_descriptor(manifest));
     validate_command_shape(command, &mut issues);
     validate_binding(profile, manifest, command, &mut issues);
@@ -41,9 +55,15 @@ pub fn required_chunks_for_range(
     if end_bytes > manifest.total_length {
         return Err(ContentIssue::RangeExceeded);
     }
+    if u64::try_from(manifest.chunks.len()).map_or(true, |count| count > manifest.total_length) {
+        return Err(ContentIssue::ChunkCountExceeded);
+    }
     let mut offset_bytes = 0_u64;
     let mut required = Vec::new();
     for chunk in &manifest.chunks {
+        if chunk.length == 0 {
+            return Err(ContentIssue::ZeroBound("content-chunk-length"));
+        }
         let chunk_end_bytes = offset_bytes.checked_add(chunk.length).ok_or(ContentIssue::ArithmeticOverflow)?;
         if range.offset < chunk_end_bytes && offset_bytes < end_bytes {
             required.push(chunk.chunk_ref.clone());

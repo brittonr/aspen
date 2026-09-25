@@ -461,26 +461,38 @@ pub fn apply_effect_transaction(
 pub fn evaluate_recovery(state: &DurableState, inventory: &RecoveryInventory) -> RecoveryDecision {
     let mut diagnostics = Vec::new();
     if state.descriptor.generation != inventory.active_generation {
-        diagnostics.push(DurabilityIssue::StaleGeneration {
+        push_recovery_diagnostic(&mut diagnostics, || DurabilityIssue::StaleGeneration {
             active: inventory.active_generation,
             requested: state.descriptor.generation,
         });
     }
     if state.descriptor.value_schema_ref != inventory.expected_schema_ref {
-        diagnostics.push(DurabilityIssue::SnapshotSchemaMismatch);
+        push_recovery_diagnostic(&mut diagnostics, || DurabilityIssue::SnapshotSchemaMismatch);
     }
     collect_log_gap_diagnostics(&state.durable_log, &mut diagnostics);
     for snapshot in state.snapshots.values() {
+        if diagnostics.len() > MAX_DURABILITY_COLLECTION_ITEMS {
+            break;
+        }
         if snapshot.corrupted {
-            diagnostics.push(DurabilityIssue::SnapshotCorrupt);
+            push_recovery_diagnostic(&mut diagnostics, || DurabilityIssue::SnapshotCorrupt);
         }
         if snapshot.value_schema_ref != inventory.expected_schema_ref {
-            diagnostics.push(DurabilityIssue::SnapshotSchemaMismatch);
+            push_recovery_diagnostic(&mut diagnostics, || DurabilityIssue::SnapshotSchemaMismatch);
         }
     }
     for effect in state.effects.values() {
+        if diagnostics.len() > MAX_DURABILITY_COLLECTION_ITEMS {
+            break;
+        }
         if matches!(effect.phase, EffectTransactionPhase::Reserved | EffectTransactionPhase::Uncertain) {
-            diagnostics.push(DurabilityIssue::UnresolvedEffect(effect.transaction_id.clone()));
+            if effect.transaction_id.len() > MAX_DURABILITY_TEXT_BYTES {
+                push_recovery_diagnostic(&mut diagnostics, || DurabilityIssue::CollectionLimitExceeded);
+            } else {
+                push_recovery_diagnostic(&mut diagnostics, || {
+                    DurabilityIssue::UnresolvedEffect(effect.transaction_id.clone())
+                });
+            }
         }
     }
     let disposition = recovery_disposition(&diagnostics, inventory);
@@ -849,12 +861,15 @@ const fn effect_generation(command: &EffectTransactionCommand) -> u64 {
 
 fn collect_log_gap_diagnostics(log: &[LogRecord], diagnostics: &mut Vec<DurabilityIssue>) {
     for pair in log.windows(ADJACENT_PAIR_WIDTH) {
+        if diagnostics.len() > MAX_DURABILITY_COLLECTION_ITEMS {
+            break;
+        }
         let Some(expected) = pair[0].sequence.checked_add(SINGLE_AFFECTED_ITEM) else {
-            diagnostics.push(DurabilityIssue::SequenceOverflow);
+            push_recovery_diagnostic(diagnostics, || DurabilityIssue::SequenceOverflow);
             continue;
         };
         if pair[1].sequence != expected {
-            diagnostics.push(DurabilityIssue::LogGap {
+            push_recovery_diagnostic(diagnostics, || DurabilityIssue::LogGap {
                 expected,
                 actual: pair[1].sequence,
             });
@@ -862,15 +877,27 @@ fn collect_log_gap_diagnostics(log: &[LogRecord], diagnostics: &mut Vec<Durabili
     }
 }
 
+fn push_recovery_diagnostic(diagnostics: &mut Vec<DurabilityIssue>, issue: impl FnOnce() -> DurabilityIssue) {
+    if diagnostics.len() < MAX_DURABILITY_COLLECTION_ITEMS {
+        diagnostics.push(issue());
+    } else if diagnostics.len() == MAX_DURABILITY_COLLECTION_ITEMS {
+        diagnostics.push(DurabilityIssue::CollectionLimitExceeded);
+    }
+}
+
 fn recovery_disposition(diagnostics: &[DurabilityIssue], inventory: &RecoveryInventory) -> RecoveryDisposition {
     if diagnostics.is_empty() {
         return RecoveryDisposition::Admit;
     }
-    let has_corruption = diagnostics
-        .iter()
-        .any(|issue| {
-            matches!(issue, DurabilityIssue::SnapshotCorrupt | DurabilityIssue::LogGap { .. } | DurabilityIssue::SequenceOverflow)
-        });
+    if diagnostics.contains(&DurabilityIssue::CollectionLimitExceeded) {
+        return RecoveryDisposition::Deny;
+    }
+    let has_corruption = diagnostics.iter().any(|issue| {
+        matches!(
+            issue,
+            DurabilityIssue::SnapshotCorrupt | DurabilityIssue::LogGap { .. } | DurabilityIssue::SequenceOverflow
+        )
+    });
     let has_uncertain = diagnostics.iter().any(|issue| matches!(issue, DurabilityIssue::UnresolvedEffect(_)));
     if has_corruption && inventory.permit_quarantine {
         RecoveryDisposition::QuarantineRequired

@@ -244,6 +244,7 @@ pub fn build_fabric_port_registry(
             actual: descriptors.len(),
             maximum: super::MAX_FABRIC_PORTS,
         });
+        return Err(issues);
     }
 
     let mut keys = std::collections::BTreeSet::new();
@@ -421,6 +422,7 @@ fn validate_token_list(field: &'static str, values: &[String], nonempty: bool, i
             actual: values.len(),
             maximum: super::MAX_FABRIC_COLLECTION_ITEMS,
         });
+        return;
     }
     if super::has_duplicates(values) {
         issues.push(FabricPortIssue::DuplicateFieldValue(field));
@@ -442,6 +444,7 @@ fn validate_enum_list<T: Ord>(field: &'static str, values: &[T], issues: &mut Ve
             actual: values.len(),
             maximum: super::MAX_FABRIC_COLLECTION_ITEMS,
         });
+        return;
     }
     if super::has_duplicates(values) {
         issues.push(FabricPortIssue::DuplicateFieldValue(field));
@@ -458,6 +461,7 @@ fn validate_conformance_refs(refs: &[String], issues: &mut Vec<FabricPortIssue>)
             actual: refs.len(),
             maximum: super::MAX_FABRIC_COLLECTION_ITEMS,
         });
+        return;
     }
     if super::has_duplicates(refs) {
         issues.push(FabricPortIssue::DuplicateFieldValue("conformance-refs"));
@@ -471,6 +475,9 @@ fn validate_conformance_refs(refs: &[String], issues: &mut Vec<FabricPortIssue>)
 
 fn validate_descriptor_non_claims(non_claims: &[super::FabricNonClaim], issues: &mut Vec<FabricPortIssue>) {
     validate_enum_list("non-claims", non_claims, issues);
+    if non_claims.len() > super::MAX_FABRIC_COLLECTION_ITEMS {
+        return;
+    }
     super::validate_required_non_claims(non_claims, |missing| {
         issues.push(FabricPortIssue::MissingNonClaim(missing));
     });
@@ -583,6 +590,59 @@ mod tests {
             port_id: TRANSPORT_PORT_ID.to_string(),
             version: TRANSPORT_VERSION.to_string(),
         })));
+    }
+
+    // r[verify molten.fabric_boundary.port_registry]
+    #[test]
+    fn registry_rejects_above_limit_before_accumulating_duplicate_diagnostics() {
+        let mut descriptors = Vec::new();
+        for index in 0..super::super::MAX_FABRIC_PORTS {
+            let mut descriptor = valid_descriptor();
+            descriptor.port_id = format!("{TRANSPORT_PORT_ID}.{index}");
+            descriptors.push(descriptor);
+        }
+        let registry = build_fabric_port_registry(&descriptors).expect("exactly the maximum valid ports");
+        assert_eq!(registry.descriptors().len(), super::super::MAX_FABRIC_PORTS);
+
+        let duplicate = descriptors[0].clone();
+        descriptors.push(duplicate);
+        assert_eq!(
+            build_fabric_port_registry(&descriptors),
+            Err(vec![FabricPortIssue::TooManyPorts {
+                actual: super::super::MAX_FABRIC_PORTS + 1,
+                maximum: super::super::MAX_FABRIC_PORTS,
+            }])
+        );
+    }
+
+    // r[verify molten.fabric_boundary.port_registry]
+    #[test]
+    fn oversized_descriptor_fields_deny_before_duplicate_or_malformed_diagnostics() {
+        let mut descriptor = valid_descriptor();
+        descriptor.input_schema_refs = vec!["not a token".to_string(); super::super::MAX_FABRIC_COLLECTION_ITEMS + 1];
+        descriptor.conformance_refs = vec!["not a digest".to_string(); super::super::MAX_FABRIC_COLLECTION_ITEMS + 1];
+        descriptor.non_claims = vec![REQUIRED_FABRIC_NON_CLAIMS[0]; super::super::MAX_FABRIC_COLLECTION_ITEMS + 1];
+
+        assert_eq!(
+            build_fabric_port_registry(&[descriptor]),
+            Err(vec![
+                FabricPortIssue::TooManyFieldValues {
+                    field: "input-schema-refs",
+                    actual: super::super::MAX_FABRIC_COLLECTION_ITEMS + 1,
+                    maximum: super::super::MAX_FABRIC_COLLECTION_ITEMS,
+                },
+                FabricPortIssue::TooManyFieldValues {
+                    field: "conformance-refs",
+                    actual: super::super::MAX_FABRIC_COLLECTION_ITEMS + 1,
+                    maximum: super::super::MAX_FABRIC_COLLECTION_ITEMS,
+                },
+                FabricPortIssue::TooManyFieldValues {
+                    field: "non-claims",
+                    actual: super::super::MAX_FABRIC_COLLECTION_ITEMS + 1,
+                    maximum: super::super::MAX_FABRIC_COLLECTION_ITEMS,
+                },
+            ])
+        );
     }
 
     // r[verify molten.fabric_boundary.port_registry]

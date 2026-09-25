@@ -41,8 +41,13 @@ pub fn validate_manifest_descriptor(manifest: &ContentManifestDescriptor) -> Vec
     }
     validate_ref_list("content-policy-ref", &manifest.policy_refs, &mut issues);
     validate_ref_list("content-evidence-ref", &manifest.evidence_refs, &mut issues);
+    if u64::try_from(manifest.chunks.len()).map_or(true, |count| count > manifest.total_length) {
+        issues.push(ContentIssue::ChunkCountExceeded);
+        return issues;
+    }
     let mut total = 0_u64;
     for (expected_position, chunk) in manifest.chunks.iter().enumerate() {
+        let prior_issue_count = issues.len();
         validate_ref("content-chunk-ref", &chunk.chunk_ref, &mut issues);
         validate_token("content-chunk-transform", &chunk.transform, &mut issues);
         if chunk.length == 0 {
@@ -54,6 +59,9 @@ pub fn validate_manifest_descriptor(manifest: &ContentManifestDescriptor) -> Vec
         match total.checked_add(chunk.length) {
             Some(next) => total = next,
             None => issues.push(ContentIssue::ArithmeticOverflow),
+        }
+        if issues.len() != prior_issue_count {
+            return issues;
         }
     }
     if total != manifest.total_length {

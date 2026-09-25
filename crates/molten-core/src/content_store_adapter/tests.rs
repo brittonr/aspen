@@ -135,6 +135,51 @@ fn preflight_is_bounded_capability_checked_and_range_specific() {
     assert!(overloaded.issues.contains(&ContentIssue::ConcurrencyExceeded));
 }
 
+#[test]
+fn overbound_manifest_denies_without_materializing_required_chunk_refs() {
+    let profile = profile();
+    let mut manifest = manifest();
+    let first = manifest.chunks[0].clone();
+    manifest.chunks = (0..=MAX_CHUNK_COUNT)
+        .map(|position| ContentChunkDescriptor {
+            length: 1,
+            position,
+            ..first.clone()
+        })
+        .collect();
+    manifest.total_length = manifest.chunks.len() as u64;
+    manifest.chunk_size = 1;
+    let mut command = command(ContentOperation::Get);
+    command.expected_chunks = manifest.chunks.len();
+    command.expected_bytes = manifest.total_length;
+
+    let denied = preflight_content_operation(&profile, &manifest, &command, 0, 0);
+    assert_eq!(denied.terminal, ContentTerminal::Denied);
+    assert_eq!(denied.issues, vec![ContentIssue::ChunkCountExceeded]);
+    assert!(denied.required_chunk_refs.is_empty());
+
+    command.cancelled = true;
+    let cancelled = preflight_content_operation(&profile, &manifest, &command, 0, 0);
+    assert_eq!(cancelled.terminal, ContentTerminal::Cancelled);
+    assert_eq!(cancelled.issues, vec![ContentIssue::ChunkCountExceeded, ContentIssue::Cancelled]);
+    assert!(cancelled.required_chunk_refs.is_empty());
+}
+
+#[test]
+fn direct_manifest_helpers_reject_impossible_counts_and_stop_at_first_bad_chunk() {
+    let mut oversized = manifest();
+    oversized.chunks = vec![oversized.chunks[0].clone(); TOTAL_LENGTH as usize + 1];
+    let range = ContentRange { offset: 0, length: 1 };
+    assert_eq!(validate_manifest_descriptor(&oversized), vec![ContentIssue::ChunkCountExceeded]);
+    assert_eq!(required_chunks_for_range(&oversized, range), Err(ContentIssue::ChunkCountExceeded));
+
+    let mut zero_length = manifest();
+    zero_length.chunks[0].length = 0;
+    zero_length.chunks[1].length = 0;
+    assert_eq!(validate_manifest_descriptor(&zero_length), vec![ContentIssue::ZeroBound("content-chunk-length")]);
+    assert_eq!(required_chunks_for_range(&zero_length, range), Err(ContentIssue::ZeroBound("content-chunk-length")));
+}
+
 // r[verify molten.content_store_adapter.streaming_bounds]
 // r[verify molten.content_store_adapter.verify_before_available]
 #[test]
