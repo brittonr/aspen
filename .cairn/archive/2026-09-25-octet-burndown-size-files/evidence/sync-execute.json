@@ -1,0 +1,61 @@
+{
+  "acceptance_ids": [
+    "octet-burndown-size-files.behavior",
+    "octet-burndown-size-files.no-suppression",
+    "octet-burndown-size-files.tooling",
+    "octet-burndown-size-files.verbatim",
+    "octet-burndown-size-files.zero"
+  ],
+  "actions": [],
+  "blocked": false,
+  "change": "octet-burndown-size-files",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [],
+  "dry_run": false,
+  "input_hash": "6c385b321354ee3db964ee385431e74fb47cc1d683ec2f53cd24d7244fadde35",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": []
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts",
+    "no-spec profile conformance does not prove zero behavior effect or semantic correctness",
+    "change-local a[...] acceptance IDs are not accepted r[...] requirements and sync never promotes them"
+  ],
+  "plan_hash": "f18d33c7f8b0cb949ae3c2678eb705d3d4edebc5c5ee2172d0bd17dd41afbcf6",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "f45c7e6b276e67bc876dc475bb690f6413ec4cae5fe796660cb9686d795fa06d",
+  "reasons": [],
+  "receipt_hash": "ee6def0e42458cb60d8f8b06f13ccb69f1332110837022bed18ff0d86b45ea56",
+  "review_receipt_hashes": [
+    "322da8ef0c356ae04bde2e050faf0c0a42dd7328f735cbd60facd4cf283f2b09"
+  ],
+  "spec_effect": "none",
+  "workflow_profile": "no-spec-delta",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

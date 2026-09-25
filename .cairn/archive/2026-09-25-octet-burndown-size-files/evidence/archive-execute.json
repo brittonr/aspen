@@ -1,0 +1,271 @@
+{
+  "acceptance_ids": [
+    "octet-burndown-size-files.behavior",
+    "octet-burndown-size-files.no-suppression",
+    "octet-burndown-size-files.tooling",
+    "octet-burndown-size-files.verbatim",
+    "octet-burndown-size-files.zero"
+  ],
+  "actions": [
+    {
+      "description": "move active change to archive: octet-burndown-size-files",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files"
+    }
+  ],
+  "blocked": false,
+  "change": "octet-burndown-size-files",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "9700fc4de771faa9f4cfe8ddbe6859d1b221674440d3c06fc18233c7b443c64f",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "255bfd79bddc8aa1b3a7deb3bda0060c04d87ca7fba213f9341820e2773b4b37",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files/acceptance.md"
+        },
+        {
+          "content_hash": "305442f34f355e1b517eb5732a692406b87643b10cfadc5c2d41cdb1a45cb6ec",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files/design.md"
+        },
+        {
+          "content_hash": "c68f124d27bf6ef75bc29e0f2ea68ed52b92eb47d6838ceca2557b5057e8cfa0",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files/evidence/expand-comparison.txt"
+        },
+        {
+          "content_hash": "97d35ecaff0b6d1cdfd94aa1c2d0f07f059497ac157e6d73310b84cb5d4bb6d9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files/evidence/fixture-receipt-comparison.txt"
+        },
+        {
+          "content_hash": "8cee3d9d40f62e8e8608b791dab750fbca50f622c0596f339c2528dd33cd3d7b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files/evidence/flake-checks.txt"
+        },
+        {
+          "content_hash": "3252054df1ebaf0fbe1d7add6c9354c883d9f002c83379c3ed4ea65d17cc13e6",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "aadf194361adca401c3e00c6384a01a39246b6ff4f4c9e89c59a93b453cce8c0",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "ddd0dbacbf04f4724a5b54d565c630abc7e4e8d456b3bcf5c141deacfac1ae30",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "18eebdca3b66b4a9d5c58946222c3e1e18d82aac09bfadc1e69af664962c48d8",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files/evidence/octet-lib-summary.txt"
+        },
+        {
+          "content_hash": "afebc070d54d228a87d89f462819db0c5cad16f1827c8235e54c5952b0f6f502",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files/evidence/octet-lint-diff.txt"
+        },
+        {
+          "content_hash": "a30c4a38f5d5a7f5a57838c1512f47d918fc8aa2791b515efcefcbf2cf444deb",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files/evidence/octet-root-summary.txt"
+        },
+        {
+          "content_hash": "1a3e369f00dacc21210700cc8d19ef9ff2bf016e10b8f6876a1f7f61a6157457",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files/evidence/simulation-fixture-comparison.txt"
+        },
+        {
+          "content_hash": "d16b7ae6780a6fbc2d72b73b6b7f89eb294a995bcabe53803dbba2d127223112",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "09364f99ad5888bbc9bb6f27d9b8fcd82c1a40172643a72aba8cda2f22737f16",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "f05deb06794b288fd5d11d7df9c1fb475612ca102b5058404a898bdec78084fa",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files/evidence/verification.md"
+        },
+        {
+          "content_hash": "38c30a126a17e023d655bdae5dd5bf96a2a3af4a3a62f61e3811b977c2c1ca8b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files/metadata.json"
+        },
+        {
+          "content_hash": "2679f3e0da3a4b4654d6047a8b73fb6ad9301de6c9efee7c2247e90acf92fcde",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files/proposal.md"
+        },
+        {
+          "content_hash": "ac0d68e56bc4926cd93df2c01987c24e073a06ed2afc81b03b2c82b81cb22e12",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "05ae6c49b07c8909ae2b4dd0b91f7b9e6cc36f629245511bdf57652626e21ff1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-octet-burndown-size-files/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/octet-burndown-size-files"
+        }
+      ],
+      "manifest_hash": "ebb840195f01371c28f305313c0c9856aca57c213b1b1d0355451f6a3ffc19c0"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "255bfd79bddc8aa1b3a7deb3bda0060c04d87ca7fba213f9341820e2773b4b37",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-size-files/acceptance.md"
+        },
+        {
+          "content_hash": "305442f34f355e1b517eb5732a692406b87643b10cfadc5c2d41cdb1a45cb6ec",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-size-files/design.md"
+        },
+        {
+          "content_hash": "c68f124d27bf6ef75bc29e0f2ea68ed52b92eb47d6838ceca2557b5057e8cfa0",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-size-files/evidence/expand-comparison.txt"
+        },
+        {
+          "content_hash": "97d35ecaff0b6d1cdfd94aa1c2d0f07f059497ac157e6d73310b84cb5d4bb6d9",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-size-files/evidence/fixture-receipt-comparison.txt"
+        },
+        {
+          "content_hash": "8cee3d9d40f62e8e8608b791dab750fbca50f622c0596f339c2528dd33cd3d7b",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-size-files/evidence/flake-checks.txt"
+        },
+        {
+          "content_hash": "3252054df1ebaf0fbe1d7add6c9354c883d9f002c83379c3ed4ea65d17cc13e6",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-size-files/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "aadf194361adca401c3e00c6384a01a39246b6ff4f4c9e89c59a93b453cce8c0",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-size-files/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "ddd0dbacbf04f4724a5b54d565c630abc7e4e8d456b3bcf5c141deacfac1ae30",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-size-files/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "18eebdca3b66b4a9d5c58946222c3e1e18d82aac09bfadc1e69af664962c48d8",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-size-files/evidence/octet-lib-summary.txt"
+        },
+        {
+          "content_hash": "afebc070d54d228a87d89f462819db0c5cad16f1827c8235e54c5952b0f6f502",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-size-files/evidence/octet-lint-diff.txt"
+        },
+        {
+          "content_hash": "a30c4a38f5d5a7f5a57838c1512f47d918fc8aa2791b515efcefcbf2cf444deb",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-size-files/evidence/octet-root-summary.txt"
+        },
+        {
+          "content_hash": "1a3e369f00dacc21210700cc8d19ef9ff2bf016e10b8f6876a1f7f61a6157457",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-size-files/evidence/simulation-fixture-comparison.txt"
+        },
+        {
+          "content_hash": "d16b7ae6780a6fbc2d72b73b6b7f89eb294a995bcabe53803dbba2d127223112",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-size-files/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "09364f99ad5888bbc9bb6f27d9b8fcd82c1a40172643a72aba8cda2f22737f16",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-size-files/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "f05deb06794b288fd5d11d7df9c1fb475612ca102b5058404a898bdec78084fa",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-size-files/evidence/verification.md"
+        },
+        {
+          "content_hash": "38c30a126a17e023d655bdae5dd5bf96a2a3af4a3a62f61e3811b977c2c1ca8b",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-size-files/metadata.json"
+        },
+        {
+          "content_hash": "2679f3e0da3a4b4654d6047a8b73fb6ad9301de6c9efee7c2247e90acf92fcde",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-size-files/proposal.md"
+        },
+        {
+          "content_hash": "ac0d68e56bc4926cd93df2c01987c24e073a06ed2afc81b03b2c82b81cb22e12",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-size-files/reviews/no-spec-classification.json"
+        },
+        {
+          "content_hash": "05ae6c49b07c8909ae2b4dd0b91f7b9e6cc36f629245511bdf57652626e21ff1",
+          "exists": true,
+          "path": "./.cairn/changes/octet-burndown-size-files/tasks.md"
+        }
+      ],
+      "manifest_hash": "1c37b133be7592b3c418c0fb19f0934359405890ff985c73dbcd77b7919048c5"
+    },
+    "kind": "archive",
+    "manifest_hash": "47561545023b558002b70cde39e3292f987e9a80a6f4497790d0335b93ac1152"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts",
+    "no-spec profile conformance does not prove zero behavior effect or semantic correctness",
+    "change-local a[...] acceptance IDs are not accepted r[...] requirements and sync never promotes them"
+  ],
+  "plan_hash": "267b11007be7e7cade7fccdf4cb64ded5e77d655ebfee800997effdd0b839c5e",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "f45c7e6b276e67bc876dc475bb690f6413ec4cae5fe796660cb9686d795fa06d",
+  "reasons": [],
+  "receipt_hash": "dc15e812148720f1b79ffc6912a99d69b59ab953381a08e04e9606d7a3b8ac86",
+  "review_receipt_hashes": [
+    "322da8ef0c356ae04bde2e050faf0c0a42dd7328f735cbd60facd4cf283f2b09"
+  ],
+  "spec_effect": "none",
+  "workflow_profile": "no-spec-delta",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
