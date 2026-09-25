@@ -213,15 +213,15 @@
         let root = temp_dir("chunk-corrupt");
         let put = put_bytes(&root, "artifact", b"aaaabbbbcccc", 4).expect("put");
         let manifest = read_manifest(&root, &put.manifest_ref).expect("read manifest");
-        fs::write(test_chunk_path(&root, &manifest.chunks[1].chunk_ref).expect("chunk path"), b"zzzz").expect("corrupt");
+        std::fs::write(test_chunk_path(&root, &manifest.chunks[1].chunk_ref).expect("chunk path"), b"zzzz").expect("corrupt");
         let error = verify_manifest(&root, &put.manifest_ref).expect_err("corruption fails");
         assert!(error.to_string().contains("chunk hash mismatch"));
 
-        fs::remove_dir_all(root.join("chunks")).expect("remove chunks");
-        fs::create_dir_all(root.join("chunks")).expect("recreate chunks");
+        std::fs::remove_dir_all(root.join("chunks")).expect("remove chunks");
+        std::fs::create_dir_all(root.join("chunks")).expect("recreate chunks");
         let put = put_bytes(&root, "artifact", b"aaaabbbbcccc", 4).expect("put after corruption");
         let manifest = read_manifest(&root, &put.manifest_ref).expect("read manifest");
-        fs::remove_file(test_chunk_path(&root, &manifest.chunks[0].chunk_ref).expect("chunk path")).expect("remove chunk");
+        std::fs::remove_file(test_chunk_path(&root, &manifest.chunks[0].chunk_ref).expect("chunk path")).expect("remove chunk");
         let missing = missing_chunks(&root, &put.manifest_ref).expect("missing chunks");
         assert_eq!(missing, vec![manifest.chunks[0].chunk_ref.clone()]);
         let error = read_object(&root, &put.manifest_ref).expect_err("missing chunk fails");

@@ -90,7 +90,7 @@ const DECISION_ERROR: &str = "error";
 const DECISION_SKIP: &str = "skip";
 const DECISION_KNOWN_BUG: &str = "known-bug";
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TranscriptParseInput {
     pub dependency_refs: Vec<String>,
     pub dependency_closure_hash: Option<String>,
@@ -106,6 +106,34 @@ pub struct TranscriptParseInput {
     pub logical_time: Option<u64>,
     pub expected_refs: Vec<String>,
     pub resolution_refs: Vec<String>,
+}
+
+impl TranscriptParseInput {
+    /// Parse input with no bound references, seed, or logical time.
+    pub fn empty() -> Self {
+        Self {
+            dependency_refs: Vec::new(),
+            dependency_closure_hash: None,
+            artifact_refs: Vec::new(),
+            schema_refs: Vec::new(),
+            handler_profile_ref: None,
+            policy_refs: Vec::new(),
+            capability_refs: Vec::new(),
+            resource_refs: Vec::new(),
+            effect_manifest_refs: Vec::new(),
+            revocation_refs: Vec::new(),
+            seed_ref: None,
+            logical_time: None,
+            expected_refs: Vec::new(),
+            resolution_refs: Vec::new(),
+        }
+    }
+}
+
+impl Default for TranscriptParseInput {
+    fn default() -> Self {
+        Self::empty()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

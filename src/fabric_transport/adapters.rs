@@ -43,7 +43,7 @@ impl DeterministicTransportAdapter {
         }
         Ok(Self {
             profile,
-            state: TransportState::default(),
+            state: TransportState::new(),
             latest_evidence_ref: None,
         })
     }
@@ -173,7 +173,7 @@ impl IrohTransportAdapter {
         }
         Ok(Self {
             profile,
-            state: TransportState::default(),
+            state: TransportState::new(),
             latest_evidence_ref: None,
         })
     }

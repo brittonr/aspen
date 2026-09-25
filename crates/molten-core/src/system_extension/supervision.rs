@@ -44,7 +44,7 @@ pub struct ResourceEnvelope {
     pub overload_policy: OverloadPolicy,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ResourceUsage {
     pub concurrent_callbacks: u64,
     pub queued_events: u64,
@@ -54,7 +54,25 @@ pub struct ResourceUsage {
     pub effect_requests: u64,
 }
 
+impl Default for ResourceUsage {
+    fn default() -> Self {
+        Self::zero()
+    }
+}
+
 impl ResourceUsage {
+    /// Usage with every counter at zero; the explicit form of the default value.
+    pub const fn zero() -> Self {
+        Self {
+            concurrent_callbacks: 0,
+            queued_events: 0,
+            inflight_bytes: 0,
+            open_streams: 0,
+            timers: 0,
+            effect_requests: 0,
+        }
+    }
+
     pub const fn is_idle(self) -> bool {
         self.concurrent_callbacks == 0
             && self.queued_events == 0

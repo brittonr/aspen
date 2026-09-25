@@ -322,7 +322,7 @@ pub struct TransportSession {
     pub deadline_tick: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransportCounters {
     pub registrations: u64,
     pub ownership_transfers: u64,
@@ -335,11 +335,51 @@ pub struct TransportCounters {
     pub cancellations: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+impl TransportCounters {
+    /// Counters with every total at zero; the explicit form of the default value.
+    pub const fn new() -> Self {
+        Self {
+            registrations: 0,
+            ownership_transfers: 0,
+            sessions_opened: 0,
+            streams_opened: 0,
+            frames_submitted: 0,
+            frames_received: 0,
+            datagrams_submitted: 0,
+            failures: 0,
+            cancellations: 0,
+        }
+    }
+}
+
+impl Default for TransportCounters {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransportState {
     pub protocols: BTreeMap<String, RegisteredProtocol>,
     pub sessions: BTreeMap<String, TransportSession>,
     pub counters: TransportCounters,
+}
+
+impl TransportState {
+    /// State with no registered protocols, no sessions, and zero counters.
+    pub const fn new() -> Self {
+        Self {
+            protocols: BTreeMap::new(),
+            sessions: BTreeMap::new(),
+            counters: TransportCounters::new(),
+        }
+    }
+}
+
+impl Default for TransportState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

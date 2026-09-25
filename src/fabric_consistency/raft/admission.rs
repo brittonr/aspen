@@ -301,11 +301,11 @@ fn initial_state(
         commit_index: super::INITIAL_COMMIT_INDEX,
         last_applied: super::INITIAL_COMMIT_INDEX,
         snapshot: None,
-        completed_requests: Default::default(),
-        pending_reads: Default::default(),
+        completed_requests: std::collections::BTreeMap::new(),
+        pending_reads: std::collections::BTreeMap::new(),
         votes_received: std::collections::BTreeSet::new(),
-        next_index: Default::default(),
-        match_index: Default::default(),
+        next_index: std::collections::BTreeMap::new(),
+        match_index: std::collections::BTreeMap::new(),
         quorum_confirmed_term: None,
     })
 }

@@ -156,8 +156,8 @@ impl Cohort {
             admitted,
             execution_profile,
             template,
-            journal: std::sync::Arc::new(std::sync::Mutex::new(Journal::default())),
-            values: shared_native_callback_value_port(InMemoryNativeCallbackValuePort::default()),
+            journal: std::sync::Arc::new(std::sync::Mutex::new(Journal::empty())),
+            values: shared_native_callback_value_port(InMemoryNativeCallbackValuePort::empty()),
         }
     }
 

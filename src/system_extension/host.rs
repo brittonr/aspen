@@ -156,7 +156,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
             admitted,
             executor,
             state: super::LifecycleState::absent(),
-            usage: super::ResourceUsage::default(),
+            usage: super::ResourceUsage::zero(),
             invocation_sequence: FIRST_SEQUENCE,
             event_sequence: FIRST_SEQUENCE,
             semantic_state_ref: None,

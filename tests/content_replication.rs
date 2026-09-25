@@ -1,10 +1,6 @@
 #[path = "src/test/support.rs"]
 mod test_support;
 
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-
-use molten::cluster_harness::DEFAULT_DISTINCT_PROCESS_TIMEOUT_MS;
 use molten::content_replication::*;
 use molten_core::content_replication::*;
 
@@ -120,9 +116,9 @@ fn run_action(label: &str, manifest: &Manifest, action: &Action) -> TransferEnve
     let mut adapter = DistinctProcessTransferAdapter::open(
         manifest,
         run_root.clone(),
-        PathBuf::from(env!("CARGO_BIN_EXE_molten")),
-        DEFAULT_DISTINCT_PROCESS_TIMEOUT_MS,
-        BTreeMap::from([(manifest.contents[0].content_ref.clone(), PAYLOAD.to_vec())]),
+        std::path::PathBuf::from(env!("CARGO_BIN_EXE_molten")),
+        molten::cluster_harness::DEFAULT_DISTINCT_PROCESS_TIMEOUT_MS,
+        std::collections::BTreeMap::from([(manifest.contents[0].content_ref.clone(), PAYLOAD.to_vec())]),
     )
     .expect("multiprocess adapter");
     let envelope = match adapter.fetch(action).expect("multiprocess transfer") {
@@ -172,9 +168,9 @@ fn multiprocess_adapter_rejects_wrong_payload_before_child_processes() {
     let result = DistinctProcessTransferAdapter::open(
         &manifest,
         workspace.join("run"),
-        PathBuf::from(env!("CARGO_BIN_EXE_molten")),
-        DEFAULT_DISTINCT_PROCESS_TIMEOUT_MS,
-        BTreeMap::from([(manifest.contents[0].content_ref.clone(), b"wrong".to_vec())]),
+        std::path::PathBuf::from(env!("CARGO_BIN_EXE_molten")),
+        molten::cluster_harness::DEFAULT_DISTINCT_PROCESS_TIMEOUT_MS,
+        std::collections::BTreeMap::from([(manifest.contents[0].content_ref.clone(), b"wrong".to_vec())]),
     );
     assert!(result.is_err());
     assert!(!workspace.join("run").exists());

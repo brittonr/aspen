@@ -4,11 +4,6 @@
 #[path = "nativesystemextension/support.rs"]
 mod support;
 
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::atomic::Ordering;
-
 use molten::system_extension::*;
 use support::*;
 
@@ -236,7 +231,7 @@ fn restart_with_missing_state_bytes_fails_before_process_start() {
     let expected_state_ref = restored.state_ref.clone();
     drop(service);
 
-    cohort.values = shared_native_callback_value_port(InMemoryNativeCallbackValuePort::default());
+    cohort.values = shared_native_callback_value_port(InMemoryNativeCallbackValuePort::empty());
     let mut recovered = cohort.recovered(restored);
     assert!(recovered.restart(RESTART_TICK).is_err());
     let observations = recovered.host().executor().observations();
@@ -327,8 +322,8 @@ fn materializing_native_host_rejects_missing_mismatched_and_oversized_effect_val
 
 #[derive(Clone, Default)]
 struct ControlledValuePort {
-    inner: Arc<Mutex<InMemoryNativeCallbackValuePort>>,
-    failure: Arc<Mutex<Option<(usize, NativeValuePortFailureKind)>>>,
+    inner: std::sync::Arc<std::sync::Mutex<InMemoryNativeCallbackValuePort>>,
+    failure: std::sync::Arc<std::sync::Mutex<Option<(usize, NativeValuePortFailureKind)>>>,
 }
 
 impl ControlledValuePort {
@@ -399,7 +394,7 @@ impl NativeCallbackValuePort for ControlledValuePort {
 // r[verify molten.system_extension.native_host.validation]
 #[test]
 fn native_executor_fails_closed_for_malformed_nonzero_timeout_flood_spawn_and_cancellation() {
-    let shell = PathBuf::from("/bin/sh");
+    let shell = std::path::PathBuf::from("/bin/sh");
     for (script, timeout_ms, output_bytes) in [
         ("printf 'malformed'", NORMAL_TIMEOUT_MS, FULL_OUTPUT_BYTES),
         ("exit 7", NORMAL_TIMEOUT_MS, FULL_OUTPUT_BYTES),
@@ -415,7 +410,7 @@ fn native_executor_fails_closed_for_malformed_nonzero_timeout_flood_spawn_and_ca
 
     let mut missing = Cohort::new();
     missing.replace_program(
-        PathBuf::from("/definitely/missing/native-extension"),
+        std::path::PathBuf::from("/definitely/missing/native-extension"),
         Vec::new(),
         NORMAL_TIMEOUT_MS,
         FULL_OUTPUT_BYTES,
@@ -425,7 +420,11 @@ fn native_executor_fails_closed_for_malformed_nonzero_timeout_flood_spawn_and_ca
 
     let cancellation = Cohort::new();
     let mut cancelled_service = cancellation.install();
-    cancelled_service.host().executor().cancellation_handle().store(true, Ordering::Release);
+    cancelled_service
+        .host()
+        .executor()
+        .cancellation_handle()
+        .store(true, std::sync::atomic::Ordering::Release);
     assert!(cancelled_service.start(START_TICK).is_err());
     assert_eq!(
         cancelled_service.host().executor().observations()[0].lifecycle,

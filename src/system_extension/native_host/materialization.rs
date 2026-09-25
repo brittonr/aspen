@@ -57,13 +57,27 @@ pub fn shared_native_callback_value_port(
     std::sync::Arc::new(std::sync::Mutex::new(Box::new(port)))
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct InMemoryNativeCallbackValuePort {
     values: std::collections::BTreeMap<String, Vec<u8>>,
     next_publication_failure: Option<NativeValuePortFailureKind>,
 }
 
+impl Default for InMemoryNativeCallbackValuePort {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
 impl InMemoryNativeCallbackValuePort {
+    /// A port with no stored values and no scheduled publication failure.
+    pub const fn empty() -> Self {
+        Self {
+            values: std::collections::BTreeMap::new(),
+            next_publication_failure: None,
+        }
+    }
+
     pub fn from_values(values: impl IntoIterator<Item = Vec<u8>>) -> Self {
         let mut port = Self::default();
         for bytes in values {

@@ -43,9 +43,22 @@ pub trait NativeHostJournal {
     fn history(&self, instance_id: &str) -> Result<Vec<NativeInstanceRecord>, NativeJournalError>;
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct InMemoryNativeHostJournal {
     records: Vec<CanonicalNativeInstanceRecord>,
+}
+
+impl InMemoryNativeHostJournal {
+    /// A journal with no saved instance records.
+    pub const fn empty() -> Self {
+        Self { records: Vec::new() }
+    }
+}
+
+impl Default for InMemoryNativeHostJournal {
+    fn default() -> Self {
+        Self::empty()
+    }
 }
 
 impl NativeHostJournal for InMemoryNativeHostJournal {

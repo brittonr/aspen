@@ -38,11 +38,11 @@ pub(super) enum Top {
     },
     FabricTime {
         #[command(subcommand)]
-        command: crate::cli_fabric_time::FabricTimeCommand,
+        command: crate::cli_fabric_time::command::FabricTimeCommand,
     },
     FabricSimulation {
         #[command(subcommand)]
-        command: crate::cli_fabric_simulation::FabricSimulationCommand,
+        command: crate::cli_fabric_simulation::command::FabricSimulationCommand,
     },
     SystemExtension {
         #[command(subcommand)]
@@ -247,11 +247,6 @@ pub(crate) enum Test {
 
 #[cfg(test)]
 mod tests {
-    use clap::Parser;
-
-    use super::Cli;
-    use super::Top;
-
     const COMMIT_REF: &str = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     #[test]
@@ -272,7 +267,7 @@ mod tests {
             "gc-plan",
         ];
         for command in commands {
-            let cli = Cli::try_parse_from([
+            let cli = <super::Cli as clap::Parser>::try_parse_from([
                 "molten",
                 "world",
                 command,
@@ -282,19 +277,25 @@ mod tests {
                 "workflow-plan.preserves",
             ])
             .expect("world operator command");
-            assert!(matches!(cli.command, Some(Top::World { .. })));
+            assert!(matches!(cli.command, Some(super::Top::World { .. })));
         }
     }
 
     #[test]
     fn world_operator_rejects_missing_request() {
-        let result = Cli::try_parse_from(["molten", "world", "inspect", "--plan-out", "workflow-plan.preserves"]);
+        let result = <super::Cli as clap::Parser>::try_parse_from([
+            "molten",
+            "world",
+            "inspect",
+            "--plan-out",
+            "workflow-plan.preserves",
+        ]);
         assert!(result.is_err());
     }
 
     #[test]
     fn world_commit_operator_commands_parse_explicit_state_and_identity() {
-        let cli = Cli::try_parse_from([
+        let cli = <super::Cli as clap::Parser>::try_parse_from([
             "molten",
             "world-commit",
             "plan-restore",
@@ -306,19 +307,19 @@ mod tests {
         ])
         .expect("world commit command");
 
-        assert!(matches!(cli.command, Some(Top::WorldCommit { .. })));
+        assert!(matches!(cli.command, Some(super::Top::WorldCommit { .. })));
     }
 
     #[test]
     fn world_commit_operator_commands_reject_missing_state_root() {
-        let result = Cli::try_parse_from(["molten", "world-commit", "inspect", COMMIT_REF]);
+        let result = <super::Cli as clap::Parser>::try_parse_from(["molten", "world-commit", "inspect", COMMIT_REF]);
 
         assert!(result.is_err());
     }
 
     #[test]
     fn world_snapshot_clone_plan_parses_explicit_descriptor_bound_and_output() {
-        let cli = Cli::try_parse_from([
+        let cli = <super::Cli as clap::Parser>::try_parse_from([
             "molten",
             "world-snapshot",
             "clone-plan",
@@ -331,12 +332,12 @@ mod tests {
         ])
         .expect("world snapshot clone plan command");
 
-        assert!(matches!(cli.command, Some(Top::WorldSnapshot { .. })));
+        assert!(matches!(cli.command, Some(super::Top::WorldSnapshot { .. })));
     }
 
     #[test]
     fn world_snapshot_restore_rejects_missing_denial_receipt_path() {
-        let result = Cli::try_parse_from([
+        let result = <super::Cli as clap::Parser>::try_parse_from([
             "molten",
             "world-snapshot",
             "restore",
@@ -351,7 +352,7 @@ mod tests {
 
     #[test]
     fn world_authority_plan_parses_bounded_request_policy_and_output() {
-        let cli = Cli::try_parse_from([
+        let cli = <super::Cli as clap::Parser>::try_parse_from([
             "molten",
             "world-authority",
             "plan",
@@ -364,12 +365,12 @@ mod tests {
         ])
         .expect("world authority plan command");
 
-        assert!(matches!(cli.command, Some(Top::WorldAuthority { .. })));
+        assert!(matches!(cli.command, Some(super::Top::WorldAuthority { .. })));
     }
 
     #[test]
     fn world_authority_effect_command_requires_denial_receipt_path() {
-        let result = Cli::try_parse_from([
+        let result = <super::Cli as clap::Parser>::try_parse_from([
             "molten",
             "world-authority",
             "activate",
@@ -384,7 +385,7 @@ mod tests {
 
     #[test]
     fn world_head_plan_parses_every_compare_and_swap_input() {
-        let cli = Cli::try_parse_from([
+        let cli = <super::Cli as clap::Parser>::try_parse_from([
             "molten",
             "world-head",
             "plan",
@@ -407,12 +408,12 @@ mod tests {
         ])
         .expect("world-head plan command");
 
-        assert!(matches!(cli.command, Some(Top::WorldHead { .. })));
+        assert!(matches!(cli.command, Some(super::Top::WorldHead { .. })));
     }
 
     #[test]
     fn world_head_mutation_commands_reject_missing_capability_root() {
-        let result = Cli::try_parse_from([
+        let result = <super::Cli as clap::Parser>::try_parse_from([
             "molten",
             "world-head",
             "advance",
@@ -427,7 +428,7 @@ mod tests {
 
     #[test]
     fn world_distribution_plan_parses_bounded_identity_and_output() {
-        let cli = Cli::try_parse_from([
+        let cli = <super::Cli as clap::Parser>::try_parse_from([
             "molten",
             "world-distribution",
             "sync-plan",
@@ -447,19 +448,25 @@ mod tests {
         ])
         .expect("world distribution plan command");
 
-        assert!(matches!(cli.command, Some(Top::WorldDistribution { .. })));
+        assert!(matches!(cli.command, Some(super::Top::WorldDistribution { .. })));
     }
 
     #[test]
     fn world_distribution_sync_rejects_missing_capability_root() {
-        let result = Cli::try_parse_from(["molten", "world-distribution", "sync", "--commit", COMMIT_REF]);
+        let result = <super::Cli as clap::Parser>::try_parse_from([
+            "molten",
+            "world-distribution",
+            "sync",
+            "--commit",
+            COMMIT_REF,
+        ]);
 
         assert!(result.is_err());
     }
 
     #[test]
     fn world_promotion_plan_requires_explicit_request_and_output() {
-        let cli = Cli::try_parse_from([
+        let cli = <super::Cli as clap::Parser>::try_parse_from([
             "molten",
             "world-promotion",
             "plan",
@@ -470,19 +477,25 @@ mod tests {
         ])
         .expect("world promotion plan command");
 
-        assert!(matches!(cli.command, Some(Top::WorldPromotion { .. })));
+        assert!(matches!(cli.command, Some(super::Top::WorldPromotion { .. })));
     }
 
     #[test]
     fn world_promotion_mutation_rejects_missing_capability_root() {
-        let result = Cli::try_parse_from(["molten", "world-promotion", "promote", "--request", "promotion.json"]);
+        let result = <super::Cli as clap::Parser>::try_parse_from([
+            "molten",
+            "world-promotion",
+            "promote",
+            "--request",
+            "promotion.json",
+        ]);
 
         assert!(result.is_err());
     }
 
     #[test]
     fn world_merge_plan_parses_explicit_base_sources_and_policy() {
-        let cli = Cli::try_parse_from([
+        let cli = <super::Cli as clap::Parser>::try_parse_from([
             "molten",
             "world-merge",
             "merge-plan",
@@ -503,12 +516,18 @@ mod tests {
         ])
         .expect("world-merge plan command");
 
-        assert!(matches!(cli.command, Some(Top::WorldMerge { .. })));
+        assert!(matches!(cli.command, Some(super::Top::WorldMerge { .. })));
     }
 
     #[test]
     fn world_merge_publish_rejects_missing_capability_root() {
-        let result = Cli::try_parse_from(["molten", "world-merge", "merge-publish", "--plan", "merge.preserves"]);
+        let result = <super::Cli as clap::Parser>::try_parse_from([
+            "molten",
+            "world-merge",
+            "merge-publish",
+            "--plan",
+            "merge.preserves",
+        ]);
 
         assert!(result.is_err());
     }

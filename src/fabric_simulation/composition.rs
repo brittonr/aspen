@@ -717,7 +717,7 @@ fn run_prepared_reference_world(
     seed: u64,
 ) -> crate::error::Result<ReferenceSimulationFixtureRun> {
     let mut pending = prepared.world.admitted.manifest.workload.clone();
-    let mut scheduler = SimulationSchedulerState::default();
+    let mut scheduler = SimulationSchedulerState::initial();
     let mut router = DeterministicSimulationPortRouter::new(&prepared.world);
     let mut observations = Vec::new();
     let mut choice_records = Vec::new();

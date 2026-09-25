@@ -90,7 +90,7 @@
         assert_eq!(diagnostic_profile.profile, "diagnostic");
         assert_eq!(diagnostic_profile.decision, "pass");
         assert!(!diagnostic_profile.marker_refs.is_empty());
-        let redacted_explain = fs::read_to_string(diagnostic_dir.join(BUNDLE_REDACTED_DIR).join("explain.preserves"))
+        let redacted_explain = std::fs::read_to_string(diagnostic_dir.join(BUNDLE_REDACTED_DIR).join("explain.preserves"))
             .expect("read redacted explain");
         assert!(!redacted_explain.contains(CLASS_PRIVATE_SECRET_REF));
         assert!(!redacted_explain.contains("encrypted-ref"));

@@ -1,7 +1,6 @@
     use n0_future::StreamExt;
 
     use super::*;
-    use std::fs;
 
     type PathBuf = std::path::PathBuf;
 
@@ -43,13 +42,13 @@
 
     fn write_store_value(path: &Path, value: &IoValue) -> Result<()> {
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(MoltenError::from)?;
+            std::fs::create_dir_all(parent).map_err(MoltenError::from)?;
         }
-        fs::write(path, crate::preserves_rail::to_text(value)?).map_err(MoltenError::from)
+        std::fs::write(path, crate::preserves_rail::to_text(value)?).map_err(MoltenError::from)
     }
 
     fn read_store_value(path: &Path) -> Result<IoValue> {
-        let text = fs::read_to_string(path).map_err(MoltenError::from)?;
+        let text = std::fs::read_to_string(path).map_err(MoltenError::from)?;
         crate::preserves_rail::parse_text(&text)
     }
 

@@ -191,14 +191,21 @@ pub struct SimulationSchedulerState {
     pub terminal: bool,
 }
 
-impl Default for SimulationSchedulerState {
-    fn default() -> Self {
+impl SimulationSchedulerState {
+    /// Scheduler state before the first choice, event, or tick.
+    pub const fn initial() -> Self {
         Self {
             next_choice_position: FIRST_CHOICE_POSITION,
             event_count: FIRST_EVENT_POSITION,
             virtual_tick: FIRST_VIRTUAL_TICK,
             terminal: false,
         }
+    }
+}
+
+impl Default for SimulationSchedulerState {
+    fn default() -> Self {
+        Self::initial()
     }
 }
 

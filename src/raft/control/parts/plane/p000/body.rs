@@ -110,11 +110,11 @@ pub struct ConsensusAlgorithmProfileInput {
 pub struct ClusterConsensusConfig {
     #[serde(default = "default_consensus_algorithm_profile_name")]
     pub algorithm_profile: String,
-    #[serde(default)]
+    #[serde(default = "absent_consensus_profile_version")]
     pub profile_version: Option<String>,
-    #[serde(default)]
+    #[serde(default = "absent_consensus_placement_ref")]
     pub placement_ref: Option<String>,
-    #[serde(default)]
+    #[serde(default = "no_required_consensus_evidence_refs")]
     pub required_evidence_refs: Vec<String>,
 }
 
@@ -131,6 +131,18 @@ impl Default for ClusterConsensusConfig {
 
 fn default_consensus_algorithm_profile_name() -> String {
     CONSENSUS_PROFILE_RAFT.to_string()
+}
+
+const fn absent_consensus_profile_version() -> Option<String> {
+    None
+}
+
+const fn absent_consensus_placement_ref() -> Option<String> {
+    None
+}
+
+const fn no_required_consensus_evidence_refs() -> Vec<String> {
+    Vec::new()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

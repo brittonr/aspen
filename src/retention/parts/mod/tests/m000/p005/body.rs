@@ -37,7 +37,7 @@
     }
 
     async fn start_bound_live_node(state_root: &Path, topic: &str) -> LiveNodeHarness {
-        let identity_text = fs::read_to_string(state_root.join("identity.preserves")).expect("node identity file");
+        let identity_text = std::fs::read_to_string(state_root.join("identity.preserves")).expect("node identity file");
         let identity_value = crate::preserves_rail::parse_text(&identity_text).expect("parse node identity file");
         let identity = crate::node_identity::parse_identity(&identity_value).expect("parse node identity");
         let node_state = crate::node_state::NodeStateRoot::open(state_root).expect("open node state root");

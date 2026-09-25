@@ -570,7 +570,7 @@ fn initial_instance(
             health: HealthState::Unknown,
             checkpoint_ref: None,
         },
-        usage: ResourceUsage::default(),
+        usage: ResourceUsage::zero(),
         callback_sequence: 0,
         event_sequence: 0,
         state_ref: None,

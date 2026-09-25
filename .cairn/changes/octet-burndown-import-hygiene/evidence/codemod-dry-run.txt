@@ -1,0 +1,14 @@
+warning: `package.edition` is unspecified, defaulting to the latest edition (currently `2024`)
+self test passed
+selftest-exit=0
+warning: `package.edition` is unspecified, defaulting to the latest edition (currently `2024`)
+src/cli/runtime/fabric_simulation.rs: SKIP (manual repair required: public import on line 6)
+src/cli/runtime/fabric_time.rs: SKIP (manual repair required: public import on line 6)
+src/fabric/mod.rs: SKIP (manual repair required: descendant src/fabric/port.rs imports `MoltenError` again)
+src/main/root/command.rs: SKIP (manual repair required: nested import `Parser` has no reference to qualify)
+src/plugin/parts/host/p000/body.rs: SKIP (manual repair required: shared use group on line 6)
+src/retention/parts/mod/tests/m000/p000/body.rs: SKIP (manual repair required: part body shares one module scope: `fs` in src/retention/parts/mod/tests/m000/p002/body.rs)
+tests/content_replication.rs: SKIP (`#[path]` module `test_support`)
+tests/nativesystemextension.rs: SKIP (`#[path]` module `support`)
+files repaired: 0, edits: 0, skipped: 8
+dryrun-exit=0

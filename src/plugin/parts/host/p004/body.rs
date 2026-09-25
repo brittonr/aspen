@@ -506,7 +506,7 @@ fn collect_missing_refs(
     label: &str,
     diagnostics: &mut impl PushLimited<String>,
 ) -> Result<()> {
-    let mut sink = DiagnosticSink::new(diagnostics, MAX_PLUGIN_DIAGNOSTICS, "plugin permission diagnostics");
+    let mut sink = crate::bounded::DiagnosticSink::new(diagnostics, MAX_PLUGIN_DIAGNOSTICS, "plugin permission diagnostics");
     for value in required_refs {
         if !supplied_refs.contains(value) {
             sink.push(format!("plugin missing current {label} ref {value}"))?;

@@ -368,11 +368,15 @@ pub fn parse_sightglass_measurements(
     Ok(phases)
 }
 
+const fn absent_engine_flags() -> Option<String> {
+    None
+}
+
 #[derive(Debug, serde::Deserialize)]
 struct RawSightglassMeasurement {
     arch: String,
     engine: String,
-    #[serde(default)]
+    #[serde(default = "absent_engine_flags")]
     engine_flags: Option<String>,
     wasm: String,
     process: u32,

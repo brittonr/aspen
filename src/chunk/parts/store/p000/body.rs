@@ -8,8 +8,6 @@ use redb::ReadableTableMetadata;
 type Path = std::path::Path;
 #[cfg(test)]
 type PathBuf = std::path::PathBuf;
-#[cfg(test)]
-use std::fs;
 type StorePath = crate::local_store::LocalStorePath;
 type StoreEntryKind = crate::local_store::LocalStoreEntryKind;
 type CompoundClass = preserves::CompoundClass;

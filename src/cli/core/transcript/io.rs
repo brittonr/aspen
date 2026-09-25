@@ -7,7 +7,7 @@ pub(super) fn read_transcript_input(
     {
         return Ok(transcript);
     }
-    molten::transcripts::parse_markdown(&text, &molten::transcripts::TranscriptParseInput::default())
+    molten::transcripts::parse_markdown(&text, &molten::transcripts::TranscriptParseInput::empty())
 }
 
 pub(super) fn read_preserves_file(path: &std::path::Path) -> molten::error::Result<preserves::IOValue> {
