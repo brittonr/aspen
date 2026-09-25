@@ -39,7 +39,7 @@ fn validate_metadata_input(input: &TestMetadataInput) -> Result<()> {
     validate_text("distributed metadata profile", &input.profile_id)?;
     validate_text("distributed metadata command", &input.command)?;
     if input.expected_artifact_kinds.is_empty() {
-        return Err(MoltenError::invalid_harness("distributed metadata requires artifact kinds"));
+        return Err(Failure::invalid_harness("distributed metadata requires artifact kinds"));
     }
     validate_strings("distributed metadata artifact kind", &input.expected_artifact_kinds, MAX_DISTRIBUTED_TEXT)?;
     validate_cost_class(&input.cost_class)?;
@@ -52,10 +52,10 @@ fn validate_metadata_input(input: &TestMetadataInput) -> Result<()> {
     validate_ref_slice("distributed metadata variance", &input.variance_refs)?;
     validate_ref_slice("distributed metadata diagnostic log", &input.diagnostic_log_refs)?;
     if input.receipt_refs.is_empty() {
-        return Err(MoltenError::invalid_harness("distributed metadata requires receipt refs"));
+        return Err(Failure::invalid_harness("distributed metadata requires receipt refs"));
     }
     if input.variance_refs.is_empty() {
-        return Err(MoltenError::invalid_harness("distributed metadata requires variance refs"));
+        return Err(Failure::invalid_harness("distributed metadata requires variance refs"));
     }
     Ok(())
 }
@@ -156,7 +156,7 @@ fn validate_metadata_surface(metadata: &TestMetadata) -> Result<()> {
     validate_text("distributed metadata profile", &metadata.profile_id)?;
     validate_text("distributed metadata command", &metadata.command)?;
     if metadata.expected_artifact_kinds.is_empty() {
-        return Err(MoltenError::invalid_harness("distributed metadata requires artifact kinds"));
+        return Err(Failure::invalid_harness("distributed metadata requires artifact kinds"));
     }
     validate_strings("distributed metadata artifact kind", &metadata.expected_artifact_kinds, MAX_DISTRIBUTED_TEXT)?;
     validate_cost_class(&metadata.cost_class)?;

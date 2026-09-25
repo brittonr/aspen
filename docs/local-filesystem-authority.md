@@ -21,7 +21,7 @@ The reviewed ambient classes are:
 
 | Location | Classification | Disposition |
 | --- | --- | --- |
-| `LocalStoreRoot::open` and `LocalStoreRoot::open_existing` | bootstrap shell | Retained as the single reviewed `create_dir_all`/`open_ambient_dir` acquisition point. |
+| `local_store::DirectoryHandle::open` and `local_store::DirectoryHandle::open_existing` | bootstrap shell | Retained as the single reviewed `create_dir_all`/`open_ambient_dir` acquisition point. |
 | Public artifact, chunk, retention, dataspace, and exchange path APIs | bootstrap shell | Retained only when they acquire one typed root and immediately delegate to `*_with_root`. |
 | `src/iroh/exchange.rs::write_explicit_output` | explicit output shell | Retained outside reusable exchange store adapters for caller-selected export output. |
 | `src/local_store.rs` test module and adapter `tests/**` files | adversarial test setup | Retained to construct tampering, symlinks, root replacement, corruption, and missing-file cases. |
@@ -30,13 +30,13 @@ The reviewed ambient classes are:
 
 ## Relative locators and enumeration
 
-r[impl molten.chunk_store.cap_std_relative_enumeration] `LocalStorePath` accepts only bounded relative components. It rejects parent traversal, absolute or platform-prefixed paths, URLs, Iroh tickets, and content refs. Directory enumeration returns a bounded, sorted `LocalStoreEntry` list containing logical relative paths and explicit file kinds. Consumers reopen those entries through the original capability and reject symlinks or non-regular leaves where regular files are required.
+r[impl molten.chunk_store.cap_std_relative_enumeration] `local_store::RelativeLocator` accepts only bounded relative components. It rejects parent traversal, absolute or platform-prefixed paths, URLs, Iroh tickets, and content refs. Directory enumeration returns a bounded, sorted `local_store::StoredEntry` list containing logical relative paths and explicit file kinds. Consumers reopen those entries through the original capability and reject symlinks or non-regular leaves where regular files are required.
 
 Typed derivation methods encode the few reviewed cross-store relationships: artifact payload chunks, chunk-GC retention evidence, and fixture-state subroots. Generic public root retagging is not exposed, so callers cannot substitute an arbitrary store authority for another typed operation.
 
 ## Backend handles
 
-r[impl molten.chunk_store.cap_std_backend_handles] Redb database leaves are fixed relative locators. `LocalStoreRoot::open_database_file` rejects symlink and non-regular leaves, opens the file through `cap_std`, and passes only the acquired `std::fs::File` handle to `redb::Builder::create_file`. Redb never receives a reconstructed ambient database path.
+r[impl molten.chunk_store.cap_std_backend_handles] Redb database leaves are fixed relative locators. `local_store::DirectoryHandle::open_database_file` rejects symlink and non-regular leaves, opens the file through `cap_std`, and passes only the acquired `std::fs::File` handle to `redb::Builder::create_file`. Redb never receives a reconstructed ambient database path.
 
 ## Structural gate
 

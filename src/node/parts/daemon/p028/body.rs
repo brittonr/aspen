@@ -42,7 +42,7 @@ struct InstallRefs {
 }
 
 struct InstallFinishInput<'a> {
-    state_root: &'a crate::node_state::NodeStateRoot,
+    state_root: &'a crate::node_state::Root,
     request: &'a crate::node_runtime::ControlRequest,
     startup_receipt_ref: &'a str,
     payload_ref: &'a str,
@@ -52,7 +52,7 @@ struct InstallFinishInput<'a> {
 }
 
 fn finish_install_dispatch(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     request: &crate::node_runtime::ControlRequest,
     startup_receipt_ref: &str,
     subreceipt_refs: &[String],
@@ -143,7 +143,7 @@ fn finish_install(input: InstallFinishInput<'_>) -> Result<ControlDispatch> {
 }
 
 fn dispatch_install_request(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     request: &crate::node_runtime::ControlRequest,
 ) -> Result<ControlDispatch> {
     let startup = current_startup_receipt(state_root)?;
@@ -203,7 +203,7 @@ struct RunStart {
 }
 
 struct CompleteRunInput<'a> {
-    state_root: &'a crate::node_state::NodeStateRoot,
+    state_root: &'a crate::node_state::Root,
     request: &'a crate::node_runtime::ControlRequest,
     startup_receipt_ref: &'a str,
     prepared: PreparedRun,
@@ -214,7 +214,7 @@ struct CompleteRunInput<'a> {
 type RunStartResult = std::result::Result<RunStart, Box<ControlDispatch>>;
 
 struct RunDenyInput<'a> {
-    state_root: &'a crate::node_state::NodeStateRoot,
+    state_root: &'a crate::node_state::Root,
     request: &'a crate::node_runtime::ControlRequest,
     startup_receipt_ref: &'a str,
     diagnostics: Vec<String>,
@@ -232,7 +232,7 @@ fn deny_run_start(input: RunDenyInput<'_>) -> Result<RunStartResult> {
 }
 
 fn prepare_run(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     request: &crate::node_runtime::ControlRequest,
     startup_receipt_ref: &str,
 ) -> Result<RunStartResult> {

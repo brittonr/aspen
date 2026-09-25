@@ -13,7 +13,7 @@ use molten_core::world_distribution::WorldDagProjectionInput;
 use molten_core::world_distribution::WorldRootObject;
 use molten_core::world_distribution::project_world_dag;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::world_commit::WorldCommitPublicationPort;
 use crate::world_commit::WorldImmutableObjectPort;
@@ -28,7 +28,7 @@ where
     S: WorldCommitPublicationPort + WorldImmutableObjectPort,
 {
     if bounds.max_closure_objects == 0 || bounds.max_closure_objects > MAX_WORLD_DISTRIBUTION_OBJECTS {
-        return Err(MoltenError::invalid_harness("world distribution store bounds exceed the supported object cohort"));
+        return Err(Failure::invalid_harness("world distribution store bounds exceed the supported object cohort"));
     }
     let mut pending = VecDeque::from([requested.clone()]);
     let mut seen_commits = BTreeSet::new();
@@ -39,26 +39,26 @@ where
             continue;
         }
         if seen_commits.len().saturating_add(roots.len()) > bounds.max_closure_objects {
-            return Err(MoltenError::invalid_harness("world distribution closure exceeds its object bound"));
+            return Err(Failure::invalid_harness("world distribution closure exceeds its object bound"));
         }
         let bytes = store
             .read_commit(&commit_ref)
-            .map_err(|error| MoltenError::invalid_harness(format!("world distribution commit read failed: {error}")))?;
+            .map_err(|error| Failure::invalid_harness(format!("world distribution commit read failed: {error}")))?;
         let canonical = parse_canonical_world_commit_with_ref(&bytes, &commit_ref, bounds)?;
         let schema_root = canonical
             .core
             .roots
             .iter()
             .find(|root| root.kind() == RootKind::Schema)
-            .ok_or_else(|| MoltenError::invalid_harness("world commit has no schema root"))?;
+            .ok_or_else(|| Failure::invalid_harness("world commit has no schema root"))?;
         let schema_ref = DagSchemaRef::new(schema_root.as_str().to_string())
-            .map_err(|error| MoltenError::invalid_harness(format!("world root schema ref is invalid: {error:?}")))?;
+            .map_err(|error| Failure::invalid_harness(format!("world root schema ref is invalid: {error:?}")))?;
         for root in &canonical.core.roots {
             let root_bytes = store.read_root(root).map_err(|error| {
-                MoltenError::invalid_harness(format!("world distribution root read failed: {error}"))
+                Failure::invalid_harness(format!("world distribution root read failed: {error}"))
             })?;
             let encoded_bytes = u64::try_from(root_bytes.len())
-                .map_err(|_| MoltenError::invalid_harness("world root size exceeds u64"))?;
+                .map_err(|_| Failure::invalid_harness("world root size exceeds u64"))?;
             let descriptor = WorldRootObject {
                 root: root.clone(),
                 schema_ref: schema_ref.clone(),
@@ -67,7 +67,7 @@ where
             if let Some(existing) = roots.insert(root.clone(), descriptor.clone())
                 && existing != descriptor
             {
-                return Err(MoltenError::invalid_harness(
+                return Err(Failure::invalid_harness(
                     "one world root was observed under incompatible schema descriptors",
                 ));
             }
@@ -86,5 +86,5 @@ where
         bounds: bounds.clone(),
     };
     project_world_dag(&input)
-        .map_err(|issues| MoltenError::invalid_harness(format!("world distribution projection denied: {issues:?}")))
+        .map_err(|issues| Failure::invalid_harness(format!("world distribution projection denied: {issues:?}")))
 }

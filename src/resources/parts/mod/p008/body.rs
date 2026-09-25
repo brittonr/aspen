@@ -141,7 +141,7 @@ pub fn evaluate_reconcile(input: &ReconcileInput) -> Result<ReconcilePlan> {
     validate_non_empty(&input.resource_type, "resource type")?;
 
     if input.generation == 0 {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "resource generation must be at least 1",
         ));
     }
@@ -149,7 +149,7 @@ pub fn evaluate_reconcile(input: &ReconcileInput) -> Result<ReconcilePlan> {
     require_ref(&input.desired_state_ref, "desired state ref")?;
 
     if input.dependency_refs.len() > MAX_DEPENDENCIES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "dependency count {} exceeds maximum {MAX_DEPENDENCIES}",
             input.dependency_refs.len(),
         )));
@@ -227,7 +227,7 @@ pub fn coalesce_work_queue_item(
     }
 
     if events.len() > MAX_COALESCE_EVENTS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "coalesce event count {} exceeds maximum {MAX_COALESCE_EVENTS}",
             events.len(),
         )));

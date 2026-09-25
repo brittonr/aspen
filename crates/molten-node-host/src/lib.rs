@@ -18,7 +18,7 @@ pub mod core_api {
 }
 
 pub mod prelude {
-    pub use crate::error::MoltenError;
+    pub use crate::error::Failure;
     pub use crate::error::Result;
     pub use crate::local_store::*;
     pub use crate::node_state::*;

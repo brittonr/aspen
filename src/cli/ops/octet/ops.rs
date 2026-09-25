@@ -18,7 +18,7 @@ pub(super) fn run(command: Command) -> Outcome<()> {
             })?;
             super::io::emit_named_receipt(receipt_out.as_ref(), "octet gate receipt", &evaluation.receipt_value)?;
             if evaluation.decision != "pass" {
-                return Err(molten::error::MoltenError::invalid_harness(format!(
+                return Err(molten::error::Failure::invalid_harness(format!(
                     "octet gate denied receipt={} artifacts={}",
                     evaluation.receipt_ref,
                     artifacts.display()
@@ -74,7 +74,7 @@ fn run_source_gate(command: SourceGate) -> Outcome<()> {
                 })?;
             super::io::emit_named_receipt(receipt_out.as_ref(), "octet source gate validation", &validation.value)?;
             if validation.decision != "pass" {
-                return Err(molten::error::MoltenError::invalid_harness(format!(
+                return Err(molten::error::Failure::invalid_harness(format!(
                     "octet source gate validation denied receipt={}",
                     validation.validation_ref
                 )));

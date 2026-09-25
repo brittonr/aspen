@@ -40,7 +40,7 @@ fn scan_bundle_artifact_files(
     }
     let mut seen_files = OrderedSet::new();
     for entry in bundle_root.root().list_entries(&artifact_dir)? {
-        if entry.kind != crate::local_store::LocalStoreEntryKind::Directory {
+        if entry.kind != crate::local_store::ObjectKind::Directory {
             push_bounded(
                 diagnostics,
                 "retention-bundle-unexpected-artifact-root-entry".to_string(),
@@ -80,7 +80,7 @@ fn scan_bundle_artifact_group_files(
 ) -> Result<()> {
     let group_dir = bundle_path(&format!("artifacts/{}", input.dir_name))?;
     for entry in input.bundle_root.root().list_entries(&group_dir)? {
-        if entry.kind != crate::local_store::LocalStoreEntryKind::File || !entry.name.ends_with(".preserves") {
+        if entry.kind != crate::local_store::ObjectKind::File || !entry.name.ends_with(".preserves") {
             push_bounded(
                 diagnostics,
                 format!("retention-bundle-unexpected-artifact-entry:{}", input.dir_name),
@@ -215,7 +215,7 @@ fn candidate_bundle_verify_value(input: &CandidateBundleVerifyValueInput<'_>) ->
 pub fn parse_candidate_bundle_verify(value: &IoValue) -> Result<CandidateBundleVerify> {
     let fields = value
         .collect_simple_record("retention-candidate-bundle-verify-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-candidate-bundle-verify-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-candidate-bundle-verify-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::RETENTION_CANDIDATE_BUNDLE_VERIFY_SCHEMA,
@@ -227,7 +227,7 @@ pub fn parse_candidate_bundle_verify(value: &IoValue) -> Result<CandidateBundleV
     let explain_ref = record_ref(&fields[3], "explain")?;
     let object_fields = fields[4]
         .collect_simple_record("object", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("expected retention bundle verify object"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected retention bundle verify object"))?;
     let object_ref = required_string(&object_fields[0], "retention bundle verify object ref")?;
     require_ref(&object_ref, "retention bundle verify object ref")?;
     let object_kind = optional_record_string(&object_fields[1], "retention bundle verify object kind")?;
@@ -236,7 +236,7 @@ pub fn parse_candidate_bundle_verify(value: &IoValue) -> Result<CandidateBundleV
     }
     let filter_fields = fields[5]
         .collect_simple_record("filters", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("expected retention bundle verify filters"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected retention bundle verify filters"))?;
     let retention_class = record_optional_string(&filter_fields[0], "class")?;
     if let Some(retention_class) = retention_class.as_deref() {
         validate_class(retention_class)?;

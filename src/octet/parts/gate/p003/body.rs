@@ -113,7 +113,7 @@ fn add_fingerprint_value(
 
 pub fn build_octet_review_manifest(input: &OctetReviewManifestInput) -> Result<OctetReviewManifestArtifact> {
     if input.finding_keys.is_empty() {
-        return Err(MoltenError::invalid_harness("octet review manifest requires at least one finding key"));
+        return Err(Failure::invalid_harness("octet review manifest requires at least one finding key"));
     }
     let review_value = record("octet-review-manifest-v1", vec![
         string(OCTET_REVIEW_MANIFEST_SCHEMA),

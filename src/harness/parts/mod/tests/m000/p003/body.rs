@@ -116,7 +116,7 @@
         assert!(error.to_string().contains("capability authority mismatch"));
         let error = replay_report_value(&tampered_report).expect_err("tampered authority binding diverges on replay");
         match error {
-            MoltenError::HarnessDivergence(divergence) => {
+            crate::error::Failure::HarnessDivergence(divergence) => {
                 assert_eq!(divergence.kind, "capability-decision");
                 assert_eq!(divergence.step, Some(0));
             }
@@ -257,7 +257,7 @@
 
     #[test]
     fn canonical_failure_artifact_is_not_a_passing_report() {
-        let error = MoltenError::invalid_harness("synthetic preflight failure");
+        let error = crate::error::Failure::invalid_harness("synthetic preflight failure");
         let failure = failure_value("preflight", &error, Vec::new());
         let report_error = validate_report_value(&failure).expect_err("failure artifacts are diagnostic evidence only");
         assert!(report_error.to_string().contains("expected <harness-report-v1"));

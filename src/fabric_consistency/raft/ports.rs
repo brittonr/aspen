@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,7 +71,7 @@ where Self: LiveReplicaEffectPorts
 
 fn validate_runtime_identity(identity: &ReplicaRuntimePortIdentity) -> Result<()> {
     if identity.service_id.is_empty() || identity.service_generation == 0 {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "live Raft runtime ports require service identity and positive generation",
         ));
     }
@@ -92,13 +92,13 @@ fn validate_runtime_identity(identity: &ReplicaRuntimePortIdentity) -> Result<()
         crate::preserves_rail::validate_content_ref(reference)?;
     }
     if identity.fabric_binding_refs.len() != REQUIRED_REPLICA_PORTS.len() {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "live Raft runtime ports require the complete admitted fabric binding cohort",
         ));
     }
     let unique = identity.fabric_binding_refs.iter().collect::<BTreeSet<_>>();
     if unique.len() != identity.fabric_binding_refs.len() {
-        return Err(MoltenError::invalid_harness("live Raft runtime ports contain duplicate fabric bindings"));
+        return Err(Failure::invalid_harness("live Raft runtime ports contain duplicate fabric bindings"));
     }
     for reference in &identity.fabric_binding_refs {
         crate::preserves_rail::validate_content_ref(reference)?;
@@ -129,7 +129,7 @@ pub fn validate_replica_runtime_identity_for_start(
     let expected_bindings = plan.port_binding_refs.iter().collect::<BTreeSet<_>>();
     let actual_bindings = identity.fabric_binding_refs.iter().collect::<BTreeSet<_>>();
     if !exact || actual_bindings != expected_bindings {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "live Raft runtime port identity does not match the admitted start plan",
         ));
     }
@@ -184,7 +184,7 @@ where
         && identity.service_generation == control.service_generation()
         && identity.supervision_ref == control.supervision_ref();
     if !exact {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "live Raft concrete adapter identity does not match the runtime port cohort",
         ));
     }

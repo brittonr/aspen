@@ -159,7 +159,7 @@ fn finish_comparison(comparison: molten::deterministic_drift::Comparison, out: O
     if comparison.decision == "pass" {
         Ok(())
     } else {
-        Err(molten::error::MoltenError::invalid_harness(format!(
+        Err(molten::error::Failure::invalid_harness(format!(
             "deterministic drift denied: {}",
             comparison
                 .diagnostics
@@ -173,15 +173,15 @@ fn finish_comparison(comparison: molten::deterministic_drift::Comparison, out: O
 
 fn ensure_fresh_root(root: &std::path::Path) -> Outcome<()> {
     if root.exists() {
-        let mut entries = std::fs::read_dir(root).map_err(molten::error::MoltenError::from)?;
+        let mut entries = std::fs::read_dir(root).map_err(molten::error::Failure::from)?;
         if entries.next().is_some() {
-            return Err(molten::error::MoltenError::invalid_harness(format!(
+            return Err(molten::error::Failure::invalid_harness(format!(
                 "drift rerun root {} must be empty",
                 root.display()
             )));
         }
     }
-    std::fs::create_dir_all(root).map_err(molten::error::MoltenError::from)
+    std::fs::create_dir_all(root).map_err(molten::error::Failure::from)
 }
 
 fn run_workflow(command: &str, args: &[String], root: &std::path::Path, label: &str) -> Outcome<()> {
@@ -190,11 +190,11 @@ fn run_workflow(command: &str, args: &[String], root: &std::path::Path, label: &
     let output = std::process::Command::new(command)
         .args(&resolved_args)
         .output()
-        .map_err(molten::error::MoltenError::from)?;
+        .map_err(molten::error::Failure::from)?;
     if output.status.success() {
         Ok(())
     } else {
-        Err(molten::error::MoltenError::invalid_harness(format!(
+        Err(molten::error::Failure::invalid_harness(format!(
             "drift rerun {label} command failed with status {}: {}",
             output.status,
             String::from_utf8_lossy(&output.stderr)
@@ -234,16 +234,16 @@ fn parse_variances(items: Vec<String>) -> Outcome<Vec<molten::deterministic_drif
 
 fn split_pair(pair: &str, label: &str) -> Outcome<(String, String)> {
     let Some((key, value)) = pair.split_once('=') else {
-        return Err(molten::error::MoltenError::invalid_harness(format!("{label} must use path=value syntax")));
+        return Err(molten::error::Failure::invalid_harness(format!("{label} must use path=value syntax")));
     };
     if key.trim().is_empty() || value.trim().is_empty() {
-        return Err(molten::error::MoltenError::invalid_harness(format!("{label} path and value must not be empty")));
+        return Err(molten::error::Failure::invalid_harness(format!("{label} path and value must not be empty")));
     }
     Ok((key.to_string(), value.to_string()))
 }
 
 fn read_preserves_file(path: &std::path::Path) -> Outcome<preserves::IOValue> {
-    let text = std::fs::read_to_string(path).map_err(molten::error::MoltenError::from)?;
+    let text = std::fs::read_to_string(path).map_err(molten::error::Failure::from)?;
     molten::preserves_rail::parse_text(&text)
 }
 
@@ -251,9 +251,9 @@ fn write_optional_preserves(path: Option<&FilePath>, value: &preserves::IOValue)
     let text = molten::preserves_rail::to_text(value)?;
     if let Some(path) = path {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(molten::error::MoltenError::from)?;
+            std::fs::create_dir_all(parent).map_err(molten::error::Failure::from)?;
         }
-        std::fs::write(path, text).map_err(molten::error::MoltenError::from)?;
+        std::fs::write(path, text).map_err(molten::error::Failure::from)?;
     } else {
         println!("{text}");
     }

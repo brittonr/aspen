@@ -1,5 +1,5 @@
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 const PROD_OPS_BACKUP_RESTORE_DRILL_SCHEMA: &str = crate::preserves_rail::PROD_OPS_BACKUP_RESTORE_DRILL_SCHEMA;

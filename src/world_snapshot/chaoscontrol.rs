@@ -21,7 +21,7 @@ use molten_core::world_snapshot::SnapshotComponentKind;
 use molten_core::world_snapshot::SnapshotDescriptor;
 use serde::Serialize;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const COHORT_IDENTITY_DOMAIN: &str = "onixresearch.molten.world-snapshot.chaoscontrol-cohort.v1";
@@ -55,11 +55,11 @@ pub fn map_chaoscontrol_snapshot(
     binding: ChaosControlSnapshotBinding,
 ) -> Result<SnapshotDescriptor> {
     chaos::validate_descriptor(&envelope.descriptor)
-        .map_err(|error| MoltenError::invalid_harness(format!("ChaosControl descriptor denied: {error:?}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("ChaosControl descriptor denied: {error:?}")))?;
     let observed_id = chaos::descriptor_identity(&envelope.descriptor)
-        .map_err(|error| MoltenError::invalid_harness(format!("ChaosControl descriptor identity failed: {error:?}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("ChaosControl descriptor identity failed: {error:?}")))?;
     if observed_id != envelope.descriptor_id {
-        return Err(MoltenError::invalid_harness("ChaosControl descriptor envelope identity drifted"));
+        return Err(Failure::invalid_harness("ChaosControl descriptor envelope identity drifted"));
     }
     validate_binding(&binding)?;
     let descriptor_ref = tagged_blake3_ref(&envelope.descriptor_id)?;
@@ -161,7 +161,7 @@ fn rooted(kind: SnapshotComponentKind, root: &WorldRootRef, owner: ComponentOwne
 
 fn opaque_machine_component(identity: &str) -> Result<SnapshotComponent> {
     let root = WorldRootRef::parse(RootKind::OpaqueMachineSnapshot, identity.to_string())
-        .map_err(|issue| MoltenError::invalid_harness(format!("ChaosControl machine root denied: {issue:?}")))?;
+        .map_err(|issue| Failure::invalid_harness(format!("ChaosControl machine root denied: {issue:?}")))?;
     Ok(SnapshotComponent {
         kind: SnapshotComponentKind::MachineDescriptor,
         identity: identity.to_string(),
@@ -190,7 +190,7 @@ fn identify_cohort(facts: &[CohortFact]) -> Result<SnapshotCohortRef> {
         update_text(&mut hasher, &fact.identity)?;
     }
     SnapshotCohortRef::new(format!("blake3:{}", hasher.finalize().to_hex()))
-        .map_err(|issue| MoltenError::invalid_harness(format!("ChaosControl cohort identity denied: {issue:?}")))
+        .map_err(|issue| Failure::invalid_harness(format!("ChaosControl cohort identity denied: {issue:?}")))
 }
 
 fn json_component_ref<T: Serialize>(label: &str, value: &T) -> Result<String> {
@@ -203,7 +203,7 @@ fn json_ref<T: Serialize>(label: &str, value: &T) -> Result<String> {
 
 fn json_identity<T: Serialize>(domain: &'static str, label: &str, value: &T) -> Result<String> {
     let bytes = serde_json::to_vec(value).map_err(|error| {
-        MoltenError::invalid_harness(format!("ChaosControl identity serialization failed: {error}"))
+        Failure::invalid_harness(format!("ChaosControl identity serialization failed: {error}"))
     })?;
     let mut hasher = blake3::Hasher::new_derive_key(domain);
     update_text(&mut hasher, label)?;
@@ -216,7 +216,7 @@ fn tagged_blake3_ref(identity: &chaos::TaggedDigest) -> Result<String> {
         || identity.hex.len() != blake3::OUT_LEN * 2
         || !identity.hex.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
     {
-        return Err(MoltenError::invalid_harness("ChaosControl descriptor identity is not canonical BLAKE3"));
+        return Err(Failure::invalid_harness("ChaosControl descriptor identity is not canonical BLAKE3"));
     }
     Ok(format!("blake3:{}", identity.hex))
 }
@@ -229,7 +229,7 @@ fn validate_binding(binding: &ChaosControlSnapshotBinding) -> Result<()> {
         ("backend profile", binding.backend_profile_ref.as_str()),
     ] {
         crate::preserves_rail::validate_content_ref(value)
-            .map_err(|_| MoltenError::invalid_harness(format!("ChaosControl {field} binding is invalid")))?;
+            .map_err(|_| Failure::invalid_harness(format!("ChaosControl {field} binding is invalid")))?;
     }
     Ok(())
 }
@@ -240,7 +240,7 @@ fn update_text(hasher: &mut blake3::Hasher, value: &str) -> Result<()> {
 
 fn update_bytes(hasher: &mut blake3::Hasher, value: &[u8]) -> Result<()> {
     let length = u64::try_from(value.len())
-        .map_err(|_| MoltenError::invalid_harness("ChaosControl identity input exceeds u64"))?;
+        .map_err(|_| Failure::invalid_harness("ChaosControl identity input exceeds u64"))?;
     hasher.update(&length.to_le_bytes());
     hasher.update(value);
     Ok(())

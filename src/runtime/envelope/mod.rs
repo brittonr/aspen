@@ -1,5 +1,5 @@
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 pub use crate::preserves_rail::ContentRef;
@@ -157,7 +157,7 @@ impl Envelope {
 
     pub fn from_dto(dto: EnvelopeDto) -> Result<Self> {
         if dto.version != ENVELOPE_VERSION {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "unsupported envelope version {}, expected {ENVELOPE_VERSION}",
                 dto.version
             )));
@@ -235,17 +235,17 @@ pub struct EnvelopeInput {
 
 fn validate_nonempty_token(label: &str, value: &str, max_bytes: usize) -> Result<()> {
     if value.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("{label} must not be empty")));
+        return Err(Failure::invalid_harness(format!("{label} must not be empty")));
     }
     if value.len() > max_bytes {
-        return Err(MoltenError::invalid_harness(format!("{label} exceeds {max_bytes} bytes")));
+        return Err(Failure::invalid_harness(format!("{label} exceeds {max_bytes} bytes")));
     }
     Ok(())
 }
 
 fn validate_ref_list_len(label: &str, len: usize) -> Result<()> {
     if len > MAX_REF_LIST_ITEMS {
-        return Err(MoltenError::invalid_harness(format!("{label} exceeds {MAX_REF_LIST_ITEMS} items")));
+        return Err(Failure::invalid_harness(format!("{label} exceeds {MAX_REF_LIST_ITEMS} items")));
     }
     Ok(())
 }

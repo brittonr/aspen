@@ -1,5 +1,5 @@
 pub(crate) fn read_preserves_file(path: &std::path::Path) -> molten::error::Result<preserves::IOValue> {
-    let text = std::fs::read_to_string(path).map_err(molten::error::MoltenError::from)?;
+    let text = std::fs::read_to_string(path).map_err(molten::error::Failure::from)?;
     molten::preserves_rail::parse_text(&text)
 }
 
@@ -8,7 +8,7 @@ pub(crate) fn read_preserves_file_with_failure(
     failure_out: Option<&std::path::PathBuf>,
     phase: &'static str,
 ) -> molten::error::Result<preserves::IOValue> {
-    let text = match std::fs::read_to_string(path).map_err(molten::error::MoltenError::from) {
+    let text = match std::fs::read_to_string(path).map_err(molten::error::Failure::from) {
         Ok(text) => text,
         Err(error) => {
             write_optional_failure(failure_out, phase, &error, None)?;
@@ -27,7 +27,7 @@ pub(crate) fn read_preserves_file_with_failure(
 pub(crate) fn write_optional_failure(
     path: Option<&std::path::PathBuf>,
     phase: &'static str,
-    error: &molten::error::MoltenError,
+    error: &molten::error::Failure,
     diagnostics: Option<Vec<preserves::IOValue>>,
 ) -> molten::error::Result<()> {
     let failure = molten::harness::failure_value(phase, error, diagnostics.unwrap_or_default());
@@ -37,7 +37,7 @@ pub(crate) fn write_optional_failure(
 pub(crate) fn write_optional_artifact_failure(
     path: Option<&std::path::PathBuf>,
     phase: &'static str,
-    error: &molten::error::MoltenError,
+    error: &molten::error::Failure,
     artifact_value: &preserves::IOValue,
 ) -> molten::error::Result<()> {
     let artifact_ref = molten::preserves_rail::canonical_hash(artifact_value)?;
@@ -91,7 +91,7 @@ fn emit_failure(path: Option<&std::path::PathBuf>, failure: &preserves::IOValue)
 
 pub(crate) fn write_file(path: &std::path::Path, contents: &str) -> molten::error::Result<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(molten::error::MoltenError::from)?;
+        std::fs::create_dir_all(parent).map_err(molten::error::Failure::from)?;
     }
-    std::fs::write(path, contents).map_err(molten::error::MoltenError::from)
+    std::fs::write(path, contents).map_err(molten::error::Failure::from)
 }

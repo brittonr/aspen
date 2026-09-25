@@ -47,7 +47,7 @@ fn validate_count(actual: usize, maximum: usize, label: &str) -> Result<()> {
     if actual <= maximum {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
+        Err(Failure::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
     }
 }
 

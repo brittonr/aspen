@@ -532,13 +532,13 @@ fn is_ambient_operation(operation: &str) -> bool {
 fn validate_plugin_id(value: &str) -> Result<()> {
     validate_non_empty(value, "plugin id")?;
     if !value.starts_with("plugin:") {
-        return Err(MoltenError::invalid_harness(format!("plugin id {value} must start with plugin:")));
+        return Err(Failure::invalid_harness(format!("plugin id {value} must start with plugin:")));
     }
     if !value
         .chars()
         .all(|character| character.is_ascii_alphanumeric() || matches!(character, ':' | '-' | '_' | '.'))
     {
-        return Err(MoltenError::invalid_harness(format!("unsupported plugin id {value}")));
+        return Err(Failure::invalid_harness(format!("unsupported plugin id {value}")));
     }
     Ok(())
 }
@@ -547,7 +547,7 @@ fn validate_abi(value: &str) -> Result<()> {
     if value == PLUGIN_HOST_ABI_VERSION {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "unsupported plugin ABI {value}; expected {PLUGIN_HOST_ABI_VERSION}"
         )))
     }
@@ -556,20 +556,20 @@ fn validate_abi(value: &str) -> Result<()> {
 fn validate_lifecycle_operation(value: &str) -> Result<()> {
     match value {
         "init" | "start" | "health" | "stop" | "remove" | "upgrade" => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported plugin lifecycle operation {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported plugin lifecycle operation {value}"))),
     }
 }
 
 fn validate_lifecycle_callbacks(values: &[String]) -> Result<()> {
     ensure_count_at_most(values.len(), MAX_PLUGIN_CALLBACKS, "plugin lifecycle callbacks")?;
     if values.is_empty() {
-        return Err(MoltenError::invalid_harness("plugin lifecycle callbacks must not be empty"));
+        return Err(Failure::invalid_harness("plugin lifecycle callbacks must not be empty"));
     }
     let mut seen = std::collections::BTreeSet::new();
     for value in values {
         validate_lifecycle_operation(value)?;
         if !seen.insert(value.clone()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate plugin lifecycle callback {value}")));
+            return Err(Failure::invalid_harness(format!("duplicate plugin lifecycle callback {value}")));
         }
     }
     Ok(())
@@ -578,20 +578,20 @@ fn validate_lifecycle_callbacks(values: &[String]) -> Result<()> {
 fn validate_health_status(value: &str) -> Result<()> {
     match value {
         "healthy" | "degraded" | "failed" => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported plugin health status {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported plugin health status {value}"))),
     }
 }
 
 fn validate_host_abi_status(value: &str) -> Result<()> {
     match value {
         "ok" | "error" => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported plugin ABI result status {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported plugin ABI result status {value}"))),
     }
 }
 
 fn validate_non_empty(value: &str, field: &str) -> Result<()> {
     if value.trim().is_empty() {
-        Err(MoltenError::invalid_harness(format!("{field} must not be empty")))
+        Err(Failure::invalid_harness(format!("{field} must not be empty")))
     } else {
         Ok(())
     }
@@ -599,7 +599,7 @@ fn validate_non_empty(value: &str, field: &str) -> Result<()> {
 
 fn validate_ref(value: &str, field: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
-        .map_err(|error| MoltenError::invalid_harness(format!("{field} must be a canonical content ref: {error}")))
+        .map_err(|error| Failure::invalid_harness(format!("{field} must be a canonical content ref: {error}")))
 }
 
 fn validate_optional_ref(value: Option<&str>, field: &str) -> Result<()> {
@@ -620,7 +620,7 @@ fn validate_refs(values: &[String], field: &str) -> Result<()> {
 
 fn require_non_empty_refs(values: &[String], field: &str) -> Result<()> {
     if values.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("{field} must not be empty")));
+        return Err(Failure::invalid_harness(format!("{field} must not be empty")));
     }
     validate_refs(values, field)
 }
@@ -666,7 +666,7 @@ fn simple_record<'a>(
 ) -> Result<std::borrow::Cow<'a, preserves::Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 fn simple_record_any<'a>(
@@ -675,7 +675,7 @@ fn simple_record_any<'a>(
 ) -> Result<std::borrow::Cow<'a, preserves::Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, None)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))
 }
 
 fn record_arity(record: &preserves::Record<Value<IoValue>>) -> usize {
@@ -691,17 +691,17 @@ fn record_decision(value: &Value<IoValue>, label: &str) -> Result<String> {
 fn validate_decision(value: &str) -> Result<()> {
     match value {
         PLUGIN_DECISION_PASS | PLUGIN_DECISION_DENY => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("plugin receipt decision {value} must be pass or deny"))),
+        _ => Err(Failure::invalid_harness(format!("plugin receipt decision {value} must be pass or deny"))),
     }
 }
 
 fn require_check_status(checks: &[(String, String)], expected: &str, status: &str, context: &str) -> Result<()> {
     match checks.iter().find(|(name, _)| name == expected) {
         Some((_, actual)) if actual == status => Ok(()),
-        Some((_, actual)) => Err(MoltenError::invalid_harness(format!(
+        Some((_, actual)) => Err(Failure::invalid_harness(format!(
             "{context} {expected} check has status {actual}, expected {status}"
         ))),
-        None => Err(MoltenError::invalid_harness(format!("{context} missing {expected} check"))),
+        None => Err(Failure::invalid_harness(format!("{context} missing {expected} check"))),
     }
 }
 
@@ -713,12 +713,12 @@ fn validate_receipt_coherence(
 ) -> Result<()> {
     let has_failed_check = checks.iter().any(|(_, status)| status == PLUGIN_CHECK_FAIL);
     if decision == PLUGIN_DECISION_PASS && has_failed_check {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "{context} pass decision carries failed required checks"
         )));
     }
     if decision == PLUGIN_DECISION_DENY && !has_failed_check && diagnostics.is_empty() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "{context} deny decision requires failed checks or diagnostics"
         )));
     }

@@ -1,7 +1,7 @@
 pub(super) fn read_transcript_input(
     path: &std::path::Path,
 ) -> molten::error::Result<molten::transcripts::TranscriptArtifact> {
-    let text = std::fs::read_to_string(path).map_err(molten::error::MoltenError::from)?;
+    let text = std::fs::read_to_string(path).map_err(molten::error::Failure::from)?;
     if let Ok(value) = molten::preserves_rail::parse_text(&text)
         && let Ok(transcript) = molten::transcripts::parse_transcript_artifact(&value)
     {
@@ -11,7 +11,7 @@ pub(super) fn read_transcript_input(
 }
 
 pub(super) fn read_preserves_file(path: &std::path::Path) -> molten::error::Result<preserves::IOValue> {
-    let text = std::fs::read_to_string(path).map_err(molten::error::MoltenError::from)?;
+    let text = std::fs::read_to_string(path).map_err(molten::error::Failure::from)?;
     molten::preserves_rail::parse_text(&text)
 }
 
@@ -35,7 +35,7 @@ pub(super) fn emit_named_receipt(
 pub(super) fn write_optional_failure(
     path: Option<&std::path::PathBuf>,
     phase: &'static str,
-    error: &molten::error::MoltenError,
+    error: &molten::error::Failure,
     diagnostics: Option<Vec<preserves::IOValue>>,
 ) -> molten::error::Result<()> {
     let failure = molten::harness::failure_value(phase, error, diagnostics.unwrap_or_default());
@@ -57,7 +57,7 @@ fn emit_failure(path: Option<&std::path::PathBuf>, failure: &preserves::IOValue)
 
 pub(super) fn write_file(path: &std::path::Path, contents: &str) -> molten::error::Result<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(molten::error::MoltenError::from)?;
+        std::fs::create_dir_all(parent).map_err(molten::error::Failure::from)?;
     }
-    std::fs::write(path, contents).map_err(molten::error::MoltenError::from)
+    std::fs::write(path, contents).map_err(molten::error::Failure::from)
 }

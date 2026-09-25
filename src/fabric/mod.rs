@@ -16,7 +16,7 @@ pub use molten_core::fabric::*;
 pub use port::*;
 use preserves::IOValue;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
@@ -98,7 +98,7 @@ pub fn canonical_fabric_port_descriptor(descriptor: &FabricPortDescriptor) -> Re
     let registry = build_fabric_port_registry(std::slice::from_ref(descriptor))
         .map_err(|issues| validation_error("fabric port descriptor", &issues))?;
     let Some(normalized) = registry.descriptors().first() else {
-        return Err(MoltenError::invalid_harness("fabric port descriptor validation produced an empty registry"));
+        return Err(Failure::invalid_harness("fabric port descriptor validation produced an empty registry"));
     };
     let value = fabric_port_descriptor_value(normalized);
     let descriptor_ref = canonical_hash(&value)?;
@@ -115,7 +115,7 @@ pub fn resolve_canonical_fabric_port_binding(
     let binding = resolve_fabric_port_binding(&registry, requirement)
         .map_err(|issues| validation_error("fabric port binding", &issues))?;
     let Some(descriptor) = registry.descriptors().iter().find(|descriptor| descriptor.key() == binding.key) else {
-        return Err(MoltenError::invalid_harness("fabric port binding resolved without its descriptor"));
+        return Err(Failure::invalid_harness("fabric port binding resolved without its descriptor"));
     };
 
     let descriptor_value = fabric_port_descriptor_value(descriptor);
@@ -336,8 +336,8 @@ fn checks_value(checks: &[&str]) -> IOValue {
     field("checks", strings_value(checks.iter().copied()))
 }
 
-fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label} validation denied: {issues:?}"))
+fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> Failure {
+    Failure::invalid_harness(format!("{label} validation denied: {issues:?}"))
 }
 
 // r[impl molten.fabric_boundary.final_validation]

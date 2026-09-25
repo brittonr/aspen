@@ -48,7 +48,7 @@ r[impl molten.testing.cap_std_regression_gate] The test-workspace rule is limite
 
 r[impl molten.filesystem_materialization.regression_gate] The materialization rule is scoped to converted repro, retention, and release writers/readers. It blocks ambient descendant calls and generic tar unpacking while permitting explicit capability acquisition and capability-relative staged publication.
 
-r[impl molten.node.cap_std_regression_gate] The node-state rules reject ambient descendant I/O across converted daemon, identity, and target-job paths and reject root reopening in inner async and execution code. Reviewed public shells may bootstrap one `NodeStateRoot`; inner operations carry that root or a namespace/store view. Test-only path adapters are compiled only under `cfg(test)` and do not provide production ambient authority.
+r[impl molten.node.cap_std_regression_gate] The node-state rules reject ambient descendant I/O across converted daemon, identity, and target-job paths and reject root reopening in inner async and execution code. Reviewed public shells may bootstrap one `node_state::Root`; inner operations carry that root or a namespace/store view. Test-only path adapters are compiled only under `cfg(test)` and do not provide production ambient authority.
 
 Rules live under `tools/ast-grep/runtime-authority/rules/`. Positive and negative fixtures live under `tools/ast-grep/runtime-authority/fixtures/`; fixture coverage is required before any rule can be promoted from inventory to warning or blocking posture.
 

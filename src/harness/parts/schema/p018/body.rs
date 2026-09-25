@@ -3,19 +3,19 @@ fn parse_wasm_inspection_receipt(value: &IoValue) -> Result<WasmInspectionReceip
     let receipt = simple_record(value, "wasm-inspection-receipt-v1", 8)?;
     let schema = required_string(&receipt[0], "Wasm inspection receipt schema")?;
     if schema != crate::preserves_rail::RUNTIME_WASM_INSPECTION_RECEIPT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported Wasm inspection receipt schema {schema}; expected {}",
             crate::preserves_rail::RUNTIME_WASM_INSPECTION_RECEIPT_SCHEMA
         )));
     }
     let decision = required_record_string(&receipt[1], "decision", "Wasm inspection receipt decision")?;
     if decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!("unsupported Wasm inspection receipt decision {decision}")));
+        return Err(crate::error::Failure::invalid_harness(format!("unsupported Wasm inspection receipt decision {decision}")));
     }
     let module_ref = required_record_hash(&receipt[2], "module-ref", "Wasm inspection receipt module ref")?;
     let module_kind = required_record_string(&receipt[3], "module-kind", "Wasm inspection receipt module kind")?;
     if !matches!(module_kind.as_str(), "core-module" | "component") {
-        return Err(MoltenError::invalid_harness(format!("unsupported Wasm inspection module kind {module_kind}")));
+        return Err(crate::error::Failure::invalid_harness(format!("unsupported Wasm inspection module kind {module_kind}")));
     }
     let import_values = required_record_sequence(&receipt[4], "imports", "Wasm inspection imports")?;
     let mut imports = Vec::with_capacity(import_values.len());
@@ -72,7 +72,7 @@ fn parse_executor_preflight_checks(value: &Value<IoValue>) -> Result<Vec<String>
         let name = required_string(&check[0], "executor preflight check name")?;
         let status = required_string(&check[1], "executor preflight check status")?;
         if status != "pass" {
-            return Err(MoltenError::invalid_harness(format!("executor preflight check {name} status is {status}")));
+            return Err(crate::error::Failure::invalid_harness(format!("executor preflight check {name} status is {status}")));
         }
         checks.push(name);
     }
@@ -83,7 +83,7 @@ fn require_executor_preflight_check(checks: &[String], expected: &str) -> Result
     if checks.iter().any(|check| check == expected) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("executor preflight missing {expected} check")))
+        Err(crate::error::Failure::invalid_harness(format!("executor preflight missing {expected} check")))
     }
 }
 
@@ -92,22 +92,22 @@ fn validate_denied_observation_events(position: usize, events: &[IoValue]) -> Re
     for event in events {
         match event_boundary(event) {
             EventBoundary::EffectRequest | EventBoundary::EffectResponse => {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "denied effect emitted effect request/response at observation {position}"
                 )));
             }
             EventBoundary::SteelExecution => {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "denied turn emitted Steel execution evidence at observation {position}"
                 )));
             }
             EventBoundary::WasmExecution => {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "denied turn emitted Wasm execution evidence at observation {position}"
                 )));
             }
             EventBoundary::PolicyDecision => {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "duplicate admission decision at observation {position}"
                 )));
             }
@@ -121,14 +121,14 @@ fn validate_denied_observation_events(position: usize, events: &[IoValue]) -> Re
             }
             EventBoundary::Trace if is_turn_journal(event) => {}
             EventBoundary::Trace => {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "denied turn committed action or non-rollback trace at observation {position}"
                 )));
             }
         }
     }
     if !has_rollback_event {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "denied turn missing rollback evidence at observation {position}"
         )));
     }
@@ -192,7 +192,7 @@ fn parse_admission_authority(value: &Value<IoValue>) -> Result<AdmissionAuthorit
     )?;
     let actual_receipt_ref = canonical_hash(&basalt_enforcement_receipt_value)?;
     if actual_receipt_ref != basalt_enforcement_receipt_ref {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "admission authority Basalt enforcement receipt ref does not match embedded receipt",
         ));
     }
@@ -218,7 +218,7 @@ fn parse_admission_decision(value: &Value<IoValue>) -> Result<crate::runtime::Ad
     match status.as_str() {
         "allow" => Ok(crate::runtime::AdmissionDecision::Allow { reason }),
         "deny" => Ok(crate::runtime::AdmissionDecision::Deny { reason }),
-        other => Err(MoltenError::invalid_harness(format!("unknown admission decision status {other}"))),
+        other => Err(crate::error::Failure::invalid_harness(format!("unknown admission decision status {other}"))),
     }
 }
 
@@ -247,43 +247,43 @@ pub fn parse_policy_gate(value: &IoValue) -> Result<PolicyGateEvidence> {
     let gate = simple_record(value, "policy-gate-v1", 8)?;
     let schema = required_string(&gate[0], "policy gate schema")?;
     if schema != crate::preserves_rail::HARNESS_POLICY_GATE_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported policy gate schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_POLICY_GATE_SCHEMA
         )));
     }
     let decision = required_record_string(&gate[1], "decision", "policy gate decision")?;
     if decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!("unsupported policy gate decision {decision}")));
+        return Err(crate::error::Failure::invalid_harness(format!("unsupported policy gate decision {decision}")));
     }
     let policy_ref = required_record_hash(&gate[2], "policy-ref", "policy gate policy ref")?;
     let nickel_source = parse_nickel_source_evidence(&gate[3])?;
     let nickel_contract = parse_nickel_contract_evidence(&gate[4])?;
     let basalt_preflight = parse_basalt_policy_preflight_evidence(&gate[5])?;
     if nickel_source.policy_ref != policy_ref {
-        return Err(MoltenError::invalid_harness("Nickel source policy ref does not match policy gate ref"));
+        return Err(crate::error::Failure::invalid_harness("Nickel source policy ref does not match policy gate ref"));
     }
     if nickel_contract.normalized_source_ref != nickel_source.source_ref {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "Nickel contract normalized source ref does not match Nickel source evidence",
         ));
     }
     if basalt_preflight.policy_ref != policy_ref {
-        return Err(MoltenError::invalid_harness("Basalt policy preflight policy ref does not match policy gate ref"));
+        return Err(crate::error::Failure::invalid_harness("Basalt policy preflight policy ref does not match policy gate ref"));
     }
     if basalt_preflight.envelope_ref != nickel_contract.envelope_ref {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "Basalt policy preflight envelope ref does not match Nickel contract envelope",
         ));
     }
     if basalt_preflight.normalized_source_ref != nickel_source.source_ref {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "Basalt policy preflight source ref does not match Nickel source evidence",
         ));
     }
     let steel_predicates = required_record_sequence(&gate[6], "steel-predicates", "policy gate Steel predicates")?;
     if !steel_predicates.is_empty() {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "Steel predicates require reviewed callable receipts and are disabled in local harness policy gates",
         ));
     }
@@ -308,11 +308,11 @@ pub fn parse_policy_gate(value: &IoValue) -> Result<PolicyGateEvidence> {
 
 pub fn validate_policy_gate_evidence(suite: &Suite, policy_gate: Option<&PolicyGateEvidence>) -> Result<()> {
     let policy_gate = policy_gate.ok_or_else(|| {
-        MoltenError::invalid_harness("missing policy gate evidence; policy must pass preflight before side effects")
+        crate::error::Failure::invalid_harness("missing policy gate evidence; policy must pass preflight before side effects")
     })?;
     let expected_ref = canonical_hash(&policy_value(&suite.policy))?;
     if policy_gate.policy_ref != expected_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "policy gate ref mismatch: gate has {}, embedded policy hashes to {expected_ref}",
             policy_gate.policy_ref
         )));
@@ -321,7 +321,7 @@ pub fn validate_policy_gate_evidence(suite: &Suite, policy_gate: Option<&PolicyG
     let expected_gate_ref = canonical_hash(&expected_gate)?;
     let actual_gate_ref = canonical_hash(&policy_gate.value)?;
     if actual_gate_ref != expected_gate_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "policy gate evidence does not match embedded suite policy preflight: gate hashes to {actual_gate_ref}, expected {expected_gate_ref}"
         )));
     }

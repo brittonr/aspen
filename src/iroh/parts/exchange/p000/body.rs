@@ -1,10 +1,10 @@
 type IoValue = preserves::IOValue;
 
-type LocalStorePath = crate::local_store::LocalStorePath;
+type RelativeLocator = crate::local_store::RelativeLocator;
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type Path = std::path::Path;
 type Value<T> = preserves::Value<T>;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 const EVIDENCE_CHAIN_SEGMENT_BUNDLE_SCHEMA: &str = crate::preserves_rail::EVIDENCE_CHAIN_SEGMENT_BUNDLE_SCHEMA;
@@ -194,7 +194,7 @@ pub fn publish_bundle_with_root(root: &CapabilityExchangeRoot, bundle: &IoValue,
     let bytes = canonical_bytes(bundle)?;
     let blob_ref = content_ref_from_bytes(&bytes);
     if blob_ref != bundle_ref {
-        return Err(MoltenError::invalid_harness("Iroh publish bundle blob ref does not match bundle ref"));
+        return Err(Failure::invalid_harness("Iroh publish bundle blob ref does not match bundle ref"));
     }
     root.root().write(&blob_store_path(&bundle_ref)?, &bytes)?;
     let ticket = format!("iroh-local:{bundle_ref}");
@@ -229,12 +229,12 @@ pub fn fetch_bundle(input: &FetchBundleInput<'_>) -> Result<Repro> {
 
 pub fn fetch_bundle_with_root(input: &FetchBundleInput<'_, CapabilityExchangeRoot>) -> Result<Repro> {
     let advertised_ref = input.ticket.strip_prefix("iroh-local:").ok_or_else(|| {
-        MoltenError::invalid_harness("unsupported Iroh repro ticket; expected iroh-local:<bundle-ref>")
+        Failure::invalid_harness("unsupported Iroh repro ticket; expected iroh-local:<bundle-ref>")
     })?;
     if let Some(expected_bundle_ref) = input.expected_bundle_ref
         && expected_bundle_ref != advertised_ref
     {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Iroh repro ticket advertises bundle {advertised_ref}, expected {expected_bundle_ref}"
         )));
     }
@@ -242,7 +242,7 @@ pub fn fetch_bundle_with_root(input: &FetchBundleInput<'_, CapabilityExchangeRoo
     let bundle = parse_canonical_bytes(&bytes)?;
     let bundle_ref = canonical_hash(&bundle)?;
     if bundle_ref != advertised_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Iroh fetched blob content hashes to {bundle_ref}, expected advertised bundle {advertised_ref}"
         )));
     }

@@ -436,5 +436,5 @@ pub fn secrets_summary(value: &IoValue) -> Result<String> {
     if let Some(line) = summary_profiles(kind, value)? {
         return Ok(line);
     }
-    Err(MoltenError::invalid_harness("not a secrets artifact"))
+    Err(Failure::invalid_harness("not a secrets artifact"))
 }

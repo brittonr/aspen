@@ -22,7 +22,7 @@ pub fn service_restart_decision_value(input: &ServiceRestartDecisionInput) -> Re
 pub fn parse_service_restart_decision(value: &IoValue) -> Result<ServiceRestartDecision> {
     let fields = value
         .collect_simple_record("service-restart-decision-v1", Some(14))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <service-restart-decision-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <service-restart-decision-v1 ...>"))?;
     require_schema(&fields[0], SERVICE_RESTART_DECISION_SCHEMA, "service restart decision schema")?;
     let checks = parse_checks(&fields[13])?;
     require_check(&checks, "bounded-restart", "service restart decision")?;
@@ -67,7 +67,7 @@ pub fn service_lifecycle_receipt_value(input: &ServiceLifecycleReceiptInput) -> 
 pub fn parse_service_lifecycle_receipt(value: &IoValue) -> Result<ServiceLifecycleReceipt> {
     let fields = value
         .collect_simple_record("service-lifecycle-receipt-v1", Some(12))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <service-lifecycle-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <service-lifecycle-receipt-v1 ...>"))?;
     require_schema(&fields[0], SERVICE_LIFECYCLE_RECEIPT_SCHEMA, "service lifecycle receipt schema")?;
     let checks = parse_checks(&fields[11])?;
     require_check(&checks, "canonical-receipt", "service lifecycle receipt")?;
@@ -113,7 +113,7 @@ pub fn service_cleanup_receipt_value(input: &ServiceCleanupReceiptInput) -> Resu
 pub fn parse_service_cleanup_receipt(value: &IoValue) -> Result<ServiceCleanupReceipt> {
     let fields = value
         .collect_simple_record("service-cleanup-receipt-v1", Some(15))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <service-cleanup-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <service-cleanup-receipt-v1 ...>"))?;
     require_schema(&fields[0], SERVICE_CLEANUP_RECEIPT_SCHEMA, "service cleanup receipt schema")?;
     let checks = parse_checks(&fields[14])?;
     require_check(&checks, "owned-state-only", "service cleanup receipt")?;
@@ -170,7 +170,7 @@ pub fn parse_service_record(value: &IoValue) -> Result<ServiceRecord> {
     if value.collect_simple_record("service-cleanup-receipt-v1", Some(15)).is_some() {
         return parse_service_cleanup_receipt(value).map(ServiceRecord::CleanupReceipt);
     }
-    Err(MoltenError::invalid_harness("unknown service record schema"))
+    Err(Failure::invalid_harness("unknown service record schema"))
 }
 
 // r[impl molten.sam_service_records_ledger.spec.catalog_redaction]

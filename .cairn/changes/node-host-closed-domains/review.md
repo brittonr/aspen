@@ -13,7 +13,7 @@ The domain contract is supported by the existing authority design, not by a targ
 - NodeStateFileObservation distinguishes missing leaves, non-regular denial, and a previously acquired regular handle. Its consumers must decide explicitly about any added observation category.
 
 Sources reviewed: `docs/node-state-filesystem-authority.md`, `local_store/mod.rs`, `node/state/{authority,namespace,filesystem}.rs`, and existing `tests/{views,leaves}.rs` under `crates/molten-node-host`.
-No enum is treated as an FSM. No public name, variant, payload, match arm, error, effect, or authority predicate needs to change.
+No enum is treated as an FSM. At the reviewed product revision, no public name, variant, payload, match arm, error, effect, or authority predicate needed to change. The later approved breaking API cutover supersedes only the public-name constraint for current source: `local_store::Category`, `node_state::NamespaceKind`, and `node_state::FileObservation` replace these historical names without aliases. It does not alter the reviewed variants, match decisions, or startup authority.
 
 ## Compatibility decision
 

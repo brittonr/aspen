@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
-use crate::node_state::NodeStateFileObservation;
-use crate::node_state::NodeStateNamespace;
-use crate::node_state::NodeStatePath;
+use crate::node_state::FileObservation;
+use crate::node_state::DirectoryView;
+use crate::node_state::RelativePath;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScanShellControl {
@@ -17,7 +17,7 @@ pub struct ScanShellControl {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DurableScanBinding {
     pub item_ref: String,
-    pub path: NodeStatePath,
+    pub path: RelativePath,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,7 +42,7 @@ pub struct ScanExecution {
 pub fn scan_durable_namespace(
     profile: &ObservationProfile,
     plan: &IntegrityPlan,
-    namespace: &NodeStateNamespace,
+    namespace: &DirectoryView,
     bindings: &[DurableScanBinding],
     control: &ScanShellControl,
 ) -> Result<ScanExecution> {
@@ -84,10 +84,10 @@ pub fn scan_content_source(
 fn validate_scan_control(profile: &ObservationProfile, plan: &IntegrityPlan, control: &ScanShellControl) -> Result<()> {
     if control.max_items == 0 || control.max_items > plan.max_items || control.max_items > profile.bounds.max_scan_items
     {
-        return Err(MoltenError::invalid_harness("integrity scan item bound exceeds the admitted plan or profile"));
+        return Err(Failure::invalid_harness("integrity scan item bound exceeds the admitted plan or profile"));
     }
     if control.max_item_bytes == 0 {
-        return Err(MoltenError::invalid_harness("integrity scan byte bound must be positive"));
+        return Err(Failure::invalid_harness("integrity scan byte bound must be positive"));
     }
     Ok(())
 }
@@ -97,7 +97,7 @@ fn index_bindings<'a>(
     bindings: &'a [DurableScanBinding],
 ) -> Result<BTreeMap<String, &'a DurableScanBinding>> {
     if bindings.len() > plan.max_items {
-        return Err(MoltenError::invalid_harness("durable scan binding count exceeds the admitted plan"));
+        return Err(Failure::invalid_harness("durable scan binding count exceeds the admitted plan"));
     }
     let declared = plan
         .targets
@@ -107,10 +107,10 @@ fn index_bindings<'a>(
     let mut index = BTreeMap::new();
     for binding in bindings {
         if !declared.contains(binding.item_ref.as_str()) {
-            return Err(MoltenError::invalid_harness("durable scan binding is outside the admitted integrity plan"));
+            return Err(Failure::invalid_harness("durable scan binding is outside the admitted integrity plan"));
         }
         if index.insert(binding.item_ref.clone(), binding).is_some() {
-            return Err(MoltenError::invalid_harness("duplicate durable scan binding item ref"));
+            return Err(Failure::invalid_harness("duplicate durable scan binding item ref"));
         }
     }
     Ok(index)
@@ -119,27 +119,27 @@ fn index_bindings<'a>(
 fn observe_node_state_target(
     plan: &IntegrityPlan,
     target: &IntegrityTarget,
-    namespace: &NodeStateNamespace,
+    namespace: &DirectoryView,
     binding: &DurableScanBinding,
     max_bytes: u64,
 ) -> ScanObservation {
     let source = match namespace.observe_file(&binding.path) {
-        Ok(NodeStateFileObservation::Missing) => ReadOnlyContentObservation {
+        Ok(FileObservation::Missing) => ReadOnlyContentObservation {
             status: ScanItemStatus::Missing,
             bytes: None,
             evidence_refs: Vec::new(),
         },
-        Ok(NodeStateFileObservation::NonRegular(_)) => ReadOnlyContentObservation {
+        Ok(FileObservation::NonRegular(_)) => ReadOnlyContentObservation {
             status: ScanItemStatus::Unsupported,
             bytes: None,
             evidence_refs: Vec::new(),
         },
-        Ok(NodeStateFileObservation::Regular(file)) if file.size() > max_bytes => ReadOnlyContentObservation {
+        Ok(FileObservation::Regular(file)) if file.size() > max_bytes => ReadOnlyContentObservation {
             status: ScanItemStatus::OverBound,
             bytes: None,
             evidence_refs: Vec::new(),
         },
-        Ok(NodeStateFileObservation::Regular(file)) => match file.read_bounded(max_bytes) {
+        Ok(FileObservation::Regular(file)) => match file.read_bounded(max_bytes) {
             Ok(bytes) => ReadOnlyContentObservation {
                 status: ScanItemStatus::Present,
                 bytes: Some(bytes),

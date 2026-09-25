@@ -18,18 +18,18 @@ impl RedactionOutputStack {
 
     fn take(&mut self, count: usize) -> Result<Vec<IoValue>> {
         if self.values.len() < count {
-            return Err(MoltenError::invalid_harness("redaction traversal stack underflow"));
+            return Err(crate::error::Failure::invalid_harness("redaction traversal stack underflow"));
         }
         Ok(self.values.split_off(self.values.len() - count))
     }
 
     fn finish(mut self) -> Result<IoValue> {
         if self.values.len() != 1 {
-            return Err(MoltenError::invalid_harness("redaction traversal produced invalid output"));
+            return Err(crate::error::Failure::invalid_harness("redaction traversal produced invalid output"));
         }
         self.values
             .pop()
-            .ok_or_else(|| MoltenError::invalid_harness("redaction traversal produced no output"))
+            .ok_or_else(|| crate::error::Failure::invalid_harness("redaction traversal produced no output"))
     }
 }
 
@@ -156,7 +156,7 @@ fn transform_sensitive_record(
     state: &mut RedactionTransformState,
 ) -> Result<IoValue> {
     if label == "encrypted-ref" {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "malformed encrypted-ref marker cannot be accepted into a repro export profile",
         ));
     }
@@ -169,7 +169,7 @@ fn transform_sensitive_record(
         return Ok(value.clone());
     }
     match state.profile {
-        ReproExportProfile::DenySensitive => Err(MoltenError::invalid_harness(format!(
+        ReproExportProfile::DenySensitive => Err(crate::error::Failure::invalid_harness(format!(
             "redaction preflight found sensitive marker {label}; sealed pass repro bundles require explicit redaction before export"
         ))),
         ReproExportProfile::RedactedDiagnostic => redaction_marker_for_value(value, label, path, state),

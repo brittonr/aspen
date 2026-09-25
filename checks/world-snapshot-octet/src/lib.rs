@@ -4,30 +4,29 @@
 
 #[allow(
     tigerstyle::non_trait_imports,
-    tigerstyle::path_segment_repetition,
-    reason = "the focused scaffold mirrors Molten error names needed by the production adapter without importing the full product shell"
+    reason = "the focused scaffold mirrors the production failure contract without importing the full product shell"
 )]
 pub mod error {
     use core::fmt;
 
     #[derive(Debug)]
-    pub struct MoltenError(String);
+    pub struct Failure(String);
 
-    impl MoltenError {
+    impl Failure {
         pub fn invalid_harness(message: impl Into<String>) -> Self {
             Self(message.into())
         }
     }
 
-    impl fmt::Display for MoltenError {
+    impl fmt::Display for Failure {
         fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
             formatter.write_str(&self.0)
         }
     }
 
-    impl std::error::Error for MoltenError {}
+    impl std::error::Error for Failure {}
 
-    pub type Result<T> = core::result::Result<T, MoltenError>;
+    pub type Result<T> = core::result::Result<T, Failure>;
 }
 
 pub mod preserves_rail {

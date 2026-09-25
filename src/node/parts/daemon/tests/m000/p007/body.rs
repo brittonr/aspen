@@ -242,7 +242,7 @@
             evidence_refs: &[],
         })
         .expect("authority envelope");
-        let state_root = crate::node_state::NodeStateRoot::open(root).expect("open node state root");
+        let state_root = crate::node_state::Root::open(root).expect("open node state root");
         let diagnostics =
             live_send_authority_grant_diagnostics(&state_root, &envelope).expect("authority diagnostics");
         assert!(diagnostics.iter().any(|value| value.contains("is not a grant")));

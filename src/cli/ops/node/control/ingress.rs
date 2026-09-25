@@ -93,7 +93,7 @@ pub(crate) fn live_loopback(input: super::super::command::control::IngressLiveLo
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
-        .map_err(molten::error::MoltenError::from)?;
+        .map_err(molten::error::Failure::from)?;
     let loopback = runtime.block_on(molten::node_daemon::control_live_iroh_loopback(
         &molten::node_daemon::ControlLiveLoopbackInput {
             state_root: &state_root,
@@ -188,7 +188,7 @@ fn send_live(
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
-        .map_err(molten::error::MoltenError::from)?;
+        .map_err(molten::error::Failure::from)?;
     runtime.block_on(molten::node_daemon::send_control_live_ingress(&molten::node_daemon::ControlLiveSendInput {
         state_root: input.state_root.as_deref(),
         request_value: &values.request_value,
@@ -217,7 +217,7 @@ fn write_live_send_outputs(
 ) -> molten::error::Result<()> {
     write_optional_receipt(input.transport_receipt_out.as_ref(), sent.transport_receipt_value.as_ref())?;
     if let Some(dir) = input.retry_receipts_dir.as_ref() {
-        std::fs::create_dir_all(dir).map_err(molten::error::MoltenError::from)?;
+        std::fs::create_dir_all(dir).map_err(molten::error::Failure::from)?;
         for (reference, value) in sent.retry_receipt_refs.iter().zip(sent.retry_receipt_values.iter()) {
             let path = dir.join(format!("{}.preserves", reference.replace(':', "-")));
             super::super::core::write_file(&path, &molten::preserves_rail::to_text(value)?)?;

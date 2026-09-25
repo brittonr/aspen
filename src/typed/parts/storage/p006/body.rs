@@ -8,14 +8,14 @@ fn validate_refs(refs: &[String], field: &str) -> Result<()> {
 
 fn require_non_empty_refs(refs: &[String], field: &str) -> Result<()> {
     if refs.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("{field} must not be empty")));
+        return Err(Failure::invalid_harness(format!("{field} must not be empty")));
     }
     validate_refs(refs, field)
 }
 
 fn require_ref(reference: &str, field: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference).map_err(|error| {
-        MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
+        Failure::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
     })
 }
 
@@ -118,7 +118,7 @@ fn parse_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
         let name = required_string(&check[0], "check name")?;
         let status = required_string(&check[1], "check status")?;
         if status != "pass" && status != "fail" {
-            return Err(MoltenError::invalid_harness(format!("typed storage check {name} has status {status}")));
+            return Err(Failure::invalid_harness(format!("typed storage check {name} has status {status}")));
         }
         parsed.push(name);
     }
@@ -129,7 +129,7 @@ fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()>
     if checks.iter().any(|check| check == expected) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{context} missing {expected} check")))
+        Err(Failure::invalid_harness(format!("{context} missing {expected} check")))
     }
 }
 
@@ -138,7 +138,7 @@ fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Resu
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported {context} schema {actual}; expected {expected}")))
+        Err(Failure::invalid_harness(format!("unsupported {context} schema {actual}; expected {expected}")))
     }
 }
 
@@ -149,35 +149,35 @@ fn simple_record<'a>(
 ) -> Result<std::borrow::Cow<'a, preserves::Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
 fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {field}")))
 }
 
 fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
 fn validate_handler_profile(profile: &str) -> Result<()> {
     if profile == STORAGE_HANDLER_PROFILE_REDB {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported typed storage handler profile {profile}")))
+        Err(Failure::invalid_harness(format!("unsupported typed storage handler profile {profile}")))
     }
 }
 
@@ -185,7 +185,7 @@ fn validate_schema_identity_mode(mode: &str) -> Result<()> {
     if mode == SCHEMA_IDENTITY_MODE_INFERRED_PRESERVES_CLASS {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "unsupported typed storage schema identity mode {mode}; mutable names are not storage identity"
         )))
     }
@@ -195,7 +195,7 @@ fn validate_no_executable_authority(value: &IoValue, context: &str) -> Result<()
     let text = crate::preserves_rail::to_text(value)?;
     for marker in FORBIDDEN_EXECUTABLE_AUTHORITY_MARKERS {
         if text.contains(marker) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "{context} rejects serialized function, closure, mutable name, or raw decoder authority marker {marker}"
             )));
         }

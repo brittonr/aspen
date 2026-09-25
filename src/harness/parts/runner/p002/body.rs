@@ -111,7 +111,7 @@ fn with_time_random_handler_receipt(
         | super::core::CoreStep::Retract { .. } => return Ok(events),
     };
     if events.len() != 2 {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "deterministic {effect} handler expected request and response events at step {step_index}"
         )));
     }
@@ -147,6 +147,6 @@ fn divergence(
     expected: impl Into<String>,
     actual: impl Into<String>,
     detail: impl Into<String>,
-) -> MoltenError {
-    MoltenError::harness_divergence(HarnessDivergence::new(kind, step, expected, actual, detail))
+) -> Failure {
+    Failure::harness_divergence(HarnessDivergence::new(kind, step, expected, actual, detail))
 }

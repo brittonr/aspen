@@ -80,7 +80,7 @@ fn planned_task(
 pub fn parse_upgrade_plan(value: &IoValue) -> Result<UpgradePlan> {
     let fields = value
         .collect_simple_record("upgrade-plan-v1", Some(12))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <upgrade-plan-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <upgrade-plan-v1 ...>"))?;
     require_schema(&fields[0], UPGRADE_PLAN_SCHEMA, "upgrade plan")?;
     let session_id = record_string(&fields[1], "session")?;
     let summary = value_to_iovalue(&fields[2]);
@@ -147,10 +147,10 @@ pub fn create_session(root: &Path, plan_value: &IoValue) -> Result<UpgradeSessio
     ensure_dirs(root)?;
     let plan = parse_upgrade_plan(plan_value)?;
     if plan.policy_refs.is_empty() {
-        return Err(MoltenError::invalid_harness("upgrade session missing policy refs"));
+        return Err(Failure::invalid_harness("upgrade session missing policy refs"));
     }
     if plan.capability_refs.is_empty() {
-        return Err(MoltenError::invalid_harness("upgrade session missing capability refs"));
+        return Err(Failure::invalid_harness("upgrade session missing capability refs"));
     }
     write_preserves(&plan_path(root, &plan.plan_ref)?, plan_value)?;
     let receipt_value = upgrade_receipt_value(&UpgradeReceiptValueInput {
@@ -212,13 +212,13 @@ pub fn execute_task(root: &Path, ledger_root: &Path, plan_ref: &str, task_id: &s
         .tasks
         .iter()
         .position(|task| task.task_id == task_id)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("upgrade plan missing task {task_id}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("upgrade plan missing task {task_id}")))?;
     let task = plan.tasks[task_index].clone();
     if let Some(prior_task_id) = first_incomplete_prior_task(root, &plan, task_index)? {
         if task.kind == "cutover" {
             return cutover_denied_for_incomplete_prior(root, &plan, &task, &prior_task_id);
         }
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "upgrade task {} cannot run before prior task {} completes",
             task.task_id, prior_task_id
         )));
@@ -361,7 +361,7 @@ fn task_result(root: &Path, ledger_root: &Path, plan: &UpgradePlan, task: &Upgra
         "update-docs" | "rollback-pointer" => {
             Ok(("pass", Vec::new(), vec![("task-admission", "pass"), ("side-effect-boundary", "pass")]))
         }
-        other => Err(MoltenError::invalid_harness(format!(
+        other => Err(Failure::invalid_harness(format!(
             "unsupported upgrade task kind {other}; expected one of {:?}",
             SUPPORTED_TASK_KINDS
         ))),
@@ -372,7 +372,7 @@ fn alias_result(root: &Path, plan: &UpgradePlan, task: &UpgradeTask) -> Result<U
     let to_ref = task
         .to_ref
         .as_deref()
-        .ok_or_else(|| MoltenError::invalid_harness("compatibility alias missing target ref"))?;
+        .ok_or_else(|| Failure::invalid_harness("compatibility alias missing target ref"))?;
     let previous = task.from_ref.as_deref();
     let pending_receipt_ref = local_ref("upgrade-pending-receipt", &plan.plan_ref, &task.task_id)?;
     let pointer = name_pointer_value(&task.subject, "alias", to_ref, previous, &pending_receipt_ref)?;

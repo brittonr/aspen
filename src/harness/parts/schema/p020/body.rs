@@ -23,15 +23,15 @@ fn nickel_export_json(source: &str) -> Result<String> {
     context.expr_to_json(&expression).map_err(nickel_error)
 }
 
-fn nickel_error(error: nickel_lang::Error) -> MoltenError {
+fn nickel_error(error: nickel_lang::Error) -> crate::error::Failure {
     let mut message = Vec::new();
     if error.format(&mut message, nickel_lang::ErrorFormat::Text).is_ok() {
-        MoltenError::invalid_harness(format!(
+        crate::error::Failure::invalid_harness(format!(
             "Nickel static policy normalization failed: {}",
             String::from_utf8_lossy(&message).trim()
         ))
     } else {
-        MoltenError::invalid_harness(format!("Nickel static policy normalization failed: {error:?}"))
+        crate::error::Failure::invalid_harness(format!("Nickel static policy normalization failed: {error:?}"))
     }
 }
 
@@ -59,36 +59,36 @@ pub fn parse_capability_gate(value: &IoValue) -> Result<CapabilityGateEvidence> 
     let gate = simple_record(value, "capability-gate-v1", 7)?;
     let schema = required_string(&gate[0], "capability gate schema")?;
     if schema != crate::preserves_rail::HARNESS_CAPABILITY_GATE_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported capability gate schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_CAPABILITY_GATE_SCHEMA
         )));
     }
     let decision = required_record_string(&gate[1], "decision", "capability gate decision")?;
     if decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!("unsupported capability gate decision {decision}")));
+        return Err(crate::error::Failure::invalid_harness(format!("unsupported capability gate decision {decision}")));
     }
     let capability_ref = required_record_hash(&gate[2], "capability-ref", "capability gate capability ref")?;
     let authority_contract = parse_authority_contract_evidence(&gate[3])?;
     let authority_preflight = parse_basalt_authority_preflight_evidence(&gate[4])?;
     let proofset = parse_ucan_proofset_evidence(&gate[5])?;
     if authority_contract.normalized_capability_ref != capability_ref {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "authority contract normalized capability ref does not match capability gate ref",
         ));
     }
     if authority_preflight.capability_ref != capability_ref {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "Basalt authority preflight capability ref does not match capability gate ref",
         ));
     }
     if authority_preflight.envelope_ref != authority_contract.envelope_ref {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "Basalt authority preflight envelope ref does not match authority contract envelope",
         ));
     }
     if authority_preflight.proofset_ref != proofset.proofset_ref {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "Basalt authority preflight proofset ref does not match UCAN proofset evidence",
         ));
     }
@@ -128,12 +128,12 @@ pub fn validate_capability_gate_evidence(
     capability_gate: Option<&CapabilityGateEvidence>,
 ) -> Result<()> {
     if !suite.capabilities_explicit {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "missing explicit capability fixture; implicit authority cannot satisfy evidence gates",
         ));
     }
     let capability_gate = capability_gate.ok_or_else(|| {
-        MoltenError::invalid_harness(
+        crate::error::Failure::invalid_harness(
             "missing capability gate evidence; authority context must pass preflight before side effects",
         )
     })?;
@@ -141,19 +141,19 @@ pub fn validate_capability_gate_evidence(
     require_capability_gate_check(&capability_gate.checks, "explicit-capability-fixture")?;
     require_capability_gate_check(&capability_gate.checks, "no-implicit-authority")?;
     if capability_gate.capability_ref != expected_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "capability gate ref mismatch: gate has {}, embedded capabilities hash to {expected_ref}",
             capability_gate.capability_ref
         )));
     }
     let expected_grant_refs = capability_grant_refs(&suite.capabilities)?;
     if capability_gate.grant_refs != expected_grant_refs {
-        return Err(MoltenError::invalid_harness("capability gate grant refs do not match embedded capabilities"));
+        return Err(crate::error::Failure::invalid_harness("capability gate grant refs do not match embedded capabilities"));
     }
     if capability_gate.ucan_verification_receipt_refs.is_empty()
         && capability_gate.derived_grant_refs != expected_grant_refs
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "local fixture derived grant refs do not match embedded capabilities",
         ));
     }
@@ -161,7 +161,7 @@ pub fn validate_capability_gate_evidence(
     let expected_gate_ref = canonical_hash(&expected_gate)?;
     let actual_gate_ref = canonical_hash(&capability_gate.value)?;
     if actual_gate_ref != expected_gate_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "capability gate evidence does not match embedded authority preflight: gate hashes to {actual_gate_ref}, expected {expected_gate_ref}"
         )));
     }
@@ -219,7 +219,7 @@ fn capability_preflight_material(
     let envelope_ref = canonical_hash(&envelope_value)?;
     let receipt = basalt::validate_contract_envelope(&envelope);
     if !receipt.is_accepted() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "Basalt authority preflight denied capability contract envelope: {}",
             receipt.reason
         )));
@@ -268,7 +268,7 @@ fn parse_authority_contract_evidence(value: &Value<IoValue>) -> Result<Authority
     let contract = simple_record(&value, "authority-contract", 3)?;
     let schema = required_string(&contract[0], "authority contract schema")?;
     if schema != crate::preserves_rail::HARNESS_CAPABILITY_CONTRACT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported authority contract schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_CAPABILITY_CONTRACT_SCHEMA
         )));
@@ -278,13 +278,13 @@ fn parse_authority_contract_evidence(value: &Value<IoValue>) -> Result<Authority
     let envelope_ref = required_record_hash(&contract[2], "envelope-ref", "authority contract envelope ref")?;
     let actual_envelope_ref = canonical_hash(&envelope_value)?;
     if envelope_ref != actual_envelope_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "authority contract envelope ref mismatch: evidence has {envelope_ref}, envelope hashes to {actual_envelope_ref}"
         )));
     }
     let receipt = basalt::validate_contract_envelope(&envelope);
     if !receipt.is_accepted() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "Basalt rejected authority contract envelope: {}",
             receipt.reason
         )));

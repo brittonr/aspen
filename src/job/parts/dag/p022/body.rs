@@ -1,7 +1,7 @@
 
 fn validate_non_empty(value: &str, field: &str) -> Result<()> {
     if value.is_empty() {
-        Err(MoltenError::invalid_harness(format!("{field} cannot be empty")))
+        Err(Failure::invalid_harness(format!("{field} cannot be empty")))
     } else {
         Ok(())
     }
@@ -9,7 +9,7 @@ fn validate_non_empty(value: &str, field: &str) -> Result<()> {
 
 fn reject_mobile_closure_config(config: &IoValue) -> Result<()> {
     if let Some(marker) = crate::preserves_rail::find_ambient_job_token(config)? {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "job stage config contains mobile/ambient token {}",
             marker.token
         )))

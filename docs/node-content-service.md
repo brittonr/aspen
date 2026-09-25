@@ -10,7 +10,7 @@ Production `node run` now rejects before state creation. Protected content servi
 
 `NodeContentConfig` and `NodeContentPlan` own closed input admission, explicit read grants, address checks, and a finite tick-wait budget. The existing content adapter owns canonical manifests, verified chunks, bounded handoffs, and Iroh transport.
 
-`src/node/content.rs` derives chunk and identity capabilities from `NodeStateRoot`. It uses the normal node identity rather than a separate fixture key. The daemon starts the listener after startup and service-lock admission, runs it inside its tick loop, and closes it before service completion. These hooks remain behind the guard until real startup evidence exists.
+`src/node/content.rs` derives chunk and identity capabilities from `node_state::Root`. It uses the normal node identity rather than a separate fixture key. The daemon starts the listener after startup and service-lock admission, runs it inside its tick loop, and closes it before service completion. These hooks remain behind the guard until real startup evidence exists.
 
 `molten-node-host` owns atomic regular-leaf writes. It does not expose raw directory capabilities. The client publishes complete verified bytes through a no-replace hard link. Existing outputs remain unchanged.
 

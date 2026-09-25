@@ -80,7 +80,7 @@ fn fetch_blob_ref_job_content(
 ) -> Result<Vec<u8>> {
     let manifest = crate::chunk_store::read_manifest(chunk_root, &content.content_ref)?;
     if manifest.total_len != content.size {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "job content {} size hint {} does not match manifest length {}",
             content.content_ref, content.size, manifest.total_len
         )));
@@ -121,7 +121,7 @@ fn run_blob_ref_job_handler(submission: &BlobRefJobSubmission, input_bytes: &[Ve
             }
             Ok(output)
         }
-        other => Err(MoltenError::invalid_harness(format!("unsupported job ref handler profile {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported job ref handler profile {other}"))),
     }
 }
 

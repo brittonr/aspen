@@ -23,7 +23,7 @@ use super::SystemExtensionManifestInput;
 use super::TypedEffectRequest;
 use super::canonical_admit_system_extension_manifest;
 use super::validate_executable_conformance;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric::DeterminismClass;
 use crate::fabric::ExtensionTier;
@@ -111,10 +111,10 @@ impl WasmProbe {
         let mut config = wasmtime::Config::new();
         config.consume_fuel(true);
         let engine = wasmtime::Engine::new(&config).map_err(|error| {
-            MoltenError::invalid_harness(format!("sandboxed fixture engine initialization failed: {error}"))
+            Failure::invalid_harness(format!("sandboxed fixture engine initialization failed: {error}"))
         })?;
         let module = wasmtime::Module::new(&engine, WASM_PROBE_SOURCE).map_err(|error| {
-            MoltenError::invalid_harness(format!("sandboxed fixture module compilation failed: {error}"))
+            Failure::invalid_harness(format!("sandboxed fixture module compilation failed: {error}"))
         })?;
         Ok(Self { engine, module })
     }
@@ -243,7 +243,7 @@ pub fn run_executable_system_extension_fixture(
     profile: ExecutionProfile,
 ) -> Result<ExecutableSystemExtensionFixtureRun> {
     if profile == ExecutionProfile::NativeProcess {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "the deterministic fixture admits in-process-native or sandboxed-component profiles only",
         ));
     }
@@ -283,7 +283,7 @@ pub fn run_executable_system_extension_fixture(
                 ..
             } => (receipt, approved_effects),
             other => {
-                return Err(MoltenError::invalid_harness(format!("fixture first request did not execute: {other:?}")));
+                return Err(Failure::invalid_harness(format!("fixture first request did not execute: {other:?}")));
             }
         };
     let mut transport_port = FixtureTransportPort::default();
@@ -293,7 +293,7 @@ pub fn run_executable_system_extension_fixture(
         .state()
         .checkpoint_ref
         .clone()
-        .ok_or_else(|| MoltenError::invalid_harness("fixture checkpoint ref missing after checkpoint"))?;
+        .ok_or_else(|| Failure::invalid_harness("fixture checkpoint ref missing after checkpoint"))?;
     let upgraded_status =
         host.upgrade(upgrade_manifest, EchoExecutor::new(profile)?, &checkpoint_ref, UPGRADE_TICK)?.status;
     let rolled_back_status = host
@@ -304,16 +304,16 @@ pub fn run_executable_system_extension_fixture(
     match host.dispatch_request(HASH_C, REQUEST_BYTES, FAILURE_TICK)? {
         HostDispatchResult::Failed { .. } => {}
         other => {
-            return Err(MoltenError::invalid_harness(format!("fixture retryable request did not fail: {other:?}")));
+            return Err(Failure::invalid_harness(format!("fixture retryable request did not fail: {other:?}")));
         }
     }
     if host.state().phase != LifecyclePhase::Failed {
-        return Err(MoltenError::invalid_harness("fixture retryable failure did not enter failed phase"));
+        return Err(Failure::invalid_harness("fixture retryable failure did not enter failed phase"));
     }
     host.restart(RECOVERY_TICK)?;
     let recovered_status = host.operator_status()?;
     if recovered_status.status.phase != LifecyclePhase::Running {
-        return Err(MoltenError::invalid_harness("fixture recovery did not return to running phase"));
+        return Err(Failure::invalid_harness("fixture recovery did not return to running phase"));
     }
     host.dispatch_request(HASH_C, REQUEST_BYTES, POST_RECOVERY_TICK)?
         .require_executed("post-recovery request")?;
@@ -334,7 +334,7 @@ pub fn run_executable_system_extension_fixture(
     let conformance = host.executable_conformance_input(required_callbacks);
     let issues = validate_executable_conformance(&conformance);
     if !issues.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("executable fixture conformance denied: {issues:?}")));
+        return Err(Failure::invalid_harness(format!("executable fixture conformance denied: {issues:?}")));
     }
 
     Ok(ExecutableSystemExtensionFixtureRun {

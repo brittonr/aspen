@@ -201,7 +201,7 @@ fn push_outcome_checks(
 #[doc(hidden)]
 pub fn synthetic_clean_octet_gate_receipt_for_tests() -> Result<IoValue> {
     let metadata = expected_metadata_for_command(DEFAULT_GATE_COMMAND)
-        .map_err(|message| MoltenError::invalid_harness(format!("current octet metadata fixture: {message}")))?;
+        .map_err(|message| Failure::invalid_harness(format!("current octet metadata fixture: {message}")))?;
     let policy = octet_gate_policy_value(&OctetGateInput {
         artifacts_dir: PathBuf::from("target/octet"),
         profile: STRICT_PROFILE.to_string(),
@@ -236,7 +236,7 @@ pub fn build_octet_warning_baseline(input: &OctetWarningBaselineInput) -> Result
     let mut diagnostics = Vec::new();
     let run = load_current_octet_run(&input.artifacts_dir, &mut checks, &mut diagnostics)?;
     if checks.iter().any(|check| check.status != "pass") {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "cannot create octet warning baseline from invalid artifacts: {}",
             diagnostics.join("; ")
         )));

@@ -263,7 +263,7 @@ pub fn plugin_summary(value: &IoValue) -> Result<String> {
     if value.collect_simple_record("plugin-fixture-report-v1", Some(11)).is_some() {
         return Ok(format!("plugin fixture report ref={} (summary is non-normative)", canonical_hash(value)?));
     }
-    Err(MoltenError::invalid_harness("unsupported plugin host artifact for summary"))
+    Err(Failure::invalid_harness("unsupported plugin host artifact for summary"))
 }
 
 fn core_summary(value: &IoValue) -> Option<String> {

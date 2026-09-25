@@ -2,7 +2,7 @@ use molten_core::world_promotion::*;
 use redb::ReadableTable;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::world_head::canonical_world_head_state;
 use crate::world_head::parse_canonical_world_head_state;
@@ -19,7 +19,7 @@ impl WorldPromotionTransactionPort for LocalWorldPromotionStore {
         facts: &WorldPromotionTransactionFacts,
     ) -> Result<WorldPromotionCommitObservation> {
         validate_promotion_transaction(plan, facts).map_err(|issues| {
-            MoltenError::invalid_harness(format!("world promotion transaction denied: {issues:?}"))
+            Failure::invalid_harness(format!("world promotion transaction denied: {issues:?}"))
         })?;
         let parsed = parse_committed_reservations(plan, reservations)?;
         let write = self.database().begin_write().map_err(store_error)?;
@@ -156,9 +156,9 @@ fn parse_committed_reservations(
     let parsed = records.iter().map(|record| parse_reservation(&record.bytes)).collect::<Result<Vec<_>>>()?;
     let refs = parsed.iter().map(|reservation| reservation.reservation_ref.clone()).collect::<Vec<_>>();
     validate_reservation_set(plan, &refs)
-        .map_err(|issue| MoltenError::invalid_harness(format!("reservation set mismatch: {issue:?}")))?;
+        .map_err(|issue| Failure::invalid_harness(format!("reservation set mismatch: {issue:?}")))?;
     if parsed.iter().any(|reservation| reservation.state != WorldReleaseState::Committed) {
-        return Err(MoltenError::invalid_harness("promotion transaction requires committed reservation records"));
+        return Err(Failure::invalid_harness("promotion transaction requires committed reservation records"));
     }
     Ok(parsed)
 }

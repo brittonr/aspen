@@ -17,7 +17,7 @@ use super::SystemExtensionAdmissionContext;
 use super::SystemExtensionManifestInput;
 use super::TypedEffectRequest;
 use super::admit_system_extension_manifest;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric::CanonicalExtensionTierAdmission;
 use crate::fabric::CanonicalFabricPortBinding;
@@ -115,7 +115,7 @@ pub fn canonical_admit_system_extension_manifest(
                 requirement.port_id == binding.key.port_id && requirement.version == binding.key.version
             })
             .ok_or_else(|| {
-                MoltenError::invalid_harness(format!(
+                Failure::invalid_harness(format!(
                     "optional binding {}@{} has no admitted requirement",
                     binding.key.port_id, binding.key.version
                 ))
@@ -372,7 +372,7 @@ pub(crate) fn canonical_effect_completion(
 ) -> Result<CanonicalEffectCompletion> {
     crate::preserves_rail::validate_content_ref(&output.output_ref)?;
     if output.output_schema_ref != effect.output_schema_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "system-extension effect completion schema mismatch: actual={} expected={}",
             output.output_schema_ref, effect.output_schema_ref
         )));
@@ -381,7 +381,7 @@ pub(crate) fn canonical_effect_completion(
         crate::preserves_rail::validate_content_ref(&materialized.value_ref)?;
         let observed_ref = crate::preserves_rail::content_ref_from_bytes(&materialized.bytes);
         if materialized.value_ref != output.output_ref || observed_ref != materialized.value_ref {
-            return Err(MoltenError::invalid_harness("system-extension materialized effect output identity mismatch"));
+            return Err(Failure::invalid_harness("system-extension materialized effect output identity mismatch"));
         }
     }
     let value = record("system-extension-effect-completion-v2", vec![
@@ -557,7 +557,7 @@ pub struct CanonicalOperatorStatus {
 
 pub(crate) fn canonical_operator_status(status: OperatorStatus) -> Result<CanonicalOperatorStatus> {
     if status.port_binding_refs.len() > MAX_CANONICAL_EXTENSION_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "system-extension status port binding count {} exceeds {}",
             status.port_binding_refs.len(),
             MAX_CANONICAL_EXTENSION_ITEMS
@@ -615,10 +615,10 @@ pub fn parse_operator_status_readback(value: &IOValue) -> Result<OperatorStatusR
     const STATUS_FIELD_COUNT: usize = 16;
     let fields = value
         .collect_simple_record("system-extension-status-v1", Some(STATUS_FIELD_COUNT))
-        .ok_or_else(|| MoltenError::invalid_harness("expected canonical system-extension status"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected canonical system-extension status"))?;
     let schema = required_string(&fields[0], "status schema")?;
     if schema != super::SYSTEM_EXTENSION_STATUS_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!("system-extension status schema mismatch: {schema}")));
+        return Err(Failure::invalid_harness(format!("system-extension status schema mismatch: {schema}")));
     }
     let extension_id = record_string_field(&fields[1], "extension-id")?;
     let service_id = record_string_field(&fields[2], "service-id")?;
@@ -685,7 +685,7 @@ pub fn parse_operator_status_readback(value: &IOValue) -> Result<OperatorStatusR
 
 fn validate_readback_identifier(value: &str, label: &str) -> Result<()> {
     if value.len() > MAX_READBACK_IDENTIFIER_BYTES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "system-extension {label} exceeds {MAX_READBACK_IDENTIFIER_BYTES} bytes"
         )));
     }
@@ -696,37 +696,37 @@ fn validate_readback_enum(value: &str, label: &str, allowed: &[&str]) -> Result<
     if allowed.contains(&value) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported system-extension {label}: {value}")))
+        Err(Failure::invalid_harness(format!("unsupported system-extension {label}: {value}")))
     }
 }
 
 fn record_string_field(value: &preserves::Value<IOValue>, label: &str) -> Result<String> {
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} STRING>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} STRING>")))?;
     required_string(&fields[0], label)
 }
 
 fn record_u64_field(value: &preserves::Value<IOValue>, label: &str) -> Result<u64> {
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} U64>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} U64>")))?;
     fields[0]
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {label}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {label}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
 fn record_optional_string_field(value: &preserves::Value<IOValue>, label: &str) -> Result<Option<String>> {
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} OPTION>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} OPTION>")))?;
     if fields[0].collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
     let some = fields[0]
         .collect_simple_record("some", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected optional string for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected optional string for {label}")))?;
     required_string(&some[0], label).map(Some)
 }
 
@@ -734,7 +734,7 @@ fn required_string(value: &preserves::Value<IOValue>, label: &str) -> Result<Str
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {label}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {label}")))
 }
 
 fn effect_value(effect: &TypedEffectRequest) -> IOValue {
@@ -819,8 +819,8 @@ fn checks_value(checks: &[&str]) -> IOValue {
     field("checks", strings_value(checks.iter().copied()))
 }
 
-fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label} validation denied: {issues:?}"))
+fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> Failure {
+    Failure::invalid_harness(format!("{label} validation denied: {issues:?}"))
 }
 
 pub(crate) fn callback_event_value(

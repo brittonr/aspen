@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use molten_core::world_faults::*;
-use molten_node_host::node_state::NodeStateRoot;
+use molten_node_host::node_state::Root;
 
 use super::super::*;
 use super::support::*;
@@ -15,7 +15,7 @@ fn full_harness_reopens_local_state_and_publishes_bounded_receipt_last() {
     let inventory = standard_world_mutation_inventory();
     let profile = standard_world_fault_profile(TEST_SOURCE_REVISION).expect("fault profile");
     let workspace = crate::test_support::process_workspace("world-fault-restart").expect("process workspace");
-    let root = NodeStateRoot::open(&workspace).expect("node state root");
+    let root = Root::open(&workspace).expect("node state root");
     root.create_layout().expect("node state layout");
     let events = Rc::new(RefCell::new(Vec::new()));
     let mut control = DeterministicFaultControl { events: events.clone() };
@@ -64,7 +64,7 @@ fn owner_core_misclassification_is_recorded_as_failure_without_shell_compensatio
     let inventory = standard_world_mutation_inventory();
     let profile = standard_world_fault_profile(TEST_SOURCE_REVISION).expect("fault profile");
     let workspace = crate::test_support::process_workspace("world-fault-owner-negative").expect("workspace");
-    let root = NodeStateRoot::open(&workspace).expect("node state root");
+    let root = Root::open(&workspace).expect("node state root");
     root.create_layout().expect("node state layout");
     let events = Rc::new(RefCell::new(Vec::new()));
     let mut control = DeterministicFaultControl { events: events.clone() };
@@ -113,7 +113,7 @@ fn receipt_port_cannot_cross_the_canonical_identity() {
     let inventory = standard_world_mutation_inventory();
     let profile = standard_world_fault_profile(TEST_SOURCE_REVISION).expect("fault profile");
     let workspace = crate::test_support::process_workspace("world-fault-crossed-receipt").expect("workspace");
-    let root = NodeStateRoot::open(&workspace).expect("node state root");
+    let root = Root::open(&workspace).expect("node state root");
     root.create_layout().expect("node state layout");
     let events = Rc::new(RefCell::new(Vec::new()));
     let mut control = DeterministicFaultControl { events: events.clone() };

@@ -91,11 +91,11 @@ pub fn plan_chunk_traversal_sync(input: &ChunkTraversalSyncInput<'_>) -> Result<
     validate_chunk_sync_strategy(input.strategy)?;
     validate_chunk_refs(input.verified_present_refs, "verified present chunk ref")?;
     if input.candidate_peers.len() < MIN_CHUNK_SYNC_PEERS {
-        return Err(MoltenError::invalid_harness("chunk traversal sync requires at least one candidate peer"));
+        return Err(Failure::invalid_harness("chunk traversal sync requires at least one candidate peer"));
     }
     for peer in input.candidate_peers {
         if peer.trim().is_empty() {
-            return Err(MoltenError::invalid_harness("chunk traversal sync peer must not be empty"));
+            return Err(Failure::invalid_harness("chunk traversal sync peer must not be empty"));
         }
     }
     let present = input.verified_present_refs.iter().collect::<OrderedSet<_>>();
@@ -216,7 +216,7 @@ pub fn verify_remote_range_readback(input: &RemoteRangeReadbackInput<'_>) -> Res
         match supplied.get(chunk_ref) {
             Some(chunk_bytes) => {
                 let chunk_size = usize::try_from(input.manifest.chunk_size).map_err(|error| {
-                    MoltenError::invalid_harness(format!("remote byte-source chunk size cannot fit usize: {error}"))
+                    Failure::invalid_harness(format!("remote byte-source chunk size cannot fit usize: {error}"))
                 })?;
                 let actual_ref = hash_chunk(chunk_bytes, chunk_size);
                 if actual_ref != *chunk_ref {
@@ -267,7 +267,7 @@ fn validate_chunk_manifest_identity(manifest: &ChunkManifest) -> Result<()> {
 fn validate_chunk_refs(refs: &[String], label: &str) -> Result<()> {
     for reference in refs {
         validate_content_ref(reference).map_err(|error| {
-            MoltenError::invalid_harness(format!("expected canonical content ref for {label}, got {reference}: {error}"))
+            Failure::invalid_harness(format!("expected canonical content ref for {label}, got {reference}: {error}"))
         })?;
     }
     Ok(())
@@ -276,7 +276,7 @@ fn validate_chunk_refs(refs: &[String], label: &str) -> Result<()> {
 fn validate_chunk_sync_strategy(strategy: &str) -> Result<()> {
     match strategy {
         CHUNK_SYNC_STEM_FIRST | CHUNK_SYNC_LEAF_ONLY | CHUNK_SYNC_PARTITIONED_LEAF | CHUNK_SYNC_RESUMABLE_MISSING => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported chunk traversal sync strategy {strategy}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported chunk traversal sync strategy {strategy}"))),
     }
 }
 
@@ -284,7 +284,7 @@ fn validate_remote_location(location: &str) -> Result<()> {
     if location.starts_with("s3://") || location.starts_with("http://") || location.starts_with("https://") || location.starts_with("iroh://") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported remote byte-source location {location}")))
+        Err(Failure::invalid_harness(format!("unsupported remote byte-source location {location}")))
     }
 }
 
@@ -327,7 +327,7 @@ fn required_chunks_for_remote_range(
 ) -> Result<Vec<String>> {
     let end = offset
         .checked_add(length)
-        .ok_or_else(|| MoltenError::invalid_harness("remote byte-source range end overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("remote byte-source range end overflow"))?;
     if end > manifest.total_len {
         diagnostics.push("remote byte-source range exceeds manifest length".to_string());
     }
@@ -336,7 +336,7 @@ fn required_chunks_for_remote_range(
     for chunk in &manifest.chunks {
         let chunk_end = chunk_start
             .checked_add(chunk.length)
-            .ok_or_else(|| MoltenError::invalid_harness("remote byte-source chunk range overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("remote byte-source chunk range overflow"))?;
         if ranges_overlap(offset, end, chunk_start, chunk_end) {
             refs.push(chunk.chunk_ref.clone());
         }

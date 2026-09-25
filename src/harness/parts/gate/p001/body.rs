@@ -17,7 +17,7 @@ pub fn repro_bundle_value_with_export_profile(
 pub fn repro_verify_receipt_value(bundle_value: &IoValue) -> Result<IoValue> {
     let bundle = super::schema::parse_repro_bundle(bundle_value)?;
     if bundle.kind == super::schema::ReproBundleKind::Failure {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "failure repro bundle {} wrapping {} is diagnostic-only and cannot be verified as pass evidence",
             bundle.bundle_ref, bundle.artifact_ref
         )));
@@ -25,22 +25,22 @@ pub fn repro_verify_receipt_value(bundle_value: &IoValue) -> Result<IoValue> {
     if let Some(loss_classification) = bundle.loss_classification.as_deref()
         && loss_classification != "gate-preserving"
     {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "{} repro bundle {} is {loss_classification} and cannot be verified as pass evidence",
             bundle.export_profile.as_deref().unwrap_or("profiled"),
             bundle.bundle_ref
         )));
     }
     let embedded_receipt_value = bundle.receipt_value.as_ref().ok_or_else(|| {
-        MoltenError::invalid_harness("unsealed report repro bundle cannot satisfy sealed repro verification")
+        Failure::invalid_harness("unsealed report repro bundle cannot satisfy sealed repro verification")
     })?;
     let embedded_receipt = parse_receipt(embedded_receipt_value)?;
     let check = check_value(bundle_value)?;
     if check.artifact_kind != "repro-bundle" || check.artifact_ref != bundle.bundle_ref {
-        return Err(MoltenError::invalid_harness("repro verify gate check did not bind bundle artifact"));
+        return Err(Failure::invalid_harness("repro verify gate check did not bind bundle artifact"));
     }
     if embedded_receipt.report_ref != check.report_ref || embedded_receipt.suite_ref != check.suite_ref {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "repro verify embedded receipt does not match recomputed bundle report refs",
         ));
     }
@@ -125,18 +125,18 @@ pub fn parse_receipt(value: &IoValue) -> Result<Receipt> {
     let receipt = simple_record(value, "gate-receipt-v1", 14)?;
     let schema = required_string(&receipt[0], "gate receipt schema")?;
     if schema != HARNESS_GATE_RECEIPT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported gate receipt schema {schema}; expected {HARNESS_GATE_RECEIPT_SCHEMA}"
         )));
     }
 
     let decision = required_record_string(&receipt[1], "decision", "gate receipt decision")?;
     if decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!("unsupported gate receipt decision {decision}")));
+        return Err(Failure::invalid_harness(format!("unsupported gate receipt decision {decision}")));
     }
     let artifact_kind = required_record_string(&receipt[2], "artifact-kind", "gate receipt artifact kind")?;
     if !matches!(artifact_kind.as_str(), "report" | "repro-bundle") {
-        return Err(MoltenError::invalid_harness(format!("unsupported gate receipt artifact kind {artifact_kind}")));
+        return Err(Failure::invalid_harness(format!("unsupported gate receipt artifact kind {artifact_kind}")));
     }
     let artifact_ref = required_record_hash(&receipt[3], "artifact", "gate receipt artifact ref")?;
     validate_tool_record(&receipt[4])?;
@@ -214,20 +214,20 @@ pub fn parse_repro_verify_receipt(value: &IoValue) -> Result<ReproVerifyReceipt>
     let receipt = simple_record(value, "repro-verify-receipt-v1", 9)?;
     let schema = required_string(&receipt[0], "repro verify receipt schema")?;
     if schema != HARNESS_REPRO_VERIFY_RECEIPT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported repro verify receipt schema {schema}; expected {HARNESS_REPRO_VERIFY_RECEIPT_SCHEMA}"
         )));
     }
     let decision = required_record_string(&receipt[1], "decision", "repro verify receipt decision")?;
     if decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!("unsupported repro verify receipt decision {decision}")));
+        return Err(Failure::invalid_harness(format!("unsupported repro verify receipt decision {decision}")));
     }
     validate_tool_record(&receipt[2])?;
     let bundle_ref = required_record_hash(&receipt[3], "bundle", "repro verify bundle ref")?;
     let artifact_ref = required_record_hash(&receipt[4], "artifact", "repro verify artifact ref")?;
     let report_ref = required_record_hash(&receipt[5], "report", "repro verify report ref")?;
     if artifact_ref != report_ref {
-        return Err(MoltenError::invalid_harness("repro verify receipt artifact ref does not match report ref"));
+        return Err(Failure::invalid_harness("repro verify receipt artifact ref does not match report ref"));
     }
     let suite_ref = required_record_hash(&receipt[6], "suite", "repro verify suite ref")?;
     let gate_receipt_ref = required_record_hash(&receipt[7], "gate-receipt", "repro verify gate receipt ref")?;
@@ -265,30 +265,30 @@ pub fn repro_verify_receipt_summary(value: &IoValue) -> Result<String> {
 
 fn validate_sealed_report_bundle(report_value: &IoValue, bundle: &super::schema::ReproBundle) -> Result<()> {
     if bundle.redaction_policy_ref.is_none() || bundle.redaction_gate_ref.is_none() {
-        return Err(MoltenError::invalid_harness("sealed report repro bundle missing redaction preflight evidence"));
+        return Err(Failure::invalid_harness("sealed report repro bundle missing redaction preflight evidence"));
     }
     let embedded_receipt_value = bundle
         .receipt_value
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("sealed report repro bundle missing embedded gate receipt"))?;
+        .ok_or_else(|| Failure::invalid_harness("sealed report repro bundle missing embedded gate receipt"))?;
     let embedded_receipt_ref = bundle
         .gate_receipt_ref
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("sealed report repro bundle missing gate receipt ref"))?;
+        .ok_or_else(|| Failure::invalid_harness("sealed report repro bundle missing gate receipt ref"))?;
     let receipt = parse_receipt(embedded_receipt_value)?;
     if &receipt.receipt_ref != embedded_receipt_ref {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "sealed repro bundle gate receipt ref does not match embedded receipt",
         ));
     }
     if receipt.artifact_kind != "report" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "sealed repro bundle must embed a report gate receipt, got {}",
             receipt.artifact_kind
         )));
     }
     if receipt.artifact_ref != bundle.artifact_ref || receipt.report_ref != bundle.artifact_ref {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "sealed repro bundle gate receipt does not bind the embedded report ref",
         ));
     }
@@ -297,7 +297,7 @@ fn validate_sealed_report_bundle(report_value: &IoValue, bundle: &super::schema:
     let expected_receipt_ref = canonical_hash(&expected_receipt_value)?;
     let actual_receipt_ref = canonical_hash(embedded_receipt_value)?;
     if actual_receipt_ref != expected_receipt_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "sealed repro bundle embedded gate receipt does not match report: receipt hashes to {actual_receipt_ref}, expected {expected_receipt_ref}"
         )));
     }

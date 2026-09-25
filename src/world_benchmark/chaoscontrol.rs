@@ -2,7 +2,7 @@ use chaoscontrol_snapshot_descriptor::SnapshotDescriptor;
 use chaoscontrol_snapshot_descriptor::validate_descriptor;
 use molten_core::world_benchmark::*;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,14 +28,14 @@ pub fn bind_chaoscontrol_snapshot(
     descriptor: &SnapshotDescriptor,
 ) -> Result<WorldBenchmarkSnapshotBinding> {
     validate_descriptor(descriptor)
-        .map_err(|error| MoltenError::invalid_harness(format!("ChaosControl snapshot descriptor denied: {error:?}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("ChaosControl snapshot descriptor denied: {error:?}")))?;
     if descriptor.completeness_profile != CHAOSCONTROL_SNAPSHOT_PROFILE {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "ChaosControl snapshot descriptor profile drifted from the exact benchmark cohort",
         ));
     }
     let closure_members = u64::try_from(descriptor.payload.members.len())
-        .map_err(|_| MoltenError::invalid_harness("ChaosControl snapshot closure member count overflow"))?;
+        .map_err(|_| Failure::invalid_harness("ChaosControl snapshot closure member count overflow"))?;
     Ok(WorldBenchmarkSnapshotBinding {
         descriptor_ref,
         source_revision: CHAOSCONTROL_SNAPSHOT_REVISION.to_string(),
@@ -51,10 +51,10 @@ pub fn instrument_chaoscontrol_snapshot(
     observation: &ChaosControlSnapshotSharingObservation,
 ) -> Result<ChaosControlSnapshotBenchmarkObservation> {
     crate::preserves_rail::validate_content_ref(&observation.observation_ref)
-        .map_err(|_| MoltenError::invalid_harness("ChaosControl sharing observation ref is invalid"))?;
+        .map_err(|_| Failure::invalid_harness("ChaosControl sharing observation ref is invalid"))?;
     if observation.page_size_bytes == 0 || !descriptor.topology.memory_bytes.is_multiple_of(observation.page_size_bytes)
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "ChaosControl sharing page geometry does not cover exact snapshot memory",
         ));
     }
@@ -62,13 +62,13 @@ pub fn instrument_chaoscontrol_snapshot(
     let observed_pages = observation
         .copied_pages
         .checked_add(observation.mapped_pages)
-        .ok_or_else(|| MoltenError::invalid_harness("ChaosControl sharing page count overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("ChaosControl sharing page count overflow"))?;
     let expected_physical_bytes = observation
         .copied_pages
         .checked_mul(observation.page_size_bytes)
-        .ok_or_else(|| MoltenError::invalid_harness("ChaosControl sharing byte count overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("ChaosControl sharing byte count overflow"))?;
     if observed_pages != page_count || observation.physical_bytes_written != expected_physical_bytes {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "ChaosControl sharing observation is incomplete or internally inconsistent",
         ));
     }

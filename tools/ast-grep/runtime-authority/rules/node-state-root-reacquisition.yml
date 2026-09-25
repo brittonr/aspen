@@ -27,13 +27,13 @@ ignores:
   - "**/tests/**"
 rule:
   any:
-    - pattern: crate::node_state::NodeStateRoot::open($PATH)
-    - pattern: crate::node_state::NodeStateRoot::open_existing($PATH)
-    - pattern: NodeStateRoot::open($PATH)
-    - pattern: NodeStateRoot::open_existing($PATH)
-    - pattern: crate::node_state::NodeStateNamespace::open($$$ARGS)
-    - pattern: crate::node_state::NodeStateNamespace::open_existing($$$ARGS)
-    - pattern: NodeStateNamespace::open($$$ARGS)
-    - pattern: NodeStateNamespace::open_existing($$$ARGS)
+    - pattern: crate::node_state::Root::open($PATH)
+    - pattern: crate::node_state::Root::open_existing($PATH)
+    - pattern: Root::open($PATH)
+    - pattern: Root::open_existing($PATH)
+    - pattern: crate::node_state::DirectoryView::open($$$ARGS)
+    - pattern: crate::node_state::DirectoryView::open_existing($$$ARGS)
+    - pattern: DirectoryView::open($$$ARGS)
+    - pattern: DirectoryView::open_existing($$$ARGS)
     - pattern: cap_std::fs::Dir::open_ambient_dir($$$ARGS)
     - pattern: Dir::open_ambient_dir($$$ARGS)

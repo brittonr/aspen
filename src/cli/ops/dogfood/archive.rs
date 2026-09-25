@@ -26,7 +26,7 @@ pub(super) fn write(
         let bytes = source.read_path(&logical_path, policy.max_member_bytes)?;
         let actual_ref = molten::operator_dogfood::release_export_file_ref(name, &bytes);
         if actual_ref != *expected_ref {
-            return Err(molten::error::MoltenError::invalid_harness(format!(
+            return Err(molten::error::Failure::invalid_harness(format!(
                 "release export member {name} ref changed before archive write: manifest={expected_ref} observed={actual_ref}"
             )));
         }
@@ -34,9 +34,9 @@ pub(super) fn write(
     }
     let archive_file = molten::materialization::create_explicit_output_file(archive_path)?;
     let encoder = zstd::stream::write::Encoder::new(archive_file, RELEASE_ARCHIVE_COMPRESSION_LEVEL)
-        .map_err(molten::error::MoltenError::from)?;
+        .map_err(molten::error::Failure::from)?;
     let encoder = molten::materialization::write_archive(encoder, &policy, &payloads)?;
-    encoder.finish().map_err(molten::error::MoltenError::from)?;
+    encoder.finish().map_err(molten::error::Failure::from)?;
     Ok(())
 }
 

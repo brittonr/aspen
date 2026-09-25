@@ -125,13 +125,13 @@ fn resolve_reference(
 ) -> Result<String> {
     if is_full_ref(reference) {
         if hidden_set(visibility).contains(reference) {
-            return Err(MoltenError::invalid_harness(format!("catalog ref {reference} is hidden")));
+            return Err(Failure::invalid_harness(format!("catalog ref {reference} is hidden")));
         }
         return Ok(reference.to_string());
     }
     if crate::preserves_rail::content_ref_has_prefix(reference) {
         let error = validate_content_ref(reference).expect_err("invalid content ref after failed full-ref check");
-        return Err(MoltenError::invalid_harness(format!("malformed full content ref: {error}")));
+        return Err(Failure::invalid_harness(format!("malformed full content ref: {error}")));
     }
     let resolution = resolve_short_id(registry_root, ledger_root, &ShortIdInput {
         prefix: reference.to_string(),
@@ -140,7 +140,7 @@ fn resolve_reference(
     })?;
     resolution
         .full_ref
-        .ok_or_else(|| MoltenError::invalid_harness(format!("short id {} did not resolve", reference)))
+        .ok_or_else(|| Failure::invalid_harness(format!("short id {} did not resolve", reference)))
 }
 
 fn visible_candidate_refs(

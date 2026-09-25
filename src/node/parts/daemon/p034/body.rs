@@ -80,32 +80,32 @@ fn current_startup_receipt<Root: NodeStateAuthority + ?Sized>(
     crate::node_runtime::parse_node_startup_receipt(&startup_value)
 }
 
-fn write_active_lock(root: &crate::node_state::NodeStateRoot, startup_receipt_ref: &str) -> Result<()> {
+fn write_active_lock(root: &crate::node_state::Root, startup_receipt_ref: &str) -> Result<()> {
     let lock_value = active_lock_value(root, startup_receipt_ref)?;
     write_preserves(root, &fixed_node_path(CONTROL_LOCK_FILE)?, &lock_value)?;
     import_artifact(root, &lock_value)?;
     Ok(())
 }
 
-fn require_active_lock(root: &crate::node_state::NodeStateRoot) -> Result<()> {
+fn require_active_lock(root: &crate::node_state::Root) -> Result<()> {
     let lock_path = fixed_node_path(CONTROL_LOCK_FILE)?;
     if !root.try_exists(&lock_path)? {
-        return Err(MoltenError::invalid_harness("node control dispatch requires active node lock"));
+        return Err(Failure::invalid_harness("node control dispatch requires active node lock"));
     }
     let lock_value = read_preserves(root, &lock_path)?;
     let fields = lock_value
         .collect_simple_record("node-control-lock-v1", Some(6))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-lock-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-control-lock-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::NODE_CONTROL_LOCK_SCHEMA, "node control lock")?;
     let locked_startup = record_string(&fields[2], "startup")?;
     let startup = current_startup_receipt(root)?;
     if locked_startup != startup.receipt_ref {
-        return Err(MoltenError::invalid_harness("node control lock is stale for current startup receipt"));
+        return Err(Failure::invalid_harness("node control lock is stale for current startup receipt"));
     }
     Ok(())
 }
 
-fn remove_active_lock(root: &crate::node_state::NodeStateRoot) -> Result<()> {
+fn remove_active_lock(root: &crate::node_state::Root) -> Result<()> {
     let path = fixed_node_path(CONTROL_LOCK_FILE)?;
     if root.try_exists(&path)? {
         root.remove_regular_file(&path)?;
@@ -113,7 +113,7 @@ fn remove_active_lock(root: &crate::node_state::NodeStateRoot) -> Result<()> {
     Ok(())
 }
 
-fn active_lock_value(root: &crate::node_state::NodeStateRoot, startup_receipt_ref: &str) -> Result<IoValue> {
+fn active_lock_value(root: &crate::node_state::Root, startup_receipt_ref: &str) -> Result<IoValue> {
     Ok(crate::preserves_rail::record("node-control-lock-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LOCK_SCHEMA),
         crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(&state_root_profile_ref(root)?)]),
@@ -155,13 +155,13 @@ fn import_artifact<Root: NodeStateAuthority + ?Sized>(source: &Root, value: &IoV
 }
 
 struct PendingControlRequest {
-    entry: crate::node_state::NodeStateEntry,
+    entry: crate::node_state::DirectoryEntry,
     content_ref: String,
 }
 
-fn first_pending_control_request(root: &crate::node_state::NodeStateRoot) -> Result<PendingControlRequest> {
+fn first_pending_control_request(root: &crate::node_state::Root) -> Result<PendingControlRequest> {
     next_pending_control_request(root)?
-        .ok_or_else(|| MoltenError::invalid_harness("node control inbox has no pending requests"))
+        .ok_or_else(|| Failure::invalid_harness("node control inbox has no pending requests"))
 }
 
 fn next_pending_control_request<Root: NodeStateAuthority + ?Sized>(
@@ -172,28 +172,28 @@ fn next_pending_control_request<Root: NodeStateAuthority + ?Sized>(
 }
 
 fn pending_control_request_by_name(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::Root,
     name: &str,
 ) -> Result<PendingControlRequest> {
-    crate::node_state::NodeStatePath::parse("control/inbox")?.join_segment(name)?;
+    crate::node_state::RelativePath::parse("control/inbox")?.join_segment(name)?;
     pending_control_requests(root)?
         .into_iter()
         .find(|request| request.entry.name == name)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("node control inbox entry {name} is not pending")))
+        .ok_or_else(|| Failure::invalid_harness(format!("node control inbox entry {name} is not pending")))
 }
 
-fn pending_control_requests(root: &crate::node_state::NodeStateRoot) -> Result<Vec<PendingControlRequest>> {
+fn pending_control_requests(root: &crate::node_state::Root) -> Result<Vec<PendingControlRequest>> {
     let inbox = root.control_inbox()?;
     let mut requests = Vec::with_capacity(MAX_PENDING_CONTROL_REQUESTS);
     for entry in inbox.list_entries()? {
-        if entry.kind != crate::node_state::NodeStateEntryKind::RegularFile
+        if entry.kind != crate::node_state::EntryKind::RegularFile
             || !entry.name.ends_with(".preserves")
             || entry.name.contains("receipt")
         {
             continue;
         }
         if requests.len() >= MAX_PENDING_CONTROL_REQUESTS {
-            return Err(MoltenError::invalid_harness("too many pending node control requests"));
+            return Err(Failure::invalid_harness("too many pending node control requests"));
         }
         let bytes = inbox.read_entry(&entry, crate::node_state::MAX_NODE_STATE_FILE_BYTES)?;
         requests.push(PendingControlRequest {
@@ -205,8 +205,8 @@ fn pending_control_requests(root: &crate::node_state::NodeStateRoot) -> Result<V
 }
 
 fn archive_dispatched_request(
-    root: &crate::node_state::NodeStateRoot,
-    request_entry: &crate::node_state::NodeStateEntry,
+    root: &crate::node_state::Root,
+    request_entry: &crate::node_state::DirectoryEntry,
     request_value: &IoValue,
 ) -> Result<()> {
     let request_ref = crate::preserves_rail::canonical_hash(request_value)?;
@@ -215,7 +215,7 @@ fn archive_dispatched_request(
     root.control_inbox()?.remove_entry(request_entry)
 }
 
-fn node_leaf_path(base: &str, leaf: &str) -> Result<crate::node_state::NodeStatePath> {
+fn node_leaf_path(base: &str, leaf: &str) -> Result<crate::node_state::RelativePath> {
     fixed_node_path(base)?.join_segment(leaf)
 }
 
@@ -223,81 +223,81 @@ fn control_inbox_entry_name(request_ref: &str) -> String {
     format!("{}.preserves", ref_file_stem(request_ref))
 }
 
-fn control_inbox_path(request_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_inbox_path(request_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(CONTROL_INBOX_DIR, &control_inbox_entry_name(request_ref))
 }
 
-fn queue_receipt_path(request_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn queue_receipt_path(request_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_INBOX_DIR,
         &format!("{}.queue-receipt.preserves", ref_file_stem(request_ref)),
     )
 }
 
-fn dispatch_receipt_path(request_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn dispatch_receipt_path(request_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_OUTBOX_DIR,
         &format!("{}.dispatch-receipt.preserves", ref_file_stem(request_ref)),
     )
 }
 
-fn control_outbox_request_path(request_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_outbox_request_path(request_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_OUTBOX_DIR,
         &format!("{}.request.preserves", ref_file_stem(request_ref)),
     )
 }
 
-fn control_outbox_receipt_path(request_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_outbox_receipt_path(request_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_OUTBOX_DIR,
         &format!("{}.control-receipt.preserves", ref_file_stem(request_ref)),
     )
 }
 
-fn control_operation_receipt_path(request_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_operation_receipt_path(request_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_OUTBOX_DIR,
         &format!("{}.operation-receipt.preserves", ref_file_stem(request_ref)),
     )
 }
 
-fn control_operation_subreceipt_path(request_ref: &str, label: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_operation_subreceipt_path(request_ref: &str, label: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_OUTBOX_DIR,
         &format!("{}.{}.preserves", ref_file_stem(request_ref), label),
     )
 }
 
-fn control_heartbeat_receipt_path(heartbeat_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_heartbeat_receipt_path(heartbeat_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_OUTBOX_DIR,
         &format!("{}.heartbeat-receipt.preserves", ref_file_stem(heartbeat_ref)),
     )
 }
 
-fn control_loop_receipt_path(loop_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_loop_receipt_path(loop_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_OUTBOX_DIR,
         &format!("{}.loop-receipt.preserves", ref_file_stem(loop_ref)),
     )
 }
 
-fn control_service_heartbeat_path(heartbeat_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_service_heartbeat_path(heartbeat_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_SERVICE_DIR,
         &format!("{}.service-heartbeat.preserves", ref_file_stem(heartbeat_ref)),
     )
 }
 
-fn control_service_run_receipt_path(service_run_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_service_run_receipt_path(service_run_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_SERVICE_DIR,
         &format!("{}.service-run-receipt.preserves", ref_file_stem(service_run_ref)),
     )
 }
 
-fn control_supervisor_receipt_path(receipt_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_supervisor_receipt_path(receipt_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_SERVICE_DIR,
         &format!("{}.supervisor-receipt.preserves", ref_file_stem(receipt_ref)),
@@ -305,7 +305,7 @@ fn control_supervisor_receipt_path(receipt_ref: &str) -> Result<crate::node_stat
 }
 
 fn write_supervisor_receipt(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::Root,
     input: &SupervisorReceiptValueInput<'_>,
 ) -> Result<String> {
     let value = supervisor_receipt_value(input)?;
@@ -315,14 +315,14 @@ fn write_supervisor_receipt(
     Ok(receipt_ref)
 }
 
-fn control_ingress_envelope_path(topic: &str, envelope_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_ingress_envelope_path(topic: &str, envelope_ref: &str) -> Result<crate::node_state::RelativePath> {
     fixed_node_path(CONTROL_INGRESS_DIR)?
         .join_segment(topic)?
         .join_segment(&format!("{}.envelope.preserves", ref_file_stem(envelope_ref)))
 }
 
 fn write_ingress_envelope_and_verify(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::Root,
     topic: &str,
     envelope: &ControlIngressEnvelope,
 ) -> Result<()> {
@@ -331,7 +331,7 @@ fn write_ingress_envelope_and_verify(
     let read_value = read_preserves(root, &path)?;
     let read_envelope = parse_control_ingress_envelope(&read_value)?;
     if read_envelope.envelope_ref != envelope.envelope_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "node control ingress materialized envelope ref {} does not match written {}",
             read_envelope.envelope_ref, envelope.envelope_ref
         )));
@@ -339,7 +339,7 @@ fn write_ingress_envelope_and_verify(
     Ok(())
 }
 
-fn control_ingress_receipt_path(envelope_ref: &str, phase: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_ingress_receipt_path(envelope_ref: &str, phase: &str) -> Result<crate::node_state::RelativePath> {
     fixed_node_path(CONTROL_INGRESS_DIR)?
         .join("receipts")?
         .join_segment(&format!("{}.{}.receipt.preserves", ref_file_stem(envelope_ref), phase))

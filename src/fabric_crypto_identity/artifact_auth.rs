@@ -12,12 +12,12 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::IrohEd25519FileAdapter;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::node_state::MAX_NODE_STATE_FILE_BYTES;
-use crate::node_state::NodeStateNamespace;
-use crate::node_state::NodeStateNamespaceKind;
-use crate::node_state::NodeStatePath;
+use crate::node_state::DirectoryView;
+use crate::node_state::NamespaceKind;
+use crate::node_state::RelativePath;
 use crate::preserves_rail::content_ref_from_bytes;
 
 mod operational;
@@ -88,9 +88,9 @@ pub fn sign_artifact_auth_for_dual_run(
     let statement = map_statement(&input.statement)?;
     let signed = adapter.sign_artifact_auth_statement(input.handle, &statement, input.signing_policy_ref)?;
     let public_key = iroh::PublicKey::from_str(&signed.public_key)
-        .map_err(|_| MoltenError::invalid_harness("artifact-auth signer returned a malformed public key"))?;
+        .map_err(|_| Failure::invalid_harness("artifact-auth signer returned a malformed public key"))?;
     let statement_bytes = artifact_auth_core::canonical_statement_bytes(&statement)
-        .map_err(|_| MoltenError::invalid_harness("artifact-auth statement is not canonicalizable"))?;
+        .map_err(|_| Failure::invalid_harness("artifact-auth statement is not canonicalizable"))?;
     let result = SignedArtifactAuthStatement {
         statement_ref: content_ref_from_bytes(&statement_bytes),
         public_key: signed.public_key,
@@ -113,10 +113,10 @@ pub fn evaluate_artifact_auth_shell_dual_run(
 ) -> Result<MoltenArtifactAuthShellReport> {
     let statement = map_statement(input)?;
     let statement_bytes = artifact_auth_core::canonical_statement_bytes(&statement)
-        .map_err(|_| MoltenError::invalid_harness("artifact-auth statement is not canonicalizable"))?;
+        .map_err(|_| Failure::invalid_harness("artifact-auth statement is not canonicalizable"))?;
     require_carrier_identity("statement", &signed.statement_ref, &content_ref_from_bytes(&statement_bytes))?;
     let public_key = iroh::PublicKey::from_str(&signed.public_key)
-        .map_err(|_| MoltenError::invalid_harness("artifact-auth carrier public key is malformed"))?;
+        .map_err(|_| Failure::invalid_harness("artifact-auth carrier public key is malformed"))?;
     require_carrier_identity("public key", &signed.public_key_ref, &content_ref_from_bytes(public_key.as_bytes()))?;
     require_carrier_identity("signature", &signed.signature_ref, &content_ref_from_bytes(&signed.signature_bytes))?;
     require_carrier_identity("signature hex", &signed.signature_hex, &bytes_to_lower_hex(&signed.signature_bytes))?;
@@ -148,18 +148,18 @@ fn admit_signing_input(input: &MoltenArtifactAuthShellInput<'_>) -> Result<()> {
     let request = input.statement.request;
     let legacy = evaluate_verification(input.statement.profile, request);
     if legacy.kind != VerificationDecisionKind::Accept {
-        return Err(MoltenError::invalid_harness("artifact-auth signing requires an accepted legacy observation"));
+        return Err(Failure::invalid_harness("artifact-auth signing requires an accepted legacy observation"));
     }
     if request.signer_generation != input.handle.generation || request.observed.generation != input.handle.generation {
-        return Err(MoltenError::invalid_harness("artifact-auth signing generation does not match the current handle"));
+        return Err(Failure::invalid_harness("artifact-auth signing generation does not match the current handle"));
     }
     if request.signer_currentness != input.handle.currentness || !input.handle.currentness.permits_signing() {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "artifact-auth signing currentness does not permit the current handle",
         ));
     }
     if input.statement.currentness_ref != input.handle.currentness_evidence_ref {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "artifact-auth signing currentness evidence does not match the current handle",
         ));
     }
@@ -170,13 +170,13 @@ fn admit_signing_input(input: &MoltenArtifactAuthShellInput<'_>) -> Result<()> {
 
 fn map_statement(input: &MoltenArtifactAuthStatementInput<'_>) -> Result<artifact_auth_core::ArtifactStatement> {
     map_artifact_auth_statement(input).map_err(|issues| {
-        MoltenError::invalid_harness(format!("artifact-auth statement mapping failed: {}", issues.join(",")))
+        Failure::invalid_harness(format!("artifact-auth statement mapping failed: {}", issues.join(",")))
     })
 }
 
 fn require_carrier_identity(label: &str, observed: &str, expected: &str) -> Result<()> {
     if observed != expected {
-        return Err(MoltenError::invalid_harness(format!("artifact-auth carrier {label} identity mismatch")));
+        return Err(Failure::invalid_harness(format!("artifact-auth carrier {label} identity mismatch")));
     }
     Ok(())
 }

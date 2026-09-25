@@ -185,7 +185,7 @@ impl SuiteFixtures {
 
     fn apply_budget(&mut self, field: &Value<IoValue>) -> Result<()> {
         if self.has_budget_fixture {
-            return Err(MoltenError::invalid_harness("duplicate suite budget fixture"));
+            return Err(crate::error::Failure::invalid_harness("duplicate suite budget fixture"));
         }
         self.budget = parse_budget_limits(&value_to_iovalue(field))?;
         self.has_budget_fixture = true;
@@ -194,7 +194,7 @@ impl SuiteFixtures {
 
     fn apply_actors(&mut self, field: &Value<IoValue>) -> Result<()> {
         if self.actors.is_some() {
-            return Err(MoltenError::invalid_harness("duplicate suite actor registry fixture"));
+            return Err(crate::error::Failure::invalid_harness("duplicate suite actor registry fixture"));
         }
         self.actors = Some(parse_actor_registry(&value_to_iovalue(field))?);
         self.has_actor_fixture = true;
@@ -203,7 +203,7 @@ impl SuiteFixtures {
 
     fn apply_capabilities(&mut self, field: &Value<IoValue>) -> Result<()> {
         if self.has_capability_fixture {
-            return Err(MoltenError::invalid_harness("duplicate suite capability fixture"));
+            return Err(crate::error::Failure::invalid_harness("duplicate suite capability fixture"));
         }
         self.capabilities = parse_capabilities(&value_to_iovalue(field))?;
         self.has_capability_fixture = true;
@@ -212,7 +212,7 @@ impl SuiteFixtures {
 
     fn apply_policy(&mut self, field: &Value<IoValue>) -> Result<()> {
         if self.has_policy_fixture {
-            return Err(MoltenError::invalid_harness("duplicate suite policy fixture"));
+            return Err(crate::error::Failure::invalid_harness("duplicate suite policy fixture"));
         }
         self.policy = parse_policy(&value_to_iovalue(field))?;
         self.has_policy_fixture = true;
@@ -223,16 +223,16 @@ impl SuiteFixtures {
 pub fn parse_suite(value: &IoValue) -> Result<Suite> {
     let suite = value
         .collect_simple_record("harness-suite-v1", None)
-        .ok_or_else(|| MoltenError::invalid_harness("expected <harness-suite-v1 ...>"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected <harness-suite-v1 ...>"))?;
     let arity = suite.fields_iter().count();
     if !(4..=8).contains(&arity) {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "expected <harness-suite-v1 ...> with arity 4 through 8, got {arity}"
         )));
     }
     let schema = required_string(&suite[0], "suite schema")?;
     if schema != crate::preserves_rail::HARNESS_SUITE_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported suite schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_SUITE_SCHEMA
         )));
@@ -268,7 +268,7 @@ fn suite_fixtures(suite: &Record<Value<IoValue>>, arity: usize) -> Result<(usize
         match fixtures.apply_field(&suite[cursor])? {
             SuiteFieldStatus::Applied => cursor += 1,
             SuiteFieldStatus::Unknown => {
-                return Err(MoltenError::invalid_harness(
+                return Err(crate::error::Failure::invalid_harness(
                     "unexpected suite field before steps; expected optional budget, actor registry, capabilities, policy, then steps",
                 ));
             }

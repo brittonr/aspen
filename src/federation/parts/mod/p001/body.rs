@@ -79,7 +79,7 @@ pub fn delegate_resource(
 ) -> Result<Delegate> {
     validate_resource(resource)?;
     if capability.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("federation delegate capability must not be empty"));
+        return Err(Failure::invalid_harness("federation delegate capability must not be empty"));
     }
     let payload = record("federation-delegate-payload", vec![
         resource_value(resource),
@@ -99,22 +99,22 @@ pub fn parse_delegate(
 ) -> Result<Delegate> {
     let fields = value
         .collect_simple_record("federation-delegate-v1", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <federation-delegate-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <federation-delegate-v1 ...>"))?;
     let payload = value_to_iovalue(&fields[0]);
     let payload_fields = payload
         .collect_simple_record("federation-delegate-payload", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("expected federation delegate payload"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected federation delegate payload"))?;
     let resource = parse_resource(&value_to_iovalue(&payload_fields[0]))?;
     let capability = record_string(&payload_fields[1], "capability")?;
     if let Some(expected_resource_ref) = expected_resource_ref
         && resource.resource_ref != expected_resource_ref
     {
-        return Err(MoltenError::invalid_harness("federation delegate resource binding mismatch"));
+        return Err(Failure::invalid_harness("federation delegate resource binding mismatch"));
     }
     if let Some(expected_capability) = expected_capability
         && capability != expected_capability
     {
-        return Err(MoltenError::invalid_harness("federation delegate capability mismatch"));
+        return Err(Failure::invalid_harness("federation delegate capability mismatch"));
     }
     let (signer, actual_trust_root) =
         verify_signature_record(&fields[1], &payload, "federation-delegate", trust_root, key)?;
@@ -131,17 +131,17 @@ pub fn parse_delegate(
 fn parse_delegate_unverified(value: &IoValue) -> Result<Delegate> {
     let fields = value
         .collect_simple_record("federation-delegate-v1", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <federation-delegate-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <federation-delegate-v1 ...>"))?;
     let payload = value_to_iovalue(&fields[0]);
     let payload_fields = payload
         .collect_simple_record("federation-delegate-payload", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("expected federation delegate payload"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected federation delegate payload"))?;
     let resource = parse_resource(&value_to_iovalue(&payload_fields[0]))?;
     let capability = record_string(&payload_fields[1], "capability")?;
     let signature = value_to_iovalue(&fields[1]);
     let signature_fields = signature
         .collect_simple_record("signature", Some(5))
-        .ok_or_else(|| MoltenError::invalid_harness("expected federation signature"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected federation signature"))?;
     Ok(Delegate {
         delegate_ref: canonical_hash(value)?,
         resource_ref: resource.resource_ref,
@@ -155,7 +155,7 @@ fn parse_delegate_unverified(value: &IoValue) -> Result<Delegate> {
 pub fn parse_announcement(value: &IoValue, trust_root: &str, key: &str) -> Result<Announcement> {
     let fields = value
         .collect_simple_record("federation-announcement-v1", Some(4))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <federation-announcement-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <federation-announcement-v1 ...>"))?;
     require_schema(&fields[0], ANNOUNCEMENT_SCHEMA, "federation announcement schema")?;
     let payload = record_value(&fields[1], "payload")?;
     let (peer, resource, _policy_refs) = parse_announcement_payload(&payload)?;
@@ -177,7 +177,7 @@ pub fn parse_announcement(value: &IoValue, trust_root: &str, key: &str) -> Resul
 pub fn parse_inventory(value: &IoValue, trust_root: &str, key: &str) -> Result<Inventory> {
     let fields = value
         .collect_simple_record("federation-inventory-v1", Some(4))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <federation-inventory-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <federation-inventory-v1 ...>"))?;
     require_schema(&fields[0], INVENTORY_SCHEMA, "federation inventory schema")?;
     let payload = record_value(&fields[1], "payload")?;
     let (peer, resources, delegates) = parse_inventory_payload(&payload)?;

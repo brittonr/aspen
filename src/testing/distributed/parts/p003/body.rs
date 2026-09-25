@@ -1,13 +1,13 @@
 fn validate_commands(topology: &Topology, commands: &[SimulationCommand]) -> Result<()> {
     if commands.is_empty() {
-        return Err(MoltenError::invalid_harness("distributed simulation requires commands"));
+        return Err(Failure::invalid_harness("distributed simulation requires commands"));
     }
     ensure_count_at_most(commands.len(), MAX_DISTRIBUTED_COMMANDS, "distributed commands")?;
     let peers = topology.peers.iter().map(|peer| peer.id.as_str()).collect::<OrderedSet<_>>();
     for command in commands {
         validate_text("simulation operation", &command.operation_id)?;
         if !peers.contains(command.from_peer.as_str()) || !peers.contains(command.to_peer.as_str()) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "simulation command {} references peer outside topology",
                 command.operation_id
             )));
@@ -37,26 +37,26 @@ fn validate_fault_kind(kind: &str) -> Result<()> {
         | FAULT_AMBIENT_STATE_DRIFT
         | FAULT_CORRUPTED_RECEIPT
         | FAULT_UNAUTHORIZED_TRANSPORT => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported distributed fault kind {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported distributed fault kind {other}"))),
     }
 }
 
 fn validate_decision(decision: &str) -> Result<()> {
     match decision {
         PASS_DECISION | DENY_DECISION => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported distributed decision {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported distributed decision {other}"))),
     }
 }
 
 fn validate_event_decision(decision: &str) -> Result<()> {
     match decision {
         PASS_DECISION | DENY_DECISION => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported simulation event decision {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported simulation event decision {other}"))),
     }
 }
 
 fn command_tick(index: usize) -> Result<u64> {
-    u64::try_from(index).map_err(|_| MoltenError::invalid_harness("simulation command index exceeds u64"))
+    u64::try_from(index).map_err(|_| Failure::invalid_harness("simulation command index exceeds u64"))
 }
 
 fn peer_values(peers: &[Peer]) -> Result<Vec<IoValue>> {
@@ -104,7 +104,7 @@ fn fault_event_values(events: &[FaultEvent]) -> Result<Vec<IoValue>> {
 
 fn validate_ref(reference: &str, label: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference)
-        .map_err(|error| MoltenError::invalid_harness(format!("invalid {label} ref {reference}: {error}")))
+        .map_err(|error| Failure::invalid_harness(format!("invalid {label} ref {reference}: {error}")))
 }
 
 fn validate_optional_ref(reference: Option<&str>, label: &str) -> Result<()> {
@@ -124,7 +124,7 @@ fn validate_ref_slice(label: &str, refs: &[String]) -> Result<()> {
 
 fn validate_text(label: &str, value: &str) -> Result<()> {
     if value.trim().is_empty() {
-        return Err(MoltenError::invalid_harness(format!("{label} must not be empty")));
+        return Err(Failure::invalid_harness(format!("{label} must not be empty")));
     }
     Ok(())
 }
@@ -141,7 +141,7 @@ fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()>
     if count <= maximum {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} count {count} exceeds bound {maximum}")))
+        Err(Failure::invalid_harness(format!("{label} count {count} exceeds bound {maximum}")))
     }
 }
 
@@ -152,7 +152,7 @@ trait DiagnosticSink {
 impl DiagnosticSink for Vec<String> {
     fn push_bounded(&mut self, diagnostic: String) -> Result<()> {
         let next =
-            self.len().checked_add(1).ok_or_else(|| MoltenError::invalid_harness("diagnostic count overflow"))?;
+            self.len().checked_add(1).ok_or_else(|| Failure::invalid_harness("diagnostic count overflow"))?;
         ensure_count_at_most(next, MAX_DISTRIBUTED_COMMANDS, "diagnostics")?;
         self.push(diagnostic);
         Ok(())
@@ -168,11 +168,11 @@ fn record_string(value: &preserves::Value<IoValue>, record_name: &str, context: 
     let field = value_to_iovalue(value);
     let record = field
         .collect_simple_record(record_name, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected {record_name} for {context}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected {record_name} for {context}")))?;
     record[0]
         .as_string()
         .map(|value| value.to_string())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {context}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {context}")))
 }
 
 fn record_ref(value: &preserves::Value<IoValue>, record_name: &str, context: &str) -> Result<String> {
@@ -185,16 +185,16 @@ fn record_string_sequence(value: &preserves::Value<IoValue>, record_name: &str, 
     let field = value_to_iovalue(value);
     let record = field
         .collect_simple_record(record_name, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected {record_name} for {context}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected {record_name} for {context}")))?;
     let sequence = record[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {context}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {context}")))?;
     let mut output = Vec::with_capacity(sequence.len());
     for item in sequence.iter() {
         output.push(
             item.as_string()
                 .map(|value| value.to_string())
-                .ok_or_else(|| MoltenError::invalid_harness(format!("expected string sequence item for {context}")))?,
+                .ok_or_else(|| Failure::invalid_harness(format!("expected string sequence item for {context}")))?,
         );
     }
     Ok(output)
@@ -209,11 +209,11 @@ fn record_ref_sequence(value: &preserves::Value<IoValue>, record_name: &str, con
 fn require_schema(value: &preserves::Value<IoValue>, expected: &str, context: &str) -> Result<()> {
     let actual = value
         .as_string()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected schema string for {context}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected schema string for {context}")))?;
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "{context} schema mismatch: expected {expected}, got {actual}"
         )))
     }

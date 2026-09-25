@@ -4,7 +4,7 @@ fn parse_iroh_ticket_value(value: &IoValue) -> Result<IrohChunkTicket> {
     require_schema(&fields[0], CHUNK_IROH_TICKET_SCHEMA, "chunk-store Iroh ticket")?;
     let adapter = record_string(&fields[1], "adapter")?;
     if adapter != "iroh-local" {
-        return Err(MoltenError::invalid_harness(format!("unsupported chunk-store Iroh adapter {adapter}")));
+        return Err(Failure::invalid_harness(format!("unsupported chunk-store Iroh adapter {adapter}")));
     }
     let manifest_ref = record_string(&fields[2], "manifest-ref")?;
     filename_for_ref(&manifest_ref)?;
@@ -21,7 +21,7 @@ fn parse_iroh_ticket_value(value: &IoValue) -> Result<IrohChunkTicket> {
         filename_for_ref(&chunk_ref)?;
         filename_for_ref(&blob_ref)?;
         if length == 0 {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "Iroh chunk ticket maps {chunk_ref} to zero-length blob"
             )));
         }
@@ -31,7 +31,7 @@ fn parse_iroh_ticket_value(value: &IoValue) -> Result<IrohChunkTicket> {
             MAX_CHUNK_STORE_CHUNKS,
             "chunk store Iroh ticket chunk set",
         )? {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "Iroh chunk ticket has duplicate chunk mapping for {chunk_ref}"
             )));
         }
@@ -62,7 +62,7 @@ fn read_iroh_blob(root: &CapabilityChunkRoot, blob_ref: &str) -> Result<Vec<u8>>
     let bytes = root.root().read(&iroh_blob_path(blob_ref)?)?;
     let actual_ref = hash_blob_bytes(&bytes);
     if actual_ref != blob_ref {
-        return Err(MoltenError::invalid_harness(format!("Iroh blob {blob_ref} hashes to {actual_ref}")));
+        return Err(Failure::invalid_harness(format!("Iroh blob {blob_ref} hashes to {actual_ref}")));
     }
     Ok(bytes)
 }
@@ -295,6 +295,6 @@ fn pin_key(kind: &str, reference: &str) -> String {
     format!("{kind}:{reference}")
 }
 
-fn index_error(error: impl std::fmt::Display) -> MoltenError {
-    MoltenError::invalid_harness(format!("chunk store redb index error: {error}"))
+fn index_error(error: impl std::fmt::Display) -> Failure {
+    Failure::invalid_harness(format!("chunk store redb index error: {error}"))
 }

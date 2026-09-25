@@ -1,12 +1,12 @@
 
 pub async fn send_control_live_ingress(input: &ControlLiveSendInput<'_>) -> Result<ControlLiveSend> {
-    let state_root = input.state_root.map(crate::node_state::NodeStateRoot::open).transpose()?;
+    let state_root = input.state_root.map(crate::node_state::Root::open).transpose()?;
     send_control_live_ingress_with_root(input, state_root.as_ref()).await
 }
 
 async fn send_control_live_ingress_with_root(
     input: &ControlLiveSendInput<'_>,
-    state_root: Option<&crate::node_state::NodeStateRoot>,
+    state_root: Option<&crate::node_state::Root>,
 ) -> Result<ControlLiveSend> {
     validate_send_input(input, state_root)?;
     let ticket = parse_control_live_ticket(input.receiver_ticket_value)?;
@@ -81,7 +81,7 @@ struct SendRetryOutcome {
 #[derive(Debug)]
 struct FinishSendInput<'a> {
     input: &'a ControlLiveSendInput<'a>,
-    state_root: Option<&'a crate::node_state::NodeStateRoot>,
+    state_root: Option<&'a crate::node_state::Root>,
     ticket: &'a ControlLiveTicket,
     envelope: ControlIngressEnvelope,
     published: ControlLiveIngressPublish,
@@ -91,7 +91,7 @@ struct FinishSendInput<'a> {
 
 fn validate_send_input(
     input: &ControlLiveSendInput<'_>,
-    state_root: Option<&crate::node_state::NodeStateRoot>,
+    state_root: Option<&crate::node_state::Root>,
 ) -> Result<()> {
     if let Some(path) = input.state_root {
         validate_state_root(path)?;
@@ -140,7 +140,7 @@ fn send_envelope(input: &ControlLiveSendInput<'_>, ticket: &ControlLiveTicket) -
 
 fn send_receiver_addr(
     input: &ControlLiveSendInput<'_>,
-    state_root: Option<&crate::node_state::NodeStateRoot>,
+    state_root: Option<&crate::node_state::Root>,
     ticket: &ControlLiveTicket,
     envelope: &ControlIngressEnvelope,
 ) -> Result<std::result::Result<iroh::EndpointAddr, Vec<String>>> {
@@ -171,14 +171,14 @@ fn send_receiver_addr(
 
 async fn publish_with_retries(
     input: &ControlLiveSendInput<'_>,
-    state_root: Option<&crate::node_state::NodeStateRoot>,
+    state_root: Option<&crate::node_state::Root>,
     receiver_addr: &iroh::EndpointAddr,
     ticket: &ControlLiveTicket,
     envelope: &ControlIngressEnvelope,
 ) -> Result<SendRetryOutcome> {
     let effective_max_attempts = effective_live_send_max_attempts(input);
     let attempt_capacity = usize::try_from(effective_max_attempts)
-        .map_err(|_| MoltenError::invalid_harness("node control live send attempts exceed usize capacity"))?;
+        .map_err(|_| Failure::invalid_harness("node control live send attempts exceed usize capacity"))?;
     let mut retry_receipt_refs = Vec::with_capacity(attempt_capacity);
     let mut retry_receipt_values = Vec::with_capacity(attempt_capacity);
     let mut diagnostics = Vec::with_capacity(attempt_capacity);

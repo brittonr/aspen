@@ -26,7 +26,7 @@ pub fn publish_chain_segment_with_root(
     let bytes = canonical_bytes(&bundle)?;
     let blob_ref = content_ref_from_bytes(&bytes);
     if blob_ref != parsed.bundle_ref {
-        return Err(MoltenError::invalid_harness("Iroh publish chain bundle blob ref does not match bundle ref"));
+        return Err(Failure::invalid_harness("Iroh publish chain bundle blob ref does not match bundle ref"));
     }
     input.iroh_root.root().write(&blob_store_path(&parsed.bundle_ref)?, &bytes)?;
     let ticket = format!("iroh-local-chain:{}", parsed.bundle_ref);
@@ -66,12 +66,12 @@ pub fn fetch_chain_segment_with_root(
     input: &FetchChainSegmentInput<'_, CapabilityExchangeRoot>,
 ) -> Result<ChainSegment> {
     let advertised_ref = input.ticket.strip_prefix("iroh-local-chain:").ok_or_else(|| {
-        MoltenError::invalid_harness("unsupported Iroh chain ticket; expected iroh-local-chain:<bundle-ref>")
+        Failure::invalid_harness("unsupported Iroh chain ticket; expected iroh-local-chain:<bundle-ref>")
     })?;
     if let Some(expected_bundle_ref) = input.expected_bundle_ref
         && expected_bundle_ref != advertised_ref
     {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Iroh chain ticket advertises bundle {advertised_ref}, expected {expected_bundle_ref}"
         )));
     }
@@ -79,7 +79,7 @@ pub fn fetch_chain_segment_with_root(
     let bundle = parse_canonical_bytes(&bytes)?;
     let parsed = parse_chain_segment_bundle(&bundle, input.fork_policy)?;
     if parsed.bundle_ref != advertised_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Iroh fetched chain bundle hashes to {}, expected advertised bundle {advertised_ref}",
             parsed.bundle_ref
         )));
@@ -217,7 +217,7 @@ fn parse_chain_segment_bundle(
     )?;
     let bundle = value
         .collect_simple_record("chain-segment-bundle-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <chain-segment-bundle-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <chain-segment-bundle-v1 ...>"))?;
     require_schema(&bundle[0], EVIDENCE_CHAIN_SEGMENT_BUNDLE_SCHEMA, "chain segment bundle schema")?;
     let chain = parse_chain_scope(&bundle[1])?;
     let anchor_ref = parse_optional_ref_field(&bundle[2], "anchor")?;
@@ -324,7 +324,7 @@ fn anchors(chain: &crate::evidence_chain::ChainScope, artifacts: &[ChainBundleAr
     for artifact in artifacts.iter().filter(|artifact| artifact.kind == "chain-anchor") {
         let anchor = crate::evidence_chain::parse_chain_anchor(&artifact.value)?;
         if anchor.chain != *chain {
-            return Err(MoltenError::invalid_harness("chain bundle anchor belongs to a different chain"));
+            return Err(Failure::invalid_harness("chain bundle anchor belongs to a different chain"));
         }
     }
     Ok(())

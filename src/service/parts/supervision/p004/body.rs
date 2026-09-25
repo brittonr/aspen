@@ -20,10 +20,10 @@ fn validate_suite_input(input: &ServiceSupervisionSuiteInput) -> Result<()> {
 
 fn validate_suite_parsed(suite: &ServiceSupervisionSuite) -> Result<()> {
     if suite.owned_state.service_id != suite.manifest.service_id {
-        return Err(MoltenError::invalid_harness("owned state service id must match manifest service id"));
+        return Err(Failure::invalid_harness("owned state service id must match manifest service id"));
     }
     if suite.owned_state.manifest_ref.as_deref() != Some(suite.manifest.manifest_ref.as_str()) {
-        return Err(MoltenError::invalid_harness("owned state manifest ref must match manifest"));
+        return Err(Failure::invalid_harness("owned state manifest ref must match manifest"));
     }
     validate_evidence(&suite.evidence)
 }
@@ -70,7 +70,7 @@ fn ensure_count_at_most(actual: usize, label: &str) -> Result<()> {
     if actual <= MAX_SUPERVISION_ITEMS {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "{label} count {actual} exceeds bound {MAX_SUPERVISION_ITEMS}"
         )))
     }
@@ -90,7 +90,7 @@ fn evidence_value(input: &ServiceSupervisionEvidenceInput) -> IoValue {
 fn parse_evidence(value: &Value<IoValue>) -> Result<ServiceSupervisionEvidenceInput> {
     let fields = value
         .collect_simple_record("evidence", Some(6))
-        .ok_or_else(|| MoltenError::invalid_harness("expected service supervision evidence"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected service supervision evidence"))?;
     Ok(ServiceSupervisionEvidenceInput {
         authority_refs: parse_ref_sequence(&fields[0], "authority")?,
         resource_refs: parse_ref_sequence(&fields[1], "resource")?,
@@ -125,7 +125,7 @@ fn record_iovalue(value: &Value<IoValue>, label: &str) -> Result<IoValue> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     Ok(crate::preserves_rail::value_to_iovalue(&fields[0]))
 }
 
@@ -133,18 +133,18 @@ fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} N>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} N>")))?;
     fields[0]
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {label}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {label}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
 fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} STRING>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} STRING>")))?;
     required_string(&fields[0], label)
 }
 
@@ -158,13 +158,13 @@ fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<Str
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} OPTION>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} OPTION>")))?;
     if fields[0].collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
     let some = fields[0]
         .collect_simple_record("some", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected optional ref for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected optional ref for {label}")))?;
     let reference = required_string(&some[0], label)?;
     require_ref(&reference, label)?;
     Ok(Some(reference))
@@ -174,13 +174,13 @@ fn record_optional_string(value: &Value<IoValue>, label: &str) -> Result<Option<
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} OPTION>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} OPTION>")))?;
     if fields[0].collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
     let some = fields[0]
         .collect_simple_record("some", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected optional string for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected optional string for {label}")))?;
     required_string(&some[0], label).map(Some)
 }
 
@@ -201,10 +201,10 @@ fn field_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Value<IoVal
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} [...]>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} [...]>")))?;
     let values = fields[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {label}")))?;
     Ok(values.iter().cloned().collect())
 }
 
@@ -216,7 +216,7 @@ fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
         let check = crate::preserves_rail::value_to_iovalue(&check);
         let check_fields = check
             .collect_simple_record("check", Some(2))
-            .ok_or_else(|| MoltenError::invalid_harness("expected <check NAME STATUS>"))?;
+            .ok_or_else(|| Failure::invalid_harness("expected <check NAME STATUS>"))?;
         parsed.push((
             required_string(&check_fields[0], "check name")?,
             required_string(&check_fields[1], "check status")?,
@@ -230,7 +230,7 @@ fn require_schema(value: &Value<IoValue>, expected: &str, label: &str) -> Result
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("expected {expected} for {label}, got {actual}")))
+        Err(Failure::invalid_harness(format!("expected {expected} for {label}, got {actual}")))
     }
 }
 
@@ -238,7 +238,7 @@ fn require_check(checks: &[(String, String)], name: &str, label: &str) -> Result
     if checks.iter().any(|(check_name, status)| check_name == name && status == "pass") {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!("missing passing check {name} for {label}")))
+    Err(Failure::invalid_harness(format!("missing passing check {name} for {label}")))
 }
 
 fn refs_sequence(values: &[String]) -> IoValue {
@@ -278,14 +278,14 @@ fn optional_string_value(value: Option<&str>) -> IoValue {
 }
 
 fn count_as_u64(count: usize, label: &str) -> Result<u64> {
-    u64::try_from(count).map_err(|_| MoltenError::invalid_harness(format!("{label} does not fit u64")))
+    u64::try_from(count).map_err(|_| Failure::invalid_harness(format!("{label} does not fit u64")))
 }
 
 fn validate_decision(decision: &str, label: &str) -> Result<()> {
     if matches!(decision, "pass" | "deny") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported {label} {decision}")))
+        Err(Failure::invalid_harness(format!("unsupported {label} {decision}")))
     }
 }
 
@@ -293,6 +293,6 @@ fn validate_restart_decision(decision: &str, label: &str) -> Result<()> {
     if matches!(decision, "pass" | "deny" | "backoff") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported {label} {decision}")))
+        Err(Failure::invalid_harness(format!("unsupported {label} {decision}")))
     }
 }

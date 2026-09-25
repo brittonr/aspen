@@ -102,13 +102,13 @@ fn write_outputs(
     report_value: &preserves::IOValue,
     receipt_value: &preserves::IOValue,
 ) -> molten::error::Result<()> {
-    std::fs::create_dir_all(input.input.out).map_err(molten::error::MoltenError::from)?;
+    std::fs::create_dir_all(input.input.out).map_err(molten::error::Failure::from)?;
     crate::cli_job::io::write_file(
         &input.input.out.join("schedule-receipt.preserves"),
         &molten::preserves_rail::to_text(receipt_value)?,
     )?;
     let coordination_out = input.input.out.join("coordination");
-    std::fs::create_dir_all(&coordination_out).map_err(molten::error::MoltenError::from)?;
+    std::fs::create_dir_all(&coordination_out).map_err(molten::error::Failure::from)?;
     crate::cli_job::io::write_file(
         &coordination_out.join("manifest.preserves"),
         &molten::preserves_rail::to_text(&evidence_values[0])?,

@@ -1,8 +1,8 @@
 use std::process::Command;
 
 use molten_core::coordination_delivery::*;
-use molten_node_host::node_state::NodeStateNamespaceKind;
-use molten_node_host::node_state::NodeStateRoot;
+use molten_node_host::node_state::NamespaceKind;
+use molten_node_host::node_state::Root;
 
 use super::super::*;
 use super::support::*;
@@ -25,9 +25,9 @@ fn multiprocess_restart_recovers_claim_and_fences_stale_consumer() {
     let workspace_path: &std::path::Path = workspace.as_ref();
     let directory = cap_std::fs::Dir::open_ambient_dir(workspace_path, cap_std::ambient_authority())
         .expect("open process workspace");
-    let root = NodeStateRoot::from_dir(directory);
+    let root = Root::from_dir(directory);
     root.create_layout().expect("node state layout");
-    let storage = root.namespace(NodeStateNamespaceKind::Storage).expect("storage namespace");
+    let storage = root.namespace(NamespaceKind::Storage).expect("storage namespace");
     let policy = policy();
     let manifest = manifest(&policy);
     let time = time_profile(&manifest);
@@ -91,8 +91,8 @@ fn multiprocess_restart_recovers_claim_and_fences_stale_consumer() {
 
     let directory = cap_std::fs::Dir::open_ambient_dir(workspace_path, cap_std::ambient_authority())
         .expect("reopen process workspace");
-    let root = NodeStateRoot::from_dir(directory);
-    let storage = root.namespace(NodeStateNamespaceKind::Storage).expect("reopened storage namespace");
+    let root = Root::from_dir(directory);
+    let storage = root.namespace(NamespaceKind::Storage).expect("reopened storage namespace");
     let store = LocalDeliveryStore::open(&storage, ENGINE_EPOCH).expect("reopened delivery store");
     let observed = store.load(QUEUE_ID).expect("read final delivery state").expect("final delivery state");
     assert!(observed.state.in_flight.is_empty());
@@ -111,8 +111,8 @@ fn child_delivery_process() {
         cap_std::ambient_authority(),
     )
     .expect("open child root");
-    let root = NodeStateRoot::from_dir(directory);
-    let storage = root.namespace(NodeStateNamespaceKind::Storage).expect("child storage namespace");
+    let root = Root::from_dir(directory);
+    let storage = root.namespace(NamespaceKind::Storage).expect("child storage namespace");
     let policy = policy();
     let manifest = manifest(&policy);
     let time = time_profile(&manifest);
@@ -151,7 +151,7 @@ fn child_delivery_process() {
 }
 
 fn apply_local(
-    storage: &molten_node_host::node_state::NodeStateNamespace,
+    storage: &molten_node_host::node_state::DirectoryView,
     timers: &mut MemoryTimerPort,
     statuses: &mut MemoryStatusPort,
     manifest: &DeliveryManifest,

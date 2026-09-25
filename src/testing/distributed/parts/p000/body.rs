@@ -1,5 +1,5 @@
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 

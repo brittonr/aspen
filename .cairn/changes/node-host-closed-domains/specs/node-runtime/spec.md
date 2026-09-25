@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Closed storage classification domains
-r[molten.node_host.closed_domains] Molten MUST treat LocalStoreKind, NodeStateNamespaceKind, and NodeStateFileObservation as deliberately closed domains whose future variants require explicit consumer decisions. This change MUST NOT mark other enums or introduce fallback arms.
+r[molten.node_host.closed_domains] Molten MUST treat `local_store::Category`, `node_state::NamespaceKind`, and `node_state::FileObservation` as deliberately closed domains whose future variants require explicit consumer decisions. This change MUST NOT mark other enums or introduce fallback arms.
 
 #### Scenario: New variants require consumer changes
 - GIVEN any one of the three actual enum declarations gains a variant in an isolated source copy
@@ -10,7 +10,7 @@ r[molten.node_host.closed_domains] Molten MUST treat LocalStoreKind, NodeStateNa
 - AND active analysis markers MUST NOT remove this compiler protection.
 
 ### Requirement: Storage identity and observation compatibility
-r[molten.node_host.closed_compatibility] Closed-domain declarations MUST preserve existing names, variants, payloads, re-exports, directory mappings, namespace registry order, error behavior, and capability authority.
+r[molten.node_host.closed_compatibility] Closed-domain declarations MUST use the deliberately renamed public types without aliases and preserve their existing variants, payloads, re-exports under the new names, directory mappings, namespace registry order, error behavior, and capability authority. The breaking name cutover MUST NOT imply runtime or startup approval.
 
 #### Scenario: Fixed namespace aliases remain distinct
 - GIVEN the current 14-kind namespace registry and eight local-store mappings

@@ -3,11 +3,11 @@ fn record_string(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Res
     let record_value = value_to_iovalue(value);
     let fields = record_value
         .collect_simple_record(tag, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{tag} string>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{tag} string>")))?;
     fields[0]
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{tag} must contain a string")))
+        .ok_or_else(|| Failure::invalid_harness(format!("{tag} must contain a string")))
 }
 
 fn record_ref(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Result<String> {
@@ -20,9 +20,9 @@ fn record_ref_sequence(value: &preserves::Value<preserves::IOValue>, tag: &str) 
     let record_value = value_to_iovalue(value);
     let fields = record_value
         .collect_simple_record(tag, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{tag} sequence>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{tag} sequence>")))?;
     let Some(items) = fields[0].collect_sequence() else {
-        return Err(MoltenError::invalid_harness(format!("{tag} must contain a sequence")));
+        return Err(Failure::invalid_harness(format!("{tag} must contain a sequence")));
     };
     ensure_ref_bound(items.len(), MAX_PROVENANCE_REFS, tag)?;
     items.iter().map(|item| required_ref(item, tag)).collect()
@@ -32,9 +32,9 @@ fn record_string_sequence(value: &preserves::Value<preserves::IOValue>, tag: &st
     let record_value = value_to_iovalue(value);
     let fields = record_value
         .collect_simple_record(tag, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{tag} sequence>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{tag} sequence>")))?;
     let Some(items) = fields[0].collect_sequence() else {
-        return Err(MoltenError::invalid_harness(format!("{tag} must contain a sequence")));
+        return Err(Failure::invalid_harness(format!("{tag} must contain a sequence")));
     };
     ensure_ref_bound(items.len(), MAX_PROVENANCE_REFS, tag)?;
     items
@@ -42,7 +42,7 @@ fn record_string_sequence(value: &preserves::Value<preserves::IOValue>, tag: &st
         .map(|item| {
             item.as_string()
                 .map(|value| value.into_owned())
-                .ok_or_else(|| MoltenError::invalid_harness(format!("{tag} item must be a string")))
+                .ok_or_else(|| Failure::invalid_harness(format!("{tag} item must be a string")))
         })
         .collect()
 }
@@ -51,7 +51,7 @@ fn required_ref(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Resu
     let value = value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{tag} ref must be a string")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("{tag} ref must be a string")))?;
     validate_ref(&value, tag)?;
     Ok(value)
 }
@@ -59,11 +59,11 @@ fn required_ref(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Resu
 fn require_schema(value: &preserves::Value<preserves::IOValue>, expected: &str, context: &str) -> Result<()> {
     let actual = value
         .as_string()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{context} schema must be a string")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("{context} schema must be a string")))?;
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "{context} schema mismatch: expected {expected}, got {actual}"
         )))
     }
@@ -81,14 +81,14 @@ fn ensure_ref_bound(len: usize, max: usize, context: &str) -> Result<()> {
     if len <= max {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("too many {context}: {len} > {max}")))
+        Err(Failure::invalid_harness(format!("too many {context}: {len} > {max}")))
     }
 }
 
 // r[impl molten.runtime_spine.canonical_content_refs.migration]
 fn validate_ref(value: &str, context: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value).map_err(|error| {
-        MoltenError::invalid_harness(format!("invalid {context}: expected canonical content ref: {error}"))
+        Failure::invalid_harness(format!("invalid {context}: expected canonical content ref: {error}"))
     })
 }
 

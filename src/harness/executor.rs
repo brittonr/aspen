@@ -1,7 +1,7 @@
 type ActorDecl = super::schema::ActorDecl;
 type ActorExecutorConfig = super::schema::ActorExecutorConfig;
 type ActorKind = super::schema::ActorKind;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,7 +58,7 @@ pub fn ensure_supported_actor_executors(actors: &[ActorDecl]) -> Result<()> {
                     )
                 }
             };
-            return Err(MoltenError::invalid_harness(message));
+            return Err(Failure::invalid_harness(message));
         }
     }
     Ok(())

@@ -241,8 +241,8 @@ fn deterministic_simulation_matches_verified_trace_and_models_failure_without_ex
     .expect("cancelled outcome");
     assert_eq!(cancelled.state.artifact.terminal, ContentTerminal::Cancelled);
     let partial_workspace = temp_dir("content-adapter-partial-state");
-    let partial_namespace = crate::node_state::NodeStateNamespace::open(
-        crate::node_state::NodeStateNamespaceKind::Ledger,
+    let partial_namespace = crate::node_state::DirectoryView::open(
+        crate::node_state::NamespaceKind::Ledger,
         &partial_workspace,
     )
     .expect("partial-state namespace");
@@ -288,8 +288,8 @@ fn deterministic_simulation_matches_verified_trace_and_models_failure_without_ex
 async fn live_iroh_blobs_stream_preserves_molten_identity_and_uses_opaque_admitted_transport_key() {
     let (workspace, root, manifest) = fixture_store("content-adapter-live-iroh");
     let identity_workspace = temp_dir("content-adapter-live-identity");
-    let namespace = crate::node_state::NodeStateNamespace::open(
-        crate::node_state::NodeStateNamespaceKind::Identity,
+    let namespace = crate::node_state::DirectoryView::open(
+        crate::node_state::NamespaceKind::Identity,
         &identity_workspace,
     )
     .expect("identity namespace");

@@ -95,7 +95,7 @@ impl RuntimePattern {
                 "pattern value ref",
             )?;
             if declared_ref != runtime_value.value_ref() {
-                return Err(crate::error::MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "runtime pattern exact value-ref mismatch: expected {declared_ref}, got {}",
                     runtime_value.value_ref()
                 )));
@@ -107,7 +107,7 @@ impl RuntimePattern {
             validate_pattern_binding(&binding)?;
             return Ok(Self::Wildcard { binding });
         }
-        Err(crate::error::MoltenError::invalid_harness(
+        Err(crate::error::Failure::invalid_harness(
             "unsupported Preserves routing pattern AST form",
         ))
     }
@@ -165,12 +165,12 @@ impl RuntimePattern {
 
 fn validate_pattern_binding(binding: &str) -> Result<()> {
     if binding.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "runtime pattern binding must not be empty",
         ));
     }
     if binding.len() > MAX_PATTERN_BINDING_BYTES {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "runtime pattern binding exceeds {MAX_PATTERN_BINDING_BYTES} bytes"
         )));
     }
@@ -178,7 +178,7 @@ fn validate_pattern_binding(binding: &str) -> Result<()> {
         .bytes()
         .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
     {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "runtime pattern binding must use ASCII alphanumeric, underscore, or dash bytes",
         ));
     }

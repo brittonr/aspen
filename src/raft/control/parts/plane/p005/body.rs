@@ -14,7 +14,7 @@ fn state_maps(state: &ControlRegistryState) -> Result<RegistryMaps> {
         })
         .collect::<OrderedMap<_, _>>();
     if entries.len() != state.entries.len() {
-        return Err(MoltenError::invalid_harness("duplicate control registry entry key"));
+        return Err(Failure::invalid_harness("duplicate control registry entry key"));
     }
     let sessions = state
         .client_sessions
@@ -30,7 +30,7 @@ fn state_maps(state: &ControlRegistryState) -> Result<RegistryMaps> {
         })
         .collect::<OrderedMap<_, _>>();
     if sessions.len() != state.client_sessions.len() {
-        return Err(MoltenError::invalid_harness("duplicate control registry client sequence"));
+        return Err(Failure::invalid_harness("duplicate control registry client sequence"));
     }
     Ok(RegistryMaps { entries, sessions })
 }
@@ -58,7 +58,7 @@ fn parse_registry_entries(value: &Value<IoValue>) -> Result<Vec<ControlRegistryE
         let entry_value = value_to_iovalue(&entry);
         let fields = entry_value
             .collect_simple_record("entry", Some(3))
-            .ok_or_else(|| MoltenError::invalid_harness("expected control registry entry"))?;
+            .ok_or_else(|| Failure::invalid_harness("expected control registry entry"))?;
         let namespace = required_string(&fields[0], "entry namespace")?;
         validate_namespace(&namespace)?;
         let name = required_string(&fields[1], "entry name")?;
@@ -81,7 +81,7 @@ fn parse_client_sessions(value: &Value<IoValue>) -> Result<Vec<ClientSessionReco
         let session_value = value_to_iovalue(&session);
         let fields = session_value
             .collect_simple_record("session", Some(3))
-            .ok_or_else(|| MoltenError::invalid_harness("expected client session record"))?;
+            .ok_or_else(|| Failure::invalid_harness("expected client session record"))?;
         let client_session = required_string(&fields[0], "client session id")?;
         validate_client_session(&client_session)?;
         sessions.push(ClientSessionRecord {
@@ -114,7 +114,7 @@ fn validate_control_command(input: &ControlRegistryCommandInput) -> Result<()> {
             Ok(())
         }
         "remove" if input.target_ref.is_none() => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!(
+        _ => Err(Failure::invalid_harness(format!(
             "operation {} is not admitted for namespace {}",
             input.operation, input.namespace
         ))),
@@ -125,7 +125,7 @@ fn validate_group_id(group_id: &str) -> Result<()> {
     if group_id.starts_with("raft:") {
         validate_non_empty(group_id, "raft group id")
     } else {
-        Err(MoltenError::invalid_harness(format!("raft group id must start with raft:, got {group_id}")))
+        Err(Failure::invalid_harness(format!("raft group id must start with raft:, got {group_id}")))
     }
 }
 
@@ -147,7 +147,7 @@ fn validate_operation(operation: &str) -> Result<()> {
     {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported control registry operation {operation}")))
+        Err(Failure::invalid_harness(format!("unsupported control registry operation {operation}")))
     }
 }
 
@@ -157,7 +157,7 @@ fn validate_namespace(namespace: &str) -> Result<()> {
     {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported control registry namespace {namespace}")))
+        Err(Failure::invalid_harness(format!("unsupported control registry namespace {namespace}")))
     }
 }
 
@@ -165,7 +165,7 @@ fn validate_command_schema_list(command_schemas: &[String]) -> Result<()> {
     ensure_count_at_most(command_schemas.len(), MAX_RAFT_COMMANDS, "raft command schemas")?;
     for schema in command_schemas {
         if !allowed_command_schemas().contains(&schema.as_str()) {
-            return Err(MoltenError::invalid_harness(format!("unsupported raft command schema {schema}")));
+            return Err(Failure::invalid_harness(format!("unsupported raft command schema {schema}")));
         }
     }
     Ok(())
@@ -200,14 +200,14 @@ fn validate_read_mode(read_mode: &str) -> Result<()> {
     if read_mode == READ_MODE_READ_INDEX {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported raft read mode {read_mode}")))
+        Err(Failure::invalid_harness(format!("unsupported raft read mode {read_mode}")))
     }
 }
 
 fn validate_read_consistency_mode(read_consistency_mode: &str) -> Result<()> {
     match read_consistency_mode {
         READ_CONSISTENCY_LINEARIZABLE | READ_CONSISTENCY_LOCAL_STALE => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!(
+        _ => Err(Failure::invalid_harness(format!(
             "unsupported raft read consistency mode {read_consistency_mode}"
         ))),
     }
@@ -216,7 +216,7 @@ fn validate_read_consistency_mode(read_consistency_mode: &str) -> Result<()> {
 fn validate_read_consistency_support(values: &[String]) -> Result<()> {
     ensure_count_at_most(values.len(), MAX_RAFT_COMMANDS, "raft read consistency modes")?;
     if !values.iter().any(|value| value == READ_CONSISTENCY_LINEARIZABLE) {
-        return Err(MoltenError::invalid_harness("consensus profile must support linearizable reads"));
+        return Err(Failure::invalid_harness("consensus profile must support linearizable reads"));
     }
     for value in values {
         validate_read_consistency_mode(value)?;
@@ -235,34 +235,34 @@ fn validate_consensus_algorithm_profile(profile: &ConsensusAlgorithmProfileInput
     let placement = profile
         .placement_ref
         .as_deref()
-        .ok_or_else(|| MoltenError::invalid_harness("consensus manifest requires placement ref"))?;
+        .ok_or_else(|| Failure::invalid_harness("consensus manifest requires placement ref"))?;
     require_ref(placement, "consensus placement ref")?;
     match profile.algorithm_profile.as_str() {
         CONSENSUS_PROFILE_RAFT => validate_raft_consensus_profile(profile),
         CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL => validate_leaderless_consensus_profile(profile),
-        value => Err(MoltenError::invalid_harness(format!("unsupported consensus algorithm profile {value}"))),
+        value => Err(Failure::invalid_harness(format!("unsupported consensus algorithm profile {value}"))),
     }
 }
 
 fn validate_raft_consensus_profile(profile: &ConsensusAlgorithmProfileInput) -> Result<()> {
     if profile.admitted_profile_version != CONSENSUS_PROFILE_VERSION_RAFT {
-        return Err(MoltenError::invalid_harness("raft consensus profile version mismatch"));
+        return Err(Failure::invalid_harness("raft consensus profile version mismatch"));
     }
     if profile.quorum_rule != QUORUM_RULE_MAJORITY_READ_INDEX {
-        return Err(MoltenError::invalid_harness("raft consensus profile must use majority read-index quorum"));
+        return Err(Failure::invalid_harness("raft consensus profile must use majority read-index quorum"));
     }
     Ok(())
 }
 
 fn validate_leaderless_consensus_profile(profile: &ConsensusAlgorithmProfileInput) -> Result<()> {
     if profile.admitted_profile_version != CONSENSUS_PROFILE_VERSION_LEADERLESS_EXPERIMENTAL {
-        return Err(MoltenError::invalid_harness("leaderless experimental profile version mismatch"));
+        return Err(Failure::invalid_harness("leaderless experimental profile version mismatch"));
     }
     if profile.quorum_rule != QUORUM_RULE_LEADERLESS_MAJORITY {
-        return Err(MoltenError::invalid_harness("leaderless experimental profile must use leaderless majority quorum"));
+        return Err(Failure::invalid_harness("leaderless experimental profile must use leaderless majority quorum"));
     }
     if profile.required_evidence_refs.is_empty() {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "leaderless experimental profile requires proof policy simulation placement and membership evidence",
         ));
     }
@@ -272,7 +272,7 @@ fn validate_leaderless_consensus_profile(profile: &ConsensusAlgorithmProfileInpu
 fn validate_caveats(caveats: &[String]) -> Result<()> {
     ensure_count_at_most(caveats.len(), MAX_RAFT_REFS, "consensus caveats")?;
     if caveats.is_empty() {
-        return Err(MoltenError::invalid_harness("consensus profile requires explicit fault-model caveats"));
+        return Err(Failure::invalid_harness("consensus profile requires explicit fault-model caveats"));
     }
     for caveat in caveats {
         validate_non_empty(caveat, "consensus caveat")?;
@@ -316,7 +316,7 @@ fn consensus_production_status(profile: &str) -> &'static str {
 
 fn validate_non_empty(value: &str, label: &str) -> Result<()> {
     if value.is_empty() {
-        Err(MoltenError::invalid_harness(format!("{label} must not be empty")))
+        Err(Failure::invalid_harness(format!("{label} must not be empty")))
     } else {
         Ok(())
     }
@@ -332,7 +332,7 @@ fn validate_refs(refs: &[String], label: &str) -> Result<()> {
 
 fn require_ref(reference: &str, label: &str) -> Result<()> {
     validate_content_ref(reference).map_err(|error| {
-        MoltenError::invalid_harness(format!("expected canonical content ref for {label}, got {reference}: {error}"))
+        Failure::invalid_harness(format!("expected canonical content ref for {label}, got {reference}: {error}"))
     })
 }
 
@@ -366,7 +366,7 @@ fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     required_string(&fields[0], label)
 }
 
@@ -380,7 +380,7 @@ fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<Str
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     parse_optional_ref_value(&fields[0])
 }
 
@@ -388,7 +388,7 @@ fn record_iovalue(value: &Value<IoValue>, label: &str) -> Result<IoValue> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     Ok(value_to_iovalue(&fields[0]))
 }
 
@@ -396,7 +396,7 @@ fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     required_u64(&fields[0], label)
 }
 
@@ -404,8 +404,8 @@ fn record_bool(value: &Value<IoValue>, label: &str) -> Result<bool> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     fields[0]
         .as_boolean()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected bool for {label}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected bool for {label}")))
 }

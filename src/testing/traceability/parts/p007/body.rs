@@ -4,12 +4,12 @@ fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()>
 
 fn checked_add_count(left: usize, right: usize, label: &str) -> Result<usize> {
     left.checked_add(right)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))
+        .ok_or_else(|| Failure::invalid_harness(format!("{label} count overflow")))
 }
 
 fn checked_mul_count(left: usize, right: usize, label: &str) -> Result<usize> {
     left.checked_mul(right)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))
+        .ok_or_else(|| Failure::invalid_harness(format!("{label} count overflow")))
 }
 
 fn aggregate_proof_diagnostic_bound(input: &AggregateProofInput) -> Result<usize> {
@@ -69,18 +69,18 @@ fn require_schema(value: &Value<IoValue>, expected: &str, label: &str) -> Result
     let actual = value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected schema string for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected schema string for {label}")))?;
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} schema {actual} did not match {expected}")))
+        Err(Failure::invalid_harness(format!("{label} schema {actual} did not match {expected}")))
     }
 }
 
 fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let record = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> field")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> field")))?;
     required_string(&record[0], label)
 }
 
@@ -93,10 +93,10 @@ fn record_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
 fn record_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let record = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> field")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> field")))?;
     let values = record[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {label}")))?;
     values.iter().map(|value| required_string(value, label)).collect()
 }
 
@@ -111,18 +111,18 @@ fn record_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String
 fn record_i64(value: &Value<IoValue>, label: &str) -> Result<i64> {
     let record = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> field")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> field")))?;
     record[0]
         .as_i64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected signed integer for {label}")))?
-        .map_err(|_| MoltenError::invalid_harness(format!("signed integer for {label} is out of i64 range")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected signed integer for {label}")))?
+        .map_err(|_| Failure::invalid_harness(format!("signed integer for {label} is out of i64 range")))
 }
 
 fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {

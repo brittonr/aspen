@@ -79,7 +79,7 @@ fn store_chain_fork_evidence(input: StoreChainForkEvidenceInput<'_>) -> Result<S
     let parsed = parse_chain_fork_evidence(&value)?;
     let imported = crate::ledger::import_artifact(input.root, &value)?;
     if imported.artifact_ref != parsed.evidence_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "imported fork evidence ref mismatch: got {}, expected {}",
             imported.artifact_ref, parsed.evidence_ref
         )));
@@ -92,7 +92,7 @@ fn store_chain_predicate_receipt(input: StoreChainPredicateReceiptInput<'_>) -> 
     let parsed = parse_chain_predicate_receipt(&value)?;
     let imported = crate::ledger::import_artifact(input.root, &value)?;
     if imported.artifact_ref != parsed.receipt_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "imported chain predicate receipt ref mismatch: got {}, expected {}",
             imported.artifact_ref, parsed.receipt_ref
         )));

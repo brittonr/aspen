@@ -17,7 +17,7 @@ pub fn default_source_scope(consumer: &str) -> Result<Vec<String>> {
             "src/node/runtime.rs",
             "src/octet/gate.rs",
         ],
-        other => return Err(MoltenError::invalid_harness(format!("unsupported octet source-gate consumer {other}"))),
+        other => return Err(Failure::invalid_harness(format!("unsupported octet source-gate consumer {other}"))),
     };
     Ok(scope.into_iter().map(ToOwned::to_owned).collect())
 }

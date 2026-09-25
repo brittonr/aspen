@@ -97,7 +97,7 @@ fn require_schema_value(value: &PreservesValue<IoValue>, schema: &str, label: &s
     if actual == schema {
         Ok(())
     } else {
-        Err(crate::error::MoltenError::invalid_harness(format!(
+        Err(crate::error::Failure::invalid_harness(format!(
             "{label} schema mismatch: expected {schema}, got {actual}"
         )))
     }
@@ -107,7 +107,7 @@ fn record_string_value(value: &PreservesValue<IoValue>, label: &'static str) -> 
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected <{label} ...>")))?;
     required_string_value(&fields[0], label)
 }
 
@@ -115,21 +115,21 @@ fn record_u64_value(value: &PreservesValue<IoValue>, label: &'static str) -> Res
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected <{label} ...>")))?;
     fields[0]
         .as_u64()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("{label} must be a u64")))?
-        .map_err(|error| crate::error::MoltenError::invalid_harness(format!("{label} out of range: {error}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("{label} must be a u64")))?
+        .map_err(|error| crate::error::Failure::invalid_harness(format!("{label} out of range: {error}")))
 }
 
 fn record_ref_list_value(value: &PreservesValue<IoValue>, label: &'static str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected <{label} ...>")))?;
     let items = fields[0]
         .collect_sequence()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("{label} must be a sequence")))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("{label} must be a sequence")))?;
     let mut refs = Vec::with_capacity(items.len());
     for item in items.iter() {
         let reference = required_string_value(item, label)?;
@@ -143,12 +143,12 @@ fn record_divergence_counts_value(value: &PreservesValue<IoValue>) -> Result<Ord
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record("divergence-counts", Some(1))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("expected <divergence-counts ...>"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected <divergence-counts ...>"))?;
     let items = fields[0]
         .collect_sequence()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("divergence-counts must be a sequence"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("divergence-counts must be a sequence"))?;
     if items.len() > MAX_REPLAY_INDEX_INPUTS {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "divergence count entries exceed {MAX_REPLAY_INDEX_INPUTS}"
         )));
     }
@@ -157,13 +157,13 @@ fn record_divergence_counts_value(value: &PreservesValue<IoValue>) -> Result<Ord
         let item = value_to_iovalue(item);
         let count_fields = item
             .collect_simple_record("divergence-count", Some(2))
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("expected <divergence-count ...>"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("expected <divergence-count ...>"))?;
         let kind = required_string_value(&count_fields[0], "divergence kind")?;
         let count = count_fields[1]
             .as_u64()
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("divergence count must be a u64"))?
+            .ok_or_else(|| crate::error::Failure::invalid_harness("divergence count must be a u64"))?
             .map_err(|error| {
-                crate::error::MoltenError::invalid_harness(format!("divergence count out of range: {error}"))
+                crate::error::Failure::invalid_harness(format!("divergence count out of range: {error}"))
             })?;
         count_entries.push((kind, count));
     }
@@ -180,14 +180,14 @@ fn required_string_value(value: &PreservesValue<IoValue>, label: &str) -> Result
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("{label} must be a string")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("{label} must be a string")))
 }
 
 fn validate_replay_decision(decision: &str) -> Result<()> {
     if decision == "pass" || decision == "deny" {
         Ok(())
     } else {
-        Err(crate::error::MoltenError::invalid_harness(format!(
+        Err(crate::error::Failure::invalid_harness(format!(
             "replay decision must be pass or deny, got {decision}"
         )))
     }

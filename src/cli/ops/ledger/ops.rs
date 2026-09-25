@@ -150,7 +150,7 @@ fn parse_policy(value: &str) -> Outcome<molten::evidence_chain::ChainForkPolicy>
         "retain-fork-evidence" | "diagnostic" | "retain" => {
             Ok(molten::evidence_chain::ChainForkPolicy::RetainForkEvidence)
         }
-        other => Err(molten::error::MoltenError::invalid_harness(format!(
+        other => Err(molten::error::Failure::invalid_harness(format!(
             "unsupported chain fork policy {other}; expected reject-unexpected-forks or retain-fork-evidence"
         ))),
     }

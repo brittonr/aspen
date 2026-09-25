@@ -184,7 +184,7 @@ pub fn parse_receipt_value(value: &IoValue, expected_receipt_ref: Option<&str>) 
     let operation = record_string(&fields[1], "operation")?;
     let decision = record_string(&fields[2], "decision")?;
     if decision != "pass" && decision != "deny" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "typed storage receipt decision must be pass or deny, got {decision}"
         )));
     }
@@ -196,7 +196,7 @@ pub fn parse_receipt_value(value: &IoValue, expected_receipt_ref: Option<&str>) 
     if let Some(expected) = expected_receipt_ref
         && receipt_ref != expected
     {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "typed storage receipt hash mismatch: got {receipt_ref}, expected {expected}"
         )));
     }
@@ -311,7 +311,7 @@ fn effect_evidence(input: EffectEvidenceInput<'_>) -> Result<EffectEvidence> {
         revoked_refs: &[],
     })?;
     if validation.handler_binding_ref != handler_binding_ref || validation.handle_ref != handle_ref {
-        return Err(MoltenError::invalid_harness("typed storage handle validation ref mismatch"));
+        return Err(Failure::invalid_harness("typed storage handle validation ref mismatch"));
     }
     Ok(EffectEvidence {
         manifest_ref: parts.manifest,

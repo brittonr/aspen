@@ -1,5 +1,5 @@
 pub fn serve_control(input: &ControlServeInput<'_>) -> Result<ControlServe> {
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::Root::open(input.state_root)?;
     validate_state_root(input.state_root)?;
     serve_control_with_root(&state_root, input, None)
 }
@@ -12,16 +12,16 @@ pub fn serve_control_content(
     startup_evidence: Option<crate::node_daemon::StartupEvidencePaths<'_>>,
 ) -> Result<ControlServe> {
     let plan = crate::content_store_adapter::NodeContentPlan::admit(config, policy_ref, input.max_ticks)
-        .map_err(MoltenError::invalid_harness)?;
+        .map_err(Failure::invalid_harness)?;
     // Independent pre-effect admission of the same verified startup evidence.
     crate::node_daemon::run_local_source_gate_for_serve(startup_evidence)?;
-    let root = crate::node_state::NodeStateRoot::open_existing(input.state_root)?;
+    let root = crate::node_state::Root::open_existing(input.state_root)?;
     validate_state_root(input.state_root)?;
     serve_control_with_root(&root, input, Some(&plan))
 }
 
 fn serve_control_with_root(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     input: &ControlServeInput<'_>,
     content: Option<&crate::content_store_adapter::NodeContentPlan>,
 ) -> Result<ControlServe> {
@@ -125,7 +125,7 @@ struct ServiceStart {
 }
 
 struct ServiceTickInput<'a> {
-    state_root: &'a crate::node_state::NodeStateRoot,
+    state_root: &'a crate::node_state::Root,
     topic: &'a str,
     max_ticks: u64,
     max_requests_per_tick: u64,
@@ -147,7 +147,7 @@ struct ServiceRunParts {
 }
 
 struct ShutdownDrainInput<'a> {
-    state_root: &'a crate::node_state::NodeStateRoot,
+    state_root: &'a crate::node_state::Root,
     topic: &'a str,
     startup_receipt_ref: &'a str,
     service_lock_ref: &'a str,
@@ -162,7 +162,7 @@ struct ShutdownDrain {
 }
 
 struct FinishServiceInput<'a> {
-    state_root: &'a crate::node_state::NodeStateRoot,
+    state_root: &'a crate::node_state::Root,
     topic: &'a str,
     max_ticks: u64,
     max_requests_per_tick: u64,
@@ -174,13 +174,13 @@ struct FinishServiceInput<'a> {
 }
 
 fn handle_existing_service_lock(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     input: &ControlServeInput<'_>,
     startup: &crate::node_runtime::NodeStartupReceipt,
     supervisor_policy: Option<&ControlSupervisorPolicy>,
     mut supervisor_receipt_refs: Vec<String>,
 ) -> Result<ExistingServiceLock> {
-    let lock_path = crate::node_state::NodeStatePath::parse(CONTROL_SERVICE_LOCK_FILE)?;
+    let lock_path = crate::node_state::RelativePath::parse(CONTROL_SERVICE_LOCK_FILE)?;
     if !state_root.try_exists(&lock_path)? {
         return Ok(ExistingServiceLock {
             supervisor_receipt_refs,
@@ -217,7 +217,7 @@ fn handle_existing_service_lock(
 }
 
 fn denied_restart_attempt(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     input: &ControlServeInput<'_>,
     startup: &crate::node_runtime::NodeStartupReceipt,
     policy: &ControlSupervisorPolicy,
@@ -276,7 +276,7 @@ fn denied_restart_attempt(
 }
 
 fn start_service_run(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     input: &ControlServeInput<'_>,
     startup: &crate::node_runtime::NodeStartupReceipt,
     supervisor_policy: Option<&ControlSupervisorPolicy>,
@@ -284,7 +284,7 @@ fn start_service_run(
 ) -> Result<ServiceStart> {
     let identity = crate::node_identity::parse_identity(&read_preserves(
         state_root,
-        &crate::node_state::NodeStatePath::parse(IDENTITY_FILE)?,
+        &crate::node_state::RelativePath::parse(IDENTITY_FILE)?,
     )?)?;
     let service_run_id = local_ref(
         "node-control-service-run",
@@ -299,7 +299,7 @@ fn start_service_run(
         service_run_ref: &service_run_id,
     })?;
     let service_lock_ref = crate::preserves_rail::canonical_hash(&lock_value)?;
-    write_preserves(state_root, &crate::node_state::NodeStatePath::parse(CONTROL_SERVICE_LOCK_FILE)?, &lock_value)?;
+    write_preserves(state_root, &crate::node_state::RelativePath::parse(CONTROL_SERVICE_LOCK_FILE)?, &lock_value)?;
     import_artifact(state_root, &lock_value)?;
     if let Some(policy) = supervisor_policy {
         let receipt_ref = write_supervisor_receipt(state_root, &SupervisorReceiptValueInput {

@@ -5,24 +5,24 @@ fn require_upgrade_replay_report_refs(
     new_report: &Report,
 ) -> Result<(String, String)> {
     if required_record_hash(&receipt[3], "old-report-ref", "old upgrade report ref")? != old_report.report_ref {
-        return Err(MoltenError::invalid_harness("upgrade replay old report ref mismatch"));
+        return Err(crate::error::Failure::invalid_harness("upgrade replay old report ref mismatch"));
     }
     if required_record_hash(&receipt[4], "new-report-ref", "new upgrade report ref")? != new_report.report_ref {
-        return Err(MoltenError::invalid_harness("upgrade replay new report ref mismatch"));
+        return Err(crate::error::Failure::invalid_harness("upgrade replay new report ref mismatch"));
     }
     let old_trace_ref = report_trace_ref(old_report)?;
     let new_trace_ref = report_trace_ref(new_report)?;
     if required_record_hash(&receipt[5], "old-trace-ref", "old upgrade trace ref")? != old_trace_ref {
-        return Err(MoltenError::invalid_harness("upgrade replay old trace ref mismatch"));
+        return Err(crate::error::Failure::invalid_harness("upgrade replay old trace ref mismatch"));
     }
     if required_record_hash(&receipt[6], "new-trace-ref", "new upgrade trace ref")? != new_trace_ref {
-        return Err(MoltenError::invalid_harness("upgrade replay new trace ref mismatch"));
+        return Err(crate::error::Failure::invalid_harness("upgrade replay new trace ref mismatch"));
     }
     if required_record_hash(&receipt[7], "old-state-ref", "old upgrade state ref")? != old_report.final_state_hash {
-        return Err(MoltenError::invalid_harness("upgrade replay old state ref mismatch"));
+        return Err(crate::error::Failure::invalid_harness("upgrade replay old state ref mismatch"));
     }
     if required_record_hash(&receipt[8], "new-state-ref", "new upgrade state ref")? != new_report.final_state_hash {
-        return Err(MoltenError::invalid_harness("upgrade replay new state ref mismatch"));
+        return Err(crate::error::Failure::invalid_harness("upgrade replay new state ref mismatch"));
     }
     Ok((old_trace_ref, new_trace_ref))
 }
@@ -40,7 +40,7 @@ fn require_upgrade_replay_drift_evidence(
         validate_content_ref(compatibility_diagnostic_ref)?;
     }
     if !is_stable_replay && migration_receipt_ref == "none" && compatibility_diagnostic_ref == "none" {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "upgrade replay trace drift requires migration receipt or compatibility diagnostic",
         ));
     }
@@ -52,7 +52,7 @@ fn require_upgrade_replay_drift_evidence(
         "diagnosed"
     };
     if outcome != expected_outcome {
-        return Err(MoltenError::invalid_harness("upgrade replay outcome does not match drift evidence"));
+        return Err(crate::error::Failure::invalid_harness("upgrade replay outcome does not match drift evidence"));
     }
     Ok(())
 }
@@ -123,21 +123,21 @@ pub fn run_receipt_value(report_value: &IoValue, export_refs: &[&str]) -> Result
 pub fn validate_harness_run_receipt(value: &IoValue, report_value: &IoValue, export_refs: &[&str]) -> Result<()> {
     let expected = run_receipt_value(report_value, export_refs)?;
     if canonical_hash(value)? != canonical_hash(&expected)? {
-        return Err(MoltenError::invalid_harness("harness run receipt does not match report and export refs"));
+        return Err(crate::error::Failure::invalid_harness("harness run receipt does not match report and export refs"));
     }
     let receipt = simple_record(value, "harness-run-receipt-v1", 11)?;
     let schema = required_string(&receipt[0], "harness run receipt schema")?;
     if schema != crate::preserves_rail::HARNESS_RUN_RECEIPT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported harness run receipt schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_RUN_RECEIPT_SCHEMA
         )));
     }
     if required_record_string(&receipt[1], "decision", "harness run receipt decision")? != "pass" {
-        return Err(MoltenError::invalid_harness("harness run receipt decision must be pass"));
+        return Err(crate::error::Failure::invalid_harness("harness run receipt decision must be pass"));
     }
     if required_record_string(&receipt[8], "final-status", "harness run final status")? != "pass" {
-        return Err(MoltenError::invalid_harness("harness run final status must be pass"));
+        return Err(crate::error::Failure::invalid_harness("harness run final status must be pass"));
     }
     let checks = parse_executor_preflight_checks(&receipt[10])?;
     for expected in [
@@ -166,7 +166,7 @@ pub fn deterministic_multipeer_receipt_value(
 ) -> Result<IoValue> {
     validate_multipeer_profile(profile)?;
     if peer_events.is_empty() {
-        return Err(MoltenError::invalid_harness("deterministic multi-peer receipt requires at least one peer event"));
+        return Err(crate::error::Failure::invalid_harness("deterministic multi-peer receipt requires at least one peer event"));
     }
     for event in peer_events {
         validate_multipeer_event(event)?;
@@ -220,21 +220,21 @@ pub fn validate_deterministic_multipeer_receipt(
 ) -> Result<()> {
     let expected = deterministic_multipeer_receipt_value(report_value, seed, profile, peer_events)?;
     if canonical_hash(value)? != canonical_hash(&expected)? {
-        return Err(MoltenError::invalid_harness("deterministic multi-peer receipt does not match replayed schedule"));
+        return Err(crate::error::Failure::invalid_harness("deterministic multi-peer receipt does not match replayed schedule"));
     }
     let receipt = simple_record(value, "deterministic-multipeer-receipt-v1", 13)?;
     let schema = required_string(&receipt[0], "deterministic multi-peer receipt schema")?;
     if schema != crate::preserves_rail::HARNESS_DETERMINISTIC_MULTIPEER_RECEIPT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported deterministic multi-peer receipt schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_DETERMINISTIC_MULTIPEER_RECEIPT_SCHEMA
         )));
     }
     if required_record_string(&receipt[1], "decision", "deterministic multi-peer decision")? != "pass" {
-        return Err(MoltenError::invalid_harness("deterministic multi-peer decision must be pass"));
+        return Err(crate::error::Failure::invalid_harness("deterministic multi-peer decision must be pass"));
     }
     if required_record_string(&receipt[2], "replay", "deterministic multi-peer replay")? != "stable" {
-        return Err(MoltenError::invalid_harness("deterministic multi-peer replay must be stable"));
+        return Err(crate::error::Failure::invalid_harness("deterministic multi-peer replay must be stable"));
     }
     let checks = parse_executor_preflight_checks(&receipt[12])?;
     for expected in [
@@ -254,7 +254,7 @@ fn validate_multipeer_profile(profile: &str) -> Result<()> {
     if matches!(profile, "seeded" | "recorded") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(crate::error::Failure::invalid_harness(format!(
             "unsupported deterministic multi-peer profile {profile}; expected seeded or recorded"
         )))
     }
@@ -267,7 +267,7 @@ fn validate_multipeer_event(event: &str) -> Result<()> {
     ) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(crate::error::Failure::invalid_harness(format!(
             "unsupported deterministic multi-peer event {event}; live or unrecorded peer delivery cannot satisfy replay"
         )))
     }

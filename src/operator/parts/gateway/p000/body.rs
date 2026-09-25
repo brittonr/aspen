@@ -2,7 +2,7 @@ type ChunkManifest = crate::chunk_store::ChunkManifest;
 type ChunkTransforms = crate::chunk_store::ChunkTransforms;
 type IoValue = preserves::IOValue;
 type Map<K, V> = std::collections::BTreeMap<K, V>;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 type Set<T> = std::collections::BTreeSet<T>;
 
@@ -155,7 +155,7 @@ impl DiagnosticSink for Vec<String> {
         let next = self
             .len()
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("gateway diagnostic count overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("gateway diagnostic count overflow"))?;
         validate_count(next, MAX_DIAGNOSTICS, "gateway diagnostic")?;
         self.push(diagnostic);
         Ok(())
@@ -216,7 +216,7 @@ pub fn verify_range(input: &RangeVerificationInput<'_>) -> Result<RangeVerificat
     let manifest = input
         .read
         .manifest
-        .ok_or_else(|| MoltenError::invalid_harness("gateway range verification requires a chunk manifest"))?;
+        .ok_or_else(|| Failure::invalid_harness("gateway range verification requires a chunk manifest"))?;
     let range = read.normalized_range.unwrap_or(Range {
         offset: RANGE_START,
         length: EMPTY_RANGE_LENGTH,
@@ -244,7 +244,7 @@ pub fn verify_range(input: &RangeVerificationInput<'_>) -> Result<RangeVerificat
         push_diagnostic(&mut diagnostics, "unsupported transform denies before response bytes")?;
     }
     let chunk_size = usize::try_from(manifest.chunk_size)
-        .map_err(|error| MoltenError::invalid_harness(format!("gateway chunk size unsupported: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("gateway chunk size unsupported: {error}")))?;
     if chunk_size < MIN_CHUNK_SIZE {
         push_diagnostic(&mut diagnostics, "manifest chunk size must be non-zero")?;
     }

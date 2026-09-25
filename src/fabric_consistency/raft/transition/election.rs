@@ -1,5 +1,5 @@
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub(super) struct VoteRequestInput {
@@ -21,15 +21,15 @@ pub(super) fn handle_election_timeout(state: &ReplicaState, timer_ref: String) -
     validation::ensure_running(state)?;
     validation::validate_content_ref(&timer_ref, "Raft election timer ref")?;
     if timer_ref != state.active_election_timer_ref {
-        return Err(MoltenError::invalid_harness("stale Raft election timer cannot activate protocol effects"));
+        return Err(Failure::invalid_harness("stale Raft election timer cannot activate protocol effects"));
     }
     if state.role == ReplicaRole::Leader {
-        return Err(MoltenError::invalid_harness("leader cannot process a follower election timeout"));
+        return Err(Failure::invalid_harness("leader cannot process a follower election timeout"));
     }
     let next_term = state
         .current_term
         .checked_add(NEXT_TERM_STEP)
-        .ok_or_else(|| MoltenError::invalid_harness("Raft term overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("Raft term overflow"))?;
     let mut next = state.clone();
     next.current_term = next_term;
     next.role = ReplicaRole::Candidate;
@@ -64,7 +64,7 @@ pub(super) fn handle_election_timeout(state: &ReplicaState, timer_ref: String) -
 pub(super) fn handle_heartbeat_timeout(state: &ReplicaState) -> Result<ReplicaTransition> {
     validation::ensure_running(state)?;
     if state.role != ReplicaRole::Leader {
-        return Err(MoltenError::invalid_harness("only a live Raft leader can emit heartbeat traffic"));
+        return Err(Failure::invalid_harness("only a live Raft leader can emit heartbeat traffic"));
     }
     let next = state.clone();
     let mut effects = support::append_effects_for_all(&next)?;
@@ -113,7 +113,7 @@ pub(super) fn handle_vote_response(transition: &mut MessageTransition, input: Vo
         return Ok(());
     }
     if input.voter_id != input.from {
-        return Err(MoltenError::invalid_harness("Raft vote response voter does not match its sender"));
+        return Err(Failure::invalid_harness("Raft vote response voter does not match its sender"));
     }
     if input.is_granted {
         transition.next.votes_received.insert(input.voter_id);
@@ -127,7 +127,7 @@ pub(super) fn handle_vote_response(transition: &mut MessageTransition, input: Vo
 fn become_leader(transition: &mut MessageTransition) -> Result<()> {
     let next_log_index = support::last_log_index(&transition.next)
         .checked_add(NEXT_LOG_INDEX_STEP)
-        .ok_or_else(|| MoltenError::invalid_harness("Raft next log index overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("Raft next log index overflow"))?;
     transition.next.role = ReplicaRole::Leader;
     transition.next.leader_id = Some(transition.next.node_id.clone());
     transition.next.quorum_confirmed_term = Some(transition.next.current_term);

@@ -30,7 +30,7 @@ fn limits_value(budget: &Budget) -> IoValue {
 fn parse_budget_schema_and_limits(budget: &Record<Value<IoValue>>) -> Result<Budget> {
     let schema = required_string(&budget[0], "budget schema")?;
     if schema != crate::preserves_rail::HARNESS_BUDGET_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported budget schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_BUDGET_SCHEMA
         )));
@@ -49,7 +49,7 @@ pub fn parse_effect_log(value: &IoValue) -> Result<Vec<EffectLogEntry>> {
     let effect_log = simple_record(value, "effect-log-v1", 2)?;
     let schema = required_string(&effect_log[0], "effect log schema")?;
     if schema != crate::preserves_rail::HARNESS_EFFECT_LOG_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported effect log schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_EFFECT_LOG_SCHEMA
         )));
@@ -61,7 +61,7 @@ pub fn parse_effect_log(value: &IoValue) -> Result<Vec<EffectLogEntry>> {
         let entry_record = simple_record(&entry_value, "effect-entry", 3)?;
         let sequence = required_u64(&entry_record[0], "effect entry sequence")?;
         if sequence != position as u64 {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "effect log sequence mismatch at position {position}: got {sequence}"
             )));
         }
@@ -70,7 +70,7 @@ pub fn parse_effect_log(value: &IoValue) -> Result<Vec<EffectLogEntry>> {
         let request_sequence = effect_request_sequence(&request)?;
         let response_sequence = effect_response_sequence_and_value(&response)?.0;
         if sequence != request_sequence || sequence != response_sequence {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "effect entry {sequence} request/response sequence mismatch"
             )));
         }
@@ -92,17 +92,17 @@ pub fn effect_log_from_observations(observations: &[Observation]) -> Result<Vec<
                 EventBoundary::EffectRequest => {
                     let sequence = effect_request_sequence(event)?;
                     if pending_request.is_some() {
-                        return Err(MoltenError::invalid_harness("nested effect request without response"));
+                        return Err(crate::error::Failure::invalid_harness("nested effect request without response"));
                     }
                     pending_request = Some((sequence, event.clone()));
                 }
                 EventBoundary::EffectResponse => {
                     let (sequence, _value) = effect_response_sequence_and_value(event)?;
                     let Some((request_sequence, request)) = pending_request.take() else {
-                        return Err(MoltenError::invalid_harness("effect response without request"));
+                        return Err(crate::error::Failure::invalid_harness("effect response without request"));
                     };
                     if sequence != request_sequence {
-                        return Err(MoltenError::invalid_harness(format!(
+                        return Err(crate::error::Failure::invalid_harness(format!(
                             "effect response sequence {sequence} does not match request sequence {request_sequence}"
                         )));
                     }
@@ -130,7 +130,7 @@ pub fn effect_log_from_observations(observations: &[Observation]) -> Result<Vec<
         }
     }
     if pending_request.is_some() {
-        return Err(MoltenError::invalid_harness("effect request without response"));
+        return Err(crate::error::Failure::invalid_harness("effect request without response"));
     }
     Ok(entries)
 }
@@ -145,17 +145,17 @@ pub(crate) fn append_effect_entries_from_events(
             EventBoundary::EffectRequest => {
                 let sequence = effect_request_sequence(event)?;
                 if pending_request.is_some() {
-                    return Err(MoltenError::invalid_harness("nested effect request without response"));
+                    return Err(crate::error::Failure::invalid_harness("nested effect request without response"));
                 }
                 pending_request = Some((sequence, event.clone()));
             }
             EventBoundary::EffectResponse => {
                 let (sequence, _value) = effect_response_sequence_and_value(event)?;
                 let Some((request_sequence, request)) = pending_request.take() else {
-                    return Err(MoltenError::invalid_harness("effect response without request"));
+                    return Err(crate::error::Failure::invalid_harness("effect response without request"));
                 };
                 if sequence != request_sequence {
-                    return Err(MoltenError::invalid_harness(format!(
+                    return Err(crate::error::Failure::invalid_harness(format!(
                         "effect response sequence {sequence} does not match request sequence {request_sequence}"
                     )));
                 }
@@ -182,14 +182,14 @@ pub(crate) fn append_effect_entries_from_events(
         }
     }
     if pending_request.is_some() {
-        return Err(MoltenError::invalid_harness("effect request without response"));
+        return Err(crate::error::Failure::invalid_harness("effect request without response"));
     }
     Ok(())
 }
 
 fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()> {
     if count > maximum {
-        Err(MoltenError::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
+        Err(crate::error::Failure::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
     } else {
         Ok(())
     }
@@ -199,7 +199,7 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
     let count = values
         .item_count()
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("{label} count overflow")))?;
     ensure_count_at_most(count, maximum, label)?;
     values.push_item(value);
     Ok(())
@@ -208,10 +208,10 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
 pub fn effect_response_sequence_and_value(value: &IoValue) -> Result<(u64, u64)> {
     let response = value
         .collect_simple_record("effect-response", None)
-        .ok_or_else(|| MoltenError::invalid_harness("expected effect-response record"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected effect-response record"))?;
     let arity = response.fields_iter().count();
     if arity != 4 && arity != 5 {
-        return Err(MoltenError::invalid_harness(format!("effect-response arity must be 4 or 5, got {arity}")));
+        return Err(crate::error::Failure::invalid_harness(format!("effect-response arity must be 4 or 5, got {arity}")));
     }
     let sequence = required_u64(&response[2], "effect response sequence")?;
     let value_index = arity - 1;
@@ -222,10 +222,10 @@ pub fn effect_response_sequence_and_value(value: &IoValue) -> Result<(u64, u64)>
 pub fn effect_request_sequence(value: &IoValue) -> Result<u64> {
     let request = value
         .collect_simple_record("effect-request", None)
-        .ok_or_else(|| MoltenError::invalid_harness("expected effect-request record"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected effect-request record"))?;
     let arity = request.fields_iter().count();
     if arity != 3 && arity != 4 {
-        return Err(MoltenError::invalid_harness(format!("effect-request arity must be 3 or 4, got {arity}")));
+        return Err(crate::error::Failure::invalid_harness(format!("effect-request arity must be 3 or 4, got {arity}")));
     }
     required_u64(&request[2], "effect request sequence")
 }

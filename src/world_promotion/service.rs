@@ -2,7 +2,7 @@ use molten_core::world_promotion::*;
 use transactional_reconciliation_core::QuarantineStatus;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub struct WorldPromotionPorts<'a, C, T, R> {
@@ -33,7 +33,7 @@ where
     R: WorldPromotionReceiptPort,
 {
     let plan = plan_world_promotion(request)
-        .map_err(|issues| MoltenError::invalid_harness(format!("world promotion planning denied: {issues:?}")))?;
+        .map_err(|issues| Failure::invalid_harness(format!("world promotion planning denied: {issues:?}")))?;
     let canonical_plan = canonical_promotion_plan(&plan)?;
     let committed_reservations = plan
         .reservations
@@ -49,12 +49,12 @@ where
     let facts = ports.current.observe_transaction(&plan)?;
     let observation = ports.transaction.commit_promotion(&plan, &canonical_plan, &canonical_reservations, &facts)?;
     let mut persistence = classify_promotion_commit(&plan, &observation).map_err(|issues| {
-        MoltenError::invalid_harness(format!("promotion commit classification failed: {issues:?}"))
+        Failure::invalid_harness(format!("promotion commit classification failed: {issues:?}"))
     })?;
     if persistence.shared.quarantine() != QuarantineStatus::Clear {
         let read_back = ports.transaction.read_back_promotion(&plan)?;
         persistence = reconcile_promotion_read_back(&plan, &persistence, &read_back)
-            .map_err(|issues| MoltenError::invalid_harness(format!("promotion readback failed: {issues:?}")))?;
+            .map_err(|issues| Failure::invalid_harness(format!("promotion readback failed: {issues:?}")))?;
     }
     let canonical_receipt = canonical_persistence(&plan, &persistence)?;
     ports.receipts.publish_promotion_receipt(&canonical_receipt)?;
@@ -106,7 +106,7 @@ where
     let reservation = ports
         .transaction
         .claim_reservation(reservation_ref)?
-        .ok_or_else(|| MoltenError::invalid_harness("world reservation does not exist"))?;
+        .ok_or_else(|| Failure::invalid_harness("world reservation does not exist"))?;
     let facts = ports.admission.observe_dispatch(plan, &reservation)?;
     let dispatch = match plan_world_dispatch(plan, &reservation, &facts, attempt_ref) {
         Ok(dispatch) => dispatch,

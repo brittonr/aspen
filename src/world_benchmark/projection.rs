@@ -1,7 +1,7 @@
 use molten_core::world_benchmark::*;
 use serde::Deserialize;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 #[derive(Debug, Deserialize)]
@@ -76,18 +76,18 @@ pub fn decode_world_benchmark_input(
     current_source_revision: &str,
 ) -> Result<(WorldBenchmarkProfile, WorldBenchmarkDataset)> {
     let input: InputProjection = serde_json::from_slice(bytes)
-        .map_err(|error| MoltenError::invalid_harness(format!("world benchmark projection is invalid: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("world benchmark projection is invalid: {error}")))?;
     let profile = project_profile(input.profile)?;
     let dataset = project_dataset(input.dataset)?;
     let profile_issues = validate_world_benchmark_profile(&profile, current_source_revision);
     if !profile_issues.is_empty() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "world benchmark profile projection denied: {profile_issues:?}"
         )));
     }
     let dataset_issues = validate_world_benchmark_dataset(&profile, &dataset);
     if !dataset_issues.is_empty() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "world benchmark dataset projection denied: {dataset_issues:?}"
         )));
     }
@@ -197,6 +197,6 @@ fn metric(value: &str) -> Result<WorldBenchmarkMetricKind> {
         .ok_or_else(|| invalid_value("metric", value))
 }
 
-fn invalid_value(kind: &str, value: &str) -> MoltenError {
-    MoltenError::invalid_harness(format!("unknown world benchmark {kind}: {value}"))
+fn invalid_value(kind: &str, value: &str) -> Failure {
+    Failure::invalid_harness(format!("unknown world benchmark {kind}: {value}"))
 }

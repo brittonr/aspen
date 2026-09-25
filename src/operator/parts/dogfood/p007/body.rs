@@ -27,25 +27,25 @@ fn require_observed_bindings(input: &OutputBindingRefs<'_>) -> Result<()> {
         .iter()
         .any(|reference| reference.as_str() == input.replay_verify_ref)
     {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Nix dogfood replay index {} does not bind replay verify {}",
             input.replay_index_ref, input.replay_verify_ref
         )));
     }
     if input.report.decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Nix dogfood evidence requires pass report {}; decision is {}",
             input.report.report_ref, input.report.decision
         )));
     }
     if input.release_gate.decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Nix dogfood evidence requires pass release gate {}; decision is {}",
             input.release_gate.receipt_ref, input.release_gate.decision
         )));
     }
     if input.release_gate.report_ref != input.report.report_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Nix dogfood release gate report ref {} does not match report {}",
             input.release_gate.report_ref, input.report.report_ref
         )));
@@ -56,7 +56,7 @@ fn require_observed_bindings(input: &OutputBindingRefs<'_>) -> Result<()> {
         .iter()
         .any(|reference| reference.as_str() == input.replay_index_ref)
     {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Nix dogfood release gate does not bind replay index {}",
             input.replay_index_ref
         )));
@@ -103,7 +103,7 @@ fn observe_nix_dogfood_output(output_path: &Path) -> Result<ObservedNixDogfoodOu
     })?;
     let nextest_check_path = nextest_text.trim().to_string();
     if nextest_check_path.is_empty() {
-        return Err(MoltenError::invalid_harness("Nix dogfood after-nextest marker is empty"));
+        return Err(Failure::invalid_harness("Nix dogfood after-nextest marker is empty"));
     }
     let summary_ref = raw_text_ref("molten.operator.nix-dogfood-summary.v1", &summary_text);
     let nextest_marker_ref = raw_text_ref("molten.operator.nix-dogfood-nextest-marker.v1", &nextest_text);
@@ -148,17 +148,17 @@ struct ObservedReleaseBundleOutput {
 fn parse_release_replay_verify(value: &IoValue) -> Result<String> {
     let fields = value
         .collect_simple_record("deterministic-replay-verify-v1", Some(13))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <deterministic-replay-verify-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <deterministic-replay-verify-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA, "release replay verify")?;
     let decision = required_string(&fields[1], "release replay verify decision")?;
     if decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "release replay verify decision is {decision}; expected pass"
         )));
     }
     let divergence = record_string(&fields[10], "divergence")?;
     if divergence != "none" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "release replay verify divergence is {divergence}; expected none"
         )));
     }
@@ -172,11 +172,11 @@ const REPLAY_INDEX_CHECKS_FIELD: usize = 15;
 fn parse_release_replay_index(value: &IoValue) -> Result<String> {
     let fields = value
         .collect_simple_record("deterministic-replay-index-v1", Some(REPLAY_INDEX_FIELD_COUNT))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <deterministic-replay-index-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <deterministic-replay-index-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::DETERMINISTIC_REPLAY_INDEX_SCHEMA, "release replay index")?;
     let decision = record_string(&fields[1], "decision")?;
     if decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "release replay index decision is {decision}; expected pass"
         )));
     }
@@ -189,7 +189,7 @@ fn parse_release_replay_index(value: &IoValue) -> Result<String> {
 fn parse_release_replay_index_receipt_refs(value: &IoValue) -> Result<Vec<String>> {
     let fields = value
         .collect_simple_record("deterministic-replay-index-v1", Some(REPLAY_INDEX_FIELD_COUNT))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <deterministic-replay-index-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <deterministic-replay-index-v1 ...>"))?;
     record_ref_sequence(&fields[REPLAY_INDEX_RECEIPT_REFS_FIELD], "receipt-refs")
 }
 
@@ -276,10 +276,10 @@ fn ensure_nix_release_artifacts_match(
     .flatten()
     .next()
     {
-        return Err(MoltenError::invalid_harness(mismatch));
+        return Err(Failure::invalid_harness(mismatch));
     }
     if verify.decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Nix dogfood verify receipt {} decision is {}",
             verify.receipt_ref, verify.decision
         )));

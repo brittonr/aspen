@@ -128,7 +128,7 @@ fn extract_requirement_ids(markdown: &str) -> Result<Vec<String>> {
     while let Some(start) = rest.find("r[") {
         let after_marker = &rest[start + "r[".len()..];
         let Some(end) = after_marker.find(']') else {
-            return Err(MoltenError::invalid_harness("unterminated requirement marker r[...]"));
+            return Err(Failure::invalid_harness("unterminated requirement marker r[...]"));
         };
         let id = &after_marker[..end];
         validate_requirement_id(id)?;
@@ -147,7 +147,7 @@ fn validate_requirement(requirement: &RequirementInput) -> Result<()> {
 fn validate_requirement_id(id: &str) -> Result<()> {
     validate_text("requirement id", id)?;
     if id.chars().any(char::is_whitespace) {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "traceability requirement id {id} must not contain whitespace"
         )));
     }
@@ -157,14 +157,14 @@ fn validate_requirement_id(id: &str) -> Result<()> {
 fn validate_kind(kind: &str) -> Result<()> {
     match kind {
         "evidence" | "documentation" | "operator" | "other" => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported traceability requirement kind {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported traceability requirement kind {other}"))),
     }
 }
 
 fn validate_coverage_kind(kind: &str) -> Result<()> {
     match kind {
         "positive" | "negative" => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("coverage kind {other} must be positive or negative"))),
+        other => Err(Failure::invalid_harness(format!("coverage kind {other} must be positive or negative"))),
     }
 }
 
@@ -172,14 +172,14 @@ fn expected_decision(kind: &str) -> Result<&'static str> {
     match kind {
         "positive" => Ok("pass"),
         "negative" => Ok("deny"),
-        other => Err(MoltenError::invalid_harness(format!("unsupported coverage kind {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported coverage kind {other}"))),
     }
 }
 
 fn validate_decision(decision: &str) -> Result<()> {
     match decision {
         "pass" | "deny" => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!(
+        other => Err(Failure::invalid_harness(format!(
             "unsupported traceability decision {other}; expected pass or deny"
         ))),
     }
@@ -187,7 +187,7 @@ fn validate_decision(decision: &str) -> Result<()> {
 
 fn validate_text(label: &str, value: &str) -> Result<()> {
     if value.trim().is_empty() {
-        Err(MoltenError::invalid_harness(format!("traceability {label} must not be empty")))
+        Err(Failure::invalid_harness(format!("traceability {label} must not be empty")))
     } else {
         Ok(())
     }
@@ -195,7 +195,7 @@ fn validate_text(label: &str, value: &str) -> Result<()> {
 
 fn validate_ref(reference: &str, label: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference)
-        .map_err(|error| MoltenError::invalid_harness(format!("invalid {label} ref {reference}: {error}")))
+        .map_err(|error| Failure::invalid_harness(format!("invalid {label} ref {reference}: {error}")))
 }
 
 fn validate_ref_list(label: &str, values: &[String], maximum: usize) -> Result<()> {
@@ -222,14 +222,14 @@ fn validate_obligation_class(class: &str) -> Result<()> {
         | "mutation-boundary"
         | "replay-determinism"
         | "fail-closed-negative" => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported proof obligation class {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported proof obligation class {other}"))),
     }
 }
 
 fn validate_layer_role(role: &str) -> Result<()> {
     match role {
         "pure-core" | "gate" | "replay" | "release" | "operator-readback" => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported proof layer role {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported proof layer role {other}"))),
     }
 }
 
@@ -237,7 +237,7 @@ fn validate_deny_class(class: &str) -> Result<()> {
     if required_deny_classes().contains(&class) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported deny-path class {class}")))
+        Err(Failure::invalid_harness(format!("unsupported deny-path class {class}")))
     }
 }
 

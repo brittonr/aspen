@@ -4,7 +4,7 @@ use molten_core::world_replay::*;
 
 use super::super::*;
 use super::support::validate_ref;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub(super) fn validate_initial_profile(
@@ -19,7 +19,7 @@ pub(super) fn validate_initial_profile(
         || initial_commit.core.profile.profile_ref != profile.profile_ref
         || initial_commit.core.profile.cohort_ref != profile.cohort_ref
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "world replay initial commit profile does not match the replay profile",
         ));
     }
@@ -32,7 +32,7 @@ pub(super) fn validate_materialization(
 ) -> Result<()> {
     validate_ref(&observation.observation_ref, "world replay materialization")?;
     if observation.object_ref != member.object_ref || !observation.available || !observation.identity_verified {
-        return Err(MoltenError::invalid_harness("world replay member materialization is unavailable or unverified"));
+        return Err(Failure::invalid_harness("world replay member materialization is unavailable or unverified"));
     }
     Ok(())
 }
@@ -43,14 +43,14 @@ pub(super) fn validate_restore(
 ) -> Result<()> {
     validate_ref(&observation.observation_ref, "world replay restore")?;
     if observation.profile_ref != profile.profile_ref.as_str() {
-        return Err(MoltenError::invalid_harness("world replay restore profile drifted"));
+        return Err(Failure::invalid_harness("world replay restore profile drifted"));
     }
     let expected_cohort = profile.cohort_ref.as_ref().map(SnapshotCohortRef::as_str);
     if observation.cohort_ref.as_deref() != expected_cohort {
-        return Err(MoltenError::invalid_harness("world replay restore cohort drifted"));
+        return Err(Failure::invalid_harness("world replay restore cohort drifted"));
     }
     if profile.kind == WorldReplayProfileKind::Opaque && observation.logical_fallback_used {
-        return Err(MoltenError::invalid_harness("opaque world replay attempted a logical fallback"));
+        return Err(Failure::invalid_harness("opaque world replay attempted a logical fallback"));
     }
     Ok(())
 }
@@ -65,7 +65,7 @@ pub(super) fn validate_admission_binding(
         || observation.capsule_ref != capsule.capsule_ref
         || observation.profile_ref != trace.profile.profile_ref.as_str()
     {
-        return Err(MoltenError::invalid_harness("world replay current admission is bound to different inputs"));
+        return Err(Failure::invalid_harness("world replay current admission is bound to different inputs"));
     }
     Ok(())
 }
@@ -76,7 +76,7 @@ pub(super) fn validate_execution(
 ) -> Result<()> {
     validate_ref(&observation.observation_ref, "world replay transition execution")?;
     if observation.position != step.position || observation.input_ref != step.input.input_ref {
-        return Err(MoltenError::invalid_harness("world replay transition execution is bound to the wrong step"));
+        return Err(Failure::invalid_harness("world replay transition execution is bound to the wrong step"));
     }
     Ok(())
 }

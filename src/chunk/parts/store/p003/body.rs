@@ -23,7 +23,7 @@ pub fn read_object_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) -> 
             ("deny-unsupported-transform", "pass"),
         ]);
         store_receipt(root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(message));
+        return Err(Failure::invalid_harness(message));
     }
     let bytes = match reconstruct_object(root, &manifest) {
         Ok(bytes) => bytes,
@@ -82,26 +82,26 @@ struct SpanData {
 
 fn span_window(manifest: &ChunkManifest, offset: u64, length: u64) -> Result<SpanWindow> {
     let chunk_size = usize::try_from(manifest.chunk_size).map_err(|error| {
-        MoltenError::invalid_harness(format!("manifest chunk size is unsupported on this platform: {error}"))
+        Failure::invalid_harness(format!("manifest chunk size is unsupported on this platform: {error}"))
     })?;
     if chunk_size == 0 {
-        return Err(MoltenError::invalid_harness("manifest chunk size must be greater than zero"));
+        return Err(Failure::invalid_harness("manifest chunk size must be greater than zero"));
     }
     let offset_usize = usize::try_from(offset).map_err(|error| {
-        MoltenError::invalid_harness(format!("range offset is unsupported on this platform: {error}"))
+        Failure::invalid_harness(format!("range offset is unsupported on this platform: {error}"))
     })?;
     let length_usize = usize::try_from(length).map_err(|error| {
-        MoltenError::invalid_harness(format!("range length is unsupported on this platform: {error}"))
+        Failure::invalid_harness(format!("range length is unsupported on this platform: {error}"))
     })?;
     ensure_count_at_most(length_usize, MAX_CHUNK_STORE_OBJECT_BYTES, "chunk store range bytes")?;
     let end = offset
         .checked_add(length)
-        .ok_or_else(|| MoltenError::invalid_harness("range offset and length overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("range offset and length overflow"))?;
     let end_usize = usize::try_from(end)
-        .map_err(|error| MoltenError::invalid_harness(format!("range end is unsupported on this platform: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("range end is unsupported on this platform: {error}")))?;
     let first = offset_usize
         .checked_div(chunk_size)
-        .ok_or_else(|| MoltenError::invalid_harness("range chunk size must be non-zero"))?;
+        .ok_or_else(|| Failure::invalid_harness("range chunk size must be non-zero"))?;
     Ok(SpanWindow {
         chunk_size,
         offset: offset_usize,
@@ -122,7 +122,7 @@ fn read_span(input: SpanInput<'_>) -> Result<SpanData> {
         for index in window.first..window.last_exclusive {
             let chunk =
                 input.manifest.chunks.get(index).ok_or_else(|| {
-                    MoltenError::invalid_harness(format!("range maps to missing chunk index {index}"))
+                    Failure::invalid_harness(format!("range maps to missing chunk index {index}"))
                 })?;
             let chunk_bytes = match read_verified_chunk(input.root, chunk, window.chunk_size) {
                 Ok(bytes) => bytes,
@@ -166,7 +166,7 @@ fn read_span(input: SpanInput<'_>) -> Result<SpanData> {
                 ("deny-range-reconstruction-mismatch", "pass"),
             ]);
         store_receipt(input.root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(message));
+        return Err(Failure::invalid_harness(message));
     }
     Ok(SpanData { bytes, refs })
 }
@@ -203,7 +203,7 @@ pub fn range_read_with_root(
                 ("deny-out-of-bounds-range", "pass"),
             ]);
         store_receipt(root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(message));
+        return Err(Failure::invalid_harness(message));
     }
     if let Some(message) = unsupported_transform_message(&manifest) {
         let receipt_value =
@@ -212,7 +212,7 @@ pub fn range_read_with_root(
                 ("deny-unsupported-transform", "pass"),
             ]);
         store_receipt(root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(message));
+        return Err(Failure::invalid_harness(message));
     }
     let span = read_span(SpanInput {
         root,

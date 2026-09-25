@@ -18,7 +18,7 @@ pub(super) fn install(
 
 pub(super) fn run_fixture(state_root: std::path::PathBuf, out: std::path::PathBuf) -> molten::error::Result<()> {
     let run = molten::plugin_host::minimal_plugin_fixture(&state_root)?;
-    std::fs::create_dir_all(&out).map_err(molten::error::MoltenError::from)?;
+    std::fs::create_dir_all(&out).map_err(molten::error::Failure::from)?;
     super::io::write_file(&out.join("report.preserves"), &molten::preserves_rail::to_text(&run.report_value)?)?;
     super::io::write_indexed_values(&out, "evidence", &run.evidence_values)?;
     println!(

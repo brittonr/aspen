@@ -27,7 +27,7 @@ pub fn summary(value: &IoValue) -> Result<String> {
     if let Some(text) = stored(value) {
         return Ok(text);
     }
-    Err(MoltenError::invalid_harness("unsupported retention artifact"))
+    Err(Failure::invalid_harness("unsupported retention artifact"))
 }
 
 fn base(value: &IoValue) -> Option<String> {

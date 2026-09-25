@@ -169,7 +169,7 @@ fn transport_for(
         .values()
         .next()
         .map(|input| input.session_ref.clone())
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("live test node has no peers"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("live test node has no peers"))?;
     Ok((IrohReplicaTransportPort::new(protocol_ref, peers, live_timeout())?, session_ref))
 }
 

@@ -66,10 +66,10 @@ pub fn parse_coordination_batch_envelope(value: &IoValue) -> Result<Coordination
     require_check(&parse_checks(&fields[7])?, "coordination-batch-envelope", "coordination batch")?;
     validate_batch_requests(&requests)?;
     if request_refs_for(&requests)? != request_refs {
-        return Err(MoltenError::invalid_harness("coordination batch request refs do not match embedded requests"));
+        return Err(Failure::invalid_harness("coordination batch request refs do not match embedded requests"));
     }
     if operation_ids_for(&requests)? != operation_ids {
-        return Err(MoltenError::invalid_harness("coordination batch operation ids do not match embedded requests"));
+        return Err(Failure::invalid_harness("coordination batch operation ids do not match embedded requests"));
     }
     Ok(CoordinationBatchEnvelope {
         batch_ref: canonical_hash(value)?,
@@ -186,7 +186,7 @@ fn denied_batch(
 fn validate_batch_requests(requests: &[IoValue]) -> Result<()> {
     ensure_count_at_most(requests.len(), MAX_COORDINATION_ITEMS, "coordination batch requests")?;
     if requests.is_empty() {
-        return Err(MoltenError::invalid_harness("coordination batch requires at least one request"));
+        return Err(Failure::invalid_harness("coordination batch requires at least one request"));
     }
     for request in requests {
         parse_coordination_request(request)?;

@@ -4,7 +4,7 @@ use artifact_auth_core::ArtifactStatement;
 use molten_core::fabric_crypto_identity::KeyPurpose;
 use molten_core::world_head::WorldHeadPolicyRef;
 use molten_core::world_head::WorldHeadSignerRole;
-use molten_node_host::node_state::NodeStateNamespace;
+use molten_node_host::node_state::DirectoryView;
 
 use super::WorldHeadPortError;
 use super::WorldHeadSignatureCarrier;
@@ -22,7 +22,7 @@ pub struct LocalWorldHeadSigningAdapter<'a> {
 
 impl<'a> LocalWorldHeadSigningAdapter<'a> {
     pub fn new(
-        namespace: &'a NodeStateNamespace,
+        namespace: &'a DirectoryView,
         profile_ref: String,
         entropy_profile_ref: String,
         backend_ref: String,
@@ -89,6 +89,6 @@ impl WorldHeadSigningPort for LocalWorldHeadSigningAdapter<'_> {
     }
 }
 
-fn signing_error(error: crate::error::MoltenError) -> WorldHeadPortError {
+fn signing_error(error: crate::error::Failure) -> WorldHeadPortError {
     WorldHeadPortError::new("world-head-signing", error.to_string())
 }

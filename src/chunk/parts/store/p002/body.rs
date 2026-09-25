@@ -77,7 +77,7 @@ pub fn parse_manifest_value(value: &IoValue, expected_manifest_ref: Option<&str>
     let fields = simple_record_any(value, "chunk-manifest-v1")?;
     let arity = record_arity(&fields);
     if arity != 10 && arity != 11 {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "expected <chunk-manifest-v1 ...> with arity 10 or 11, got {arity}"
         )));
     }
@@ -112,19 +112,19 @@ pub fn parse_manifest_value(value: &IoValue, expected_manifest_ref: Option<&str>
         expected_schema: CHUNK_MANIFEST_SCHEMA,
         supported_labels: &["chunk-manifest-v1"],
     })
-    .map_err(|issue| MoltenError::invalid_harness(format!("chunk manifest codec facade rejected artifact: {issue}")))?;
+    .map_err(|issue| Failure::invalid_harness(format!("chunk manifest codec facade rejected artifact: {issue}")))?;
     if let Some(expected) = expected_manifest_ref
         && manifest_ref != expected
     {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "chunk manifest hash mismatch: got {manifest_ref}, expected {expected}"
         )));
     }
     if chunker != FIXED_V1_CHUNKER {
-        return Err(MoltenError::invalid_harness(format!("unsupported chunker {chunker}")));
+        return Err(Failure::invalid_harness(format!("unsupported chunker {chunker}")));
     }
     if chunk_size == 0 {
-        return Err(MoltenError::invalid_harness("chunk manifest chunk-size must be non-zero"));
+        return Err(Failure::invalid_harness("chunk manifest chunk-size must be non-zero"));
     }
     validate_transform_shape(&transforms)?;
     let chunks = refs_from_values(&chunk_values, chunk_size, &transforms)?;
@@ -132,7 +132,7 @@ pub fn parse_manifest_value(value: &IoValue, expected_manifest_ref: Option<&str>
     ensure_distinct_commitments(&chunks)?;
     let recomputed_root = chunk_root_ref(&chunks)?;
     if recomputed_root != root_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "chunk manifest root mismatch: got {root_ref}, expected {recomputed_root}"
         )));
     }
@@ -157,7 +157,7 @@ fn refs_from_values(values: &[IoValue], chunk_size: u64, transforms: &ChunkTrans
     for value in values {
         let chunk = parse_chunk_ref_value(value, chunk_size)?;
         if chunk.transforms != *transforms {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "chunk transform mismatch for {}: manifest transforms differ from chunk ref transforms",
                 chunk.chunk_ref
             )));
@@ -168,7 +168,7 @@ fn refs_from_values(values: &[IoValue], chunk_size: u64, transforms: &ChunkTrans
 }
 
 fn validate_content_ref_field(value: &str, label: &str) -> Result<()> {
-    validate_content_ref(value).map_err(|error| MoltenError::invalid_harness(format!("{label} is invalid: {error}")))
+    validate_content_ref(value).map_err(|error| Failure::invalid_harness(format!("{label} is invalid: {error}")))
 }
 
 fn validate_content_ref_sequence(values: &[String], label: &str) -> Result<()> {
@@ -181,7 +181,7 @@ fn validate_content_ref_sequence(values: &[String], label: &str) -> Result<()> {
 fn ensure_distinct_commitments(chunks: &[ChunkRef]) -> Result<()> {
     for chunk in chunks {
         if chunk.transforms.protected_commitment_ref.as_deref() == Some(chunk.chunk_ref.as_str()) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "protected commitment ref for chunk {} must differ from the plaintext chunk ref",
                 chunk.chunk_ref
             )));
@@ -194,7 +194,7 @@ pub fn parse_chunk_ref_value(value: &IoValue, expected_chunk_size: u64) -> Resul
     let fields = simple_record_any(value, "chunk-ref-v1")?;
     let arity = record_arity(&fields);
     if arity != 7 && arity != 8 {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "expected <chunk-ref-v1 ...> with arity 7 or 8, got {arity}"
         )));
     }
@@ -213,17 +213,17 @@ pub fn parse_chunk_ref_value(value: &IoValue, expected_chunk_size: u64) -> Resul
     validate_content_ref_field(&chunk_ref, "chunk ref hash")?;
     validate_content_ref_sequence(&evidence_refs, "chunk ref evidence-ref")?;
     if chunker != FIXED_V1_CHUNKER {
-        return Err(MoltenError::invalid_harness(format!("unsupported chunk ref chunker {chunker}")));
+        return Err(Failure::invalid_harness(format!("unsupported chunk ref chunker {chunker}")));
     }
     let expected_chunk_size_usize = chunk_size_to_usize(expected_chunk_size, "expected chunk size")?;
     let expected_domain = chunk_domain(expected_chunk_size_usize);
     if domain != expected_domain {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "chunk ref domain mismatch: got {domain}, expected {expected_domain}"
         )));
     }
     if length == 0 || length > expected_chunk_size {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "chunk ref length {length} outside fixed_v1 bounds 1..={expected_chunk_size}"
         )));
     }
@@ -262,7 +262,7 @@ pub fn verify_manifest_with_root(root: &CapabilityChunkRoot, manifest_ref: &str)
                 ("deny-unsupported-transform", "pass"),
             ]);
         store_receipt(root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(message));
+        return Err(Failure::invalid_harness(message));
     }
     if let Err(error) = verify_manifest_chunks(root, &manifest) {
         let receipt_value =

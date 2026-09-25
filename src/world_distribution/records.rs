@@ -2,7 +2,7 @@ use artifact_binding_core::RetirementClassification;
 use molten_core::world_distribution::*;
 use preserves::IOValue;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const WORLD_DISTRIBUTION_RECORD_CONTEXT: &str = "onixresearch.molten.world-distribution.record.v1";
@@ -180,7 +180,7 @@ pub fn canonical_world_sync_receipt(
     verified: usize,
 ) -> Result<CanonicalWorldDistributionRecord> {
     crate::preserves_rail::validate_content_ref(dag_receipt_ref)
-        .map_err(|_| MoltenError::invalid_harness("world sync DAG receipt ref is invalid"))?;
+        .map_err(|_| Failure::invalid_harness("world sync DAG receipt ref is invalid"))?;
     require_non_claims(&plan.non_claims)?;
     canonical(
         "sync-receipt",
@@ -199,7 +199,7 @@ pub fn canonical_world_sync_receipt(
 fn require_non_claims(non_claims: &[String]) -> Result<()> {
     let expected = distribution_non_claims();
     if non_claims != expected {
-        return Err(MoltenError::invalid_harness("world distribution non-claims are incomplete"));
+        return Err(Failure::invalid_harness("world distribution non-claims are incomplete"));
     }
     Ok(())
 }
@@ -218,7 +218,7 @@ fn canonical(kind: &str, value: IOValue) -> Result<CanonicalWorldDistributionRec
     let mut hasher = blake3::Hasher::new_derive_key(WORLD_DISTRIBUTION_RECORD_CONTEXT);
     update(&mut hasher, kind)?;
     let length = u64::try_from(bytes.len())
-        .map_err(|_| MoltenError::invalid_harness("world distribution record length exceeds u64"))?;
+        .map_err(|_| Failure::invalid_harness("world distribution record length exceeds u64"))?;
     hasher.update(&length.to_be_bytes());
     hasher.update(&bytes);
     Ok(CanonicalWorldDistributionRecord {
@@ -230,7 +230,7 @@ fn canonical(kind: &str, value: IOValue) -> Result<CanonicalWorldDistributionRec
 
 fn update(hasher: &mut blake3::Hasher, value: &str) -> Result<()> {
     let length = u64::try_from(value.len())
-        .map_err(|_| MoltenError::invalid_harness("world distribution identity length exceeds u64"))?;
+        .map_err(|_| Failure::invalid_harness("world distribution identity length exceeds u64"))?;
     hasher.update(&length.to_be_bytes());
     hasher.update(value.as_bytes());
     Ok(())

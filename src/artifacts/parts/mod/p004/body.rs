@@ -389,7 +389,7 @@ fn parse_checks(value: &RailValue) -> Result<Vec<String>> {
     let mut names = Vec::with_capacity(parsed.len());
     for check in parsed {
         if check.status != "pass" && check.status != "fail" {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "artifact registry check {} has status {}",
                 check.name, check.status
             )));
@@ -403,7 +403,7 @@ fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()>
     if checks.iter().any(|check| check == expected) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{context} missing {expected} check")))
+        Err(Failure::invalid_harness(format!("{context} missing {expected} check")))
     }
 }
 
@@ -412,7 +412,7 @@ fn require_schema(value: &RailValue, expected: &str, context: &str) -> Result<()
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported {context} schema {actual}; expected {expected}")))
+        Err(Failure::invalid_harness(format!("unsupported {context} schema {actual}; expected {expected}")))
     }
 }
 
@@ -440,8 +440,8 @@ fn required_ref(value: &RailValue, field: &str) -> Result<String> {
 fn required_u64(value: &RailValue, field: &str) -> Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
 fn validate_name_view_input(input: &ArtifactNameViewInput) -> Result<()> {
@@ -469,7 +469,7 @@ fn validate_name_view_update_authority(input: &ArtifactNameViewInput) -> Result<
 fn validate_name_view_target_kind(kind: &str) -> Result<()> {
     match kind {
         "artifact-ref" | "artifact-set-ref" => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!(
+        _ => Err(Failure::invalid_harness(format!(
             "unsupported artifact name view target kind {kind}; expected artifact-ref or artifact-set-ref"
         ))),
     }
@@ -790,7 +790,7 @@ fn validate_strings(values: &[String], field: &str) -> Result<()> {
 
 fn ensure_non_empty(count: usize, label: &str) -> Result<()> {
     if count == 0 {
-        Err(MoltenError::invalid_harness(format!("{label} cannot be empty")))
+        Err(Failure::invalid_harness(format!("{label} cannot be empty")))
     } else {
         Ok(())
     }
@@ -811,7 +811,7 @@ fn validate_install_input(input: &ArtifactInstallInput) -> Result<()> {
     validate_refs(&input.evidence_refs, "artifact evidence ref")?;
     validate_ref(&input.installer_ref, "artifact installer ref")?;
     if input.capability_refs.is_empty() {
-        return Err(MoltenError::invalid_harness("artifact install requires at least one capability ref"));
+        return Err(Failure::invalid_harness("artifact install requires at least one capability ref"));
     }
     validate_refs(&input.capability_refs, "artifact capability ref")
 }
@@ -821,7 +821,7 @@ fn validate_kind(kind: &str) -> Result<()> {
     if kind.chars().all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_') {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "artifact kind {kind} must use lowercase ascii, digits, '-' or '_'"
         )))
     }
@@ -831,7 +831,7 @@ fn validate_pointer_kind(kind: &str) -> Result<()> {
     if matches!(kind, "name" | "alias" | "tag" | "channel") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "unsupported artifact pointer kind {kind}; expected name, alias, tag, or channel"
         )))
     }
@@ -839,7 +839,7 @@ fn validate_pointer_kind(kind: &str) -> Result<()> {
 
 fn validate_non_empty(value: &str, field: &str) -> Result<()> {
     if value.is_empty() {
-        Err(MoltenError::invalid_harness(format!("{field} cannot be empty")))
+        Err(Failure::invalid_harness(format!("{field} cannot be empty")))
     } else {
         Ok(())
     }
@@ -849,7 +849,7 @@ fn validate_non_empty(value: &str, field: &str) -> Result<()> {
 fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
     validate_non_empty(value_ref, field)?;
     crate::preserves_rail::validate_content_ref(value_ref).map_err(|error| {
-        MoltenError::invalid_harness(format!("{field} must be a canonical blake3 content ref: {error}"))
+        Failure::invalid_harness(format!("{field} must be a canonical blake3 content ref: {error}"))
     })
 }
 
@@ -863,7 +863,7 @@ fn validate_refs(refs: &[String], field: &str) -> Result<()> {
 
 fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()> {
     if count > maximum {
-        Err(MoltenError::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
+        Err(Failure::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
     } else {
         Ok(())
     }
@@ -872,7 +872,7 @@ fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()>
 fn checked_count_sum(left: usize, right: usize, maximum: usize, label: &str) -> Result<usize> {
     let total = left
         .checked_add(right)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("{label} count overflow")))?;
     ensure_count_at_most(total, maximum, label)?;
     Ok(total)
 }
@@ -909,6 +909,6 @@ fn extend_bounded<T>(
     Ok(())
 }
 
-fn index_error(error: impl std::fmt::Display) -> MoltenError {
-    MoltenError::invalid_harness(format!("artifact registry redb index error: {error}"))
+fn index_error(error: impl std::fmt::Display) -> Failure {
+    Failure::invalid_harness(format!("artifact registry redb index error: {error}"))
 }

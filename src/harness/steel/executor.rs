@@ -13,7 +13,7 @@ type Suite = super::schema::Suite;
 type RunReceipt<'a> = super::schema::SteelExecutionReceiptInput<'a>;
 type ResourceReceipt = super::schema::SteelResourceReceiptInput;
 type SourceConfig = super::schema::SteelExecutorConfig;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 fn validate_bound_request(hostcall_request: &PreservesValue, operation: &str) -> Result<()> {
@@ -57,13 +57,13 @@ pub fn execute_steel_actor_step(
 ) -> Result<Option<PreservesValue>> {
     let actor_id = step.primary_actor();
     let Some(actor) = suite.actors.iter().find(|actor| actor.id == actor_id) else {
-        return Err(MoltenError::invalid_harness(format!("actor {actor_id} missing from executor registry")));
+        return Err(Failure::invalid_harness(format!("actor {actor_id} missing from executor registry")));
     };
     if actor.kind != ActorMode::Steel {
         return Ok(None);
     }
     let Some(ActorConfig::Steel(config)) = actor.executor.as_ref() else {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "steel actor {actor_id} missing reviewed Steel executor preflight fixture"
         )));
     };
@@ -114,21 +114,21 @@ struct FinishInput<'a> {
 
 fn prepare_run(actor_id: &str, source: &str, callable: &str, actor_input: &PreservesValue) -> Result<Prepared> {
     if source.len() > STEEL_MAX_SOURCE_BYTES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Steel executor source for actor {actor_id} exceeds deterministic resource limit"
         )));
     }
     validate_steel_resource_shape(actor_id, callable, source)?;
     let input_text = to_text(actor_input)?;
     if input_text.len() > STEEL_MAX_INPUT_BYTES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Steel executor input for actor {actor_id} exceeds deterministic resource limit"
         )));
     }
     let script = format!("{}\n({} \"{}\")", source, callable, escape_steel_string(&input_text));
     let estimated_fuel = estimate_steel_fuel(source, &input_text);
     if estimated_fuel > STEEL_FUEL_LIMIT {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Steel executor estimated fuel for actor {actor_id} exceeds deterministic resource limit"
         )));
     }
@@ -160,19 +160,19 @@ fn run_vm(
         }
     });
     let values = engine.run(script).map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "Steel executor actor {actor_id} callable {callable} failed in reviewed VM: {error}"
         ))
     })?;
     let output_text = values.last().map_or_else(|| "#<void>".to_string(), ToString::to_string);
     if output_text.len() > STEEL_MAX_OUTPUT_BYTES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Steel executor output for actor {actor_id} exceeds deterministic resource limit"
         )));
     }
     let hostcall_count = hostcall_counter.load(MemoryOrder::SeqCst);
     if hostcall_count > STEEL_MAX_HOSTCALLS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Steel executor hostcall count for actor {actor_id} exceeds deterministic resource limit"
         )));
     }
@@ -211,7 +211,7 @@ fn finish_value(input: FinishInput<'_>) -> Result<PreservesValue> {
 fn validate_steel_resource_shape(actor_id: &str, callable: &str, source: &str) -> Result<()> {
     for token in FORBIDDEN_STEEL_RESOURCE_TOKENS {
         if source.contains(token) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "Steel executor source for actor {actor_id} references unbounded resource token {token}; reviewed Steel resource gate remains fail-closed"
             )));
         }
@@ -219,14 +219,14 @@ fn validate_steel_resource_shape(actor_id: &str, callable: &str, source: &str) -
     for function in steel_defined_functions(source)? {
         let self_call = format!("({function}");
         if source.matches(&self_call).count() > 1 {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "Steel executor source for actor {actor_id} references recursive callable {function}; reviewed Steel resource gate remains fail-closed"
             )));
         }
     }
     let self_call = format!("({callable}");
     if source.matches(&self_call).count() > 1 {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Steel executor source for actor {actor_id} references recursive callable {callable}; reviewed Steel resource gate remains fail-closed"
         )));
     }
@@ -243,7 +243,7 @@ fn steel_defined_functions(source: &str) -> Result<Vec<&str>> {
             .unwrap_or(after_prefix.len());
         if end > 0 {
             if functions.len() >= STEEL_MAX_DEFINED_FUNCTIONS {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(Failure::invalid_harness(format!(
                     "Steel executor source defines more than {STEEL_MAX_DEFINED_FUNCTIONS} functions"
                 )));
             }

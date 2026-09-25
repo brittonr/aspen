@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 use std::path::PathBuf;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 type IoValue = preserves::IOValue;
@@ -51,14 +51,14 @@ pub fn cluster_manifest_path(state_root: &Path) -> PathBuf {
 pub fn plan_cluster(state_root: &Path, node_names: &[String]) -> Result<ClusterPlan> {
     validate_cluster_state_root(state_root)?;
     if node_names.is_empty() {
-        return Err(MoltenError::invalid_harness("cluster requires at least one --node"));
+        return Err(Failure::invalid_harness("cluster requires at least one --node"));
     }
     let mut seen_node_ids = BTreeSet::new();
     let mut nodes = Vec::with_capacity(node_names.len());
     for node_name in node_names {
         let node = plan_node(state_root, node_name)?;
         if !seen_node_ids.insert(node.node_id.clone()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate cluster node {}", node.node_id)));
+            return Err(Failure::invalid_harness(format!("duplicate cluster node {}", node.node_id)));
         }
         nodes.push(node);
     }
@@ -80,9 +80,9 @@ pub fn render_cluster_manifest(plan: &ClusterPlan) -> String {
 
 pub fn parse_cluster_manifest(source: &str) -> Result<Vec<String>> {
     let mut lines = source.lines();
-    let header = lines.next().ok_or_else(|| MoltenError::invalid_harness("cluster manifest is empty"))?;
+    let header = lines.next().ok_or_else(|| Failure::invalid_harness("cluster manifest is empty"))?;
     if header != CLUSTER_MANIFEST_HEADER {
-        return Err(MoltenError::invalid_harness("cluster manifest has unsupported header"));
+        return Err(Failure::invalid_harness("cluster manifest has unsupported header"));
     }
     let mut nodes = Vec::new();
     for line in lines {
@@ -91,17 +91,17 @@ pub fn parse_cluster_manifest(source: &str) -> Result<Vec<String>> {
         }
     }
     if nodes.is_empty() {
-        return Err(MoltenError::invalid_harness("cluster manifest has no nodes"));
+        return Err(Failure::invalid_harness("cluster manifest has no nodes"));
     }
     Ok(nodes)
 }
 
 fn validate_cluster_state_root(state_root: &Path) -> Result<()> {
     if state_root.as_os_str().is_empty() {
-        return Err(MoltenError::invalid_harness("cluster requires explicit state root"));
+        return Err(Failure::invalid_harness("cluster requires explicit state root"));
     }
     if state_root == Path::new(CURRENT_DIR_COMPONENT) || state_root == Path::new(PARENT_DIR_COMPONENT) {
-        return Err(MoltenError::invalid_harness("cluster state root must not be ambient current or parent directory"));
+        return Err(Failure::invalid_harness("cluster state root must not be ambient current or parent directory"));
     }
     Ok(())
 }
@@ -123,20 +123,20 @@ fn plan_node(state_root: &Path, requested_node: &str) -> Result<ClusterNodePlan>
 
 fn node_path_component(requested_node: &str) -> Result<String> {
     if requested_node.is_empty() || requested_node.trim() != requested_node {
-        return Err(MoltenError::invalid_harness("cluster node name must be non-empty and unpadded"));
+        return Err(Failure::invalid_harness("cluster node name must be non-empty and unpadded"));
     }
     let component = requested_node.strip_prefix(NODE_ID_PREFIX).unwrap_or(requested_node);
     if component.is_empty() {
-        return Err(MoltenError::invalid_harness("cluster node path component must be non-empty"));
+        return Err(Failure::invalid_harness("cluster node path component must be non-empty"));
     }
     if component == CURRENT_DIR_COMPONENT || component == PARENT_DIR_COMPONENT {
-        return Err(MoltenError::invalid_harness("cluster node path component must not be relative syntax"));
+        return Err(Failure::invalid_harness("cluster node path component must not be relative syntax"));
     }
     if component.contains(NODE_ID_SEPARATOR) {
-        return Err(MoltenError::invalid_harness("cluster node path component must not contain ':'"));
+        return Err(Failure::invalid_harness("cluster node path component must not contain ':'"));
     }
     if !component.chars().all(is_safe_node_path_character) {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "cluster node path component must contain only ASCII letters, digits, '-' or '_'",
         ));
     }
@@ -466,7 +466,7 @@ fn collect_lifecycle_text_diagnostic(label: &str, value: &str, diagnostics: &mut
 
 fn collect_lifecycle_ref_diagnostics(label: &str, refs: &[String], diagnostics: &mut Vec<String>) -> Result<()> {
     if refs.len() > MAX_CLUSTER_LIFECYCLE_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "cluster lifecycle {label} ref count {} exceeds bound {MAX_CLUSTER_LIFECYCLE_ITEMS}",
             refs.len()
         )));
@@ -504,7 +504,7 @@ fn push_lifecycle_if(diagnostics: &mut Vec<String>, condition: bool, diagnostic:
 
 fn push_lifecycle_diagnostic(diagnostics: &mut Vec<String>, diagnostic: impl Into<String>) -> Result<()> {
     if diagnostics.len() >= MAX_CLUSTER_LIFECYCLE_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "cluster lifecycle diagnostic count exceeds bound {MAX_CLUSTER_LIFECYCLE_ITEMS}"
         )));
     }
@@ -568,7 +568,7 @@ fn cluster_lifecycle_decision_status(diagnostics: &[String], prefix: &str) -> &'
 
 fn cluster_lifecycle_phase_values(phases: &[ClusterLifecyclePhaseObservation]) -> Result<Vec<IoValue>> {
     if phases.len() > MAX_CLUSTER_LIFECYCLE_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "cluster lifecycle phase count {} exceeds bound {MAX_CLUSTER_LIFECYCLE_ITEMS}",
             phases.len()
         )));
@@ -587,7 +587,7 @@ fn cluster_lifecycle_phase_values(phases: &[ClusterLifecyclePhaseObservation]) -
 
 fn cluster_lifecycle_node_values(summaries: &[ClusterLifecycleNodeSummary]) -> Result<Vec<IoValue>> {
     if summaries.len() > MAX_CLUSTER_LIFECYCLE_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "cluster lifecycle node summary count {} exceeds bound {MAX_CLUSTER_LIFECYCLE_ITEMS}",
             summaries.len()
         )));
@@ -656,7 +656,7 @@ fn push_lifecycle_summary_field(
     is_ref: bool,
 ) -> Result<()> {
     if fields.len() >= MAX_CLUSTER_LIFECYCLE_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "cluster lifecycle drift field count exceeds bound {MAX_CLUSTER_LIFECYCLE_ITEMS}"
         )));
     }

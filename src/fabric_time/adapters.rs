@@ -34,7 +34,7 @@ use super::entropy_evidence_metadata;
 use super::open_entropy_stream;
 use super::poll_timer;
 use super::schedule_timer;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 #[allow(
     tigerstyle::non_trait_imports,
@@ -67,10 +67,10 @@ pub struct LiveClockAdapter {
 impl LiveClockAdapter {
     pub fn new(profile: &AdmittedTimeProfile, wall_uncertainty_nanos: u64) -> Result<Self> {
         if profile.kind != TimeProfileKind::Live {
-            return Err(MoltenError::invalid_harness("live clock requires an admitted live time profile"));
+            return Err(Failure::invalid_harness("live clock requires an admitted live time profile"));
         }
         if wall_uncertainty_nanos > profile.max_uncertainty_ticks {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "wall uncertainty {wall_uncertainty_nanos} exceeds profile maximum {}",
                 profile.max_uncertainty_ticks
             )));
@@ -88,11 +88,11 @@ impl LiveClockAdapter {
     pub fn observe_wall(&mut self) -> Result<WallClockObservation> {
         let duration = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|error| MoltenError::invalid_harness(format!("system clock predates Unix epoch: {error}")))?;
+            .map_err(|error| Failure::invalid_harness(format!("system clock predates Unix epoch: {error}")))?;
         self.observation_sequence = self
             .observation_sequence
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("wall observation sequence overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("wall observation sequence overflow"))?;
         Ok(WallClockObservation {
             profile_ref: self.profile_ref.clone(),
             unix_nanos: duration_to_u64_nanos(duration)?,
@@ -104,7 +104,7 @@ impl LiveClockAdapter {
     pub fn observe_monotonic(&mut self) -> Result<MonotonicInstant> {
         let ticks = duration_to_u64_nanos(self.monotonic_origin.elapsed())?;
         if ticks < self.last_monotonic_ticks {
-            return Err(MoltenError::invalid_harness("live monotonic clock moved backwards"));
+            return Err(Failure::invalid_harness("live monotonic clock moved backwards"));
         }
         self.last_monotonic_ticks = ticks;
         Ok(MonotonicInstant {
@@ -163,7 +163,7 @@ pub struct VirtualClockAdapter {
 impl VirtualClockAdapter {
     pub fn new(profile: &AdmittedTimeProfile, initial_virtual_ticks: u64, wall_base_nanos: u64) -> Result<Self> {
         if profile.kind != TimeProfileKind::DeterministicSimulation {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "virtual clock requires an admitted deterministic simulation profile",
             ));
         }
@@ -183,7 +183,7 @@ impl VirtualClockAdapter {
         self.virtual_ticks = self
             .virtual_ticks
             .checked_add(delta_ticks)
-            .ok_or_else(|| MoltenError::invalid_harness("virtual time overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("virtual time overflow"))?;
         Ok(self.observe_virtual())
     }
 
@@ -191,7 +191,7 @@ impl VirtualClockAdapter {
         self.logical_position = self
             .logical_position
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("logical time overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("logical time overflow"))?;
         Ok(self.logical_position)
     }
 
@@ -206,13 +206,13 @@ impl VirtualClockAdapter {
         self.observation_sequence = self
             .observation_sequence
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("virtual wall observation sequence overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("virtual wall observation sequence overflow"))?;
         let base = i128::from(self.wall_base_nanos)
             .checked_add(i128::from(self.virtual_ticks))
             .and_then(|value| value.checked_add(self.wall_offset_nanos))
-            .ok_or_else(|| MoltenError::invalid_harness("virtual wall clock overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("virtual wall clock overflow"))?;
         let unix_nanos =
-            u64::try_from(base).map_err(|_| MoltenError::invalid_harness("virtual wall clock underflow"))?;
+            u64::try_from(base).map_err(|_| Failure::invalid_harness("virtual wall clock underflow"))?;
         Ok(WallClockObservation {
             profile_ref: self.profile_ref.clone(),
             unix_nanos,
@@ -225,7 +225,7 @@ impl VirtualClockAdapter {
         self.wall_offset_nanos = self
             .wall_offset_nanos
             .checked_add(signed_delta_nanos)
-            .ok_or_else(|| MoltenError::invalid_harness("virtual wall fault offset overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("virtual wall fault offset overflow"))?;
         Ok(())
     }
 
@@ -279,7 +279,7 @@ pub fn run_timer_adapter_conformance<A: TimerClockAdapter>(
     generation: u64,
 ) -> Result<AdapterConformanceObservation> {
     if adapter.profile_ref() != profile.profile_ref {
-        return Err(MoltenError::invalid_harness("timer adapter profile mismatch"));
+        return Err(Failure::invalid_harness("timer adapter profile mismatch"));
     }
     let start = adapter.now_ticks()?;
     let delay = match profile.kind {
@@ -288,7 +288,7 @@ pub fn run_timer_adapter_conformance<A: TimerClockAdapter>(
     };
     let deadline = start
         .checked_add(delay)
-        .ok_or_else(|| MoltenError::invalid_harness("conformance deadline overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("conformance deadline overflow"))?;
     let request = conformance_timer_request(profile, service_id, generation, adapter.timer_domain(), deadline, 0);
     let timer = schedule_timer(profile, generation, 0, &request)
         .map_err(|error| core_error("schedule conformance timer", error))?;
@@ -340,7 +340,7 @@ pub struct ThreadSchedulerWakeAdapter {
 impl ThreadSchedulerWakeAdapter {
     pub fn register(&mut self, key: RunnableKey, thread: std::thread::Thread) -> Result<()> {
         if self.targets.insert(key.clone(), thread).is_some() {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "scheduler wake target {}:{}:{} is already registered",
                 key.service_id, key.generation, key.runnable_id
             )));
@@ -356,10 +356,10 @@ impl ThreadSchedulerWakeAdapter {
     // translates an admitted wake into the host thread wake primitive.
     pub fn route(&self, transition: &SchedulerTransition) -> Result<()> {
         if !matches!(transition.action, super::SchedulerAction::Woken | super::SchedulerAction::Yielded) {
-            return Err(MoltenError::invalid_harness("thread wake adapter received a non-wake scheduler transition"));
+            return Err(Failure::invalid_harness("thread wake adapter received a non-wake scheduler transition"));
         }
         let thread = self.targets.get(&transition.runnable).ok_or_else(|| {
-            MoltenError::invalid_harness(format!(
+            Failure::invalid_harness(format!(
                 "no live scheduler wake target for {}:{}:{}",
                 transition.runnable.service_id, transition.runnable.generation, transition.runnable.runnable_id
             ))
@@ -435,7 +435,7 @@ fn run_entropy_conformance(profile: &AdmittedTimeProfile, generation: u64) -> Re
     let over_limit = profile
         .max_entropy_request_bytes
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness("conformance entropy bound overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("conformance entropy bound overflow"))?;
     let request = EntropyRequest::Bytes { count: over_limit };
     let rejected = match mode {
         super::EntropyMode::DeterministicSimulation => matches!(
@@ -496,7 +496,7 @@ impl<S: CryptographicEntropySource> ProductionEntropyAdapter<S> {
         request: EntropyRequest,
     ) -> Result<(EntropyTransition, EntropyEvidenceMetadata)> {
         let output_len = usize::try_from(request.requested_bytes())
-            .map_err(|_| MoltenError::invalid_harness("entropy request length overflow"))?;
+            .map_err(|_| Failure::invalid_harness("entropy request length overflow"))?;
         let mut secret = vec![0; output_len];
         self.source.fill_secret(&mut secret)?;
         let transition = consume_production_entropy(profile, active_generation, state, request, secret)
@@ -535,7 +535,7 @@ pub fn validate_scheduler_fault_outcome(fault: &FabricTimeFault, transition: &Sc
     if matches!(fault, FabricTimeFault::SaturateSchedulerQueue)
         && !matches!(transition.action, super::SchedulerAction::RejectedOverload | super::SchedulerAction::Backpressure)
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "scheduler saturation fault did not produce an explicit overload outcome",
         ));
     }
@@ -557,7 +557,7 @@ pub fn poll_timer_with_fault(
                 faulted.next_deadline_ticks = faulted
                     .next_deadline_ticks
                     .checked_add(*ticks)
-                    .ok_or_else(|| MoltenError::invalid_harness("faulted timer deadline overflow"))?;
+                    .ok_or_else(|| Failure::invalid_harness("faulted timer deadline overflow"))?;
             }
             FabricTimeFault::DropTimerDelivery { key } if key == &state.key => {
                 faulted.overload = super::TimerOverloadPolicy::DropDue;
@@ -630,12 +630,12 @@ fn duration_to_u64_nanos(duration: Duration) -> Result<u64> {
     let seconds = duration
         .as_secs()
         .checked_mul(NANOS_PER_SECOND)
-        .ok_or_else(|| MoltenError::invalid_harness("duration seconds overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("duration seconds overflow"))?;
     seconds
         .checked_add(u64::from(duration.subsec_nanos()))
-        .ok_or_else(|| MoltenError::invalid_harness("duration nanoseconds overflow"))
+        .ok_or_else(|| Failure::invalid_harness("duration nanoseconds overflow"))
 }
 
-fn core_error(label: &str, error: impl std::fmt::Debug) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label}: {error:?}"))
+fn core_error(label: &str, error: impl std::fmt::Debug) -> Failure {
+    Failure::invalid_harness(format!("{label}: {error:?}"))
 }

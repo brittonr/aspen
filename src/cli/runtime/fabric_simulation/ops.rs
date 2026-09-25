@@ -2,7 +2,7 @@ use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 
-use molten::error::MoltenError;
+use molten::error::Failure;
 use molten::error::Result;
 use molten::fabric_simulation::CanonicalSimulatedWorld;
 use molten::fabric_simulation::CanonicalSimulationDifferential;
@@ -65,13 +65,13 @@ pub(super) fn replay(report: PathBuf) -> Result<()> {
     let expected = molten::fabric_simulation::parse_simulation_run_readback(&value)?;
     let replay = molten::fabric_simulation::run_reference_simulation_fixture()?;
     if expected.world_ref != replay.world.world_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "fabric-simulation replay world mismatch: expected={} actual={}",
             expected.world_ref, replay.world.world_ref
         )));
     }
     if expected.run_ref != replay.run.run_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "fabric-simulation replay diverged: expected={} actual={}",
             expected.run_ref, replay.run.run_ref
         )));
@@ -146,9 +146,9 @@ fn plan_run_artifacts(fixture: &ReferenceSimulationFixtureRun) -> Result<Vec<Pla
         .len()
         .checked_add(fixture.port_events.len())
         .and_then(|count| count.checked_add(RUN_FIXED_ARTIFACT_COUNT))
-        .ok_or_else(|| MoltenError::invalid_harness("fabric-simulation artifact count overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("fabric-simulation artifact count overflow"))?;
     if artifact_count > MAX_ARTIFACTS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "fabric-simulation artifact count {artifact_count} exceeds {MAX_ARTIFACTS}"
         )));
     }
@@ -179,7 +179,7 @@ fn plan_export_artifacts(fixture: &ReferenceSimulationFixtureRun) -> Result<Vec<
         differential_artifact("differential.preserves", &fixture.differential)?,
     ];
     if artifacts.len() != EXPORT_ARTIFACT_COUNT {
-        return Err(MoltenError::invalid_harness("fabric-simulation export artifact count drifted"));
+        return Err(Failure::invalid_harness("fabric-simulation export artifact count drifted"));
     }
     validate_artifact_plan(&artifacts)?;
     Ok(artifacts)
@@ -192,7 +192,7 @@ fn plan_shrink_artifacts(fixture: &ReferenceShrinkFixture) -> Result<Vec<Planned
         shrink_artifact("shrink.preserves", &fixture.shrink)?,
     ];
     if artifacts.len() != SHRINK_ARTIFACT_COUNT {
-        return Err(MoltenError::invalid_harness("fabric-simulation shrink artifact count drifted"));
+        return Err(Failure::invalid_harness("fabric-simulation shrink artifact count drifted"));
     }
     validate_artifact_plan(&artifacts)?;
     Ok(artifacts)
@@ -235,7 +235,7 @@ fn shrink_artifact(path: impl Into<PathBuf>, shrink: &CanonicalSimulationShrink)
 fn planned(path: impl Into<PathBuf>, value: &preserves::IOValue) -> Result<PlannedArtifact> {
     let content = molten::preserves_rail::to_text(value)?;
     if content.len() > MAX_ARTIFACT_CONTENT_BYTES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "fabric-simulation artifact is {} bytes; maximum is {MAX_ARTIFACT_CONTENT_BYTES}",
             content.len()
         )));
@@ -248,7 +248,7 @@ fn planned(path: impl Into<PathBuf>, value: &preserves::IOValue) -> Result<Plann
 
 fn validate_artifact_plan(artifacts: &[PlannedArtifact]) -> Result<()> {
     if artifacts.len() > MAX_ARTIFACTS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "fabric-simulation artifact plan exceeds {MAX_ARTIFACTS} entries"
         )));
     }
@@ -256,7 +256,7 @@ fn validate_artifact_plan(artifacts: &[PlannedArtifact]) -> Result<()> {
     for artifact in artifacts {
         validate_relative_artifact_path(&artifact.relative_path)?;
         if !paths.insert(artifact.relative_path.clone()) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "duplicate fabric-simulation artifact path {}",
                 artifact.relative_path.display()
             )));
@@ -267,13 +267,13 @@ fn validate_artifact_plan(artifacts: &[PlannedArtifact]) -> Result<()> {
 
 fn validate_relative_artifact_path(path: &Path) -> Result<()> {
     if path.as_os_str().is_empty() || path.is_absolute() {
-        return Err(MoltenError::invalid_harness("fabric-simulation artifact path must be non-empty and relative"));
+        return Err(Failure::invalid_harness("fabric-simulation artifact path must be non-empty and relative"));
     }
     if path
         .components()
         .any(|component| matches!(component, Component::ParentDir | Component::RootDir | Component::Prefix(_)))
     {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "fabric-simulation artifact path escapes output root: {}",
             path.display()
         )));
@@ -282,26 +282,26 @@ fn validate_relative_artifact_path(path: &Path) -> Result<()> {
 }
 
 fn write_artifacts(root: &Path, artifacts: &[PlannedArtifact]) -> Result<()> {
-    std::fs::create_dir_all(root).map_err(MoltenError::from)?;
+    std::fs::create_dir_all(root).map_err(Failure::from)?;
     for artifact in artifacts {
         let path = root.join(&artifact.relative_path);
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(MoltenError::from)?;
+            std::fs::create_dir_all(parent).map_err(Failure::from)?;
         }
-        std::fs::write(path, artifact.content.as_bytes()).map_err(MoltenError::from)?;
+        std::fs::write(path, artifact.content.as_bytes()).map_err(Failure::from)?;
     }
     Ok(())
 }
 
 fn read_report(path: &Path) -> Result<preserves::IOValue> {
-    let metadata = std::fs::metadata(path).map_err(MoltenError::from)?;
+    let metadata = std::fs::metadata(path).map_err(Failure::from)?;
     if metadata.len() > MAX_REPORT_ARTIFACT_BYTES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "fabric-simulation report is {} bytes; maximum is {MAX_REPORT_ARTIFACT_BYTES}",
             metadata.len()
         )));
     }
-    let source = std::fs::read_to_string(path).map_err(MoltenError::from)?;
+    let source = std::fs::read_to_string(path).map_err(Failure::from)?;
     molten::preserves_rail::parse_text(&source)
 }
 

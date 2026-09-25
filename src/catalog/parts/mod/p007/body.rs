@@ -233,15 +233,15 @@ fn dedup_ratio_bps(total_chunk_refs: usize, dedup_hits: usize) -> Result<u64> {
     }
     let numerator = dedup_hits
         .checked_mul(10_000)
-        .ok_or_else(|| MoltenError::invalid_harness("chunk catalog dedup ratio overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("chunk catalog dedup ratio overflow"))?;
     let ratio = numerator
         .checked_div(total_chunk_refs)
-        .ok_or_else(|| MoltenError::invalid_harness("chunk catalog dedup ratio divisor is zero"))?;
+        .ok_or_else(|| Failure::invalid_harness("chunk catalog dedup ratio divisor is zero"))?;
     usize_to_u64(ratio, "chunk catalog dedup ratio")
 }
 
 fn usize_to_u64(value: usize, label: &str) -> Result<u64> {
-    u64::try_from(value).map_err(|_| MoltenError::invalid_harness(format!("{label} count exceeds u64")))
+    u64::try_from(value).map_err(|_| Failure::invalid_harness(format!("{label} count exceeds u64")))
 }
 
 fn filter_value(filter: &Filter) -> Result<IoValue> {

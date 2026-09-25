@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use molten_core::content_replication::*;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric_transport::*;
 
@@ -78,14 +78,14 @@ impl FabricTransferAdapter {
             )?),
             TransferProfile::IrohLiveLoopback => {
                 if fault.is_some() {
-                    return Err(MoltenError::invalid_harness(
+                    return Err(Failure::invalid_harness(
                         "live replication loopback does not synthesize transport faults",
                     ));
                 }
                 let runtime = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()
-                    .map_err(|error| MoltenError::invalid_harness(format!("replication runtime failed: {error}")))?;
+                    .map_err(|error| Failure::invalid_harness(format!("replication runtime failed: {error}")))?;
                 Mechanism::IrohLive {
                     adapter: IrohTransportAdapter::new(transport_profile(TransportAdapterKind::IrohLive)?)?,
                     runtime,
@@ -125,24 +125,24 @@ impl FabricTransferAdapter {
     fn execute_command(&mut self, command: &TransportCommand) -> Result<CanonicalTransportTransition> {
         match &mut self.mechanism {
             Mechanism::Deterministic(adapter) => adapter.execute_command(command).map_err(|error| {
-                MoltenError::invalid_harness(format!("simulated replication transport failed: {error}"))
+                Failure::invalid_harness(format!("simulated replication transport failed: {error}"))
             }),
             Mechanism::IrohLive { adapter, .. } => adapter
                 .execute_command(command)
-                .map_err(|error| MoltenError::invalid_harness(format!("live replication transport failed: {error}"))),
+                .map_err(|error| Failure::invalid_harness(format!("live replication transport failed: {error}"))),
         }
     }
 
     fn transfer(&mut self, action: &Action) -> Result<TransferOutcome> {
         let payload = action_payload(action);
         let payload_bytes = u64::try_from(payload.len())
-            .map_err(|_| MoltenError::invalid_harness("replication transport payload exceeds u64"))?;
+            .map_err(|_| Failure::invalid_harness("replication transport payload exceeds u64"))?;
         let transfer_ref = match &mut self.mechanism {
             Mechanism::Deterministic(adapter) => {
                 let send = send_command(&self.session_id, &self.stream_id, action, &payload)?;
                 let _submitted = adapter
                     .execute_command(&send)
-                    .map_err(|error| MoltenError::invalid_harness(format!("simulated transfer failed: {error}")))?;
+                    .map_err(|error| Failure::invalid_harness(format!("simulated transfer failed: {error}")))?;
                 adapter
                     .execute_command(&TransportCommand::AcknowledgeFrame {
                         operation_id: OPERATION_REF.to_string(),
@@ -150,7 +150,7 @@ impl FabricTransferAdapter {
                         stream_id: self.stream_id.clone(),
                         payload_bytes,
                     })
-                    .map_err(|error| MoltenError::invalid_harness(format!("simulated ack failed: {error}")))?
+                    .map_err(|error| Failure::invalid_harness(format!("simulated ack failed: {error}")))?
                     .transition_ref
             }
             Mechanism::IrohLive { adapter, runtime } => {
@@ -175,7 +175,7 @@ impl FabricTransferAdapter {
             .manifest_refs
             .get(&action.content_ref)
             .cloned()
-            .ok_or_else(|| MoltenError::invalid_harness("replication action lacks a manifest binding"))?;
+            .ok_or_else(|| Failure::invalid_harness("replication action lacks a manifest binding"))?;
         Ok(TransferOutcome::Received(TransferEnvelope {
             transport_verification_ref: transfer_ref.clone(),
             transfer_ref,
@@ -196,7 +196,7 @@ impl FabricTransferAdapter {
         let payload = action_payload(action);
         let send = send_command(&self.session_id, &self.stream_id, action, &payload)?;
         let Mechanism::Deterministic(adapter) = &mut self.mechanism else {
-            return Err(MoltenError::invalid_harness("replication fault injection requires deterministic transport"));
+            return Err(Failure::invalid_harness("replication fault injection requires deterministic transport"));
         };
         match fault {
             TransferFault::CancelAt { .. } => {
@@ -208,7 +208,7 @@ impl FabricTransferAdapter {
                             stream_id: self.stream_id.clone(),
                         },
                     })
-                    .map_err(|error| MoltenError::invalid_harness(format!("simulated cancel failed: {error}")))?;
+                    .map_err(|error| Failure::invalid_harness(format!("simulated cancel failed: {error}")))?;
                 Ok(TransferOutcome::Cancelled(cancelled.transition_ref))
             }
             TransferFault::PartitionAt { .. } => {
@@ -233,7 +233,7 @@ impl TransportPort for FabricTransferAdapter {
         self.call_count = self
             .call_count
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("replication transport call count overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("replication transport call count overflow"))?;
         if let Some(fault) = self.fault.filter(|fault| fault_call(*fault) == call) {
             return self.deterministic_fault(action, fault);
         }

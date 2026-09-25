@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use preserves::IOValue;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric::DeterminismClass;
 use crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA;
@@ -445,7 +445,7 @@ pub fn membership_status_readback(
     assignments: &[(String, RoleAssignment)],
 ) -> Result<MembershipStatusReadback> {
     if assignments.len() > MAX_MEMBERSHIP_ITEMS {
-        return Err(MoltenError::invalid_harness("membership readback assignment limit exceeded"));
+        return Err(Failure::invalid_harness("membership readback assignment limit exceeded"));
     }
     let member_ids = view.admitted.view.members.iter().map(|member| member.node_id.clone()).collect::<Vec<_>>();
     let mut active_assignments = 0u64;
@@ -529,7 +529,7 @@ impl ExtensionMembershipPlacementContext {
             };
             if let Some(binding) = host.manifest().binding_for(&key) {
                 if binding.binding.implementation_profile != profile.profile.profile_id {
-                    return Err(MoltenError::invalid_harness(format!(
+                    return Err(Failure::invalid_harness(format!(
                         "system-extension membership profile {} does not match {}",
                         binding.binding.implementation_profile, profile.profile.profile_id
                     )));
@@ -538,7 +538,7 @@ impl ExtensionMembershipPlacementContext {
             }
         }
         if bound_ports.is_empty() {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "system extension has no admitted membership or placement fabric port binding",
             ));
         }
@@ -576,7 +576,7 @@ impl ExtensionMembershipPlacementContext {
     ) -> Result<()> {
         self.admit_scope(profile, FABRIC_PLACEMENT_PORT_ID, service_id, generation)?;
         if view.admitted.profile.profile_ref != self.source_profile_ref {
-            return Err(MoltenError::invalid_harness("placement view uses a substituted membership source profile"));
+            return Err(Failure::invalid_harness("placement view uses a substituted membership source profile"));
         }
         Ok(())
     }
@@ -598,18 +598,18 @@ impl ExtensionMembershipPlacementContext {
         generation: u64,
     ) -> Result<()> {
         if self.profile_id != profile.profile.profile_id {
-            return Err(MoltenError::invalid_harness("membership profile substitution denied"));
+            return Err(Failure::invalid_harness("membership profile substitution denied"));
         }
         if !self.bound_ports.iter().any(|bound| bound == port_id) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "membership or placement port {port_id} is not bound to the system extension"
             )));
         }
         if self.service_id != service_id {
-            return Err(MoltenError::invalid_harness("membership service identity mismatch"));
+            return Err(Failure::invalid_harness("membership service identity mismatch"));
         }
         if self.generation != generation {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "membership or placement operation uses a stale service generation",
             ));
         }
@@ -775,18 +775,18 @@ fn validate_evidence_ref(label: &str, value: &str) -> Result<()> {
     if is_valid {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} ref is malformed")))
+        Err(Failure::invalid_harness(format!("{label} ref is malformed")))
     }
 }
 
 fn checked_increment(value: u64) -> Result<u64> {
     value
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness("membership readback count overflow"))
+        .ok_or_else(|| Failure::invalid_harness("membership readback count overflow"))
 }
 
-fn validation_error<T: std::fmt::Debug>(label: &str, issues: &[T]) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label} validation failed: {issues:?}"))
+fn validation_error<T: std::fmt::Debug>(label: &str, issues: &[T]) -> Failure {
+    Failure::invalid_harness(format!("{label} validation failed: {issues:?}"))
 }
 
 fn field(name: &str, value: IOValue) -> IOValue {

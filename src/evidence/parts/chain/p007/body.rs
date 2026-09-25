@@ -106,7 +106,7 @@ fn parse_checkpoint_range(value: &Value<IoValue>) -> Result<(String, String, Str
     let value = value_to_iovalue(value);
     let range = value
         .collect_simple_record("range", Some(4))
-        .ok_or_else(|| MoltenError::invalid_harness("chain checkpoint missing range record"))?;
+        .ok_or_else(|| Failure::invalid_harness("chain checkpoint missing range record"))?;
     Ok((
         record_string(&range[0], "anchor", "checkpoint range anchor")?,
         record_string(&range[1], "head", "checkpoint range head")?,
@@ -119,16 +119,16 @@ fn parse_control_plane(value: &Value<IoValue>) -> Result<()> {
     let value = value_to_iovalue(value);
     let control = value
         .collect_simple_record("control-plane", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("chain checkpoint missing control-plane record"))?;
+        .ok_or_else(|| Failure::invalid_harness("chain checkpoint missing control-plane record"))?;
     let mode = record_string(&control[0], "mode", "checkpoint control-plane mode")?;
     if mode != "trellis-raft" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported checkpoint control-plane mode {mode}; expected trellis-raft"
         )));
     }
     let command = record_string(&control[1], "command", "checkpoint control-plane command")?;
     if command != "accept-chain-head" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported checkpoint control-plane command {command}; expected accept-chain-head"
         )));
     }
@@ -148,7 +148,7 @@ fn ensure_sequence_unoccupied(index: &ChainIndex, link: &ChainLink) -> Result<()
     if occupants.is_empty() {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "chain sequence {} for {:?} is already occupied by {:?}",
             link.sequence, link.chain, occupants
         )))
@@ -167,7 +167,7 @@ fn parse_chain(value: &Value<IoValue>) -> Result<ChainScope> {
     let value = value_to_iovalue(value);
     let chain = value
         .collect_simple_record("chain", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("chain link missing chain record"))?;
+        .ok_or_else(|| Failure::invalid_harness("chain link missing chain record"))?;
     Ok(ChainScope {
         scope: record_string(&chain[0], "scope", "chain scope")?,
         id: record_string(&chain[1], "id", "chain id")?,
@@ -179,14 +179,14 @@ fn parse_previous_link_ref(value: &Value<IoValue>) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let prev = value
         .collect_simple_record("prev", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("chain link missing prev record"))?;
+        .ok_or_else(|| Failure::invalid_harness("chain link missing prev record"))?;
     let prev_value = value_to_iovalue(&prev[0]);
     if prev_value.collect_simple_record("none", Some(0)).is_some() {
         Ok(None)
     } else if let Some(some) = prev_value.collect_simple_record("some", Some(1)) {
         required_string(&some[0], "previous link ref").map(Some)
     } else {
-        Err(MoltenError::invalid_harness("chain link prev must be <none> or <some ref>"))
+        Err(Failure::invalid_harness("chain link prev must be <none> or <some ref>"))
     }
 }
 
@@ -194,7 +194,7 @@ fn parse_payload(value: &Value<IoValue>) -> Result<ChainPayload> {
     let value = value_to_iovalue(value);
     let payload = value
         .collect_simple_record("payload", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("chain link missing payload record"))?;
+        .ok_or_else(|| Failure::invalid_harness("chain link missing payload record"))?;
     Ok(ChainPayload {
         kind: record_string(&payload[0], "kind", "payload kind")?,
         artifact_ref: record_string(&payload[1], "ref", "payload ref")?,
@@ -206,16 +206,16 @@ fn parse_context_refs(value: &Value<IoValue>) -> Result<Vec<ChainContextRef>> {
     let value = value_to_iovalue(value);
     let context = value
         .collect_simple_record("context", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("chain link missing context record"))?;
+        .ok_or_else(|| Failure::invalid_harness("chain link missing context record"))?;
     let refs = context[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("chain link context must be a sequence"))?;
+        .ok_or_else(|| Failure::invalid_harness("chain link context must be a sequence"))?;
     refs.iter()
         .map(|value| {
             let value = value_to_iovalue(value);
             let context_ref = value
                 .collect_simple_record("ref", Some(2))
-                .ok_or_else(|| MoltenError::invalid_harness("chain context item must be <ref label artifact-ref>"))?;
+                .ok_or_else(|| Failure::invalid_harness("chain context item must be <ref label artifact-ref>"))?;
             Ok(ChainContextRef {
                 label: required_string(&context_ref[0], "context ref label")?,
                 artifact_ref: required_string(&context_ref[1], "context artifact ref")?,
@@ -228,7 +228,7 @@ fn parse_producer(value: &Value<IoValue>) -> Result<ChainProducer> {
     let value = value_to_iovalue(value);
     let producer = value
         .collect_simple_record("producer", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("chain link missing producer record"))?;
+        .ok_or_else(|| Failure::invalid_harness("chain link missing producer record"))?;
     Ok(ChainProducer {
         id: record_string(&producer[0], "id", "producer id")?,
         key_ref: record_string(&producer[1], "key", "producer key ref")?,
@@ -239,7 +239,7 @@ fn parse_trellis(value: &Value<IoValue>) -> Result<ChainTrellisEvidence> {
     let value = value_to_iovalue(value);
     let trellis = value
         .collect_simple_record("trellis", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("chain link missing trellis record"))?;
+        .ok_or_else(|| Failure::invalid_harness("chain link missing trellis record"))?;
     Ok(ChainTrellisEvidence {
         predicate: record_string(&trellis[0], "predicate", "trellis predicate")?,
         input_ref: record_string(&trellis[1], "input", "trellis predicate input ref")?,
@@ -251,17 +251,17 @@ fn parse_checks(value: &Value<IoValue>) -> Result<Vec<ChainCheck>> {
     let value = value_to_iovalue(value);
     let checks = value
         .collect_simple_record("checks", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("chain link missing checks record"))?;
+        .ok_or_else(|| Failure::invalid_harness("chain link missing checks record"))?;
     let sequence = checks[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("chain link checks must be a sequence"))?;
+        .ok_or_else(|| Failure::invalid_harness("chain link checks must be a sequence"))?;
     sequence
         .iter()
         .map(|value| {
             let value = value_to_iovalue(value);
             let check = value
                 .collect_simple_record("check", Some(2))
-                .ok_or_else(|| MoltenError::invalid_harness("chain check item must be <check name decision>"))?;
+                .ok_or_else(|| Failure::invalid_harness("chain check item must be <check name decision>"))?;
             Ok(ChainCheck {
                 name: required_string(&check[0], "check name")?,
                 decision: required_string(&check[1], "check decision")?,

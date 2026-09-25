@@ -8,11 +8,11 @@ fn validate_live_topology_profile(profile: &LiveTopologyProfile<'_>) -> Result<(
         validate_node_id(endpoint)?;
     }
     if profile.allowed_alpns.is_empty() {
-        return Err(MoltenError::invalid_harness("live topology profile allowed ALPNs must not be empty"));
+        return Err(Failure::invalid_harness("live topology profile allowed ALPNs must not be empty"));
     }
     for alpn in profile.allowed_alpns {
         if alpn.trim().is_empty() {
-            return Err(MoltenError::invalid_harness("live topology profile ALPN must not be empty"));
+            return Err(Failure::invalid_harness("live topology profile ALPN must not be empty"));
         }
     }
     validate_ingress_refs(profile.ticket_refs, "live topology profile ticket ref")?;
@@ -20,7 +20,7 @@ fn validate_live_topology_profile(profile: &LiveTopologyProfile<'_>) -> Result<(
     if let Some(role) = profile.role
         && role.trim().is_empty()
     {
-        return Err(MoltenError::invalid_harness("live topology profile role must not be empty"));
+        return Err(Failure::invalid_harness("live topology profile role must not be empty"));
     }
     Ok(())
 }
@@ -31,7 +31,7 @@ fn validate_live_transport_profile_shape(profile: &LiveTransportProfile<'_>) -> 
         profile.relay_preference,
         LIVE_PROFILE_RELAY_DIRECT | LIVE_PROFILE_RELAY_RELAY | LIVE_PROFILE_RELAY_AUTO
     ) {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "live transport profile relay preference {} is not supported",
             profile.relay_preference
         )));

@@ -7,7 +7,7 @@ type Path = std::path::Path;
 type Value<T> = preserves::Value<T>;
 type Database = redb::Database;
 type TableDefinition<K, V> = redb::TableDefinition<'static, K, V>;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 fn bool_value(value: bool) -> IoValue {

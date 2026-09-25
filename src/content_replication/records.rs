@@ -2,7 +2,7 @@ use molten_core::content_replication::*;
 use preserves::IOValue;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const RECORD_IDENTITY_CONTEXT: &str = "onixresearch.molten.content-replication.record.v1";
@@ -121,7 +121,7 @@ pub fn canonical_operator_status(view: &OperatorStatusView) -> Result<CanonicalR
 pub fn canonical_receipt(receipt: &ExecutionReceipt) -> Result<CanonicalReplicationRecord> {
     let expected = NON_CLAIMS.iter().map(ToString::to_string).collect::<Vec<_>>();
     if receipt.non_claims != expected {
-        return Err(MoltenError::invalid_harness("content-replication receipt non-claims are incomplete"));
+        return Err(Failure::invalid_harness("content-replication receipt non-claims are incomplete"));
     }
     canonical(
         "receipt",
@@ -182,7 +182,7 @@ fn canonical(kind: &str, value: IOValue) -> Result<CanonicalReplicationRecord> {
     let mut hasher = blake3::Hasher::new_derive_key(RECORD_IDENTITY_CONTEXT);
     update(&mut hasher, kind)?;
     let length = u64::try_from(bytes.len())
-        .map_err(|_| MoltenError::invalid_harness("replication record length exceeds u64"))?;
+        .map_err(|_| Failure::invalid_harness("replication record length exceeds u64"))?;
     hasher.update(&length.to_be_bytes());
     hasher.update(&bytes);
     Ok(CanonicalReplicationRecord {
@@ -194,7 +194,7 @@ fn canonical(kind: &str, value: IOValue) -> Result<CanonicalReplicationRecord> {
 
 fn update(hasher: &mut blake3::Hasher, value: &str) -> Result<()> {
     let length = u64::try_from(value.len())
-        .map_err(|_| MoltenError::invalid_harness("replication identity field length exceeds u64"))?;
+        .map_err(|_| Failure::invalid_harness("replication identity field length exceeds u64"))?;
     hasher.update(&length.to_be_bytes());
     hasher.update(value.as_bytes());
     Ok(())
@@ -223,7 +223,7 @@ fn boolean(value: bool) -> IOValue {
 fn count(value: usize) -> Result<IOValue> {
     u64::try_from(value)
         .map(number)
-        .map_err(|_| MoltenError::invalid_harness("replication count exceeds u64"))
+        .map_err(|_| Failure::invalid_harness("replication count exceeds u64"))
 }
 
 fn field(label: &'static str, value: IOValue) -> IOValue {

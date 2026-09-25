@@ -156,7 +156,7 @@ impl std::fmt::Display for ContentRef {
 }
 
 impl std::str::FromStr for ContentRef {
-    type Err = MoltenError;
+    type Err = Failure;
 
     fn from_str(value: &str) -> std::result::Result<Self, Self::Err> {
         Self::parse(value)
@@ -164,7 +164,7 @@ impl std::str::FromStr for ContentRef {
 }
 
 impl TryFrom<&str> for ContentRef {
-    type Error = MoltenError;
+    type Error = Failure;
 
     fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
         Self::parse(value)
@@ -172,7 +172,7 @@ impl TryFrom<&str> for ContentRef {
 }
 
 impl TryFrom<String> for ContentRef {
-    type Error = MoltenError;
+    type Error = Failure;
 
     fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
         Self::parse(value)
@@ -200,7 +200,7 @@ impl<'de> serde::Deserialize<'de> for ContentRef {
 
 pub fn validate_content_ref(value: &str) -> Result<()> {
     let Some(hex) = value.strip_prefix(BLAKE3_REF_PREFIX) else {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "content ref must start with {BLAKE3_REF_PREFIX}, got {value}"
         )));
     };
@@ -213,7 +213,7 @@ pub fn content_ref_has_prefix(value: &str) -> bool {
 
 pub fn content_ref_hex(value: &str) -> Result<&str> {
     let Some(hex) = value.strip_prefix(BLAKE3_REF_PREFIX) else {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "content ref must start with {BLAKE3_REF_PREFIX}, got {value}"
         )));
     };
@@ -230,26 +230,26 @@ pub fn content_ref_from_hex(hex: &str) -> Result<String> {
 
 fn validate_content_ref_hex(value: &str, hex: &str) -> Result<()> {
     if hex.len() != BLAKE3_HEX_LEN {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "content ref must be {BLAKE3_REF_PREFIX}<64 lowercase hex chars>, got {value}"
         )));
     }
     if !hex.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)) {
-        return Err(MoltenError::invalid_harness(format!("content ref must use lowercase hex chars, got {value}")));
+        return Err(Failure::invalid_harness(format!("content ref must use lowercase hex chars, got {value}")));
     }
     Ok(())
 }
 
 pub fn parse_text(source: &str) -> Result<IoValue> {
-    preserves::read_iovalue_text(source, false).map_err(|error| MoltenError::Preserves(error.to_string()))
+    preserves::read_iovalue_text(source, false).map_err(|error| Failure::Preserves(error.to_string()))
 }
 
 pub fn to_text(value: &IoValue) -> Result<String> {
-    preserves::write_iovalue_text(value, false).map_err(|error| MoltenError::Preserves(error.to_string()))
+    preserves::write_iovalue_text(value, false).map_err(|error| Failure::Preserves(error.to_string()))
 }
 
 pub fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
-    preserves::write_iovalue_packed(value, false).map_err(|error| MoltenError::Preserves(error.to_string()))
+    preserves::write_iovalue_packed(value, false).map_err(|error| Failure::Preserves(error.to_string()))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -262,10 +262,10 @@ pub struct StrictCanonicalDecode {
 // r[impl molten.preserves_canonical_bytes.strict_decode]
 // r[impl molten.preserves_canonical_bytes.noncanonical_denial]
 pub fn strict_canonical_decode(bytes: &[u8]) -> Result<StrictCanonicalDecode> {
-    let value = preserves::read_iovalue_packed(bytes, false).map_err(|error| MoltenError::Preserves(error.to_string()))?;
+    let value = preserves::read_iovalue_packed(bytes, false).map_err(|error| Failure::Preserves(error.to_string()))?;
     let canonical = canonical_bytes(&value)?;
     if canonical.as_slice() != bytes {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "strict canonical Preserves decode failed: input bytes differ from canonical re-encoding",
         ));
     }
@@ -283,11 +283,11 @@ pub fn strict_canonical_decode_with_ref(
     boundary: &str,
 ) -> Result<StrictCanonicalDecode> {
     let expected = ContentRef::parse(expected_ref).map_err(|error| {
-        MoltenError::invalid_harness(format!("{boundary} expected content ref is invalid: {error}"))
+        Failure::invalid_harness(format!("{boundary} expected content ref is invalid: {error}"))
     })?;
     let decoded = strict_canonical_decode(bytes)?;
     if decoded.value_ref != expected {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "{boundary} strict canonical decode ref mismatch: expected {}, got {}",
             expected, decoded.value_ref
         )));
@@ -369,9 +369,9 @@ impl OperationId {
         let first = value
             .bytes()
             .next()
-            .ok_or_else(|| MoltenError::invalid_harness("operation id cannot be empty"))?;
+            .ok_or_else(|| Failure::invalid_harness("operation id cannot be empty"))?;
         if !first.is_ascii_lowercase() {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "{OPERATION_FIRST_CHAR_LABEL} must be lowercase ascii, got {value}"
             )));
         }
@@ -409,7 +409,7 @@ impl Decision {
         match value {
             DECISION_PASS => Ok(Self::Pass),
             DECISION_DENY => Ok(Self::Deny),
-            _ => Err(MoltenError::invalid_harness(format!("unsupported decision {value}"))),
+            _ => Err(Failure::invalid_harness(format!("unsupported decision {value}"))),
         }
     }
 
@@ -436,7 +436,7 @@ impl CheckStatus {
             CHECK_STATUS_FAIL => Ok(Self::Fail),
             DECISION_DENY => Ok(Self::Deny),
             CHECK_STATUS_DIAGNOSTIC => Ok(Self::Diagnostic),
-            _ => Err(MoltenError::invalid_harness(format!("unsupported check status {value}"))),
+            _ => Err(Failure::invalid_harness(format!("unsupported check status {value}"))),
         }
     }
 
@@ -463,7 +463,7 @@ impl ReplayClass {
             REPLAY_CLASS_IDEMPOTENT => Ok(Self::Idempotent),
             REPLAY_CLASS_DETERMINISTIC => Ok(Self::Deterministic),
             REPLAY_CLASS_EFFECTFUL => Ok(Self::Effectful),
-            _ => Err(MoltenError::invalid_harness(format!("unsupported replay class {value}"))),
+            _ => Err(Failure::invalid_harness(format!("unsupported replay class {value}"))),
         }
     }
 
@@ -478,12 +478,12 @@ impl ReplayClass {
 
 pub fn validate_stable_id(value: &str, label: &str) -> Result<()> {
     if value.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("{label} cannot be empty")));
+        return Err(Failure::invalid_harness(format!("{label} cannot be empty")));
     }
     if value.bytes().all(is_stable_id_byte) {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!(
+    Err(Failure::invalid_harness(format!(
         "{label} must contain only ASCII letters, digits, '_', '.', ':', or '-', got {value}"
     )))
 }
@@ -535,20 +535,20 @@ pub fn simple_record_fields<'a>(
 ) -> Result<std::borrow::Cow<'a, preserves::Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 pub fn required_string_field(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.to_string())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 pub fn required_content_ref(value: &Value<IoValue>, field: &str) -> Result<ContentRef> {
     let reference = required_string_field(value, field)?;
     ContentRef::parse(&reference).map_err(|error| {
-        MoltenError::invalid_harness(format!("{field} must be a canonical content ref: {error}"))
+        Failure::invalid_harness(format!("{field} must be a canonical content ref: {error}"))
     })
 }
 
@@ -576,7 +576,7 @@ pub fn required_sequence_field<'a>(
 ) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {field}")))
 }
 
 pub fn record_string_field(value: &Value<IoValue>, record_name: &str, field: &str) -> Result<String> {
@@ -656,10 +656,10 @@ pub fn parse_checks_record(
         let name = required_string_field(&check[0], "check name")?;
         let status = required_string_field(&check[1], "check status")?;
         if !matches!(status.as_str(), "pass" | "fail" | "deny") {
-            return Err(MoltenError::invalid_harness(format!("unsupported {context} check status {status}")));
+            return Err(Failure::invalid_harness(format!("unsupported {context} check status {status}")));
         }
         if !seen.insert(name.clone()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate {context} check {name}")));
+            return Err(Failure::invalid_harness(format!("duplicate {context} check {name}")));
         }
         checks.push(ParsedCheck { name, status });
     }
@@ -669,7 +669,7 @@ pub fn parse_checks_record(
 pub fn require_checks_present(checks: &[ParsedCheck], expected: &[&str], context: &str) -> Result<()> {
     for expected in expected {
         if !checks.iter().any(|check| check.name == *expected) {
-            return Err(MoltenError::invalid_harness(format!("missing {context} check {expected}")));
+            return Err(Failure::invalid_harness(format!("missing {context} check {expected}")));
         }
     }
     Ok(())
@@ -679,7 +679,7 @@ fn ensure_toolkit_count_at_most(count: usize, maximum: usize, label: &str) -> Re
     if count <= maximum {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
+        Err(Failure::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
     }
 }
 
@@ -896,7 +896,7 @@ pub const OPERATOR_RELEASE_EVIDENCE_BUNDLE_BOUNDARY_SCHEMA: BoundarySchemaSpec =
 // r[impl molten.preserves_schema_boundaries.schema_artifacts]
 pub fn boundary_schema_artifact_value(spec: &BoundarySchemaSpec) -> Result<IoValue> {
     let arity = u64::try_from(spec.arity()).map_err(|error| {
-        MoltenError::invalid_harness(format!("boundary schema arity cannot convert to u64: {error}"))
+        Failure::invalid_harness(format!("boundary schema arity cannot convert to u64: {error}"))
     })?;
     Ok(record("preserves-boundary-schema-artifact-v1", vec![
         record("family", vec![string(spec.family)]),
@@ -918,7 +918,7 @@ pub fn boundary_schema_ref(spec: &BoundarySchemaSpec) -> Result<ContentRef> {
 pub fn validate_boundary_claimed_schema_ref(spec: &BoundarySchemaSpec, claimed_ref: &str) -> Result<ContentRef> {
     let expected = boundary_schema_ref(spec)?;
     let claimed = ContentRef::parse(claimed_ref).map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "{} schema validation deny: claimed schema ref is invalid using current schema {}: {error}",
             spec.family, expected
         ))
@@ -926,7 +926,7 @@ pub fn validate_boundary_claimed_schema_ref(spec: &BoundarySchemaSpec, claimed_r
     if claimed == expected {
         return Ok(expected);
     }
-    Err(MoltenError::invalid_harness(format!(
+    Err(Failure::invalid_harness(format!(
         "{} schema validation deny: stale schema ref {} expected {}",
         spec.family, claimed, expected
     )))
@@ -1010,7 +1010,7 @@ pub fn validate_boundary_schema(value: &IoValue, spec: &BoundarySchemaSpec) -> R
     let value_ref = canonical_content_ref(value)?;
     let arity = spec.arity();
     let fields = value.collect_simple_record(spec.record_label, Some(arity)).ok_or_else(|| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "{} schema validation deny: expected <{} ...> with arity {} using schema {}",
             spec.family, spec.record_label, arity, schema_ref
         ))
@@ -1148,7 +1148,7 @@ fn boundary_record<'a>(
     schema_ref: &ContentRef,
 ) -> Result<std::borrow::Cow<'a, preserves::Record<Value<IoValue>>>> {
     value.collect_simple_record(label, Some(arity)).ok_or_else(|| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "{} schema validation deny: field {label} must be <{label} ...> with arity {arity} using schema {}",
             spec.family, schema_ref
         ))
@@ -1161,7 +1161,7 @@ fn validate_boundary_schema_id(
     schema_ref: &ContentRef,
 ) -> Result<()> {
     let actual_schema = value.as_string().ok_or_else(|| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "{} schema validation deny: schema field must be a string for schema {}",
             spec.family, schema_ref
         ))
@@ -1169,7 +1169,7 @@ fn validate_boundary_schema_id(
     if actual_schema.as_ref() == spec.schema_id {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "{} schema validation deny: unsupported schema {} expected {} using schema {}",
             spec.family,
             actual_schema.as_ref(),
@@ -1198,7 +1198,7 @@ fn validate_non_empty_string_record(
     let record = boundary_record(value, label, FIELD_ARITY_ONE, spec, schema_ref)?;
     let text = ensure_string(&record[0], label, spec, schema_ref)?;
     if text.is_empty() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "{} schema validation deny: field {label} requires a non-empty string using schema {}",
             spec.family, schema_ref
         )));
@@ -1215,7 +1215,7 @@ fn validate_stable_id_record(
     let record = boundary_record(value, label, FIELD_ARITY_ONE, spec, schema_ref)?;
     let text = ensure_string(&record[0], label, spec, schema_ref)?;
     validate_stable_id(text.as_ref(), label).map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "{} schema validation deny: field {label} expected stable id using schema {}: {error}",
             spec.family, schema_ref
         ))
@@ -1231,7 +1231,7 @@ fn validate_decision_record(
     let record = boundary_record(value, label, FIELD_ARITY_ONE, spec, schema_ref)?;
     let text = ensure_string(&record[0], label, spec, schema_ref)?;
     Decision::parse(text.as_ref()).map(|_| ()).map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "{} schema validation deny: field {label} expected decision using schema {}: {error}",
             spec.family, schema_ref
         ))
@@ -1249,7 +1249,7 @@ fn validate_u64_record(
         .as_u64()
         .ok_or_else(|| boundary_field_error(spec, label, "u64", schema_ref))?
         .map(|_| ())
-        .map_err(|error| MoltenError::invalid_harness(format!(
+        .map_err(|error| Failure::invalid_harness(format!(
             "{} schema validation deny: field {label} u64 out of range using schema {}: {error}",
             spec.family, schema_ref
         )))
@@ -1285,7 +1285,7 @@ fn validate_ref_sequence_record_with_contract(
     let record = boundary_record(value, label, FIELD_ARITY_ONE, spec, schema_ref)?;
     let sequence = ensure_sequence(&record[0], label, spec, schema_ref)?;
     if require_non_empty && sequence.is_empty() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "{} schema validation deny: field {label} requires a non-empty ref sequence using schema {}",
             spec.family, schema_ref
         )));
@@ -1294,7 +1294,7 @@ fn validate_ref_sequence_record_with_contract(
     for item in sequence.iter() {
         let reference = ensure_content_ref_string(item, label, spec, schema_ref)?;
         if require_unique && !seen.insert(reference.clone()) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "{} schema validation deny: field {label} duplicate ref {reference} using schema {}",
                 spec.family, schema_ref
             )));
@@ -1329,7 +1329,7 @@ fn validate_unique_string_sequence_record(
     for item in sequence.iter() {
         let text = ensure_string(item, label, spec, schema_ref)?;
         if !seen.insert(text.to_string()) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "{} schema validation deny: field {label} duplicate string {text} using schema {}",
                 spec.family, schema_ref
             )));
@@ -1382,13 +1382,13 @@ fn validate_checks_boundary_record(
         let name = ensure_string(&check[0], "check name", spec, schema_ref)?;
         let status = ensure_string(&check[1], "check status", spec, schema_ref)?;
         if !seen.insert(name.to_string()) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "{} schema validation deny: duplicate check {name} using schema {}",
                 spec.family, schema_ref
             )));
         }
         CheckStatus::parse(status.as_ref()).map_err(|error| {
-            MoltenError::invalid_harness(format!(
+            Failure::invalid_harness(format!(
                 "{} schema validation deny: unsupported check status using schema {}: {error}",
                 spec.family, schema_ref
             ))
@@ -1502,7 +1502,7 @@ fn validate_hostcall_descriptors_boundary_record(
     for descriptor in descriptors.iter() {
         let identity = validate_hostcall_descriptor_boundary_record(descriptor, spec, schema_ref)?;
         if !seen.insert(identity.clone()) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "{} schema validation deny: duplicate hostcall descriptor {identity} using schema {}",
                 spec.family, schema_ref
             )));
@@ -1523,7 +1523,7 @@ fn validate_hostcall_descriptor_boundary_record(
     let operation_record = boundary_record(&fields[HOSTCALL_DESCRIPTOR_OPERATION_INDEX], "operation", FIELD_ARITY_ONE, spec, schema_ref)?;
     let operation = ensure_string(&operation_record[0], "operation", spec, schema_ref)?;
     OperationId::parse(operation.as_ref()).map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "{} schema validation deny: hostcall operation expected operation id using schema {}: {error}",
             spec.family, schema_ref
         ))
@@ -1538,7 +1538,7 @@ fn validate_hostcall_descriptor_boundary_record(
     let replay_record = boundary_record(&fields[HOSTCALL_DESCRIPTOR_REPLAY_INDEX], "replay", FIELD_ARITY_ONE, spec, schema_ref)?;
     let replay = ensure_string(&replay_record[0], "replay", spec, schema_ref)?;
     ReplayClass::parse(replay.as_ref()).map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "{} schema validation deny: hostcall replay class unsupported using schema {}: {error}",
             spec.family, schema_ref
         ))
@@ -1586,7 +1586,7 @@ fn ensure_content_ref_string(
         .as_string()
         .ok_or_else(|| boundary_field_error(spec, label, "canonical content ref string", schema_ref))?;
     ContentRef::parse(reference.as_ref()).map(|_| reference.to_string()).map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "{} schema validation deny: field {label} expected canonical content ref string using schema {}: {error}",
             spec.family, schema_ref
         ))
@@ -1613,8 +1613,8 @@ fn boundary_field_error(
     label: &str,
     expected: &str,
     schema_ref: &ContentRef,
-) -> MoltenError {
-    MoltenError::invalid_harness(format!(
+) -> Failure {
+    Failure::invalid_harness(format!(
         "{} schema validation deny: field {label} expected {expected} using schema {}",
         spec.family, schema_ref
     ))
@@ -1784,15 +1784,15 @@ where
     state.visited_nodes = state
         .visited_nodes
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness("structural Preserves scan node count overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("structural Preserves scan node count overflow"))?;
     if state.visited_nodes > state.limits.max_nodes {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "structural Preserves scan exceeded {} nodes",
             state.limits.max_nodes
         )));
     }
     if path.len() > state.limits.max_depth {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "structural Preserves scan exceeded depth {}",
             state.limits.max_depth
         )));

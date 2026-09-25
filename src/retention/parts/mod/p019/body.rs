@@ -93,7 +93,7 @@ fn collect_bundle_artifact_sensitive_markers(
             continue;
         }
         for entry in bundle_root.root().list_entries(&group_dir)? {
-            if entry.kind != crate::local_store::LocalStoreEntryKind::File || !entry.name.ends_with(".preserves") {
+            if entry.kind != crate::local_store::ObjectKind::File || !entry.name.ends_with(".preserves") {
                 continue;
             }
             let value = read_bundle_value(bundle_root, &entry.path)?;
@@ -193,7 +193,7 @@ fn write_candidate_bundle_redacted_view(
             continue;
         }
         for entry in bundle_root.root().list_entries(&group_dir)? {
-            if entry.kind != crate::local_store::LocalStoreEntryKind::File || !entry.name.ends_with(".preserves") {
+            if entry.kind != crate::local_store::ObjectKind::File || !entry.name.ends_with(".preserves") {
                 continue;
             }
             let value = read_bundle_value(bundle_root, &entry.path)?;
@@ -237,7 +237,7 @@ impl RedactionResults {
             .values
             .len()
             .checked_sub(child_count)
-            .ok_or_else(|| MoltenError::invalid_harness("retention bundle redaction record stack underflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("retention bundle redaction record stack underflow"))?;
         let fields = self.values.split_off(start);
         self.push(IoValue::record(label, fields))
     }
@@ -247,17 +247,17 @@ impl RedactionResults {
             .values
             .len()
             .checked_sub(child_count)
-            .ok_or_else(|| MoltenError::invalid_harness("retention bundle redaction sequence stack underflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("retention bundle redaction sequence stack underflow"))?;
         let values = self.values.split_off(start);
         self.push(crate::preserves_rail::sequence(values))
     }
 
     fn finish(mut self) -> Result<IoValue> {
         if self.values.len() != 1 {
-            return Err(MoltenError::invalid_harness("retention bundle redaction result stack mismatch"));
+            return Err(Failure::invalid_harness("retention bundle redaction result stack mismatch"));
         }
         self.values
             .pop()
-            .ok_or_else(|| MoltenError::invalid_harness("retention bundle redaction produced no result"))
+            .ok_or_else(|| Failure::invalid_harness("retention bundle redaction produced no result"))
     }
 }

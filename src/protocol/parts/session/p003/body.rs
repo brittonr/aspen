@@ -42,7 +42,7 @@ pub fn gate_protocol_session_lifecycle_with_diagnostics(
 pub fn parse_protocol_session_gate_receipt(value: &IoValue) -> Result<ProtocolSessionGateReceipt> {
     let fields = value
         .collect_simple_record("protocol-session-gate-receipt-v1", Some(11))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-session-gate-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <protocol-session-gate-receipt-v1 ...>"))?;
     require_schema(&fields[0], PROTOCOL_SESSION_GATE_RECEIPT_SCHEMA, "protocol session gate receipt schema")?;
     let checks = parse_checks(&fields[10])?;
     require_check(&checks, "protocol-session-gate-is-not-authority", "protocol session gate receipt")?;
@@ -102,7 +102,7 @@ pub fn protocol_summary(value: &IoValue) -> Result<String> {
             receipt.diagnostics.len()
         ));
     }
-    Err(MoltenError::invalid_harness("unsupported protocol summary record"))
+    Err(Failure::invalid_harness("unsupported protocol summary record"))
 }
 
 pub fn request_response_manifest_value() -> Result<IoValue> {

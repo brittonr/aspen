@@ -22,10 +22,10 @@ fn field_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Value<IoVal
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     let values = fields[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {label}")))?;
     Ok(values.iter().cloned().collect())
 }
 
@@ -38,7 +38,7 @@ fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
             let check = value_to_iovalue(check);
             let fields = check
                 .collect_simple_record("check", Some(2))
-                .ok_or_else(|| MoltenError::invalid_harness("expected service check"))?;
+                .ok_or_else(|| Failure::invalid_harness("expected service check"))?;
             Ok((required_string(&fields[0], "check name")?, required_string(&fields[1], "check status")?))
         })
         .collect()
@@ -48,7 +48,7 @@ fn require_check(checks: &[(String, String)], name: &str, context: &str) -> Resu
     if checks.iter().any(|(check, status)| check == name && status == "pass") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{context} missing passing {name} check")))
+        Err(Failure::invalid_harness(format!("{context} missing passing {name} check")))
     }
 }
 
@@ -56,7 +56,7 @@ fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     required_string(&fields[0], label)
 }
 
@@ -70,7 +70,7 @@ fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<Str
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     parse_optional_ref_value(&fields[0])
 }
 
@@ -88,7 +88,7 @@ fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     required_u64(&fields[0], label)
 }
 
@@ -97,7 +97,7 @@ fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("expected {field} {expected}, got {actual}")))
+        Err(Failure::invalid_harness(format!("expected {field} {expected}, got {actual}")))
     }
 }
 
@@ -111,14 +111,14 @@ fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
 fn is_sensitive_marker_present(value: &IoValue) -> Result<bool> {

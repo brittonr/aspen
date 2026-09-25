@@ -20,7 +20,7 @@ type Suite = super::schema::Suite;
 type AbiReceipt = super::schema::WasmAbiReceiptInput;
 type ExecReceipt<'a> = super::schema::WasmExecutionReceiptInput<'a>;
 type ModuleConfig = super::schema::WasmExecutorConfig;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 fn validate_bound_request(hostcall_request: &PreservesValue, operation: &str) -> Result<()> {
@@ -97,7 +97,7 @@ pub fn execute_wasm_actor_step(input: &WasmActorStepInput<'_>) -> Result<Option<
     })?;
     let mut store = new_store(&compiled.engine, prepared.actor_id)?;
     let instance = linker.instantiate(&mut store, &compiled.module).map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "Wasm executor instantiation failed for actor {}; only declared molten:hostcall imports are linked and WASI is unavailable: {error}",
             prepared.actor_id
         ))
@@ -113,13 +113,13 @@ pub fn execute_wasm_actor_step(input: &WasmActorStepInput<'_>) -> Result<Option<
         )?)
     } else {
         let func = instance.get_typed_func::<(), ()>(&mut store, &prepared.export).map_err(|error| {
-            MoltenError::invalid_harness(format!(
+            Failure::invalid_harness(format!(
                 "Wasm executor actor {} missing required export {} for hostcall operation {}: {error}",
                 prepared.actor_id, prepared.export, prepared.operation
             ))
         })?;
         func.call(&mut store, ()).map_err(|error| {
-            MoltenError::invalid_harness(format!(
+            Failure::invalid_harness(format!(
                 "Wasm executor actor {} export {} trapped while requesting hostcall {}: {error}",
                 prepared.actor_id, prepared.export, prepared.operation
             ))
@@ -128,7 +128,7 @@ pub fn execute_wasm_actor_step(input: &WasmActorStepInput<'_>) -> Result<Option<
     };
 
     let fuel_remaining = store.get_fuel().map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "Wasm executor fuel readback failed for actor {}: {error}",
             prepared.actor_id
         ))
@@ -174,13 +174,13 @@ struct LinkInput<'a> {
 fn prepare<'a>(input: &WasmActorStepInput<'a>) -> Result<Option<Prepared<'a>>> {
     let actor_id = input.step.primary_actor();
     let Some(actor) = input.suite.actors.iter().find(|actor| actor.id == actor_id) else {
-        return Err(MoltenError::invalid_harness(format!("actor {actor_id} missing from executor registry")));
+        return Err(Failure::invalid_harness(format!("actor {actor_id} missing from executor registry")));
     };
     if actor.kind != ActorMode::Wasm {
         return Ok(None);
     }
     let Some(ActorConfig::Wasm(config)) = actor.executor.as_ref() else {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "wasm actor {actor_id} missing Wasm executor preflight fixture"
         )));
     };
@@ -211,17 +211,17 @@ fn compile(actor_id: &str, bytes: &[u8]) -> Result<Compiled> {
         bytes,
     )
     .map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "Wasm executor artifact profile mismatch for actor {actor_id}: {error}"
         ))
     })?;
     let mut engine_config = Config::new();
     engine_config.consume_fuel(true);
     let engine = Engine::new(&engine_config).map_err(|error| {
-        MoltenError::invalid_harness(format!("Wasm executor engine creation failed for actor {actor_id}: {error}"))
+        Failure::invalid_harness(format!("Wasm executor engine creation failed for actor {actor_id}: {error}"))
     })?;
     let module = Module::from_binary(&engine, bytes).map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "Wasm executor module for actor {actor_id} failed Wasmtime compilation; core-module execution is required and components remain fail-closed: {error}"
         ))
     })?;
@@ -230,7 +230,7 @@ fn compile(actor_id: &str, bytes: &[u8]) -> Result<Compiled> {
 
 fn link_imports(linker: &mut Linker<WasmExecutionState>, input: LinkInput<'_>) -> Result<()> {
     if input.decision_bytes.len() > WASM_ABI_MAX_HOSTCALL_BYTES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Wasm executor hostcall decision bytes for actor {} exceed molten.wasm.abi.v1 limit",
             input.actor_id
         )));
@@ -251,7 +251,7 @@ fn link_imports(linker: &mut Linker<WasmExecutionState>, input: LinkInput<'_>) -
                     },
                 )
                 .map_err(|error| {
-                    MoltenError::invalid_harness(format!(
+                    Failure::invalid_harness(format!(
                         "Wasm executor hostcall linker setup failed for actor {}: {error}",
                         input.actor_id
                     ))
@@ -262,7 +262,7 @@ fn link_imports(linker: &mut Linker<WasmExecutionState>, input: LinkInput<'_>) -
                     caller.data_mut().hostcalls.push(captured_hostcall.clone());
                 })
                 .map_err(|error| {
-                    MoltenError::invalid_harness(format!(
+                    Failure::invalid_harness(format!(
                         "Wasm executor hostcall linker setup failed for actor {}: {error}",
                         input.actor_id
                     ))
@@ -287,7 +287,7 @@ fn new_store(engine: &Engine, actor_id: &str) -> Result<Store<WasmExecutionState
     });
     store.limiter(|state| &mut state.limits);
     store.set_fuel(WASM_FUEL_LIMIT).map_err(|error| {
-        MoltenError::invalid_harness(format!("Wasm executor fuel setup failed for actor {actor_id}: {error}"))
+        Failure::invalid_harness(format!("Wasm executor fuel setup failed for actor {actor_id}: {error}"))
     })?;
     Ok(store)
 }
@@ -295,7 +295,7 @@ fn new_store(engine: &Engine, actor_id: &str) -> Result<Store<WasmExecutionState
 fn require_single_call(hostcalls: &[String], prepared: &Prepared<'_>, sequence: u64, step_ref: &str) -> Result<()> {
     let expected = std::slice::from_ref(&prepared.operation);
     if hostcalls != expected {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Wasm executor actor {} requested hostcalls {:?}, expected exactly {:?} for step {sequence} ({step_ref})",
             prepared.actor_id, hostcalls, expected
         )));

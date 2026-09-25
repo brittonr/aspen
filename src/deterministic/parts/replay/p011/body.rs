@@ -13,7 +13,7 @@ struct ParsedTurnJournalRefs {
 fn parse_fixture_record_run_parts(value: &IoValue) -> Result<ReplayRunParts> {
     let fields = value
         .collect_simple_record("deterministic-fixture-record-v1", Some(FIXTURE_RECORD_FIELD_COUNT))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("expected <deterministic-fixture-record-v1 ...>"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected <deterministic-fixture-record-v1 ...>"))?;
     require_schema_value(
         &fields[FIXTURE_SCHEMA_INDEX],
         DETERMINISTIC_FIXTURE_RECORD_SCHEMA,
@@ -54,17 +54,17 @@ fn parse_fixture_record_run_parts(value: &IoValue) -> Result<ReplayRunParts> {
 fn first_turn_journal(value: &PreservesValue<IoValue>) -> Result<IoValue> {
     let journals = value
         .collect_sequence()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("fixture turn journals must be a sequence"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("fixture turn journals must be a sequence"))?;
     let first = journals
         .first()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("fixture turn journals must not be empty"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("fixture turn journals must not be empty"))?;
     Ok(value_to_iovalue(first))
 }
 
 fn parse_turn_journal_refs(value: &IoValue) -> Result<ParsedTurnJournalRefs> {
     let fields = value
         .collect_simple_record("deterministic-turn-journal-v1", Some(TURN_JOURNAL_FIELD_COUNT))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("expected <deterministic-turn-journal-v1 ...>"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected <deterministic-turn-journal-v1 ...>"))?;
     require_schema_value(
         &fields[TURN_JOURNAL_SCHEMA_INDEX],
         DETERMINISTIC_TURN_JOURNAL_SCHEMA,
@@ -104,7 +104,7 @@ fn validate_record_ref_match(label: &str, value: &IoValue, declared_ref: &str) -
     if actual_ref == declared_ref {
         Ok(())
     } else {
-        Err(crate::error::MoltenError::invalid_harness(format!(
+        Err(crate::error::Failure::invalid_harness(format!(
             "{label} ref mismatch: declared {declared_ref} actual {actual_ref}"
         )))
     }
@@ -115,7 +115,7 @@ fn validate_bound_ref(label: &str, declared_ref: &str, journal_ref: &str) -> Res
     if declared_ref == journal_ref {
         Ok(())
     } else {
-        Err(crate::error::MoltenError::invalid_harness(format!(
+        Err(crate::error::Failure::invalid_harness(format!(
             "fixture {label} ref mismatch: declared {declared_ref} journal {journal_ref}"
         )))
     }

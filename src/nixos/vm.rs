@@ -1,5 +1,5 @@
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 const NIXOS_VM_NODE_EVIDENCE_SCHEMA: &str = crate::preserves_rail::NIXOS_VM_NODE_EVIDENCE_SCHEMA;
@@ -259,7 +259,7 @@ pub fn vm_fault_descriptor_value(input: &NixosVmFaultDescriptorInput<'_>) -> Res
     validate_text_field("fault command profile", input.command_profile)?;
     validate_text_field("fault expected outcome", input.expected_outcome)?;
     if input.duration_millis < NIXOS_VM_FAULT_DESCRIPTOR_MIN_DURATION_MILLIS {
-        return Err(MoltenError::invalid_harness("nixos VM fault duration must be positive"));
+        return Err(Failure::invalid_harness("nixos VM fault duration must be positive"));
     }
     validate_text_field("fault trigger", input.trigger)?;
     validate_ref_slice("fault preflight", input.preflight_refs)?;
@@ -534,10 +534,10 @@ fn vm_aggregate_value(input: &NixosVmAggregateInput<'_>, decision: &str, diagnos
 
 fn validate_nodes(nodes: &[String]) -> Result<()> {
     if nodes.is_empty() {
-        return Err(MoltenError::invalid_harness("nixos VM topology requires at least one node"));
+        return Err(Failure::invalid_harness("nixos VM topology requires at least one node"));
     }
     if nodes.len() > MAX_VM_NODES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "nixos VM topology node count {} exceeds bound {MAX_VM_NODES}",
             nodes.len()
         )));
@@ -546,7 +546,7 @@ fn validate_nodes(nodes: &[String]) -> Result<()> {
     for node in nodes {
         validate_text_field("node", node)?;
         if !seen.insert(node.as_str()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate nixos VM node {node}")));
+            return Err(Failure::invalid_harness(format!("duplicate nixos VM node {node}")));
         }
     }
     Ok(())
@@ -554,7 +554,7 @@ fn validate_nodes(nodes: &[String]) -> Result<()> {
 
 fn validate_text_field(label: &str, value: &str) -> Result<()> {
     if value.trim().is_empty() {
-        return Err(MoltenError::invalid_harness(format!("nixos VM {label} must not be empty")));
+        return Err(Failure::invalid_harness(format!("nixos VM {label} must not be empty")));
     }
     Ok(())
 }
@@ -583,14 +583,14 @@ fn validate_fault_kind(kind: &str) -> Result<()> {
         | "tampered-fault-receipt"
         | "wrong-topology"
         | "log-only-pass" => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported nixos VM fault kind {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported nixos VM fault kind {other}"))),
     }
 }
 
 fn validate_host_support(status: &str) -> Result<()> {
     match status {
         "supported" | "unavailable" | "denied" => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported nixos VM host-support status {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported nixos VM host-support status {other}"))),
     }
 }
 
@@ -600,28 +600,28 @@ fn validate_vm_evidence_scope(scope: &str) -> Result<()> {
         | NIXOS_VM_SCOPE_EXECUTABLE_VM
         | NIXOS_VM_SCOPE_AGGREGATE_INDEX
         | NIXOS_VM_SCOPE_DIAGNOSTIC_ONLY => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported nixos VM evidence scope {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported nixos VM evidence scope {other}"))),
     }
 }
 
 fn validate_optional_ref(label: &str, reference: Option<&str>) -> Result<()> {
     if let Some(value) = reference {
         validate_content_ref(value)
-            .map_err(|error| MoltenError::invalid_harness(format!("invalid nixos VM {label} ref {value}: {error}")))?;
+            .map_err(|error| Failure::invalid_harness(format!("invalid nixos VM {label} ref {value}: {error}")))?;
     }
     Ok(())
 }
 
 fn validate_ref_slice(label: &str, refs: &[String]) -> Result<()> {
     if refs.len() > MAX_VM_REFS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "nixos VM {label} ref count {} exceeds bound {MAX_VM_REFS}",
             refs.len()
         )));
     }
     for reference in refs {
         validate_content_ref(reference).map_err(|error| {
-            MoltenError::invalid_harness(format!("invalid nixos VM {label} ref {reference}: {error}"))
+            Failure::invalid_harness(format!("invalid nixos VM {label} ref {reference}: {error}"))
         })?;
     }
     Ok(())
@@ -630,7 +630,7 @@ fn validate_ref_slice(label: &str, refs: &[String]) -> Result<()> {
 fn validate_decision(decision: &str) -> Result<()> {
     match decision {
         "pass" | "deny" | "unavailable" | "skipped" => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!(
+        other => Err(Failure::invalid_harness(format!(
             "unsupported nixos VM decision {other}; expected pass, deny, unavailable, or skipped"
         ))),
     }
@@ -646,7 +646,7 @@ fn node_values(nodes: &[String]) -> Result<Vec<IoValue>> {
 
 fn validate_strings(label: &str, values: &[String], maximum: usize) -> Result<()> {
     if values.len() > maximum {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "nixos VM {label} count {} exceeds bound {maximum}",
             values.len()
         )));

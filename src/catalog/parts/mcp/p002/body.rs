@@ -33,7 +33,7 @@ fn visibility_from_args(args: &[IoValue]) -> Result<VisibilityInput> {
 
 fn required_arg_string(args: &[IoValue], label: &str) -> Result<String> {
     optional_arg_string(args, label)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("catalog MCP request missing required arg <{label} ...>")))
+        .ok_or_else(|| Failure::invalid_harness(format!("catalog MCP request missing required arg <{label} ...>")))
 }
 
 fn optional_arg_string(args: &[IoValue], label: &str) -> Option<String> {
@@ -59,7 +59,7 @@ fn arg_bool(args: &[IoValue], label: &str, default: bool) -> Result<bool> {
         if let Some(fields) = arg.collect_simple_record(label, Some(1)) {
             return fields[0]
                 .as_boolean()
-                .ok_or_else(|| MoltenError::invalid_harness(format!("catalog MCP arg {label} must be bool")));
+                .ok_or_else(|| Failure::invalid_harness(format!("catalog MCP arg {label} must be bool")));
         }
     }
     Ok(default)
@@ -70,9 +70,9 @@ fn arg_u64(args: &[IoValue], label: &str, default: u64) -> Result<u64> {
         if let Some(fields) = arg.collect_simple_record(label, Some(1)) {
             return fields[0]
                 .as_u64()
-                .ok_or_else(|| MoltenError::invalid_harness(format!("catalog MCP arg {label} must be u64")))?
+                .ok_or_else(|| Failure::invalid_harness(format!("catalog MCP arg {label} must be u64")))?
                 .map_err(|error| {
-                    MoltenError::invalid_harness(format!("catalog MCP arg {label} is out of range: {error}"))
+                    Failure::invalid_harness(format!("catalog MCP arg {label} is out of range: {error}"))
                 });
         }
     }
@@ -139,7 +139,7 @@ fn parse_checks(value: &PreservesValue<IoValue>) -> Result<Vec<String>> {
         let name = required_string(&check[0], "catalog MCP check name")?;
         let status = required_string(&check[1], "catalog MCP check status")?;
         if status != "pass" && status != "fail" {
-            return Err(MoltenError::invalid_harness(format!("catalog MCP check {name} has status {status}")));
+            return Err(Failure::invalid_harness(format!("catalog MCP check {name} has status {status}")));
         }
         push_bounded(&mut parsed, name, MAX_CHECKS, "catalog MCP checks")?;
     }
@@ -150,7 +150,7 @@ fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()>
     if checks.iter().any(|check| check == expected) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{context} missing {expected} check")))
+        Err(Failure::invalid_harness(format!("{context} missing {expected} check")))
     }
 }
 
@@ -159,7 +159,7 @@ fn require_schema(value: &PreservesValue<IoValue>, expected: &str, context: &str
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported {context} schema {actual}; expected {expected}")))
+        Err(Failure::invalid_harness(format!("unsupported {context} schema {actual}; expected {expected}")))
     }
 }
 
@@ -170,7 +170,7 @@ fn simple_record<'a>(
 ) -> Result<std::borrow::Cow<'a, PreservesRecord<PreservesValue<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
@@ -180,7 +180,7 @@ fn required_sequence<'a>(
 ) -> Result<std::borrow::Cow<'a, Vec<PreservesValue<IoValue>>>> {
     value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {field}")))
 }
 
 fn record_string(value: &PreservesValue<IoValue>, label: &str) -> Result<String> {
@@ -217,7 +217,7 @@ fn required_string(value: &PreservesValue<IoValue>, field: &str) -> Result<Strin
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn required_ref(value: &PreservesValue<IoValue>, field: &str) -> Result<String> {
@@ -230,14 +230,14 @@ fn validate_decision(decision: &str) -> Result<()> {
     if matches!(decision, "pass" | "deny") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported catalog MCP decision {decision}")))
+        Err(Failure::invalid_harness(format!("unsupported catalog MCP decision {decision}")))
     }
 }
 
 fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
     validate_non_empty(value_ref, field)?;
     crate::preserves_rail::validate_content_ref(value_ref).map_err(|error| {
-        MoltenError::invalid_harness(format!("{field} must be a canonical content ref, got {value_ref}: {error}"))
+        Failure::invalid_harness(format!("{field} must be a canonical content ref, got {value_ref}: {error}"))
     })
 }
 
@@ -251,7 +251,7 @@ fn validate_refs(refs: &[String], field: &str) -> Result<()> {
 
 fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()> {
     if count > maximum {
-        Err(MoltenError::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
+        Err(Failure::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
     } else {
         Ok(())
     }
@@ -260,7 +260,7 @@ fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()>
 fn checked_count_sum(left: usize, right: usize, maximum: usize, label: &str) -> Result<usize> {
     let total = left
         .checked_add(right)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("{label} count overflow")))?;
     ensure_count_at_most(total, maximum, label)?;
     Ok(total)
 }
@@ -273,7 +273,7 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
 
 fn validate_non_empty(value: &str, field: &str) -> Result<()> {
     if value.is_empty() {
-        Err(MoltenError::invalid_harness(format!("{field} must not be empty")))
+        Err(Failure::invalid_harness(format!("{field} must not be empty")))
     } else {
         Ok(())
     }

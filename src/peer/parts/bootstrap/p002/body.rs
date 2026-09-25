@@ -14,7 +14,7 @@ fn validate_features(features: &FeatureVector) -> Result<()> {
         || features.preserves_boundaries.is_empty()
         || features.transports.is_empty()
     {
-        return Err(MoltenError::invalid_harness("peer feature vectors must include required feature sets"));
+        return Err(Failure::invalid_harness("peer feature vectors must include required feature sets"));
     }
     Ok(())
 }
@@ -36,7 +36,7 @@ fn validate_endpoint(endpoint_id: &str) -> Result<()> {
     if endpoint_id.starts_with("iroh:") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "expected iroh endpoint id for peer bootstrap, got {endpoint_id}"
         )))
     }
@@ -46,14 +46,14 @@ fn ensure_count_at_most(actual: usize, maximum: usize, label: &str) -> Result<()
     if actual <= maximum {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
+    Err(Failure::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
 }
 
 fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maximum: usize, label: &str) -> Result<()> {
     let total = values
         .item_count()
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("{label} count overflow")))?;
     ensure_count_at_most(total, maximum, label)?;
     values.push_item(value);
     Ok(())
@@ -61,7 +61,7 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
 
 fn validate_non_empty(value: &str, field: &str) -> Result<()> {
     if value.trim().is_empty() {
-        Err(MoltenError::invalid_harness(format!("{field} must not be empty")))
+        Err(Failure::invalid_harness(format!("{field} must not be empty")))
     } else {
         Ok(())
     }
@@ -76,7 +76,7 @@ fn validate_refs(refs: &[String], field: &str) -> Result<()> {
 
 fn require_ref(reference: &str, field: &str) -> Result<()> {
     validate_content_ref(reference).map_err(|error| {
-        MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
+        Failure::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
     })
 }
 
@@ -92,14 +92,14 @@ fn parse_optional_u64(value: &Value<IoValue>, label: &str) -> Result<Option<u64>
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     let optional = value_to_iovalue(&fields[0]);
     if optional.collect_simple_record("none", Some(0)).is_some() {
         Ok(None)
     } else if let Some(some) = optional.collect_simple_record("some", Some(1)) {
         required_u64(&some[0], label).map(Some)
     } else {
-        Err(MoltenError::invalid_harness(format!("expected optional u64 for {label}")))
+        Err(Failure::invalid_harness(format!("expected optional u64 for {label}")))
     }
 }
 
@@ -124,10 +124,10 @@ fn field_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Value<IoVal
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     let values = fields[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {label}")))?;
     Ok(values.iter().cloned().collect())
 }
 
@@ -139,7 +139,7 @@ fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
             let check = value_to_iovalue(check);
             let fields = check
                 .collect_simple_record("check", Some(2))
-                .ok_or_else(|| MoltenError::invalid_harness("expected peer bootstrap check"))?;
+                .ok_or_else(|| Failure::invalid_harness("expected peer bootstrap check"))?;
             Ok((required_string(&fields[0], "check name")?, required_string(&fields[1], "check status")?))
         })
         .collect()
@@ -149,7 +149,7 @@ fn require_check(checks: &[(String, String)], name: &str) -> Result<()> {
     if checks.iter().any(|(check, status)| check == name && status == "pass") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("peer bootstrap evidence missing passing {name} check")))
+        Err(Failure::invalid_harness(format!("peer bootstrap evidence missing passing {name} check")))
     }
 }
 
@@ -157,7 +157,7 @@ fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     required_string(&fields[0], label)
 }
 
@@ -165,14 +165,14 @@ fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     required_u64(&fields[0], label)
 }
 
 fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result<()> {
     let actual = required_string(value, field)?;
     if actual != expected {
-        return Err(MoltenError::invalid_harness(format!("expected {field} {expected}, got {actual}")));
+        return Err(Failure::invalid_harness(format!("expected {field} {expected}, got {actual}")));
     }
     Ok(())
 }
@@ -181,12 +181,12 @@ fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }

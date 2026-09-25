@@ -21,7 +21,7 @@ pub(crate) fn run(input: Command) -> molten::error::Result<()> {
         Action::Verify { policy, bundle } => {
             let report = molten::node_startup_evidence::verify(&policy, &bundle)?;
             let json = serde_json::to_string(&report).map_err(|error| {
-                molten::error::MoltenError::invalid_harness(format!("startup-evidence-report: {error}"))
+                molten::error::Failure::invalid_harness(format!("startup-evidence-report: {error}"))
             })?;
             println!("{json}");
             Ok(())

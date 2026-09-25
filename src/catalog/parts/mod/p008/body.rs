@@ -57,7 +57,7 @@ fn parse_checks(value: &PreservesValue<IoValue>) -> Result<Vec<String>> {
         let name = required_string(&check[0], "catalog check name")?;
         let status = required_string(&check[1], "catalog check status")?;
         if status != "pass" && status != "fail" {
-            return Err(MoltenError::invalid_harness(format!("catalog check {name} has status {status}")));
+            return Err(Failure::invalid_harness(format!("catalog check {name} has status {status}")));
         }
         push_bounded(&mut parsed, name, MAX_CATALOG_CHECKS, "catalog checks")?;
     }
@@ -68,7 +68,7 @@ fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()>
     if checks.iter().any(|check| check == expected) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{context} missing {expected} check")))
+        Err(Failure::invalid_harness(format!("{context} missing {expected} check")))
     }
 }
 
@@ -77,7 +77,7 @@ fn require_schema(value: &PreservesValue<IoValue>, expected: &str, context: &str
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported {context} schema {actual}; expected {expected}")))
+        Err(Failure::invalid_harness(format!("unsupported {context} schema {actual}; expected {expected}")))
     }
 }
 
@@ -88,7 +88,7 @@ fn simple_record<'a>(
 ) -> Result<std::borrow::Cow<'a, PreservesRecord<PreservesValue<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
@@ -98,7 +98,7 @@ fn required_sequence<'a>(
 ) -> Result<std::borrow::Cow<'a, Vec<PreservesValue<IoValue>>>> {
     value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {field}")))
 }
 
 fn record_string(value: &PreservesValue<IoValue>, label: &str) -> Result<String> {
@@ -153,7 +153,7 @@ fn required_string(value: &PreservesValue<IoValue>, field: &str) -> Result<Strin
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn required_ref(value: &PreservesValue<IoValue>, field: &str) -> Result<String> {
@@ -165,8 +165,8 @@ fn required_ref(value: &PreservesValue<IoValue>, field: &str) -> Result<String> 
 fn required_u64(value: &PreservesValue<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
 fn validate_filters(filters: &[Filter]) -> Result<()> {
@@ -207,14 +207,14 @@ fn validate_decision(decision: &str) -> Result<()> {
     if matches!(decision, "pass" | "deny") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported catalog decision {decision}")))
+        Err(Failure::invalid_harness(format!("unsupported catalog decision {decision}")))
     }
 }
 
 fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
     validate_non_empty(value_ref, field)?;
     validate_content_ref(value_ref).map_err(|error| {
-        MoltenError::invalid_harness(format!("{field} must be a canonical content ref, got {value_ref}: {error}"))
+        Failure::invalid_harness(format!("{field} must be a canonical content ref, got {value_ref}: {error}"))
     })
 }
 
@@ -228,7 +228,7 @@ fn validate_refs(refs: &[String], field: &str) -> Result<()> {
 
 fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()> {
     if count > maximum {
-        Err(MoltenError::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
+        Err(Failure::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
     } else {
         Ok(())
     }
@@ -237,7 +237,7 @@ fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()>
 fn checked_count_sum(left: usize, right: usize, maximum: usize, label: &str) -> Result<usize> {
     let total = left
         .checked_add(right)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("{label} count overflow")))?;
     ensure_count_at_most(total, maximum, label)?;
     Ok(total)
 }
@@ -258,7 +258,7 @@ fn insert_bounded<T: Ord>(values: &mut Set<T>, value: T, maximum: usize, label: 
 
 fn validate_non_empty(value: &str, field: &str) -> Result<()> {
     if value.is_empty() {
-        Err(MoltenError::invalid_harness(format!("{field} must not be empty")))
+        Err(Failure::invalid_harness(format!("{field} must not be empty")))
     } else {
         Ok(())
     }

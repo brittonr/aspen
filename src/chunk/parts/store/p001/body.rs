@@ -153,7 +153,7 @@ fn prepare_put(input: &CapabilityPutBytesWithTransformsInput<'_>) -> Result<Read
                 ("denial-receipt", "pass"),
             ]);
         store_receipt(input.root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness("chunk store object kind must not be empty"));
+        return Err(Failure::invalid_harness("chunk store object kind must not be empty"));
     }
     if input.chunk_size == 0 {
         let receipt_value =
@@ -162,7 +162,7 @@ fn prepare_put(input: &CapabilityPutBytesWithTransformsInput<'_>) -> Result<Read
                 ("denial-receipt", "pass"),
             ]);
         store_receipt(input.root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness("fixed_v1 chunk size must be non-zero"));
+        return Err(Failure::invalid_harness("fixed_v1 chunk size must be non-zero"));
     }
     let chunk_size = match chunk_size_to_usize(input.chunk_size, "fixed_v1 chunk size") {
         Ok(chunk_size) => chunk_size,

@@ -4,19 +4,19 @@ pub fn remote_execution_request_value(input: &RemoteExecutionRequestInput) -> Re
     validate_ref(&input.root_artifact_ref, "remote execution request root artifact ref")?;
     let closure = parse_remote_execution_closure_descriptor(&input.closure_descriptor)?;
     if closure.root_artifact_ref != input.root_artifact_ref {
-        return Err(MoltenError::invalid_harness("remote execution request root does not match closure descriptor"));
+        return Err(Failure::invalid_harness("remote execution request root does not match closure descriptor"));
     }
     validate_non_empty(&input.entrypoint_id, "remote execution entrypoint")?;
     reject_mobile_closure_config(&input.argument)?;
     validate_ref(&input.effect_manifest_ref, "remote execution effect manifest ref")?;
     if input.effect_manifest_ref != closure.effect_manifest_ref {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "remote execution request effect manifest does not match closure descriptor",
         ));
     }
     validate_non_empty(&input.handler_profile, "remote execution handler profile")?;
     if input.handler_profile != closure.handler_profile {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "remote execution request handler profile does not match closure descriptor",
         ));
     }

@@ -5,7 +5,7 @@ pub fn parse_control_live_workflow_bundle_verify_receipt(
     let fields = value
         .collect_simple_record("node-control-live-workflow-bundle-verify-receipt-v1", Some(10))
         .ok_or_else(|| {
-            MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-verify-receipt-v1 ...>")
+            Failure::invalid_harness("expected <node-control-live-workflow-bundle-verify-receipt-v1 ...>")
         })?;
     require_schema(
         &fields[0],
@@ -46,7 +46,7 @@ pub fn parse_control_live_workflow_bundle_gate_receipt(
     let fields = value
         .collect_simple_record("node-control-live-workflow-bundle-gate-receipt-v1", Some(12))
         .ok_or_else(|| {
-            MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-gate-receipt-v1 ...>")
+            Failure::invalid_harness("expected <node-control-live-workflow-bundle-gate-receipt-v1 ...>")
         })?;
     require_schema(
         &fields[0],
@@ -88,7 +88,7 @@ pub fn parse_control_live_workflow_bundle_gate_receipt(
 pub fn parse_control_live_workflow_bundle(value: &IoValue) -> Result<ControlLiveWorkflowBundle> {
     let fields = value
         .collect_simple_record("node-control-live-workflow-bundle-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-control-live-workflow-bundle-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA,
@@ -106,17 +106,17 @@ pub fn parse_control_live_workflow_bundle(value: &IoValue) -> Result<ControlLive
     let parsed_admission = parse_control_live_peer_admission(&peer_admission_value)?;
     let parsed_authority = parse_control_authority_grant(&authority_grant_value)?;
     if parsed_ticket.ticket_ref != ticket_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ticket ref mismatch"));
+        return Err(Failure::invalid_harness("node control live workflow bundle ticket ref mismatch"));
     }
     if parsed_admission.admission_ref != peer_admission_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle peer admission ref mismatch"));
+        return Err(Failure::invalid_harness("node control live workflow bundle peer admission ref mismatch"));
     }
     if parsed_authority.grant_ref != authority_grant_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle authority grant ref mismatch"));
+        return Err(Failure::invalid_harness("node control live workflow bundle authority grant ref mismatch"));
     }
     let parsed_receipt_refs = live_workflow_bundle_receipt_refs_from_values(&receipt_values)?;
     if parsed_receipt_refs != receipt_refs {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle receipt refs mismatch"));
+        return Err(Failure::invalid_harness("node control live workflow bundle receipt refs mismatch"));
     }
     Ok(ControlLiveWorkflowBundle {
         bundle_ref: crate::preserves_rail::canonical_hash(value)?,
@@ -224,37 +224,37 @@ fn validate_ack_members(parts: &AckParts) -> Result<()> {
 
 fn validate_ack_reconcile(parts: &AckParts, reconcile: &ControlLiveWorkflowBundleReconcileReceipt) -> Result<()> {
     if reconcile.apply_receipt_ref != parts.apply_receipt_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack apply ref mismatch"));
+        return Err(Failure::invalid_harness("node control live workflow bundle ack apply ref mismatch"));
     }
     if reconcile.bundle_ref != parts.bundle_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack bundle ref mismatch"));
+        return Err(Failure::invalid_harness("node control live workflow bundle ack bundle ref mismatch"));
     }
     if reconcile.send_receipt_ref != parts.send_receipt_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack send ref mismatch"));
+        return Err(Failure::invalid_harness("node control live workflow bundle ack send ref mismatch"));
     }
     if reconcile.ingress_receipt_ref != parts.ingress_receipt_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack ingress ref mismatch"));
+        return Err(Failure::invalid_harness("node control live workflow bundle ack ingress ref mismatch"));
     }
     if reconcile.queue_receipt_ref != parts.queue_receipt_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack queue ref mismatch"));
+        return Err(Failure::invalid_harness("node control live workflow bundle ack queue ref mismatch"));
     }
     if reconcile.control_receipt_ref != parts.control_receipt_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack control ref mismatch"));
+        return Err(Failure::invalid_harness("node control live workflow bundle ack control ref mismatch"));
     }
     if reconcile.envelope_ref != parts.envelope_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack envelope ref mismatch"));
+        return Err(Failure::invalid_harness("node control live workflow bundle ack envelope ref mismatch"));
     }
     if reconcile.operation_ref != parts.operation_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack operation ref mismatch"));
+        return Err(Failure::invalid_harness("node control live workflow bundle ack operation ref mismatch"));
     }
     if reconcile.request_ref != parts.request_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack request ref mismatch"));
+        return Err(Failure::invalid_harness("node control live workflow bundle ack request ref mismatch"));
     }
     if reconcile.decision != parts.receiver_decision {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack receiver decision mismatch"));
+        return Err(Failure::invalid_harness("node control live workflow bundle ack receiver decision mismatch"));
     }
     if reconcile.diagnostics != parts.receiver_diagnostics {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "node control live workflow bundle ack receiver diagnostics mismatch",
         ));
     }
@@ -264,7 +264,7 @@ fn validate_ack_reconcile(parts: &AckParts, reconcile: &ControlLiveWorkflowBundl
 pub fn parse_control_live_workflow_bundle_ack(value: &IoValue) -> Result<ControlLiveWorkflowBundleAck> {
     let fields = value
         .collect_simple_record("node-control-live-workflow-bundle-ack-v1", Some(22))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-ack-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-control-live-workflow-bundle-ack-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_SCHEMA,

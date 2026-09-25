@@ -53,7 +53,7 @@ fn complete_run(input: CompleteRunInput<'_>) -> Result<ControlDispatch> {
 }
 
 fn dispatch_run_request(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     request: &crate::node_runtime::ControlRequest,
 ) -> Result<ControlDispatch> {
     let startup = current_startup_receipt(state_root)?;
@@ -91,7 +91,7 @@ fn dispatch_run_request(
 }
 
 fn dispatch_gate_request(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     request: &crate::node_runtime::ControlRequest,
 ) -> Result<ControlDispatch> {
     let startup = current_startup_receipt(state_root)?;
@@ -225,7 +225,7 @@ fn read_ledger_artifact<Root: NodeStateAuthority + ?Sized>(source: &Root, artifa
 }
 
 fn control_receipt_for_request(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     request: &crate::node_runtime::ControlRequest,
     startup_receipt_ref: &str,
     subreceipt_refs: &[String],

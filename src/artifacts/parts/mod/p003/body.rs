@@ -23,7 +23,7 @@ fn name_pointer_value(input: &NamePointerValueInput<'_>) -> Result<IoValue> {
 fn parse_name_pointer_value(value: &IoValue) -> Result<ArtifactNamePointer> {
     let fields = value
         .collect_simple_record("artifact-name-pointer-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <artifact-name-pointer-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <artifact-name-pointer-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::ARTIFACT_NAME_POINTER_SCHEMA, "artifact name pointer")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "names-are-metadata", "artifact name pointer")?;
@@ -368,7 +368,7 @@ fn parse_payload_ref(value: &RailValue) -> Result<ArtifactPayloadRef> {
             length: required_u64(&content[1], "content payload length")?,
         });
     }
-    Err(MoltenError::invalid_harness("artifact payload must be inline or content-ref"))
+    Err(Failure::invalid_harness("artifact payload must be inline or content-ref"))
 }
 
 fn refs_value(refs: &[String]) -> IoValue {
@@ -477,12 +477,12 @@ fn str_table_keys(table: &redb::Table<'_, &str, &str>) -> Result<Vec<String>> {
 }
 
 fn ensure_dirs(root: &CapabilityArtifactRoot) -> Result<()> {
-    root.root().create_dir_all(&LocalStorePath::parse("chunks")?)
+    root.root().create_dir_all(&RelativeLocator::parse("chunks")?)
 }
 
 fn ensure_index_tables(root: &CapabilityArtifactRoot) -> Result<redb::Database> {
     ensure_dirs(root)?;
-    let database_file = root.root().open_database_file(&LocalStorePath::parse(INDEX_FILE)?)?;
+    let database_file = root.root().open_database_file(&RelativeLocator::parse(INDEX_FILE)?)?;
     let db = redb::Database::builder().create_file(database_file).map_err(index_error)?;
     let write_txn = db.begin_write().map_err(index_error)?;
     {

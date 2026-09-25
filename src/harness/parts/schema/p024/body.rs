@@ -34,7 +34,7 @@ fn embedded_gate_receipt(bundle: &Record<Value<IoValue>>, index: usize, expected
     let receipt_value = value_to_iovalue(&bundle[index]);
     let actual_gate_receipt_ref = canonical_hash(&receipt_value)?;
     if actual_gate_receipt_ref != expected_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "sealed repro bundle gate receipt ref mismatch: seal has {expected_ref}, embedded receipt hashes to {actual_gate_receipt_ref}"
         )));
     }
@@ -134,7 +134,7 @@ fn parse_profiled_report_repro_bundle(bundle_value: &IoValue, bundle: &Record<Va
 fn parse_profiled_body(bundle: &Record<Value<IoValue>>) -> Result<ProfiledBody> {
     let kind = required_record_string(&bundle[1], "bundle-kind", "repro bundle kind")?;
     if kind != "report" {
-        return Err(MoltenError::invalid_harness(format!("expected report repro bundle kind, got {kind}")));
+        return Err(crate::error::Failure::invalid_harness(format!("expected report repro bundle kind, got {kind}")));
     }
     validate_tool_record(&bundle[2])?;
     validate_sequence_record(&bundle[3], "command", "repro bundle command")?;
@@ -228,7 +228,7 @@ fn require_transform_receipt_binding(
         || body.export_profile.is_gate_preserving
         || body.export_profile.requires_reveal != body.export_profile.profile.requires_reveal()
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "redaction transform receipt binding does not match profiled repro bundle",
         ));
     }
@@ -241,13 +241,13 @@ fn require_profiled_output_inventory(
 ) -> Result<()> {
     let output_encrypted_refs = validate_profiled_output(&body.report_value, body.export_profile.profile)?;
     if output_encrypted_refs != transform_receipt.encrypted_refs {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "redaction transform encrypted-ref inventory does not match output bundle",
         ));
     }
     let output_marker_refs = collect_redaction_marker_refs(&body.report_value)?;
     if output_marker_refs != transform_receipt.marker_refs {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "redaction transform marker manifest does not cover output bundle markers",
         ));
     }
@@ -262,7 +262,7 @@ fn parse_profiled_private(
 ) -> Result<ProfiledPrivate> {
     if arity != 24 {
         if body.export_profile.profile == ReproExportProfile::EncryptedPrivate {
-            return Err(MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "encrypted-private repro bundle missing private bundle profile evidence",
             ));
         }
@@ -276,7 +276,7 @@ fn parse_profiled_private(
     let private = crate::secrets::parse_private_bundle_profile(&private_value)?;
     require_artifact_ref(&body.artifact_refs, "private-bundle-profile", &canonical_hash(&private_value)?)?;
     if body.export_profile.profile != ReproExportProfile::EncryptedPrivate {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "private bundle profile is only valid for encrypted-private repro exports",
         ));
     }
@@ -284,7 +284,7 @@ fn parse_profiled_private(
         || private.encrypted_refs != evidence.transform_receipt.encrypted_refs
         || private.is_gate_preserving
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "private bundle profile does not bind encrypted refs and diagnostic-only transform receipt",
         ));
     }

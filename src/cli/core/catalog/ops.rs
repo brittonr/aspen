@@ -251,6 +251,6 @@ fn catalog_visibility(hidden_refs: Vec<String>) -> molten::catalog::VisibilityIn
     }
 }
 
-fn wrong_handler(name: &str) -> molten::error::MoltenError {
-    molten::error::MoltenError::invalid_harness(format!("catalog {name} handler called with another command"))
+fn wrong_handler(name: &str) -> molten::error::Failure {
+    molten::error::Failure::invalid_harness(format!("catalog {name} handler called with another command"))
 }

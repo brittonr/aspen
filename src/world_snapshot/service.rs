@@ -17,7 +17,7 @@ use super::canonical_snapshot_compatibility;
 use super::canonical_snapshot_descriptor;
 use super::canonical_snapshot_receipt;
 use super::canonical_snapshot_restore_plan;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub struct LogicalSnapshotPorts<'a, M, A, H, R, P> {
@@ -68,7 +68,7 @@ where
     P: SnapshotReceiptPort,
 {
     if descriptor.class != SnapshotClass::Logical {
-        return Err(MoltenError::invalid_harness("logical snapshot restore rejects non-logical profiles"));
+        return Err(Failure::invalid_harness("logical snapshot restore rejects non-logical profiles"));
     }
     let canonical_descriptor = canonical_snapshot_descriptor(descriptor)?;
     let compatibility_report = validate_snapshot(descriptor, destination);
@@ -77,7 +77,7 @@ where
         ports.admission.observe_current(descriptor, &canonical_descriptor.artifact_ref, destination)?;
     validate_admission(&initial_admission, descriptor, destination, &canonical_descriptor.artifact_ref, None)?;
     let restore_plan = plan_restore(descriptor, destination, true)
-        .map_err(|report| MoltenError::invalid_harness(format!("snapshot restore denied: {:?}", report.issues)))?;
+        .map_err(|report| Failure::invalid_harness(format!("snapshot restore denied: {:?}", report.issues)))?;
     let canonical_plan = canonical_snapshot_restore_plan(&restore_plan)?;
     let materializations = materialize_complete_inventory(descriptor, ports.materialization)?;
     let mut observations = Vec::with_capacity(restore_plan.steps.len());
@@ -133,21 +133,21 @@ where
                 });
             }
             SnapshotRestoreStep::RestoreOpaqueMachine => {
-                return Err(MoltenError::invalid_harness("logical snapshot plan contains an opaque restore step"));
+                return Err(Failure::invalid_harness("logical snapshot plan contains an opaque restore step"));
             }
             state_step => {
                 let kind = component_for_step(*state_step).ok_or_else(|| {
-                    MoltenError::invalid_harness("logical snapshot plan contains an unmapped restore step")
+                    Failure::invalid_harness("logical snapshot plan contains an unmapped restore step")
                 })?;
                 let component = descriptor
                     .components
                     .iter()
                     .find(|component| component.kind == kind)
-                    .ok_or_else(|| MoltenError::invalid_harness("logical snapshot component disappeared"))?;
+                    .ok_or_else(|| Failure::invalid_harness("logical snapshot component disappeared"))?;
                 let materialization = materialization_for(&materializations, kind)?;
                 let observation = ports.runtime.restore_component(*state_step, component, materialization)?;
                 if observation.step != *state_step {
-                    return Err(MoltenError::invalid_harness(
+                    return Err(Failure::invalid_harness(
                         "logical snapshot adapter returned an observation for the wrong step",
                     ));
                 }
@@ -200,13 +200,13 @@ where
     P: SnapshotReceiptPort,
 {
     if descriptor.class != SnapshotClass::Opaque {
-        return Err(MoltenError::invalid_harness("opaque snapshot restore rejects non-opaque profiles"));
+        return Err(Failure::invalid_harness("opaque snapshot restore rejects non-opaque profiles"));
     }
     let canonical_descriptor = canonical_snapshot_descriptor(descriptor)?;
     let compatibility_report = validate_snapshot(descriptor, destination);
     let canonical_compatibility = canonical_snapshot_compatibility(&compatibility_report)?;
     if compatibility_report.verdict != CompatibilityVerdict::Compatible {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "opaque snapshot restore denied: {:?}",
             compatibility_report.issues
         )));
@@ -216,19 +216,19 @@ where
         .components
         .iter()
         .find(|component| component.kind == SnapshotComponentKind::MachineDescriptor)
-        .ok_or_else(|| MoltenError::invalid_harness("opaque machine descriptor is missing"))?;
+        .ok_or_else(|| Failure::invalid_harness("opaque machine descriptor is missing"))?;
     if chaos_observation.descriptor_ref != machine_descriptor.identity
         || chaos_observation.cohort_ref != destination.cohort_ref.as_str()
         || !chaos_observation.available
         || !chaos_observation.identity_verified
     {
-        return Err(MoltenError::invalid_harness("ChaosControl descriptor observation is unavailable or drifted"));
+        return Err(Failure::invalid_harness("ChaosControl descriptor observation is unavailable or drifted"));
     }
     let initial_admission =
         ports.admission.observe_current(descriptor, &canonical_descriptor.artifact_ref, destination)?;
     validate_admission(&initial_admission, descriptor, destination, &canonical_descriptor.artifact_ref, None)?;
     let restore_plan = plan_restore(descriptor, destination, true).map_err(|report| {
-        MoltenError::invalid_harness(format!("opaque snapshot restore denied: {:?}", report.issues))
+        Failure::invalid_harness(format!("opaque snapshot restore denied: {:?}", report.issues))
     })?;
     let canonical_plan = canonical_snapshot_restore_plan(&restore_plan)?;
     let materializations = materialize_complete_inventory(descriptor, ports.materialization)?;
@@ -253,7 +253,7 @@ where
         || restored.len() > MAX_SNAPSHOT_COMPONENTS
         || restored.iter().any(|observation| observation.step != SnapshotRestoreStep::RestoreOpaqueMachine)
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "ChaosControl restore observations are empty, overbound, or use the wrong step",
         ));
     }
@@ -321,12 +321,12 @@ fn materialize_complete_inventory<M: SnapshotMaterializationPort>(
             || !observation.available
             || !observation.identity_verified
         {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "snapshot component materialization is unavailable or unverified",
             ));
         }
         if observations.insert(component.kind, observation).is_some() {
-            return Err(MoltenError::invalid_harness("snapshot component materialization was duplicated"));
+            return Err(Failure::invalid_harness("snapshot component materialization was duplicated"));
         }
     }
     Ok(observations)
@@ -338,7 +338,7 @@ fn materialization_for(
 ) -> Result<&SnapshotMaterializationObservation> {
     observations
         .get(&kind)
-        .ok_or_else(|| MoltenError::invalid_harness("snapshot materialization observation is missing"))
+        .ok_or_else(|| Failure::invalid_harness("snapshot materialization observation is missing"))
 }
 
 fn validate_admission(
@@ -356,14 +356,14 @@ fn validate_admission(
         || observation.cohort_ref != destination.cohort_ref.as_str()
         || stale
     {
-        return Err(MoltenError::invalid_harness("snapshot current admission denied, drifted, or became stale"));
+        return Err(Failure::invalid_harness("snapshot current admission denied, drifted, or became stale"));
     }
     Ok(())
 }
 
 fn validate_ref(reference: &str, field: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference)
-        .map_err(|_| MoltenError::invalid_harness(format!("{field} is not a canonical content reference")))
+        .map_err(|_| Failure::invalid_harness(format!("{field} is not a canonical content reference")))
 }
 
 const fn component_for_step(step: SnapshotRestoreStep) -> Option<SnapshotComponentKind> {

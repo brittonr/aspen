@@ -1,7 +1,5 @@
     use super::*;
 
-    type MoltenError = crate::error::MoltenError;
-
     fn canonical_bytes(value: &preserves::IOValue) -> crate::error::Result<Vec<u8>> {
         crate::preserves_rail::canonical_bytes(value)
     }
@@ -70,7 +68,7 @@
         "0061736d0100000001040160000002230116776173695f736e617073686f745f70726576696577310866645f77726974650000";
     const WASM_ENV_READ_IMPORT_MODULE_HEX: &str = "0061736d01000000010401600000020c0103656e7604726561640000";
 
-    fn error_contains_any(error: &MoltenError, needles: &[&str]) -> bool {
+    fn error_contains_any(error: &crate::error::Failure, needles: &[&str]) -> bool {
         let message = error.to_string();
         needles.iter().any(|needle| message.contains(needle))
     }

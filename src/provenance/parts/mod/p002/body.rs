@@ -50,7 +50,7 @@ pub fn summary(value: &IoValue) -> Result<String> {
             record_ref(&fields[3], "actual-artifact")?
         ));
     }
-    Err(MoltenError::invalid_harness("unsupported provenance artifact"))
+    Err(Failure::invalid_harness("unsupported provenance artifact"))
 }
 
 fn receipt_value(input: &ReceiptValueInput<'_>) -> Result<IoValue> {
@@ -290,7 +290,7 @@ fn validate_trust_state(trust_state: &str) -> Result<()> {
     ) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("invalid provenance trust state `{trust_state}`")))
+        Err(Failure::invalid_harness(format!("invalid provenance trust state `{trust_state}`")))
     }
 }
 
@@ -298,7 +298,7 @@ fn validate_profile(profile: &str) -> Result<()> {
     if matches!(profile, PROFILE_NODE_CONTROL | PROFILE_LOCAL_TEST) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("invalid provenance evaluation profile `{profile}`")))
+        Err(Failure::invalid_harness(format!("invalid provenance evaluation profile `{profile}`")))
     }
 }
 
@@ -317,16 +317,16 @@ fn validate_build_param(param: &BuildParam) -> Result<()> {
 
 fn validate_build_param_token(value: &str, context: &str) -> Result<()> {
     if value.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("{context} must not be empty")));
+        return Err(Failure::invalid_harness(format!("{context} must not be empty")));
     }
     if value.len() > MAX_BUILD_PARAM_BYTES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "{context} is too long: {} > {MAX_BUILD_PARAM_BYTES}",
             value.len()
         )));
     }
     if value.contains('\n') || value.contains('\r') {
-        return Err(MoltenError::invalid_harness(format!("{context} must not contain newlines")));
+        return Err(Failure::invalid_harness(format!("{context} must not contain newlines")));
     }
     Ok(())
 }
@@ -346,9 +346,9 @@ fn record_build_params_sequence(value: &preserves::Value<preserves::IOValue>, ta
     let record_value = value_to_iovalue(value);
     let fields = record_value
         .collect_simple_record(tag, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{tag} sequence>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{tag} sequence>")))?;
     let Some(items) = fields[0].collect_sequence() else {
-        return Err(MoltenError::invalid_harness(format!("{tag} must contain a sequence")));
+        return Err(Failure::invalid_harness(format!("{tag} must contain a sequence")));
     };
     ensure_ref_bound(items.len(), MAX_BUILD_PARAMS, tag)?;
     let mut params = Vec::with_capacity(items.len());
@@ -363,15 +363,15 @@ fn required_build_param(value: &preserves::Value<preserves::IOValue>, tag: &str)
     let item_value = value_to_iovalue(value);
     let fields = item_value
         .collect_simple_record("build-param", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{tag} item must be <build-param key value>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("{tag} item must be <build-param key value>")))?;
     let key = fields[0]
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{tag} build param key must be a string")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("{tag} build param key must be a string")))?;
     let value = fields[1]
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{tag} build param value must be a string")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("{tag} build param value must be a string")))?;
     Ok(BuildParam { key, value })
 }
 

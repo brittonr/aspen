@@ -1,22 +1,22 @@
 # Node-state filesystem authority
 
-Molten treats an operator-selected node state directory as one explicit filesystem authority. The host path is accepted only by public CLI or daemon shells; reusable lifecycle, control, ingress, identity, and target-job logic receives `NodeStateRoot` or a narrower derived view.
+Molten treats an operator-selected node state directory as one explicit filesystem authority. The host path is accepted only by public CLI or daemon shells; reusable lifecycle, control, ingress, identity, and target-job logic receives `node_state::Root` or a narrower derived view.
 
 ## Crate ownership
 
-`crates/molten-node-host` owns the shared error type, `NodeStateRoot`, derived node namespaces, typed local-store roots, and their capability filesystem effects. The root `molten` crate re-exports these exact definitions through `molten::error`, `molten::node_state`, and `molten::local_store`.
+`crates/molten-node-host` owns the shared `Failure` error type, `node_state::Root`, derived node namespaces, typed local-store roots, and their capability filesystem effects. The root `molten` crate re-exports these exact definitions through `molten::error`, `molten::node_state`, and `molten::local_store`. Their former public type names are intentionally removed, not preserved as aliases; this is a breaking API rename, not a change to filesystem authority or startup admission.
 
 CLI parsing, operator presentation, daemon orchestration, service semantics, workload semantics, NixOS validation, test harness orchestration, and release policy remain outside `molten-node-host`. This first extraction does not claim that the complete daemon moved.
 
 ## Authority boundary
 
-r[impl molten.node.cap_std_state_root] `NodeStateRoot::open` and `NodeStateRoot::open_existing` are the reviewed ambient bootstrap operations. The root owns an open `cap_std::fs::Dir`, and clones retain that authority rather than reopening the host path. Renaming or replacing the bootstrap pathname therefore does not redirect later descendant operations.
+r[impl molten.node.cap_std_state_root] `node_state::Root::open` and `node_state::Root::open_existing` are the reviewed ambient bootstrap operations. The root owns an open `cap_std::fs::Dir`, and clones retain that authority rather than reopening the host path. Renaming or replacing the bootstrap pathname therefore does not redirect later descendant operations.
 
 Public compatibility APIs that still accept `&Path` are imperative shells. They validate the operator input, open one root, and immediately delegate to a root-bearing implementation. Host paths may be returned for diagnostics or legacy display fields, but they do not determine canonical receipt identity.
 
 ## Namespaces and locators
 
-r[impl molten.node.cap_std_namespaces] `NodeStatePath` accepts only bounded relative components and rejects parent traversal, absolute paths, platform prefixes, URI-like locators, and empty paths before I/O. Fixed namespaces are derived from the open root for:
+r[impl molten.node.cap_std_namespaces] `node_state::RelativePath` accepts only bounded relative components and rejects parent traversal, absolute paths, platform prefixes, URI-like locators, and empty paths before I/O. Fixed namespaces are derived from the open root for:
 
 - identity and persisted secrets;
 - ledger and nested artifact, chunk, and delivery stores;
@@ -27,12 +27,12 @@ Directory enumeration is bounded, sorted, and rejects non-UTF-8 names. Enumerate
 
 ## Deliberately closed classifications
 
-`LocalStoreKind` has eight fixed directory labels. `NodeStateNamespaceKind` has
+`local_store::Category` has eight fixed directory labels. `node_state::NamespaceKind` has
 14 distinct kinds in its ordered registry. Identity/Secrets share `identity`;
 ControlIngress/Ingress share `control/iroh-ingress`. These directory aliases do
 not make their enum identities or enumerated-entry authority interchangeable.
 
-`NodeStateFileObservation` separates missing leaves, non-regular denial, and an
+`node_state::FileObservation` separates missing leaves, non-regular denial, and an
 acquired regular-file handle. A new classification must receive explicit handling
 in the mapping, read, and mode consumers. Their exhaustive matches intentionally
 have no fallback arm.
@@ -48,7 +48,7 @@ r[impl molten.node.cap_std_identity_secret] Endpoint secrets are created and loa
 
 ## Control request lifecycle
 
-r[impl molten.node.cap_std_request_lifecycle] Pending requests are represented by `NodeStateEntry` values returned by the inbox capability. Entries bind their originating root and exact namespace view. Dispatch reopens the logical entry through that namespace, archives through the outbox namespace, and removes through the inbox namespace. The legacy `Path` compatibility API accepts either one normal UTF-8 entry component or the exact diagnostic path under the selected state root's inbox, converts it to an entry identity, and never treats the supplied host path as a deletion target. Wrong-root entries, links, non-regular leaves, malformed names, and stale canonical bindings deny without lexical host-path authorization.
+r[impl molten.node.cap_std_request_lifecycle] Pending requests are represented by `node_state::DirectoryEntry` values returned by the inbox capability. Entries bind their originating root and exact namespace view. Dispatch reopens the logical entry through that namespace, archives through the outbox namespace, and removes through the inbox namespace. The legacy `Path` compatibility API accepts either one normal UTF-8 entry component or the exact diagnostic path under the selected state root's inbox, converts it to an entry identity, and never treats the supplied host path as a deletion target. Wrong-root entries, links, non-regular leaves, malformed names, and stale canonical bindings deny without lexical host-path authorization.
 
 ## Async and nested-store authority
 

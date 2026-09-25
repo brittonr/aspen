@@ -223,7 +223,7 @@ fn read_output_text(output_path: &Path, name: &str) -> Result<String> {
     let path = crate::materialization::MaterializationPath::parse(name, policy.max_path_bytes)?;
     let bytes = source.read_path(&path, policy.max_member_bytes)?;
     String::from_utf8(bytes)
-        .map_err(|error| MoltenError::invalid_harness(format!("release output {name} is not UTF-8: {error}")))
+        .map_err(|error| Failure::invalid_harness(format!("release output {name} is not UTF-8: {error}")))
 }
 
 fn release_materialization_policy() -> Result<crate::materialization::MaterializationPolicy> {

@@ -2,7 +2,7 @@ use molten_core::world_replay::*;
 use preserves::IOValue;
 
 use super::CanonicalWorldReplayRecord;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const WORLD_REPLAY_RECORD_CONTEXT: &str = "onixresearch.molten.world-replay.record.v1";
@@ -21,7 +21,7 @@ pub(super) fn validate_receipt_common(input: &ReceiptValidationInput<'_>) -> Res
     validate_ref(input.capsule_ref, "replay capsule")?;
     validate_ref(input.profile_ref, "replay profile")?;
     if input.dependencies.len() > MAX_WORLD_REPLAY_DEPENDENCY_REFS {
-        return Err(MoltenError::invalid_harness("world replay dependency refs exceed the bound"));
+        return Err(Failure::invalid_harness("world replay dependency refs exceed the bound"));
     }
     for reference in input.dependencies {
         validate_ref(reference, "replay dependency")?;
@@ -36,14 +36,14 @@ pub(super) fn validate_diagnostics(diagnostics: &[String]) -> Result<()> {
             .iter()
             .any(|diagnostic| diagnostic.is_empty() || diagnostic.len() > MAX_WORLD_REPLAY_TEXT_BYTES)
     {
-        return Err(MoltenError::invalid_harness("world replay diagnostics are empty or overbound"));
+        return Err(Failure::invalid_harness("world replay diagnostics are empty or overbound"));
     }
     Ok(())
 }
 
 pub(super) fn require_non_claims(non_claims: &[String]) -> Result<()> {
     if non_claims != world_replay_non_claims() {
-        return Err(MoltenError::invalid_harness("world replay non-claims are incomplete"));
+        return Err(Failure::invalid_harness("world replay non-claims are incomplete"));
     }
     Ok(())
 }
@@ -52,17 +52,17 @@ pub(super) fn core_issues(issues: Vec<WorldReplayIssue>) -> Result<()> {
     if issues.is_empty() {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("world replay record denied: {issues:?}")))
+        Err(Failure::invalid_harness(format!("world replay record denied: {issues:?}")))
     }
 }
 
-pub(super) fn core_issue(issue: WorldReplayIssue) -> MoltenError {
-    MoltenError::invalid_harness(format!("world replay identity denied: {issue:?}"))
+pub(super) fn core_issue(issue: WorldReplayIssue) -> Failure {
+    Failure::invalid_harness(format!("world replay identity denied: {issue:?}"))
 }
 
 pub(super) fn validate_ref(reference: &str, field_name: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference)
-        .map_err(|_| MoltenError::invalid_harness(format!("{field_name} is not a canonical content reference")))
+        .map_err(|_| Failure::invalid_harness(format!("{field_name} is not a canonical content reference")))
 }
 
 pub(super) fn canonical(
@@ -72,7 +72,7 @@ pub(super) fn canonical(
 ) -> Result<CanonicalWorldReplayRecord> {
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     if bytes.len() > MAX_WORLD_REPLAY_CANONICAL_BYTES {
-        return Err(MoltenError::invalid_harness("world replay canonical record exceeds the byte bound"));
+        return Err(Failure::invalid_harness("world replay canonical record exceeds the byte bound"));
     }
     let record_ref = domain_identity_with_context(WORLD_REPLAY_RECORD_CONTEXT, identity_kind, &bytes)?;
     Ok(CanonicalWorldReplayRecord {
@@ -92,7 +92,7 @@ fn domain_identity_with_context(context: &'static str, kind: &str, bytes: &[u8])
     let mut hasher = blake3::Hasher::new_derive_key(context);
     update(&mut hasher, kind)?;
     let length = u64::try_from(bytes.len())
-        .map_err(|_| MoltenError::invalid_harness("world replay canonical length exceeds u64"))?;
+        .map_err(|_| Failure::invalid_harness("world replay canonical length exceeds u64"))?;
     hasher.update(&length.to_be_bytes());
     hasher.update(bytes);
     Ok(format!("blake3:{}", hasher.finalize().to_hex()))
@@ -100,7 +100,7 @@ fn domain_identity_with_context(context: &'static str, kind: &str, bytes: &[u8])
 
 fn update(hasher: &mut blake3::Hasher, value: &str) -> Result<()> {
     let length = u64::try_from(value.len())
-        .map_err(|_| MoltenError::invalid_harness("world replay identity field length exceeds u64"))?;
+        .map_err(|_| Failure::invalid_harness("world replay identity field length exceeds u64"))?;
     hasher.update(&length.to_be_bytes());
     hasher.update(value.as_bytes());
     Ok(())

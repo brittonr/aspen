@@ -96,7 +96,7 @@ fn runtime() -> molten::error::Result<tokio::runtime::Runtime> {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
-        .map_err(molten::error::MoltenError::from)
+        .map_err(molten::error::Failure::from)
 }
 
 fn emit_summary(

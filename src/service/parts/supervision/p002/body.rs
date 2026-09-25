@@ -190,7 +190,7 @@ fn failure_marker_value(suite: &ServiceSupervisionSuite) -> Result<IoValue> {
 fn parse_failure_marker_ref(value: &IoValue) -> Result<String> {
     let fields = value
         .collect_simple_record("service-failure-v1", Some(6))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <service-failure-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <service-failure-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::SERVICE_FAILURE_MARKER_SCHEMA, "service failure marker schema")?;
     let checks = parse_checks(&fields[5])?;
     require_check(&checks, "logical-supervision", "service failure marker")?;
@@ -200,7 +200,7 @@ fn parse_failure_marker_ref(value: &IoValue) -> Result<String> {
 fn parse_monitor_notification_ref(value: &IoValue) -> Result<String> {
     let fields = value
         .collect_simple_record("service-monitor-notification-v1", Some(7))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <service-monitor-notification-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <service-monitor-notification-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::SERVICE_MONITOR_NOTIFICATION_SCHEMA,
@@ -214,7 +214,7 @@ fn parse_monitor_notification_ref(value: &IoValue) -> Result<String> {
 fn parse_retraction_ref(value: &IoValue) -> Result<String> {
     let fields = value
         .collect_simple_record("service-retraction-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <service-retraction-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <service-retraction-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::SERVICE_RETRACTION_SCHEMA, "service retraction schema")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "service-owned-retraction", "service retraction")?;

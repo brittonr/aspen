@@ -209,20 +209,20 @@ fn audit_value(input: &AuditValueInput<'_>) -> Result<IoValue> {
 fn validate_audit_step_status(status: &str, label: &str) -> Result<()> {
     match status {
         "pass" | "deny" | "missing" | "present" | "not-required" => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported {label}: {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported {label}: {other}"))),
     }
 }
 
 pub fn parse_gc_audit(value: &IoValue) -> Result<GcAudit> {
     let fields = value
         .collect_simple_record("retention-gc-audit-v1", Some(14))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-gc-audit-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-gc-audit-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::RETENTION_GC_AUDIT_SCHEMA, "retention GC audit schema")?;
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     let mode = record_string(&fields[2], "mode")?;
     if mode != "audit" {
-        return Err(MoltenError::invalid_harness("retention GC audit mode must be audit"));
+        return Err(Failure::invalid_harness("retention GC audit mode must be audit"));
     }
     let subsystem = record_string(&fields[3], "subsystem")?;
     validate_name(&subsystem, "retention GC audit subsystem")?;
@@ -235,7 +235,7 @@ pub fn parse_gc_audit(value: &IoValue) -> Result<GcAudit> {
     let (apply_ref, apply_decision) = record_optional_ref_with_status(&fields[8], "apply")?;
     let execution_fields = fields[9]
         .collect_simple_record("execution", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("expected retention GC audit execution record"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected retention GC audit execution record"))?;
     let execution_ref = required_string(&execution_fields[0], "retention GC audit execution ref")?;
     require_ref(&execution_ref, "retention GC audit execution ref")?;
     let execution_decision = required_string(&execution_fields[1], "retention GC audit execution decision")?;
@@ -281,7 +281,7 @@ pub fn read_gc_audit_with_root(root: &CapabilityRetentionRoot, audit_ref: &str) 
     let value = read_store_value_with_root(root, &capability_ref_path(GC_AUDIT_DIR, audit_ref)?)?;
     let audit = parse_gc_audit(&value)?;
     if audit.audit_ref != audit_ref {
-        return Err(MoltenError::invalid_harness("stored retention GC audit ref mismatch"));
+        return Err(Failure::invalid_harness("stored retention GC audit ref mismatch"));
     }
     Ok(audit)
 }

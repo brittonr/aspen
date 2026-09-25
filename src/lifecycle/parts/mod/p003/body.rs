@@ -98,7 +98,7 @@ pub fn validate_probe_results(
         require_ref(&probe.probe_evidence_ref, "probe evidence ref")?;
 
         if probe.observed_generation > current_generation {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "probe observed generation {} exceeds current {}",
                 probe.observed_generation, current_generation,
             )));
@@ -146,7 +146,7 @@ pub fn evaluate_restart_decision(input: &RestartDecisionInput) -> Result<Restart
     validate_non_empty(&input.entity_kind, "entity kind")?;
 
     if input.current_generation == 0 {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "current generation must be at least 1",
         ));
     }
@@ -166,12 +166,12 @@ pub fn evaluate_restart_decision(input: &RestartDecisionInput) -> Result<Restart
         Some(profile) => {
             validate_non_empty(&profile.name, "backoff profile name")?;
             if profile.max_attempts == 0 {
-                return Err(MoltenError::invalid_harness(
+                return Err(Failure::invalid_harness(
                     "backoff profile max_attempts must be at least 1",
                 ));
             }
             if profile.max_attempts > MAX_RESTART_ATTEMPTS {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(Failure::invalid_harness(format!(
                     "backoff profile max_attempts {} exceeds maximum {MAX_RESTART_ATTEMPTS}",
                     profile.max_attempts,
                 )));
@@ -234,7 +234,7 @@ pub fn evaluate_restart_decision(input: &RestartDecisionInput) -> Result<Restart
 /// Evaluate a readiness transition from probe results.
 pub fn evaluate_readiness(probe: &LifecycleProbe, current_generation: u64) -> Result<String> {
     if probe.kind != ProbeKind::Readiness {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "expected readiness probe but got {:?}",
             probe.kind,
         )));
@@ -243,7 +243,7 @@ pub fn evaluate_readiness(probe: &LifecycleProbe, current_generation: u64) -> Re
     require_ref(&probe.probe_evidence_ref, "readiness probe evidence ref")?;
 
     if probe.observed_generation != current_generation {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "readiness probe observed generation {} != current {}",
             probe.observed_generation, current_generation,
         )));

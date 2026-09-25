@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -118,7 +118,7 @@ fn validate_application_config(config: &ReplicaApplicationConfig) -> Result<()> 
     crate::preserves_rail::validate_content_ref(&config.application_manifest_ref)?;
     crate::preserves_rail::validate_content_ref(&config.handler_ref)?;
     if config.command_schema_refs.is_empty() {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "live Raft application port requires at least one admitted command schema",
         ));
     }
@@ -142,10 +142,10 @@ fn validate_application_snapshot(
         crate::preserves_rail::validate_content_ref(reference)?;
     }
     if snapshot.group_binding_ref != config.group_binding_ref || snapshot.snapshot_ref != snapshot_ref(snapshot)? {
-        return Err(MoltenError::invalid_harness("live Raft application snapshot identity mismatch"));
+        return Err(Failure::invalid_harness("live Raft application snapshot identity mismatch"));
     }
     if snapshot.last_included_index <= last_applied_index {
-        return Err(MoltenError::invalid_harness("live Raft application snapshot is stale or duplicated"));
+        return Err(Failure::invalid_harness("live Raft application snapshot is stale or duplicated"));
     }
     Ok(())
 }
@@ -157,31 +157,31 @@ fn plan_application_batch(
 ) -> Result<ApplicationBatchPlan> {
     let first = entries
         .first()
-        .ok_or_else(|| MoltenError::invalid_harness("live Raft application port denies an empty committed batch"))?;
+        .ok_or_else(|| Failure::invalid_harness("live Raft application port denies an empty committed batch"))?;
     let expected_first = last_applied_index
         .checked_add(NEXT_LOG_INDEX_STEP)
-        .ok_or_else(|| MoltenError::invalid_harness("live Raft application index overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("live Raft application index overflow"))?;
     if first.index != expected_first {
-        return Err(MoltenError::invalid_harness("live Raft application batch is duplicated, stale, or noncontiguous"));
+        return Err(Failure::invalid_harness("live Raft application batch is duplicated, stale, or noncontiguous"));
     }
     let mut expected_index = expected_first;
     for entry in entries {
         if entry.index != expected_index {
-            return Err(MoltenError::invalid_harness("live Raft application batch contains an index gap"));
+            return Err(Failure::invalid_harness("live Raft application batch contains an index gap"));
         }
         if !command_schema_refs.contains(&entry.command_schema_ref) {
-            return Err(MoltenError::invalid_harness("live Raft application command schema is not admitted"));
+            return Err(Failure::invalid_harness("live Raft application command schema is not admitted"));
         }
         for reference in [&entry.request_ref, &entry.command_ref, &entry.command_schema_ref] {
             crate::preserves_rail::validate_content_ref(reference)?;
         }
         expected_index = expected_index
             .checked_add(NEXT_LOG_INDEX_STEP)
-            .ok_or_else(|| MoltenError::invalid_harness("live Raft application index overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("live Raft application index overflow"))?;
     }
     let last_index = entries
         .last()
-        .ok_or_else(|| MoltenError::invalid_harness("live Raft application batch became empty"))?
+        .ok_or_else(|| Failure::invalid_harness("live Raft application batch became empty"))?
         .index;
     Ok(ApplicationBatchPlan {
         first_index: first.index,

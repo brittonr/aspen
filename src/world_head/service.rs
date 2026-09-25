@@ -38,7 +38,7 @@ use super::canonical_world_head_conflict;
 use super::canonical_world_head_transition_receipt;
 use super::world_head_artifact_statement;
 use super::world_head_authentication_scope;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const STATEMENT_SET_IDENTITY_DOMAIN: &str = "molten.world-head.statement-set.v1";
@@ -143,7 +143,7 @@ pub fn evaluate_world_head_authentication(
         .collect::<Vec<_>>();
     let statement_ref = statement_set_ref(&statements)?;
     let decision_ref = WorldHeadAuthenticationDecisionRef::new(format!("blake3:{}", decision.decision_blake3))
-        .map_err(|error| MoltenError::invalid_harness(format!("invalid authentication decision ref: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("invalid authentication decision ref: {error}")))?;
     let policy_matches = policy.profile_id == scope.profile_id
         && scope.verifier_context.digest_hex
             == crate::preserves_rail::content_ref_hex(claim.claim.policy_ref.as_str())?;
@@ -258,7 +258,7 @@ pub fn record_world_head_conflict<S: WorldHeadConflictPort>(
     maximum: u32,
 ) -> Result<Option<(WorldHeadConflictSet, CanonicalWorldHeadConflict)>> {
     let conflict = classify_world_head_conflict(plans, maximum)
-        .map_err(|issues| MoltenError::invalid_harness(format!("world-head conflict denied: {issues:?}")))?;
+        .map_err(|issues| Failure::invalid_harness(format!("world-head conflict denied: {issues:?}")))?;
     let Some(conflict) = conflict else {
         return Ok(None);
     };
@@ -292,16 +292,16 @@ fn statement_set_ref(
     let mut refs = statements.iter().map(|(_, statement_ref)| statement_ref.as_str()).collect::<Vec<_>>();
     refs.sort_unstable();
     let mut hasher = blake3::Hasher::new_derive_key(STATEMENT_SET_IDENTITY_DOMAIN);
-    let count = u64::try_from(refs.len()).map_err(|_| MoltenError::invalid_harness("statement set count overflow"))?;
+    let count = u64::try_from(refs.len()).map_err(|_| Failure::invalid_harness("statement set count overflow"))?;
     hasher.update(&count.to_le_bytes());
     for reference in refs {
         let length = u64::try_from(reference.len())
-            .map_err(|_| MoltenError::invalid_harness("statement ref length overflow"))?;
+            .map_err(|_| Failure::invalid_harness("statement ref length overflow"))?;
         hasher.update(&length.to_le_bytes());
         hasher.update(reference.as_bytes());
     }
     WorldHeadStatementRef::new(format!("blake3:{}", hasher.finalize().to_hex()))
-        .map_err(|error| MoltenError::invalid_harness(format!("statement set identity failed: {error}")))
+        .map_err(|error| Failure::invalid_harness(format!("statement set identity failed: {error}")))
 }
 
 fn transition_receipt(
@@ -332,8 +332,8 @@ fn decision_issues(decision: WorldHeadDecision) -> Vec<WorldHeadIssue> {
     }
 }
 
-fn port_error(error: WorldHeadPortError) -> MoltenError {
-    MoltenError::invalid_harness(format!("world-head port failed: {error}"))
+fn port_error(error: WorldHeadPortError) -> Failure {
+    Failure::invalid_harness(format!("world-head port failed: {error}"))
 }
 
 pub fn conflict_receipt(

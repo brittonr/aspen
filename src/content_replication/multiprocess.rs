@@ -10,7 +10,7 @@ use molten_core::content_replication::*;
 
 use super::*;
 use crate::cluster_harness::DistinctProcessTransportRunInput;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric_durability::*;
 
@@ -42,24 +42,24 @@ impl DistinctProcessTransferAdapter {
         payloads: BTreeMap<String, Vec<u8>>,
     ) -> Result<Self> {
         if run_root.as_os_str().is_empty() || process_binary.as_os_str().is_empty() {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "multiprocess replication requires explicit run root and process binary",
             ));
         }
         for content in &manifest.contents {
             let payload = payloads.get(&content.content_ref).ok_or_else(|| {
-                MoltenError::invalid_harness("multiprocess replication lacks a declared content payload")
+                Failure::invalid_harness("multiprocess replication lacks a declared content payload")
             })?;
             let actual_ref = crate::preserves_rail::content_ref_from_bytes(payload);
             if actual_ref != content.content_ref {
-                return Err(MoltenError::invalid_harness(
+                return Err(Failure::invalid_harness(
                     "multiprocess replication payload does not match its content identity",
                 ));
             }
             let payload_bytes = u64::try_from(payload.len())
-                .map_err(|_| MoltenError::invalid_harness("multiprocess payload length exceeds u64"))?;
+                .map_err(|_| Failure::invalid_harness("multiprocess payload length exceeds u64"))?;
             if payload_bytes != content.encoded_bytes {
-                return Err(MoltenError::invalid_harness(
+                return Err(Failure::invalid_harness(
                     "multiprocess replication payload length does not match the content rule",
                 ));
             }
@@ -92,13 +92,13 @@ impl TransportPort for DistinctProcessTransferAdapter {
             .payloads
             .get(&action.content_ref)
             .cloned()
-            .ok_or_else(|| MoltenError::invalid_harness("multiprocess transfer lacks payload bytes"))?;
+            .ok_or_else(|| Failure::invalid_harness("multiprocess transfer lacks payload bytes"))?;
         let operation_leaf = action
             .operation_id
             .strip_prefix("blake3:")
-            .ok_or_else(|| MoltenError::invalid_harness("multiprocess operation is not a BLAKE3 reference"))?;
+            .ok_or_else(|| Failure::invalid_harness("multiprocess operation is not a BLAKE3 reference"))?;
         if !operation_leaf.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()) {
-            return Err(MoltenError::invalid_harness("multiprocess operation leaf is not canonical lowercase hex"));
+            return Err(Failure::invalid_harness("multiprocess operation leaf is not canonical lowercase hex"));
         }
         let run = crate::cluster_harness::execute_distinct_process_transport_run(&DistinctProcessTransportRunInput {
             run_directory: self.run_root.join(operation_leaf),
@@ -109,7 +109,7 @@ impl TransportPort for DistinctProcessTransferAdapter {
             payload,
         })?;
         if run.decision != "pass" || !run.diagnostics.is_empty() {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "multiprocess replication transport denied: {:?}",
                 run.diagnostics
             )));
@@ -117,12 +117,12 @@ impl TransportPort for DistinctProcessTransferAdapter {
         self.call_count = self
             .call_count
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("multiprocess transfer call count overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("multiprocess transfer call count overflow"))?;
         let manifest_ref = self
             .manifest_refs
             .get(&action.content_ref)
             .cloned()
-            .ok_or_else(|| MoltenError::invalid_harness("multiprocess transfer lacks manifest binding"))?;
+            .ok_or_else(|| Failure::invalid_harness("multiprocess transfer lacks manifest binding"))?;
         Ok(TransferOutcome::Received(TransferEnvelope {
             transfer_ref: run.parent_ref,
             transport_verification_ref: run.verification_ref,
@@ -219,7 +219,7 @@ impl SimulatedDurableReplicationAdapter {
         };
         let transition = self.inner.apply_batch(&request, self.next_fault.take().as_ref())?;
         if transition.outcome != MutationOutcome::Durable {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "simulated replication durability did not commit: {:?}",
                 transition.outcome
             )));

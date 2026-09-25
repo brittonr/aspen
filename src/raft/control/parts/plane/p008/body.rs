@@ -109,7 +109,7 @@ pub fn consensus_placement_report(input: &ConsensusPlacementInput) -> Result<Con
 pub fn parse_consensus_placement_report(value: &IoValue) -> Result<ConsensusPlacementReport> {
     let fields = value
         .collect_simple_record("consensus-placement-report-v1", Some(CONSENSUS_PLACEMENT_FIELD_COUNT))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <consensus-placement-report-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <consensus-placement-report-v1 ...>"))?;
     require_schema(&fields[0], CONSENSUS_PLACEMENT_REPORT_SCHEMA, "consensus placement schema")?;
     let decision = record_string(&fields[1], "decision")?;
     let group_id = record_string(&fields[2], "group")?;
@@ -160,7 +160,7 @@ pub fn consensus_claim_boundary_receipt(
 pub fn parse_consensus_claim_boundary_receipt(value: &IoValue) -> Result<ConsensusClaimBoundaryReceipt> {
     let fields = value
         .collect_simple_record("consensus-non-claim-receipt-v1", Some(CONSENSUS_NON_CLAIM_FIELD_COUNT))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <consensus-non-claim-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <consensus-non-claim-receipt-v1 ...>"))?;
     require_schema(&fields[0], CONSENSUS_NON_CLAIM_RECEIPT_SCHEMA, "consensus non-claim schema")?;
     require_check(&parse_checks(&fields[7])?, "claim-boundary-evaluated", "consensus non-claim receipt")?;
     Ok(ConsensusClaimBoundaryReceipt {
@@ -194,7 +194,7 @@ pub fn run_consensus_simulation(input: &ConsensusSimulationInput) -> Result<Cons
 pub fn parse_consensus_simulation_receipt(value: &IoValue) -> Result<ConsensusSimulationReceipt> {
     let fields = value
         .collect_simple_record("consensus-simulation-receipt-v1", Some(CONSENSUS_SIMULATION_FIELD_COUNT))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <consensus-simulation-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <consensus-simulation-receipt-v1 ...>"))?;
     require_schema(&fields[0], CONSENSUS_SIMULATION_RECEIPT_SCHEMA, "consensus simulation schema")?;
     require_check(&parse_checks(&fields[12])?, "deterministic-scheduler", "consensus simulation receipt")?;
     Ok(ConsensusSimulationReceipt {
@@ -309,7 +309,7 @@ fn validate_simulation_input(input: &ConsensusSimulationInput) -> Result<()> {
         | SCENARIO_LEADERLESS_MISSING_EVIDENCE
         | SCENARIO_CONCURRENT_PROPOSAL_RESOLUTION
         | SCENARIO_UNSAFE_PLACEMENT => Ok(()),
-        value => Err(MoltenError::invalid_harness(format!("unsupported consensus simulation scenario {value}"))),
+        value => Err(Failure::invalid_harness(format!("unsupported consensus simulation scenario {value}"))),
     }
 }
 
@@ -424,7 +424,7 @@ fn simulation_final_state_ref(input: &ConsensusSimulationInput) -> Result<String
 fn validate_algorithm_name(value: &str) -> Result<()> {
     match value {
         CONSENSUS_PROFILE_RAFT | CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported consensus algorithm profile {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported consensus algorithm profile {value}"))),
     }
 }
 
@@ -432,11 +432,11 @@ fn majority_quorum_count(member_count: usize) -> Result<usize> {
     member_count
         .checked_div(MAJORITY_QUORUM_DIVISOR)
         .and_then(|value| value.checked_add(MAJORITY_QUORUM_OFFSET))
-        .ok_or_else(|| MoltenError::invalid_harness("consensus majority quorum overflow"))
+        .ok_or_else(|| Failure::invalid_harness("consensus majority quorum overflow"))
 }
 
 fn usize_to_u64(value: usize) -> Result<u64> {
-    u64::try_from(value).map_err(|_| MoltenError::invalid_harness("consensus count overflow"))
+    u64::try_from(value).map_err(|_| Failure::invalid_harness("consensus count overflow"))
 }
 
 fn validate_diagnostic_strings(values: &[String], label: &str) -> Result<()> {

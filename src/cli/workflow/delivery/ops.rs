@@ -137,7 +137,7 @@ fn resolve_delivery_scope_ref(
         (_, Some(reference)) => Ok(reference.to_string()),
         (Some(name), None) => molten::delivery_idempotency::scope_ref(scope_profile, name),
         (None, None) => {
-            Err(molten::error::MoltenError::invalid_harness("delivery command requires --scope-ref or --scope-name"))
+            Err(molten::error::Failure::invalid_harness("delivery command requires --scope-ref or --scope-name"))
         }
     }
 }
@@ -146,12 +146,12 @@ fn parse_delivery_gap_policy(value: &str) -> Outcome<molten::delivery_idempotenc
     match value {
         "deny" => Ok(molten::delivery_idempotency::GapPolicy::Deny),
         "retry" => Ok(molten::delivery_idempotency::GapPolicy::Retry),
-        other => Err(molten::error::MoltenError::invalid_harness(format!(
+        other => Err(molten::error::Failure::invalid_harness(format!(
             "unsupported delivery gap policy {other}; expected deny or retry"
         ))),
     }
 }
 
-fn wrong_handler(name: &str) -> molten::error::MoltenError {
-    molten::error::MoltenError::invalid_harness(format!("delivery {name} handler called with another command"))
+fn wrong_handler(name: &str) -> molten::error::Failure {
+    molten::error::Failure::invalid_harness(format!("delivery {name} handler called with another command"))
 }

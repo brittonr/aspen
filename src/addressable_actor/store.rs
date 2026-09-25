@@ -1,7 +1,7 @@
 use molten_core::addressable_actor::*;
-use molten_node_host::node_state::NodeStateNamespace;
-use molten_node_host::node_state::NodeStateNamespaceKind;
-use molten_node_host::node_state::NodeStatePath;
+use molten_node_host::node_state::DirectoryView;
+use molten_node_host::node_state::NamespaceKind;
+use molten_node_host::node_state::RelativePath;
 use redb::ReadableDatabase;
 use redb::ReadableTable;
 
@@ -17,8 +17,8 @@ pub struct LocalActorStore {
 }
 
 impl LocalActorStore {
-    pub fn open(storage: &NodeStateNamespace, engine_epoch: u64) -> ActorPortResult<Self> {
-        if storage.kind() != NodeStateNamespaceKind::Storage {
+    pub fn open(storage: &DirectoryView, engine_epoch: u64) -> ActorPortResult<Self> {
+        if storage.kind() != NamespaceKind::Storage {
             return Err(port_error(
                 "actor-storage-namespace",
                 "addressable actor store requires the storage namespace",
@@ -27,7 +27,7 @@ impl LocalActorStore {
         if engine_epoch == 0 {
             return Err(port_error("actor-engine-epoch", "addressable actor engine epoch must be positive"));
         }
-        let path = NodeStatePath::parse(ACTOR_DATABASE_FILE).map_err(node_state_error)?;
+        let path = RelativePath::parse(ACTOR_DATABASE_FILE).map_err(node_state_error)?;
         let file = storage.open_database_file(&path).map_err(node_state_error)?;
         let database = redb::Database::builder().create_file(file).map_err(redb_error)?;
         initialize(&database)?;

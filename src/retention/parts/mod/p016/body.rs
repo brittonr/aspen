@@ -2,13 +2,13 @@
 pub fn parse_gc_execution_gate(value: &IoValue) -> Result<GcExecutionGate> {
     let fields = value
         .collect_simple_record("retention-gc-execute-v1", Some(14))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-gc-execute-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-gc-execute-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::RETENTION_GC_EXECUTE_SCHEMA, "retention GC execution schema")?;
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     let mode = record_string(&fields[2], "mode")?;
     if mode != "execute-gate" {
-        return Err(MoltenError::invalid_harness("retention GC execution mode must be execute-gate"));
+        return Err(Failure::invalid_harness("retention GC execution mode must be execute-gate"));
     }
     let subsystem = record_string(&fields[3], "subsystem")?;
     validate_name(&subsystem, "retention GC execution subsystem")?;

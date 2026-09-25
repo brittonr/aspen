@@ -1,7 +1,7 @@
 use molten_core::world_operator::*;
 use preserves::IOValue;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub const WORLD_WORKFLOW_REQUEST_RECORD: &str = "molten-world-workflow-request-v1";
@@ -53,7 +53,7 @@ pub fn canonical_world_workflow_request(
 
 pub fn canonical_world_workflow_plan(plan: &WorldWorkflowPlan) -> Result<CanonicalWorldOperatorRecord> {
     if plan.schema != WORLD_WORKFLOW_PLAN_SCHEMA || plan.non_claims != world_operator_non_claims() {
-        return Err(MoltenError::invalid_harness("world workflow plan schema or non-claims are invalid"));
+        return Err(Failure::invalid_harness("world workflow plan schema or non-claims are invalid"));
     }
     canonical(
         "plan",
@@ -82,7 +82,7 @@ pub fn canonical_world_workflow_receipt(receipt: &WorldWorkflowReceipt) -> Resul
         || receipt.receipt_ref != identity
         || receipt.non_claims != world_operator_non_claims()
     {
-        return Err(MoltenError::invalid_harness("world workflow receipt identity or non-claims are invalid"));
+        return Err(Failure::invalid_harness("world workflow receipt identity or non-claims are invalid"));
     }
     canonical(
         "receipt",
@@ -105,7 +105,7 @@ pub fn canonical_world_workflow_summary(summary: &WorldWorkflowSummary) -> Resul
         || summary.summary_ref != identity
         || summary.non_claims != world_operator_non_claims()
     {
-        return Err(MoltenError::invalid_harness("world workflow summary identity or non-claims are invalid"));
+        return Err(Failure::invalid_harness("world workflow summary identity or non-claims are invalid"));
     }
     canonical(
         "summary",
@@ -193,12 +193,12 @@ fn optional_blocker_value(blocker: Option<&WorldWorkflowBlocker>) -> IOValue {
 fn canonical(identity_kind: &str, record_kind: &'static str, value: IOValue) -> Result<CanonicalWorldOperatorRecord> {
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     if bytes.len() > MAX_WORLD_OPERATOR_CANONICAL_BYTES {
-        return Err(MoltenError::invalid_harness("world workflow canonical record exceeds the byte bound"));
+        return Err(Failure::invalid_harness("world workflow canonical record exceeds the byte bound"));
     }
     let mut hasher = blake3::Hasher::new_derive_key(WORLD_OPERATOR_RECORD_CONTEXT);
     update(&mut hasher, identity_kind)?;
     let length = u64::try_from(bytes.len())
-        .map_err(|_| MoltenError::invalid_harness("world workflow canonical length exceeds u64"))?;
+        .map_err(|_| Failure::invalid_harness("world workflow canonical length exceeds u64"))?;
     hasher.update(&length.to_be_bytes());
     hasher.update(&bytes);
     Ok(CanonicalWorldOperatorRecord {
@@ -213,17 +213,17 @@ fn core_issues(issues: Vec<WorldWorkflowIssue>, kind: &str) -> Result<()> {
     if issues.is_empty() {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("world workflow {kind} denied: {issues:?}")))
+        Err(Failure::invalid_harness(format!("world workflow {kind} denied: {issues:?}")))
     }
 }
 
-fn core_issue(issue: WorldWorkflowIssue) -> MoltenError {
-    MoltenError::invalid_harness(format!("world workflow identity denied: {issue:?}"))
+fn core_issue(issue: WorldWorkflowIssue) -> Failure {
+    Failure::invalid_harness(format!("world workflow identity denied: {issue:?}"))
 }
 
 fn update(hasher: &mut blake3::Hasher, value: &str) -> Result<()> {
     let length = u64::try_from(value.len())
-        .map_err(|_| MoltenError::invalid_harness("world workflow identity field exceeds u64"))?;
+        .map_err(|_| Failure::invalid_harness("world workflow identity field exceeds u64"))?;
     hasher.update(&length.to_be_bytes());
     hasher.update(value.as_bytes());
     Ok(())
@@ -242,7 +242,7 @@ fn boolean(value: bool) -> IOValue {
 }
 
 fn usize_value(value: usize) -> Result<IOValue> {
-    let value = u64::try_from(value).map_err(|_| MoltenError::invalid_harness("world workflow count exceeds u64"))?;
+    let value = u64::try_from(value).map_err(|_| Failure::invalid_harness("world workflow count exceeds u64"))?;
     Ok(number(value))
 }
 

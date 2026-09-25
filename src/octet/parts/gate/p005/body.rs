@@ -96,12 +96,12 @@ fn octet_source_gate_validation_value(input: OctetSourceGateValidationValueInput
 fn parse_octet_gate_receipt(value: &IoValue) -> Result<ParsedOctetGateReceipt> {
     let fields = value
         .collect_simple_record("octet-gate-receipt-v1", Some(15))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <octet-gate-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <octet-gate-receipt-v1 ...>"))?;
     require_schema(&fields[0], OCTET_GATE_RECEIPT_SCHEMA, "octet gate receipt")?;
     let metadata = value_to_iovalue(&fields[11]);
     let metadata_fields = metadata
         .collect_simple_record("metadata", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("expected octet gate metadata record"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected octet gate metadata record"))?;
     Ok(ParsedOctetGateReceipt {
         receipt_ref: canonical_hash(value)?,
         decision: record_string(&fields[1], "decision")?,
@@ -129,7 +129,7 @@ fn parse_counts(value: &Value<IoValue>) -> Result<FindingCounts> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record("counts", Some(6))
-        .ok_or_else(|| MoltenError::invalid_harness("expected counts record"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected counts record"))?;
     Ok(FindingCounts {
         total: record_u64(&fields[0], "findings")?,
         warnings: record_u64(&fields[1], "warnings")?,
@@ -144,17 +144,17 @@ fn parse_check_pairs(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record("checks", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("expected checks record"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected checks record"))?;
     let items = fields[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("expected checks sequence"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected checks sequence"))?;
     items
         .iter()
         .map(|item| {
             let item = value_to_iovalue(item);
             let fields = item
                 .collect_simple_record("check", Some(2))
-                .ok_or_else(|| MoltenError::invalid_harness("expected check record"))?;
+                .ok_or_else(|| Failure::invalid_harness("expected check record"))?;
             Ok((required_string(&fields[0], "check name")?, required_string(&fields[1], "check status")?))
         })
         .collect()
@@ -164,7 +164,7 @@ fn record_optional_string(value: &Value<IoValue>, label: &str) -> Result<Option<
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected {label} record")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected {label} record")))?;
     optional_string(&fields[0], label)
 }
 
@@ -175,7 +175,7 @@ fn optional_string(value: &Value<IoValue>, label: &str) -> Result<Option<String>
     }
     let fields = value
         .collect_simple_record("some", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected optional {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected optional {label}")))?;
     Ok(Some(required_string(&fields[0], label)?))
 }
 

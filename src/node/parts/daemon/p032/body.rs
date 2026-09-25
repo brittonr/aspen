@@ -207,7 +207,7 @@ pub fn summary(value: &IoValue) -> Result<String> {
     if let Ok(summary) = crate::provenance::summary(value) {
         return Ok(summary);
     }
-    Err(MoltenError::invalid_harness("unsupported node daemon artifact for show"))
+    Err(Failure::invalid_harness("unsupported node daemon artifact for show"))
 }
 
 fn runtime_summary(value: &IoValue) -> Result<Option<String>> {

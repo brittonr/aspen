@@ -55,7 +55,7 @@ fn summary_record(
 pub fn parse_release_promotion_summary(value: &IoValue) -> Result<ReleasePromotionSummary> {
     let fields = value
         .collect_simple_record("release-promotion-summary-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <release-promotion-summary-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <release-promotion-summary-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::OPERATOR_RELEASE_PROMOTION_SUMMARY_SCHEMA,
@@ -107,7 +107,7 @@ pub fn release_export_manifest_value(input: &ReleaseExportManifestInput<'_>) -> 
     )?)?;
     let summary = parse_release_promotion_summary(&summary_value)?;
     if summary.decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "release export requires pass promotion summary {}; decision is {}",
             summary.summary_ref, summary.decision
         )));
@@ -135,7 +135,7 @@ pub fn release_export_manifest_value(input: &ReleaseExportManifestInput<'_>) -> 
 pub fn parse_release_export_manifest(value: &IoValue) -> Result<ReleaseExportManifest> {
     let fields = value
         .collect_simple_record("release-export-manifest-v1", Some(5))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <release-export-manifest-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <release-export-manifest-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::OPERATOR_RELEASE_EXPORT_MANIFEST_SCHEMA,
@@ -217,7 +217,7 @@ pub fn verify_release_export(input: &ReleaseExportVerifyInput<'_>) -> Result<Rel
 pub fn parse_release_export_verify_receipt(value: &IoValue) -> Result<ReleaseExportVerifyReceipt> {
     let fields = value
         .collect_simple_record("release-export-verify-receipt-v1", Some(5))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <release-export-verify-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <release-export-verify-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::OPERATOR_RELEASE_EXPORT_VERIFY_RECEIPT_SCHEMA,
@@ -265,7 +265,7 @@ fn select_release_promotion_key<'a>(input: &'a ReleasePromotionGateInput<'_>) ->
         matches.push_limited_value(key, MAX_OPERATOR_REFS, "release promotion signed key matches")?;
     }
     if matches.is_empty() {
-        return Err(MoltenError::invalid_harness("no signed receipt key matched promotion policy"));
+        return Err(Failure::invalid_harness("no signed receipt key matched promotion policy"));
     }
     let mut current = Vec::new();
     for key in matches {
@@ -278,9 +278,9 @@ fn select_release_promotion_key<'a>(input: &'a ReleasePromotionGateInput<'_>) ->
         current.push_limited_value(key, MAX_OPERATOR_REFS, "release promotion current signed keys")?;
     }
     if current.is_empty() {
-        Err(MoltenError::invalid_harness("matching signed receipt keys are stale or revoked"))
+        Err(Failure::invalid_harness("matching signed receipt keys are stale or revoked"))
     } else if current.len() > 1 {
-        Err(MoltenError::invalid_harness(
+        Err(Failure::invalid_harness(
             "multiple current signed receipt keys matched promotion policy; specify key ref or key id",
         ))
     } else {
@@ -367,7 +367,7 @@ fn validate_release_workflow_stage(stage: &str) -> Result<()> {
     if RELEASE_WORKFLOW_STAGES.contains(&stage) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "unsupported release workflow required stage {stage}"
         )))
     }

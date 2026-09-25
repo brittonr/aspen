@@ -1,7 +1,7 @@
 use molten_core::world_benchmark::*;
 
 use super::WorldBenchmarkOperationObservation;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,13 +30,13 @@ pub fn instrument_world_benchmark_facts(
     facts: &WorldBenchmarkOperationFacts,
 ) -> Result<WorldBenchmarkOperationObservation> {
     if facts.adapter_ref.is_empty() {
-        return Err(MoltenError::invalid_harness("world benchmark adapter ref is empty"));
+        return Err(Failure::invalid_harness("world benchmark adapter ref is empty"));
     }
     if !facts.physical_measurement_independent {
-        return Err(MoltenError::invalid_harness("world benchmark collapsed logical and physical measurement sources"));
+        return Err(Failure::invalid_harness("world benchmark collapsed logical and physical measurement sources"));
     }
     if operation == WorldBenchmarkOperation::RetentionPlan && facts.protected_deletion_candidates != 0 {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "world benchmark retention plan contains a protected deletion candidate",
         ));
     }

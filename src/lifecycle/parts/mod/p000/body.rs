@@ -1,7 +1,7 @@
 type IoValue = preserves::IOValue;
 type Record<T> = preserves::Record<T>;
 type Value<T> = preserves::Value<T>;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 type PendingTurn = crate::runtime::PendingTurn;
 type RuntimeScopeCleanup = crate::runtime::RuntimeScopeCleanup;
@@ -39,16 +39,16 @@ fn validate_content_ref(value: &str) -> Result<()> {
 
 fn require_ref(reference: &str, field: &str) -> Result<()> {
     if reference.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("{field} must not be empty")));
+        return Err(Failure::invalid_harness(format!("{field} must not be empty")));
     }
     validate_content_ref(reference).map_err(|_| {
-        MoltenError::invalid_harness(format!("{field} must be a valid content ref, got {reference}"))
+        Failure::invalid_harness(format!("{field} must be a valid content ref, got {reference}"))
     })
 }
 
 fn validate_non_empty(value: &str, field: &str) -> Result<()> {
     if value.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("{field} must not be empty")));
+        return Err(Failure::invalid_harness(format!("{field} must not be empty")));
     }
     Ok(())
 }

@@ -443,9 +443,9 @@ fn capability_rooted_durable_scan_detects_corruption_partial_and_overbound_witho
     let original = b"durable-record";
     let workspace = temp_dir("observability-durable-scan");
     let namespace =
-        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Ledger, &workspace)
+        crate::node_state::DirectoryView::open(crate::node_state::NamespaceKind::Ledger, &workspace)
             .expect("ledger namespace");
-    let path = crate::node_state::NodeStatePath::parse("record.bin").expect("record path");
+    let path = crate::node_state::RelativePath::parse("record.bin").expect("record path");
     namespace.write(&path, original).expect("write record");
     let plan = integrity_plan(original);
     let binding = DurableScanBinding {

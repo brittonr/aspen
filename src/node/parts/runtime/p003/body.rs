@@ -2,7 +2,7 @@
 pub fn parse_node_health_receipt(value: &IoValue) -> Result<NodeHealthReceipt> {
     let fields = value
         .collect_simple_record("node-health-receipt-v1", Some(11))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-health-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-health-receipt-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::NODE_HEALTH_RECEIPT_SCHEMA, "node health receipt")?;
     let checks = parse_checks(&fields[10])?;
     require_check(&checks, "canonical-receipt", "node health receipt")?;
@@ -54,7 +54,7 @@ pub fn node_restart_health_receipt_value(input: &RestartHealthReceiptValueInput<
 pub fn parse_node_startup_receipt(value: &IoValue) -> Result<NodeStartupReceipt> {
     let fields = value
         .collect_simple_record("node-startup-receipt-v1", Some(14))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-startup-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-startup-receipt-v1 ...>"))?;
     require_schema(&fields[0], NODE_STARTUP_RECEIPT_SCHEMA, "node startup receipt")?;
     let checks = parse_checks(&fields[13])?;
     require_check(&checks, "canonical-receipt", "node startup receipt")?;
@@ -105,7 +105,7 @@ fn missing_required_adapters(adapters: &[NodeAdapterBinding]) -> Vec<String> {
 fn ensure_unique_adapter_names(adapters: &[NodeAdapterBinding]) -> Result<()> {
     for (index, adapter) in adapters.iter().enumerate() {
         if adapters.iter().skip(index + 1).any(|other| other.name == adapter.name) {
-            return Err(MoltenError::invalid_harness(format!("duplicate node adapter name {}", adapter.name)));
+            return Err(Failure::invalid_harness(format!("duplicate node adapter name {}", adapter.name)));
         }
     }
     Ok(())
@@ -203,21 +203,21 @@ fn simple_record<'a>(
 ) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
 fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {field}")))
 }
 
 fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {
@@ -261,7 +261,7 @@ fn parse_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
         let name = required_string(&check[0], "check name")?;
         let status = required_string(&check[1], "check status")?;
         if status != "pass" && status != "fail" {
-            return Err(MoltenError::invalid_harness(format!("node runtime check {name} has status {status}")));
+            return Err(Failure::invalid_harness(format!("node runtime check {name} has status {status}")));
         }
         parsed.push(name);
     }
@@ -272,7 +272,7 @@ fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()>
     if checks.iter().any(|check| check == expected) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{context} missing {expected} check")))
+        Err(Failure::invalid_harness(format!("{context} missing {expected} check")))
     }
 }
 
@@ -281,7 +281,7 @@ fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Resu
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported {context} schema {actual}; expected {expected}")))
+        Err(Failure::invalid_harness(format!("unsupported {context} schema {actual}; expected {expected}")))
     }
 }
 
@@ -290,7 +290,7 @@ fn validate_adapter_name(name: &str) -> Result<()> {
     if name.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_') {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "node adapter name {name} must use ascii alphanumeric, '-', or '_'"
         )))
     }

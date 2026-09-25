@@ -7,7 +7,7 @@ fn fallback_startup_source_gate() -> Result<IoValue> {
 
 #[cfg(not(test))]
 fn fallback_startup_source_gate() -> Result<IoValue> {
-    Err(MoltenError::invalid_harness(NODE_STARTUP_SOURCE_GATE_REQUIRED))
+    Err(Failure::invalid_harness(NODE_STARTUP_SOURCE_GATE_REQUIRED))
 }
 
 // Real admission requires explicit operator-owned evidence paths. Absence stays fail-closed:
@@ -17,7 +17,7 @@ fn startup_source_gate(evidence: Option<crate::node_daemon::StartupEvidencePaths
         Some(paths) => {
             let gate = crate::node_startup_evidence::admit_startup_source_gate(paths.policy, paths.bundle)?;
             if gate.receipt_ref.is_empty() {
-                return Err(MoltenError::invalid_harness(NODE_STARTUP_SOURCE_GATE_REQUIRED));
+                return Err(Failure::invalid_harness(NODE_STARTUP_SOURCE_GATE_REQUIRED));
             }
             Ok(gate.receipt_value)
         }
@@ -27,18 +27,18 @@ fn startup_source_gate(evidence: Option<crate::node_daemon::StartupEvidencePaths
 
 /// Independent serve-side admission: verifies the same evidence before any serve effect.
 pub fn run_local_source_gate_for_serve(evidence: Option<crate::node_daemon::StartupEvidencePaths<'_>>) -> Result<()> {
-    let paths = evidence.ok_or_else(|| MoltenError::invalid_harness(NODE_STARTUP_SOURCE_GATE_REQUIRED))?;
+    let paths = evidence.ok_or_else(|| Failure::invalid_harness(NODE_STARTUP_SOURCE_GATE_REQUIRED))?;
     crate::node_startup_evidence::admit_startup_source_gate(paths.policy, paths.bundle).map(|_| ())
 }
 
 pub fn run_local(input: &RunInput<'_>) -> Result<Run> {
     let source_gate_value = startup_source_gate(input.startup_evidence)?;
     validate_state_root(input.state_root)?;
-    let root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let root = crate::node_state::Root::open(input.state_root)?;
     run_local_admitted_with_root(&root, source_gate_value)
 }
 
-fn run_local_admitted_with_root(root: &crate::node_state::NodeStateRoot, source_gate_value: IoValue) -> Result<Run> {
+fn run_local_admitted_with_root(root: &crate::node_state::Root, source_gate_value: IoValue) -> Result<Run> {
     ensure_state_layout(root)?;
     verify_restart_state(root)?;
     let config_value = read_preserves(root, &fixed_node_path(CONFIG_FILE)?)?;
@@ -67,7 +67,7 @@ fn run_local_admitted_with_root(root: &crate::node_state::NodeStateRoot, source_
     }
     write_preserves(root, &fixed_node_path(STARTUP_FILE)?, &run.startup_receipt.value)?;
     if run.decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "node daemon startup denied receipt={}",
             run.startup_receipt.receipt_ref
         )));
@@ -84,17 +84,17 @@ fn run_local_admitted_with_root(root: &crate::node_state::NodeStateRoot, source_
 
 pub fn status_local(input: &StatusInput<'_>) -> Result<Status> {
     validate_state_root(input.state_root)?;
-    let root = crate::node_state::NodeStateRoot::open_existing(input.state_root)?;
+    let root = crate::node_state::Root::open_existing(input.state_root)?;
     status_local_with_root(&root)
 }
 
-pub fn status_local_with_root(root: &crate::node_state::NodeStateRoot) -> Result<Status> {
+pub fn status_local_with_root(root: &crate::node_state::Root) -> Result<Status> {
     let request = status_request()?;
     status_local_node_with_request(root, &request)
 }
 
 fn status_local_node_with_request(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::Root,
     request: &crate::node_runtime::ControlRequest,
 ) -> Result<Status> {
     let startup_value = read_preserves(root, &fixed_node_path(STARTUP_FILE)?)?;
@@ -136,17 +136,17 @@ fn status_local_node_with_request(
 
 pub fn stop_local(input: &StopInput<'_>) -> Result<Stop> {
     validate_state_root(input.state_root)?;
-    let root = crate::node_state::NodeStateRoot::open_existing(input.state_root)?;
+    let root = crate::node_state::Root::open_existing(input.state_root)?;
     stop_local_with_root(&root)
 }
 
-pub fn stop_local_with_root(root: &crate::node_state::NodeStateRoot) -> Result<Stop> {
+pub fn stop_local_with_root(root: &crate::node_state::Root) -> Result<Stop> {
     let request = shutdown_request()?;
     stop_local_node_with_request(root, &request)
 }
 
 fn stop_local_node_with_request(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::Root,
     request: &crate::node_runtime::ControlRequest,
 ) -> Result<Stop> {
     let startup_value = read_preserves(root, &fixed_node_path(STARTUP_FILE)?)?;
@@ -202,12 +202,12 @@ fn stop_local_node_with_request(
 
 pub fn submit_control_request(input: &ControlSubmitInput<'_>) -> Result<ControlSubmit> {
     validate_state_root(input.state_root)?;
-    let root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let root = crate::node_state::Root::open(input.state_root)?;
     submit_control_request_with_root(&root, input.request_value)
 }
 
 pub fn submit_control_request_with_root(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::Root,
     request_value: &IoValue,
 ) -> Result<ControlSubmit> {
     ensure_state_layout(root)?;
@@ -238,13 +238,13 @@ pub fn submit_control_request_with_root(
 pub fn dispatch_control_request(input: &ControlDispatchInput<'_>) -> Result<ControlDispatch> {
     validate_state_root(input.state_root)?;
     let request_entry = compatibility_request_entry(input.state_root, input.request_path)?;
-    let root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let root = crate::node_state::Root::open(input.state_root)?;
     dispatch_control_request_with_root(&root, request_entry)
 }
 
 pub fn dispatch_control_request_entry(input: &ControlDispatchEntryInput<'_>) -> Result<ControlDispatch> {
     validate_state_root(input.state_root)?;
-    let root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let root = crate::node_state::Root::open(input.state_root)?;
     dispatch_control_request_with_root(&root, input.request_entry)
 }
 
@@ -257,27 +257,27 @@ fn compatibility_request_entry<'a>(state_root: &Path, request_path: Option<&'a P
         return entry
             .to_str()
             .map(Some)
-            .ok_or_else(|| MoltenError::invalid_harness("node control compatibility request entry must be UTF-8"));
+            .ok_or_else(|| Failure::invalid_harness("node control compatibility request entry must be UTF-8"));
     }
 
     let relative = request_path.strip_prefix(state_root).map_err(|_| {
-        MoltenError::invalid_harness("node control compatibility request path must name the selected state root inbox")
+        Failure::invalid_harness("node control compatibility request path must name the selected state root inbox")
     })?;
     if relative.parent() != Some(Path::new(CONTROL_INBOX_DIR)) {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "node control compatibility request path must name the selected state root inbox",
         ));
     }
     let entry = relative
         .file_name()
         .and_then(std::ffi::OsStr::to_str)
-        .ok_or_else(|| MoltenError::invalid_harness("node control compatibility request entry must be UTF-8"))?;
-    crate::node_state::NodeStatePath::parse(CONTROL_INBOX_DIR)?.join_segment(entry)?;
+        .ok_or_else(|| Failure::invalid_harness("node control compatibility request entry must be UTF-8"))?;
+    crate::node_state::RelativePath::parse(CONTROL_INBOX_DIR)?.join_segment(entry)?;
     Ok(Some(entry))
 }
 
 pub fn dispatch_control_request_with_root(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::Root,
     request_entry: Option<&str>,
 ) -> Result<ControlDispatch> {
     ensure_state_layout(root)?;
@@ -290,20 +290,20 @@ pub fn dispatch_control_request_with_root(
 }
 
 fn dispatch_pending_control_request(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::Root,
     pending: PendingControlRequest,
 ) -> Result<ControlDispatch> {
     let inbox = root.control_inbox()?;
     let bytes = inbox.read_entry(&pending.entry, crate::node_state::MAX_NODE_STATE_FILE_BYTES)?;
     let observed_ref = crate::preserves_rail::content_ref_from_bytes(&bytes);
     if observed_ref != pending.content_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "node control inbox entry {} changed between discovery and dispatch",
             pending.entry.name
         )));
     }
     let text = String::from_utf8(bytes)
-        .map_err(|error| MoltenError::invalid_harness(format!("node control request is not UTF-8: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("node control request is not UTF-8: {error}")))?;
     let request_value = crate::preserves_rail::parse_text(&text)?;
     let request = crate::node_runtime::parse_control_request(&request_value)?;
     import_artifact(root, &request_value)?;
@@ -319,7 +319,7 @@ fn dispatch_pending_control_request(
         "run" => dispatch_run_request(root, &request)?,
         "gate" => dispatch_gate_request(root, &request)?,
         other => {
-            return Err(MoltenError::invalid_harness(format!("node control request operation unsupported: {other}")));
+            return Err(Failure::invalid_harness(format!("node control request operation unsupported: {other}")));
         }
     };
     archive_dispatched_request(root, &pending.entry, &request.value)?;
@@ -329,12 +329,12 @@ fn dispatch_pending_control_request(
 
 pub fn run_control_loop(input: &ControlLoopInput<'_>) -> Result<ControlLoop> {
     validate_state_root(input.state_root)?;
-    let root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let root = crate::node_state::Root::open(input.state_root)?;
     run_control_loop_with_root(&root, input.max_requests)
 }
 
 pub fn run_control_loop_with_root(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::Root,
     maximum_requests: u64,
 ) -> Result<ControlLoop> {
     ensure_state_layout(root)?;

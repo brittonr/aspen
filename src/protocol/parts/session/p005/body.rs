@@ -181,20 +181,20 @@ fn parse_protocol_global(value: &IoValue) -> Result<ProtocolGlobal> {
     }
     let fields = value
         .collect_simple_record("global-choice", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("expected protocol global script or choice"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected protocol global script or choice"))?;
     let decider = record_string(&fields[0], "decider")?;
     let branch_fields = fields[1]
         .collect_simple_record("branches", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("expected protocol choice branches"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected protocol choice branches"))?;
     let branch_values = branch_fields[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("expected protocol choice branch sequence"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected protocol choice branch sequence"))?;
     ensure_count_at_most(branch_values.len(), MAX_PROTOCOL_ITEMS, "protocol choice branches")?;
     let mut branches = Vec::with_capacity(branch_values.len());
     for branch in branch_values.iter() {
         let branch_fields = branch
             .collect_simple_record("branch", Some(2))
-            .ok_or_else(|| MoltenError::invalid_harness("expected protocol branch"))?;
+            .ok_or_else(|| Failure::invalid_harness("expected protocol branch"))?;
         let label = required_string(&branch_fields[0], "protocol branch label")?;
         let steps = parse_comm_sequence_value(&branch_fields[1], "protocol branch steps")?;
         branches.push(ProtocolBranchInput { label, steps });
@@ -205,14 +205,14 @@ fn parse_protocol_global(value: &IoValue) -> Result<ProtocolGlobal> {
 fn parse_step_sequence(value: &IoValue, label: &str) -> Result<Vec<ProtocolCommInput>> {
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} [...]>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} [...]>")))?;
     parse_comm_sequence_value(&fields[0], label)
 }
 
 fn parse_comm_sequence_value(value: &Value<IoValue>, label: &str) -> Result<Vec<ProtocolCommInput>> {
     let steps = value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected protocol comm sequence for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected protocol comm sequence for {label}")))?;
     ensure_count_at_most(steps.len(), MAX_PROTOCOL_STEPS, label)?;
     let mut parsed = Vec::with_capacity(steps.len());
     for step in steps.iter() {
@@ -225,7 +225,7 @@ fn parse_comm_step(value: &Value<IoValue>) -> Result<ProtocolCommInput> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record("comm", Some(4))
-        .ok_or_else(|| MoltenError::invalid_harness("expected protocol comm step"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected protocol comm step"))?;
     Ok(ProtocolCommInput {
         from_role: record_string(&fields[0], "from")?,
         to_role: record_string(&fields[1], "to")?,
@@ -252,7 +252,7 @@ fn registry_entries(names: &[String], label: &str) -> Result<Vec<RegistryEntry>>
         entries.push(RegistryEntry {
             name: name.clone(),
             id: u32::try_from(index)
-                .map_err(|error| MoltenError::invalid_harness(format!("protocol registry id overflow: {error}")))?,
+                .map_err(|error| Failure::invalid_harness(format!("protocol registry id overflow: {error}")))?,
         });
     }
     Ok(entries)

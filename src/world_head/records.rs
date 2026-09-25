@@ -23,7 +23,7 @@ use molten_core::world_head::WorldHeadStatementRef;
 use molten_core::world_head::WorldHeadTransitionPlan;
 use preserves::IOValue;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub const WORLD_HEAD_CLAIM_RECORD: &str = "world-head-claim";
@@ -177,7 +177,7 @@ pub fn canonical_world_head_claim(claim: &WorldHeadClaim) -> Result<CanonicalWor
     crate::preserves_rail::validate_boundary_schema(&value, &WORLD_HEAD_CLAIM_BOUNDARY_SCHEMA)?;
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     let claim_ref = WorldHeadClaimRef::new(crate::preserves_rail::content_ref_from_bytes(&bytes))
-        .map_err(|error| MoltenError::invalid_harness(format!("world-head claim identity failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("world-head claim identity failed: {error}")))?;
     Ok(CanonicalWorldHeadClaim {
         claim: claim.clone(),
         claim_ref,
@@ -195,7 +195,7 @@ pub fn parse_canonical_world_head_claim(bytes: &[u8]) -> Result<CanonicalWorldHe
     )?;
     let schema = crate::preserves_rail::required_string_field(&fields[0], "world-head claim schema")?;
     if schema != WORLD_HEAD_CLAIM_SCHEMA {
-        return Err(MoltenError::invalid_harness("unsupported world-head claim schema"));
+        return Err(Failure::invalid_harness("unsupported world-head claim schema"));
     }
     let branch_id = WorldBranchId::new(crate::preserves_rail::required_string_field(
         &named_field_value(&fields[1], "branch-id")?,
@@ -255,7 +255,7 @@ pub fn parse_canonical_world_head_claim(bytes: &[u8]) -> Result<CanonicalWorldHe
     };
     let canonical = canonical_world_head_claim(&claim)?;
     if canonical.bytes != decoded.canonical_bytes {
-        return Err(MoltenError::invalid_harness("world-head claim bytes are not canonical"));
+        return Err(Failure::invalid_harness("world-head claim bytes are not canonical"));
     }
     Ok(canonical)
 }
@@ -290,7 +290,7 @@ pub fn world_head_artifact_statement(
         key_identity: input.key_identity,
     };
     let statement_identity = artifact_auth_core::statement_identity(&statement)
-        .map_err(|_| MoltenError::invalid_harness("world-head Artifact Auth statement is invalid"))?;
+        .map_err(|_| Failure::invalid_harness("world-head Artifact Auth statement is invalid"))?;
     let statement_ref = WorldHeadStatementRef::new(format!("blake3:{statement_identity}")).map_err(reference_error)?;
     Ok((statement, statement_ref))
 }
@@ -311,7 +311,7 @@ pub fn parse_canonical_world_head_state(bytes: &[u8]) -> Result<WorldHeadState> 
     )?;
     let schema = crate::preserves_rail::required_string_field(&fields[0], "world-head state schema")?;
     if schema != WORLD_HEAD_TRANSITION_SCHEMA {
-        return Err(MoltenError::invalid_harness("unsupported world-head state schema"));
+        return Err(Failure::invalid_harness("unsupported world-head state schema"));
     }
     let state = WorldHeadState {
         branch_id: WorldBranchId::new(crate::preserves_rail::required_string_field(
@@ -338,7 +338,7 @@ pub fn parse_canonical_world_head_state(bytes: &[u8]) -> Result<WorldHeadState> 
     };
     let (_, canonical) = canonical_world_head_state(&state)?;
     if canonical != decoded.canonical_bytes {
-        return Err(MoltenError::invalid_harness("world-head state bytes are not canonical"));
+        return Err(Failure::invalid_harness("world-head state bytes are not canonical"));
     }
     Ok(state)
 }
@@ -379,7 +379,7 @@ pub fn canonical_world_head_transition_receipt(
         input.decision,
         TRANSITION_DECISION_ADMITTED | TRANSITION_DECISION_DENIED | TRANSITION_DECISION_CONFLICT
     ) {
-        return Err(MoltenError::invalid_harness("unknown world-head receipt decision"));
+        return Err(Failure::invalid_harness("unknown world-head receipt decision"));
     }
     let (before_head, before_generation, after_head, after_generation, currentness) =
         input
@@ -461,7 +461,7 @@ fn named_field(label: &'static str, value: IOValue) -> IOValue {
 fn named_field_value(value: &preserves::Value<IOValue>, label: &str) -> Result<preserves::Value<IOValue>> {
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} VALUE>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} VALUE>")))?;
     Ok(fields[0].clone())
 }
 
@@ -476,8 +476,8 @@ fn artifact_ref(profile: &str, reference: &str) -> Result<ArtifactRef> {
 fn required_u64(value: &preserves::Value<IOValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
 fn optional_u64_value(value: Option<u64>) -> IOValue {
@@ -493,10 +493,10 @@ fn non_claims_value() -> IOValue {
     )])
 }
 
-fn reference_error(error: molten_core::world_head::WorldHeadReferenceError) -> MoltenError {
-    MoltenError::invalid_harness(format!("invalid world-head reference: {error}"))
+fn reference_error(error: molten_core::world_head::WorldHeadReferenceError) -> Failure {
+    Failure::invalid_harness(format!("invalid world-head reference: {error}"))
 }
 
-fn world_commit_reference_error(error: molten_core::world_commit::WorldCommitReferenceError) -> MoltenError {
-    MoltenError::invalid_harness(format!("invalid world commit reference: {error:?}"))
+fn world_commit_reference_error(error: molten_core::world_commit::WorldCommitReferenceError) -> Failure {
+    Failure::invalid_harness(format!("invalid world commit reference: {error:?}"))
 }

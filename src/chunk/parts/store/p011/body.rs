@@ -2,7 +2,7 @@
 fn parse_lineage_chain_scope(value: &Value<IoValue>) -> Result<crate::evidence_chain::ChainScope> {
     let chain = value
         .collect_simple_record("chain", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("expected chain scope field"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected chain scope field"))?;
     Ok(crate::evidence_chain::ChainScope::new(
         record_string(&chain[0], "scope")?,
         record_string(&chain[1], "id")?,
@@ -13,14 +13,14 @@ fn parse_lineage_chain_scope(value: &Value<IoValue>) -> Result<crate::evidence_c
 fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let record = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> field")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> field")))?;
     let optional = value_to_iovalue(&record[0]);
     if optional.collect_simple_record("none", Some(0)).is_some() {
         Ok(None)
     } else if let Some(some) = optional.collect_simple_record("some", Some(1)) {
         required_string(&some[0], label).map(Some)
     } else {
-        Err(MoltenError::invalid_harness(format!("expected <none> or <some ref> for {label}")))
+        Err(Failure::invalid_harness(format!("expected <none> or <some ref> for {label}")))
     }
 }
 

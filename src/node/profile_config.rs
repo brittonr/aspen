@@ -1,6 +1,6 @@
 type IoValue = preserves::IOValue;
 type Result<T> = crate::error::Result<T>;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 
 type NodeAdapterBinding = crate::node_runtime::NodeAdapterBinding;
 
@@ -194,14 +194,14 @@ fn validate_overrides(overrides: &NodeProfileOverrides) -> Result<()> {
 fn validate_tier(tier: &str) -> Result<()> {
     match tier {
         TIER_DEVELOPMENT | TIER_PILOT | TIER_RELEASE => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported node profile tier {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported node profile tier {other}"))),
     }
 }
 
 fn validate_source_kind(kind: &str) -> Result<()> {
     match kind {
         SOURCE_KIND_CHECKED_EXPORT | SOURCE_KIND_PROFILE_REF | SOURCE_KIND_NICKEL_SOURCE => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported node profile source kind {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported node profile source kind {other}"))),
     }
 }
 
@@ -417,7 +417,7 @@ fn resolution_value(input: ResolutionValueInput<'_>) -> Result<IoValue> {
 fn validate_override_field(field: &str) -> Result<()> {
     match field {
         OVERRIDE_STATE_ROOT_REF | OVERRIDE_POLICY_REFS | OVERRIDE_ADAPTER_REFS => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported node profile override field {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported node profile override field {other}"))),
     }
 }
 
@@ -435,12 +435,12 @@ fn validate_refs(refs: &[String], label: &str) -> Result<()> {
 
 fn validate_ref(reference: &str, label: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference)
-        .map_err(|error| MoltenError::invalid_harness(format!("invalid {label} {reference}: {error}")))
+        .map_err(|error| Failure::invalid_harness(format!("invalid {label} {reference}: {error}")))
 }
 
 fn validate_text(label: &str, value: &str) -> Result<()> {
     if value.trim().is_empty() {
-        Err(MoltenError::invalid_harness(format!("{label} must not be empty")))
+        Err(Failure::invalid_harness(format!("{label} must not be empty")))
     } else {
         Ok(())
     }

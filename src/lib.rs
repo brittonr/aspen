@@ -344,12 +344,12 @@ pub mod core_api {
 }
 
 pub mod prelude {
-    pub use crate::MoltenError;
+    pub use crate::Failure;
     pub use crate::Result;
     pub use crate::core_api::prelude::*;
 }
 
-pub use failures::MoltenError;
+pub use failures::Failure;
 pub use failures::Result;
 
 pub fn greeting() -> &'static str {

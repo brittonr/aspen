@@ -2,7 +2,7 @@
 fn parse_review_manifest(value: &IoValue) -> Result<ParsedReviewManifest> {
     let fields = value
         .collect_simple_record("octet-review-manifest-v1", Some(6))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <octet-review-manifest-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <octet-review-manifest-v1 ...>"))?;
     require_schema(&fields[0], OCTET_REVIEW_MANIFEST_SCHEMA, "octet review manifest")?;
     Ok(ParsedReviewManifest {
         review_ref: canonical_hash(value)?,
@@ -23,7 +23,7 @@ fn finding_is_reviewed(finding: &FindingEntry, reviews: &[ParsedReviewManifest],
 fn parse_warning_baseline(value: &IoValue) -> Result<ParsedWarningBaseline> {
     let fields = value
         .collect_simple_record("octet-warning-baseline-v1", Some(14))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <octet-warning-baseline-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <octet-warning-baseline-v1 ...>"))?;
     require_schema(&fields[0], OCTET_WARNING_BASELINE_SCHEMA, "octet warning baseline")?;
     let findings = record_finding_entries(&fields[8], "finding-keys")?;
     let _critical_keys = record_string_sequence(&fields[9], "critical-finding-keys")?;
@@ -31,7 +31,7 @@ fn parse_warning_baseline(value: &IoValue) -> Result<ParsedWarningBaseline> {
     let burn_down = value_to_iovalue(&fields[11]);
     let burn_down_fields = burn_down
         .collect_simple_record("burn-down", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("expected baseline burn-down record"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected baseline burn-down record"))?;
     Ok(ParsedWarningBaseline {
         baseline_ref: canonical_hash(value)?,
         expires_at: record_string(&fields[3], "expires-at")?,
@@ -208,17 +208,17 @@ fn record_finding_entries(value: &Value<IoValue>, label: &str) -> Result<Ordered
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected {label} record")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected {label} record")))?;
     let items = record[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected {label} sequence")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected {label} sequence")))?;
     ensure_count_at_most(items.len(), MAX_OCTET_FINDING_ENTRIES, label)?;
     let mut findings = OrderedMap::new();
     for item in items.iter() {
         let item = value_to_iovalue(item);
         let fields = item
             .collect_simple_record("finding-key", Some(5))
-            .ok_or_else(|| MoltenError::invalid_harness("expected finding-key record"))?;
+            .ok_or_else(|| Failure::invalid_harness("expected finding-key record"))?;
         let key = required_string(&fields[0], "finding key")?;
         insert_bounded(
             &mut findings,
@@ -241,7 +241,7 @@ fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected {label} record")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected {label} record")))?;
     required_string(&record[0], label)
 }
 
@@ -249,7 +249,7 @@ fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected {label} record")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected {label} record")))?;
     required_u64(&record[0], label)
 }
 
@@ -257,10 +257,10 @@ fn record_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Str
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected {label} record")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected {label} record")))?;
     let items = record[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected {label} sequence")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected {label} sequence")))?;
     ensure_count_at_most(items.len(), MAX_OCTET_STRING_SEQUENCE, label)?;
     let mut strings = Vec::with_capacity(items.len());
     for item in items.iter() {
@@ -274,7 +274,7 @@ fn require_schema(value: &Value<IoValue>, expected: &str, label: &str) -> Result
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} schema mismatch: got {actual}, expected {expected}")))
+        Err(Failure::invalid_harness(format!("{label} schema mismatch: got {actual}, expected {expected}")))
     }
 }
 
@@ -282,12 +282,12 @@ fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }

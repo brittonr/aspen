@@ -7,7 +7,7 @@ use preserves::IOValue;
 use preserves::Value;
 
 use super::super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::fabric_durability::AppendRequest;
 use crate::fabric_durability::DurabilityLevel;
 use crate::fabric_durability::RedbDurableStateAdapter;
@@ -180,7 +180,7 @@ pub fn decode_native_instance_record(bytes: &[u8]) -> crate::error::Result<Nativ
     let fields = simple_record_fields(&decoded.value, INSTANCE_RECORD, INSTANCE_FIELD_COUNT)?;
     let schema = required_string_field(&fields[0], "native instance schema")?;
     if schema != NATIVE_INSTANCE_STATE_SCHEMA {
-        return Err(MoltenError::invalid_harness("native instance schema mismatch"));
+        return Err(Failure::invalid_harness("native instance schema mismatch"));
     }
     Ok(NativeInstanceRecord {
         schema,
@@ -299,7 +299,7 @@ fn parse_operation(value: &Value<IOValue>) -> crate::error::Result<NativeOperati
     let fields = simple_record_fields(&value, OPERATION_RECORD, OPERATION_FIELD_COUNT)?;
     let schema = required_string_field(&fields[0], "native operation schema")?;
     if schema != NATIVE_OPERATION_SCHEMA {
-        return Err(MoltenError::invalid_harness("native operation schema mismatch"));
+        return Err(Failure::invalid_harness("native operation schema mismatch"));
     }
     Ok(NativeOperationRecord {
         schema,
@@ -339,14 +339,14 @@ fn parse_optional_ref(value: &Value<IOValue>, field: &str) -> crate::error::Resu
 fn required_u64(value: &Value<IOValue>, field: &str) -> crate::error::Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
 fn required_bool(value: &Value<IOValue>, field: &str) -> crate::error::Result<bool> {
     value
         .as_boolean()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected boolean for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected boolean for {field}")))
 }
 
 fn parse_phase(value: &str) -> crate::error::Result<LifecyclePhase> {
@@ -370,7 +370,7 @@ fn parse_phase(value: &str) -> crate::error::Result<LifecyclePhase> {
         "quarantined" => Ok(LifecyclePhase::Quarantined),
         "stopped" => Ok(LifecyclePhase::Stopped),
         "removed" => Ok(LifecyclePhase::Removed),
-        _ => Err(MoltenError::invalid_harness("native lifecycle phase is unsupported")),
+        _ => Err(Failure::invalid_harness("native lifecycle phase is unsupported")),
     }
 }
 
@@ -383,7 +383,7 @@ fn parse_health(value: &str) -> crate::error::Result<HealthState> {
         "failed" => Ok(HealthState::Failed),
         "quarantined" => Ok(HealthState::Quarantined),
         "stopped" => Ok(HealthState::Stopped),
-        _ => Err(MoltenError::invalid_harness("native health state is unsupported")),
+        _ => Err(Failure::invalid_harness("native health state is unsupported")),
     }
 }
 
@@ -393,7 +393,7 @@ fn parse_operation_kind(value: &str) -> crate::error::Result<NativeOperationKind
         "effect" => Ok(NativeOperationKind::Effect),
         "ingress" => Ok(NativeOperationKind::Ingress),
         "value-publication" => Ok(NativeOperationKind::ValuePublication),
-        _ => Err(MoltenError::invalid_harness("native operation kind is unsupported")),
+        _ => Err(Failure::invalid_harness("native operation kind is unsupported")),
     }
 }
 
@@ -404,17 +404,17 @@ fn parse_operation_state(value: &str) -> crate::error::Result<NativeOperationSta
         "terminal" => Ok(NativeOperationState::Terminal),
         "unknown" => Ok(NativeOperationState::Unknown),
         "stale" => Ok(NativeOperationState::Stale),
-        _ => Err(MoltenError::invalid_harness("native operation state is unsupported")),
+        _ => Err(Failure::invalid_harness("native operation state is unsupported")),
     }
 }
 
 fn require_item_bound(actual: usize, field: &str) -> crate::error::Result<()> {
     if actual > MAX_INSTANCE_COLLECTION_ITEMS {
-        return Err(MoltenError::invalid_harness(format!("{field} exceeds its item bound")));
+        return Err(Failure::invalid_harness(format!("{field} exceeds its item bound")));
     }
     Ok(())
 }
 
-fn journal_invalid(error: crate::error::MoltenError) -> NativeJournalError {
+fn journal_invalid(error: crate::error::Failure) -> NativeJournalError {
     NativeJournalError::InvalidRecord(error.to_string())
 }

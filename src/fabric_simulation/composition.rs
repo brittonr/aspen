@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric::ExtensionTier;
 use crate::fabric::ExtensionTierRequest;
@@ -220,7 +220,7 @@ pub fn run_reference_simulation_fixture() -> Result<ReferenceSimulationFixtureRu
 pub fn replay_reference_simulation_fixture(expected: &CanonicalSimulationRun) -> Result<ReferenceReplayResult> {
     let replay = run_reference_simulation_fixture()?;
     if replay.world.world_ref != expected.world_ref {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "reference simulation replay world identity differs from the expected run",
         ));
     }
@@ -234,7 +234,7 @@ pub fn run_reference_shrink_fixture() -> Result<ReferenceShrinkFixture> {
     let first = original_manifest
         .workload
         .first_mut()
-        .ok_or_else(|| MoltenError::invalid_harness("reference shrink fixture requires a workload"))?;
+        .ok_or_else(|| Failure::invalid_harness("reference shrink fixture requires a workload"))?;
     first.expected_failure_class = Some("fixture-invariant-failure".to_string());
     let original_world = canonical_admit_simulated_world(&original_manifest)?;
     let result = shrink_simulation_failure(&original_world.admitted.manifest, |candidate| {
@@ -244,7 +244,7 @@ pub fn run_reference_shrink_fixture() -> Result<ReferenceShrinkFixture> {
             .iter()
             .any(|step| step.expected_failure_class.as_deref() == Some("fixture-invariant-failure"))
     })
-    .map_err(|error| MoltenError::invalid_harness(format!("reference shrink fixture denied: {error:?}")))?;
+    .map_err(|error| Failure::invalid_harness(format!("reference shrink fixture denied: {error:?}")))?;
     let shrunk_world = canonical_admit_simulated_world(&result.world)?;
     let shrink = canonical_simulation_shrink(&original_world.world_ref, &shrunk_world, result)?;
     Ok(ReferenceShrinkFixture {
@@ -307,7 +307,7 @@ fn prepare_reference_world() -> Result<PreparedReferenceWorld> {
             required_port_classes: reference_required_ports(kind),
         });
         if hosts.insert(node_id.clone(), host).is_some() {
-            return Err(MoltenError::invalid_harness(format!("duplicate reference node {node_id}")));
+            return Err(Failure::invalid_harness(format!("duplicate reference node {node_id}")));
         }
     }
     let workload = operations
@@ -315,7 +315,7 @@ fn prepare_reference_world() -> Result<PreparedReferenceWorld> {
         .enumerate()
         .map(|(index, (kind, request_ref, _))| {
             let sequence = u64::try_from(index)
-                .map_err(|_| MoltenError::invalid_harness("reference workload sequence overflow"))?;
+                .map_err(|_| Failure::invalid_harness("reference workload sequence overflow"))?;
             Ok(SimulationWorkloadStep {
                 sequence,
                 node_id: reference_node_id(*kind),
@@ -329,7 +329,7 @@ fn prepare_reference_world() -> Result<PreparedReferenceWorld> {
         .iter()
         .find(|profile| profile.class == FabricPortClass::Transport)
         .map(|profile| profile.port_id.clone())
-        .ok_or_else(|| MoltenError::invalid_harness("reference world lacks its transport profile"))?;
+        .ok_or_else(|| Failure::invalid_harness("reference world lacks its transport profile"))?;
     let manifest = SimulatedWorldManifest {
         schema: FABRIC_SIMULATION_WORLD_SCHEMA.to_string(),
         runtime_ref: blake3_ref(b"molten-runtime-reference-simulation"),
@@ -385,38 +385,38 @@ fn run_prepared_reference_world(mut prepared: PreparedReferenceWorld) -> Result<
     while !pending.is_empty() {
         let eligible = pending.iter().map(workload_choice).collect::<Vec<_>>();
         let transition = select_simulation_choice(&prepared.world.admitted, &scheduler, &eligible, None)
-            .map_err(|error| MoltenError::invalid_harness(format!("reference scheduler denied: {error:?}")))?;
+            .map_err(|error| Failure::invalid_harness(format!("reference scheduler denied: {error:?}")))?;
         let selected_id = &transition.record.selected.choice_id;
         let selected_index = pending
             .iter()
             .position(|step| workload_choice_id(step.sequence) == *selected_id)
-            .ok_or_else(|| MoltenError::invalid_harness("selected reference workload choice disappeared"))?;
+            .ok_or_else(|| Failure::invalid_harness("selected reference workload choice disappeared"))?;
         let step = pending.remove(selected_index);
         router.begin_choice(transition.record.position);
         let host = prepared
             .hosts
             .get_mut(&step.node_id)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("missing reference host {}", step.node_id)))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("missing reference host {}", step.node_id)))?;
         let (receipt, outcome) =
             match host.dispatch_request(&step.request_ref, REFERENCE_REQUEST_BYTES, transition.next.virtual_tick)? {
                 HostDispatchResult::Executed { receipt, outcome, .. } => (receipt, outcome),
                 other => {
-                    return Err(MoltenError::invalid_harness(format!(
+                    return Err(Failure::invalid_harness(format!(
                         "reference request did not execute through the system-extension host: {other:?}"
                     )));
                 }
             };
         let completions = host.route_approved_effects(&receipt, &mut router)?;
         if completions.is_empty() {
-            return Err(MoltenError::invalid_harness("reference request did not cross a deterministic fabric port"));
+            return Err(Failure::invalid_harness("reference request did not cross a deterministic fabric port"));
         }
         let reference_transition = host
             .executor()
             .last_transition()
-            .ok_or_else(|| MoltenError::invalid_harness("reference executor did not retain its pure transition"))?;
+            .ok_or_else(|| Failure::invalid_harness("reference executor did not retain its pure transition"))?;
         let state_ref = outcome
             .state_ref
-            .ok_or_else(|| MoltenError::invalid_harness("reference callback returned no state ref"))?;
+            .ok_or_else(|| Failure::invalid_harness("reference callback returned no state ref"))?;
         history_material.push_str(&state_ref);
         history_material.push_str(&transition.record.selected.choice_id);
         let history_ref = blake3_ref(history_material.as_bytes());
@@ -424,7 +424,7 @@ fn run_prepared_reference_world(mut prepared: PreparedReferenceWorld) -> Result<
             .events()
             .last()
             .map(|event| event.event_ref.clone())
-            .ok_or_else(|| MoltenError::invalid_harness("reference route emitted no canonical port event"))?;
+            .ok_or_else(|| Failure::invalid_harness("reference route emitted no canonical port event"))?;
         let observation = canonical_simulation_observation(SimulationObservation {
             sequence: step.sequence,
             node_id: step.node_id,
@@ -449,7 +449,7 @@ fn run_prepared_reference_world(mut prepared: PreparedReferenceWorld) -> Result<
         scheduler = transition.next;
     }
     scheduler = finish_simulation_scheduler(&prepared.world.admitted, &scheduler)
-        .map_err(|error| MoltenError::invalid_harness(format!("reference scheduler finish denied: {error:?}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("reference scheduler finish denied: {error:?}")))?;
     let mut final_state_refs = Vec::new();
     let mut host_evidence_refs = Vec::new();
     for host in prepared.hosts.values_mut() {
@@ -468,15 +468,15 @@ fn run_prepared_reference_world(mut prepared: PreparedReferenceWorld) -> Result<
         SimulationDecision::InvariantFailed
     };
     let choice_resource_units = u64::try_from(choice_records.len())
-        .map_err(|_| MoltenError::invalid_harness("reference choice resource count overflow"))?
+        .map_err(|_| Failure::invalid_harness("reference choice resource count overflow"))?
         .checked_mul(RUN_RESOURCE_INCREMENT)
-        .ok_or_else(|| MoltenError::invalid_harness("reference choice resource multiplication overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("reference choice resource multiplication overflow"))?;
     let resource_units = router
         .resource_units()
         .checked_add(choice_resource_units)
-        .ok_or_else(|| MoltenError::invalid_harness("reference run resource count overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("reference run resource count overflow"))?;
     if resource_units > prepared.world.admitted.manifest.bounds.max_resource_units {
-        return Err(MoltenError::invalid_harness("reference run exceeded its resource envelope"));
+        return Err(Failure::invalid_harness("reference run exceeded its resource envelope"));
     }
     let summary = SimulationRunSummary {
         decision,

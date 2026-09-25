@@ -17,7 +17,7 @@ use super::binding::validate_content_refs;
 use super::binding::validate_identifier;
 use super::canonical::PlanValueInput;
 use super::canonical::plan_value;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub(super) fn plan_consistency_operation(
@@ -32,7 +32,7 @@ pub(super) fn plan_consistency_operation(
         diagnostics.insert("in-flight-operation-bound-exhausted");
     }
     if diagnostics.len() > MAX_CONSISTENCY_DIAGNOSTICS {
-        return Err(MoltenError::invalid_harness("consistency diagnostics exceeded the bounded maximum"));
+        return Err(Failure::invalid_harness("consistency diagnostics exceeded the bounded maximum"));
     }
     let decision = if diagnostics.is_empty() {
         ConsistencyPlanDecision::Admitted

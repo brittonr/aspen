@@ -145,7 +145,7 @@ fn candidate_explain_value(input: &CandidateExplainValueInput<'_>) -> Result<IoV
 pub fn parse_candidate_explain(value: &IoValue) -> Result<CandidateExplain> {
     let fields = value
         .collect_simple_record("retention-candidate-explain-v1", Some(15))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-candidate-explain-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-candidate-explain-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::RETENTION_CANDIDATE_EXPLAIN_SCHEMA,
@@ -153,7 +153,7 @@ pub fn parse_candidate_explain(value: &IoValue) -> Result<CandidateExplain> {
     )?;
     let object_fields = fields[1]
         .collect_simple_record("object", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("expected retention candidate object"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected retention candidate object"))?;
     let object_ref = required_string(&object_fields[0], "retention candidate object ref")?;
     require_ref(&object_ref, "retention candidate object ref")?;
     let object_kind = optional_record_string(&object_fields[1], "retention candidate object kind")?;
@@ -162,7 +162,7 @@ pub fn parse_candidate_explain(value: &IoValue) -> Result<CandidateExplain> {
     }
     let filter_fields = fields[2]
         .collect_simple_record("filters", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("expected retention candidate filters"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected retention candidate filters"))?;
     let retention_class = record_optional_string(&filter_fields[0], "class")?;
     if let Some(retention_class) = retention_class.as_deref() {
         validate_class(retention_class)?;

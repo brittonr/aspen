@@ -35,32 +35,32 @@ fn validate_value_input(input: &ValueInput) -> Result<()> {
     validate_refs(&input.evidence_refs, "eval cache value evidence ref")?;
     if input.tier == TIER_PRODUCTION_TRACE_ONLY {
         if input.status != STATUS_TRACE_ONLY {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "production-effectful trace-only cache values must use trace-only status",
             ));
         }
         if input.output.is_some() {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "production-effectful trace-only cache values cannot store semantic output",
             ));
         }
     }
     if input.status == STATUS_PASS && input.output.is_none() {
-        return Err(MoltenError::invalid_harness("passing eval cache values require output"));
+        return Err(Failure::invalid_harness("passing eval cache values require output"));
     }
     Ok(())
 }
 
 fn validate_value_against_key(key: &Key, input: &ValueInput) -> Result<()> {
     if !input.dependency_refs.iter().all(|reference| key.dependency_refs.contains(reference)) {
-        return Err(MoltenError::invalid_harness("eval cache value dependencies must be represented in key"));
+        return Err(Failure::invalid_harness("eval cache value dependencies must be represented in key"));
     }
     if !input.policy_refs.iter().all(|reference| key.policy_refs.contains(reference)) {
-        return Err(MoltenError::invalid_harness("eval cache value policy refs must be represented in key"));
+        return Err(Failure::invalid_harness("eval cache value policy refs must be represented in key"));
     }
     if matches!(input.status.as_str(), STATUS_DENY | STATUS_ERROR) {
         if input.evidence_refs.is_empty() {
-            return Err(MoltenError::invalid_harness("deterministic negative cache results require evidence refs"));
+            return Err(Failure::invalid_harness("deterministic negative cache results require evidence refs"));
         }
         for evidence_ref in &input.evidence_refs {
             if !key.evidence_refs.contains(evidence_ref)
@@ -72,7 +72,7 @@ fn validate_value_against_key(key: &Key, input: &ValueInput) -> Result<()> {
                 && !key.provenance_refs.contains(evidence_ref)
                 && !key.source_gate_refs.contains(evidence_ref)
             {
-                return Err(MoltenError::invalid_harness(
+                return Err(Failure::invalid_harness(
                     "negative cache result evidence refs must be represented in policy-aware key inputs",
                 ));
             }
@@ -125,7 +125,7 @@ fn validate_operation(operation: &str) -> Result<()> {
     if operation.chars().all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_') {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "eval cache operation {operation} must use lowercase ascii, digits, '-' or '_'"
         )))
     }
@@ -135,7 +135,7 @@ fn validate_tier(tier: &str) -> Result<()> {
     if matches!(tier, TIER_PURE | TIER_SIMULATED | TIER_POLICY_CURRENT | TIER_PRODUCTION_TRACE_ONLY) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported eval cache tier {tier}")))
+        Err(Failure::invalid_harness(format!("unsupported eval cache tier {tier}")))
     }
 }
 
@@ -143,7 +143,7 @@ fn validate_status(status: &str) -> Result<()> {
     if matches!(status, STATUS_PASS | STATUS_DENY | STATUS_ERROR | STATUS_TRACE_ONLY) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported eval cache status {status}")))
+        Err(Failure::invalid_harness(format!("unsupported eval cache status {status}")))
     }
 }
 
@@ -179,7 +179,7 @@ fn parse_output_ref(value: &PreservesValue<IoValue>) -> Result<OutputRef> {
             length: required_u64(&content[2], "content output length")?,
         });
     }
-    Err(MoltenError::invalid_harness("eval cache output must be none, inline, or content-ref"))
+    Err(Failure::invalid_harness("eval cache output must be none, inline, or content-ref"))
 }
 
 fn clear_derived_index_tables_in_tx(write_txn: &redb::WriteTransaction) -> Result<()> {
@@ -211,8 +211,8 @@ fn str_table_keys(table: &redb::Table<'_, &str, &str>) -> Result<Vec<String>> {
 }
 
 fn ensure_dirs(root: &Path) -> Result<()> {
-    std::fs::create_dir_all(root).map_err(MoltenError::from)?;
-    std::fs::create_dir_all(chunk_root(root)).map_err(MoltenError::from)
+    std::fs::create_dir_all(root).map_err(Failure::from)?;
+    std::fs::create_dir_all(chunk_root(root)).map_err(Failure::from)
 }
 
 fn ensure_index_tables(root: &Path) -> Result<Database> {

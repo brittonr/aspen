@@ -122,7 +122,7 @@ impl CandidateBundleExportProfile {
             "internal" => Ok(Self::Internal),
             "public" => Ok(Self::Public),
             "diagnostic" => Ok(Self::Diagnostic),
-            _ => Err(MoltenError::invalid_harness(format!(
+            _ => Err(Failure::invalid_harness(format!(
                 "unsupported retention bundle export profile {value}; expected internal, public, or diagnostic"
             ))),
         }

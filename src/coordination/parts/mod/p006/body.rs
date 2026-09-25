@@ -69,7 +69,7 @@ fn status_fact_for(
                 ])
             },
         )),
-        _ => Err(MoltenError::invalid_harness("unsupported coordination status service")),
+        _ => Err(Failure::invalid_harness("unsupported coordination status service")),
     }
 }
 
@@ -193,7 +193,7 @@ fn payload_token(request: &CoordinationRequest) -> Result<u64> {
     let payload = request
         .payload
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("coordination release requires token payload"))?;
+        .ok_or_else(|| Failure::invalid_harness("coordination release requires token payload"))?;
     let fields = simple_record(payload, "token", 1)?;
     required_u64(&fields[0], "coordination token")
 }
@@ -202,7 +202,7 @@ fn payload_text(request: &CoordinationRequest, label: &str) -> Result<String> {
     let payload = request
         .payload
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("coordination request requires {label} payload")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("coordination request requires {label} payload")))?;
     simple_payload_text(payload, label)
 }
 
@@ -215,7 +215,7 @@ fn payload_endpoint(request: &CoordinationRequest) -> Result<(String, String)> {
     let payload = request
         .payload
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("coordination registry register requires endpoint payload"))?;
+        .ok_or_else(|| Failure::invalid_harness("coordination registry register requires endpoint payload"))?;
     let fields = simple_record(payload, "endpoint", 2)?;
     let endpoint_ref = required_string(&fields[0], "coordination endpoint ref")?;
     let evidence_ref = required_string(&fields[1], "coordination endpoint evidence ref")?;
@@ -354,5 +354,5 @@ fn simple_record<'a>(
 ) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }

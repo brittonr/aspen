@@ -119,7 +119,7 @@ pub fn evidence_admission_value(input: &EvidenceAdmissionInput<'_>) -> Result<Io
 pub fn parse_evidence_admission(value: &IoValue) -> Result<EvidenceAdmission> {
     let fields = value
         .collect_simple_record("retention-evidence-admission-v1", Some(15))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-evidence-admission-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-evidence-admission-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::RETENTION_EVIDENCE_ADMISSION_SCHEMA,
@@ -210,7 +210,7 @@ pub fn remote_gc_clearance_value(input: &RemoteGcClearanceInput<'_>) -> Result<I
 pub fn parse_remote_gc_clearance(value: &IoValue) -> Result<RemoteGcClearance> {
     let fields = value
         .collect_simple_record("retention-remote-gc-clearance-v1", Some(16))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-remote-gc-clearance-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-remote-gc-clearance-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_SCHEMA,
@@ -295,7 +295,7 @@ pub fn remote_gc_clearance_request_value(input: &RemoteGcClearanceRequestInput<'
 pub fn parse_remote_gc_clearance_request(value: &IoValue) -> Result<RemoteGcClearanceRequest> {
     let fields = value
         .collect_simple_record("retention-remote-gc-clearance-request-v1", Some(11))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-remote-gc-clearance-request-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-remote-gc-clearance-request-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_REQUEST_SCHEMA,

@@ -17,13 +17,13 @@ pub(super) async fn run(node_id: String, run_directory: PathBuf, mode: ChildMode
     let endpoints = read_endpoints(&run_directory)?;
     let endpoint_identity = endpoints
         .get(&node_id)
-        .ok_or_else(|| MoltenError::invalid_harness("child endpoint identity is absent"))?
+        .ok_or_else(|| Failure::invalid_harness("child endpoint identity is absent"))?
         .descriptor
         .public_endpoint_identity
         .clone();
     let group = super::super::tests::active_group();
     let durability_root = durability_path(&run_directory, &node_id);
-    std::fs::create_dir_all(&durability_root).map_err(MoltenError::from)?;
+    std::fs::create_dir_all(&durability_root).map_err(Failure::from)?;
     let node = match mode {
         ChildMode::Fresh => {
             live_cluster::build_node_at_root(&group, &node_id, listener, &endpoints, &durability_root).await?
@@ -44,7 +44,7 @@ async fn run_fresh_node(
     mut node: live_cluster::LiveNode,
     run_directory: &Path,
 ) -> Result<()> {
-    let listener = node.listener.take().ok_or_else(|| MoltenError::invalid_harness("child live listener is absent"))?;
+    let listener = node.listener.take().ok_or_else(|| Failure::invalid_harness("child live listener is absent"))?;
     let mut ingress = IrohReplicaIngressPump::spawn(listener, IrohReplicaIngressConfig {
         session_ref: node.session_ref.clone(),
         accept_timeout: Duration::from_secs(CHILD_TIMEOUT_SECONDS),
@@ -79,7 +79,7 @@ fn secret_byte(node_id: &str) -> Result<u8> {
         NODE_A => Ok(NODE_A_SECRET_BYTE),
         NODE_B => Ok(NODE_B_SECRET_BYTE),
         NODE_C => Ok(NODE_C_SECRET_BYTE),
-        _ => Err(MoltenError::invalid_harness("child secret requested outside static membership")),
+        _ => Err(Failure::invalid_harness("child secret requested outside static membership")),
     }
 }
 
@@ -137,7 +137,7 @@ async fn run_leader(
             write_signal(&run_directory.join(LEADER_DONE_FILE), "leader-done")?;
         }
     }
-    Err(MoltenError::invalid_harness("leader exhausted its bounded event loop"))
+    Err(Failure::invalid_harness("leader exhausted its bounded event loop"))
 }
 
 async fn propose(node: &mut live_cluster::LiveNode) -> Result<()> {
@@ -218,7 +218,7 @@ async fn run_follower(
         }
         require_applied(node.service.handle_event(event.event).await)?;
     }
-    Err(MoltenError::invalid_harness("follower exhausted its bounded event loop"))
+    Err(Failure::invalid_harness("follower exhausted its bounded event loop"))
 }
 
 fn should_drop_before_snapshot(state: &ReplicaState, event: &ReplicaEvent) -> bool {
@@ -268,9 +268,9 @@ pub(super) fn require_applied(outcome: ReplicaExecutionOutcome) -> Result<()> {
     match outcome {
         ReplicaExecutionOutcome::Applied(_) => Ok(()),
         ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
-            Err(MoltenError::invalid_harness(format!("distinct-process turn denied: {diagnostic}")))
+            Err(Failure::invalid_harness(format!("distinct-process turn denied: {diagnostic}")))
         }
-        ReplicaExecutionOutcome::Failed(failed) => Err(MoltenError::invalid_harness(format!(
+        ReplicaExecutionOutcome::Failed(failed) => Err(Failure::invalid_harness(format!(
             "distinct-process effect {} failed: {}",
             failed.failed_kind.as_str(),
             failed.diagnostic

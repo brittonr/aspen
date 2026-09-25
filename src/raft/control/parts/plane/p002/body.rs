@@ -2,7 +2,7 @@
 pub fn parse_control_registry_state(value: &IoValue) -> Result<ControlRegistryState> {
     let fields = value
         .collect_simple_record("control-registry-state-v1", Some(4))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <control-registry-state-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <control-registry-state-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::CONTROL_REGISTRY_STATE_SCHEMA, "control registry state schema")?;
     let entries = parse_registry_entries(&fields[1])?;
     let client_sessions = parse_client_sessions(&fields[2])?;
@@ -43,7 +43,7 @@ fn new_control_registry_runtime_for_environment(
 ) -> Result<ControlRegistryRuntime> {
     let manifest = parse_raft_group_manifest(manifest_value)?;
     if manifest.state_machine != CONTROL_REGISTRY_STATE_MACHINE {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported raft state machine {}; expected {CONTROL_REGISTRY_STATE_MACHINE}",
             manifest.state_machine
         )));
@@ -54,7 +54,7 @@ fn new_control_registry_runtime_for_environment(
         resolve_control_registry_engine(&manifest)?
     };
     if admission.decision != ENGINE_DECISION_PASS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "consensus profile {} is not admitted for {environment} runtime; status {}; diagnostics {}",
             manifest.algorithm_profile,
             manifest.production_status,
@@ -149,7 +149,7 @@ pub fn propose_control_registry_transition_core(
         return Ok(denied_transition(runtime, proposal));
     }
     let command =
-        command.ok_or_else(|| MoltenError::invalid_harness("missing admitted command after admission pass"))?;
+        command.ok_or_else(|| Failure::invalid_harness("missing admitted command after admission pass"))?;
     let draft = pass_draft(runtime, &envelope)?;
     let (state_after, registry_receipt) = apply_admitted_command_core(
         &runtime.state,
@@ -305,14 +305,14 @@ pub fn snapshot_control_registry(input: &RaftSnapshotInput) -> Result<RaftSnapsh
 pub fn parse_raft_snapshot(value: &IoValue) -> Result<RaftSnapshot> {
     let fields = value
         .collect_simple_record("raft-snapshot-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <raft-snapshot-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <raft-snapshot-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::RAFT_SNAPSHOT_SCHEMA, "raft snapshot schema")?;
     let state_value = record_iovalue(&fields[6], "state")?;
     let state = parse_control_registry_state(&state_value)?;
     let state_ref = record_ref(&fields[4], "state-ref")?;
     let content_ref = record_ref(&fields[5], "content-ref")?;
     if state.state_ref != state_ref || state.state_ref != content_ref {
-        return Err(MoltenError::invalid_harness("raft snapshot state/content ref mismatch"));
+        return Err(Failure::invalid_harness("raft snapshot state/content ref mismatch"));
     }
     require_check(&parse_checks(&fields[9])?, "snapshot-state-integrity", "raft snapshot")?;
     Ok(RaftSnapshot {

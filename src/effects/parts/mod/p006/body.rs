@@ -488,14 +488,14 @@ fn effect_profile_replay_binding_check_names() -> Vec<String> {
 fn validate_effect_determinism_class(value: &str) -> Result<()> {
     match value {
         EFFECT_DETERMINISM_DETERMINISTIC | EFFECT_DETERMINISM_NONDETERMINISTIC => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported effect determinism class {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported effect determinism class {value}"))),
     }
 }
 
 fn validate_effect_replay_class(value: &str) -> Result<()> {
     match value {
         EFFECT_REPLAY_CLASS_RECORDED | EFFECT_REPLAY_CLASS_RECORD_REQUIRED | EFFECT_REPLAY_CLASS_COMPATIBLE => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported effect replay class {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported effect replay class {value}"))),
     }
 }
 
@@ -506,6 +506,6 @@ fn validate_effect_profile_integration_kind(value: &str) -> Result<()> {
         | EFFECT_PROFILE_INTEGRATION_EVAL_CACHE
         | EFFECT_PROFILE_INTEGRATION_JOB_DAG
         | EFFECT_PROFILE_INTEGRATION_REMOTE_EXECUTION => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported effect profile integration kind {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported effect profile integration kind {value}"))),
     }
 }

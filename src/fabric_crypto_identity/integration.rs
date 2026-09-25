@@ -8,7 +8,7 @@ use super::CanonicalCryptoProfile;
 use super::CanonicalSignatureDomain;
 use super::CanonicalSignatureOutcome;
 use super::CanonicalVerificationOutcome;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub const LEGACY_FIXTURE_SIGNATURE_ALGORITHM: &str = "blake3-local-fixture-v1";
@@ -43,7 +43,7 @@ pub fn admit_evidence_verification(outcome: &CanonicalVerificationOutcome) -> Re
 
 pub fn admit_signature_algorithm(profile: &CanonicalCryptoProfile, algorithm: &str) -> Result<()> {
     if profile.profile.class == CryptoProfileClass::Production && algorithm == LEGACY_FIXTURE_SIGNATURE_ALGORITHM {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "deterministic BLAKE3 fixture signatures are denied by production cryptographic identity profiles",
         ));
     }
@@ -52,7 +52,7 @@ pub fn admit_signature_algorithm(profile: &CanonicalCryptoProfile, algorithm: &s
         CryptoAlgorithm::Blake3Fixture => LEGACY_FIXTURE_SIGNATURE_ALGORITHM,
     };
     if algorithm != expected {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "cryptographic signature algorithm mismatch: expected {expected}, observed {algorithm}"
         )));
     }
@@ -61,14 +61,14 @@ pub fn admit_signature_algorithm(profile: &CanonicalCryptoProfile, algorithm: &s
 
 fn require_accepted_verification(outcome: &CanonicalVerificationOutcome, expected_purpose: KeyPurpose) -> Result<()> {
     if outcome.decision.purpose != expected_purpose {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "cryptographic verification purpose mismatch: expected {}, observed {}",
             expected_purpose.as_str(),
             outcome.decision.purpose.as_str()
         )));
     }
     if outcome.decision.kind != VerificationDecisionKind::Accept {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "cryptographic verification was denied: {:?}",
             outcome.decision.issues
         )));
@@ -78,7 +78,7 @@ fn require_accepted_verification(outcome: &CanonicalVerificationOutcome, expecte
 
 fn require_purpose(handle_purpose: KeyPurpose, domain_purpose: KeyPurpose, expected_purpose: KeyPurpose) -> Result<()> {
     if handle_purpose != expected_purpose || domain_purpose != expected_purpose {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "cryptographic purpose mismatch: expected {}, handle {}, domain {}",
             expected_purpose.as_str(),
             handle_purpose.as_str(),

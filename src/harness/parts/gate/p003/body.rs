@@ -78,7 +78,7 @@ fn pass_predicate_refs(values: &[IoValue]) -> Result<(Vec<String>, String)> {
     Ok((
         refs,
         range_ref.ok_or_else(|| {
-            MoltenError::invalid_harness("gate chain evidence did not build checkpoint range predicate")
+            Failure::invalid_harness("gate chain evidence did not build checkpoint range predicate")
         })?,
     ))
 }
@@ -180,15 +180,15 @@ fn parse_chain_evidence(value: &Value<IoValue>) -> Result<ChainEvidence> {
     let link_ref = link.link_ref.clone();
     let anchor = crate::evidence_chain::parse_chain_anchor(&parts.anchor_value)?;
     if anchor.link_ref != link_ref || anchor.chain != link.chain {
-        return Err(MoltenError::invalid_harness("gate chain anchor does not bind the gate chain link"));
+        return Err(Failure::invalid_harness("gate chain anchor does not bind the gate chain link"));
     }
     let checkpoint = crate::evidence_chain::parse_chain_checkpoint(&parts.checkpoint_value)?;
     if checkpoint.chain != link.chain || checkpoint.anchor_link_ref != link_ref || checkpoint.head_ref != link_ref {
-        return Err(MoltenError::invalid_harness("gate chain checkpoint does not bind the anchored chain head"));
+        return Err(Failure::invalid_harness("gate chain checkpoint does not bind the anchored chain head"));
     }
     let verify_receipt_ref = canonical_hash(&parts.verify_receipt_value)?;
     if checkpoint.verify_receipt_ref != verify_receipt_ref {
-        return Err(MoltenError::invalid_harness("gate chain checkpoint does not bind the embedded verify receipt"));
+        return Err(Failure::invalid_harness("gate chain checkpoint does not bind the embedded verify receipt"));
     }
 
     let predicates = parsed_predicates(&parts.predicate_values)?;
@@ -220,7 +220,7 @@ fn evidence_parts(value: &Value<IoValue>) -> Result<EvidenceParts> {
     let evidence = simple_record(&value, "chain-evidence", 7)?;
     let profile = required_record_string(&evidence[0], "profile", "chain evidence profile")?;
     if profile != "local-pass-evidence-chain" {
-        return Err(MoltenError::invalid_harness(format!("unsupported gate chain evidence profile {profile}")));
+        return Err(Failure::invalid_harness(format!("unsupported gate chain evidence profile {profile}")));
     }
     let checks = parse_checks(&evidence[6])?;
     require_check(&checks, "chain-continuity")?;
@@ -258,10 +258,10 @@ fn require_predicates(predicates: &ParsedPredicates, range_ref: &str, link_ref: 
     require_chain_predicate_kind(&predicates.receipts, crate::evidence_chain::SEGMENT_NO_FORK_PREDICATE)?;
     require_chain_predicate_kind(&predicates.receipts, crate::evidence_chain::DESCENDS_FROM_ANCHOR_PREDICATE)?;
     if range_predicate.subject_refs != vec![link_ref.to_string()] {
-        return Err(MoltenError::invalid_harness("gate chain range predicate subjects do not match anchored link"));
+        return Err(Failure::invalid_harness("gate chain range predicate subjects do not match anchored link"));
     }
     if range_predicate.input_refs != vec![payload_ref.to_string()] {
-        return Err(MoltenError::invalid_harness("gate chain range predicate inputs do not match report payload ref"));
+        return Err(Failure::invalid_harness("gate chain range predicate inputs do not match report payload ref"));
     }
     Ok(())
 }

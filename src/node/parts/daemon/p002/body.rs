@@ -202,7 +202,7 @@ struct LiveWorkflowBundleImportReceiptValueInput<'a> {
 #[derive(Debug)]
 struct DeniedLiveSendInput<'a> {
     input: &'a ControlLiveSendInput<'a>,
-    state_root: Option<&'a crate::node_state::NodeStateRoot>,
+    state_root: Option<&'a crate::node_state::Root>,
     ticket: &'a ControlLiveTicket,
     envelope: ControlIngressEnvelope,
     diagnostics: Vec<String>,
@@ -274,7 +274,7 @@ struct LoopReceiptValueInput<'a> {
 
 #[derive(Debug, Clone, Copy)]
 struct OperationFinalizeInput<'a> {
-    state_root: &'a crate::node_state::NodeStateRoot,
+    state_root: &'a crate::node_state::Root,
     request: &'a crate::node_runtime::ControlRequest,
     startup_receipt_ref: &'a str,
     subreceipt_refs: &'a [String],

@@ -2,7 +2,7 @@
 pub fn parse_candidate_bundle(value: &IoValue) -> Result<CandidateBundle> {
     let fields = value
         .collect_simple_record("retention-candidate-bundle-v1", Some(13))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-candidate-bundle-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-candidate-bundle-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::RETENTION_CANDIDATE_BUNDLE_SCHEMA,
@@ -11,7 +11,7 @@ pub fn parse_candidate_bundle(value: &IoValue) -> Result<CandidateBundle> {
     let explain_ref = record_ref(&fields[1], "explain")?;
     let object_fields = fields[2]
         .collect_simple_record("object", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("expected retention candidate bundle object"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected retention candidate bundle object"))?;
     let object_ref = required_string(&object_fields[0], "retention bundle object ref")?;
     require_ref(&object_ref, "retention bundle object ref")?;
     let object_kind = optional_record_string(&object_fields[1], "retention bundle object kind")?;
@@ -20,7 +20,7 @@ pub fn parse_candidate_bundle(value: &IoValue) -> Result<CandidateBundle> {
     }
     let filter_fields = fields[3]
         .collect_simple_record("filters", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("expected retention bundle filters"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected retention bundle filters"))?;
     let retention_class = record_optional_string(&filter_fields[0], "class")?;
     if let Some(retention_class) = retention_class.as_deref() {
         validate_class(retention_class)?;

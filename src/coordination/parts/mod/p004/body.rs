@@ -197,7 +197,7 @@ fn record_success(input: SuccessInput<'_>) -> Result<CoordinationApplyResult> {
     runtime.next_sequence = runtime
         .next_sequence
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness("coordination raft sequence overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("coordination raft sequence overflow"))?;
     let parts = success_parts(PartsInput {
         transition: &transition,
         request: &request,
@@ -521,6 +521,6 @@ fn prepare_mutation(runtime: &CoordinationRuntime, request: &CoordinationRequest
         (SERVICE_BARRIER, OP_ARRIVE) => prepare_barrier(runtime, request),
         (SERVICE_REGISTRY, OP_REGISTER) => prepare_registry_register(runtime, request),
         (SERVICE_REGISTRY, OP_UNREGISTER) => prepare_registry_unregister(runtime, request),
-        _ => Err(MoltenError::invalid_harness("unsupported coordination mutation")),
+        _ => Err(Failure::invalid_harness("unsupported coordination mutation")),
     }
 }

@@ -234,13 +234,13 @@ pub fn gc_plan_value(input: &GcPlanValueInput<'_>) -> Result<IoValue> {
 pub fn parse_gc_plan(value: &IoValue) -> Result<GcPlan> {
     let fields = value
         .collect_simple_record("retention-gc-plan-v1", Some(13))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-gc-plan-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-gc-plan-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::RETENTION_GC_PLAN_SCHEMA, "retention GC plan schema")?;
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     let mode = record_string(&fields[2], "mode")?;
     if mode != "dry-run" {
-        return Err(MoltenError::invalid_harness("retention GC plan mode must be dry-run"));
+        return Err(Failure::invalid_harness("retention GC plan mode must be dry-run"));
     }
     let subsystem = record_string(&fields[3], "subsystem")?;
     validate_name(&subsystem, "retention GC plan subsystem")?;
@@ -252,12 +252,12 @@ pub fn parse_gc_plan(value: &IoValue) -> Result<GcPlan> {
     let requester_ref = record_optional_ref(&fields[7], "requester")?;
     let (index_ref, index) = parse_embedded_reference_index(&fields[8])?;
     if index.object_ref != object_ref || index.object_kind != object_kind {
-        return Err(MoltenError::invalid_harness("retention GC plan index scope mismatch"));
+        return Err(Failure::invalid_harness("retention GC plan index scope mismatch"));
     }
     let evidence_value = parse_embedded_destructive_evidence_summary(&fields[9])?;
     let evidence = parse_destructive_evidence_summary_to_evidence(&evidence_value)?;
     if requester_ref != evidence.requester_ref {
-        return Err(MoltenError::invalid_harness("retention GC plan requester evidence mismatch"));
+        return Err(Failure::invalid_harness("retention GC plan requester evidence mismatch"));
     }
     let gates = parse_plan_gates(&fields[10])?;
     let diagnostics = record_string_sequence(&fields[11], "diagnostics")?;
@@ -294,7 +294,7 @@ pub fn read_gc_plan_with_root(root: &CapabilityRetentionRoot, plan_ref: &str) ->
     let value = read_store_value_with_root(root, &capability_ref_path(GC_PLAN_DIR, plan_ref)?)?;
     let plan = parse_gc_plan(&value)?;
     if plan.plan_ref != plan_ref {
-        return Err(MoltenError::invalid_harness("stored retention GC plan ref mismatch"));
+        return Err(Failure::invalid_harness("stored retention GC plan ref mismatch"));
     }
     Ok(plan)
 }

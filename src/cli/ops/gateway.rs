@@ -55,7 +55,7 @@ fn reset_fixture_root(root: &std::path::Path) -> Outcome<()> {
     match std::fs::remove_dir_all(root) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(molten::error::MoltenError::from(error)),
+        Err(error) => Err(molten::error::Failure::from(error)),
     }
 }
 
@@ -75,7 +75,7 @@ fn collect_fixture_chunks(
         })
         .collect::<std::collections::BTreeMap<_, _>>();
     if chunk_bytes.len() != manifest.chunks.len() {
-        return Err(molten::error::MoltenError::invalid_harness(
+        return Err(molten::error::Failure::invalid_harness(
             "gateway fixture manifest contains duplicate chunk refs",
         ));
     }
@@ -85,7 +85,7 @@ fn collect_fixture_chunks(
 fn ensure_fixture_chunk_count(body: &[u8], chunk_count: usize) -> Outcome<()> {
     let expected_chunks = body.len().div_ceil(GATEWAY_CHUNK_SIZE_USIZE);
     if chunk_count > expected_chunks {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "gateway fixture chunk count {chunk_count} exceeds expected bound {expected_chunks}"
         )));
     }
@@ -140,9 +140,9 @@ fn emit(out: Option<&std::path::PathBuf>, label: &str, value: &preserves::IOValu
     let reference = molten::preserves_rail::canonical_hash(value)?;
     if let Some(path) = out {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(molten::error::MoltenError::from)?;
+            std::fs::create_dir_all(parent).map_err(molten::error::Failure::from)?;
         }
-        std::fs::write(path, text).map_err(molten::error::MoltenError::from)?;
+        std::fs::write(path, text).map_err(molten::error::Failure::from)?;
         println!("{label} {reference} written to {}", path.display());
     } else {
         println!("{text}");

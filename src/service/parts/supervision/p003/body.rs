@@ -26,14 +26,14 @@ fn evaluate_restart(suite: &ServiceSupervisionSuite) -> Result<RestartEvaluation
     let backoff_slot = suite
         .restart_attempt
         .checked_mul(suite.restart_policy.backoff_steps)
-        .ok_or_else(|| MoltenError::invalid_harness("service restart backoff overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("service restart backoff overflow"))?;
     let attempt = if suite.restart_attempt >= suite.restart_policy.max_attempts {
         suite.restart_attempt
     } else {
         suite
             .restart_attempt
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("service restart attempt overflow"))?
+            .ok_or_else(|| Failure::invalid_harness("service restart attempt overflow"))?
     };
     if is_revoked {
         return Ok(restart_evaluation("deny", attempt, backoff_slot, vec![
@@ -104,7 +104,7 @@ fn scheduled_demands(suite: &ServiceSupervisionSuite, restart: &RestartEvaluatio
         .authority_refs
         .first()
         .cloned()
-        .ok_or_else(|| MoltenError::invalid_harness("restart pass requires authority ref"))?;
+        .ok_or_else(|| Failure::invalid_harness("restart pass requires authority ref"))?;
     let demand = crate::service_records::service_demand_value(&crate::service_records::ServiceDemandInput {
         demand_id: format!("restart:{}:{}", suite.manifest.service_id, restart.attempt),
         service_id: suite.manifest.service_id.clone(),
@@ -210,7 +210,7 @@ fn cleanup_targets(owned_state: &ServiceOwnedState) -> Result<Vec<CleanupTarget>
         .and_then(|total| total.checked_add(owned_state.live_ref_refs.len()))
         .and_then(|total| total.checked_add(owned_state.exposed_ref_refs.len()))
         .and_then(|total| total.checked_add(owned_state.pending_effect_refs.len()))
-        .ok_or_else(|| MoltenError::invalid_harness("service cleanup target count overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("service cleanup target count overflow"))?;
     ensure_count_at_most(total, "service cleanup targets")?;
     let mut targets = OrderedSet::new();
     insert_targets(&mut targets, "owned-assertion", &owned_state.owned_assertion_refs);
@@ -267,7 +267,7 @@ fn status_values(failure_status: &IoValue, final_statuses: &[IoValue]) -> Result
     let total = final_statuses
         .len()
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness("service status count overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("service status count overflow"))?;
     let mut statuses = Vec::with_capacity(total);
     statuses.push(failure_status.clone());
     statuses.extend_from_slice(final_statuses);
@@ -292,7 +292,7 @@ fn supervision_refs(
         .len()
         .checked_add(monitor_refs.len())
         .and_then(|total| total.checked_add(notification_refs.len()))
-        .ok_or_else(|| MoltenError::invalid_harness("service supervision ref count overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("service supervision ref count overflow"))?;
     let mut refs = Vec::with_capacity(total);
     refs.extend(suite.links.iter().map(|link| link.link_ref.clone()));
     refs.extend_from_slice(monitor_refs);

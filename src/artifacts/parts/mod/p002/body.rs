@@ -257,13 +257,13 @@ pub fn release_snapshot_value_input_with_root(
     let artifact_refs = sorted_unique(&draft.artifact_refs);
     let (closure_refs, missing_refs) = compute_closure_refs(root, &artifact_refs)?;
     if !missing_refs.is_empty() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "release snapshot cannot bind missing closure refs: {}",
             missing_refs.join(", ")
         )));
     }
     if closure_refs != artifact_refs {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "release snapshot artifact refs must equal dependency closure: expected {}, got {}",
             closure_refs.join(", "),
             artifact_refs.join(", ")
@@ -379,7 +379,7 @@ pub fn release_snapshot_value(input: &ReleaseSnapshotValueInput) -> Result<IoVal
 pub fn parse_release_snapshot_value(value: &IoValue) -> Result<ReleaseSnapshot> {
     let fields = value
         .collect_simple_record("artifact-release-snapshot-v1", Some(RELEASE_SNAPSHOT_RECORD_ARITY))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <artifact-release-snapshot-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <artifact-release-snapshot-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::ARTIFACT_RELEASE_SNAPSHOT_SCHEMA, "release snapshot")?;
     let checks = parse_checks(&fields[15])?;
     require_check(&checks, "immutable-snapshot-artifact", "release snapshot")?;
@@ -436,7 +436,7 @@ pub fn install_release_snapshot_with_root(
 ) -> Result<ReleaseSnapshotInstall> {
     validate_ref(&input.installer_ref, "release snapshot installer ref")?;
     if input.capability_refs.is_empty() {
-        return Err(MoltenError::invalid_harness("release snapshot install requires at least one capability ref"));
+        return Err(Failure::invalid_harness("release snapshot install requires at least one capability ref"));
     }
     validate_refs(&input.capability_refs, "release snapshot capability ref")?;
     let snapshot_input = release_snapshot_value_input_with_root(root, &input.snapshot)?;
@@ -521,7 +521,7 @@ pub fn set_release_channel_with_root(
     validate_release_channel_update_input(input)?;
     let artifact = read_artifact_with_root(root, &input.snapshot_ref)?;
     if artifact.kind != RELEASE_SNAPSHOT_ARTIFACT_KIND {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "release channel target {} is {}, expected {RELEASE_SNAPSHOT_ARTIFACT_KIND}",
             input.snapshot_ref, artifact.kind
         )));
@@ -602,7 +602,7 @@ pub fn read_receipt_with_root(root: &CapabilityArtifactRoot, receipt_ref: &str) 
     let read_txn = db.begin_read().map_err(index_error)?;
     let receipts = read_txn.open_table(INDEX_RECEIPTS).map_err(index_error)?;
     let Some(bytes) = receipts.get(receipt_ref).map_err(index_error)? else {
-        return Err(MoltenError::invalid_harness(format!("artifact receipt {receipt_ref} not found")));
+        return Err(Failure::invalid_harness(format!("artifact receipt {receipt_ref} not found")));
     };
     let value = parse_canonical_bytes(bytes.value())?;
     parse_artifact_receipt(&value)
@@ -630,11 +630,11 @@ pub fn list_receipts_with_root(root: &CapabilityArtifactRoot) -> Result<Vec<Arti
 pub fn parse_artifact_receipt(value: &IoValue) -> Result<ArtifactReceipt> {
     let fields = value
         .collect_simple_record("artifact-receipt-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <artifact-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <artifact-receipt-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::ARTIFACT_RECEIPT_SCHEMA, "artifact receipt")?;
     let checks = parse_checks(&fields[7])?;
     if checks.is_empty() {
-        return Err(MoltenError::invalid_harness("artifact receipt missing checks"));
+        return Err(Failure::invalid_harness("artifact receipt missing checks"));
     }
     Ok(ArtifactReceipt {
         receipt_ref: canonical_hash(value)?,
@@ -802,7 +802,7 @@ struct NamePointerValueInput<'a> {
 fn artifact_receipt_value(input: &ArtifactReceiptValueInput<'_>) -> Result<IoValue> {
     validate_non_empty(input.operation, "artifact receipt operation")?;
     if !matches!(input.decision, "pass" | "deny") {
-        return Err(MoltenError::invalid_harness(format!("unsupported artifact receipt decision {}", input.decision)));
+        return Err(Failure::invalid_harness(format!("unsupported artifact receipt decision {}", input.decision)));
     }
     validate_ref(input.subject_ref, "artifact receipt subject ref")?;
     validate_refs(input.refs, "artifact receipt ref")?;
@@ -899,7 +899,7 @@ fn dependency_edge_value(
 fn parse_dependency_edge_value(value: &IoValue) -> Result<ArtifactDependencyEdge> {
     let fields = value
         .collect_simple_record("artifact-dependency-edge-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <artifact-dependency-edge-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <artifact-dependency-edge-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::ARTIFACT_DEPENDENCY_EDGE_SCHEMA, "artifact dependency edge")?;
     let checks = parse_checks(&fields[8])?;
     require_check(&checks, "direct-edge", "artifact dependency edge")?;
@@ -907,7 +907,7 @@ fn parse_dependency_edge_value(value: &IoValue) -> Result<ArtifactDependencyEdge
     let required_record = simple_record(&required_value, "required", 1)?;
     let required = required_record[0]
         .as_boolean()
-        .ok_or_else(|| MoltenError::invalid_harness("artifact dependency edge required must be bool"))?;
+        .ok_or_else(|| Failure::invalid_harness("artifact dependency edge required must be bool"))?;
     Ok(ArtifactDependencyEdge {
         edge_ref: canonical_hash(value)?,
         source_ref: record_ref(&fields[1], "source")?,
@@ -946,7 +946,7 @@ fn validate_dependency_label(value: &str, field: &str) -> Result<()> {
     if value.chars().all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_') {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "{field} {value} must use lowercase ascii, digits, '-' or '_'"
         )))
     }

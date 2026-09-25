@@ -19,7 +19,7 @@ fn parse_edge_sequence(value: &Value<IoValue>) -> Result<Vec<JobEdge>> {
 fn parse_job_edge_value(value: &IoValue) -> Result<JobEdge> {
     let fields = value
         .collect_simple_record("job-edge-v1", Some(7))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <job-edge-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <job-edge-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::JOB_DAG_EDGE_SCHEMA, "job edge")?;
     let from = crate::preserves_rail::value_to_iovalue(&fields[1]);
     let from_fields = simple_record(&from, "from", 2)?;
@@ -51,7 +51,7 @@ fn execution_order(nodes: &[JobNode], edges: &[JobEdge]) -> Result<Vec<String>> 
 fn trellis_execution_plan(nodes: &[JobNode], edges: &[JobEdge]) -> Result<TrellisExecutionPlan> {
     let mapping = plan_mapping(nodes, edges)?;
     if mapping.node_ids.len().checked_add(mapping.edges.len()).is_none() {
-        return Err(MoltenError::invalid_harness("job dag trellis mapping exceeds topo-sort size precondition"));
+        return Err(Failure::invalid_harness("job dag trellis mapping exceeds topo-sort size precondition"));
     }
     let order_ids = plan_order_ids(&mapping.edges, &mapping.node_ids)?;
     let dependency_indices = plan_dependency_indices(&mapping.edges, &mapping.node_ids)?;
@@ -72,7 +72,7 @@ fn plan_mapping(nodes: &[JobNode], edges: &[JobEdge]) -> Result<PlanMapping> {
     node_ids.sort();
     node_ids.dedup();
     if node_ids.len() != nodes.len() {
-        return Err(MoltenError::invalid_harness("job dag has duplicate node ids before trellis mapping"));
+        return Err(Failure::invalid_harness("job dag has duplicate node ids before trellis mapping"));
     }
     let mut node_index = OrderedMap::new();
     for (index, node) in node_ids.iter().enumerate() {
@@ -81,11 +81,11 @@ fn plan_mapping(nodes: &[JobNode], edges: &[JobEdge]) -> Result<PlanMapping> {
     let mut mapped_edges = Vec::with_capacity(edges.len());
     for edge in edges {
         let from = *node_index.get(&edge.from_node).ok_or_else(|| {
-            MoltenError::invalid_harness(format!("trellis edge from unknown node {}", edge.from_node))
+            Failure::invalid_harness(format!("trellis edge from unknown node {}", edge.from_node))
         })?;
         let to = *node_index
             .get(&edge.to_node)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("trellis edge to unknown node {}", edge.to_node)))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("trellis edge to unknown node {}", edge.to_node)))?;
         push_bounded(&mut mapped_edges, (from, to), MAX_JOB_EDGES, "trellis edges")?;
     }
     mapped_edges.sort();
@@ -98,16 +98,16 @@ fn plan_mapping(nodes: &[JobNode], edges: &[JobEdge]) -> Result<PlanMapping> {
 
 fn plan_order_ids(edges: &[(usize, usize)], node_ids: &[String]) -> Result<Vec<String>> {
     let Some(order_indices) = trellis::topo_sort::topo_sort(edges, node_ids.len()) else {
-        return Err(MoltenError::invalid_harness("trellis topo_sort rejected cyclic job dag"));
+        return Err(Failure::invalid_harness("trellis topo_sort rejected cyclic job dag"));
     };
     if !trellis::topo_sort::is_topo_order(edges, node_ids.len(), &order_indices) {
-        return Err(MoltenError::invalid_harness("trellis topo_sort produced invalid job order"));
+        return Err(Failure::invalid_harness("trellis topo_sort produced invalid job order"));
     }
     let mut order_ids = Vec::with_capacity(order_indices.len());
     for index in &order_indices {
         let node_id = node_ids
             .get(*index)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("trellis topo index {index} outside node set")))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("trellis topo index {index} outside node set")))?;
         push_bounded(&mut order_ids, node_id.clone(), MAX_JOB_NODES, "trellis order ids")?;
     }
     Ok(order_ids)
@@ -128,10 +128,10 @@ fn plan_dependency_indices(edges: &[(usize, usize)], node_ids: &[String]) -> Res
     for (from, to) in edges {
         let to_node = node_ids
             .get(*to)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("trellis dependency index {to} outside node set")))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("trellis dependency index {to} outside node set")))?;
         let dependency_values = dependency_indices
             .get_mut(to_node)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("dependency vector missing for {to_node}")))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("dependency vector missing for {to_node}")))?;
         push_bounded(
             dependency_values,
             usize_to_u64(*from, "trellis dependency index")?,
@@ -152,10 +152,10 @@ fn trellis_incoming_counts(trellis_edges: &[(usize, usize)], node_count: usize) 
     for (_, to) in trellis_edges {
         let count = counts
             .get_mut(*to)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("trellis edge target {to} outside node set")))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("trellis edge target {to} outside node set")))?;
         *count = count
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("trellis incoming edge count overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("trellis incoming edge count overflow"))?;
         ensure_count_at_most(*count, MAX_JOB_EDGES, "trellis incoming edges")?;
     }
     Ok(counts)
@@ -167,7 +167,7 @@ fn find_job_node<'a>(nodes: &'a [JobNode], node_id: &str) -> Result<&'a JobNode>
             return Ok(node);
         }
     }
-    Err(MoltenError::invalid_harness(format!("job node {node_id} missing from node set")))
+    Err(Failure::invalid_harness(format!("job node {node_id} missing from node set")))
 }
 
 fn gather_inputs(
@@ -206,11 +206,11 @@ fn indexed_stage_outputs<'a>(
 ) -> Result<&'a Vec<IoValue>> {
     let from_index = *node_index
         .get(node_id)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("job edge input from {node_id} lacks node index")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("job edge input from {node_id} lacks node index")))?;
     outputs_by_index
         .get(from_index)
         .and_then(Option::as_ref)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("job edge input from {node_id} not available")))
+        .ok_or_else(|| Failure::invalid_harness(format!("job edge input from {node_id} not available")))
 }
 
 fn sink_nodes(dag: &JobDag) -> Result<Vec<String>> {
@@ -258,7 +258,7 @@ fn parse_cached_stage_output(value: &IoValue) -> Result<Vec<IoValue>> {
         }
         Ok(values)
     } else {
-        Err(MoltenError::invalid_harness("cached job stage output must be a sequence"))
+        Err(Failure::invalid_harness("cached job stage output must be a sequence"))
     }
 }
 

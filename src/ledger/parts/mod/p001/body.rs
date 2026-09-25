@@ -59,7 +59,7 @@ fn remove_entries(
             push_bounded(&mut removed_refs, entry.artifact_ref.clone(), MAX_SCAN_ENTRIES, "ledger removed refs")?;
             if !is_dry_run {
                 std::fs::remove_file(content_path(root, &entry.artifact_ref)?)
-                    .map_err(crate::error::MoltenError::from)?;
+                    .map_err(crate::error::Failure::from)?;
             }
         }
     }
@@ -227,17 +227,17 @@ pub fn artifact_kind(value: &preserves::IOValue) -> &'static str {
 }
 
 fn ensure_dirs_with_root(root: &CapabilityLedgerRoot) -> crate::error::Result<()> {
-    root.root().create_dir_all(&crate::local_store::LocalStorePath::parse("content")?)?;
-    root.root().create_dir_all(&crate::local_store::LocalStorePath::parse("pins")?)
+    root.root().create_dir_all(&crate::local_store::RelativeLocator::parse("content")?)?;
+    root.root().create_dir_all(&crate::local_store::RelativeLocator::parse("pins")?)
 }
 
-fn content_store_path(artifact_ref: &str) -> crate::error::Result<crate::local_store::LocalStorePath> {
-    crate::local_store::LocalStorePath::parse("content")?.join(&filename_for_ref(artifact_ref)?)
+fn content_store_path(artifact_ref: &str) -> crate::error::Result<crate::local_store::RelativeLocator> {
+    crate::local_store::RelativeLocator::parse("content")?.join(&filename_for_ref(artifact_ref)?)
 }
 
 fn ensure_dirs(root: &std::path::Path) -> crate::error::Result<()> {
-    std::fs::create_dir_all(root.join("content")).map_err(crate::error::MoltenError::from)?;
-    std::fs::create_dir_all(root.join("pins")).map_err(crate::error::MoltenError::from)
+    std::fs::create_dir_all(root.join("content")).map_err(crate::error::Failure::from)?;
+    std::fs::create_dir_all(root.join("pins")).map_err(crate::error::Failure::from)
 }
 
 fn content_path(root: &std::path::Path, artifact_ref: &str) -> crate::error::Result<std::path::PathBuf> {
@@ -257,9 +257,9 @@ fn push_bounded<T>(
     let total = values
         .item_count()
         .checked_add(1)
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("{label} count overflow")))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("{label} count overflow")))?;
     if total > maximum {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "{label} count {total} exceeds bound {maximum}"
         )));
     }
@@ -269,7 +269,7 @@ fn push_bounded<T>(
 
 fn filename_for_ref(artifact_ref: &str) -> crate::error::Result<String> {
     let hex = crate::preserves_rail::content_ref_hex(artifact_ref).map_err(|error| {
-        crate::error::MoltenError::invalid_harness(format!("unsupported ledger artifact ref {artifact_ref}: {error}"))
+        crate::error::Failure::invalid_harness(format!("unsupported ledger artifact ref {artifact_ref}: {error}"))
     })?;
     Ok(format!("blake3_{hex}.bin"))
 }
@@ -286,12 +286,12 @@ fn pinned_refs(root: &std::path::Path) -> crate::error::Result<Vec<String>> {
         return Ok(Vec::new());
     }
     let mut refs = Vec::new();
-    for entry in std::fs::read_dir(pins).map_err(crate::error::MoltenError::from)? {
-        let entry = entry.map_err(crate::error::MoltenError::from)?;
-        if entry.file_type().map_err(crate::error::MoltenError::from)?.is_file() {
-            let reference = std::fs::read_to_string(entry.path()).map_err(crate::error::MoltenError::from)?;
+    for entry in std::fs::read_dir(pins).map_err(crate::error::Failure::from)? {
+        let entry = entry.map_err(crate::error::Failure::from)?;
+        if entry.file_type().map_err(crate::error::Failure::from)?.is_file() {
+            let reference = std::fs::read_to_string(entry.path()).map_err(crate::error::Failure::from)?;
             crate::preserves_rail::validate_content_ref(&reference).map_err(|error| {
-                crate::error::MoltenError::invalid_harness(format!(
+                crate::error::Failure::invalid_harness(format!(
                     "ledger pin file contains invalid content ref {reference}: {error}"
                 ))
             })?;

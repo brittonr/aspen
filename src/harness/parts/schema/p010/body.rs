@@ -137,14 +137,14 @@ pub fn validate_golden_trace_update_receipt(value: &IoValue, updated_report_valu
     let receipt = simple_record(value, "golden-trace-update-receipt-v1", 11)?;
     let schema = required_string(&receipt[0], "golden trace update receipt schema")?;
     if schema != crate::preserves_rail::HARNESS_GOLDEN_TRACE_UPDATE_RECEIPT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported golden trace update receipt schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_GOLDEN_TRACE_UPDATE_RECEIPT_SCHEMA
         )));
     }
     let decision = required_record_string(&receipt[1], "decision", "golden trace update decision")?;
     if decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!("unsupported golden trace update decision {decision}")));
+        return Err(crate::error::Failure::invalid_harness(format!("unsupported golden trace update decision {decision}")));
     }
     let reason = required_record_string(&receipt[2], "reason", "golden trace update reason")?;
     validate_golden_trace_update_reason(&reason)?;
@@ -155,17 +155,17 @@ pub fn validate_golden_trace_update_receipt(value: &IoValue, updated_report_valu
     let report = parse_report(updated_report_value)?;
     let updated_report_ref = required_record_hash(&receipt[4], "updated-report-ref", "updated golden report ref")?;
     if updated_report_ref != report.report_ref {
-        return Err(MoltenError::invalid_harness("golden trace update report ref does not match updated report"));
+        return Err(crate::error::Failure::invalid_harness("golden trace update report ref does not match updated report"));
     }
     let suite_ref = required_record_hash(&receipt[5], "suite-ref", "golden trace suite ref")?;
     if suite_ref != report.suite_ref {
-        return Err(MoltenError::invalid_harness("golden trace update suite ref does not match updated report"));
+        return Err(crate::error::Failure::invalid_harness("golden trace update suite ref does not match updated report"));
     }
     let expected_trace_ref =
         canonical_hash(&sequence(report.observations.iter().map(|observation| observation.value.clone()).collect()))?;
     let trace_ref = required_record_hash(&receipt[6], "trace-ref", "golden trace ref")?;
     if trace_ref != expected_trace_ref {
-        return Err(MoltenError::invalid_harness("golden trace update trace ref does not match report observations"));
+        return Err(crate::error::Failure::invalid_harness("golden trace update trace ref does not match report observations"));
     }
     let expected_receipt_ref = canonical_hash(&record("harness-golden-receipt-anchor", vec![
         string(&report.report_ref),
@@ -174,11 +174,11 @@ pub fn validate_golden_trace_update_receipt(value: &IoValue, updated_report_valu
     ]))?;
     let receipt_ref = required_record_hash(&receipt[7], "receipt-ref", "golden receipt ref")?;
     if receipt_ref != expected_receipt_ref {
-        return Err(MoltenError::invalid_harness("golden trace update receipt ref does not match report"));
+        return Err(crate::error::Failure::invalid_harness("golden trace update receipt ref does not match report"));
     }
     let state_ref = required_record_hash(&receipt[8], "state-ref", "golden state ref")?;
     if state_ref != report.final_state_hash {
-        return Err(MoltenError::invalid_harness("golden trace update state ref does not match final state"));
+        return Err(crate::error::Failure::invalid_harness("golden trace update state ref does not match final state"));
     }
     let reviewer_ref = required_record_hash(&receipt[9], "reviewer-ref", "golden trace reviewer ref")?;
     validate_content_ref(&reviewer_ref)?;
@@ -199,7 +199,7 @@ fn validate_golden_trace_update_reason(reason: &str) -> Result<()> {
     if matches!(reason, "schema-driven" | "policy-driven" | "migration-driven" | "bug-fix") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(crate::error::Failure::invalid_harness(format!(
             "unsupported golden trace update reason {reason}; expected schema-driven, policy-driven, migration-driven, or bug-fix"
         )))
     }
@@ -223,7 +223,7 @@ pub fn upgrade_replay_receipt_value(
         validate_content_ref(compatibility_diagnostic_ref)?;
     }
     if !is_stable_replay && migration_receipt_ref.is_none() && compatibility_diagnostic_ref.is_none() {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "upgrade replay trace drift requires migration receipt or compatibility diagnostic",
         ));
     }
@@ -282,18 +282,18 @@ pub fn validate_upgrade_replay_receipt(
 fn require_upgrade_replay_header(receipt: &Record<Value<IoValue>>) -> Result<String> {
     let schema = required_string(&receipt[0], "upgrade replay receipt schema")?;
     if schema != crate::preserves_rail::HARNESS_UPGRADE_REPLAY_RECEIPT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported upgrade replay receipt schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_UPGRADE_REPLAY_RECEIPT_SCHEMA
         )));
     }
     let decision = required_record_string(&receipt[1], "decision", "upgrade replay decision")?;
     if decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!("unsupported upgrade replay decision {decision}")));
+        return Err(crate::error::Failure::invalid_harness(format!("unsupported upgrade replay decision {decision}")));
     }
     let outcome = required_record_string(&receipt[2], "outcome", "upgrade replay outcome")?;
     if !matches!(outcome.as_str(), "stable" | "migrated" | "diagnosed") {
-        return Err(MoltenError::invalid_harness(format!("unsupported upgrade replay outcome {outcome}")));
+        return Err(crate::error::Failure::invalid_harness(format!("unsupported upgrade replay outcome {outcome}")));
     }
     Ok(outcome)
 }

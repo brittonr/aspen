@@ -5,7 +5,7 @@ fn validate_evidence_list(
     diagnostics: &mut impl PushLimited<String>,
 ) -> Result<()> {
     if evidence.len() > MAX_COVERAGE_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "traceability {label} evidence count {} exceeds bound {MAX_COVERAGE_ITEMS}",
             evidence.len()
         )));

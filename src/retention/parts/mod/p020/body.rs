@@ -176,7 +176,7 @@ fn candidate_bundle_profile_value(input: &CandidateBundleProfileValueInput<'_>) 
 pub fn parse_candidate_bundle_profile(value: &IoValue) -> Result<CandidateBundleProfile> {
     let fields = value
         .collect_simple_record("retention-candidate-bundle-profile-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-candidate-bundle-profile-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-candidate-bundle-profile-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::RETENTION_CANDIDATE_BUNDLE_PROFILE_SCHEMA,
@@ -186,7 +186,7 @@ pub fn parse_candidate_bundle_profile(value: &IoValue) -> Result<CandidateBundle
     let parsed_profile = CandidateBundleExportProfile::parse(&profile)?;
     let loss_classification = record_string(&fields[2], "loss-classification")?;
     if loss_classification != parsed_profile.loss_classification() {
-        return Err(MoltenError::invalid_harness("retention bundle profile loss classification mismatch"));
+        return Err(Failure::invalid_harness("retention bundle profile loss classification mismatch"));
     }
     let decision = record_string(&fields[3], "decision")?;
     validate_decision(&decision)?;

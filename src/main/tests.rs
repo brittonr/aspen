@@ -2,7 +2,7 @@ use super::*;
 
 type Path = std::path::Path;
 type PathBuf = std::path::PathBuf;
-type MoltenError = molten::error::MoltenError;
+type Failure = molten::error::Failure;
 type Result<T> = molten::error::Result<T>;
 type Top = crate::cli_chunk::Top;
 type CoordinationCommand = crate::cli_coordination::CoordinationCommand;
@@ -71,7 +71,7 @@ fn to_text(value: &preserves::IOValue) -> Result<String> {
     molten::preserves_rail::to_text(value)
 }
 
-fn failure_value(phase: &str, error: &MoltenError, diagnostics: Vec<preserves::IOValue>) -> preserves::IOValue {
+fn failure_value(phase: &str, error: &Failure, diagnostics: Vec<preserves::IOValue>) -> preserves::IOValue {
     molten::harness::failure_value(phase, error, diagnostics)
 }
 
@@ -168,15 +168,15 @@ fn cli_synthetic_ref(label: &str) -> Result<String> {
 }
 
 fn read_preserves_file(path: &Path) -> Result<preserves::IOValue> {
-    let text = fs::read_to_string(path).map_err(MoltenError::from)?;
+    let text = fs::read_to_string(path).map_err(Failure::from)?;
     parse_text(&text)
 }
 
 fn write_file(path: &Path, contents: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(MoltenError::from)?;
+        fs::create_dir_all(parent).map_err(Failure::from)?;
     }
-    fs::write(path, contents).map_err(MoltenError::from)
+    fs::write(path, contents).map_err(Failure::from)
 }
 
 include!("tests/core/basic.rs");

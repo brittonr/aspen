@@ -1,8 +1,8 @@
 use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt};
 use molten::content_store_adapter::*;
-use molten::error::{MoltenError, Result};
+use molten::error::{Failure, Result};
 use molten::node_content;
-use molten::node_state::{NodeStatePath, NodeStateRoot};
+use molten::node_state::{RelativePath, Root};
 use serde_json::json;
 use std::{
     io::{Read, Write},
@@ -63,20 +63,20 @@ struct Fetch {
 pub(crate) fn run(command: Command) -> Result<()> {
     let event = match command.action {
         Action::Identity(state) => {
-            let root = NodeStateRoot::open_existing(&state.state_root)?;
+            let root = Root::open_existing(&state.state_root)?;
             let id = node_content::identity(&root)?;
             json!({"event":"identity", "public_key":id.public_key})
         }
         Action::Prepare(input) => {
             let bytes = read_input(&input.archive, NODE_CONTENT_MAX_BYTES)?;
-            admit_node_archive(&bytes, &input.expected).map_err(MoltenError::invalid_harness)?;
-            let root = NodeStateRoot::open_existing(&input.state.state_root)?;
+            admit_node_archive(&bytes, &input.expected).map_err(Failure::invalid_harness)?;
+            let root = Root::open_existing(&input.state.state_root)?;
             let manifest = node_content::prepare(&root, &bytes, &input.expected)?;
             json!({"event":"prepared", "manifest_ref":manifest, "archive_blake3":input.expected, "bytes":bytes.len(), "pinned":true})
         }
         Action::Fetch(input) => {
             let handoff = read_input(&input.handoff, MAX_LIVE_HANDOFF_BYTES as u64)?;
-            let root = NodeStateRoot::open_existing(&input.state.state_root)?;
+            let root = Root::open_existing(&input.state.state_root)?;
             let runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build()?;
             let (bytes, receipt) = runtime.block_on(node_content::fetch(node_content::FetchInput {
                 root: &root,
@@ -92,8 +92,8 @@ pub(crate) fn run(command: Command) -> Result<()> {
                 "bytes":bytes.len(), "receipt_ref":receipt, "package_provenance":false})
         }
         Action::Status(state) => {
-            let root = NodeStateRoot::open_existing(&state.state_root)?;
-            let bytes = root.read(&NodeStatePath::parse(node_content::STATUS_FILE)?, 65_536)?;
+            let root = Root::open_existing(&state.state_root)?;
+            let bytes = root.read(&RelativePath::parse(node_content::STATUS_FILE)?, 65_536)?;
             let status: serde_json::Value = serde_json::from_slice(&bytes).map_err(json_error)?;
             json!({"event":"status", "content":status})
         }
@@ -110,18 +110,18 @@ pub(crate) fn read_input(path: &Path, limit: u64) -> Result<Vec<u8>> {
     options.read(true).follow(FollowSymlinks::No);
     let file = dir.open_with(&leaf, &options)?;
     if !file.metadata()?.is_file() {
-        return Err(MoltenError::invalid_harness("node content input is not a regular file"));
+        return Err(Failure::invalid_harness("node content input is not a regular file"));
     }
     let mut bytes = Vec::new();
     file.take(limit + 1).read_to_end(&mut bytes)?;
     if bytes.len() as u64 > limit {
-        return Err(MoltenError::invalid_harness("node content input exceeds bound"));
+        return Err(Failure::invalid_harness("node content input exceeds bound"));
     }
     Ok(bytes)
 }
 
 fn parent_grant(path: &Path) -> Result<(cap_std::fs::Dir, std::ffi::OsString)> {
-    let leaf = path.file_name().ok_or_else(|| MoltenError::invalid_harness("node content file name required"))?;
+    let leaf = path.file_name().ok_or_else(|| Failure::invalid_harness("node content file name required"))?;
     let parent = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
     Ok((cap_std::fs::Dir::open_ambient_dir(parent, cap_std::ambient_authority())?, leaf.to_os_string()))
 }
@@ -141,6 +141,6 @@ fn publish_new(path: &Path, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-fn json_error(error: serde_json::Error) -> MoltenError {
-    MoltenError::invalid_harness(format!("node content JSON: {error}"))
+fn json_error(error: serde_json::Error) -> Failure {
+    Failure::invalid_harness(format!("node content JSON: {error}"))
 }

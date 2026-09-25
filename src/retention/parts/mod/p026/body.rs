@@ -42,10 +42,10 @@ fn validate_class_profile_input(input: &ClassProfileInput) -> Result<()> {
     require_ref(&input.deletion_authority_ref, "retention deletion authority ref")?;
     validate_refs(&input.policy_refs, "retention class policy ref")?;
     if input.policy_refs.is_empty() {
-        return Err(MoltenError::invalid_harness("retention class profile requires policy refs"));
+        return Err(Failure::invalid_harness("retention class profile requires policy refs"));
     }
     if input.maximum_age_seconds.is_some_and(|maximum| maximum < input.minimum_age_seconds) {
-        return Err(MoltenError::invalid_harness("retention maximum age cannot be below minimum age"));
+        return Err(Failure::invalid_harness("retention maximum age cannot be below minimum age"));
     }
     Ok(())
 }
@@ -63,7 +63,7 @@ fn validate_pin_input(input: &PinInput) -> Result<()> {
     validate_refs(&input.policy_refs, "retention pin policy ref")?;
     validate_refs(&input.evidence_refs, "retention pin evidence ref")?;
     if input.policy_refs.is_empty() {
-        return Err(MoltenError::invalid_harness("retention pin requires policy refs"));
+        return Err(Failure::invalid_harness("retention pin requires policy refs"));
     }
     Ok(())
 }
@@ -80,7 +80,7 @@ fn validate_reference_index_input(input: &ReferenceIndexInput) -> Result<()> {
 
 fn validate_receipt_build_input(input: &ReceiptBuildInput<'_>) -> Result<()> {
     if input.decision != "pass" && input.decision != "deny" {
-        return Err(MoltenError::invalid_harness("retention receipt decision must be pass or deny"));
+        return Err(Failure::invalid_harness("retention receipt decision must be pass or deny"));
     }
     validate_action(input.action)?;
     require_ref(input.object_ref, "retention receipt object ref")?;
@@ -103,7 +103,7 @@ fn validate_class(value: &str) -> Result<()> {
     if RETENTION_CLASSES.iter().any(|class| class == &value) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported retention class {value}")))
+        Err(Failure::invalid_harness(format!("unsupported retention class {value}")))
     }
 }
 
@@ -111,7 +111,7 @@ fn validate_pin_source(value: &str) -> Result<()> {
     if PIN_SOURCES.iter().any(|source| source == &value) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported retention pin source {value}")))
+        Err(Failure::invalid_harness(format!("unsupported retention pin source {value}")))
     }
 }
 
@@ -119,7 +119,7 @@ fn validate_action(value: &str) -> Result<()> {
     if RETENTION_ACTIONS.iter().any(|action| action == &value) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported retention action {value}")))
+        Err(Failure::invalid_harness(format!("unsupported retention action {value}")))
     }
 }
 
@@ -127,7 +127,7 @@ fn validate_admission_kind(value: &str) -> Result<()> {
     if ADMISSION_KINDS.iter().any(|kind| kind == &value) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported retention admission kind {value}")))
+        Err(Failure::invalid_harness(format!("unsupported retention admission kind {value}")))
     }
 }
 
@@ -135,7 +135,7 @@ fn validate_decision(value: &str) -> Result<()> {
     if matches!(value, "pass" | "deny") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported retention admission decision {value}")))
+        Err(Failure::invalid_harness(format!("unsupported retention admission decision {value}")))
     }
 }
 

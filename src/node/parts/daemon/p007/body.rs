@@ -47,7 +47,7 @@ fn apply_gate_check(
 }
 
 fn apply_import_step(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     input: &ControlLiveWorkflowBundleApplyInput<'_>,
 ) -> Result<ImportStep> {
     let import_input = live_workflow_bundle_import_input_from_apply(input);
@@ -68,7 +68,7 @@ fn apply_import_step(
 }
 
 async fn apply_transfer_step(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     input: &ControlLiveWorkflowBundleApplyInput<'_>,
 ) -> Result<TransferStep> {
     let Some(request_value) = input.request_value else {
@@ -139,7 +139,7 @@ async fn apply_transfer_step(
 }
 
 fn finish_apply(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     input: FinishInput<'_>,
 ) -> Result<ControlLiveWorkflowBundleApply> {
     let decision = if input.diagnostics.is_empty() { "pass" } else { "deny" };
@@ -191,7 +191,7 @@ pub async fn apply_control_live_workflow_bundle(
     input: &ControlLiveWorkflowBundleApplyInput<'_>,
 ) -> Result<ControlLiveWorkflowBundleApply> {
     validate_live_workflow_bundle_apply_input(input)?;
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::Root::open(input.state_root)?;
     ensure_state_layout(&state_root)?;
     let verify_input = live_workflow_bundle_verify_input_from_apply(input);
     let verified = verify_control_live_workflow_bundle(&verify_input)?;

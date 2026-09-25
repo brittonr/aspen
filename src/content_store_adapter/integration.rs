@@ -1,7 +1,7 @@
 use molten_core::content_store_adapter::*;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub fn content_adapter_profile(
@@ -58,7 +58,7 @@ pub fn content_adapter_profile(
     if issues.is_empty() {
         Ok(profile)
     } else {
-        Err(MoltenError::invalid_harness(format!("content adapter profile denied: {issues:?}")))
+        Err(Failure::invalid_harness(format!("content adapter profile denied: {issues:?}")))
     }
 }
 
@@ -102,29 +102,29 @@ pub fn assemble_verified_content(
     chunks: &[VerifiedChunkPayload],
 ) -> Result<Vec<u8>> {
     if !content_is_available(manifest, state) {
-        return Err(MoltenError::invalid_harness("content cannot be assembled before complete verification"));
+        return Err(Failure::invalid_harness("content cannot be assembled before complete verification"));
     }
     if chunks.len() != manifest.chunks.len() {
-        return Err(MoltenError::invalid_harness("verified payload count does not match manifest"));
+        return Err(Failure::invalid_harness("verified payload count does not match manifest"));
     }
     let manifest_chunk_size = usize::try_from(manifest.chunk_size)
-        .map_err(|_| MoltenError::invalid_harness("manifest chunk size does not fit usize"))?;
+        .map_err(|_| Failure::invalid_harness("manifest chunk size does not fit usize"))?;
     let mut bytes = Vec::new();
     for (position, (descriptor, payload)) in manifest.chunks.iter().zip(chunks).enumerate() {
         if payload.position != position || payload.chunk_ref != descriptor.chunk_ref {
-            return Err(MoltenError::invalid_harness("verified payload ordering does not match manifest"));
+            return Err(Failure::invalid_harness("verified payload ordering does not match manifest"));
         }
         let payload_length = u64::try_from(payload.bytes.len())
-            .map_err(|_| MoltenError::invalid_harness("verified payload length does not fit u64"))?;
+            .map_err(|_| Failure::invalid_harness("verified payload length does not fit u64"))?;
         if payload_length != descriptor.length
             || crate::chunk_store::hash_chunk(&payload.bytes, manifest_chunk_size) != descriptor.chunk_ref
         {
-            return Err(MoltenError::invalid_harness("verified payload no longer matches canonical chunk identity"));
+            return Err(Failure::invalid_harness("verified payload no longer matches canonical chunk identity"));
         }
         bytes.extend_from_slice(&payload.bytes);
     }
     if u64::try_from(bytes.len()).ok() != Some(manifest.total_length) {
-        return Err(MoltenError::invalid_harness("assembled content length does not match manifest"));
+        return Err(Failure::invalid_harness("assembled content length does not match manifest"));
     }
     Ok(bytes)
 }
@@ -156,7 +156,7 @@ fn expected_shape(manifest: &ContentManifestDescriptor, range: Option<ContentRan
     match range {
         Some(range) => {
             let refs = required_chunks_for_range(manifest, range)
-                .map_err(|issue| MoltenError::invalid_harness(format!("content range denied: {issue:?}")))?;
+                .map_err(|issue| Failure::invalid_harness(format!("content range denied: {issue:?}")))?;
             Ok((range.length, refs.len()))
         }
         None => Ok((manifest.total_length, manifest.chunks.len())),

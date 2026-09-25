@@ -15,7 +15,7 @@ use super::cohort::VM_COHORT_PUBLICATION_REVISION;
 use super::cohort::VmCohortCloneBinding;
 use super::cohort::VmCohortLimits;
 use super::cohort::VmCohortPlanProjection;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub(super) fn project_plan(
@@ -24,10 +24,10 @@ pub(super) fn project_plan(
     plan: &vm::CohortPlan,
 ) -> Result<VmCohortPlanProjection> {
     if request.children.len() != plan.clones.len() {
-        return Err(MoltenError::invalid_harness("VM Cohort clone count differs from Molten child count"));
+        return Err(Failure::invalid_harness("VM Cohort clone count differs from Molten child count"));
     }
     let mechanism_plan_json = serde_json::to_vec(plan)
-        .map_err(|error| MoltenError::invalid_harness(format!("VM Cohort plan serialization failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("VM Cohort plan serialization failed: {error}")))?;
     let plan_ref = json_ref("mechanism-plan", plan)?;
     let mut clones = Vec::with_capacity(plan.clones.len());
     for (index, (child, clone)) in request.children.iter().zip(&plan.clones).enumerate() {
@@ -50,7 +50,7 @@ pub(super) fn project_plan(
 
 fn clone_binding(index: usize, child: &CloneChild, clone: &vm::ClonePlan) -> Result<VmCohortCloneBinding> {
     let child_index =
-        u32::try_from(index).map_err(|_| MoltenError::invalid_harness("VM Cohort child index exceeds u32"))?;
+        u32::try_from(index).map_err(|_| Failure::invalid_harness("VM Cohort child index exceeds u32"))?;
     Ok(VmCohortCloneBinding {
         child_index,
         vm_clone_ref: clone.clone_ref.as_str().to_string(),
@@ -67,13 +67,13 @@ pub(super) fn validate_mapped_descriptor(
     envelope: &chaos::SnapshotDescriptorEnvelope,
 ) -> Result<()> {
     chaos::validate_descriptor(&envelope.descriptor)
-        .map_err(|error| MoltenError::invalid_harness(format!("ChaosControl descriptor denied: {error:?}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("ChaosControl descriptor denied: {error:?}")))?;
     let observed = chaos::descriptor_identity(&envelope.descriptor)
-        .map_err(|error| MoltenError::invalid_harness(format!("ChaosControl identity failed: {error:?}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("ChaosControl identity failed: {error:?}")))?;
     if observed != envelope.descriptor_id
         || component_ref(descriptor, SnapshotComponentKind::MachineDescriptor)? != tagged_ref(&observed)?
     {
-        return Err(MoltenError::invalid_harness("VM Cohort ChaosControl descriptor binding drifted"));
+        return Err(Failure::invalid_harness("VM Cohort ChaosControl descriptor binding drifted"));
     }
     Ok(())
 }
@@ -82,7 +82,7 @@ pub(super) fn validate_limits(limits: &VmCohortLimits) -> Result<()> {
     let adapter = adapter_ref();
     for value in [limits.policy_ref.as_str(), adapter.as_str()] {
         crate::preserves_rail::validate_content_ref(value)
-            .map_err(|_| MoltenError::invalid_harness("VM Cohort policy reference is invalid"))?;
+            .map_err(|_| Failure::invalid_harness("VM Cohort policy reference is invalid"))?;
     }
     Ok(())
 }
@@ -113,7 +113,7 @@ pub(super) fn component_ref(descriptor: &SnapshotDescriptor, kind: SnapshotCompo
         .iter()
         .find(|component| component.kind == kind)
         .map(|component| component.identity.as_str())
-        .ok_or_else(|| MoltenError::invalid_harness("VM Cohort descriptor component is missing"))
+        .ok_or_else(|| Failure::invalid_harness("VM Cohort descriptor component is missing"))
 }
 
 pub(super) fn fact_ref(descriptor: &SnapshotDescriptor, kind: CohortFactKind) -> Result<&str> {
@@ -123,7 +123,7 @@ pub(super) fn fact_ref(descriptor: &SnapshotDescriptor, kind: CohortFactKind) ->
         .iter()
         .find(|fact| fact.kind == kind)
         .map(|fact| fact.identity.as_str())
-        .ok_or_else(|| MoltenError::invalid_harness("VM Cohort cohort fact is missing"))
+        .ok_or_else(|| Failure::invalid_harness("VM Cohort cohort fact is missing"))
 }
 
 pub(super) fn guest_artifact_ref(
@@ -134,7 +134,7 @@ pub(super) fn guest_artifact_ref(
         .guest_artifacts
         .iter()
         .find(|artifact| artifact.role == role)
-        .ok_or_else(|| MoltenError::invalid_harness("ChaosControl guest artifact is missing"))?;
+        .ok_or_else(|| Failure::invalid_harness("ChaosControl guest artifact is missing"))?;
     json_ref("guest-artifact", artifact)
 }
 
@@ -159,7 +159,7 @@ pub(super) fn adapter_ref() -> String {
 
 pub(super) fn json_ref<T: Serialize>(label: &str, value: &T) -> Result<String> {
     let bytes = serde_json::to_vec(value)
-        .map_err(|error| MoltenError::invalid_harness(format!("VM Cohort identity serialization failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("VM Cohort identity serialization failed: {error}")))?;
     let mut hasher = blake3::Hasher::new_derive_key(VM_COHORT_PLAN_DOMAIN);
     update_text(&mut hasher, label)?;
     update_bytes(&mut hasher, &bytes)?;
@@ -168,23 +168,23 @@ pub(super) fn json_ref<T: Serialize>(label: &str, value: &T) -> Result<String> {
 
 fn tagged_ref(identity: &chaos::TaggedDigest) -> Result<String> {
     if identity.algorithm != chaos::DigestAlgorithm::Blake3 {
-        return Err(MoltenError::invalid_harness("ChaosControl descriptor identity is not BLAKE3"));
+        return Err(Failure::invalid_harness("ChaosControl descriptor identity is not BLAKE3"));
     }
     Ok(format!("blake3:{}", identity.hex))
 }
 
 pub(super) fn vm_resource_ref(value: &str) -> Result<vm::ResourceRef> {
     vm::ResourceRef::new(value.to_string())
-        .map_err(|_| MoltenError::invalid_harness("VM Cohort resource reference is invalid"))
+        .map_err(|_| Failure::invalid_harness("VM Cohort resource reference is invalid"))
 }
 
 pub(super) fn vm_profile_ref(value: &str) -> Result<vm::ProfileRef> {
     vm::ProfileRef::new(value.to_string())
-        .map_err(|_| MoltenError::invalid_harness("VM Cohort profile reference is invalid"))
+        .map_err(|_| Failure::invalid_harness("VM Cohort profile reference is invalid"))
 }
 
-pub(super) fn clone_issues(issues: Vec<SnapshotIssue>) -> MoltenError {
-    MoltenError::invalid_harness(format!("Molten clone plan denied: {issues:?}"))
+pub(super) fn clone_issues(issues: Vec<SnapshotIssue>) -> Failure {
+    Failure::invalid_harness(format!("Molten clone plan denied: {issues:?}"))
 }
 
 fn update_text(hasher: &mut blake3::Hasher, value: &str) -> Result<()> {
@@ -193,7 +193,7 @@ fn update_text(hasher: &mut blake3::Hasher, value: &str) -> Result<()> {
 
 fn update_bytes(hasher: &mut blake3::Hasher, value: &[u8]) -> Result<()> {
     let length =
-        u64::try_from(value.len()).map_err(|_| MoltenError::invalid_harness("VM Cohort identity input exceeds u64"))?;
+        u64::try_from(value.len()).map_err(|_| Failure::invalid_harness("VM Cohort identity input exceeds u64"))?;
     hasher.update(&length.to_le_bytes());
     hasher.update(value);
     Ok(())

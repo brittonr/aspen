@@ -299,7 +299,7 @@ pub fn service_lifecycle_assertion(
     evidence_refs: &[String],
 ) -> Result<RuntimeValue> {
     if service_id.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("service lifecycle assertion id must be non-empty"));
+        return Err(Failure::invalid_harness("service lifecycle assertion id must be non-empty"));
     }
     if let Some(reference) = target_ref {
         validate_content_ref(reference)?;
@@ -317,7 +317,7 @@ pub fn service_lifecycle_assertion(
 
 fn validate_service_demand_input(input: &ServiceDemandEvaluationInput<'_>) -> Result<()> {
     if input.service_id.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("service demand id must be non-empty"));
+        return Err(Failure::invalid_harness("service demand id must be non-empty"));
     }
     validate_content_ref(input.demand_ref)?;
     validate_content_ref(input.manifest_ref)?;
@@ -349,10 +349,10 @@ fn service_readiness_evidence_refs(input: &ServiceDemandEvaluationInput<'_>) -> 
 
 fn validate_transition_input(input: &TransitionInput) -> Result<()> {
     if input.entity_id.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("lifecycle entity id must be non-empty"));
+        return Err(Failure::invalid_harness("lifecycle entity id must be non-empty"));
     }
     if input.cause.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("lifecycle transition cause must be non-empty"));
+        return Err(Failure::invalid_harness("lifecycle transition cause must be non-empty"));
     }
     validate_refs("policy", &input.policy_refs)?;
     validate_refs("resources", &input.resource_refs)?;

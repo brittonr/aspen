@@ -70,7 +70,7 @@ fn validate_remote_gc_clearance_workflow_scope(
         || clearance.policy_ref != request.policy_ref
         || clearance.authority_ref != request.authority_ref
     {
-        return Err(MoltenError::invalid_harness("remote clearance workflow scope mismatch"));
+        return Err(Failure::invalid_harness("remote clearance workflow scope mismatch"));
     }
     Ok(())
 }
@@ -79,13 +79,13 @@ fn parse_embedded_remote_clearance_request(value: &Value<IoValue>) -> Result<Rem
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("request", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("expected embedded remote clearance request"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected embedded remote clearance request"))?;
     let request_ref = required_string(&fields[0], "remote clearance request ref")?;
     require_ref(&request_ref, "remote clearance request ref")?;
     let request_value = crate::preserves_rail::value_to_iovalue(&fields[1]);
     let request = parse_remote_gc_clearance_request(&request_value)?;
     if request.request_ref != request_ref {
-        return Err(MoltenError::invalid_harness("embedded remote clearance request ref mismatch"));
+        return Err(Failure::invalid_harness("embedded remote clearance request ref mismatch"));
     }
     Ok(request)
 }
@@ -94,13 +94,13 @@ fn parse_embedded_remote_clearance(value: &Value<IoValue>) -> Result<RemoteGcCle
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("clearance", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("expected embedded remote clearance"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected embedded remote clearance"))?;
     let clearance_ref = required_string(&fields[0], "remote clearance ref")?;
     require_ref(&clearance_ref, "remote clearance ref")?;
     let clearance_value = crate::preserves_rail::value_to_iovalue(&fields[1]);
     let clearance = parse_remote_gc_clearance(&clearance_value)?;
     if clearance.clearance_ref != clearance_ref {
-        return Err(MoltenError::invalid_harness("embedded remote clearance ref mismatch"));
+        return Err(Failure::invalid_harness("embedded remote clearance ref mismatch"));
     }
     Ok(clearance)
 }
@@ -109,13 +109,13 @@ fn parse_embedded_remote_clearance_import(value: &Value<IoValue>) -> Result<Remo
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("import", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("expected embedded remote clearance import"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected embedded remote clearance import"))?;
     let import_ref = required_string(&fields[0], "remote clearance import ref")?;
     require_ref(&import_ref, "remote clearance import ref")?;
     let import_value = crate::preserves_rail::value_to_iovalue(&fields[1]);
     let import = parse_remote_gc_clearance_import(&import_value)?;
     if import.import_ref != import_ref {
-        return Err(MoltenError::invalid_harness("embedded remote clearance import ref mismatch"));
+        return Err(Failure::invalid_harness("embedded remote clearance import ref mismatch"));
     }
     Ok(import)
 }
@@ -124,12 +124,12 @@ fn parse_embedded_value(value: &Value<IoValue>, label: &str) -> Result<(String, 
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected embedded {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected embedded {label}")))?;
     let value_ref = required_string(&fields[0], label)?;
     require_ref(&value_ref, label)?;
     let embedded = crate::preserves_rail::value_to_iovalue(&fields[1]);
     if crate::preserves_rail::canonical_hash(&embedded)? != value_ref {
-        return Err(MoltenError::invalid_harness(format!("embedded {label} ref mismatch")));
+        return Err(Failure::invalid_harness(format!("embedded {label} ref mismatch")));
     }
     Ok((value_ref, embedded))
 }
@@ -222,7 +222,7 @@ fn pins_for_object_with_root(root: &CapabilityRetentionRoot, object_ref: &str) -
         return Ok(pins);
     }
     for entry in root.root().list_entries(&directory)? {
-        if entry.kind != crate::local_store::LocalStoreEntryKind::File {
+        if entry.kind != crate::local_store::ObjectKind::File {
             continue;
         }
         let value = read_store_value_with_root(root, &entry.path)?;
@@ -242,7 +242,7 @@ fn tombstone_refs_for_object_with_root(root: &CapabilityRetentionRoot, object_re
         return Ok(refs);
     }
     for entry in root.root().list_entries(&directory)? {
-        if entry.kind != crate::local_store::LocalStoreEntryKind::File {
+        if entry.kind != crate::local_store::ObjectKind::File {
             continue;
         }
         let value = read_store_value_with_root(root, &entry.path)?;

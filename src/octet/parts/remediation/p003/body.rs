@@ -234,7 +234,7 @@ fn insert_count_bounded(
     label: &str,
 ) -> Result<()> {
     if !counts.contains_key(name) && counts.len() >= limit {
-        return Err(MoltenError::invalid_harness(format!("{label} count section exceeds row bound")));
+        return Err(Failure::invalid_harness(format!("{label} count section exceeds row bound")));
     }
     counts.insert(name.to_string(), count);
     Ok(())
@@ -247,7 +247,7 @@ fn increment_count(counts: &mut Map<String, u64>, name: &str, count: u64) {
 
 fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, limit: usize, label: &str) -> Result<()> {
     if values.item_count() >= limit {
-        return Err(MoltenError::invalid_harness(format!("{label} exceeds item bound")));
+        return Err(Failure::invalid_harness(format!("{label} exceeds item bound")));
     }
     values.push_item(value);
     Ok(())

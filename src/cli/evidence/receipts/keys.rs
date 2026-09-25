@@ -133,7 +133,7 @@ fn show(key_ref: String, ledger: FilePath) -> Outcome<()> {
 fn revoke(input: RevokeInput) -> Outcome<()> {
     let keyring = super::load_signed_receipt_keyring(&input.ledger)?;
     if super::keyring::revocation(&keyring, &input.key_ref).is_some() {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "signed receipt key {} is already revoked",
             input.key_ref
         )));
@@ -158,7 +158,7 @@ fn revoke(input: RevokeInput) -> Outcome<()> {
 fn rotate(input: RotateInput) -> Outcome<()> {
     let keyring = super::load_signed_receipt_keyring(&input.ledger)?;
     if super::keyring::revocation(&keyring, &input.old_key_ref).is_some() {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "signed receipt key {} is already revoked and cannot be rotated",
             input.old_key_ref
         )));
@@ -168,7 +168,7 @@ fn rotate(input: RotateInput) -> Outcome<()> {
     let generation = old_key
         .generation
         .checked_add(1)
-        .ok_or_else(|| molten::error::MoltenError::invalid_harness("signed receipt key generation overflow"))?;
+        .ok_or_else(|| molten::error::Failure::invalid_harness("signed receipt key generation overflow"))?;
     let new_value = molten::evidence::signed_receipt_key_value(&molten::evidence::SignedReceiptKeyInput {
         key_id: &input.new_key_id,
         signer: &old_key.signer,

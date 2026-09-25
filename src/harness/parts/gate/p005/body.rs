@@ -46,7 +46,7 @@ fn turn_journal_context_refs(
     for (event, event_ref) in observation.events.iter().zip(observation.event_refs.iter()) {
         let computed_event_ref = canonical_hash(event)?;
         if computed_event_ref != *event_ref {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "turn journal observation event refs do not match canonical events",
             ));
         }
@@ -112,7 +112,7 @@ fn parse_turn_journals(value: &Value<IoValue>, report_ref: &str, suite_ref: &str
     let journals_record = simple_record(&value, "turn-journals", 3)?;
     let profile = required_record_string(&journals_record[0], "profile", "turn journal profile")?;
     if profile != "per-actor-local-turn-journal" {
-        return Err(MoltenError::invalid_harness(format!("unsupported turn journal profile {profile}")));
+        return Err(Failure::invalid_harness(format!("unsupported turn journal profile {profile}")));
     }
     let journal_values = required_record_values(&journals_record[1], "journals")?;
     let checks = parse_checks(&journals_record[2])?;
@@ -143,12 +143,12 @@ fn parse_turn_journal_set(
     for journal_value in journal_values {
         let journal = parse_turn_journal(journal_value, report_ref, suite_ref)?;
         if actor_ids.insert(journal.actor_id.clone(), ()).is_some() {
-            return Err(MoltenError::invalid_harness(format!("duplicate turn journal for actor {}", journal.actor_id)));
+            return Err(Failure::invalid_harness(format!("duplicate turn journal for actor {}", journal.actor_id)));
         }
         journals.push(journal);
     }
     if journals.is_empty() {
-        return Err(MoltenError::invalid_harness("turn journal evidence must contain at least one actor journal"));
+        return Err(Failure::invalid_harness("turn journal evidence must contain at least one actor journal"));
     }
     Ok(journals)
 }
@@ -197,7 +197,7 @@ fn parse_turn_journal_links(
     suite_ref: &str,
 ) -> Result<ParsedTurnJournalLinks> {
     if link_values.is_empty() {
-        return Err(MoltenError::invalid_harness("turn journal must contain at least one link"));
+        return Err(Failure::invalid_harness("turn journal must contain at least one link"));
     }
     let mut links = Vec::with_capacity(link_values.len());
     let mut link_refs = Vec::with_capacity(link_values.len());
@@ -237,12 +237,12 @@ fn validate_turn_journal_link(input: TurnJournalLinkValidation<'_>) -> Result<()
         || input.link.chain.id != input.actor_id
         || input.link.chain.epoch != input.report_ref
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "turn journal link scope must be per actor and per report, not global",
         ));
     }
     if input.link.sequence != input.position as u64 {
-        return Err(MoltenError::invalid_harness("turn journal link sequence is not contiguous"));
+        return Err(Failure::invalid_harness("turn journal link sequence is not contiguous"));
     }
     validate_turn_journal_previous_ref(input.link, input.position, input.link_refs)?;
     require_context_ref(&input.link.context_refs, "report", input.report_ref)?;
@@ -262,12 +262,12 @@ fn validate_turn_journal_previous_ref(
 ) -> Result<()> {
     if position == 0 {
         if link.previous_link_ref.is_some() {
-            return Err(MoltenError::invalid_harness("turn journal genesis link must not name a previous link"));
+            return Err(Failure::invalid_harness("turn journal genesis link must not name a previous link"));
         }
         return Ok(());
     }
     if link.previous_link_ref.as_deref() != link_refs.get(position - 1).map(String::as_str) {
-        return Err(MoltenError::invalid_harness("turn journal link does not bind previous actor-local turn"));
+        return Err(Failure::invalid_harness("turn journal link does not bind previous actor-local turn"));
     }
     Ok(())
 }

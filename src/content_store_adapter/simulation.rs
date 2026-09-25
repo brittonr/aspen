@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use molten_core::content_store_adapter::*;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,14 +35,14 @@ pub fn execute_simulated_stream(
     fault: Option<SimulationFault>,
 ) -> Result<SimulationContentExecution> {
     if profile.class != ContentAdapterClass::DeterministicSimulation {
-        return Err(MoltenError::invalid_harness("simulation execution requires deterministic simulation profile"));
+        return Err(Failure::invalid_harness("simulation execution requires deterministic simulation profile"));
     }
     let preflight = preflight_content_operation(profile, manifest, command, 0, 0);
     if preflight.terminal != ContentTerminal::Accepted || !preflight.issues.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("simulation preflight denied: {:?}", preflight.issues)));
+        return Err(Failure::invalid_harness(format!("simulation preflight denied: {:?}", preflight.issues)));
     }
     let mut state = begin_partial_state(profile, manifest, command, generation, retained)
-        .map_err(|issues| MoltenError::invalid_harness(format!("simulation partial state denied: {issues:?}")))?;
+        .map_err(|issues| Failure::invalid_harness(format!("simulation partial state denied: {issues:?}")))?;
     if fault == Some(SimulationFault::CapacityExceeded) {
         state = classify_content_failure(profile, &state, ContentFailure::Overload).map_err(transition_error)?;
         return terminal_execution(profile, manifest, command, state);
@@ -51,7 +51,7 @@ pub fn execute_simulated_stream(
         let completion_tick = command
             .submitted_tick
             .checked_add(latency)
-            .ok_or_else(|| MoltenError::invalid_harness("simulation latency overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("simulation latency overflow"))?;
         if completion_tick > command.deadline_tick {
             state = classify_content_failure(profile, &state, ContentFailure::Timeout).map_err(transition_error)?;
             return terminal_execution(profile, manifest, command, state);
@@ -96,12 +96,12 @@ pub fn execute_simulated_stream(
         }
         let bytes = chunks
             .get(&descriptor.chunk_ref)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("simulation lacks chunk {}", descriptor.chunk_ref)))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("simulation lacks chunk {}", descriptor.chunk_ref)))?;
         let manifest_chunk_size = usize::try_from(manifest.chunk_size)
-            .map_err(|_| MoltenError::invalid_harness("simulation chunk size does not fit usize"))?;
+            .map_err(|_| Failure::invalid_harness("simulation chunk size does not fit usize"))?;
         let mut observed_ref = crate::chunk_store::hash_chunk(bytes, manifest_chunk_size);
         let mut observed_length = u64::try_from(bytes.len())
-            .map_err(|_| MoltenError::invalid_harness("simulation chunk length does not fit u64"))?;
+            .map_err(|_| Failure::invalid_harness("simulation chunk length does not fit u64"))?;
         if fault == Some(SimulationFault::CorruptAt(descriptor.position)) {
             observed_ref = crate::preserves_rail::content_ref_from_bytes(b"deterministic-corruption");
         }
@@ -206,16 +206,16 @@ fn failure_from_issues(issues: &[ContentIssue]) -> ContentFailure {
 fn terminal_sequence(state: &ContentPartialState) -> Result<u64> {
     state
         .last_sequence
-        .ok_or_else(|| MoltenError::invalid_harness("terminal simulation state lacks event sequence"))
+        .ok_or_else(|| Failure::invalid_harness("terminal simulation state lacks event sequence"))
 }
 
-fn transition_error(issue: ContentIssue) -> MoltenError {
-    MoltenError::invalid_harness(format!("simulation transition denied: {issue:?}"))
+fn transition_error(issue: ContentIssue) -> Failure {
+    Failure::invalid_harness(format!("simulation transition denied: {issue:?}"))
 }
 
 fn next_sequence(state: &ContentPartialState) -> Result<u64> {
     state
         .last_sequence
         .map_or(Some(0), |sequence| sequence.checked_add(1))
-        .ok_or_else(|| MoltenError::invalid_harness("simulation event sequence overflow"))
+        .ok_or_else(|| Failure::invalid_harness("simulation event sequence overflow"))
 }

@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use molten_core::prolly_map::*;
-use molten_node_host::node_state::NodeStateNamespaceKind;
-use molten_node_host::node_state::NodeStateRoot;
+use molten_node_host::node_state::NamespaceKind;
+use molten_node_host::node_state::Root;
 
 use super::*;
 
@@ -10,9 +10,9 @@ use super::*;
 #[test]
 fn local_store_stages_publishes_restarts_and_executes_revalidated_gc() {
     let temporary = cap_tempfile::tempdir(cap_std::ambient_authority()).expect("temporary state root");
-    let root = NodeStateRoot::from_dir(temporary.try_clone().expect("clone root"));
+    let root = Root::from_dir(temporary.try_clone().expect("clone root"));
     root.create_layout().expect("node state layout");
-    let storage = root.namespace(NodeStateNamespaceKind::Storage).expect("storage namespace");
+    let storage = root.namespace(NamespaceKind::Storage).expect("storage namespace");
     let mut store = LocalProllyBlockStore::open(&storage).expect("Prolly store");
     let profile = profile();
     let initial = initial_plan();

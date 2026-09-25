@@ -10,7 +10,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use molten::error::MoltenError;
+use molten::error::Failure;
 use molten::error::Result;
 use molten::world_snapshot::canonical_snapshot_clone_plan;
 use molten::world_snapshot::canonical_snapshot_compatibility;
@@ -120,7 +120,7 @@ fn compatibility(source: &Path, destination: &Path) -> Result<()> {
         println!("issue={issue:?}");
     }
     if report.verdict != CompatibilityVerdict::Compatible {
-        return Err(MoltenError::invalid_harness("world snapshot compatibility denied"));
+        return Err(Failure::invalid_harness("world snapshot compatibility denied"));
     }
     Ok(())
 }
@@ -129,7 +129,7 @@ fn restore_plan(source: &Path, destination: &Path, current_admission: bool, out:
     let (descriptor, _) = load_descriptor(source)?;
     let (target, _) = load_descriptor(destination)?;
     let plan = plan_restore(&descriptor, &target.cohort, current_admission).map_err(|report| {
-        MoltenError::invalid_harness(format!("world snapshot restore planning denied: {:?}", report.issues))
+        Failure::invalid_harness(format!("world snapshot restore planning denied: {:?}", report.issues))
     })?;
     let canonical = molten::world_snapshot::canonical_snapshot_restore_plan(&plan)?;
     write_optional(out, &canonical.bytes)?;
@@ -144,9 +144,9 @@ fn restore_plan(source: &Path, destination: &Path, current_admission: bool, out:
 fn clone_plan(source: &Path, children: u32, out: Option<&Path>) -> Result<()> {
     let (descriptor, _) = load_descriptor(source)?;
     let child_count = usize::try_from(children)
-        .map_err(|_| MoltenError::invalid_harness("world snapshot child count exceeds usize"))?;
+        .map_err(|_| Failure::invalid_harness("world snapshot child count exceeds usize"))?;
     if child_count == 0 || child_count > MAX_CLONE_CHILDREN {
-        return Err(MoltenError::invalid_harness("world snapshot child count is outside the reviewed bound"));
+        return Err(Failure::invalid_harness("world snapshot child count is outside the reviewed bound"));
     }
     let request = ClonePlanRequest {
         parent_ref: descriptor.commit_ref.clone(),
@@ -175,14 +175,14 @@ fn denied_restore(source: &Path, destination: &Path, receipt_out: &Path) -> Resu
         non_claims: SNAPSHOT_NON_CLAIMS.iter().map(ToString::to_string).collect(),
     };
     let canonical = canonical_snapshot_receipt(&receipt)?;
-    std::fs::write(receipt_out, canonical.bytes).map_err(MoltenError::from)?;
+    std::fs::write(receipt_out, canonical.bytes).map_err(Failure::from)?;
     println!("decision=denied");
     println!("receipt_ref={}", canonical.artifact_ref);
-    Err(MoltenError::invalid_harness("world snapshot restore requires an admitted runtime adapter"))
+    Err(Failure::invalid_harness("world snapshot restore requires an admitted runtime adapter"))
 }
 
 fn load_descriptor(path: &Path) -> Result<(SnapshotDescriptor, molten::world_snapshot::CanonicalSnapshotArtifact)> {
-    let bytes = std::fs::read(path).map_err(MoltenError::from)?;
+    let bytes = std::fs::read(path).map_err(Failure::from)?;
     parse_canonical_snapshot_descriptor(&bytes)
 }
 
@@ -206,7 +206,7 @@ fn overlay(descriptor: &SnapshotDescriptor, index: u32, surface: &str) -> Result
 
 fn update_text(hasher: &mut blake3::Hasher, value: &str) -> Result<()> {
     let length =
-        u64::try_from(value.len()).map_err(|_| MoltenError::invalid_harness("world snapshot CLI value exceeds u64"))?;
+        u64::try_from(value.len()).map_err(|_| Failure::invalid_harness("world snapshot CLI value exceeds u64"))?;
     hasher.update(&length.to_le_bytes());
     hasher.update(value.as_bytes());
     Ok(())
@@ -214,7 +214,7 @@ fn update_text(hasher: &mut blake3::Hasher, value: &str) -> Result<()> {
 
 fn write_optional(path: Option<&Path>, bytes: &[u8]) -> Result<()> {
     if let Some(path) = path {
-        std::fs::write(path, bytes).map_err(MoltenError::from)?;
+        std::fs::write(path, bytes).map_err(Failure::from)?;
     }
     Ok(())
 }

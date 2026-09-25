@@ -101,7 +101,7 @@ fn check_request(root: &crate::local_store::DeliveryStoreRoot, input: CheckReque
         IdempotencyDecisionKind::First => first_decision(input, &db, operation, current_window, dedup_key)?,
         IdempotencyDecisionKind::Duplicate | IdempotencyDecisionKind::Conflict => {
             let entry = existing_entry.ok_or_else(|| {
-                MoltenError::invalid_harness("delivery idempotency invariant violated: duplicate/conflict without entry")
+                Failure::invalid_harness("delivery idempotency invariant violated: duplicate/conflict without entry")
             })?;
             duplicate_or_conflict_decision(input, &db, operation, current_window, entry, &law)?
         }
@@ -118,7 +118,7 @@ pub fn read_idempotency_receipt(root: &std::path::Path, receipt_ref: &str) -> Re
     let read_txn = db.begin_read().map_err(store_error)?;
     let table = read_txn.open_table(STORE_RECEIPTS).map_err(store_error)?;
     let Some(bytes) = table.get(receipt_ref).map_err(store_error)? else {
-        return Err(MoltenError::invalid_harness(format!("unknown delivery idempotency receipt {receipt_ref}")));
+        return Err(Failure::invalid_harness(format!("unknown delivery idempotency receipt {receipt_ref}")));
     };
     crate::preserves_rail::parse_canonical_bytes(bytes.value())
 }
@@ -139,7 +139,7 @@ pub fn retry_receipt_value(operation: &OperationId, window: &Window, diagnostics
 pub fn parse_receipt(value: &IoValue) -> Result<Receipt> {
     let fields = value
         .collect_simple_record("delivery-idempotency-receipt-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <delivery-idempotency-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <delivery-idempotency-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::DELIVERY_IDEMPOTENCY_RECEIPT_SCHEMA,
@@ -167,7 +167,7 @@ pub fn parse_receipt(value: &IoValue) -> Result<Receipt> {
 pub fn parse_dedup_entry(value: &IoValue) -> Result<DedupEntry> {
     let fields = value
         .collect_simple_record("dedup-entry-v1", Some(13))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <dedup-entry-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <dedup-entry-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::DELIVERY_DEDUP_ENTRY_SCHEMA, "delivery dedup entry schema")?;
     require_check(&parse_checks(&fields[12])?, "first-receipt-bound", "delivery dedup entry")?;
     Ok(DedupEntry {
@@ -249,7 +249,7 @@ pub fn summary(value: &IoValue) -> Result<String> {
             record_string_sequence(&fields[5], "diagnostics")?.len()
         ));
     }
-    Err(MoltenError::invalid_harness("unsupported delivery artifact"))
+    Err(Failure::invalid_harness("unsupported delivery artifact"))
 }
 
 fn first_decision(
@@ -262,7 +262,7 @@ fn first_decision(
     let next_sequence = operation
         .sequence
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness("delivery sequence overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("delivery sequence overflow"))?;
     let updated_window = parse_window(&window_value(
         input.scope_profile,
         input.scope_ref,

@@ -1,4 +1,4 @@
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 const MAX_LOCAL_STORE_COMPONENTS: usize = 32;
@@ -8,7 +8,7 @@ const _: () = assert!(MAX_LOCAL_STORE_COMPONENTS <= 1_000);
 /// Closed storage-directory classification; additions require an explicit mapping.
 #[cfg_attr(dylint_lib = "octet", octet::sealed_enum)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LocalStoreKind {
+pub enum Category {
     Artifact,
     Chunk,
     Retention,
@@ -19,7 +19,7 @@ pub enum LocalStoreKind {
     Durable,
 }
 
-impl LocalStoreKind {
+impl Category {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Artifact => "artifact",
@@ -35,11 +35,11 @@ impl LocalStoreKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct LocalStorePath {
+pub struct RelativeLocator {
     pub(super) relative: std::path::PathBuf,
 }
 
-impl LocalStorePath {
+impl RelativeLocator {
     pub fn parse(input: &str) -> Result<Self> {
         validate_locator(input)?;
         let path = std::path::Path::new(input);
@@ -53,17 +53,17 @@ impl LocalStorePath {
                 }
                 std::path::Component::CurDir => {}
                 std::path::Component::ParentDir => {
-                    return Err(MoltenError::invalid_harness(format!(
+                    return Err(Failure::invalid_harness(format!(
                         "local store path {input} cannot contain parent traversal"
                     )));
                 }
                 std::path::Component::RootDir | std::path::Component::Prefix(_) => {
-                    return Err(MoltenError::invalid_harness(format!("local store path {input} must be relative")));
+                    return Err(Failure::invalid_harness(format!("local store path {input} must be relative")));
                 }
             }
         }
         if relative.as_os_str().is_empty() {
-            return Err(MoltenError::invalid_harness("local store path cannot be empty"));
+            return Err(Failure::invalid_harness("local store path cannot be empty"));
         }
         Ok(Self { relative })
     }
@@ -74,9 +74,9 @@ impl LocalStorePath {
         let suffix_count = suffix.relative.components().count();
         let component_count = base_count
             .checked_add(suffix_count)
-            .ok_or_else(|| MoltenError::invalid_harness("local store path component count overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("local store path component count overflow"))?;
         if component_count > MAX_LOCAL_STORE_COMPONENTS {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "local store path component count {component_count} exceeds maximum {MAX_LOCAL_STORE_COMPONENTS}"
             )));
         }
@@ -96,15 +96,15 @@ impl LocalStorePath {
 
 fn validate_locator(input: &str) -> Result<()> {
     if input.is_empty() {
-        return Err(MoltenError::invalid_harness("local store path cannot be empty"));
+        return Err(Failure::invalid_harness("local store path cannot be empty"));
     }
     if has_platform_prefix(input) {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "platform-prefixed local store path {input} is not portable relative authority"
         )));
     }
     if crate::locator::is_remote(input) {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "remote or content locator {input} cannot be used as a local filesystem path"
         )));
     }
@@ -120,9 +120,9 @@ fn has_platform_prefix(input: &str) -> bool {
 fn checked_component_count(count: usize) -> Result<usize> {
     let next = count
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness("local store path component count overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("local store path component count overflow"))?;
     if next > MAX_LOCAL_STORE_COMPONENTS {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "local store path component count {next} exceeds maximum {MAX_LOCAL_STORE_COMPONENTS}"
         )))
     } else {

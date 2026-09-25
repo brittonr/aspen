@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 
 use super::tests::test_ref;
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const FIRST_INDEX: u64 = 1;
@@ -19,7 +19,7 @@ impl CommittedBatchHandler for RecordingBatchHandler {
     fn restore_snapshot(&mut self, _snapshot: &ApplicationSnapshotRestore) -> Result<String> {
         self.calls += 1;
         if self.fail {
-            return Err(MoltenError::invalid_harness("injected application failure"));
+            return Err(Failure::invalid_harness("injected application failure"));
         }
         Ok(test_ref("application-snapshot-handler-evidence"))
     }
@@ -27,7 +27,7 @@ impl CommittedBatchHandler for RecordingBatchHandler {
     fn apply_batch(&mut self, _commands: &[ApplicationCommand]) -> Result<String> {
         self.calls += 1;
         if self.fail {
-            return Err(MoltenError::invalid_harness("injected application failure"));
+            return Err(Failure::invalid_harness("injected application failure"));
         }
         Ok(test_ref("application-handler-evidence"))
     }

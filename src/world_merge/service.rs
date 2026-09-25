@@ -20,7 +20,7 @@ use super::WorldMergeResultInput;
 use super::canonical_generated_world_root;
 use super::canonical_world_merge_conflict;
 use super::canonical_world_merge_result;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const DECISION_PUBLISHED: &str = "published";
@@ -58,14 +58,14 @@ where
         })
         .collect::<Vec<_>>();
     if application_profiles.len() > 1 {
-        return Err(MoltenError::invalid_harness("one merge plan supports at most one application handler profile"));
+        return Err(Failure::invalid_harness("one merge plan supports at most one application handler profile"));
     }
     let handler = application_profiles
         .first()
         .map(|profile| handlers.load_handler(profile).map_err(port_error))
         .transpose()?;
     plan_world_merge(&loaded, handler.as_deref())
-        .map_err(|issues| MoltenError::invalid_harness(format!("world merge planning denied: {issues:?}")))
+        .map_err(|issues| Failure::invalid_harness(format!("world merge planning denied: {issues:?}")))
 }
 
 pub struct WorldMergePublicationRequest<'a> {
@@ -110,10 +110,10 @@ where
         let schema_ref = output
             .output_schema
             .as_ref()
-            .ok_or_else(|| MoltenError::invalid_harness("generated merge output has no schema"))?;
+            .ok_or_else(|| Failure::invalid_harness("generated merge output has no schema"))?;
         let observed_root = objects.persist_generated_root(output.kind, schema_ref, &bytes).map_err(port_error)?;
         if observed_root != expected_root {
-            return Err(MoltenError::invalid_harness("generated merge root identity changed during publication"));
+            return Err(Failure::invalid_harness("generated merge root identity changed during publication"));
         }
         output_roots.push(observed_root);
     }
@@ -186,12 +186,12 @@ fn materialize_value<M: WorldMergeMigrationPort>(
     let source = value
         .canonical_bytes
         .as_deref()
-        .ok_or_else(|| MoltenError::invalid_harness("migration source bytes are unavailable"))?;
+        .ok_or_else(|| Failure::invalid_harness("migration source bytes are unavailable"))?;
     value.canonical_bytes = Some(migrations.materialize_migration(binding, source).map_err(port_error)?);
     value.schema_ref = Some(binding.target_schema.clone());
     Ok(())
 }
 
-fn port_error(error: WorldMergePortError) -> MoltenError {
-    MoltenError::invalid_harness(format!("world-merge port failed: {error}"))
+fn port_error(error: WorldMergePortError) -> Failure {
+    Failure::invalid_harness(format!("world-merge port failed: {error}"))
 }

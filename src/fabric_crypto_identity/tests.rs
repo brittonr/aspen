@@ -15,7 +15,7 @@ fn profile() -> CanonicalCryptoProfile {
         .expect("production profile")
 }
 
-fn adapter<'a>(namespace: &'a crate::node_state::NodeStateNamespace) -> IrohEd25519FileAdapter<'a> {
+fn adapter<'a>(namespace: &'a crate::node_state::DirectoryView) -> IrohEd25519FileAdapter<'a> {
     IrohEd25519FileAdapter::new(namespace, profile(), test_ref("capability-file-backend")).expect("file adapter")
 }
 
@@ -44,7 +44,7 @@ fn domain(
 fn production_file_key_is_random_persisted_restricted_and_restart_stable() {
     let workspace = temp_dir("crypto-production-restart");
     let namespace =
-        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Identity, &workspace)
+        crate::node_state::DirectoryView::open(crate::node_state::NamespaceKind::Identity, &workspace)
             .expect("identity namespace");
     let adapter = adapter(&namespace);
     let first = adapter
@@ -82,7 +82,7 @@ fn production_file_key_is_random_persisted_restricted_and_restart_stable() {
 fn production_sign_verify_binds_domain_and_denies_wrong_purpose_or_payload() {
     let workspace = temp_dir("crypto-production-sign");
     let namespace =
-        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Secrets, &workspace)
+        crate::node_state::DirectoryView::open(crate::node_state::NamespaceKind::Secrets, &workspace)
             .expect("secrets namespace");
     let adapter = adapter(&namespace);
     let key = adapter
@@ -106,8 +106,8 @@ fn production_sign_verify_binds_domain_and_denies_wrong_purpose_or_payload() {
     admit_federation_verification(&verified).expect("federation verification admission");
 
     let other_workspace = temp_dir("crypto-production-wrong-key");
-    let other_namespace = crate::node_state::NodeStateNamespace::open(
-        crate::node_state::NodeStateNamespaceKind::Secrets,
+    let other_namespace = crate::node_state::DirectoryView::open(
+        crate::node_state::NamespaceKind::Secrets,
         &other_workspace,
     )
     .expect("other secrets namespace");
@@ -205,7 +205,7 @@ fn production_sign_verify_binds_domain_and_denies_wrong_purpose_or_payload() {
 fn rotation_fences_stale_handle_and_restart_resolves_new_generation() {
     let workspace = temp_dir("crypto-production-rotation");
     let namespace =
-        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Secrets, &workspace)
+        crate::node_state::DirectoryView::open(crate::node_state::NamespaceKind::Secrets, &workspace)
             .expect("secrets namespace");
     let adapter = adapter(&namespace);
     let first = adapter
@@ -250,7 +250,7 @@ fn rotation_fences_stale_handle_and_restart_resolves_new_generation() {
 fn evidence_signature_wrapper_consumes_only_canonical_outcomes() {
     let workspace = temp_dir("crypto-evidence-signature");
     let namespace =
-        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Secrets, &workspace)
+        crate::node_state::DirectoryView::open(crate::node_state::NamespaceKind::Secrets, &workspace)
             .expect("secrets namespace");
     let adapter = adapter(&namespace);
     let key = adapter
@@ -294,7 +294,7 @@ fn fixture_profile_and_missing_or_unsafe_keys_fail_closed() {
         .expect("fixture profile is valid for tests");
     let workspace = temp_dir("crypto-fixture-denial");
     let namespace =
-        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Identity, &workspace)
+        crate::node_state::DirectoryView::open(crate::node_state::NamespaceKind::Identity, &workspace)
             .expect("identity namespace");
     let denied = IrohEd25519FileAdapter::new(&namespace, fixture, test_ref("fixture-backend"))
         .err()
@@ -312,12 +312,12 @@ fn fixture_profile_and_missing_or_unsafe_keys_fail_closed() {
     assert!(unavailable.to_string().contains("replacement generation is disabled"));
 
     let malformed_workspace = temp_dir("crypto-malformed-record");
-    let malformed_namespace = crate::node_state::NodeStateNamespace::open(
-        crate::node_state::NodeStateNamespaceKind::Secrets,
+    let malformed_namespace = crate::node_state::DirectoryView::open(
+        crate::node_state::NamespaceKind::Secrets,
         &malformed_workspace,
     )
     .expect("malformed secrets namespace");
-    let malformed_path = crate::node_state::NodeStatePath::parse("crypto-authority.key").expect("authority key path");
+    let malformed_path = crate::node_state::RelativePath::parse("crypto-authority.key").expect("authority key path");
     malformed_namespace
         .write_restricted(&malformed_path, b"malformed", OWNER_ONLY_SECRET_FILE_MODE)
         .expect("malformed key fixture");
@@ -353,7 +353,7 @@ fn fixture_profile_and_missing_or_unsafe_keys_fail_closed() {
 fn transport_secret_is_only_resolved_for_current_transport_handle() {
     let workspace = temp_dir("crypto-transport-handle");
     let namespace =
-        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Identity, &workspace)
+        crate::node_state::DirectoryView::open(crate::node_state::NamespaceKind::Identity, &workspace)
             .expect("identity namespace");
     let adapter = adapter(&namespace);
     let key = adapter
@@ -383,7 +383,7 @@ fn transport_secret_is_only_resolved_for_current_transport_handle() {
 fn artifact_auth_shell_signs_and_verifies_exact_statement_without_admitting_authority() {
     let workspace = temp_dir("artifact-auth-shell-positive");
     let namespace =
-        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Secrets, &workspace)
+        crate::node_state::DirectoryView::open(crate::node_state::NamespaceKind::Secrets, &workspace)
             .expect("secrets namespace");
     let adapter = adapter(&namespace);
     let key = adapter
@@ -430,7 +430,7 @@ fn artifact_auth_shell_signs_and_verifies_exact_statement_without_admitting_auth
     assert_eq!(signed.public_key_ref, key.handle.handle.public_key_ref);
     assert!(signed.signature_hex.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)));
 
-    let secret_path = crate::node_state::NodeStatePath::parse("crypto-evidence-signing.key").expect("secret path");
+    let secret_path = crate::node_state::RelativePath::parse("crypto-evidence-signing.key").expect("secret path");
     let secret_record = namespace.read(&secret_path, crate::node_state::MAX_NODE_SECRET_BYTES).expect("secret record");
     let public_evidence = format!("{signed:?}{report:?}");
     assert!(!public_evidence.as_bytes().windows(secret_record.len()).any(|window| window == secret_record));
@@ -446,7 +446,7 @@ fn artifact_auth_shell_rejects_tamper_wrong_preimage_key_currentness_and_false_p
 
     let workspace = temp_dir("artifact-auth-shell-negative");
     let namespace =
-        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Secrets, &workspace)
+        crate::node_state::DirectoryView::open(crate::node_state::NamespaceKind::Secrets, &workspace)
             .expect("secrets namespace");
     let adapter = adapter(&namespace);
     let key = adapter
@@ -597,7 +597,7 @@ fn artifact_auth_shell_rejects_tamper_wrong_preimage_key_currentness_and_false_p
 #[test]
 fn artifact_auth_operational_receipt_survives_restart_and_rejects_rotation() {
     let workspace = temp_dir("artifact-auth-operational-restart");
-    let root = crate::node_state::NodeStateRoot::open(&workspace).expect("node state root");
+    let root = crate::node_state::Root::open(&workspace).expect("node state root");
     root.create_layout().expect("node state layout");
     let secrets = root.secrets().expect("secrets namespace");
     let receipts = root.receipts().expect("receipts namespace");
@@ -608,7 +608,7 @@ fn artifact_auth_operational_receipt_survives_restart_and_rejects_rotation() {
     let (request, signing_policy_ref, receipt) = operational_receipt_fixture(&initial_adapter, &key);
     let path = write_artifact_auth_operational_receipt(&receipts, &receipt).expect("write receipt");
 
-    let reopened_root = crate::node_state::NodeStateRoot::open_existing(&workspace).expect("reopen node state");
+    let reopened_root = crate::node_state::Root::open_existing(&workspace).expect("reopen node state");
     let reopened_secrets = reopened_root.secrets().expect("reopened secrets");
     let reopened_receipts = reopened_root.receipts().expect("reopened receipts");
     let reopened_adapter = adapter(&reopened_secrets);
@@ -659,7 +659,7 @@ fn artifact_auth_operational_receipt_survives_restart_and_rejects_rotation() {
 #[test]
 fn artifact_auth_operational_receipt_rejects_namespace_revocation_and_tamper() {
     let workspace = temp_dir("artifact-auth-operational-negative");
-    let root = crate::node_state::NodeStateRoot::open(&workspace).expect("node state root");
+    let root = crate::node_state::Root::open(&workspace).expect("node state root");
     root.create_layout().expect("node state layout");
     let secrets = root.secrets().expect("secrets namespace");
     let receipts = root.receipts().expect("receipts namespace");

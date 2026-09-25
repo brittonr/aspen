@@ -2,7 +2,7 @@
 pub fn parse_release_promotion_gate_receipt(value: &IoValue) -> Result<ReleasePromotionGateReceipt> {
     let fields = value
         .collect_simple_record("release-promotion-gate-receipt-v1", Some(7))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <release-promotion-gate-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <release-promotion-gate-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::OPERATOR_RELEASE_PROMOTION_GATE_RECEIPT_SCHEMA,

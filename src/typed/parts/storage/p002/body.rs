@@ -65,7 +65,7 @@ fn stored_binding(input: &GetValueInnerInput<'_>, storage_key: &str) -> Result<I
             details: Vec::new(),
         });
         store_receipt(input.root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness("typed storage get rejected: record not found"));
+        return Err(Failure::invalid_harness("typed storage get rejected: record not found"));
     };
     parse_canonical_bytes(bytes.value())
 }
@@ -92,7 +92,7 @@ fn require_binding(input: &GetValueInnerInput<'_>, typed_ref: &EntryRef) -> Resu
         details: Vec::new(),
     });
     store_receipt(input.root, &receipt_value)?;
-    Err(MoltenError::invalid_harness(
+    Err(Failure::invalid_harness(
         "typed storage get rejected: expected schema ref does not match stored schema ref",
     ))
 }
@@ -140,7 +140,7 @@ fn checked_value(input: &GetValueInnerInput<'_>, typed_ref: &EntryRef) -> Result
         details: Vec::new(),
     });
     store_receipt(input.root, &receipt_value)?;
-    Err(MoltenError::invalid_harness("typed storage content integrity check failed"))
+    Err(Failure::invalid_harness("typed storage content integrity check failed"))
 }
 
 fn get_details(input: &GetValueInnerInput<'_>, revision: u64) -> Result<Vec<IoValue>> {
@@ -219,7 +219,7 @@ fn schema_mismatch(root: &Path, storage_ref: &str, typed_ref: &EntryRef, expecte
         details: Vec::new(),
     });
     store_receipt(root, &receipt_value)?;
-    Err(MoltenError::invalid_harness(
+    Err(Failure::invalid_harness(
         "typed storage verify rejected: expected schema ref does not match stored schema ref",
     ))
 }
@@ -237,5 +237,5 @@ fn content_mismatch(root: &Path, storage_ref: &str, typed_ref: &EntryRef) -> Res
         details: Vec::new(),
     });
     store_receipt(root, &receipt_value)?;
-    Err(MoltenError::invalid_harness("typed storage verify content integrity check failed"))
+    Err(Failure::invalid_harness("typed storage verify content integrity check failed"))
 }

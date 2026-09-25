@@ -62,7 +62,7 @@ fn read_receipt(path: &Path) -> Result<ProcessReceipt> {
 
 pub(super) fn parse_receipt(value: &IOValue) -> Result<ProcessReceipt> {
     let fields = canonical::required_record(value, RECEIPT_SCHEMA, RECEIPT_FIELD_COUNT)
-        .map_err(|error| MoltenError::invalid_harness(format!("invalid participant receipt: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("invalid participant receipt: {error}")))?;
     Ok(ProcessReceipt {
         node_id: canonical::required_string(&fields[0], "receipt node")?,
         process_id: canonical::required_u64(&fields[1], "receipt process")?,
@@ -95,9 +95,9 @@ pub(super) fn parse_receipt(value: &IOValue) -> Result<ProcessReceipt> {
 fn parse_member_sequence(value: &preserves::Value<IOValue>, label: &str) -> Result<Vec<std::string::String>> {
     let members = value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {label}")))?;
     if members.len() > STATIC_VOTER_COUNT {
-        return Err(MoltenError::invalid_harness(format!("{label} exceeds the static voter bound")));
+        return Err(Failure::invalid_harness(format!("{label} exceeds the static voter bound")));
     }
     members.iter().map(|member| canonical::required_string(&member, label)).collect()
 }
@@ -106,7 +106,7 @@ fn parse_role(value: &preserves::Value<IOValue>) -> Result<ReplicaRole> {
     match canonical::required_string(value, "receipt role")?.as_str() {
         "leader" => Ok(ReplicaRole::Leader),
         "follower" => Ok(ReplicaRole::Follower),
-        _ => Err(MoltenError::invalid_harness("participant receipt has an invalid role")),
+        _ => Err(Failure::invalid_harness("participant receipt has an invalid role")),
     }
 }
 
@@ -133,7 +133,7 @@ pub(super) fn receipt_from_node(
         last_applied: state.last_applied,
         quorum_term: state.quorum_confirmed_term.unwrap_or(INITIAL_TERM),
         pending_read_count: u64::try_from(state.pending_reads.len())
-            .map_err(|_| MoltenError::invalid_harness("pending read count overflow"))?,
+            .map_err(|_| Failure::invalid_harness("pending read count overflow"))?,
         snapshot_ref: state.snapshot.as_ref().map_or_else(String::new, |snapshot| snapshot.snapshot_ref.clone()),
         request_completed: state.completed_requests.contains_key(&super::super::tests::test_ref(REQUEST_LABEL)),
         quorum_loss_request_uncommitted: !state
@@ -143,9 +143,9 @@ pub(super) fn receipt_from_node(
         application_restored: application.restored_application_state_ref
             == Some(super::super::tests::test_ref(APPLICATION_STATE_LABEL)),
         durable_record_count: u64::try_from(durability.durable_log.len())
-            .map_err(|_| MoltenError::invalid_harness("durable record count overflow"))?,
+            .map_err(|_| Failure::invalid_harness("durable record count overflow"))?,
         durable_snapshot_count: u64::try_from(durability.snapshots.len())
-            .map_err(|_| MoltenError::invalid_harness("durable snapshot count overflow"))?,
+            .map_err(|_| Failure::invalid_harness("durable snapshot count overflow"))?,
         clean_shutdown: false,
         recovery_ref: node.recovery_ref.clone().unwrap_or_default(),
         group_binding_ref: state.profile.group_binding_ref.clone(),
@@ -255,7 +255,7 @@ pub(super) fn validate_process_commit_quorum(receipt: &ProcessReceipt) -> Result
         source_ref: receipt.commit_effect_ref.clone(),
     })?;
     if validated.evidence_ref != receipt.commit_quorum_ref {
-        return Err(MoltenError::invalid_harness("distinct-process commit quorum evidence binding mismatch"));
+        return Err(Failure::invalid_harness("distinct-process commit quorum evidence binding mismatch"));
     }
     Ok(validated.evidence_ref)
 }

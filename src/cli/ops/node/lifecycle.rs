@@ -100,7 +100,7 @@ fn checked_node_profile_from_cli(
 ) -> molten::error::Result<molten::node_profile_config::CheckedNodeProfile> {
     let profile_identity = input.profile_identity.unwrap_or_else(|| "profile-backed-node".to_string());
     let profile_state_root_ref = input.profile_state_root_ref.ok_or_else(|| {
-        molten::error::MoltenError::invalid_harness("--profile-state-root-ref is required with --profile-ref")
+        molten::error::Failure::invalid_harness("--profile-state-root-ref is required with --profile-ref")
     })?;
     let adapters = parse_adapter_profiles(&input.adapter_profiles)?;
     Ok(molten::node_profile_config::CheckedNodeProfile {
@@ -129,7 +129,7 @@ fn startup_evidence_paths<'a>(
     match (policy, bundle) {
         (Some(policy), Some(bundle)) => Ok(Some(molten::node_daemon::StartupEvidencePaths { policy, bundle })),
         (None, None) => Ok(None),
-        _ => Err(molten::error::MoltenError::invalid_harness(
+        _ => Err(molten::error::Failure::invalid_harness(
             "node startup evidence requires both --startup-policy and --startup-bundle",
         )),
     }
@@ -139,7 +139,7 @@ fn parse_adapter_profiles(values: &[String]) -> molten::error::Result<Vec<molten
     let mut adapters = Vec::with_capacity(values.len());
     for value in values {
         let (name, profile_ref) = value.split_once('=').ok_or_else(|| {
-            molten::error::MoltenError::invalid_harness("--adapter-profile must use name=blake3:<hash>")
+            molten::error::Failure::invalid_harness("--adapter-profile must use name=blake3:<hash>")
         })?;
         adapters.push(molten::node_runtime::node_adapter_binding(name, profile_ref)?);
     }
@@ -214,7 +214,7 @@ pub(crate) fn serve(input: super::command::base::Serve) -> molten::error::Result
     } = input;
     let startup_evidence = startup_evidence_paths(startup_policy.as_deref(), startup_bundle.as_deref())?;
     if startup_evidence.is_some() && (live_iroh || content_config.is_none()) {
-        return Err(molten::error::MoltenError::invalid_harness(
+        return Err(molten::error::Failure::invalid_harness(
             "node serve: startup evidence requires --content-config and excludes --live-iroh",
         ));
     }
@@ -251,7 +251,7 @@ pub(crate) fn serve(input: super::command::base::Serve) -> molten::error::Result
         let served = if let Some(path) = content_config {
             let bytes = super::content::read_input(&path, 16_384)?;
             let config = serde_json::from_slice(&bytes).map_err(|error| {
-                molten::error::MoltenError::invalid_harness(format!("node content config: {error}"))
+                molten::error::Failure::invalid_harness(format!("node content config: {error}"))
             })?;
             let result = molten::node_daemon::serve_control_content(
                 &request,
@@ -260,7 +260,7 @@ pub(crate) fn serve(input: super::command::base::Serve) -> molten::error::Result
                 startup_evidence,
             )?;
             if result.decision != "pass" {
-                return Err(molten::error::MoltenError::invalid_harness("node content service lifecycle denied"));
+                return Err(molten::error::Failure::invalid_harness("node content service lifecycle denied"));
             }
             result
         } else {
@@ -304,7 +304,7 @@ fn serve_live(
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
-        .map_err(molten::error::MoltenError::from)?;
+        .map_err(molten::error::Failure::from)?;
     let served = runtime.block_on(molten::node_daemon::serve_control_live_listener(
         &molten::node_daemon::ControlLiveServeInput {
             state_root: &state_root,

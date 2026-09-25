@@ -13,7 +13,7 @@ use crate::dag_sync::DagSyncOutcome;
 use crate::dag_sync::DagSyncPorts;
 use crate::dag_sync::DagTransportPort;
 use crate::dag_sync::run_dag_sync;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub trait WorldDistributionReceiptPort {
@@ -53,10 +53,10 @@ where
     W: WorldDistributionReceiptPort,
 {
     let initial_plan = plan_world_closure(projection, context)
-        .map_err(|issues| MoltenError::invalid_harness(format!("world closure planning denied: {issues:?}")))?;
+        .map_err(|issues| Failure::invalid_harness(format!("world closure planning denied: {issues:?}")))?;
     let dag = run_dag_sync(&projection.graph, initial_plan.request.clone(), ports.dag)?;
     if dag.plan.plan_ref != initial_plan.shared_plan.plan_ref {
-        return Err(MoltenError::invalid_harness("world closure plan drifted before DAG synchronization"));
+        return Err(Failure::invalid_harness("world closure plan drifted before DAG synchronization"));
     }
     let missing = dag
         .receipt
@@ -64,7 +64,7 @@ where
         .iter()
         .map(|object| {
             dag_object_to_world(object, &projection.objects)
-                .ok_or_else(|| MoltenError::invalid_harness("DAG receipt contains an untyped world object"))
+                .ok_or_else(|| Failure::invalid_harness("DAG receipt contains an untyped world object"))
         })
         .collect::<Result<Vec<_>>>()?;
     let complete = dag.receipt.decision == DagSyncDecision::Complete && missing.is_empty();

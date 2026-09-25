@@ -90,7 +90,7 @@ pub fn scheduler_profile_value(profile: &SchedulerProfile) -> Result<IoValue> {
     validate_text("scheduler profile id", &profile.id)?;
     validate_text("scheduler policy", &profile.policy)?;
     if profile.max_ticks == 0 {
-        return Err(MoltenError::invalid_harness("scheduler profile max_ticks must be positive"));
+        return Err(Failure::invalid_harness("scheduler profile max_ticks must be positive"));
     }
     Ok(record("distributed-scheduler-profile-v1", vec![
         string(DISTRIBUTED_SCHEDULER_SCHEMA),
@@ -226,7 +226,7 @@ pub fn run_simulation(input: &SimulationInput) -> Result<SimulationRun> {
 pub fn parse_test_run(value: &IoValue) -> Result<ParsedTestRun> {
     let run = value
         .collect_simple_record("distributed-test-run-v1", Some(DISTRIBUTED_RUN_ARITY))
-        .ok_or_else(|| MoltenError::invalid_harness("expected distributed-test-run-v1 receipt"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected distributed-test-run-v1 receipt"))?;
     require_schema(&run[0], DISTRIBUTED_RUN_SCHEMA, "distributed test run")?;
     let decision = record_string(&run[1], "decision", "distributed test run decision")?;
     validate_decision(&decision)?;

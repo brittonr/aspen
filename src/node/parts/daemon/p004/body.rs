@@ -287,7 +287,7 @@ pub fn control_authority_grant_value(input: &ControlAuthorityGrantInput<'_>) -> 
     validate_node_id(input.target_scope)?;
     validate_node_id(input.resource_scope)?;
     if input.operations.is_empty() {
-        return Err(MoltenError::invalid_harness("node control authority grant operations missing"));
+        return Err(Failure::invalid_harness("node control authority grant operations missing"));
     }
     for operation in input.operations {
         validate_node_id(operation)?;

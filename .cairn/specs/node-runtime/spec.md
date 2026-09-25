@@ -1002,19 +1002,19 @@ r[molten.node_host.crate_boundary] Molten MUST define `molten-node-host` as the 
 #### Scenario: Node host opens admitted local authority
 - GIVEN an explicit operator-selected state root and valid relative state paths
 - WHEN node state or a typed local store opens through `molten-node-host`
-- THEN the operation uses capability-rooted filesystem authority and returns the existing public types.
+- THEN the operation uses capability-rooted filesystem authority and returns the current public types without legacy name aliases.
 
 #### Scenario: Forbidden host dependency enters the crate
 - GIVEN a `molten-node-host` manifest that adds CLI, presentation, harness, NixOS, release-policy, or root-package dependencies
 - WHEN the crate boundary gate runs
 - THEN validation MUST deny before the dependency is accepted.
 
-### Requirement: Root node host facades preserve compatibility
+### Requirement: Root node host facades share current type identity
 
-r[molten.node_host.facade_compatibility] Molten MUST preserve `molten::error`, `molten::node_state`, and `molten::local_store` as explicit compatibility re-exports of `molten-node-host`. Existing error variants, public types, path validation, namespace layout, constants, and capability behavior MUST remain unchanged.
+r[molten.node_host.facade_compatibility] Molten MUST preserve `molten::error`, `molten::node_state`, and `molten::local_store` as explicit re-exports of `molten-node-host`. Both paths MUST expose the same current public types without aliases for names removed by the approved breaking cutover. Error variants, path validation, namespace layout, constants, and capability behavior MUST remain unchanged.
 
 #### Scenario: Existing root path is used
-- GIVEN a caller compiled against an existing root module path
+- GIVEN a caller using a current type through the root module path
 - WHEN it opens and uses node state or a local store
 - THEN the caller observes the same type identity and behavior as the new crate path.
 
@@ -1028,7 +1028,7 @@ r[molten.node_host.facade_compatibility] Molten MUST preserve `molten::error`, `
 r[molten.node_host.bridge_authority] Cross-crate compatibility bridges MUST consume already-open capability directories. They MUST NOT accept new ambient filesystem paths, parse CLI arguments, execute processes, contact networks, or make release decisions.
 
 #### Scenario: Root internals derive a store from node state
-- GIVEN an already-open `NodeStateRoot`
+- GIVEN an already-open `node_state::Root`
 - WHEN root daemon code requests a ledger, artifact, chunk, or delivery store
 - THEN the bridge derives the store from the existing capability without reopening the host path.
 

@@ -3,7 +3,7 @@ pub fn remote_execution_closure_descriptor_value(input: &RemoteExecutionClosureD
     validate_ref(&input.root_artifact_ref, "remote execution root artifact ref")?;
     validate_refs(&input.dependency_refs, "remote execution dependency ref")?;
     if !input.dependency_refs.iter().any(|reference| reference == &input.root_artifact_ref) {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "remote execution closure descriptor must include the root artifact ref",
         ));
     }
@@ -87,5 +87,5 @@ fn replay_nonce_from_evidence(value: &Value<IoValue>) -> Result<String> {
     record_ref_sequence(value, "evidence")?
         .last()
         .cloned()
-        .ok_or_else(|| MoltenError::invalid_harness("remote execution closure descriptor missing replay nonce"))
+        .ok_or_else(|| Failure::invalid_harness("remote execution closure descriptor missing replay nonce"))
 }

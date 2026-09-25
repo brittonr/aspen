@@ -10,7 +10,7 @@ use molten_core::content_store_adapter::*;
 use super::super::*;
 use super::support::*;
 use crate::content_store_adapter::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const CONTENT_CHUNK_COUNT: usize = 1;
@@ -33,7 +33,7 @@ impl SimulatedContent {
     pub fn new(manifest: &Manifest, events: &Events, fault: Option<SimulationFault>) -> Result<Self> {
         let bytes = content_bytes()?;
         let chunk_size = usize::try_from(CONTENT_BYTES)
-            .map_err(|_| MoltenError::invalid_harness("content fixture size exceeds usize"))?;
+            .map_err(|_| Failure::invalid_harness("content fixture size exceeds usize"))?;
         let chunk_ref = crate::chunk_store::hash_chunk(&bytes, chunk_size);
         let descriptor = descriptor(manifest, chunk_ref.clone());
         let profile = profile(manifest, ContentAdapterClass::DeterministicSimulation)?;
@@ -69,13 +69,13 @@ impl ContentPort for SimulatedContent {
             self.fault,
         )?;
         if !content_is_available(&self.descriptor, &execution.state.artifact) {
-            return Err(MoltenError::invalid_harness("simulated replication content did not become verified"));
+            return Err(Failure::invalid_harness("simulated replication content did not become verified"));
         }
         verification(action, &self.descriptor, digest('1'))
     }
 
     fn cleanup(&mut self, _action: &Action, _admission: &CleanupObservation) -> Result<String> {
-        Err(MoltenError::invalid_harness("simulation conformance does not execute cleanup"))
+        Err(Failure::invalid_harness("simulation conformance does not execute cleanup"))
     }
 }
 
@@ -91,9 +91,9 @@ pub struct LocalContent {
 
 impl LocalContent {
     pub fn new(manifest: &mut Manifest, events: &Events) -> Result<Self> {
-        let temp = cap_tempfile::tempdir(cap_tempfile::ambient_authority()).map_err(MoltenError::from)?;
+        let temp = cap_tempfile::tempdir(cap_tempfile::ambient_authority()).map_err(Failure::from)?;
         let descriptor_path = PathBuf::from(format!("/proc/self/fd/{}", temp.as_raw_fd()));
-        let host_path = std::fs::read_link(descriptor_path).map_err(MoltenError::from)?;
+        let host_path = std::fs::read_link(descriptor_path).map_err(Failure::from)?;
         let root = crate::chunk_store::CapabilityChunkRoot::open(&host_path)?;
         let bytes = content_bytes()?;
         let stored = crate::chunk_store::put_bytes_with_root(&root, "replication-fixture", &bytes, CONTENT_BYTES)?;
@@ -128,13 +128,13 @@ impl ContentPort for LocalContent {
         let assembled =
             assemble_verified_content(&execution.manifest, &execution.state.artifact, &execution.verified_chunks)?;
         if assembled != self.bytes {
-            return Err(MoltenError::invalid_harness("local replication content readback drifted"));
+            return Err(Failure::invalid_harness("local replication content readback drifted"));
         }
         verification(action, &self.descriptor, digest('2'))
     }
 
     fn cleanup(&mut self, _action: &Action, _admission: &CleanupObservation) -> Result<String> {
-        Err(MoltenError::invalid_harness("local conformance does not execute cleanup"))
+        Err(Failure::invalid_harness("local conformance does not execute cleanup"))
     }
 }
 
@@ -225,6 +225,6 @@ fn verification(
 
 fn content_bytes() -> Result<Vec<u8>> {
     let length = usize::try_from(CONTENT_BYTES)
-        .map_err(|_| MoltenError::invalid_harness("content fixture size exceeds usize"))?;
+        .map_err(|_| Failure::invalid_harness("content fixture size exceeds usize"))?;
     Ok(vec![CONTENT_BYTES_VALUE; length])
 }

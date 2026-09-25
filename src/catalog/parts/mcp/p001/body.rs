@@ -1,7 +1,7 @@
 
 fn chunk_store_result(chunk_root: Option<&Path>, request: &Request) -> Result<CoreResult> {
     let Some(chunk_root) = chunk_root else {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "catalog MCP chunk-store tool requires a chunk store root supplied by the caller",
         ));
     };
@@ -43,7 +43,7 @@ fn short_id_result(registry_root: &Path, ledger_root: Option<&Path>, request: &R
     let prefix = required_arg_string(&request.args, "prefix")?;
     let min_length =
         usize::try_from(arg_u64(&request.args, "min-length", crate::catalog::DEFAULT_SHORT_ID_MIN_LENGTH as u64)?)
-            .map_err(|error| MoltenError::invalid_harness(format!("catalog MCP min-length is unsupported: {error}")))?;
+            .map_err(|error| Failure::invalid_harness(format!("catalog MCP min-length is unsupported: {error}")))?;
     crate::catalog::resolve_short_id(registry_root, ledger_root, &crate::catalog::ShortIdInput {
         prefix,
         min_length,

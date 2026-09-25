@@ -214,7 +214,7 @@ fn record_start_steps(input: StartStepInput<'_>) -> Result<StartSteps> {
     let identity = identity_resolution
         .identity
         .clone()
-        .ok_or_else(|| MoltenError::invalid_harness("local dogfood identity resolution denied"))?;
+        .ok_or_else(|| Failure::invalid_harness("local dogfood identity resolution denied"))?;
     let identity_startup =
         crate::node_identity::startup_evidence_value(&identity.identity_ref, &identity_resolution.receipt_ref)?;
     let identity_startup_ref = crate::preserves_rail::canonical_hash(&identity_startup)?;

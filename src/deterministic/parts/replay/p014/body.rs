@@ -34,7 +34,7 @@ pub fn explain_replay_comparison_value(value: IoValue) -> Result<ReplayExplainRe
     let comparison_ref = canonical_hash(&value)?;
     let fields = value
         .collect_simple_record("deterministic-replay-comparison-v1", Some(MULTITURN_COMPARISON_FIELD_COUNT))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("expected <deterministic-replay-comparison-v1 ...>"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected <deterministic-replay-comparison-v1 ...>"))?;
     require_schema_value(&fields[0], MULTITURN_REPLAY_COMPARISON_SCHEMA, "multiturn replay comparison")?;
     let decision = record_string_value(&fields[MULTITURN_COMPARISON_DECISION_INDEX], "decision")?;
     validate_replay_decision(&decision)?;

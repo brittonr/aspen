@@ -15,12 +15,12 @@ fn execute_preserves_abi(
         actor_input,
     })?;
     let descriptor = parts.func.call(&mut *store, (written.ptr, written.len)).map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "Wasm executor actor {actor_id} export {export} trapped under molten.wasm.abi.v1: {error}"
         ))
     })?;
     parts.dealloc.call(&mut *store, (written.ptr, written.len)).map_err(|error| {
-        MoltenError::invalid_harness(format!("Wasm executor actor {actor_id} deallocator trapped: {error}"))
+        Failure::invalid_harness(format!("Wasm executor actor {actor_id} deallocator trapped: {error}"))
     })?;
     let output = read_output(OutputRead {
         actor_id,
@@ -77,24 +77,24 @@ fn parts(
     export: &str,
 ) -> Result<Parts> {
     let memory = instance.get_memory(&mut *store, "memory").ok_or_else(|| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "Wasm executor actor {actor_id} uses molten.wasm.abi.v1 but does not export memory"
         ))
     })?;
     let alloc = instance.get_typed_func::<i32, i32>(&mut *store, "molten_alloc").map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "Wasm executor actor {actor_id} missing molten.wasm.abi.v1 allocator export molten_alloc: {error}"
         ))
     })?;
     let dealloc = instance.get_typed_func::<(i32, i32), ()>(&mut *store, "molten_dealloc").map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "Wasm executor actor {actor_id} missing molten.wasm.abi.v1 deallocator export molten_dealloc: {error}"
         ))
     })?;
     let func = instance
         .get_typed_func::<(i32, i32), i64>(&mut *store, export)
         .map_err(|error| {
-            MoltenError::invalid_harness(format!(
+            Failure::invalid_harness(format!(
                 "Wasm executor actor {actor_id} export {export} must use molten.wasm.abi.v1 signature (i32,i32)->i64: {error}"
             ))
         })?;
@@ -109,16 +109,16 @@ fn parts(
 fn write_input(input: InputWrite<'_, '_>) -> Result<Written> {
     let input_bytes = canonical_bytes(input.actor_input)?;
     if input_bytes.len() > WASM_ABI_MAX_INPUT_BYTES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Wasm executor actor {} input bytes exceed molten.wasm.abi.v1 limit",
             input.actor_id
         )));
     }
     let input_len = i32::try_from(input_bytes.len()).map_err(|_| {
-        MoltenError::invalid_harness(format!("Wasm executor actor {} input length does not fit i32", input.actor_id))
+        Failure::invalid_harness(format!("Wasm executor actor {} input length does not fit i32", input.actor_id))
     })?;
     let input_ptr = input.alloc.call(&mut *input.store, input_len).map_err(|error| {
-        MoltenError::invalid_harness(format!("Wasm executor actor {} allocator trapped: {error}", input.actor_id))
+        Failure::invalid_harness(format!("Wasm executor actor {} allocator trapped: {error}", input.actor_id))
     })?;
     write_memory_checked(input.actor_id, input.memory, &mut *input.store, input_ptr, &input_bytes)?;
     Ok(Written {
@@ -130,27 +130,27 @@ fn write_input(input: InputWrite<'_, '_>) -> Result<Written> {
 fn read_output(input: OutputRead<'_, '_>) -> Result<Output> {
     let (output_ptr, output_len) = decode_descriptor(input.actor_id, input.descriptor)?;
     if output_len > WASM_ABI_MAX_OUTPUT_BYTES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "Wasm executor actor {} output bytes exceed molten.wasm.abi.v1 limit",
             input.actor_id
         )));
     }
     let output_bytes = read_memory_checked(input.actor_id, input.memory, &mut *input.store, output_ptr, output_len)?;
     let output_value = parse_canonical_bytes(&output_bytes).map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "Wasm executor actor {} returned invalid canonical Preserves output bytes: {error}",
             input.actor_id
         ))
     })?;
     let output_ref = canonical_hash(&output_value)?;
     let output_len_i32 = i32::try_from(output_len).map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "Wasm executor actor {} output length cannot be passed to deallocator: {error}",
             input.actor_id
         ))
     })?;
     input.dealloc.call(&mut *input.store, (output_ptr, output_len_i32)).map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "Wasm executor actor {} output deallocator trapped: {error}",
             input.actor_id
         ))
@@ -196,13 +196,13 @@ fn module_exports(bytes: &[u8]) -> Result<Vec<(String, ExternalKind)>> {
     let mut exports = Vec::with_capacity(WASM_MAX_EXPORTS);
     for payload in Parser::new(0).parse_all(bytes) {
         if let Payload::ExportSection(section) =
-            payload.map_err(|error| MoltenError::invalid_harness(format!("wasm export parse failed: {error}")))?
+            payload.map_err(|error| Failure::invalid_harness(format!("wasm export parse failed: {error}")))?
         {
             for export in section {
                 let export = export
-                    .map_err(|error| MoltenError::invalid_harness(format!("wasm export parse failed: {error}")))?;
+                    .map_err(|error| Failure::invalid_harness(format!("wasm export parse failed: {error}")))?;
                 if exports.len() >= WASM_MAX_EXPORTS {
-                    return Err(MoltenError::invalid_harness(format!(
+                    return Err(Failure::invalid_harness(format!(
                         "wasm module declares more than {WASM_MAX_EXPORTS} exports"
                     )));
                 }
@@ -218,16 +218,16 @@ fn decode_descriptor(actor_id: &str, descriptor: i64) -> Result<(i32, usize)> {
     let ptr_u64 = raw >> 32;
     let len_u64 = raw & 0xffff_ffff;
     let ptr_u32 = u32::try_from(ptr_u64).map_err(|error| {
-        MoltenError::invalid_harness(format!("Wasm executor actor {actor_id} ABI pointer out of range: {error}"))
+        Failure::invalid_harness(format!("Wasm executor actor {actor_id} ABI pointer out of range: {error}"))
     })?;
     let len_u32 = u32::try_from(len_u64).map_err(|error| {
-        MoltenError::invalid_harness(format!("Wasm executor actor {actor_id} ABI length out of range: {error}"))
+        Failure::invalid_harness(format!("Wasm executor actor {actor_id} ABI length out of range: {error}"))
     })?;
     let ptr = i32::try_from(ptr_u32).map_err(|_| {
-        MoltenError::invalid_harness(format!("Wasm executor actor {actor_id} returned negative ABI pointer"))
+        Failure::invalid_harness(format!("Wasm executor actor {actor_id} returned negative ABI pointer"))
     })?;
     let len = usize::try_from(len_u32).map_err(|error| {
-        MoltenError::invalid_harness(format!("Wasm executor actor {actor_id} ABI length unsupported: {error}"))
+        Failure::invalid_harness(format!("Wasm executor actor {actor_id} ABI length unsupported: {error}"))
     })?;
     Ok((ptr, len))
 }
@@ -240,10 +240,10 @@ fn write_memory_checked(
     bytes: &[u8],
 ) -> Result<()> {
     let ptr = usize::try_from(ptr).map_err(|_| {
-        MoltenError::invalid_harness(format!("Wasm executor actor {actor_id} returned negative ABI pointer"))
+        Failure::invalid_harness(format!("Wasm executor actor {actor_id} returned negative ABI pointer"))
     })?;
     memory.write(store, ptr, bytes).map_err(|_| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "Wasm executor actor {actor_id} ABI pointer/length is out of guest memory bounds"
         ))
     })
@@ -257,11 +257,11 @@ fn read_memory_checked(
     len: usize,
 ) -> Result<Vec<u8>> {
     let ptr = usize::try_from(ptr).map_err(|_| {
-        MoltenError::invalid_harness(format!("Wasm executor actor {actor_id} returned negative ABI pointer"))
+        Failure::invalid_harness(format!("Wasm executor actor {actor_id} returned negative ABI pointer"))
     })?;
     let mut bytes = vec![0; len];
     memory.read(store, ptr, &mut bytes).map_err(|_| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "Wasm executor actor {actor_id} ABI pointer/length is out of guest memory bounds"
         ))
     })?;

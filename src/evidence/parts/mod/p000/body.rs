@@ -1,6 +1,6 @@
 type IoValue = preserves::IOValue;
 type Value<T> = preserves::Value<T>;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 const EVIDENCE_SIGNED_RECEIPT_KEY_REVOCATION_SCHEMA: &str =
@@ -146,10 +146,10 @@ pub struct VerifySignedReceiptKeyringPolicy<'a> {
 
 pub fn sign_receipt(input: &SignReceiptInput<'_>) -> Result<IoValue> {
     if input.signer.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("signer id must not be empty"));
+        return Err(Failure::invalid_harness("signer id must not be empty"));
     }
     if input.trust_root.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("signed receipt trust root must not be empty"));
+        return Err(Failure::invalid_harness("signed receipt trust root must not be empty"));
     }
     let subject_ref = canonical_hash(input.receipt)?;
     let signature = signature_for(input.receipt, input.signer, input.purpose, input.trust_root, input.key)?;
@@ -211,35 +211,35 @@ pub fn signed_receipt_key_revocation_value(input: &SignedReceiptKeyRevocationInp
 pub fn parse_signed_receipt_key(value: &IoValue) -> Result<SignedReceiptKey> {
     let fields = value
         .collect_simple_record("signed-receipt-key-v1", Some(6))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <signed-receipt-key-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <signed-receipt-key-v1 ...>"))?;
     let schema = required_string(&fields[0], "signed receipt key schema")?;
     if schema != EVIDENCE_SIGNED_RECEIPT_KEY_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported signed receipt key schema {schema}; expected {EVIDENCE_SIGNED_RECEIPT_KEY_SCHEMA}"
         )));
     }
     let identity_value = value_to_iovalue(&fields[1]);
     let identity = identity_value
         .collect_simple_record("identity", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("signed receipt key missing identity record"))?;
+        .ok_or_else(|| Failure::invalid_harness("signed receipt key missing identity record"))?;
     let key_value = value_to_iovalue(&fields[2]);
     let key_fields = key_value
         .collect_simple_record("verification-key", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("signed receipt key missing verification-key record"))?;
+        .ok_or_else(|| Failure::invalid_harness("signed receipt key missing verification-key record"))?;
     let algorithm = required_string(&key_fields[0], "signed receipt key algorithm")?;
     if algorithm != SIGNATURE_ALGORITHM {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported signed receipt key algorithm {algorithm}; expected {SIGNATURE_ALGORITHM}"
         )));
     }
     let status_value = value_to_iovalue(&fields[3]);
     let status = status_value
         .collect_simple_record("status", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("signed receipt key missing status record"))?;
+        .ok_or_else(|| Failure::invalid_harness("signed receipt key missing status record"))?;
     let predecessor_value = value_to_iovalue(&fields[4]);
     let predecessor = predecessor_value
         .collect_simple_record("predecessor", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("signed receipt key missing predecessor record"))?;
+        .ok_or_else(|| Failure::invalid_harness("signed receipt key missing predecessor record"))?;
     let checks = parse_signed_checks(&fields[5])?;
     require_signed_check(&checks, "key-id-bound")?;
     require_signed_check(&checks, "key-material-bound")?;
@@ -259,21 +259,21 @@ pub fn parse_signed_receipt_key(value: &IoValue) -> Result<SignedReceiptKey> {
 pub fn parse_signed_receipt_key_revocation(value: &IoValue) -> Result<SignedReceiptKeyRevocation> {
     let fields = value
         .collect_simple_record("signed-receipt-key-revocation-v1", Some(5))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <signed-receipt-key-revocation-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <signed-receipt-key-revocation-v1 ...>"))?;
     let schema = required_string(&fields[0], "signed receipt key revocation schema")?;
     if schema != EVIDENCE_SIGNED_RECEIPT_KEY_REVOCATION_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported signed receipt key revocation schema {schema}; expected {EVIDENCE_SIGNED_RECEIPT_KEY_REVOCATION_SCHEMA}"
         )));
     }
     let key_value = value_to_iovalue(&fields[1]);
     let key_fields = key_value
         .collect_simple_record("key", Some(4))
-        .ok_or_else(|| MoltenError::invalid_harness("signed receipt key revocation missing key record"))?;
+        .ok_or_else(|| Failure::invalid_harness("signed receipt key revocation missing key record"))?;
     let superseded_value = value_to_iovalue(&fields[3]);
     let superseded = superseded_value
         .collect_simple_record("superseded-by", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("signed receipt key revocation missing superseded-by record"))?;
+        .ok_or_else(|| Failure::invalid_harness("signed receipt key revocation missing superseded-by record"))?;
     let checks = parse_signed_checks(&fields[4])?;
     require_signed_check(&checks, "key-ref-bound")?;
     require_signed_check(&checks, "key-revocation-currentness-bound")?;

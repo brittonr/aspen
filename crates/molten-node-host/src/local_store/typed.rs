@@ -4,7 +4,7 @@ type Path = std::path::Path;
 macro_rules! typed_root {
     ($name:ident, $kind:expr) => {
         pub struct $name {
-            root: super::root::LocalStoreRoot,
+            root: super::root::DirectoryHandle,
         }
 
         impl std::fmt::Debug for $name {
@@ -16,36 +16,36 @@ macro_rules! typed_root {
         impl $name {
             pub fn open(path: &Path) -> Result<Self> {
                 Ok(Self {
-                    root: super::root::LocalStoreRoot::open($kind, path)?,
+                    root: super::root::DirectoryHandle::open($kind, path)?,
                 })
             }
 
             pub fn open_existing(path: &Path) -> Result<Self> {
                 Ok(Self {
-                    root: super::root::LocalStoreRoot::open_existing($kind, path)?,
+                    root: super::root::DirectoryHandle::open_existing($kind, path)?,
                 })
             }
 
-            pub fn root(&self) -> &super::root::LocalStoreRoot {
+            pub fn root(&self) -> &super::root::DirectoryHandle {
                 &self.root
             }
         }
     };
 }
 
-typed_root!(ArtifactStoreRoot, super::path::LocalStoreKind::Artifact);
-typed_root!(ChunkStoreRoot, super::path::LocalStoreKind::Chunk);
-typed_root!(RetentionStoreRoot, super::path::LocalStoreKind::Retention);
-typed_root!(DataspaceStoreRoot, super::path::LocalStoreKind::Dataspace);
-typed_root!(ExchangeStoreRoot, super::path::LocalStoreKind::Exchange);
-typed_root!(LedgerStoreRoot, super::path::LocalStoreKind::Ledger);
-typed_root!(DeliveryStoreRoot, super::path::LocalStoreKind::Delivery);
-typed_root!(DurableStoreRoot, super::path::LocalStoreKind::Durable);
+typed_root!(ArtifactStoreRoot, super::path::Category::Artifact);
+typed_root!(ChunkStoreRoot, super::path::Category::Chunk);
+typed_root!(RetentionStoreRoot, super::path::Category::Retention);
+typed_root!(DataspaceStoreRoot, super::path::Category::Dataspace);
+typed_root!(ExchangeStoreRoot, super::path::Category::Exchange);
+typed_root!(LedgerStoreRoot, super::path::Category::Ledger);
+typed_root!(DeliveryStoreRoot, super::path::Category::Delivery);
+typed_root!(DurableStoreRoot, super::path::Category::Durable);
 
 impl ArtifactStoreRoot {
     pub(crate) fn from_dir(dir: cap_std::fs::Dir) -> Self {
         Self {
-            root: super::root::LocalStoreRoot::from_dir(super::path::LocalStoreKind::Artifact, dir),
+            root: super::root::DirectoryHandle::from_dir(super::path::Category::Artifact, dir),
         }
     }
 }
@@ -53,7 +53,7 @@ impl ArtifactStoreRoot {
 impl ChunkStoreRoot {
     pub(crate) fn from_dir(dir: cap_std::fs::Dir) -> Self {
         Self {
-            root: super::root::LocalStoreRoot::from_dir(super::path::LocalStoreKind::Chunk, dir),
+            root: super::root::DirectoryHandle::from_dir(super::path::Category::Chunk, dir),
         }
     }
 }
@@ -61,7 +61,7 @@ impl ChunkStoreRoot {
 impl LedgerStoreRoot {
     pub(crate) fn from_dir(dir: cap_std::fs::Dir) -> Self {
         Self {
-            root: super::root::LocalStoreRoot::from_dir(super::path::LocalStoreKind::Ledger, dir),
+            root: super::root::DirectoryHandle::from_dir(super::path::Category::Ledger, dir),
         }
     }
 }
@@ -69,7 +69,7 @@ impl LedgerStoreRoot {
 impl DeliveryStoreRoot {
     pub(crate) fn from_dir(dir: cap_std::fs::Dir) -> Self {
         Self {
-            root: super::root::LocalStoreRoot::from_dir(super::path::LocalStoreKind::Delivery, dir),
+            root: super::root::DirectoryHandle::from_dir(super::path::Category::Delivery, dir),
         }
     }
 }
@@ -80,7 +80,7 @@ impl ChunkStoreRoot {
         Ok(Self {
             root: parent
                 .root()
-                .open_subdir(super::path::LocalStoreKind::Chunk, &super::path::LocalStorePath::parse("chunks")?)?,
+                .open_subdir(super::path::Category::Chunk, &super::path::RelativeLocator::parse("chunks")?)?,
         })
     }
 }
@@ -89,7 +89,7 @@ impl RetentionStoreRoot {
     #[doc(hidden)]
     pub fn share_chunk_state(parent: &ChunkStoreRoot) -> Result<Self> {
         Ok(Self {
-            root: parent.root().share_authority_as(super::path::LocalStoreKind::Retention)?,
+            root: parent.root().share_authority_as(super::path::Category::Retention)?,
         })
     }
 
@@ -98,16 +98,16 @@ impl RetentionStoreRoot {
         Ok(Self {
             root: parent
                 .root()
-                .open_subdir(super::path::LocalStoreKind::Retention, &super::path::LocalStorePath::parse("state")?)?,
+                .open_subdir(super::path::Category::Retention, &super::path::RelativeLocator::parse("state")?)?,
         })
     }
 }
 
 impl ExchangeStoreRoot {
     #[doc(hidden)]
-    pub fn open_chunk_subdir(parent: &ChunkStoreRoot, path: &super::path::LocalStorePath) -> Result<Self> {
+    pub fn open_chunk_subdir(parent: &ChunkStoreRoot, path: &super::path::RelativeLocator) -> Result<Self> {
         Ok(Self {
-            root: parent.root().open_subdir(super::path::LocalStoreKind::Exchange, path)?,
+            root: parent.root().open_subdir(super::path::Category::Exchange, path)?,
         })
     }
 }

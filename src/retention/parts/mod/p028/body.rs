@@ -6,42 +6,42 @@ fn ref_file_name(reference: &str) -> Result<String> {
     Ok(name)
 }
 
-fn capability_store_path(suffix: &str) -> Result<LocalStorePath> {
-    LocalStorePath::parse(&format!("{STORE_DIR}/{suffix}"))
+fn capability_store_path(suffix: &str) -> Result<RelativeLocator> {
+    RelativeLocator::parse(&format!("{STORE_DIR}/{suffix}"))
 }
 
-fn capability_ref_path(directory: &str, reference: &str) -> Result<LocalStorePath> {
+fn capability_ref_path(directory: &str, reference: &str) -> Result<RelativeLocator> {
     capability_store_path(&format!("{directory}/{}.preserves", ref_file_name(reference)?))
 }
 
 fn write_store_value_with_root(
     root: &CapabilityRetentionRoot,
-    path: &LocalStorePath,
+    path: &RelativeLocator,
     value: &IoValue,
 ) -> Result<()> {
     let text = crate::preserves_rail::to_text(value)?;
     root.root().write(path, text.as_bytes())
 }
 
-fn read_store_value_with_root(root: &CapabilityRetentionRoot, path: &LocalStorePath) -> Result<IoValue> {
+fn read_store_value_with_root(root: &CapabilityRetentionRoot, path: &RelativeLocator) -> Result<IoValue> {
     let text = root.root().read_to_string(path)?;
     crate::preserves_rail::parse_text(&text)
 }
 
-fn bundle_path(path: &str) -> Result<LocalStorePath> {
+fn bundle_path(path: &str) -> Result<RelativeLocator> {
     // r[impl molten.filesystem_materialization.archive_members]
     crate::materialization::MaterializationPath::parse(
         path,
         crate::materialization::DEFAULT_MAX_MATERIALIZATION_PATH_BYTES,
     )?;
-    LocalStorePath::parse(path)
+    RelativeLocator::parse(path)
 }
 
-fn bundle_artifact_path(directory: &str, reference: &str) -> Result<LocalStorePath> {
+fn bundle_artifact_path(directory: &str, reference: &str) -> Result<RelativeLocator> {
     bundle_path(&format!("artifacts/{directory}/{}.preserves", ref_file_name(reference)?))
 }
 
-fn write_bundle_value(root: &CapabilityBundleRoot, path: &LocalStorePath, value: &IoValue) -> Result<()> {
+fn write_bundle_value(root: &CapabilityBundleRoot, path: &RelativeLocator, value: &IoValue) -> Result<()> {
     // r[impl molten.filesystem_materialization.root]
     let payload = [crate::materialization::MaterializationPayload::new(
         bundle_materialization_path(path)?,
@@ -55,15 +55,15 @@ fn write_bundle_value(root: &CapabilityBundleRoot, path: &LocalStorePath, value:
     Ok(())
 }
 
-fn bundle_materialization_path(path: &LocalStorePath) -> Result<String> {
+fn bundle_materialization_path(path: &RelativeLocator) -> Result<String> {
     let mut components = Vec::new();
     for component in path.as_path().components() {
         let std::path::Component::Normal(component) = component else {
-            return Err(MoltenError::invalid_harness("retention bundle path is not normalized"));
+            return Err(Failure::invalid_harness("retention bundle path is not normalized"));
         };
         let component = component
             .to_str()
-            .ok_or_else(|| MoltenError::invalid_harness("retention bundle path must be UTF-8"))?;
+            .ok_or_else(|| Failure::invalid_harness("retention bundle path must be UTF-8"))?;
         components.push(component);
     }
     Ok(components.join("/"))
@@ -97,7 +97,7 @@ fn finalize_candidate_bundle_materialization(
     let readback = read_bundle_value(root, &receipt_path)?;
     let parsed = crate::materialization::parse_materialization_receipt(&readback)?;
     if parsed != receipt {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "retention candidate materialization receipt changed during publication",
         ));
     }
@@ -123,7 +123,7 @@ fn verify_candidate_bundle_materialization(root: &CapabilityBundleRoot) -> Resul
     }
     let observed = crate::materialization::plan_payloads(&policy, &payloads)?;
     if observed.plan_ref != receipt.plan_ref || observed.value != receipt.plan_value {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "retention candidate members do not match materialization receipt",
         ));
     }
@@ -137,7 +137,7 @@ fn candidate_bundle_materialization_policy() -> Result<crate::materialization::M
     )
 }
 
-fn read_bundle_value(root: &CapabilityBundleRoot, path: &LocalStorePath) -> Result<IoValue> {
+fn read_bundle_value(root: &CapabilityBundleRoot, path: &RelativeLocator) -> Result<IoValue> {
     let text = root.root().read_to_string(path)?;
     crate::preserves_rail::parse_text(&text)
 }
@@ -153,7 +153,7 @@ fn parse_object_value(value: &Value<IoValue>) -> Result<(String, String)> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("object", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("expected object record"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected object record"))?;
     let object_ref = required_string(&fields[0], "object ref")?;
     require_ref(&object_ref, "object ref")?;
     let object_kind = required_string(&fields[1], "object kind")?;
@@ -197,16 +197,16 @@ fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("checks", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("expected checks record"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected checks record"))?;
     let entries = fields[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("expected checks sequence"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected checks sequence"))?;
     let mut checks = Vec::with_capacity(entries.len());
     for entry in entries.iter() {
         let check_value = crate::preserves_rail::value_to_iovalue(entry);
         let check_fields = check_value
             .collect_simple_record("check", Some(2))
-            .ok_or_else(|| MoltenError::invalid_harness("expected check record"))?;
+            .ok_or_else(|| Failure::invalid_harness("expected check record"))?;
         push_bounded(
             &mut checks,
             (required_string(&check_fields[0], "check name")?, required_string(&check_fields[1], "check status")?),
@@ -221,7 +221,7 @@ fn require_check(checks: &[(String, String)], name: &str, label: &str) -> Result
     if checks.iter().any(|(check_name, status)| check_name == name && status == "pass") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} missing pass check {name}")))
+        Err(Failure::invalid_harness(format!("{label} missing pass check {name}")))
     }
 }
 
@@ -244,7 +244,7 @@ fn parse_node_live_transport_receipt(value: &IoValue) -> Result<NodeLiveTranspor
     let fields = value
         .collect_simple_record("node-control-live-transport-receipt-v1", Some(13))
         .or_else(|| value.collect_simple_record("node-control-live-transport-receipt-v1", Some(11)))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-transport-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-control-live-transport-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA,

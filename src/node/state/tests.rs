@@ -3,17 +3,17 @@ use super::*;
 const SECRET_MODE: u32 = 0o600;
 const UNSAFE_SECRET_MODE: u32 = 0o644;
 
-fn state_root(label: &str) -> (crate::test_support::TestWorkspace, NodeStateRoot) {
+fn state_root(label: &str) -> (crate::test_support::TestWorkspace, Root) {
     let workspace = crate::test_support::TestWorkspace::new(label).expect("test workspace");
     let state = workspace.state().expect("state root");
     let dir = state.dir().try_clone().expect("clone state capability");
-    (workspace, NodeStateRoot::from_dir(dir))
+    (workspace, Root::from_dir(dir))
 }
 
 #[test]
 fn pure_paths_accept_bounded_relative_locators_and_reject_authority_smuggling() {
     // r[verify molten.node.cap_std_namespaces]
-    let base = NodeStatePath::parse("control/inbox").expect("fixed path");
+    let base = RelativePath::parse("control/inbox").expect("fixed path");
     assert_eq!(base.join_segment("request.preserves").expect("leaf").display(), "control/inbox/request.preserves");
     for invalid_value in [
         "",
@@ -24,7 +24,7 @@ fn pure_paths_accept_bounded_relative_locators_and_reject_authority_smuggling() 
         "https://remote",
         "iroh:ticket",
     ] {
-        assert!(NodeStatePath::parse(invalid_value).is_err(), "{invalid_value} must deny");
+        assert!(RelativePath::parse(invalid_value).is_err(), "{invalid_value} must deny");
     }
     assert!(base.join_segment("nested/request").is_err());
 }
@@ -39,8 +39,8 @@ fn namespace_io_is_sorted_bounded_and_root_bound() {
     right.create_layout().expect("right layout");
     let left_inbox = left.control_inbox().expect("left inbox");
     let right_inbox = right.control_inbox().expect("right inbox");
-    let first = NodeStatePath::parse("b.preserves").expect("first path");
-    let second = NodeStatePath::parse("a.preserves").expect("second path");
+    let first = RelativePath::parse("b.preserves").expect("first path");
+    let second = RelativePath::parse("a.preserves").expect("second path");
     left_inbox.write(&first, b"b").expect("write first");
     left_inbox.write(&second, b"a").expect("write second");
     let entries = left_inbox.list_entries().expect("list entries");
@@ -78,9 +78,9 @@ fn entries_are_bound_to_the_exact_namespace_view() {
     let (_workspace, root) = state_root("node-state-namespace-view-binding");
     root.create_layout().expect("layout");
     let ingress = root.control_ingress().expect("ingress");
-    let leaf = NodeStatePath::parse("same.preserves").expect("leaf");
+    let leaf = RelativePath::parse("same.preserves").expect("leaf");
     ingress.write(&leaf, b"parent").expect("parent value");
-    let topic_path = NodeStatePath::parse("topic").expect("topic");
+    let topic_path = RelativePath::parse("topic").expect("topic");
     let topic = ingress.open_subdir(&topic_path).expect("topic view");
     topic.write(&leaf, b"child").expect("child value");
     let entry = ingress
@@ -100,10 +100,10 @@ fn entries_are_bound_to_the_exact_namespace_view() {
 fn missing_parent_is_absent_without_weakening_invalid_component_denials() {
     // r[verify molten.node.cap_std_state_root]
     let (_workspace, root) = state_root("node-state-missing-parent");
-    let missing = NodeStatePath::parse("control/node.lock.preserves").expect("missing path");
+    let missing = RelativePath::parse("control/node.lock.preserves").expect("missing path");
     assert!(!root.try_exists(&missing).expect("missing parent is absent"));
 
-    let invalid = NodeStatePath::parse("control/../escape");
+    let invalid = RelativePath::parse("control/../escape");
     assert!(invalid.is_err());
 }
 
@@ -193,14 +193,14 @@ fn symlinked_and_non_regular_leaves_deny_before_read_write_or_remove() {
     let linked = plan.path().join("control/inbox/linked.preserves");
     symlink(&outside, &linked).expect("symlink leaf");
     let inbox = root.control_inbox().expect("inbox");
-    let linked_path = NodeStatePath::parse("linked.preserves").expect("linked path");
+    let linked_path = RelativePath::parse("linked.preserves").expect("linked path");
     assert!(inbox.read(&linked_path, MAX_NODE_STATE_FILE_BYTES).is_err());
     assert!(inbox.write(&linked_path, b"replacement").is_err());
     assert!(inbox.remove_regular_file(&linked_path).is_err());
     assert_eq!(std::fs::read(&outside).expect("outside bytes"), b"outside");
 
     std::fs::create_dir(plan.path().join("control/inbox/directory.preserves")).expect("directory leaf");
-    let directory = NodeStatePath::parse("directory.preserves").expect("directory path");
+    let directory = RelativePath::parse("directory.preserves").expect("directory path");
     assert!(inbox.read(&directory, MAX_NODE_STATE_FILE_BYTES).is_err());
 }
 
@@ -212,7 +212,7 @@ fn restricted_secret_creation_and_unsafe_permission_observation_are_explicit() {
 
     let (workspace, root) = state_root("node-state-secret-permissions");
     let secrets = root.secrets().expect("secret namespace");
-    let path = NodeStatePath::parse("node-endpoint.secret").expect("secret path");
+    let path = RelativePath::parse("node-endpoint.secret").expect("secret path");
     secrets.write_restricted(&path, b"secret\n", SECRET_MODE).expect("restricted write");
     assert_eq!(secrets.unix_mode(&path).expect("secret mode").expect("unix mode") & UNSAFE_SECRET_MODE, SECRET_MODE);
 
@@ -232,7 +232,7 @@ fn observed_secret_handle_resists_leaf_replacement() {
     // r[verify molten.node.cap_std_validation]
     let (workspace, root) = state_root("node-state-secret-replacement");
     let secrets = root.secrets().expect("secret namespace");
-    let path = NodeStatePath::parse("node-endpoint.secret").expect("secret path");
+    let path = RelativePath::parse("node-endpoint.secret").expect("secret path");
     secrets.write_restricted(&path, b"original\n", SECRET_MODE).expect("original secret");
     let observation = secrets.observe_file(&path).expect("observe secret");
 
@@ -242,7 +242,7 @@ fn observed_secret_handle_resists_leaf_replacement() {
     std::fs::rename(&host_path, host_path.with_extension("observed")).expect("move observed secret");
     std::fs::write(&host_path, b"replacement\n").expect("replacement secret");
 
-    let NodeStateFileObservation::Regular(file) = observation else {
+    let FileObservation::Regular(file) = observation else {
         panic!("regular secret observation expected");
     };
     assert_eq!(file.read_bounded(MAX_NODE_SECRET_BYTES).expect("observed bytes"), b"original\n");
@@ -256,8 +256,8 @@ fn opened_root_remains_bound_after_host_path_replacement() {
     let workspace = crate::test_support::TestWorkspace::new("node-state-root-replacement").expect("workspace");
     let state = workspace.state().expect("state root");
     let plan = workspace.process_bridge().plan(&state).expect("diagnostic bridge");
-    let root = NodeStateRoot::open(plan.path()).expect("open root");
-    let marker = NodeStatePath::parse("identity/original.preserves").expect("marker path");
+    let root = Root::open(plan.path()).expect("open root");
+    let marker = RelativePath::parse("identity/original.preserves").expect("marker path");
     root.write(&marker, b"original").expect("write original");
 
     let moved = plan.path().with_extension("opened-root");

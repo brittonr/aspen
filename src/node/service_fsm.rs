@@ -1,6 +1,6 @@
 type IoValue = preserves::IOValue;
 type Result<T> = crate::error::Result<T>;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 
 const SERVICE_FSM_SCHEMA: &str = "molten.node.service-fsm-transition.v1";
 const DECISION_PASS: &str = "pass";
@@ -352,7 +352,7 @@ fn validate_state_name(name: &str) -> Result<()> {
         | STATE_STALE_LOCK_RECOVERY_PENDING
         | STATE_STALE_LOCK_RECOVERED
         | STATE_FAILED => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported service FSM state {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported service FSM state {other}"))),
     }
 }
 
@@ -371,7 +371,7 @@ fn validate_event_name(name: &str) -> Result<()> {
         | EVENT_DRAIN_COMPLETE
         | EVENT_STOP
         | EVENT_FAILURE => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported service FSM event {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported service FSM event {other}"))),
     }
 }
 
@@ -392,7 +392,7 @@ fn validate_optional_ref(reference: &Option<String>, label: &str) -> Result<()> 
 
 fn validate_ref(reference: &str, label: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference)
-        .map_err(|error| MoltenError::invalid_harness(format!("invalid {label} {reference}: {error}")))
+        .map_err(|error| Failure::invalid_harness(format!("invalid {label} {reference}: {error}")))
 }
 
 fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {

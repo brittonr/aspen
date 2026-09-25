@@ -142,7 +142,7 @@ pub fn watcher_snapshot_value(input: &NetworkWatcherInput) -> crate::error::Resu
         push_diagnostic(&mut diagnostics, "retained watcher event count exceeds observed event count")?;
     }
     let retained_event_count = usize::try_from(input.retained_event_count).map_err(|error| {
-        crate::error::MoltenError::invalid_harness(format!("retained watcher event count unsupported: {error}"))
+        crate::error::Failure::invalid_harness(format!("retained watcher event count unsupported: {error}"))
     })?;
     if retained_event_count > MAX_WATCHER_ITEMS {
         push_diagnostic(&mut diagnostics, "retained watcher events exceed latest-state bound")?;

@@ -19,7 +19,7 @@ fn validate_service_id(value: &str, label: &str) -> Result<()> {
     if value.starts_with("svc:") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("expected svc: service id for {label}, got {value}")))
+        Err(Failure::invalid_harness(format!("expected svc: service id for {label}, got {value}")))
     }
 }
 
@@ -31,7 +31,7 @@ fn required_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
 
 fn require_ref(reference: &str, label: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference).map_err(|error| {
-        MoltenError::invalid_harness(format!("expected canonical content ref for {label}, got {reference}: {error}"))
+        Failure::invalid_harness(format!("expected canonical content ref for {label}, got {reference}: {error}"))
     })
 }
 
@@ -39,7 +39,7 @@ fn required_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {label}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {label}")))
 }
 
 fn synthetic_ref(label: &str) -> Result<String> {

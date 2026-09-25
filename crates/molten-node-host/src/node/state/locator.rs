@@ -8,11 +8,11 @@ const _: () = assert!(MAX_NODE_STATE_PATH_BYTES > 0);
 const _: () = assert!(MAX_NODE_STATE_PATH_BYTES <= MAX_REASONABLE_NODE_STATE_BOUND);
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct NodeStatePath {
+pub struct RelativePath {
     relative: std::path::PathBuf,
 }
 
-impl NodeStatePath {
+impl RelativePath {
     pub fn parse(value: &str) -> crate::error::Result<Self> {
         validate_input(value)?;
         let mut relative = std::path::PathBuf::new();
@@ -77,7 +77,7 @@ impl NodeStatePath {
     }
 }
 
-pub(super) fn join_scope(scope: &std::path::Path, suffix: &NodeStatePath) -> crate::error::Result<std::path::PathBuf> {
+pub(super) fn join_scope(scope: &std::path::Path, suffix: &RelativePath) -> crate::error::Result<std::path::PathBuf> {
     let component_count = scope
         .components()
         .count()

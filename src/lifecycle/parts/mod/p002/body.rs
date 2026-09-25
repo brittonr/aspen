@@ -1,7 +1,7 @@
 
 fn validate_refs(label: &str, refs: &[String]) -> Result<()> {
     if refs.len() > MAX_REFS {
-        return Err(MoltenError::invalid_harness(format!("{label} refs exceed lifecycle bound")));
+        return Err(Failure::invalid_harness(format!("{label} refs exceed lifecycle bound")));
     }
     let mut prior: Option<&str> = None;
     for reference in refs {
@@ -9,7 +9,7 @@ fn validate_refs(label: &str, refs: &[String]) -> Result<()> {
         if let Some(prior_ref) = prior
             && prior_ref >= reference.as_str()
         {
-            return Err(MoltenError::invalid_harness(format!("{label} refs must be sorted and unique")));
+            return Err(Failure::invalid_harness(format!("{label} refs must be sorted and unique")));
         }
         prior = Some(reference);
     }
@@ -18,10 +18,10 @@ fn validate_refs(label: &str, refs: &[String]) -> Result<()> {
 
 fn validate_turn_failure_input(input: &TurnFailureInput<'_>) -> Result<()> {
     if input.entity_id.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("turn failure entity id must be non-empty"));
+        return Err(Failure::invalid_harness("turn failure entity id must be non-empty"));
     }
     if input.cause.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("turn failure cause must be non-empty"));
+        return Err(Failure::invalid_harness("turn failure cause must be non-empty"));
     }
     validate_refs("vat delta", input.vat_delta_refs)?;
     validate_refs("one-shot effect", input.one_shot_effect_refs)?;
@@ -32,10 +32,10 @@ fn validate_turn_failure_input(input: &TurnFailureInput<'_>) -> Result<()> {
 
 fn validate_scope_cleanup_input(input: &ScopeCleanupInput<'_>) -> Result<()> {
     if input.entity_id.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("scope cleanup entity id must be non-empty"));
+        return Err(Failure::invalid_harness("scope cleanup entity id must be non-empty"));
     }
     if input.cause.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("scope cleanup cause must be non-empty"));
+        return Err(Failure::invalid_harness("scope cleanup cause must be non-empty"));
     }
     validate_refs("assertion", &input.cleanup.assertion_refs)?;
     validate_refs("subscription", &input.cleanup.observer_refs)?;
@@ -48,7 +48,7 @@ fn validate_scope_cleanup_input(input: &ScopeCleanupInput<'_>) -> Result<()> {
 
 fn validate_monitor_input(input: &MonitorInput<'_>) -> Result<()> {
     if input.observer_id.trim().is_empty() || input.child_id.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("monitor observer and child ids must be non-empty"));
+        return Err(Failure::invalid_harness("monitor observer and child ids must be non-empty"));
     }
     validate_content_ref(input.child_failure_ref)?;
     validate_refs("policy", input.policy_refs)?;
@@ -58,7 +58,7 @@ fn validate_monitor_input(input: &MonitorInput<'_>) -> Result<()> {
 
 fn validate_supervisor_input(input: &SupervisorDecisionInput<'_>) -> Result<()> {
     if input.policy.supervisor_id.trim().is_empty() || input.child_id.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("supervisor and child ids must be non-empty"));
+        return Err(Failure::invalid_harness("supervisor and child ids must be non-empty"));
     }
     validate_content_ref(input.child_failure_ref)?;
     validate_refs("policy", &input.policy.policy_refs)?;
@@ -66,7 +66,7 @@ fn validate_supervisor_input(input: &SupervisorDecisionInput<'_>) -> Result<()> 
     if let Some(window) = input.policy.restart_window.as_ref()
         && window.end_step < window.start_step
     {
-        return Err(MoltenError::invalid_harness("restart window end precedes start"));
+        return Err(Failure::invalid_harness("restart window end precedes start"));
     }
     Ok(())
 }
@@ -104,25 +104,25 @@ pub fn validate_transition_receipt(
     let input = parse_transition_value(transition_value)?;
     let expected_transition = transition_record(&input)?;
     if expected_transition.value != *transition_value {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "lifecycle transition value does not match parsed transition input",
         ));
     }
     let transition_ref = canonical_hash(transition_value)?;
     if transition_ref != expected_transition.transition_ref {
-        return Err(MoltenError::invalid_harness("lifecycle transition ref mismatch"));
+        return Err(Failure::invalid_harness("lifecycle transition ref mismatch"));
     }
     let receipt = parse_transition_receipt_value(receipt_value, expected_receipt_ref)?;
     if receipt.transition_ref != transition_ref {
-        return Err(MoltenError::invalid_harness("lifecycle receipt transition ref mismatch"));
+        return Err(Failure::invalid_harness("lifecycle receipt transition ref mismatch"));
     }
     let expected_diagnostics = transition_diagnostics(&input);
     if receipt.diagnostics != expected_diagnostics {
-        return Err(MoltenError::invalid_harness("lifecycle receipt diagnostics mismatch"));
+        return Err(Failure::invalid_harness("lifecycle receipt diagnostics mismatch"));
     }
     let expected_decision = if expected_diagnostics.is_empty() { "pass" } else { "deny" };
     if receipt.decision != expected_decision {
-        return Err(MoltenError::invalid_harness("lifecycle receipt decision mismatch"));
+        return Err(Failure::invalid_harness("lifecycle receipt decision mismatch"));
     }
     Ok(receipt)
 }
@@ -153,7 +153,7 @@ fn parse_transition_value(value: &IoValue) -> Result<TransitionInput> {
         logical_step: record_u64(&fields[TRANSITION_LOGICAL_STEP_INDEX], "logical-step")?,
     };
     if crate::preserves_rail::value_to_iovalue(&fields[TRANSITION_CHECKS_INDEX]) != checks_value() {
-        return Err(MoltenError::invalid_harness("lifecycle transition checks mismatch"));
+        return Err(Failure::invalid_harness("lifecycle transition checks mismatch"));
     }
     validate_transition_input(&input)?;
     Ok(input)
@@ -173,20 +173,20 @@ fn parse_transition_receipt_value(
     validate_content_ref(&transition_ref)?;
     let decision = record_string(&fields[RECEIPT_DECISION_INDEX], "decision")?;
     if decision != "pass" && decision != "deny" {
-        return Err(MoltenError::invalid_harness("lifecycle receipt decision must be pass or deny"));
+        return Err(Failure::invalid_harness("lifecycle receipt decision must be pass or deny"));
     }
     let diagnostics = record_string_sequence(&fields[RECEIPT_DIAGNOSTICS_INDEX], "diagnostics")?;
     if diagnostics.len() > MAX_DIAGNOSTICS {
-        return Err(MoltenError::invalid_harness("lifecycle receipt diagnostics exceed bound"));
+        return Err(Failure::invalid_harness("lifecycle receipt diagnostics exceed bound"));
     }
     if crate::preserves_rail::value_to_iovalue(&fields[RECEIPT_CHECKS_INDEX]) != checks_value() {
-        return Err(MoltenError::invalid_harness("lifecycle receipt checks mismatch"));
+        return Err(Failure::invalid_harness("lifecycle receipt checks mismatch"));
     }
     let receipt_ref = canonical_hash(receipt_value)?;
     if let Some(expected) = expected_receipt_ref
         && receipt_ref != expected
     {
-        return Err(MoltenError::invalid_harness("lifecycle receipt hash mismatch"));
+        return Err(Failure::invalid_harness("lifecycle receipt hash mismatch"));
     }
     Ok(TransitionReceiptValidation {
         receipt_ref,
@@ -204,7 +204,7 @@ fn simple_record<'a>(
 ) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 fn simple_record_field<'a>(
@@ -214,7 +214,7 @@ fn simple_record_field<'a>(
 ) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> field with arity {arity}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> field with arity {arity}")))
 }
 
 fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
@@ -226,8 +226,8 @@ fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let field = simple_record_field(value, label, FIELD_RECORD_ARITY)?;
     field[FIELD_VALUE_INDEX]
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {label}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {label}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
 fn record_state(value: &Value<IoValue>, label: &str) -> Result<State> {
@@ -242,7 +242,7 @@ fn record_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<IoValue>> 
     let field = simple_record_field(value, label, FIELD_RECORD_ARITY)?;
     let sequence = field[FIELD_VALUE_INDEX]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {label}")))?;
     Ok(sequence.iter().map(crate::preserves_rail::value_to_iovalue).collect())
 }
 
@@ -254,7 +254,7 @@ fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<Str
     }
     let some = optional
         .collect_simple_record("some", Some(FIELD_RECORD_ARITY))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected optional ref for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected optional ref for {label}")))?;
     let reference = required_string(&some[FIELD_VALUE_INDEX], label)?;
     validate_content_ref(&reference)?;
     Ok(Some(reference))
@@ -263,7 +263,7 @@ fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<Str
 fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result<()> {
     let actual = required_string(value, field)?;
     if actual != expected {
-        return Err(MoltenError::invalid_harness(format!("expected {field} schema {expected}, got {actual}")));
+        return Err(Failure::invalid_harness(format!("expected {field} schema {expected}, got {actual}")));
     }
     Ok(())
 }
@@ -272,14 +272,14 @@ fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn required_iovalue_string(value: &IoValue, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn parse_entity_kind(value: &str) -> Result<EntityKind> {
@@ -290,7 +290,7 @@ fn parse_entity_kind(value: &str) -> Result<EntityKind> {
         "session" => Ok(EntityKind::Session),
         "handler" => Ok(EntityKind::Handler),
         "job" => Ok(EntityKind::Job),
-        _ => Err(MoltenError::invalid_harness(format!("unknown lifecycle entity kind {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unknown lifecycle entity kind {value}"))),
     }
 }
 
@@ -306,7 +306,7 @@ fn parse_state(value: &str) -> Result<State> {
         "failed" => Ok(State::Failed),
         "restarting" => Ok(State::Restarting),
         "cleaned" => Ok(State::Cleaned),
-        _ => Err(MoltenError::invalid_harness(format!("unknown lifecycle state {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unknown lifecycle state {value}"))),
     }
 }
 
@@ -321,7 +321,7 @@ fn parse_action(value: &str) -> Result<Action> {
         "stop" => Ok(Action::Stop),
         "cleanup" => Ok(Action::Cleanup),
         "supervisor-decision" => Ok(Action::SupervisorDecision),
-        _ => Err(MoltenError::invalid_harness(format!("unknown lifecycle action {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unknown lifecycle action {value}"))),
     }
 }
 

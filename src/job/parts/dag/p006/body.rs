@@ -41,7 +41,7 @@ fn output_root_index(plan: &TrellisExecutionPlan, root: &str) -> Result<usize> {
     plan.node_index
         .get(root)
         .copied()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("job output root {root} missing from node index")))
+        .ok_or_else(|| Failure::invalid_harness(format!("job output root {root} missing from node index")))
 }
 
 fn output_values_for_root<'a>(
@@ -52,7 +52,7 @@ fn output_values_for_root<'a>(
     outputs_by_index
         .get(root_index)
         .and_then(Option::as_deref)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("job output root {root} was not executed")))
+        .ok_or_else(|| Failure::invalid_harness(format!("job output root {root} was not executed")))
 }
 
 fn ensure_final_output_ref(mut final_refs: Vec<String>, output_value: &IoValue) -> Result<Vec<String>> {
@@ -117,11 +117,11 @@ fn stage_plan_values(dag: &JobDag, plan: &TrellisExecutionPlan) -> Result<Vec<Io
     for node_id in &plan.order_ids {
         let node = node_map
             .get(node_id)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("job plan missing node {node_id}")))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("job plan missing node {node_id}")))?;
         let index = *plan
             .node_index
             .get(node_id)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("job plan missing index for {node_id}")))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("job plan missing index for {node_id}")))?;
         let deps = dependency_ids(plan, node_id)?;
         push_bounded(
             &mut stage_values,
@@ -211,12 +211,12 @@ fn stage_profile_values(dag: &JobDag, plan: &TrellisExecutionPlan, cache_entries
             .nodes
             .iter()
             .find(|candidate| candidate.id == *node_id)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("job profile missing node {node_id}")))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("job profile missing node {node_id}")))?;
         let bytes =
             usize_to_u64(crate::preserves_rail::canonical_bytes(&node.config)?.len(), "job profile config bytes")?;
         config_bytes = config_bytes
             .checked_add(bytes)
-            .ok_or_else(|| MoltenError::invalid_harness("job profile estimated config bytes overflowed"))?;
+            .ok_or_else(|| Failure::invalid_harness("job profile estimated config bytes overflowed"))?;
         push_bounded(
             &mut values,
             crate::preserves_rail::record("job-stage-profile-v1", vec![

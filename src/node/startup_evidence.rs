@@ -13,7 +13,7 @@ use molten_core::node_startup::EvidencePlan;
 use molten_core::node_startup::MAX_DESCRIPTOR_BYTES;
 use molten_core::node_startup::TrustedCohort;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 type IoValue = preserves::IOValue;
@@ -60,7 +60,7 @@ fn load_plan(policy_path: &Path, bundle_path: &Path) -> Result<(Dir, EvidencePla
     let descriptor: Descriptor = serde_json::from_slice(&descriptor_bytes).map_err(|_| deny("descriptor-json"))?;
     let executable = measure_current_executable()?;
     let plan = EvidencePlan::admit(&policy, descriptor, &executable)
-        .map_err(|error| MoltenError::invalid_harness(format!("startup-evidence-plan: {error:?}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("startup-evidence-plan: {error:?}")))?;
     Ok((root, plan))
 }
 
@@ -167,8 +167,8 @@ fn measure_current_executable() -> Result<String> {
     Err(deny("platform-unsupported"))
 }
 
-fn deny(code: &str) -> MoltenError {
-    MoltenError::invalid_harness(format!("startup-evidence-{code}"))
+fn deny(code: &str) -> Failure {
+    Failure::invalid_harness(format!("startup-evidence-{code}"))
 }
 
 #[cfg(test)]

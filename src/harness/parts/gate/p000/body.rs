@@ -3,7 +3,7 @@ type IoValue = preserves::IOValue;
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type Record<T> = preserves::Record<T>;
 type Value<T> = preserves::Value<T>;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 const DETERMINISTIC_REPLAY_VERIFY_SCHEMA: &str = crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
@@ -255,7 +255,7 @@ pub struct ReproVerifyReceipt {
 pub fn check_value(value: &IoValue) -> Result<Check> {
     if value.collect_simple_record("harness-failure-v1", None).is_some() {
         let failure = super::schema::parse_failure(value)?;
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "harness failure artifact {} phase={} kind={} cannot satisfy pass evidence gate",
             failure.failure_ref, failure.phase, failure.kind
         )));
@@ -272,7 +272,7 @@ pub fn check_value(value: &IoValue) -> Result<Check> {
                 if let Some(loss_classification) = bundle.loss_classification.as_deref()
                     && loss_classification != "gate-preserving"
                 {
-                    return Err(MoltenError::invalid_harness(format!(
+                    return Err(Failure::invalid_harness(format!(
                         "{} repro bundle {} is {loss_classification} and cannot satisfy pass evidence gates without an explicit gate-preserving policy",
                         bundle.export_profile.as_deref().unwrap_or("profiled"),
                         bundle.bundle_ref
@@ -281,21 +281,21 @@ pub fn check_value(value: &IoValue) -> Result<Check> {
                 let report_value = bundle
                     .report_value
                     .clone()
-                    .ok_or_else(|| MoltenError::invalid_harness("report repro bundle missing report value"))?;
+                    .ok_or_else(|| Failure::invalid_harness("report repro bundle missing report value"))?;
                 validate_sealed_report_bundle(&report_value, &bundle)?;
                 let mut check = check_report(&report_value, "repro-bundle".to_string(), Some(bundle.bundle_ref))?;
                 check.redaction_policy_ref = bundle.redaction_policy_ref;
                 check.redaction_gate_ref = bundle.redaction_gate_ref;
                 Ok(check)
             }
-            super::schema::ReproBundleKind::Failure => Err(MoltenError::invalid_harness(format!(
+            super::schema::ReproBundleKind::Failure => Err(Failure::invalid_harness(format!(
                 "failure repro bundle {} wrapping {} cannot satisfy pass evidence gate",
                 bundle.bundle_ref, bundle.artifact_ref
             ))),
         };
     }
 
-    Err(MoltenError::invalid_harness(
+    Err(Failure::invalid_harness(
         "expected harness report or report repro bundle as pass evidence; failure artifacts are diagnostics only",
     ))
 }

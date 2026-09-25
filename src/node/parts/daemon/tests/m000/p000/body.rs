@@ -195,11 +195,11 @@
             request_value,
         })
         .expect("submit request");
-        let state_root = crate::node_state::NodeStateRoot::open(root).expect("open node state root");
+        let state_root = crate::node_state::Root::open(root).expect("open node state root");
         let inbox = state_root.control_inbox().expect("open control inbox");
         assert!(
             inbox
-                .try_exists(&crate::node_state::NodeStatePath::parse(&submitted.inbox_entry).expect("inbox entry"))
+                .try_exists(&crate::node_state::RelativePath::parse(&submitted.inbox_entry).expect("inbox entry"))
                 .expect("inspect inbox entry")
         );
         dispatch_control_request_entry(&ControlDispatchEntryInput {
@@ -393,7 +393,7 @@
             request_entry: Some(&submitted.inbox_entry),
         })
         .expect("dispatch status");
-        let state_root = crate::node_state::NodeStateRoot::open(&root).expect("open node state root");
+        let state_root = crate::node_state::Root::open(&root).expect("open node state root");
         write_preserves(
             &state_root,
             &control_outbox_request_path(&status_request.request_ref).expect("outbox request path"),

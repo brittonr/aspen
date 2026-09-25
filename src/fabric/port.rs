@@ -6,7 +6,7 @@
     reason = "the port vocabulary keeps explicit domain-qualified infrastructure failure names"
 )]
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 
 /// Infrastructure failures that can cross a maintained fabric port boundary.
 // r[impl molten.modularity.fabric_boundary.errors]
@@ -86,13 +86,13 @@ impl std::fmt::Display for FabricPortError {
 
 impl std::error::Error for FabricPortError {}
 
-impl From<MoltenError> for FabricPortError {
-    fn from(error: MoltenError) -> Self {
+impl From<Failure> for FabricPortError {
+    fn from(error: Failure) -> Self {
         Self::capability(error.to_string())
     }
 }
 
-impl From<FabricPortError> for MoltenError {
+impl From<FabricPortError> for Failure {
     fn from(error: FabricPortError) -> Self {
         Self::invalid_harness(error.to_string())
     }
@@ -119,7 +119,7 @@ mod tests {
     #[test]
     fn malformed_observation_does_not_become_policy_denial() {
         let error = FabricPortError::malformed("clock moved backwards");
-        let molten = MoltenError::from(error.clone());
+        let molten = Failure::from(error.clone());
 
         assert!(matches!(error, FabricPortError::MalformedObservation { .. }));
         assert!(molten.to_string().contains("malformed observation"));

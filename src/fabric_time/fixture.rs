@@ -1,5 +1,5 @@
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric::build_fabric_port_registry;
 use crate::fabric::canonical_fabric_port_descriptor;
@@ -259,9 +259,9 @@ fn run_live_scheduler_scenario(profile: &CanonicalTimeProfile) -> Result<Canonic
     let mut wake_adapter = ThreadSchedulerWakeAdapter::default();
     wake_adapter.register(key.clone(), parked.thread().clone())?;
     wake_adapter.route(&woken)?;
-    parked.join().map_err(|_| MoltenError::invalid_harness("live scheduler wake target panicked"))?;
+    parked.join().map_err(|_| Failure::invalid_harness("live scheduler wake target panicked"))?;
     if !wake_adapter.unregister(&key) {
-        return Err(MoltenError::invalid_harness("live scheduler wake target cleanup failed"));
+        return Err(Failure::invalid_harness("live scheduler wake target cleanup failed"));
     }
     let selected = choose_runnable(
         &profile.profile,
@@ -399,7 +399,7 @@ fn run_simulation_scenarios(
 
     let cleaned = cleanup_generation(&[periodic_transition.next, delayed_transition.next], FIXTURE_GENERATION);
     if cleaned.iter().any(|timer| timer.phase != TimerPhase::Cancelled) {
-        return Err(MoltenError::invalid_harness("fixture generation cleanup leaked an active timer"));
+        return Err(Failure::invalid_harness("fixture generation cleanup leaked an active timer"));
     }
     events.push(canonical_named_event(
         &profile.profile_ref,
@@ -447,13 +447,13 @@ fn run_scheduler_scenario(
     let replay = choose_runnable(&profile.profile, policy, &state, FIXTURE_GENERATION, Some(&selection.selected))
         .map_err(|error| core_error("replay fixture selection", error))?;
     if replay.selected != selection.selected {
-        return Err(MoltenError::invalid_harness("deterministic scheduler replay selected a different runnable"));
+        return Err(Failure::invalid_harness("deterministic scheduler replay selected a different runnable"));
     }
     if !matches!(
         choose_runnable(&profile.profile, policy, &state, FIXTURE_GENERATION, Some(&low),),
         Err(SchedulerError::UnexpectedReplayChoice { .. })
     ) {
-        return Err(MoltenError::invalid_harness("fixture scheduler accepted a divergent replay choice"));
+        return Err(Failure::invalid_harness("fixture scheduler accepted a divergent replay choice"));
     }
     events.push(canonical_named_event(
         &profile.profile_ref,
@@ -655,7 +655,7 @@ fn run_clock_partition_faults(
     let previous = clock.observe_wall()?;
     let backward = FabricTimeFault::BackwardWallJump { ticks: WALL_JUMP_FAULT };
     if !apply_clock_fault(clock, &backward)? {
-        return Err(MoltenError::invalid_harness("backward clock fault was not applied"));
+        return Err(Failure::invalid_harness("backward clock fault was not applied"));
     }
     clock.advance(1)?;
     let observed = clock.observe_wall()?;
@@ -678,13 +678,13 @@ fn run_clock_partition_faults(
     let partition_until = clock
         .now_ticks()?
         .checked_add(TIMER_PERIOD)
-        .ok_or_else(|| MoltenError::invalid_harness("partition deadline overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("partition deadline overflow"))?;
     let partition = FabricTimeFault::PartitionWindow {
         until_ticks: partition_until,
     };
     let partition_deadline_ticks = partition_until
         .checked_add(TIMER_PERIOD)
-        .ok_or_else(|| MoltenError::invalid_harness("partition-coupled deadline overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("partition-coupled deadline overflow"))?;
     let partition_decision = evaluate_deadline_with_fault(
         &profile.profile,
         FIXTURE_GENERATION,
@@ -699,7 +699,7 @@ fn run_clock_partition_faults(
         Some(&partition),
     )?;
     if !matches!(partition_decision, FaultedDeadlineDecision::PartitionIndeterminate { .. }) {
-        return Err(MoltenError::invalid_harness("partition fault did not make the coupled deadline indeterminate"));
+        return Err(Failure::invalid_harness("partition fault did not make the coupled deadline indeterminate"));
     }
     events.push(canonical_named_event(
         &profile.profile_ref,
@@ -782,7 +782,7 @@ fn ensure_shared_conformance(
         || live.scheduler_cancellation_recorded != simulation.scheduler_cancellation_recorded
         || live.entropy_bound_rejected != simulation.entropy_bound_rejected
     {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "live and simulation adapters diverged: live={live:?} simulation={simulation:?}"
         )));
     }
@@ -877,13 +877,13 @@ fn trace_for_kinds(
 
 fn count_events(events: &[&CanonicalTimeEvent], kinds: &[CanonicalTimeEventKind]) -> Result<u64> {
     u64::try_from(events.iter().filter(|event| kinds.contains(&event.kind)).count())
-        .map_err(|_| MoltenError::invalid_harness("fabric-time event count overflow"))
+        .map_err(|_| Failure::invalid_harness("fabric-time event count overflow"))
 }
 
 fn checked_increment(value: u64, label: &str) -> Result<u64> {
-    value.checked_add(1).ok_or_else(|| MoltenError::invalid_harness(format!("{label} overflow")))
+    value.checked_add(1).ok_or_else(|| Failure::invalid_harness(format!("{label} overflow")))
 }
 
-fn core_error(label: &str, error: impl std::fmt::Debug) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label}: {error:?}"))
+fn core_error(label: &str, error: impl std::fmt::Debug) -> Failure {
+    Failure::invalid_harness(format!("{label}: {error:?}"))
 }

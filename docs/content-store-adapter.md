@@ -22,7 +22,7 @@ A backend success callback, QUIC connection, Iroh blob hash, or Redb row never m
 
 ## Partial state and failure semantics
 
-Canonical partial state records the exact verified prefix, missing suffix, verified bytes, generation, event count, sequence, and terminal class. Capability-rooted persistence uses a bounded deterministic `MCPS001` record under a caller-supplied `NodeStateNamespace`; load revalidates profile, manifest, operation, partition, generation, refs, bytes, and event limits before resume.
+Canonical partial state records the exact verified prefix, missing suffix, verified bytes, generation, event count, sequence, and terminal class. Capability-rooted persistence uses a bounded deterministic `MCPS001` record under a caller-supplied `node_state::DirectoryView`; load revalidates profile, manifest, operation, partition, generation, refs, bytes, and event limits before resume.
 
 Terminal classes distinguish accepted, streaming, verified, durable, cancelled, retryable, failed, uncertain, and denied. Corruption, truncation, reordering, unexpected chunks, stale tickets, unsupported transforms, root escape, overload, permission denial, timeout, disconnect, and adapter failure remain distinct. Disconnect or timeout after possible progress is uncertain, never normalized to success or definite absence.
 

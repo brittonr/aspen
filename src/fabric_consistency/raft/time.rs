@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric_time::AdmittedTimeProfile;
 use crate::fabric_time::CryptographicEntropySource;
@@ -77,7 +77,7 @@ impl<S: CryptographicEntropySource> TokioReplicaTimePort<S> {
             explicit_simulation_seed: None,
             explicit_simulation_seed_ref: None,
         })
-        .map_err(|error| MoltenError::invalid_harness(format!("live Raft entropy stream denied: {error:?}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("live Raft entropy stream denied: {error:?}")))?;
         Ok(Self {
             profile: config.profile,
             generation: config.generation,
@@ -118,20 +118,20 @@ impl<S: CryptographicEntropySource> TokioReplicaTimePort<S> {
             .election_max_ticks
             .checked_sub(self.election_min_ticks)
             .and_then(|difference| difference.checked_add(1))
-            .ok_or_else(|| MoltenError::invalid_harness("live Raft election span overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("live Raft election span overflow"))?;
         let (transition, metadata) =
             self.entropy
                 .draw(&self.profile, self.generation, &self.entropy_stream, EntropyRequest::BoundedChoice {
                     upper_exclusive: span,
                 })?;
         let EntropyValue::Choice(choice) = transition.value else {
-            return Err(MoltenError::invalid_harness("live Raft election entropy did not produce a bounded choice"));
+            return Err(Failure::invalid_harness("live Raft election entropy did not produce a bounded choice"));
         };
         self.entropy_stream = transition.next;
         let delay = self
             .election_min_ticks
             .checked_add(choice)
-            .ok_or_else(|| MoltenError::invalid_harness("live Raft election delay overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("live Raft election delay overflow"))?;
         Ok((delay, canonical_entropy_event(&metadata)?.evidence_ref))
     }
 
@@ -152,11 +152,11 @@ impl<S: CryptographicEntropySource> TokioReplicaTimePort<S> {
             overload: TimerOverloadPolicy::RejectAndRetain,
             resource_charge: TimerResourceCharge::single_slot(),
         })
-        .map_err(|error| MoltenError::invalid_harness(format!("live Raft timer plan denied: {error:?}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("live Raft timer plan denied: {error:?}")))?;
         self.next_timer_sequence = self
             .next_timer_sequence
             .checked_add(NEXT_TIMER_SEQUENCE)
-            .ok_or_else(|| MoltenError::invalid_harness("live Raft timer sequence overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("live Raft timer sequence overflow"))?;
         crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("raft-timer-plan-v1", vec![
             crate::preserves_rail::string(&self.profile.profile_ref),
             crate::preserves_rail::string(&timer.key.service_id),
@@ -169,10 +169,10 @@ impl<S: CryptographicEntropySource> TokioReplicaTimePort<S> {
 
     fn duration(&self, ticks: u64) -> Result<Duration> {
         let multiplier =
-            u32::try_from(ticks).map_err(|_| MoltenError::invalid_harness("live Raft timer ticks exceed u32"))?;
+            u32::try_from(ticks).map_err(|_| Failure::invalid_harness("live Raft timer ticks exceed u32"))?;
         self.tick_duration
             .checked_mul(multiplier)
-            .ok_or_else(|| MoltenError::invalid_harness("live Raft timer duration overflow"))
+            .ok_or_else(|| Failure::invalid_harness("live Raft timer duration overflow"))
     }
 }
 
@@ -232,11 +232,11 @@ impl<S: CryptographicEntropySource> Drop for TokioReplicaTimePort<S> {
 
 fn validate_time_configuration(config: &TokioReplicaTimeConfig) -> Result<()> {
     if config.profile.kind != TimeProfileKind::Live {
-        return Err(MoltenError::invalid_harness("Tokio Raft time port requires a live time profile"));
+        return Err(Failure::invalid_harness("Tokio Raft time port requires a live time profile"));
     }
     crate::preserves_rail::validate_content_ref(&config.entropy_binding_ref)?;
     if config.generation == 0 || config.service_id.is_empty() || config.tick_duration.is_zero() {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "Tokio Raft time port requires generation, service id, and positive tick duration",
         ));
     }
@@ -244,12 +244,12 @@ fn validate_time_configuration(config: &TokioReplicaTimeConfig) -> Result<()> {
         || config.election_min_ticks <= config.heartbeat_ticks
         || config.election_max_ticks < config.election_min_ticks
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "Tokio Raft time bounds require heartbeat < election minimum <= election maximum",
         ));
     }
     if config.election_max_ticks > config.profile.max_duration_ticks {
-        return Err(MoltenError::invalid_harness("Tokio Raft election bound exceeds the admitted time profile"));
+        return Err(Failure::invalid_harness("Tokio Raft election bound exceeds the admitted time profile"));
     }
     Ok(())
 }

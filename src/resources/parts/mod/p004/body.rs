@@ -199,7 +199,7 @@ pub struct DeletionDecision {
 fn validate_scoped_name(name: &str) -> Result<()> {
     validate_non_empty(name, "scoped name")?;
     if name.len() > MAX_SCOPED_NAME_LENGTH {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "scoped name exceeds maximum length {MAX_SCOPED_NAME_LENGTH}: {name}"
         )));
     }
@@ -207,7 +207,7 @@ fn validate_scoped_name(name: &str) -> Result<()> {
         .chars()
         .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.');
     if !valid {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "scoped name contains invalid characters: {name}"
         )));
     }
@@ -217,7 +217,7 @@ fn validate_scoped_name(name: &str) -> Result<()> {
 fn validate_label_key(key: &str) -> Result<()> {
     validate_non_empty(key, "label key")?;
     if key.len() > MAX_LABEL_KEY_LENGTH {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "label key exceeds maximum length {MAX_LABEL_KEY_LENGTH}: {key}"
         )));
     }
@@ -225,7 +225,7 @@ fn validate_label_key(key: &str) -> Result<()> {
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' || c == '/');
     if !valid {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "label key contains invalid characters: {key}"
         )));
     }
@@ -234,7 +234,7 @@ fn validate_label_key(key: &str) -> Result<()> {
 
 fn validate_label_value(value: &str) -> Result<()> {
     if value.len() > MAX_LABEL_VALUE_LENGTH {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "label value exceeds maximum length {MAX_LABEL_VALUE_LENGTH}"
         )));
     }
@@ -242,7 +242,7 @@ fn validate_label_value(value: &str) -> Result<()> {
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_');
     if !valid {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "label value contains invalid characters: {value}"
         )));
     }
@@ -252,7 +252,7 @@ fn validate_label_value(value: &str) -> Result<()> {
 fn validate_annotation_key(key: &str) -> Result<()> {
     validate_non_empty(key, "annotation key")?;
     if key.len() > MAX_ANNOTATION_KEY_LENGTH {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "annotation key exceeds maximum length {MAX_ANNOTATION_KEY_LENGTH}: {key}"
         )));
     }
@@ -261,7 +261,7 @@ fn validate_annotation_key(key: &str) -> Result<()> {
 
 fn validate_annotation_value(value: &str) -> Result<()> {
     if value.len() > MAX_ANNOTATION_VALUE_LENGTH {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "annotation value exceeds maximum length {MAX_ANNOTATION_VALUE_LENGTH}"
         )));
     }
@@ -280,7 +280,7 @@ pub fn validate_resource_record(resource: &ResourceRecord) -> Result<ResourceRec
     validate_scoped_name(&resource.name)?;
 
     if resource.generation == 0 {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "resource generation must be at least 1",
         ));
     }
@@ -302,7 +302,7 @@ pub fn validate_resource_record(resource: &ResourceRecord) -> Result<ResourceRec
 /// Validate resource metadata bounds and label/annotation shapes.
 pub fn validate_metadata(metadata: &ResourceMetadata) -> Result<()> {
     if metadata.labels.len() > MAX_LABEL_COUNT {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "label count {} exceeds maximum {MAX_LABEL_COUNT}",
             metadata.labels.len()
         )));
@@ -313,7 +313,7 @@ pub fn validate_metadata(metadata: &ResourceMetadata) -> Result<()> {
     }
 
     if metadata.annotations.len() > MAX_ANNOTATION_COUNT {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "annotation count {} exceeds maximum {MAX_ANNOTATION_COUNT}",
             metadata.annotations.len()
         )));
@@ -324,7 +324,7 @@ pub fn validate_metadata(metadata: &ResourceMetadata) -> Result<()> {
     }
 
     if metadata.owner_refs.len() > MAX_OWNER_REFS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "owner ref count {} exceeds maximum {MAX_OWNER_REFS}",
             metadata.owner_refs.len()
         )));
@@ -335,7 +335,7 @@ pub fn validate_metadata(metadata: &ResourceMetadata) -> Result<()> {
     }
 
     if metadata.finalizers.len() > MAX_FINALIZERS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "finalizer count {} exceeds maximum {MAX_FINALIZERS}",
             metadata.finalizers.len()
         )));
@@ -345,7 +345,7 @@ pub fn validate_metadata(metadata: &ResourceMetadata) -> Result<()> {
     }
 
     if metadata.evidence_refs.len() > MAX_EVIDENCE_REFS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "metadata evidence ref count {} exceeds maximum {MAX_EVIDENCE_REFS}",
             metadata.evidence_refs.len()
         )));
@@ -363,13 +363,13 @@ pub fn validate_status_condition(
     current_generation: u64,
 ) -> Result<()> {
     if condition.observed_generation > current_generation {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "observed generation {} exceeds current generation {}",
             condition.observed_generation, current_generation
         )));
     }
     if condition.evidence_refs.is_empty() {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "status condition must have at least one evidence ref",
         ));
     }

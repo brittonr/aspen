@@ -18,7 +18,7 @@ fn apply_admitted_command_core(
             let target_ref = command
                 .target_ref
                 .clone()
-                .ok_or_else(|| MoltenError::invalid_harness("admitted set command missing target ref"))?;
+                .ok_or_else(|| Failure::invalid_harness("admitted set command missing target ref"))?;
             maps.entries.insert(
                 ControlRegistryKey {
                     namespace: command.namespace.clone(),
@@ -153,7 +153,7 @@ fn raft_log_entry_value(input: &LogEntryValueInput<'_>) -> Result<IoValue> {
 fn parse_raft_log_entry(value: &IoValue) -> Result<RaftLogEntry> {
     let fields = value
         .collect_simple_record("raft-log-entry-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <raft-log-entry-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <raft-log-entry-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::RAFT_LOG_ENTRY_SCHEMA, "raft log entry schema")?;
     let command = record_iovalue(&fields[6], "command")?;
     require_check(&parse_checks(&fields[8])?, "append-consistency", "raft log entry")?;
@@ -193,7 +193,7 @@ fn commit_receipt_value(input: &CommitReceiptValueInput<'_>) -> Result<IoValue> 
 fn parse_commit_receipt(value: &IoValue) -> Result<RaftCommitReceipt> {
     let fields = value
         .collect_simple_record("raft-commit-receipt-v1", Some(12))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <raft-commit-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <raft-commit-receipt-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::RAFT_COMMIT_RECEIPT_SCHEMA, "raft commit receipt schema")?;
     Ok(RaftCommitReceipt {
         receipt_ref: canonical_hash(value)?,
@@ -238,7 +238,7 @@ fn registry_receipt_value(input: &RegistryReceiptValueInput<'_>) -> Result<IoVal
 fn parse_registry_receipt(value: &IoValue) -> Result<ControlRegistryReceipt> {
     let fields = value
         .collect_simple_record("control-registry-receipt-v1", Some(15))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <control-registry-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <control-registry-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::CONTROL_REGISTRY_RECEIPT_SCHEMA,
@@ -277,7 +277,7 @@ fn predicate_receipt_value(input: &PredicateReceiptInput<'_>) -> Result<IoValue>
 fn parse_predicate_receipt(value: &IoValue) -> Result<RaftPredicateReceipt> {
     let fields = value
         .collect_simple_record("raft-predicate-receipt-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <raft-predicate-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <raft-predicate-receipt-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::RAFT_PREDICATE_RECEIPT_SCHEMA, "raft predicate receipt schema")?;
     require_check(&parse_checks(&fields[8])?, "trellis-predicate", "raft predicate receipt")?;
     Ok(RaftPredicateReceipt {

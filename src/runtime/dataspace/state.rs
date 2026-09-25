@@ -73,8 +73,8 @@ pub fn recorded_effect_response_transition(
         }
         Event::EffectRequest {
             effect: Effect::Random, ..
-        } => Err(MoltenError::invalid_harness("recorded random effect request missing upper bound")),
-        _ => Err(MoltenError::invalid_harness("recorded effect response requires an effect request")),
+        } => Err(Failure::invalid_harness("recorded random effect request missing upper bound")),
+        _ => Err(Failure::invalid_harness("recorded effect response requires an effect request")),
     }
 }
 
@@ -168,7 +168,7 @@ impl RuntimeState {
             *self = preview;
             Ok((events, receipt))
         } else {
-            Err(MoltenError::invalid_harness("runtime turn predicate denied commit"))
+            Err(Failure::invalid_harness("runtime turn predicate denied commit"))
         }
     }
 

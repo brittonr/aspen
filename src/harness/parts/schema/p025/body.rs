@@ -64,7 +64,7 @@ fn validate_redaction_transform_manifest(
     let manifest = simple_record(value, "redaction-transform-manifest-v1", 9)?;
     let schema = required_string(&manifest[0], "redaction transform manifest schema")?;
     if schema != crate::preserves_rail::HARNESS_REDACTION_TRANSFORM_MANIFEST_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported redaction transform manifest schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_REDACTION_TRANSFORM_MANIFEST_SCHEMA
         )));
@@ -80,13 +80,13 @@ fn validate_redaction_transform_manifest(
         || manifest_output_suite != report.suite_ref
         || manifest_profile != profile.as_str()
     {
-        return Err(MoltenError::invalid_harness("redaction transform manifest binding mismatch"));
+        return Err(crate::error::Failure::invalid_harness("redaction transform manifest binding mismatch"));
     }
     validate_sequence_record(&manifest[6], "markers", "redaction transform manifest markers")?;
     let manifest_encrypted_refs =
         required_record_hash_sequence(&manifest[7], "encrypted-refs", "manifest encrypted refs")?;
     if profile == ReproExportProfile::EncryptedPrivate && manifest_encrypted_refs.is_empty() {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "encrypted-private repro bundle transform manifest missing encrypted refs",
         ));
     }
@@ -133,7 +133,7 @@ fn collect_redaction_marker_refs(value: &IoValue) -> Result<Vec<String>> {
 fn parse_failure_repro_bundle(bundle_value: &IoValue, bundle: &Record<Value<IoValue>>) -> Result<ReproBundle> {
     let kind = required_record_string(&bundle[1], "bundle-kind", "repro bundle kind")?;
     if kind != "failure" {
-        return Err(MoltenError::invalid_harness(format!("expected failure repro bundle kind, got {kind}")));
+        return Err(crate::error::Failure::invalid_harness(format!("expected failure repro bundle kind, got {kind}")));
     }
     validate_tool_record(&bundle[2])?;
     validate_sequence_record(&bundle[3], "command", "repro bundle command")?;
@@ -144,7 +144,7 @@ fn parse_failure_repro_bundle(bundle_value: &IoValue, bundle: &Record<Value<IoVa
     let failure_value = value_to_iovalue(&bundle[7]);
     let failure = parse_failure(&failure_value)?;
     if failure.failure_ref != failure_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "failure repro bundle ref mismatch: bundle has {failure_ref}, embedded failure hashes to {}",
             failure.failure_ref
         )));
@@ -191,31 +191,31 @@ fn parse_repro_seal(
     let seal = simple_record(&value, "repro-seal", 7)?;
     let schema = required_string(&seal[0], "repro seal schema")?;
     if schema != crate::preserves_rail::HARNESS_REPRO_SEAL_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported repro seal schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_REPRO_SEAL_SCHEMA
         )));
     }
     let decision = required_record_string(&seal[1], "decision", "repro seal decision")?;
     if decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!("unsupported repro seal decision {decision}")));
+        return Err(crate::error::Failure::invalid_harness(format!("unsupported repro seal decision {decision}")));
     }
     let gate_receipt_ref = required_record_hash(&seal[2], "gate-receipt-ref", "repro seal gate receipt ref")?;
     let sealed_report_ref = required_record_hash(&seal[3], "report-ref", "repro seal report ref")?;
     if sealed_report_ref != report_ref {
-        return Err(MoltenError::invalid_harness("repro seal report ref does not match bundle report ref"));
+        return Err(crate::error::Failure::invalid_harness("repro seal report ref does not match bundle report ref"));
     }
     let sealed_suite_ref = required_record_hash(&seal[4], "suite-ref", "repro seal suite ref")?;
     if sealed_suite_ref != suite_ref {
-        return Err(MoltenError::invalid_harness("repro seal suite ref does not match bundle suite ref"));
+        return Err(crate::error::Failure::invalid_harness("repro seal suite ref does not match bundle suite ref"));
     }
     let sealed_profile = required_record_string(&seal[5], "profile", "repro seal profile")?;
     if sealed_profile != profile {
-        return Err(MoltenError::invalid_harness("repro seal profile does not match bundle profile"));
+        return Err(crate::error::Failure::invalid_harness("repro seal profile does not match bundle profile"));
     }
     let sealed_replay_status = required_record_string(&seal[6], "replay-status", "repro seal replay status")?;
     if sealed_replay_status != replay_status {
-        return Err(MoltenError::invalid_harness("repro seal replay status does not match bundle replay status"));
+        return Err(crate::error::Failure::invalid_harness("repro seal replay status does not match bundle replay status"));
     }
     Ok(ReproSeal { gate_receipt_ref })
 }
@@ -231,7 +231,7 @@ fn parse_seal_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
         let name = required_string(&check[0], "repro seal check name")?;
         let status = required_string(&check[1], "repro seal check status")?;
         if status != "pass" {
-            return Err(MoltenError::invalid_harness(format!("repro seal check {name} status is {status}")));
+            return Err(crate::error::Failure::invalid_harness(format!("repro seal check {name} status is {status}")));
         }
         checks.push(name);
     }
@@ -242,7 +242,7 @@ fn require_seal_check(checks: &[String], expected: &str) -> Result<()> {
     if checks.iter().any(|check| check == expected) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("repro seal missing {expected} check")))
+        Err(crate::error::Failure::invalid_harness(format!("repro seal missing {expected} check")))
     }
 }
 
@@ -268,32 +268,32 @@ fn require_report_artifact_refs(refs: &[(String, String)], report: &Report) -> R
 
 fn require_repro_report_matches(input: &ReproReportMatchInput<'_>) -> Result<()> {
     if input.report.report_ref != input.report_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "repro bundle report ref mismatch: bundle has {}, embedded report hashes to {}",
             input.report_ref, input.report.report_ref
         )));
     }
     if input.report.suite_ref != input.suite_ref {
-        return Err(MoltenError::invalid_harness("repro bundle suite ref does not match embedded report"));
+        return Err(crate::error::Failure::invalid_harness("repro bundle suite ref does not match embedded report"));
     }
     if input.report.initial_state_hash != input.initial_state_hash
         || input.report.final_state_hash != input.final_state_hash
     {
-        return Err(MoltenError::invalid_harness("repro bundle state refs do not match embedded report"));
+        return Err(crate::error::Failure::invalid_harness("repro bundle state refs do not match embedded report"));
     }
     if input.report.replay_status != input.replay_status || input.report.profile != input.profile {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "repro bundle replay/profile metadata does not match embedded report",
         ));
     }
     if input.report.actors != input.actors {
-        return Err(MoltenError::invalid_harness("repro bundle actor registry does not match embedded report"));
+        return Err(crate::error::Failure::invalid_harness("repro bundle actor registry does not match embedded report"));
     }
     if input.report.effect_log != input.effect_log {
-        return Err(MoltenError::invalid_harness("repro bundle effect log does not match embedded report"));
+        return Err(crate::error::Failure::invalid_harness("repro bundle effect log does not match embedded report"));
     }
     if &input.report.suite_value != input.suite_value {
-        return Err(MoltenError::invalid_harness("repro bundle suite value does not match embedded report"));
+        return Err(crate::error::Failure::invalid_harness("repro bundle suite value does not match embedded report"));
     }
     Ok(())
 }

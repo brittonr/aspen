@@ -75,11 +75,11 @@ pub fn transcript_run_key_placeholder(input: &TranscriptRunKeyInput<'_>) -> Resu
 pub fn parse_receipt(value: &IoValue) -> Result<Receipt> {
     let fields = value
         .collect_simple_record("eval-cache-receipt-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <eval-cache-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <eval-cache-receipt-v1 ...>"))?;
     require_schema(&fields[0], EVAL_CACHE_RECEIPT_SCHEMA, "eval cache receipt")?;
     let checks = parse_checks(&fields[7])?;
     if checks.is_empty() {
-        return Err(MoltenError::invalid_harness("eval cache receipt missing checks"));
+        return Err(Failure::invalid_harness("eval cache receipt missing checks"));
     }
     Ok(Receipt {
         receipt_ref: canonical_hash(value)?,
@@ -115,16 +115,16 @@ fn read_output(root: &Path, key_ref: &str, value: &Value) -> Result<Option<IoVal
             let read_txn = db.begin_read().map_err(index_error)?;
             let outputs = read_txn.open_table(INDEX_OUTPUTS).map_err(index_error)?;
             let Some(bytes) = outputs.get(key_ref).map_err(index_error)? else {
-                return Err(MoltenError::invalid_harness(format!("missing inline eval cache output for {key_ref}")));
+                return Err(Failure::invalid_harness(format!("missing inline eval cache output for {key_ref}")));
             };
             let bytes = bytes.value().to_vec();
             if bytes.len() as u64 != *length {
-                return Err(MoltenError::invalid_harness("eval cache inline output length mismatch"));
+                return Err(Failure::invalid_harness("eval cache inline output length mismatch"));
             }
             let output = parse_canonical_bytes(&bytes)?;
             let actual_ref = canonical_hash(&output)?;
             if &actual_ref != output_ref {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(Failure::invalid_harness(format!(
                     "eval cache output hash mismatch: got {actual_ref}, expected {output_ref}"
                 )));
             }
@@ -137,12 +137,12 @@ fn read_output(root: &Path, key_ref: &str, value: &Value) -> Result<Option<IoVal
         } => {
             let read = crate::chunk_store::read_object(&chunk_root(root), manifest_ref)?;
             if read.bytes.len() as u64 != *length {
-                return Err(MoltenError::invalid_harness("eval cache content output length mismatch"));
+                return Err(Failure::invalid_harness("eval cache content output length mismatch"));
             }
             let output = parse_canonical_bytes(&read.bytes)?;
             let actual_ref = canonical_hash(&output)?;
             if &actual_ref != output_ref {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(Failure::invalid_harness(format!(
                     "eval cache output hash mismatch: got {actual_ref}, expected {output_ref}"
                 )));
             }
@@ -244,7 +244,7 @@ fn tombstone_reason(root: &Path, key_ref: &str) -> Result<Option<String>> {
 fn receipt_value(input: &ReceiptValueInput<'_>) -> Result<IoValue> {
     validate_non_empty(input.operation, "eval cache receipt operation")?;
     if !matches!(input.decision, "pass" | "deny") {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported eval cache receipt decision {}",
             input.decision
         )));

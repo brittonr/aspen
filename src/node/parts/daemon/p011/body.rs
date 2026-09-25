@@ -122,7 +122,7 @@ fn live_workflow_bundle_ack_import_diagnostics(
 }
 
 fn import_live_workflow_bundle_ack_members(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     ack: &ControlLiveWorkflowBundleAck,
 ) -> Result<Vec<String>> {
     let mut imported_refs = Vec::with_capacity(8);
@@ -151,7 +151,7 @@ pub fn parse_control_live_workflow_bundle_apply_receipt(
         .collect_simple_record("node-control-live-workflow-bundle-apply-receipt-v1", Some(17))
         .or_else(|| value.collect_simple_record("node-control-live-workflow-bundle-apply-receipt-v1", Some(15)))
         .ok_or_else(|| {
-            MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-apply-receipt-v1 ...>")
+            Failure::invalid_harness("expected <node-control-live-workflow-bundle-apply-receipt-v1 ...>")
         })?;
     require_schema(
         &fields[0],
@@ -189,7 +189,7 @@ pub fn parse_control_live_workflow_bundle_reconcile_receipt(
     let fields = value
         .collect_simple_record("node-control-live-workflow-bundle-reconcile-receipt-v1", Some(13))
         .ok_or_else(|| {
-            MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-reconcile-receipt-v1 ...>")
+            Failure::invalid_harness("expected <node-control-live-workflow-bundle-reconcile-receipt-v1 ...>")
         })?;
     require_schema(
         &fields[0],
@@ -225,7 +225,7 @@ pub fn parse_control_live_workflow_bundle_reconcile_receipt(
 pub fn parse_control_ingress_receipt(value: &IoValue) -> Result<ControlIngressReceipt> {
     let fields = value
         .collect_simple_record("node-control-ingress-receipt-v1", Some(15))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-ingress-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-control-ingress-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA,
@@ -257,7 +257,7 @@ pub fn parse_control_ingress_receipt(value: &IoValue) -> Result<ControlIngressRe
 pub fn parse_control_queue_receipt(value: &IoValue) -> Result<ControlQueueReceipt> {
     let fields = value
         .collect_simple_record("node-control-queue-receipt-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-queue-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-control-queue-receipt-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::NODE_CONTROL_QUEUE_RECEIPT_SCHEMA, "node control queue receipt")?;
     let _checks = record_sequence_len(&fields[8], "checks")?;
     let decision = record_string(&fields[1], "decision")?;

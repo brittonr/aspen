@@ -9,7 +9,7 @@ pub fn parse_compound_handler_profile(value: &IoValue) -> Result<CompoundHandler
     validate_unique_refs(&handler_binding_refs, "compound handler binding ref")?;
     validate_unique_refs(&child_handle_refs, "compound child handle ref")?;
     if child_handle_refs.is_empty() {
-        return Err(MoltenError::invalid_harness("compound handler profile must expose at least one child handle"));
+        return Err(Failure::invalid_harness("compound handler profile must expose at least one child handle"));
     }
     let checks = parse_checks(&profile[8])?;
     require_check(&checks, "compound-handler-profile", "compound handler profile")?;
@@ -90,10 +90,10 @@ pub fn attenuated_handle_value(parent_handle_value: &IoValue, input: &HandleAtte
     if let (Some(parent_expiry), Some(child_expiry)) = (parent.expires_at, input.expires_at)
         && child_expiry > parent_expiry
     {
-        return Err(MoltenError::invalid_harness("attenuated effect handle expiry exceeds parent expiry"));
+        return Err(Failure::invalid_harness("attenuated effect handle expiry exceeds parent expiry"));
     }
     if parent.expires_at.is_some() && input.expires_at.is_none() {
-        return Err(MoltenError::invalid_harness("attenuated effect handle cannot remove parent expiry"));
+        return Err(Failure::invalid_harness("attenuated effect handle cannot remove parent expiry"));
     }
     validate_refs(&input.evidence_refs, "attenuated handle evidence ref")?;
     effect_handle_value(&EffectHandleInput {
@@ -146,7 +146,7 @@ pub fn parse_handle_cleanup_receipt(value: &IoValue) -> Result<HandleCleanupRece
     require_check(&checks, "historical-artifact-preserved", "handle cleanup")?;
     let should_preserve_artifact = required_record_bool(&receipt[4], "preserve-artifact", "cleanup preserve artifact")?;
     if !should_preserve_artifact {
-        return Err(MoltenError::invalid_harness("handle cleanup must preserve historical artifacts for replay"));
+        return Err(Failure::invalid_harness("handle cleanup must preserve historical artifacts for replay"));
     }
     Ok(HandleCleanupReceipt {
         receipt_ref: canonical_hash(value)?,
@@ -187,10 +187,10 @@ fn require_binding_match(
     request: &EffectHandleRequest<'_>,
 ) -> Result<()> {
     if handle.handler_binding_ref != handler.binding_ref {
-        return Err(MoltenError::invalid_harness("effect handle does not bind the supplied handler binding"));
+        return Err(Failure::invalid_harness("effect handle does not bind the supplied handler binding"));
     }
     if handle.kind != request.kind {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "effect handle kind mismatch: got {}, expected {}",
             handle.kind, request.kind
         )));
@@ -207,50 +207,50 @@ fn require_context_match(
     request: &EffectHandleRequest<'_>,
 ) -> Result<()> {
     if handler.policy_ref != request.policy_ref {
-        return Err(MoltenError::invalid_harness("handler binding policy ref does not match request"));
+        return Err(Failure::invalid_harness("handler binding policy ref does not match request"));
     }
     if handler.capability_context_ref != request.capability_context_ref
         || handle.capability_context_ref != request.capability_context_ref
     {
-        return Err(MoltenError::invalid_harness("effect handle capability context ref does not match request"));
+        return Err(Failure::invalid_harness("effect handle capability context ref does not match request"));
     }
     if handler.context_ref.as_deref() != request.context_ref || handle.context_ref.as_deref() != request.context_ref {
-        return Err(MoltenError::invalid_harness("effect handle authority context ref does not match request"));
+        return Err(Failure::invalid_harness("effect handle authority context ref does not match request"));
     }
     if handler.resource_refs != request.resource_refs || handle.resource_refs != request.resource_refs {
-        return Err(MoltenError::invalid_harness("effect handle resource refs do not match request"));
+        return Err(Failure::invalid_harness("effect handle resource refs do not match request"));
     }
     Ok(())
 }
 
 fn require_lifetime_match(handle: &EffectHandle, request: &EffectHandleRequest<'_>) -> Result<()> {
     if handle.not_before.is_some_and(|not_before| request.logical_time < not_before) {
-        return Err(MoltenError::invalid_harness("effect handle used before not-before bound"));
+        return Err(Failure::invalid_harness("effect handle used before not-before bound"));
     }
     if handle.expires_at.is_some_and(|expires_at| request.logical_time >= expires_at) {
-        return Err(MoltenError::invalid_harness("effect handle expired before request"));
+        return Err(Failure::invalid_harness("effect handle expired before request"));
     }
     if request
         .revoked_refs
         .iter()
         .any(|revoked| handle.revocation_refs.iter().any(|handle_revoked| handle_revoked == revoked))
     {
-        return Err(MoltenError::invalid_harness("effect handle revoked before request"));
+        return Err(Failure::invalid_harness("effect handle revoked before request"));
     }
     if request.remote_use && handle.transfer == TRANSFER_LOCAL_ONLY {
-        return Err(MoltenError::invalid_harness("local-only effect handle cannot be used remotely"));
+        return Err(Failure::invalid_harness("local-only effect handle cannot be used remotely"));
     }
     if request.remote_use && handle.transfer == TRANSFER_REMOTE_PROXY {
         if handle.evidence_refs.len() < 3 {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "remote-proxy effect handle missing peer/node/revocation evidence refs",
             ));
         }
         if handle.resource_refs.is_empty() {
-            return Err(MoltenError::invalid_harness("remote-proxy effect handle missing resource limits"));
+            return Err(Failure::invalid_harness("remote-proxy effect handle missing resource limits"));
         }
         if handle.expires_at.is_none() {
-            return Err(MoltenError::invalid_harness("remote-proxy effect handle missing bounded expiry"));
+            return Err(Failure::invalid_harness("remote-proxy effect handle missing bounded expiry"));
         }
     }
     Ok(())

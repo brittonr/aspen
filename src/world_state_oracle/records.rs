@@ -1,7 +1,7 @@
 use molten_core::world_state_oracle::*;
 use preserves::IOValue;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub const ORACLE_SOURCE_RECORD: &str = "molten-semantic-state-oracle-source-v1";
@@ -22,7 +22,7 @@ pub struct CanonicalOracleRecord {
 pub fn canonical_oracle_source(source: &OracleSourceDescriptor) -> Result<CanonicalOracleRecord> {
     let issues = validate_source_descriptor(source);
     if !issues.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("oracle source denied: {issues:?}")));
+        return Err(Failure::invalid_harness(format!("oracle source denied: {issues:?}")));
     }
     canonical(
         "source",
@@ -47,7 +47,7 @@ pub fn canonical_oracle_source(source: &OracleSourceDescriptor) -> Result<Canoni
 pub fn canonical_oracle_observation(observation: &OracleObservation) -> Result<CanonicalOracleRecord> {
     let issues = validate_observation(observation, OracleBounds::standard(), true);
     if !issues.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("oracle observation denied: {issues:?}")));
+        return Err(Failure::invalid_harness(format!("oracle observation denied: {issues:?}")));
     }
     canonical(
         "observation",
@@ -72,7 +72,7 @@ pub fn canonical_oracle_observation(observation: &OracleObservation) -> Result<C
 pub fn canonical_oracle_comparison(comparison: &OracleComparison) -> Result<CanonicalOracleRecord> {
     let issues = validate_oracle_comparison(comparison);
     if !issues.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("oracle comparison denied: {issues:?}")));
+        return Err(Failure::invalid_harness(format!("oracle comparison denied: {issues:?}")));
     }
     canonical(
         "comparison",
@@ -92,7 +92,7 @@ pub fn canonical_oracle_comparison(comparison: &OracleComparison) -> Result<Cano
 pub fn canonical_oracle_projection(projection: &OracleEvidenceProjection) -> Result<CanonicalOracleRecord> {
     let issues = validate_oracle_projection(projection);
     if !issues.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("oracle projection denied: {issues:?}")));
+        return Err(Failure::invalid_harness(format!("oracle projection denied: {issues:?}")));
     }
     canonical(
         "projection",
@@ -121,12 +121,12 @@ pub fn canonical_oracle_projection(projection: &OracleEvidenceProjection) -> Res
 fn canonical(kind: &str, value: IOValue) -> Result<CanonicalOracleRecord> {
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     if bytes.len() > MAX_ORACLE_RECORD_BYTES {
-        return Err(MoltenError::invalid_harness("oracle record exceeds its canonical byte bound"));
+        return Err(Failure::invalid_harness("oracle record exceeds its canonical byte bound"));
     }
     let mut hasher = blake3::Hasher::new_derive_key(ORACLE_RECORD_CONTEXT);
     update(&mut hasher, kind)?;
     let byte_length =
-        u64::try_from(bytes.len()).map_err(|_| MoltenError::invalid_harness("oracle record length exceeds u64"))?;
+        u64::try_from(bytes.len()).map_err(|_| Failure::invalid_harness("oracle record length exceeds u64"))?;
     hasher.update(&byte_length.to_be_bytes());
     hasher.update(&bytes);
     Ok(CanonicalOracleRecord {
@@ -163,7 +163,7 @@ fn decision_name(decision: ComparisonDecision) -> &'static str {
 
 fn update(hasher: &mut blake3::Hasher, value: &str) -> Result<()> {
     let length =
-        u64::try_from(value.len()).map_err(|_| MoltenError::invalid_harness("oracle identity field exceeds u64"))?;
+        u64::try_from(value.len()).map_err(|_| Failure::invalid_harness("oracle identity field exceeds u64"))?;
     hasher.update(&length.to_be_bytes());
     hasher.update(value.as_bytes());
     Ok(())
@@ -176,7 +176,7 @@ fn optional_string(value: Option<&str>) -> IOValue {
 fn usize_value(value: usize) -> Result<IOValue> {
     u64::try_from(value)
         .map(number)
-        .map_err(|_| MoltenError::invalid_harness("oracle bound exceeds u64"))
+        .map_err(|_| Failure::invalid_harness("oracle bound exceeds u64"))
 }
 
 fn boolean(value: bool) -> IOValue {

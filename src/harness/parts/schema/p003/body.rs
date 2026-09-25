@@ -129,7 +129,7 @@ fn call_binding_receipt_ref(
         binding.handle_ref.clone(),
     ])?;
     if effect_binding.decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "hostcall effect manifest denied operation {}: {:?}",
             base.operation, effect_binding.diagnostics
         )));
@@ -158,7 +158,7 @@ fn validate_call_handle(base: &CallBase, binding: &CallBinding, context: Hostcal
         },
     )?;
     if validation.handler_binding_ref != binding.value_ref || validation.handle_ref != binding.handle_ref {
-        return Err(MoltenError::invalid_harness("hostcall effect handle validation ref mismatch"));
+        return Err(crate::error::Failure::invalid_harness("hostcall effect handle validation ref mismatch"));
     }
     Ok(())
 }
@@ -179,10 +179,10 @@ fn hostcall_session_ref(context: HostcallEvidenceContext<'_>) -> Result<String> 
 pub(crate) fn validate_hostcall_effect_binding_request(hostcall_request: &IoValue, operation: &str) -> Result<()> {
     let request = hostcall_request
         .collect_simple_record("hostcall-request-v1", Some(15))
-        .ok_or_else(|| MoltenError::invalid_harness("executor hostcall gate requires bound effect request evidence"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("executor hostcall gate requires bound effect request evidence"))?;
     let request_operation = required_record_string(&request[3], "operation", "hostcall request operation")?;
     if request_operation != operation {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "executor hostcall gate operation mismatch: got {request_operation}, expected {operation}"
         )));
     }

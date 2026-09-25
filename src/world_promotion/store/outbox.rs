@@ -2,7 +2,7 @@ use molten_core::world_promotion::*;
 use redb::ReadableTable;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::world_promotion::canonical_attempt;
 use crate::world_promotion::canonical_reservation;
@@ -28,7 +28,7 @@ pub(super) fn list_reservations(database: &redb::Database) -> Result<Vec<WorldRe
     let mut reservations = Vec::with_capacity(MAX_WORLD_PROMOTION_INTENTS);
     for entry in table.iter().map_err(store_error)? {
         if reservations.len() >= MAX_WORLD_PROMOTION_INTENTS {
-            return Err(MoltenError::invalid_harness("world reservation inventory exceeds its bound"));
+            return Err(Failure::invalid_harness("world reservation inventory exceeds its bound"));
         }
         let (_key, value) = entry.map_err(store_error)?;
         reservations.push(parse_reservation(value.value())?);
@@ -54,7 +54,7 @@ pub(super) fn claim_reservation(
         return Ok(Some(reservation));
     }
     if reservation.state != WorldReleaseState::Committed {
-        return Err(MoltenError::invalid_harness("only a committed world reservation can be claimed"));
+        return Err(Failure::invalid_harness("only a committed world reservation can be claimed"));
     }
     reservation.state = WorldReleaseState::Claimed;
     let canonical = canonical_reservation(&reservation)?;
@@ -77,10 +77,10 @@ pub(super) fn update_reservation(database: &redb::Database, reservation: &WorldR
             .map_err(store_error)?
             .map(|guard| guard.value().to_vec())
     }
-    .ok_or_else(|| MoltenError::invalid_harness("world reservation is missing"))?;
+    .ok_or_else(|| Failure::invalid_harness("world reservation is missing"))?;
     let observed = parse_reservation(&current)?;
     if !allowed_transition(observed.state, reservation.state) {
-        return Err(MoltenError::invalid_harness("world reservation state transition is invalid"));
+        return Err(Failure::invalid_harness("world reservation state transition is invalid"));
     }
     let canonical = canonical_reservation(reservation)?;
     {
@@ -105,7 +105,7 @@ pub(super) fn store_attempt(database: &redb::Database, attempt: &WorldAttemptRec
             if observed.reservation_ref != attempt.reservation_ref
                 || !allowed_attempt_transition(observed.state, attempt.state)
             {
-                return Err(MoltenError::invalid_harness("world attempt record conflicts with durable bytes"));
+                return Err(Failure::invalid_harness("world attempt record conflicts with durable bytes"));
             }
         }
         table.insert(attempt.attempt_ref.as_str(), canonical.bytes.as_slice()).map_err(store_error)?;

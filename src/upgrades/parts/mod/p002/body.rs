@@ -91,8 +91,8 @@ fn policy_or_handler_update_result(task: &UpgradeTask) -> Result<UpgradeTaskOutc
 
 fn move_result(root: &Path, plan: &UpgradePlan, task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
     let from_ref =
-        task.from_ref.as_deref().ok_or_else(|| MoltenError::invalid_harness("move-name missing from ref"))?;
-    let to_ref = task.to_ref.as_deref().ok_or_else(|| MoltenError::invalid_harness("move-name missing to ref"))?;
+        task.from_ref.as_deref().ok_or_else(|| Failure::invalid_harness("move-name missing from ref"))?;
+    let to_ref = task.to_ref.as_deref().ok_or_else(|| Failure::invalid_harness("move-name missing to ref"))?;
     let current = read_name_pointer(root, &task.subject)?;
     if let Some(current) = current.as_ref()
         && current.artifact_ref != from_ref
@@ -152,7 +152,7 @@ pub fn rollback_task(root: &Path, plan_ref: &str, task_id: &str) -> Result<Upgra
         .tasks
         .iter()
         .find(|task| task.task_id == task_id)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("upgrade plan missing task {task_id}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("upgrade plan missing task {task_id}")))?;
     let is_irreversible_task = matches!(task.kind.as_str(), "migrate-storage" | "cleanup" | "install-protocol-bridge");
     let (decision, diagnostics, checks) = if is_irreversible_task || !task.reversible {
         ("deny", vec![format!("task {} kind {} is not reversible", task.task_id, task.kind)], vec![

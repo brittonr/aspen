@@ -58,7 +58,7 @@
 
     #[test]
     fn gate_rejects_failure_and_failure_repro_bundle_as_pass_evidence() {
-        let error = MoltenError::invalid_harness("synthetic preflight failure");
+        let error = crate::error::Failure::invalid_harness("synthetic preflight failure");
         let failure = failure_value("preflight", &error, Vec::new());
         let gate_error = check_value(&failure).expect_err("failure cannot satisfy gate");
         assert!(gate_error.to_string().contains("cannot satisfy pass evidence gate"));

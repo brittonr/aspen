@@ -90,7 +90,7 @@ pub(crate) fn run() -> molten::error::Result<()> {
 pub(crate) fn run_runtime_command(command: command::Runtime) -> molten::error::Result<()> {
     match command {
         command::Runtime::Config { config } => {
-            let source = std::fs::read_to_string(&config).map_err(molten::error::MoltenError::from)?;
+            let source = std::fs::read_to_string(&config).map_err(molten::error::Failure::from)?;
             let startup = molten::runtime::RuntimeStartupConfig::from_nickel_export_json(&source)?;
             println!(
                 "runtime config ok source=nickel actors={} subscriptions={}",

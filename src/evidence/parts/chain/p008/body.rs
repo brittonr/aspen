@@ -15,7 +15,7 @@ fn validate_chain_predicate_receipt_shape(receipt: &ChainPredicateReceipt) -> Re
     require_non_empty(&receipt.predicate, "chain predicate name")?;
     match receipt.decision.as_str() {
         "pass" | "fail" | "retained" => {}
-        other => return Err(MoltenError::invalid_harness(format!("unsupported chain predicate decision {other}"))),
+        other => return Err(Failure::invalid_harness(format!("unsupported chain predicate decision {other}"))),
     }
     for subject_ref in &receipt.subject_refs {
         require_ref(subject_ref, "chain predicate subject ref")?;
@@ -40,7 +40,7 @@ fn validate_chain_fork_evidence_shape(fork: &ChainForkEvidence) -> Result<()> {
         require_ref(parent_ref, "fork parent ref")?;
     }
     if fork.child_refs.len() < 2 {
-        return Err(MoltenError::invalid_harness("fork evidence must name at least two child/head refs"));
+        return Err(Failure::invalid_harness("fork evidence must name at least two child/head refs"));
     }
     for child_ref in &fork.child_refs {
         require_ref(child_ref, "fork child ref")?;
@@ -51,12 +51,12 @@ fn validate_chain_fork_evidence_shape(fork: &ChainForkEvidence) -> Result<()> {
     match fork.profile.as_str() {
         "reject-unexpected-forks" | "retain-fork-evidence" => {}
         other => {
-            return Err(MoltenError::invalid_harness(format!("unsupported fork policy profile {other}")));
+            return Err(Failure::invalid_harness(format!("unsupported fork policy profile {other}")));
         }
     }
     match fork.decision.as_str() {
         "reject" | "retain" => {}
-        other => return Err(MoltenError::invalid_harness(format!("unsupported fork decision {other}"))),
+        other => return Err(Failure::invalid_harness(format!("unsupported fork decision {other}"))),
     }
     require_pass_check_in(&fork.checks, "fork-detected")?;
     require_pass_check_in(&fork.checks, "fork-policy-profile")?;
@@ -99,13 +99,13 @@ fn validate_chain_checkpoint_shape(checkpoint: &ChainCheckpoint) -> Result<()> {
 
 fn require_trellis_pass(link: &ChainLink, expected_predicate: &str) -> Result<()> {
     if link.trellis.predicate != expected_predicate {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "chain link trellis predicate {} does not match expected {expected_predicate}",
             link.trellis.predicate
         )));
     }
     if link.trellis.decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "chain link trellis decision must be pass, got {}",
             link.trellis.decision
         )));
@@ -115,19 +115,19 @@ fn require_trellis_pass(link: &ChainLink, expected_predicate: &str) -> Result<()
 
 fn require_pass_check(link: &ChainLink, name: &str) -> Result<()> {
     require_pass_check_in(&link.checks, name)
-        .map_err(|_| MoltenError::invalid_harness(format!("chain link missing pass check {name}")))
+        .map_err(|_| Failure::invalid_harness(format!("chain link missing pass check {name}")))
 }
 
 fn require_input_pass_check(input: &ChainCheckpointInput, name: &str) -> Result<()> {
     require_pass_check_in(&input.checks, name)
-        .map_err(|_| MoltenError::invalid_harness(format!("chain checkpoint missing pass check {name}")))
+        .map_err(|_| Failure::invalid_harness(format!("chain checkpoint missing pass check {name}")))
 }
 
 fn require_pass_check_in(checks: &[ChainCheck], name: &str) -> Result<()> {
     if checks.iter().any(|check| check.name == name && check.decision == "pass") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("missing pass check {name}")))
+        Err(Failure::invalid_harness(format!("missing pass check {name}")))
     }
 }
 
@@ -135,7 +135,7 @@ fn record_string(value: &Value<IoValue>, label: &str, field: &str) -> Result<Str
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> for {field}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> for {field}")))?;
     required_string(&record[0], field)
 }
 
@@ -143,14 +143,14 @@ fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<Str
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> optional ref")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> optional ref")))?;
     let value = value_to_iovalue(&record[0]);
     if value.collect_simple_record("none", Some(0)).is_some() {
         Ok(None)
     } else if let Some(some) = value.collect_simple_record("some", Some(1)) {
         required_string(&some[0], label).map(Some)
     } else {
-        Err(MoltenError::invalid_harness(format!("expected <some ref> or <none> for {label}")))
+        Err(Failure::invalid_harness(format!("expected <some ref> or <none> for {label}")))
     }
 }
 
@@ -158,10 +158,10 @@ fn record_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> ref sequence")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> ref sequence")))?;
     let sequence = record[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {label}")))?;
     sequence.iter().map(|value| required_string(value, label)).collect()
 }
 
@@ -169,7 +169,7 @@ fn record_u64(value: &Value<IoValue>, label: &str, field: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> for {field}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> for {field}")))?;
     required_u64(&record[0], field)
 }
 
@@ -178,7 +178,7 @@ fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported {field} {actual}; expected {expected}")))
+        Err(Failure::invalid_harness(format!("unsupported {field} {actual}; expected {expected}")))
     }
 }
 
@@ -186,19 +186,19 @@ fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
 fn require_non_empty(value: &str, field: &str) -> Result<()> {
     if value.trim().is_empty() {
-        Err(MoltenError::invalid_harness(format!("{field} must not be empty")))
+        Err(Failure::invalid_harness(format!("{field} must not be empty")))
     } else {
         Ok(())
     }
@@ -207,13 +207,13 @@ fn require_non_empty(value: &str, field: &str) -> Result<()> {
 fn require_ref(value: &str, field: &str) -> Result<()> {
     require_non_empty(value, field)?;
     validate_content_ref(value).map_err(|error| {
-        MoltenError::invalid_harness(format!("unsupported {field} {value}; expected canonical content ref: {error}"))
+        Failure::invalid_harness(format!("unsupported {field} {value}; expected canonical content ref: {error}"))
     })
 }
 
 fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()> {
     if count > maximum {
-        Err(MoltenError::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
+        Err(Failure::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
     } else {
         Ok(())
     }
@@ -223,7 +223,7 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
     let count = values
         .item_count()
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("{label} count overflow")))?;
     ensure_count_at_most(count, maximum, label)?;
     values.push_item(value);
     Ok(())

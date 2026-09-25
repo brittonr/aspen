@@ -3,7 +3,7 @@ pub fn parse_plugin_manifest(value: &IoValue) -> Result<PluginManifest> {
     let fields = simple_record_any(value, "plugin-manifest-v1")?;
     let field_count = record_arity(&fields);
     if field_count != PLUGIN_MANIFEST_BASE_ARITY && field_count != PLUGIN_MANIFEST_EXTENSION_ARITY {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "expected <plugin-manifest-v1 ...> with arity {PLUGIN_MANIFEST_BASE_ARITY} or {PLUGIN_MANIFEST_EXTENSION_ARITY}, got {field_count}"
         )));
     }
@@ -356,7 +356,7 @@ fn parse_grant_revocation(value: &Value<IoValue>) -> Result<(Vec<String>, bool)>
     let refs = required_ref_sequence(&fields[0], "plugin capability grant revocation refs")?;
     let revoked = fields[1]
         .as_boolean()
-        .ok_or_else(|| MoltenError::invalid_harness("plugin capability grant revoked flag must be boolean"))?;
+        .ok_or_else(|| Failure::invalid_harness("plugin capability grant revoked flag must be boolean"))?;
     Ok((refs, revoked))
 }
 
@@ -390,7 +390,7 @@ fn parse_optional_ref_value(value: &Value<IoValue>, label: &str) -> Result<Optio
         validate_ref(&reference, label)?;
         Ok(Some(reference))
     } else {
-        Err(MoltenError::invalid_harness(format!("expected optional ref for {label}")))
+        Err(Failure::invalid_harness(format!("expected optional ref for {label}")))
     }
 }
 
@@ -408,7 +408,7 @@ fn validate_grant_attenuation(input: &PluginCapabilityGrantAttenuation) -> Resul
 
 fn validate_turn_window(valid_from_turn: u64, valid_until_turn: u64) -> Result<()> {
     if valid_from_turn > valid_until_turn {
-        Err(MoltenError::invalid_harness("plugin capability grant validity window is inverted"))
+        Err(Failure::invalid_harness("plugin capability grant validity window is inverted"))
     } else {
         Ok(())
     }

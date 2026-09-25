@@ -1,5 +1,5 @@
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric_consistency::ConsistencyReadMode;
 
@@ -93,10 +93,10 @@ pub(super) fn handle_create_snapshot(state: &ReplicaState, application_state_ref
     validation::ensure_running(state)?;
     validation::validate_content_ref(&application_state_ref, "Raft snapshot application state ref")?;
     if state.last_applied == INITIAL_COMMIT_INDEX {
-        return Err(MoltenError::invalid_harness("Raft snapshot requires a committed application boundary"));
+        return Err(Failure::invalid_harness("Raft snapshot requires a committed application boundary"));
     }
     let last_included_term = support::term_at(state, state.last_applied)
-        .ok_or_else(|| MoltenError::invalid_harness("Raft snapshot boundary term is absent"))?;
+        .ok_or_else(|| Failure::invalid_harness("Raft snapshot boundary term is absent"))?;
     let mut snapshot = ReplicaSnapshot {
         snapshot_ref: String::new(),
         group_binding_ref: state.profile.group_binding_ref.clone(),
@@ -176,7 +176,7 @@ fn append_proposal(
     let mut next = state.clone();
     let index = support::last_log_index(&next)
         .checked_add(NEXT_LOG_INDEX_STEP)
-        .ok_or_else(|| MoltenError::invalid_harness("Raft proposal log index overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("Raft proposal log index overflow"))?;
     let entry = ReplicatedEntry {
         index,
         term: next.current_term,

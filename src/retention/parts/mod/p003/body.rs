@@ -49,7 +49,7 @@ pub fn class_profile_value(input: &ClassProfileInput) -> Result<IoValue> {
 pub fn parse_class_profile(value: &IoValue) -> Result<ClassProfile> {
     let fields = value
         .collect_simple_record("retention-class-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-class-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-class-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::RETENTION_CLASS_SCHEMA, "retention class schema")?;
     let class_name = record_string(&fields[1], "class")?;
     let minimum_age_seconds = record_u64(&fields[2], "minimum-age-seconds")?;
@@ -96,7 +96,7 @@ pub fn pin_value(input: &PinInput) -> Result<IoValue> {
 pub fn parse_pin(value: &IoValue) -> Result<Pin> {
     let fields = value
         .collect_simple_record("retention-pin-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-pin-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-pin-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::RETENTION_PIN_SCHEMA, "retention pin schema")?;
     let (object_ref, object_kind) = parse_object_value(&fields[1])?;
     let retention_class = record_string(&fields[2], "class")?;
@@ -260,7 +260,7 @@ pub fn reference_index_value(input: &ReferenceIndexInput) -> Result<IoValue> {
 pub fn parse_reference_index(value: &IoValue) -> Result<ReferenceIndex> {
     let fields = value
         .collect_simple_record("retention-reference-index-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-reference-index-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-reference-index-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::RETENTION_REFERENCE_INDEX_SCHEMA,

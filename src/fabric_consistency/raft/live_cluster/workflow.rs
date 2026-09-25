@@ -90,7 +90,7 @@ pub(super) async fn quorum_read(
         {
             Ok(())
         }
-        applied @ ReplicaExecutionOutcome::Applied(_) => Err(crate::error::MoltenError::invalid_harness(format!(
+        applied @ ReplicaExecutionOutcome::Applied(_) => Err(crate::error::Failure::invalid_harness(format!(
             "live cluster quorum read produced no current outcome: {applied:?}"
         ))),
         other => require_applied(other),
@@ -166,9 +166,9 @@ fn require_applied(outcome: ReplicaExecutionOutcome) -> Result<()> {
     match outcome {
         ReplicaExecutionOutcome::Applied(_) => Ok(()),
         ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
-            Err(crate::error::MoltenError::invalid_harness(format!("live cluster turn denied: {diagnostic}")))
+            Err(crate::error::Failure::invalid_harness(format!("live cluster turn denied: {diagnostic}")))
         }
-        ReplicaExecutionOutcome::Failed(failed) => Err(crate::error::MoltenError::invalid_harness(format!(
+        ReplicaExecutionOutcome::Failed(failed) => Err(crate::error::Failure::invalid_harness(format!(
             "live cluster effect {} failed: {}",
             failed.failed_kind.as_str(),
             failed.diagnostic

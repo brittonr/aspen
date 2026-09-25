@@ -1,7 +1,7 @@
 pub fn parse_verification_run_receipt(value: &IoValue) -> Result<VerificationRunReceipt> {
     let fields = value
         .collect_simple_record("verification-run-receipt-v1", Some(VERIFICATION_RUN_RECEIPT_ARITY))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <verification-run-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <verification-run-receipt-v1 ...>"))?;
     require_schema(&fields[0], VERIFICATION_RUN_RECEIPT_SCHEMA, "verification run receipt")?;
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
@@ -54,7 +54,7 @@ pub fn coverage_from_verification_receipts(sources: &[ReceiptCoverageSource]) ->
         match receipt.coverage_kind.as_str() {
             "positive" => entry.positive.push(evidence),
             "negative" => entry.negative.push(evidence),
-            other => return Err(MoltenError::invalid_harness(format!("unsupported coverage kind {other}"))),
+            other => return Err(Failure::invalid_harness(format!("unsupported coverage kind {other}"))),
         }
     }
     Ok(coverage.into_values().collect())
@@ -132,7 +132,7 @@ pub fn coverage_from_aggregate_proof(
             match kind {
                 "positive" => entry.positive.push(evidence),
                 "negative" => entry.negative.push(evidence),
-                other => return Err(MoltenError::invalid_harness(format!("unsupported aggregate proof kind {other}"))),
+                other => return Err(Failure::invalid_harness(format!("unsupported aggregate proof kind {other}"))),
             }
         }
     }

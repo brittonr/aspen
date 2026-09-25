@@ -1,6 +1,6 @@
 type IoValue = preserves::IOValue;
 type Value<T> = preserves::Value<T>;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 fn canonical_hash(value: &IoValue) -> Result<String> {
@@ -198,12 +198,12 @@ pub fn identity_value(input: IdentityValueInput<'_>) -> Result<IoValue> {
 pub fn parse_identity(value: &IoValue) -> Result<Identity> {
     let fields = value
         .collect_simple_record("authority-identity-v1", Some(6))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <authority-identity-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <authority-identity-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::AUTHORITY_IDENTITY_SCHEMA, "authority identity schema")?;
     let identity = value_to_iovalue(&fields[1]);
     let identity_fields = identity
         .collect_simple_record("identity", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("authority identity missing identity field"))?;
+        .ok_or_else(|| Failure::invalid_harness("authority identity missing identity field"))?;
     let checks = parse_checks(&fields[5])?;
     require_check(&checks, "identity-alone-grants-no-authority")?;
     Ok(Identity {
@@ -252,12 +252,12 @@ pub fn context_value(input: ContextValueInput<'_>) -> Result<IoValue> {
 pub fn parse_context(value: &IoValue) -> Result<Context> {
     let fields = value
         .collect_simple_record("authority-context-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <authority-context-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <authority-context-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::AUTHORITY_CONTEXT_SCHEMA, "authority context schema")?;
     let validity = value_to_iovalue(&fields[4]);
     let validity_fields = validity
         .collect_simple_record("validity", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("authority context missing validity"))?;
+        .ok_or_else(|| Failure::invalid_harness("authority context missing validity"))?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "revocation-checked-at-admission")?;
     Ok(Context {

@@ -20,7 +20,7 @@ fn obligation_expected_decision(class: &str) -> Result<&'static str> {
         "input-validation" | "canonicalization" | "admission" | "mutation-boundary" | "replay-determinism" => {
             Ok("pass")
         }
-        other => Err(MoltenError::invalid_harness(format!("unsupported proof obligation class {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported proof obligation class {other}"))),
     }
 }
 

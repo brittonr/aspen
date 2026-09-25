@@ -136,8 +136,8 @@ fn dirty_state_reason(path: &Path) -> Result<Option<String>> {
     if !path.is_dir() {
         return Ok(Some("dogfood state root exists but is not a directory".to_string()));
     }
-    let mut entries = std::fs::read_dir(path).map_err(MoltenError::from)?;
-    if entries.next().transpose().map_err(MoltenError::from)?.is_some() {
+    let mut entries = std::fs::read_dir(path).map_err(Failure::from)?;
+    if entries.next().transpose().map_err(Failure::from)?.is_some() {
         Ok(Some("dogfood local-node requires a clean empty state root".to_string()))
     } else {
         Ok(None)
@@ -153,7 +153,7 @@ fn dogfood_ref(label: &str) -> Result<String> {
 fn validate_workflow_id(value: &str) -> Result<()> {
     validate_non_empty(value, "operator workflow id")?;
     if !value.starts_with("dogfood:") {
-        return Err(MoltenError::invalid_harness(format!("operator workflow id {value} must start with dogfood:")));
+        return Err(Failure::invalid_harness(format!("operator workflow id {value} must start with dogfood:")));
     }
     Ok(())
 }
@@ -164,7 +164,7 @@ fn validate_step_name(value: &str) -> Result<()> {
         .chars()
         .all(|character| character.is_ascii_alphanumeric() || character == '-' || character == '_')
     {
-        return Err(MoltenError::invalid_harness(format!("unsupported operator step name {value}")));
+        return Err(Failure::invalid_harness(format!("unsupported operator step name {value}")));
     }
     Ok(())
 }
@@ -172,20 +172,20 @@ fn validate_step_name(value: &str) -> Result<()> {
 fn validate_decision(value: &str) -> Result<()> {
     match value {
         "pass" | "deny" | "diagnostic" => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported operator decision {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported operator decision {value}"))),
     }
 }
 
 fn validate_replay_status(value: &str) -> Result<()> {
     match value {
         "deterministic" | "recorded" | "diagnostic" | "non-replayable" => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported operator replay status {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported operator replay status {value}"))),
     }
 }
 
 fn validate_non_empty(value: &str, field: &str) -> Result<()> {
     if value.trim().is_empty() {
-        Err(MoltenError::invalid_harness(format!("{field} must not be empty")))
+        Err(Failure::invalid_harness(format!("{field} must not be empty")))
     } else {
         Ok(())
     }
@@ -193,7 +193,7 @@ fn validate_non_empty(value: &str, field: &str) -> Result<()> {
 
 fn validate_ref(value: &str, field: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
-        .map_err(|error| MoltenError::invalid_harness(format!("{field} must be a canonical content ref: {error}")))
+        .map_err(|error| Failure::invalid_harness(format!("{field} must be a canonical content ref: {error}")))
 }
 
 fn validate_optional_ref(value: Option<&str>, field: &str) -> Result<()> {
@@ -213,14 +213,14 @@ fn validate_refs(values: &[String], field: &str) -> Result<()> {
 
 fn require_non_empty_refs(values: &[String], field: &str) -> Result<()> {
     if values.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("{field} must not be empty")));
+        return Err(Failure::invalid_harness(format!("{field} must not be empty")));
     }
     validate_refs(values, field)
 }
 
 fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()> {
     if count > maximum {
-        Err(MoltenError::invalid_harness(format!("{label} count {count} exceeds {maximum}")))
+        Err(Failure::invalid_harness(format!("{label} count {count} exceeds {maximum}")))
     } else {
         Ok(())
     }

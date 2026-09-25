@@ -15,7 +15,7 @@ No configuration or receipt format is introduced.
 | `node_state::NodeStateNamespaceKind` | `node/state/authority.rs:40` |
 | `node_state::NodeStateFileObservation` | `node/state/filesystem.rs:157`, `node/state/namespace.rs:105` |
 
-Preserve public re-exports and every existing variant, payload, derive, and name.
+At that product revision, preserve public re-exports and every existing variant, payload, derive, and name. The later approved breaking public API cutover supersedes only this name-preservation constraint for current source: the three declarations are now `local_store::Category`, `node_state::NamespaceKind`, and `node_state::FileObservation`, with no old-name aliases. Preserve their variants, payloads, derives, mappings, registry order, diagnostic strings, and exhaustive-consumer purpose. The historical match-site line numbers and mutation evidence still refer to the frozen product revision, not the renamed current source.
 Do not add `non_exhaustive`, change representation, or move decisions into a catch-all, helper table, or lookup default.
 
 ## Fixed mapping contract
@@ -50,7 +50,7 @@ Expected-table tests describe this current inventory; they are not automatic dis
 
 ## Observation contract
 
-`Missing` remains distinct from `NonRegular(NodeStateEntryKind)` and `Regular(NodeStateFile)`.
+`Missing` remains distinct from `NonRegular(NodeStateEntryKind)` and `Regular(NodeStateFile)` in the frozen revision; the current payload types are `node_state::EntryKind` and `node_state::AcquiredFile`.
 Bounded reads deny Missing and NonRegular; only Regular consumes the already acquired file handle.
 Mode observation returns None for Missing, denies NonRegular, and returns the recorded mode for Regular.
 Retain exact error messages, no-follow behavior, observation identity, read limits, and effect order.

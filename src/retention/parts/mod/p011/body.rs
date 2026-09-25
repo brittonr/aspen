@@ -2,7 +2,7 @@
 fn parse_plan_gate(value: &IoValue) -> Result<PlanGate> {
     let fields = value
         .collect_simple_record("gate", Some(5))
-        .ok_or_else(|| MoltenError::invalid_harness("expected retention GC plan gate"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected retention GC plan gate"))?;
     let name = record_string(&fields[0], "name")?;
     validate_name(&name, "retention GC plan gate name")?;
     let decision = record_string(&fields[1], "decision")?;
@@ -23,13 +23,13 @@ fn parse_embedded_reference_index(value: &Value<IoValue>) -> Result<(String, Ref
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("index", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("expected embedded retention index"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected embedded retention index"))?;
     let index_ref = required_string(&fields[0], "embedded retention index ref")?;
     require_ref(&index_ref, "embedded retention index ref")?;
     let index_value = crate::preserves_rail::value_to_iovalue(&fields[1]);
     let index = parse_reference_index(&index_value)?;
     if index.index_ref != index_ref {
-        return Err(MoltenError::invalid_harness("embedded retention index ref mismatch"));
+        return Err(Failure::invalid_harness("embedded retention index ref mismatch"));
     }
     Ok((index_ref, index))
 }
@@ -38,7 +38,7 @@ fn parse_embedded_destructive_evidence_summary(value: &Value<IoValue>) -> Result
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("retention-evidence", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("expected embedded retention evidence summary"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected embedded retention evidence summary"))?;
     parse_destructive_evidence_summary(&crate::preserves_rail::value_to_iovalue(&fields[0]))
 }
 
@@ -50,10 +50,10 @@ fn parse_destructive_evidence_summary(value: &IoValue) -> Result<IoValue> {
 fn parse_destructive_evidence_summary_to_evidence(value: &IoValue) -> Result<DestructiveEvidence> {
     let fields = value
         .collect_simple_record("retention-evidence-summary-v1", Some(12))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-evidence-summary-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-evidence-summary-v1 ...>"))?;
     let requester_fields = fields[0]
         .collect_simple_record("requester", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("expected retention evidence requester"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected retention evidence requester"))?;
     let requester_value = crate::preserves_rail::value_to_iovalue(&requester_fields[0]);
     let requester_ref = if requester_value.collect_simple_record("none", Some(0)).is_some() {
         None

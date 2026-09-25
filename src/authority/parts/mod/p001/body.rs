@@ -25,12 +25,12 @@ pub fn revocation_value(input: RevocationValueInput<'_>) -> Result<IoValue> {
 pub fn parse_revocation(value: &IoValue) -> Result<Revocation> {
     let fields = value
         .collect_simple_record("authority-revocation-v1", Some(7))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <authority-revocation-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <authority-revocation-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::AUTHORITY_REVOCATION_SCHEMA, "authority revocation schema")?;
     let target = value_to_iovalue(&fields[1]);
     let target_fields = target
         .collect_simple_record("target", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("authority revocation missing target"))?;
+        .ok_or_else(|| Failure::invalid_harness("authority revocation missing target"))?;
     let checks = parse_checks(&fields[6])?;
     require_check(&checks, "authority-cleanup-required")?;
     Ok(Revocation {
@@ -156,7 +156,7 @@ pub fn gatekeeper_resolve_live_ref(
 ) -> Result<LiveRef> {
     let admission = admit_authority(context_value, requested_capability, scope, logical_time, revocation_values)?;
     if admission.decision != "pass" {
-        return Err(MoltenError::invalid_harness("gatekeeper resolution denied by authority context"));
+        return Err(Failure::invalid_harness("gatekeeper resolution denied by authority context"));
     }
     let context = parse_context(context_value)?;
     let expires_at = context.expires_at;
@@ -230,7 +230,7 @@ pub fn cleanup_for_revocation(
 pub fn replay_verify_receipt(receipt: &Receipt, context_value: &IoValue) -> Result<()> {
     let context = parse_context(context_value)?;
     if receipt.context_ref.as_deref() != Some(context.context_ref.as_str()) {
-        return Err(MoltenError::invalid_harness("replay authority receipt does not bind recorded context"));
+        return Err(Failure::invalid_harness("replay authority receipt does not bind recorded context"));
     }
     Ok(())
 }
@@ -267,7 +267,7 @@ fn capability_value(capability: &Capability) -> IoValue {
 fn parse_capability(value: &IoValue) -> Result<Capability> {
     let fields = value
         .collect_simple_record("capability", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("expected authority capability"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected authority capability"))?;
     let capability = Capability {
         capability: record_string(&fields[0], "name")?,
         scope: record_string(&fields[1], "scope")?,
@@ -324,7 +324,7 @@ fn capability_ref(subject_ref: &str, capability: &Capability) -> Result<String> 
 fn validate_identity_type(identity_type: &str) -> Result<()> {
     match identity_type {
         "principal" | "node" | "actor" | "service" | "session" | "artifact" | "execution" => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported authority identity type {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported authority identity type {other}"))),
     }
 }
 
@@ -332,7 +332,7 @@ fn validate_revocation_target(target_kind: &str) -> Result<()> {
     match target_kind {
         "key" | "principal" | "delegation" | "capability" | "live-ref" | "handler-binding" | "session" | "artifact"
         | "authority-context" => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported authority revocation target {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported authority revocation target {other}"))),
     }
 }
 
@@ -344,7 +344,7 @@ fn validate_capability(capability: &Capability) -> Result<()> {
 
 fn validate_non_empty(value: &str, field: &str) -> Result<()> {
     if value.trim().is_empty() {
-        Err(MoltenError::invalid_harness(format!("{field} must not be empty")))
+        Err(Failure::invalid_harness(format!("{field} must not be empty")))
     } else {
         Ok(())
     }

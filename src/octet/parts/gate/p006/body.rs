@@ -161,12 +161,12 @@ fn octet_fingerprint_evidence_value(object_corpus: &GateFile, receipt: &ObjectCo
     let object_set_hash = receipt
         .object_set_hash
         .as_deref()
-        .ok_or_else(|| MoltenError::invalid_harness("object corpus missing object_set_hash"))?;
+        .ok_or_else(|| Failure::invalid_harness("object corpus missing object_set_hash"))?;
     let source_paths = object_corpus_coverage_paths(receipt)
-        .ok_or_else(|| MoltenError::invalid_harness("object corpus missing source_paths"))?;
+        .ok_or_else(|| Failure::invalid_harness("object corpus missing source_paths"))?;
     let object_count = receipt
         .object_count
-        .ok_or_else(|| MoltenError::invalid_harness("object corpus missing object_count"))?;
+        .ok_or_else(|| Failure::invalid_harness("object corpus missing object_count"))?;
     let pure_cache_blocked = receipt.pure_cache_blocked_count.unwrap_or(0);
     Ok(record("octet-fingerprint-evidence-v1", vec![
         string(crate::preserves_rail::OCTET_FINGERPRINT_EVIDENCE_SCHEMA),

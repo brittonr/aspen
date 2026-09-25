@@ -114,7 +114,7 @@ fn finish_pull(inventory: Inventory, refs: PullRefs) -> Pull {
 pub fn pull_chunk_manifest_from_announcement(input: &PullChunkManifestInput<'_>) -> Result<Pull> {
     let announcement = parse_announcement(input.announcement_value, input.trust_root, input.key)?;
     if announcement.resource.resource_type != RESOURCE_CHUNK_MANIFEST {
-        return Err(MoltenError::invalid_harness("federation chunk pull requires a chunk-manifest resource"));
+        return Err(Failure::invalid_harness("federation chunk pull requires a chunk-manifest resource"));
     }
     let fetched = chunk_store::fetch_iroh_blobs(
         input.iroh_root,
@@ -271,7 +271,7 @@ fn resource_value(resource: &Resource) -> IoValue {
 fn parse_announcement_payload(value: &IoValue) -> Result<(String, Resource, Vec<String>)> {
     let fields = value
         .collect_simple_record("federation-announcement-payload", Some(4))
-        .ok_or_else(|| MoltenError::invalid_harness("expected federation announcement payload"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected federation announcement payload"))?;
     let peer = record_string(&fields[0], "peer")?;
     let resource = parse_resource(&value_to_iovalue(&fields[1]))?;
     let policy_refs = parse_ref_sequence(&fields[2], "policy")?;

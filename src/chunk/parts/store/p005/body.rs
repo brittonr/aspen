@@ -38,7 +38,7 @@ fn loaded_ticket(
             ("deny-wrong-manifest", "pass"),
         ]);
         store_receipt(dest_root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(message));
+        return Err(Failure::invalid_harness(message));
     }
     Ok(parsed_ticket)
 }
@@ -67,7 +67,7 @@ fn received_manifest(
             ("deny-corrupt-manifest-blob", "pass"),
         ]);
         store_receipt(dest_root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(message));
+        return Err(Failure::invalid_harness(message));
     }
     let manifest_value = parse_canonical_bytes(&manifest_bytes)?;
     let manifest_ref = canonical_hash(&manifest_value)?;
@@ -78,7 +78,7 @@ fn received_manifest(
             ("transport-does-not-grant-trust", "pass"),
         ]);
         store_receipt(dest_root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(message));
+        return Err(Failure::invalid_harness(message));
     }
     write_immutable_bytes(
         dest_root,
@@ -110,7 +110,7 @@ fn require_part(
         ("deny-incomplete-ticket", "pass"),
     ]);
     store_receipt(dest_root, &receipt_value)?;
-    Err(MoltenError::invalid_harness(message))
+    Err(Failure::invalid_harness(message))
 }
 
 fn available_ref(
@@ -176,13 +176,13 @@ fn part_for<'a>(manifest: &'a ChunkManifest, part_ref: &str) -> Result<&'a Chunk
         .chunks
         .iter()
         .find(|candidate| candidate.chunk_ref == part_ref)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("manifest missing expected chunk {part_ref}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("manifest missing expected chunk {part_ref}")))
 }
 
 fn blob_for<'a>(parts: &'a OrderedMap<String, IrohChunkBlob>, part_ref: &str) -> Result<&'a IrohChunkBlob> {
     parts
         .get(part_ref)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("Iroh ticket lacks blob mapping for chunk {part_ref}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("Iroh ticket lacks blob mapping for chunk {part_ref}")))
 }
 
 fn require_blob_len(
@@ -204,7 +204,7 @@ fn require_blob_len(
         ("deny-incomplete-ticket", "pass"),
     ]);
     store_receipt(dest_root, &receipt_value)?;
-    Err(MoltenError::invalid_harness(message))
+    Err(Failure::invalid_harness(message))
 }
 
 struct BlobInput<'a> {
@@ -240,7 +240,7 @@ fn blob_bytes(input: BlobInput<'_>) -> Result<Vec<u8>> {
             ("deny-corrupt-chunk-blob", "pass"),
         ]);
     store_receipt(input.dest_root, &receipt_value)?;
-    Err(MoltenError::invalid_harness(message))
+    Err(Failure::invalid_harness(message))
 }
 
 struct IncomingInput<'a> {

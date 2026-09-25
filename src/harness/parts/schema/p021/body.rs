@@ -3,39 +3,39 @@ fn parse_capability_contract_envelope(value: &IoValue) -> Result<basalt::Contrac
     let envelope = simple_record(value, "contract-envelope", 7)?;
     let backend = required_string(&envelope[0], "capability contract backend")?;
     if backend != "nickel" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "capability authority preflight requires Nickel backend, got {backend}"
         )));
     }
     let contract_id = required_string(&envelope[1], "capability contract id")?;
     if contract_id != CAPABILITY_CONTRACT_ID {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported capability contract id {contract_id}; expected {CAPABILITY_CONTRACT_ID}"
         )));
     }
     let contract_version = required_string(&envelope[2], "capability contract version")?;
     if contract_version != CAPABILITY_CONTRACT_VERSION {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported capability contract version {contract_version}; expected {CAPABILITY_CONTRACT_VERSION}"
         )));
     }
     let normalized_source_hash = required_hash(&envelope[3], "capability contract normalized context ref")?;
     let input_schema = required_string(&envelope[4], "capability contract input schema")?;
     if input_schema != CAPABILITY_INPUT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported capability contract input schema {input_schema}; expected {CAPABILITY_INPUT_SCHEMA}"
         )));
     }
     let output_schema = required_string(&envelope[5], "capability contract output schema")?;
     if output_schema != crate::preserves_rail::RUNTIME_CAPABILITY_AUTHORIZATION_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported capability contract output schema {output_schema}; expected {}",
             crate::preserves_rail::RUNTIME_CAPABILITY_AUTHORIZATION_SCHEMA
         )));
     }
     let receipt_schema_version = required_string(&envelope[6], "capability contract receipt schema")?;
     if receipt_schema_version != crate::preserves_rail::HARNESS_BASALT_AUTHORITY_PREFLIGHT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported capability contract receipt schema {receipt_schema_version}; expected {}",
             crate::preserves_rail::HARNESS_BASALT_AUTHORITY_PREFLIGHT_SCHEMA
         )));
@@ -56,26 +56,26 @@ fn parse_basalt_authority_preflight_evidence(value: &Value<IoValue>) -> Result<B
     let receipt = simple_record(&value, "basalt-authority-preflight", 9)?;
     let schema = required_string(&receipt[0], "Basalt authority preflight schema")?;
     if schema != crate::preserves_rail::HARNESS_BASALT_AUTHORITY_PREFLIGHT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported Basalt authority preflight schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_BASALT_AUTHORITY_PREFLIGHT_SCHEMA
         )));
     }
     let decision = required_record_string(&receipt[1], "decision", "Basalt authority preflight decision")?;
     if decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported Basalt authority preflight decision {decision}"
         )));
     }
     let backend = required_record_string(&receipt[2], "backend", "Basalt authority preflight backend")?;
     if backend != "nickel" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "Basalt authority preflight requires Nickel backend, got {backend}"
         )));
     }
     let contract_id = required_record_string(&receipt[3], "contract-id", "Basalt authority preflight contract id")?;
     if contract_id != CAPABILITY_CONTRACT_ID {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported Basalt authority preflight contract id {contract_id}; expected {CAPABILITY_CONTRACT_ID}"
         )));
     }
@@ -86,7 +86,7 @@ fn parse_basalt_authority_preflight_evidence(value: &Value<IoValue>) -> Result<B
     let grant_refs = required_record_hash_sequence(&receipt[7], "grant-refs", "Basalt authority preflight grant refs")?;
     let reason = required_record_string(&receipt[8], "reason", "Basalt authority preflight reason")?;
     if reason != "accepted" {
-        return Err(MoltenError::invalid_harness(format!("unsupported Basalt authority preflight reason {reason}")));
+        return Err(crate::error::Failure::invalid_harness(format!("unsupported Basalt authority preflight reason {reason}")));
     }
     Ok(BasaltAuthorityPreflightEvidence {
         receipt_ref: canonical_hash(&value)?,
@@ -101,16 +101,16 @@ fn parse_ucan_proofset_evidence(value: &Value<IoValue>) -> Result<UcanProofsetEv
     let value = value_to_iovalue(value);
     let proofset = value
         .collect_simple_record("ucan-proofset-v1", None)
-        .ok_or_else(|| MoltenError::invalid_harness("expected UCAN proofset evidence"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected UCAN proofset evidence"))?;
     let arity = proofset.fields_iter().count();
     if arity != UCAN_PROOFSET_EMPTY_ARITY && arity != UCAN_PROOFSET_VERIFIED_ARITY {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "expected UCAN proofset arity {UCAN_PROOFSET_EMPTY_ARITY} or {UCAN_PROOFSET_VERIFIED_ARITY}, got {arity}"
         )));
     }
     let schema = required_string(&proofset[0], "UCAN proofset schema")?;
     if schema != crate::preserves_rail::HARNESS_UCAN_PROOFSET_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported UCAN proofset schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_UCAN_PROOFSET_SCHEMA
         )));
@@ -129,7 +129,7 @@ fn parse_ucan_proofset_evidence(value: &Value<IoValue>) -> Result<UcanProofsetEv
         });
     }
     if arity != UCAN_PROOFSET_VERIFIED_ARITY {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "UCAN proof refs require matching UCAN verification receipts bound to the proofset",
         ));
     }
@@ -172,7 +172,7 @@ fn parse_ucan_verification_receipts(
 ) -> Result<ParsedUcanVerificationReceipts> {
     let receipts = required_sequence(value, "UCAN verification receipts")?;
     if receipts.is_empty() {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "non-empty UCAN proofset requires at least one verification receipt",
         ));
     }
@@ -182,22 +182,22 @@ fn parse_ucan_verification_receipts(
         let receipt_value = value_to_iovalue(receipt);
         let parsed = crate::capability_tokens::parse_ucan_verification_receipt_value(&receipt_value)?;
         if parsed.decision != "pass" {
-            return Err(MoltenError::invalid_harness("UCAN verification receipt must pass for harness proofset"));
+            return Err(crate::error::Failure::invalid_harness("UCAN verification receipt must pass for harness proofset"));
         }
         if parsed.proofset_ref != proofset_ref {
-            return Err(MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "UCAN verification receipt proofset ref does not match harness proofset",
             ));
         }
         for proof_ref in proof_refs {
             if !parsed.proof_refs.as_slice().iter().any(|candidate| candidate == proof_ref) {
-                return Err(MoltenError::invalid_harness(
+                return Err(crate::error::Failure::invalid_harness(
                     "UCAN verification receipt does not bind every harness proof ref",
                 ));
             }
         }
         if parsed.derived_grant_refs.is_empty() {
-            return Err(MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "UCAN verification receipt must derive at least one grant ref",
             ));
         }
@@ -285,7 +285,7 @@ pub fn parse_capabilities(value: &IoValue) -> Result<crate::runtime::CapabilityC
     let capabilities = simple_record(value, "capabilities-v1", 2)?;
     let schema = required_string(&capabilities[0], "capabilities schema")?;
     if schema != crate::preserves_rail::HARNESS_CAPABILITIES_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported capabilities schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_CAPABILITIES_SCHEMA
         )));
@@ -348,7 +348,7 @@ fn parse_capability_gate_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
         let name = required_string(&check[0], "capability gate check name")?;
         let status = required_string(&check[1], "capability gate check status")?;
         if status != "pass" {
-            return Err(MoltenError::invalid_harness(format!("capability gate check {name} status is {status}")));
+            return Err(crate::error::Failure::invalid_harness(format!("capability gate check {name} status is {status}")));
         }
         checks.push(name);
     }
@@ -359,7 +359,7 @@ fn require_capability_gate_check(checks: &[String], expected: &str) -> Result<()
     if checks.iter().any(|check| check == expected) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("capability gate missing {expected} check")))
+        Err(crate::error::Failure::invalid_harness(format!("capability gate missing {expected} check")))
     }
 }
 
@@ -414,7 +414,7 @@ fn parse_policy_gate_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
         let name = required_string(&check[0], "policy gate check name")?;
         let status = required_string(&check[1], "policy gate check status")?;
         if status != "pass" {
-            return Err(MoltenError::invalid_harness(format!("policy gate check {name} status is {status}")));
+            return Err(crate::error::Failure::invalid_harness(format!("policy gate check {name} status is {status}")));
         }
         checks.push(name);
     }
@@ -425,6 +425,6 @@ fn require_policy_gate_check(checks: &[String], expected: &str) -> Result<()> {
     if checks.iter().any(|check| check == expected) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("policy gate missing {expected} check")))
+        Err(crate::error::Failure::invalid_harness(format!("policy gate missing {expected} check")))
     }
 }

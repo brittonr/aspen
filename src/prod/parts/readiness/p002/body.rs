@@ -92,7 +92,7 @@ pub fn security_readiness_report_value(input: &SecurityReadinessReportInput<'_>)
         && !input.unresolved_risk_refs.is_empty()
         && input.pilot_recommendation == BROAD_PRODUCTION_SCOPE
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "security readiness with unresolved risks cannot recommend broad production",
         ));
     }
@@ -135,7 +135,7 @@ pub fn pilot_decision_value(input: &PilotDecisionInput<'_>) -> Result<IoValue> {
     require_pass_texts("stop condition", input.stop_conditions, input.decision)?;
     require_pass_refs("operator review", input.operator_review_refs, input.decision)?;
     if is_pass(input.decision) && input.scope == BROAD_PRODUCTION_SCOPE && !input.caveats.is_empty() {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "pilot decision with evidence-only caveats cannot claim broad production scope",
         ));
     }
@@ -214,7 +214,7 @@ impl<'a> ReleaseCandidateGate<'a> {
             && self.input.source_gate_status != SOURCE_REMEDIATED_ZERO_STATUS
             && self.input.source_gate_caveats.is_empty()
         {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "passing production candidate with non-zero source gate status requires source gate caveats",
             ));
         }
@@ -281,31 +281,31 @@ fn validate_candidate_evidence_bindings(
     decision: &str,
 ) -> Result<()> {
     if bindings.len() > MAX_PROD_REFS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "production readiness {label} binding count {} exceeds bound {MAX_PROD_REFS}",
             bindings.len()
         )));
     }
     if is_pass(decision) && bindings.is_empty() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "passing production readiness receipt requires at least one {label} candidate evidence binding"
         )));
     }
     for binding in bindings {
         validate_content_ref(binding.artifact_ref).map_err(|error| {
-            MoltenError::invalid_harness(format!(
+            Failure::invalid_harness(format!(
                 "invalid production readiness {label} artifact ref {}: {error}",
                 binding.artifact_ref
             ))
         })?;
         validate_content_ref(binding.source_ref).map_err(|error| {
-            MoltenError::invalid_harness(format!(
+            Failure::invalid_harness(format!(
                 "invalid production readiness {label} candidate source ref {}: {error}",
                 binding.source_ref
             ))
         })?;
         if binding.source_ref != expected_source_ref {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "production readiness {label} candidate source mismatch: expected {expected_source_ref}, observed {}",
                 binding.source_ref
             )));

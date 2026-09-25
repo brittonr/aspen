@@ -47,7 +47,7 @@ fn deliver_service_ingress(input: &ServiceTickInput<'_>, run: &mut ServiceRunPar
 }
 
 fn process_service_loop(input: &ServiceTickInput<'_>, run: &mut ServiceRunParts) -> Result<bool> {
-    let lock_path = crate::node_state::NodeStatePath::parse(CONTROL_LOCK_FILE)?;
+    let lock_path = crate::node_state::RelativePath::parse(CONTROL_LOCK_FILE)?;
     if !input.state_root.try_exists(&lock_path)? {
         run.has_stopped = true;
         return Ok(true);
@@ -151,7 +151,7 @@ fn finish_service_run(input: FinishServiceInput<'_>) -> Result<ControlServe> {
 }
 
 fn denied_duplicate_service_run(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     input: &ControlServeInput<'_>,
     startup: &crate::node_runtime::NodeStartupReceipt,
     supervisor_policy: Option<&ControlSupervisorPolicy>,
@@ -159,7 +159,7 @@ fn denied_duplicate_service_run(
 ) -> Result<ControlServe> {
     let lock_value = read_preserves(
         state_root,
-        &crate::node_state::NodeStatePath::parse(CONTROL_SERVICE_LOCK_FILE)?,
+        &crate::node_state::RelativePath::parse(CONTROL_SERVICE_LOCK_FILE)?,
     )?;
     let service_lock_ref = crate::preserves_rail::canonical_hash(&lock_value)?;
     let diagnostics = vec!["node control service runner already active".to_string()];
@@ -213,23 +213,23 @@ fn denied_duplicate_service_run(
 }
 
 fn pending_ingress_envelope_refs(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     topic: &str,
 ) -> Result<Vec<String>> {
     let ingress = state_root.control_ingress()?;
-    let topic = ingress.open_subdir(&crate::node_state::NodeStatePath::parse(topic)?)?;
+    let topic = ingress.open_subdir(&crate::node_state::RelativePath::parse(topic)?)?;
     let entries = topic.list_entries()?;
     if entries.len() > MAX_PENDING_CONTROL_REQUESTS {
-        return Err(MoltenError::invalid_harness("node control ingress pending envelope bound exceeded"));
+        return Err(Failure::invalid_harness("node control ingress pending envelope bound exceeded"));
     }
     let mut envelope_refs = Vec::with_capacity(entries.len());
     for entry in entries {
-        if entry.kind != crate::node_state::NodeStateEntryKind::RegularFile {
+        if entry.kind != crate::node_state::EntryKind::RegularFile {
             continue;
         }
         let bytes = topic.read_entry(&entry, crate::node_state::MAX_NODE_STATE_FILE_BYTES)?;
         let text = String::from_utf8(bytes)
-            .map_err(|error| MoltenError::invalid_harness(format!("node control ingress envelope is not UTF-8: {error}")))?;
+            .map_err(|error| Failure::invalid_harness(format!("node control ingress envelope is not UTF-8: {error}")))?;
         let value = crate::preserves_rail::parse_text(&text)?;
         let envelope = parse_control_ingress_envelope(&value)?;
         if !state_root.try_exists(&control_ingress_receipt_path(&envelope.envelope_ref, "deliver")?)? {
@@ -239,21 +239,21 @@ fn pending_ingress_envelope_refs(
     Ok(envelope_refs)
 }
 
-fn has_pending_service_work(state_root: &crate::node_state::NodeStateRoot, topic: &str) -> Result<bool> {
+fn has_pending_service_work(state_root: &crate::node_state::Root, topic: &str) -> Result<bool> {
     if !pending_ingress_envelope_refs(state_root, topic)?.is_empty() {
         return Ok(true);
     }
     next_pending_control_request(state_root).map(|pending| pending.is_some())
 }
 
-fn remove_service_lock(state_root: &crate::node_state::NodeStateRoot, service_lock_ref: &str) -> Result<()> {
-    let path = crate::node_state::NodeStatePath::parse(CONTROL_SERVICE_LOCK_FILE)?;
+fn remove_service_lock(state_root: &crate::node_state::Root, service_lock_ref: &str) -> Result<()> {
+    let path = crate::node_state::RelativePath::parse(CONTROL_SERVICE_LOCK_FILE)?;
     if !state_root.try_exists(&path)? {
         return Ok(());
     }
     let current_ref = crate::preserves_rail::canonical_hash(&read_preserves(state_root, &path)?)?;
     if current_ref != service_lock_ref {
-        return Err(MoltenError::invalid_harness("node control service lock changed during serve"));
+        return Err(Failure::invalid_harness("node control service lock changed during serve"));
     }
     state_root.remove_regular_file(&path)
 }
@@ -261,7 +261,7 @@ fn remove_service_lock(state_root: &crate::node_state::NodeStateRoot, service_lo
 fn ingress_receipt_decision(value: &IoValue) -> Result<String> {
     let fields = value
         .collect_simple_record("node-control-ingress-receipt-v1", Some(15))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-ingress-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-control-ingress-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA,

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use molten::error::MoltenError;
+use molten::error::Failure;
 use molten::error::Result;
 use molten_core::world_commit::WorldCommitRef;
 use molten_core::world_head::WorldBranchId;
@@ -65,7 +65,7 @@ struct OperationDocument {
 
 pub(super) fn read_world_workflow_request(path: &Path) -> Result<WorldWorkflowRequest> {
     let document: WorkflowDocument = serde_json::from_slice(&std::fs::read(path)?)
-        .map_err(|error| MoltenError::invalid_harness(format!("parse world workflow request: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("parse world workflow request: {error}")))?;
     document.into_request()
 }
 
@@ -157,7 +157,7 @@ fn parse_operation_kind(value: &str) -> Result<WorldOperationKind> {
         "export" => Ok(WorldOperationKind::Export),
         "import" => Ok(WorldOperationKind::Import),
         "gc-plan" => Ok(WorldOperationKind::GarbageCollectionPlan),
-        _ => Err(MoltenError::invalid_harness("unsupported world workflow operation")),
+        _ => Err(Failure::invalid_harness("unsupported world workflow operation")),
     }
 }
 
@@ -167,7 +167,7 @@ fn parse_profile_kind(value: &str) -> Result<WorldProfileKind> {
         "opaque" => Ok(WorldProfileKind::Opaque),
         "witnessed-head" => Ok(WorldProfileKind::WitnessedHead),
         "executable-extent" => Ok(WorldProfileKind::ExecutableExtent),
-        _ => Err(MoltenError::invalid_harness("unsupported world workflow profile kind")),
+        _ => Err(Failure::invalid_harness("unsupported world workflow profile kind")),
     }
 }
 
@@ -177,7 +177,7 @@ fn parse_profile_status(value: &str) -> Result<WorldProfileStatus> {
         "blocked" => Ok(WorldProfileStatus::Blocked),
         "unsupported" => Ok(WorldProfileStatus::Unsupported),
         "unavailable" => Ok(WorldProfileStatus::Unavailable),
-        _ => Err(MoltenError::invalid_harness("unsupported world workflow profile status")),
+        _ => Err(Failure::invalid_harness("unsupported world workflow profile status")),
     }
 }
 
@@ -193,14 +193,14 @@ fn parse_observation_kind(value: &str) -> Result<WorldExpectedObservationKind> {
         "retention" => Ok(WorldExpectedObservationKind::Retention),
         "witness" => Ok(WorldExpectedObservationKind::Witness),
         "executable-extent" => Ok(WorldExpectedObservationKind::ExecutableExtent),
-        _ => Err(MoltenError::invalid_harness("unsupported world workflow observation kind")),
+        _ => Err(Failure::invalid_harness("unsupported world workflow observation kind")),
     }
 }
 
-fn head_reference_error(error: molten_core::world_head::WorldHeadReferenceError) -> MoltenError {
-    MoltenError::invalid_harness(format!("invalid world head reference: {error}"))
+fn head_reference_error(error: molten_core::world_head::WorldHeadReferenceError) -> Failure {
+    Failure::invalid_harness(format!("invalid world head reference: {error}"))
 }
 
-fn commit_reference_error(error: molten_core::world_commit::WorldCommitReferenceError) -> MoltenError {
-    MoltenError::invalid_harness(format!("invalid world commit reference: {error:?}"))
+fn commit_reference_error(error: molten_core::world_commit::WorldCommitReferenceError) -> Failure {
+    Failure::invalid_harness(format!("invalid world commit reference: {error:?}"))
 }

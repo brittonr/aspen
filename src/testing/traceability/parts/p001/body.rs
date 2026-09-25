@@ -1,6 +1,6 @@
 pub fn requirements_from_sources(sources: &[SpecSource]) -> Result<Vec<RequirementInput>> {
     if sources.len() > MAX_REQUIREMENTS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "traceability source count {} exceeds bound {MAX_REQUIREMENTS}",
             sources.len()
         )));

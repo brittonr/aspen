@@ -105,7 +105,7 @@ pub fn locator_query(input: &LocatorQueryInput<'_>) -> Result<LocatorEvidence> {
     validate_peer(input.requester_ref)?;
     require_ref(input.subject_ref, "locator query subject ref")?;
     if input.freshness_policy.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("locator query freshness policy must not be empty"));
+        return Err(Failure::invalid_harness("locator query freshness policy must not be empty"));
     }
     require_ref(input.resource_bounds_ref, "locator query resource bounds ref")?;
     let value = record("content-locator-query-v1", vec![
@@ -143,7 +143,7 @@ pub fn locator_result(input: &LocatorResultInput<'_>) -> Result<LocatorEvidence>
 pub fn locator_probe_receipt(input: &LocatorProbeInput<'_>) -> Result<LocatorEvidence> {
     validate_locator_identity(input.peer_ref, input.subject_ref)?;
     if input.probe_scope.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("locator probe scope must not be empty"));
+        return Err(Failure::invalid_harness("locator probe scope must not be empty"));
     }
     validate_refs(input.sampled_chunk_refs, "locator probe sampled chunk ref")?;
     let mut diagnostics = Vec::with_capacity(LOCATOR_DIAGNOSTIC_CAPACITY);
@@ -267,20 +267,20 @@ fn validate_locator_identity(peer_ref: &str, subject_ref: &str) -> Result<()> {
 fn validate_availability(value: &str) -> Result<()> {
     match value {
         LOCATOR_COMPLETE | LOCATOR_PARTIAL | LOCATOR_UNKNOWN => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported locator availability {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported locator availability {value}"))),
     }
 }
 
 fn validate_freshness(value: &str) -> Result<()> {
     match value {
         LOCATOR_FRESH | LOCATOR_STALE => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported locator freshness {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported locator freshness {value}"))),
     }
 }
 
 fn validate_locator_source(value: &str) -> Result<()> {
     match value {
         "tracker" | "pkarr" | "static-peer" | "catalog" | "peer-observed" => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported locator source {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported locator source {value}"))),
     }
 }

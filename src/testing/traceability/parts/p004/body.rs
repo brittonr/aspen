@@ -1,6 +1,6 @@
 fn summarize_entries(entries: &[TraceabilityEntry]) -> Result<TraceabilitySummary> {
     if entries.len() > MAX_SUMMARY_LINES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "traceability summary entry count {} exceeds bound {MAX_SUMMARY_LINES}",
             entries.len()
         )));
@@ -14,7 +14,7 @@ fn summarize_entries(entries: &[TraceabilityEntry]) -> Result<TraceabilitySummar
             "missing-negative" => summary.missing_negative.push(entry.requirement_id.clone()),
             "stale-reference" => summary.stale_reference.push(entry.requirement_id.clone()),
             "unsupported" => summary.unsupported.push(entry.requirement_id.clone()),
-            other => return Err(MoltenError::invalid_harness(format!("unsupported traceability status {other}"))),
+            other => return Err(Failure::invalid_harness(format!("unsupported traceability status {other}"))),
         }
         if entry
             .positive
@@ -160,7 +160,7 @@ fn verification_run_diagnostics(input: &VerificationRunInput) -> Result<Vec<Stri
         "positive" if !is_success => diagnostics.push("positive-run-exited-nonzero".to_string()),
         "negative" if is_success => diagnostics.push("negative-run-did-not-deny".to_string()),
         "positive" | "negative" => {}
-        other => return Err(MoltenError::invalid_harness(format!("unsupported coverage kind {other}"))),
+        other => return Err(Failure::invalid_harness(format!("unsupported coverage kind {other}"))),
     }
     if input.artifact_refs.is_empty() {
         diagnostics.push("missing-produced-artifact-ref".to_string());
@@ -201,7 +201,7 @@ fn validate_verification_receipt_decision(
             "positive" if exit_status == 0 => "pass",
             "negative" if exit_status != 0 => "deny",
             "positive" | "negative" => "deny",
-            other => return Err(MoltenError::invalid_harness(format!("unsupported coverage kind {other}"))),
+            other => return Err(Failure::invalid_harness(format!("unsupported coverage kind {other}"))),
         }
     } else {
         "deny"
@@ -209,7 +209,7 @@ fn validate_verification_receipt_decision(
     if decision == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "verification receipt decision {decision} does not match expected {expected}"
         )))
     }

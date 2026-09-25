@@ -1,7 +1,7 @@
 use molten_core::prolly_map::*;
 use preserves::IOValue;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub const PROLLY_PUBLICATION_RECEIPT_SCHEMA: &str = "molten.prolly-map-publication-receipt.v1";
@@ -74,7 +74,7 @@ pub fn canonical_prolly_publication_receipt(
         || receipt.deletion_authorized
         || receipt.non_claims != prolly_receipt_non_claims()
     {
-        return Err(MoltenError::invalid_harness("Prolly publication receipt is invalid"));
+        return Err(Failure::invalid_harness("Prolly publication receipt is invalid"));
     }
     let value = record(PROLLY_PUBLICATION_RECEIPT_RECORD, vec![
         field("schema", string(&receipt.schema)),
@@ -93,7 +93,7 @@ pub fn canonical_prolly_publication_receipt(
     ]);
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     if bytes.len() > MAX_PROLLY_RECEIPT_BYTES {
-        return Err(MoltenError::invalid_harness("Prolly publication receipt exceeds its byte bound"));
+        return Err(Failure::invalid_harness("Prolly publication receipt exceeds its byte bound"));
     }
     let mut hasher = blake3::Hasher::new_derive_key(PROLLY_RECEIPT_DOMAIN);
     hasher.update(&bytes);

@@ -199,7 +199,7 @@
         })
         .expect("reconcile authority envelope");
         let state_root =
-            crate::node_state::NodeStateRoot::open(&case.delivery.root).expect("open node state root");
+            crate::node_state::Root::open(&case.delivery.root).expect("open node state root");
         let diagnostics = live_send_authority_grant_diagnostics(&state_root, &envelope)
             .expect("reconcile authority diagnostics");
         assert!(diagnostics.iter().any(|value| value.contains("is not a grant")));

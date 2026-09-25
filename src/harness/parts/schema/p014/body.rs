@@ -2,11 +2,11 @@
 pub fn parse_repro_bundle(value: &IoValue) -> Result<ReproBundle> {
     let bundle = value
         .collect_simple_record("harness-repro-bundle-v1", None)
-        .ok_or_else(|| MoltenError::invalid_harness("expected <harness-repro-bundle-v1 ...>"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected <harness-repro-bundle-v1 ...>"))?;
     let arity = bundle.fields_iter().count();
     let schema = required_string(&bundle[0], "repro bundle schema")?;
     if schema != crate::preserves_rail::HARNESS_REPRO_BUNDLE_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported repro bundle schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_REPRO_BUNDLE_SCHEMA
         )));
@@ -27,7 +27,7 @@ pub fn parse_repro_bundle(value: &IoValue) -> Result<ReproBundle> {
     if arity == 8 {
         return parse_failure_repro_bundle(value, &bundle);
     }
-    Err(MoltenError::invalid_harness(format!(
+    Err(crate::error::Failure::invalid_harness(format!(
         "expected <harness-repro-bundle-v1 ...> with arity 8, 11, 16, 19, 21, 23, or 24, got {arity}"
     )))
 }
@@ -36,12 +36,12 @@ pub fn repro_bundle_report_value(bundle_value: &IoValue) -> Result<IoValue> {
     let bundle = parse_repro_bundle(bundle_value)?;
     match (bundle.kind, bundle.report_value) {
         (ReproBundleKind::Report, Some(report_value)) => Ok(report_value),
-        (ReproBundleKind::Failure, _) => Err(MoltenError::invalid_harness(format!(
+        (ReproBundleKind::Failure, _) => Err(crate::error::Failure::invalid_harness(format!(
             "failure repro bundle {} cannot satisfy pass evidence gate",
             bundle.bundle_ref
         ))),
         (ReproBundleKind::Report, None) => {
-            Err(MoltenError::invalid_harness("report repro bundle missing report value"))
+            Err(crate::error::Failure::invalid_harness("report repro bundle missing report value"))
         }
     }
 }
@@ -159,7 +159,7 @@ pub fn validate_executor_preflight_inputs(suite: &Suite) -> Result<()> {
         match (&actor.kind, &actor.executor) {
             (ActorKind::Native, None) => {}
             (ActorKind::Native, Some(_)) => {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "native actor {} must not declare non-native executor preflight fixture",
                     actor.id
                 )));
@@ -181,19 +181,19 @@ pub fn validate_executor_preflight_inputs(suite: &Suite) -> Result<()> {
                 validate_required_hostcalls_allowed(suite, actor, &config.allowed_hostcalls, "remote-proxy")?;
             }
             (ActorKind::Steel, None) => {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "steel actor {} missing reviewed Steel executor preflight fixture",
                     actor.id
                 )));
             }
             (ActorKind::Wasm, None) => {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "wasm actor {} missing Wasm executor preflight fixture",
                     actor.id
                 )));
             }
             (ActorKind::Adapter, None) | (ActorKind::RemoteProxy, None) => {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "executor kind {} requires executor adapter preflight and remains disabled in local harness",
                     actor.kind.as_str()
                 )));
@@ -202,7 +202,7 @@ pub fn validate_executor_preflight_inputs(suite: &Suite) -> Result<()> {
             | (ActorKind::Wasm, Some(_))
             | (ActorKind::Adapter, Some(_))
             | (ActorKind::RemoteProxy, Some(_)) => {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "actor {} kind {} has mismatched executor preflight fixture",
                     actor.id,
                     actor.kind.as_str()
@@ -222,7 +222,7 @@ fn validate_required_hostcalls_allowed(
     let required_hostcalls = hostcalls_required_by_steps(suite, &actor.id);
     for operation in required_hostcalls {
         if !allowed_hostcalls.iter().any(|allowed| allowed.as_str() == operation.as_str()) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "hostcall operation {operation} is not allowed by {executor_name} executor preflight for actor {}",
                 actor.id
             )));
@@ -258,7 +258,7 @@ fn executor_preflight_value(actor: &ActorDecl, allowed_hostcalls: &[String]) -> 
             (Some(endpoint_ref), vec![receipt], remote_proxy_executor_preflight_checks().to_vec())
         }
         _ => {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "unsupported executor preflight fixture for actor {} kind {}",
                 actor.id,
                 actor.kind.as_str()

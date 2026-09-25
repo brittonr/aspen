@@ -58,7 +58,7 @@ pub fn import_control_live_workflow_bundle_ack(
     input: &ControlLiveWorkflowBundleAckImportInput<'_>,
 ) -> Result<ControlLiveWorkflowBundleAckImport> {
     validate_live_workflow_bundle_ack_import_input(input)?;
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::Root::open(input.state_root)?;
     ensure_state_layout(&state_root)?;
     let ack = parse_control_live_workflow_bundle_ack(input.ack_value)?;
     let mut diagnostics = live_workflow_bundle_ack_import_diagnostics(input, &ack)?;

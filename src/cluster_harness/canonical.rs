@@ -1,7 +1,7 @@
 use molten_core::cluster_harness::FirstDivergence;
 use molten_core::cluster_harness::RunDirectoryAssessment;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub type IoValue = preserves::IOValue;
@@ -120,7 +120,7 @@ pub fn command_plan_value(
 ) -> Result<IoValue> {
     crate::preserves_rail::validate_content_ref(fixture_ref)?;
     if child_timeout_ms == 0 {
-        return Err(MoltenError::invalid_harness("cluster harness child timeout must be positive"));
+        return Err(Failure::invalid_harness("cluster harness child timeout must be positive"));
     }
     validate_non_empty_strings("command plan node", node_ids)?;
     validate_non_empty_strings("expected artifact kind", expected_artifact_kinds)?;
@@ -174,7 +174,7 @@ pub fn unavailable_cluster_lifecycle_value(
 // r[impl molten.testing.receipt_first_cluster_harness.run_artifact_directory]
 pub fn drift_summary_value(summary: &crate::drift_core::EvidenceSummary) -> Result<IoValue> {
     if summary.workflow.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("cluster drift summary workflow must be non-empty"));
+        return Err(Failure::invalid_harness("cluster drift summary workflow must be non-empty"));
     }
     let fields = summary
         .fields
@@ -219,7 +219,7 @@ pub fn drift_summary_value(summary: &crate::drift_core::EvidenceSummary) -> Resu
 // r[impl molten.testing.local_multiprocess_cluster_tier.cleanup_negatives]
 pub fn child_process_value(input: &ClusterHarnessChildProcessInput) -> Result<IoValue> {
     if input.node_id.trim().is_empty() || input.phase.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("cluster child process requires node and phase"));
+        return Err(Failure::invalid_harness("cluster child process requires node and phase"));
     }
     crate::preserves_rail::validate_content_ref(&input.command_profile_ref)?;
     crate::preserves_rail::validate_content_ref(&input.diagnostic_log_ref)?;
@@ -438,17 +438,17 @@ fn strings_sequence(values: &[String]) -> IoValue {
 fn validate_refs(label: &str, refs: &[String]) -> Result<()> {
     for reference in refs {
         crate::preserves_rail::validate_content_ref(reference)
-            .map_err(|error| MoltenError::invalid_harness(format!("invalid {label} ref {reference}: {error}")))?;
+            .map_err(|error| Failure::invalid_harness(format!("invalid {label} ref {reference}: {error}")))?;
     }
     Ok(())
 }
 
 fn validate_non_empty_strings(label: &str, values: &[String]) -> Result<()> {
     if values.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("{label} values must not be empty")));
+        return Err(Failure::invalid_harness(format!("{label} values must not be empty")));
     }
     if values.iter().any(|value| value.trim().is_empty() || value.trim() != value) {
-        return Err(MoltenError::invalid_harness(format!("{label} values must be non-empty and unpadded")));
+        return Err(Failure::invalid_harness(format!("{label} values must be non-empty and unpadded")));
     }
     Ok(())
 }

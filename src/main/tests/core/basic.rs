@@ -46,7 +46,7 @@
         let dir = temp_dir("gate-failure");
         let failure_artifact = dir.join("input.failure.preserves");
         let gate_failure = dir.join("gate.failure.preserves");
-        let synthetic = failure_value("preflight", &MoltenError::invalid_harness("synthetic"), Vec::new());
+        let synthetic = failure_value("preflight", &Failure::invalid_harness("synthetic"), Vec::new());
         write_file(&failure_artifact, &to_text(&synthetic).expect("render failure")).expect("write failure");
 
         let error = run_gate_command(GateCommand::Check {
@@ -128,7 +128,7 @@
         let dir = temp_dir("failure-repro");
         let failure_artifact = dir.join("input.failure.preserves");
         let out = dir.join("bundle");
-        let synthetic = failure_value("execute", &MoltenError::invalid_harness("synthetic"), Vec::new());
+        let synthetic = failure_value("execute", &Failure::invalid_harness("synthetic"), Vec::new());
         write_file(&failure_artifact, &to_text(&synthetic).expect("render failure")).expect("write failure");
 
         run_repro_command(ReproCommand::Export {

@@ -80,7 +80,7 @@ pub fn replay_service_supervision_report(value: &IoValue) -> Result<ServiceSuper
     }
     .to_string();
     if decision == "deny" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "service supervision replay divergence: expected {expected_report_ref}, got {}",
             rerun.report_ref
         )));
@@ -131,7 +131,7 @@ pub fn gate_service_supervision_report(value: &IoValue) -> Result<ServiceSupervi
 pub fn parse_service_supervision_gate_receipt(value: &IoValue) -> Result<ServiceSupervisionGateReceipt> {
     let fields = value
         .collect_simple_record("service-supervision-gate-receipt-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <service-supervision-gate-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <service-supervision-gate-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::SERVICE_SUPERVISION_GATE_RECEIPT_SCHEMA,
@@ -202,7 +202,7 @@ fn service_supervision_gate_diagnostics(report: &ServiceSupervisionRun) -> Resul
 pub fn parse_service_supervision_report(value: &IoValue) -> Result<ServiceSupervisionRun> {
     let fields = value
         .collect_simple_record("service-supervision-report-v1", Some(12))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <service-supervision-report-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <service-supervision-report-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::SERVICE_SUPERVISION_REPORT_SCHEMA,

@@ -7,7 +7,7 @@ pub fn parse_envelope(value: &IoValue) -> Result<Envelope> {
             (
                 value
                     .collect_simple_record("remote-dataspace-envelope-v1", Some(10))
-                    .ok_or_else(|| MoltenError::invalid_harness("expected <remote-dataspace-envelope-v1 ...>"))?,
+                    .ok_or_else(|| Failure::invalid_harness("expected <remote-dataspace-envelope-v1 ...>"))?,
                 false,
             )
         };
@@ -108,7 +108,7 @@ fn parsed_ref(input: RefParts<'_>) -> Result<String> {
         sequence: input.sequence,
     })?;
     if operation_ref != expected_operation_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "remote dataspace operation ref {operation_ref} does not match canonical ref {expected_operation_ref}"
         )));
     }
@@ -171,7 +171,7 @@ pub async fn publish_live_gossip(
     sender
         .broadcast(canonical_bytes(&envelope.value)?.into())
         .await
-        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh gossip publish failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("live Iroh gossip publish failed: {error}")))?;
     Ok(Exchange {
         envelope_ref: envelope.envelope_ref.clone(),
         receipt_value: transport_receipt_value_for_transport(TransportReceiptInput {
@@ -245,13 +245,13 @@ pub fn deliver_live_gossip_bytes_with_root(
     let value = parse_canonical_bytes(bytes)?;
     let envelope = parse_envelope(&value)?;
     if envelope.topic != topic {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "live Iroh envelope topic {} does not match subscribed topic {topic}",
             envelope.topic
         )));
     }
     if envelope.to_peer != receiver_peer && envelope.to_peer != "*" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "live Iroh envelope target {} does not match receiver {receiver_peer}",
             envelope.to_peer
         )));
@@ -296,19 +296,19 @@ pub fn deliver_local_gossip_with_root(
     let value = parse_canonical_bytes(&bytes)?;
     let actual_ref = canonical_hash(&value)?;
     if actual_ref != envelope_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "remote dataspace envelope hashes to {actual_ref}, expected {envelope_ref}"
         )));
     }
     let envelope = parse_envelope(&value)?;
     if envelope.topic != topic {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "remote dataspace envelope topic {} does not match requested topic {topic}",
             envelope.topic
         )));
     }
     if envelope.to_peer != receiver_peer && envelope.to_peer != "*" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "remote dataspace envelope target {} does not match receiver {receiver_peer}",
             envelope.to_peer
         )));

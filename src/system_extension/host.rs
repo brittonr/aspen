@@ -42,7 +42,7 @@ use super::release_effect_requests;
 use super::reserve_effect_requests;
 use super::validate_callback_outcome;
 use super::validate_typed_effects;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::preserves_rail::canonical_hash;
 
@@ -140,10 +140,10 @@ impl HostDispatchResult {
     pub fn require_executed(self, label: &str) -> Result<(CanonicalCallbackReceipt, CallbackOutcome)> {
         match self {
             Self::Executed { receipt, outcome, .. } => Ok((receipt, outcome)),
-            Self::Deferred { decision, .. } => Err(MoltenError::invalid_harness(format!(
+            Self::Deferred { decision, .. } => Err(Failure::invalid_harness(format!(
                 "system-extension {label} callback was deferred: {decision:?}"
             ))),
-            Self::Failed { receipt, lifecycle } => Err(MoltenError::invalid_harness(format!(
+            Self::Failed { receipt, lifecycle } => Err(Failure::invalid_harness(format!(
                 "system-extension {label} callback failed: callback={} lifecycle={}",
                 receipt.receipt_ref, lifecycle.receipt_ref
             ))),
@@ -187,7 +187,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         let actual = executor.execution_profile();
         let expected = admitted.manifest().execution_profile;
         if actual != expected {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "system-extension execution profile mismatch: executor={} manifest={}",
                 actual.as_str(),
                 expected.as_str()
@@ -226,15 +226,15 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         let actual = executor.execution_profile();
         let expected = admitted.manifest().execution_profile;
         if actual != expected {
-            return Err(MoltenError::invalid_harness("recovered system-extension executor profile mismatch"));
+            return Err(Failure::invalid_harness("recovered system-extension executor profile mismatch"));
         }
         if state.generation < admitted.manifest().initial_generation || state.phase == LifecyclePhase::Absent {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "recovered system-extension state is not compatible with the admitted manifest",
             ));
         }
         if !usage.is_idle() {
-            return Err(MoltenError::invalid_harness("recovered system-extension state contains live resource usage"));
+            return Err(Failure::invalid_harness("recovered system-extension state contains live resource usage"));
         }
         Ok(Self {
             admitted,
@@ -430,7 +430,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
             )
         });
         if !receipt_is_host_owned || callback_receipt.decision != CallbackExecutionDecision::Succeeded {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "system-extension effect routing requires a successful host-owned callback receipt",
             ));
         }
@@ -453,20 +453,20 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
                 let key = match &effect.target {
                     EffectTarget::FabricPort(key) => key,
                     EffectTarget::Ambient(ambient) => {
-                        return Err(MoltenError::invalid_harness(format!(
+                        return Err(Failure::invalid_harness(format!(
                             "ambient effect reached routing after validation: {}",
                             ambient.as_str()
                         )));
                     }
                 };
                 let binding = self.admitted.binding_for(key).ok_or_else(|| {
-                    MoltenError::invalid_harness(format!(
+                    Failure::invalid_harness(format!(
                         "system-extension effect port {}@{} is not canonically bound",
                         key.port_id, key.version
                     ))
                 })?;
                 let output = port.route(binding, effect).map_err(|_error| {
-                    MoltenError::invalid_harness("system-extension bound fabric-port routing failed")
+                    Failure::invalid_harness("system-extension bound fabric-port routing failed")
                 })?;
                 let completion = canonical_effect_completion(&callback_receipt.receipt_ref, binding, effect, &output)?;
                 self.record_evidence(HostEvidence::EffectCompletion(completion.clone()))?;
@@ -492,7 +492,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
             .require_executed("checkpoint")?;
         let checkpoint_ref = outcome
             .checkpoint_ref
-            .ok_or_else(|| MoltenError::invalid_harness("validated checkpoint callback returned no checkpoint ref"))?;
+            .ok_or_else(|| Failure::invalid_harness("validated checkpoint callback returned no checkpoint ref"))?;
         self.apply_transition(LifecycleEvent {
             kind: LifecycleEventKind::CheckpointSucceeded,
             generation: self.state.generation,
@@ -551,7 +551,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         if self.admitted.manifest().declares_callback(CallbackKind::Recover) {
             let checkpoint_ref =
                 self.state.checkpoint_ref.clone().ok_or_else(|| {
-                    MoltenError::invalid_harness("restart recovery requires a canonical checkpoint ref")
+                    Failure::invalid_harness("restart recovery requires a canonical checkpoint ref")
                 })?;
             return self.recover(&checkpoint_ref, logical_tick);
         }
@@ -636,24 +636,24 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         if self.admitted.manifest().extension_id != next.manifest().extension_id
             || self.admitted.manifest().service_id != next.manifest().service_id
         {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "system-extension generation replacement changed extension or service identity",
             ));
         }
         if next_executor.execution_profile() != next.manifest().execution_profile {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "system-extension replacement profile mismatch: executor={} manifest={}",
                 next_executor.execution_profile().as_str(),
                 next.manifest().execution_profile.as_str()
             )));
         }
         if !next.manifest().declares_callback(CallbackKind::Recover) {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "system-extension replacement manifest must declare recover callback",
             ));
         }
         if self.state.checkpoint_ref.as_deref() != Some(checkpoint_ref) {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "system-extension replacement checkpoint does not match active state",
             ));
         }
@@ -667,7 +667,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
             .state
             .generation
             .checked_add(GENERATION_INCREMENT)
-            .ok_or_else(|| MoltenError::invalid_harness("system-extension generation overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("system-extension generation overflow"))?;
         let begin_kind = match operation {
             MigrationOperation::Upgrade => LifecycleEventKind::BeginUpgrade,
             MigrationOperation::Rollback => LifecycleEventKind::BeginRollback,
@@ -730,10 +730,10 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         let event_sequence = self
             .event_sequence
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("system-extension event sequence overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("system-extension event sequence overflow"))?;
         let deadline_tick = logical_tick
             .checked_add(self.admitted.manifest().resources.callback_deadline_ticks)
-            .ok_or_else(|| MoltenError::invalid_harness("system-extension callback deadline overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("system-extension callback deadline overflow"))?;
         let value = callback_event_value(
             callback,
             self.state.generation,
@@ -827,7 +827,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         let current = self.observations.get(&callback).copied().unwrap_or(0);
         let next = current
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("system-extension callback observation overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("system-extension callback observation overflow"))?;
         self.observations.insert(callback, next);
         Ok(())
     }
@@ -850,7 +850,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
 
     fn push_execution_binding_ref(&mut self, execution_binding_ref: String) -> Result<()> {
         if self.execution_binding_refs.len() >= MAX_HOST_EVIDENCE_ITEMS {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "system-extension execution binding count exceeds {MAX_HOST_EVIDENCE_ITEMS}"
             )));
         }
@@ -863,9 +863,9 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
             .evidence
             .len()
             .checked_add(additional)
-            .ok_or_else(|| MoltenError::invalid_harness("system-extension evidence count overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("system-extension evidence count overflow"))?;
         if total > MAX_HOST_EVIDENCE_ITEMS {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "system-extension evidence count {total} exceeds {MAX_HOST_EVIDENCE_ITEMS}"
             )));
         }
@@ -874,7 +874,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
 
     fn record_evidence(&mut self, evidence: HostEvidence) -> Result<()> {
         if self.evidence.len() >= MAX_HOST_EVIDENCE_ITEMS {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "system-extension evidence count exceeds {MAX_HOST_EVIDENCE_ITEMS}"
             )));
         }
@@ -896,6 +896,6 @@ fn collect_artifacts(evidence: &[HostEvidence]) -> (Vec<CanonicalLifecycleReceip
     (lifecycle, callbacks)
 }
 
-fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> MoltenError {
-    MoltenError::invalid_harness(format!("system-extension {label} denied: {issues:?}"))
+fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> Failure {
+    Failure::invalid_harness(format!("system-extension {label} denied: {issues:?}"))
 }

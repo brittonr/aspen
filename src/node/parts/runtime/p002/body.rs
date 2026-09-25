@@ -127,7 +127,7 @@ pub fn parse_control_request(value: &IoValue) -> Result<ControlRequest> {
     }
     let fields = value
         .collect_simple_record("node-control-request-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-request-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-control-request-v1 ...>"))?;
     require_schema(&fields[0], NODE_CONTROL_REQUEST_SCHEMA, "node control request")?;
     let operation = record_string(&fields[1], "operation")?;
     validate_control_operation(&operation)?;
@@ -176,7 +176,7 @@ pub fn control_receipt_value(input: &ControlReceiptValueInput<'_>) -> Result<IoV
 pub fn parse_control_receipt(value: &IoValue) -> Result<ControlReceipt> {
     let fields = value
         .collect_simple_record("node-control-receipt-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-control-receipt-v1 ...>"))?;
     require_schema(&fields[0], NODE_CONTROL_RECEIPT_SCHEMA, "node control receipt")?;
     let checks = parse_checks(&fields[8])?;
     require_check(&checks, "canonical-receipt", "node control receipt")?;
@@ -246,7 +246,7 @@ pub fn node_shutdown_receipt_value(input: &ShutdownReceiptValueInput<'_>) -> Res
 pub fn parse_node_shutdown_receipt(value: &IoValue) -> Result<NodeShutdownReceipt> {
     let fields = value
         .collect_simple_record("node-shutdown-receipt-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-shutdown-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-shutdown-receipt-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::NODE_SHUTDOWN_RECEIPT_SCHEMA, "node shutdown receipt")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "canonical-receipt", "node shutdown receipt")?;

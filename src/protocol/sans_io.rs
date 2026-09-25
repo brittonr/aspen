@@ -1,6 +1,6 @@
 type IoValue = preserves::IOValue;
 type Result<T> = crate::error::Result<T>;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 
 const SANS_IO_TRANSITION_SCHEMA: &str = "molten.runtime-patterns.sans-io-transition.v1";
 const SANS_IO_SHELL_DRAIN_SCHEMA: &str = "molten.runtime-patterns.sans-io-shell-drain.v1";
@@ -315,14 +315,14 @@ fn transition_receipt_facts_value(input: TransitionFactsValueInput<'_>) -> Resul
 fn validate_phase(phase: &str) -> Result<()> {
     match phase {
         PHASE_INIT | PHASE_ACTIVE | PHASE_CLOSED => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported protocol phase {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported protocol phase {other}"))),
     }
 }
 
 fn validate_event_kind(kind: &str) -> Result<()> {
     match kind {
         EVENT_OPEN | EVENT_MESSAGE | EVENT_CLOSE => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported protocol event kind {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported protocol event kind {other}"))),
     }
 }
 
@@ -336,12 +336,12 @@ fn validate_refs(refs: &[String], label: &str) -> Result<()> {
 
 fn validate_ref(reference: &str, label: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference)
-        .map_err(|error| MoltenError::invalid_harness(format!("invalid {label} {reference}: {error}")))
+        .map_err(|error| Failure::invalid_harness(format!("invalid {label} {reference}: {error}")))
 }
 
 fn validate_text(label: &str, value: &str) -> Result<()> {
     if value.trim().is_empty() {
-        Err(MoltenError::invalid_harness(format!("{label} must not be empty")))
+        Err(Failure::invalid_harness(format!("{label} must not be empty")))
     } else {
         Ok(())
     }

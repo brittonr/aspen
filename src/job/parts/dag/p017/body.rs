@@ -98,7 +98,7 @@ fn execute_stage(
         "filter" => execute_filter(node, inputs)?,
         "reduce" => execute_reduce(node, inputs)?,
         "materialize" => execute_materialize(node, inputs, options, &mut effects)?,
-        _ => return Err(MoltenError::invalid_harness(format!("unsupported job stage kind {}", node.kind))),
+        _ => return Err(Failure::invalid_harness(format!("unsupported job stage kind {}", node.kind))),
     };
     let output_refs = refs_for_values(&output_values)?;
     let receipt_value = job_receipt_value(JobReceiptInput {
@@ -146,7 +146,7 @@ fn execute_stage_with_capabilities(
         "filter" => execute_filter(node, inputs)?,
         "reduce" => execute_reduce(node, inputs)?,
         "materialize" => execute_materialize_with_capabilities(node, inputs, options, &mut effects)?,
-        _ => return Err(MoltenError::invalid_harness(format!("unsupported job stage kind {}", node.kind))),
+        _ => return Err(Failure::invalid_harness(format!("unsupported job stage kind {}", node.kind))),
     };
     let output_refs = refs_for_values(&output_values)?;
     let receipt_value = job_receipt_value(JobReceiptInput {
@@ -198,7 +198,7 @@ fn execute_source_with_capabilities(
         .collect_simple_record("typed-storage", Some(TYPED_STORAGE_SOURCE_FIELD_COUNT))
         .is_some()
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "typed-storage job sources require a capability-aware typed storage adapter",
         ));
     }
@@ -222,7 +222,7 @@ fn execute_source_with_capabilities(
         }
         return Ok(vec![value]);
     }
-    Err(MoltenError::invalid_harness(
+    Err(Failure::invalid_harness(
         "unsupported source config; expected inline values or a chunk manifest under capability-rooted node execution",
     ))
 }
@@ -270,7 +270,7 @@ fn execute_source(
         }
         return Ok(vec![value]);
     }
-    Err(MoltenError::invalid_harness(
+    Err(Failure::invalid_harness(
         "unsupported source config; expected <source <values [...]>>, <source <value ...>>, <source <typed-storage ...>>, or <source <chunk-manifest ...>>",
     ))
 }
@@ -305,7 +305,7 @@ fn execute_reduce(node: &JobNode, inputs: &[IoValue]) -> Result<Vec<IoValue>> {
             for value in inputs {
                 sum = sum
                     .checked_add(required_u64_value(value, "sum-u64 input")?)
-                    .ok_or_else(|| MoltenError::invalid_harness("sum-u64 reducer overflowed u64"))?;
+                    .ok_or_else(|| Failure::invalid_harness("sum-u64 reducer overflowed u64"))?;
             }
             Ok(vec![crate::preserves_rail::u64_value(sum)])
         }
@@ -322,12 +322,12 @@ fn execute_reduce(node: &JobNode, inputs: &[IoValue]) -> Result<Vec<IoValue>> {
                         )?;
                     }
                 } else {
-                    return Err(MoltenError::invalid_harness("concat-lists reducer requires sequence inputs"));
+                    return Err(Failure::invalid_harness("concat-lists reducer requires sequence inputs"));
                 }
             }
             Ok(vec![crate::preserves_rail::sequence(values)])
         }
-        other => Err(MoltenError::invalid_harness(format!("unsupported reduce operation {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported reduce operation {other}"))),
     }
 }
 
@@ -344,10 +344,10 @@ fn execute_materialize(
         "typed-storage" => {
             let namespace = config
                 .namespace
-                .ok_or_else(|| MoltenError::invalid_harness("typed-storage materialization requires namespace"))?;
+                .ok_or_else(|| Failure::invalid_harness("typed-storage materialization requires namespace"))?;
             let key = config
                 .key
-                .ok_or_else(|| MoltenError::invalid_harness("typed-storage materialization requires key"))?;
+                .ok_or_else(|| Failure::invalid_harness("typed-storage materialization requires key"))?;
             let admission = crate::typed_storage::Admission::local_fixture(&format!("job:{namespace}:{key}"));
             let put = crate::typed_storage::put_value(options.storage_root, &crate::typed_storage::PutInput {
                 namespace,
@@ -375,7 +375,7 @@ fn execute_materialize(
                 crate::preserves_rail::string(&put.manifest_ref),
             ])])
         }
-        other => Err(MoltenError::invalid_harness(format!("unsupported materialization kind {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported materialization kind {other}"))),
     }
 }
 
@@ -389,7 +389,7 @@ fn execute_materialize_with_capabilities(
     let value = crate::preserves_rail::sequence(inputs.to_vec());
     match config.kind.as_str() {
         "inline" => Ok(vec![value]),
-        "typed-storage" => Err(MoltenError::invalid_harness(
+        "typed-storage" => Err(Failure::invalid_harness(
             "typed-storage job materialization requires a capability-aware typed storage adapter",
         )),
         "chunk-manifest" => {
@@ -405,7 +405,7 @@ fn execute_materialize_with_capabilities(
                 crate::preserves_rail::string(&put.manifest_ref),
             ])])
         }
-        other => Err(MoltenError::invalid_harness(format!("unsupported materialization kind {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported materialization kind {other}"))),
     }
 }
 

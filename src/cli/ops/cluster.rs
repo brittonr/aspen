@@ -120,7 +120,7 @@ fn harness_run(input: ClusterHarnessRun) -> molten::error::Result<()> {
         println!("cluster harness failure_bundle={bundle_ref} evidence_scope=diagnostic-only");
     }
     if execution.decision != "pass" {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "cluster harness run denied: {}",
             execution.diagnostics.join(",")
         )));
@@ -139,7 +139,7 @@ fn harness_verify(input: ClusterHarnessVerify) -> molten::error::Result<()> {
         input.run_dir.display()
     );
     if verification.decision != "pass" {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "cluster harness verification denied: {}",
             verification.receipt.diagnostics.join(",")
         )));
@@ -168,7 +168,7 @@ fn fabric_transport_run(input: FabricTransportRun) -> molten::error::Result<()> 
         execution.run_directory.display()
     );
     if execution.decision != "pass" {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "fabric transport distinct-process run denied: {}",
             execution.diagnostics.join(",")
         )));
@@ -187,7 +187,7 @@ fn fabric_transport_verify(input: FabricTransportVerify) -> molten::error::Resul
         input.run_dir.display()
     );
     if verification.decision != "pass" {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "fabric transport distinct-process verification denied: {}",
             verification.diagnostics.join(",")
         )));
@@ -288,14 +288,14 @@ fn prepare_cluster_init(plan: &molten::cluster::ClusterPlan, force: bool) -> mol
     if force {
         for node in &plan.nodes {
             if node.state_root.exists() {
-                std::fs::remove_dir_all(&node.state_root).map_err(molten::error::MoltenError::from)?;
+                std::fs::remove_dir_all(&node.state_root).map_err(molten::error::Failure::from)?;
             }
         }
         return Ok(());
     }
     let manifest_path = molten::cluster::cluster_manifest_path(&plan.state_root);
     if manifest_path.exists() {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "cluster init denied: manifest already exists at {}; pass --force to overwrite the cluster manifest",
             manifest_path.display()
         )));
@@ -303,7 +303,7 @@ fn prepare_cluster_init(plan: &molten::cluster::ClusterPlan, force: bool) -> mol
     for node in &plan.nodes {
         let state = molten::node_daemon::inspect_node_lifecycle_state(&node.state_root);
         if state != molten::node_daemon::NodeLifecycleState::Empty {
-            return Err(molten::error::MoltenError::invalid_harness(format!(
+            return Err(molten::error::Failure::invalid_harness(format!(
                 "cluster init denied: node {} already has {state:?} lifecycle state at {}; pass --force to reset that node root",
                 node.node_id,
                 node.state_root.display()
@@ -322,13 +322,13 @@ fn current_running_status(state_root: &std::path::Path) -> molten::error::Result
 
 fn read_cluster_plan(state_root: &std::path::Path) -> molten::error::Result<molten::cluster::ClusterPlan> {
     let path = molten::cluster::cluster_manifest_path(state_root);
-    let source = std::fs::read_to_string(&path).map_err(molten::error::MoltenError::from)?;
+    let source = std::fs::read_to_string(&path).map_err(molten::error::Failure::from)?;
     let nodes = molten::cluster::parse_cluster_manifest(&source)?;
     molten::cluster::plan_cluster(state_root, &nodes)
 }
 
 fn write_cluster_manifest(plan: &molten::cluster::ClusterPlan) -> molten::error::Result<()> {
-    std::fs::create_dir_all(&plan.state_root).map_err(molten::error::MoltenError::from)?;
+    std::fs::create_dir_all(&plan.state_root).map_err(molten::error::Failure::from)?;
     let path = molten::cluster::cluster_manifest_path(&plan.state_root);
-    std::fs::write(path, molten::cluster::render_cluster_manifest(plan)).map_err(molten::error::MoltenError::from)
+    std::fs::write(path, molten::cluster::render_cluster_manifest(plan)).map_err(molten::error::Failure::from)
 }

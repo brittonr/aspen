@@ -3,7 +3,7 @@
 fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {field}")))
 }
 
 fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
@@ -40,7 +40,7 @@ fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {
@@ -69,9 +69,9 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
     let total = values
         .item_count()
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("{label} count overflow")))?;
     if total > maximum {
-        return Err(MoltenError::invalid_harness(format!("{label} count {total} exceeds bound {maximum}")));
+        return Err(Failure::invalid_harness(format!("{label} count {total} exceeds bound {maximum}")));
     }
     values.push_item(value);
     Ok(())
@@ -80,7 +80,7 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
 fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
     validate_non_empty(value_ref, field)?;
     validate_content_ref(value_ref).map_err(|error| {
-        MoltenError::invalid_harness(format!("{field} must be a canonical content ref, got {value_ref}: {error}"))
+        Failure::invalid_harness(format!("{field} must be a canonical content ref, got {value_ref}: {error}"))
     })
 }
 
@@ -93,7 +93,7 @@ fn validate_refs(refs: &[String], field: &str) -> Result<()> {
 
 fn validate_non_empty(value: &str, field: &str) -> Result<()> {
     if value.is_empty() {
-        Err(MoltenError::invalid_harness(format!("{field} must not be empty")))
+        Err(Failure::invalid_harness(format!("{field} must not be empty")))
     } else {
         Ok(())
     }

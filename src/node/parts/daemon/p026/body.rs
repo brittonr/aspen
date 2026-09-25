@@ -32,7 +32,7 @@ pub fn parse_control_ingress_envelope(value: &IoValue) -> Result<ControlIngressE
     )?;
     let fields = value
         .collect_simple_record("node-control-ingress-envelope-v1", Some(15))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-ingress-envelope-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-control-ingress-envelope-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::NODE_CONTROL_INGRESS_ENVELOPE_SCHEMA,
@@ -48,7 +48,7 @@ pub fn parse_control_ingress_envelope(value: &IoValue) -> Result<ControlIngressE
     let request_value = record_value(&fields[8], "request")?;
     let request = crate::node_runtime::parse_control_request(&request_value)?;
     if request.request_ref != request_ref {
-        return Err(MoltenError::invalid_harness("node control ingress embedded request ref mismatch"));
+        return Err(Failure::invalid_harness("node control ingress embedded request ref mismatch"));
     }
     let peer_bootstrap_refs = record_ref_strings(&fields[9], "peer-bootstrap")?;
     let authority_refs = record_ref_strings(&fields[10], "authority")?;
@@ -67,7 +67,7 @@ pub fn parse_control_ingress_envelope(value: &IoValue) -> Result<ControlIngressE
             policy_refs: policy_refs.clone(),
         })?;
     if expected_operation.operation_ref != operation_ref {
-        return Err(MoltenError::invalid_harness("node control ingress operation ref mismatch"));
+        return Err(Failure::invalid_harness("node control ingress operation ref mismatch"));
     }
     // r[impl molten.runtime_spine.canonical_content_refs.node_control]
     Ok(ControlIngressEnvelope {
@@ -89,7 +89,7 @@ pub fn parse_control_ingress_envelope(value: &IoValue) -> Result<ControlIngressE
 }
 
 pub fn publish_control_ingress(input: &ControlIngressPublishInput<'_>) -> Result<ControlIngressPublish> {
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::Root::open(input.state_root)?;
     validate_state_root(input.state_root)?;
     ensure_state_layout(&state_root)?;
     let envelope = parse_control_ingress_envelope(input.envelope_value)?;
@@ -131,7 +131,7 @@ struct EnqueueOutcome {
 }
 
 fn apply_ingress_enqueue(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     envelope: &ControlIngressEnvelope,
 ) -> Result<EnqueueOutcome> {
     let idempotency_evidence_refs = ingress_idempotency_evidence_refs(envelope);
@@ -183,13 +183,13 @@ fn apply_ingress_enqueue(
 }
 
 pub fn deliver_control_ingress(input: &ControlIngressDeliverInput<'_>) -> Result<ControlIngressDeliver> {
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::Root::open(input.state_root)?;
     validate_state_root(input.state_root)?;
     deliver_control_ingress_with_root(&state_root, input.topic, input.envelope_ref)
 }
 
 fn deliver_control_ingress_with_root(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     topic: &str,
     envelope_ref: &str,
 ) -> Result<ControlIngressDeliver> {
@@ -199,7 +199,7 @@ fn deliver_control_ingress_with_root(
     let envelope_value = read_preserves(state_root, &control_ingress_envelope_path(topic, envelope_ref)?)?;
     let envelope = parse_control_ingress_envelope(&envelope_value)?;
     if envelope.envelope_ref != envelope_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "node control ingress materialized envelope ref {} does not match requested {}",
             envelope.envelope_ref, envelope_ref
         )));
@@ -243,7 +243,7 @@ fn deliver_control_ingress_with_root(
 }
 
 fn ingress_pre_enqueue_diagnostics(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     topic: &str,
     envelope: &ControlIngressEnvelope,
 ) -> Result<Vec<String>> {
@@ -256,7 +256,7 @@ fn ingress_pre_enqueue_diagnostics(
     }
     let identity = crate::node_identity::parse_identity(&read_preserves(
         state_root,
-        &crate::node_state::NodeStatePath::parse(IDENTITY_FILE)?,
+        &crate::node_state::RelativePath::parse(IDENTITY_FILE)?,
     )?)?;
     if envelope.to_node != identity.node_id {
         diagnostics
@@ -284,7 +284,7 @@ fn ingress_pre_enqueue_diagnostics(
 }
 
 fn evaluate_live_peer_bootstrap(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     envelope: &ControlIngressEnvelope,
 ) -> Result<Vec<String>> {
     let mut diagnostics = Vec::with_capacity(envelope.peer_bootstrap_refs.len().saturating_add(1));

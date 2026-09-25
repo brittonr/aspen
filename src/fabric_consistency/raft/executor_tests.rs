@@ -5,7 +5,7 @@ use super::tests::sent_envelope_to;
 use super::tests::started_state;
 use super::tests::test_ref;
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric_consistency::ConsistencyReadMode;
 
@@ -19,7 +19,7 @@ impl RecordingPorts {
     fn record(&mut self, kind: ReplicaEffectKind) -> Result<String> {
         self.executed.push(kind);
         if self.fail_on == Some(kind) {
-            return Err(MoltenError::invalid_harness(format!("injected {} failure", kind.as_str())));
+            return Err(Failure::invalid_harness(format!("injected {} failure", kind.as_str())));
         }
         Ok(test_ref(kind.as_str()))
     }

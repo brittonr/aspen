@@ -1,6 +1,6 @@
 type IoValue = preserves::IOValue;
 type Result<T> = crate::error::Result<T>;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 
 const CLAIM_SELECTOR_SCHEMA: &str = "molten.claim-authority.subject-selector.v1";
 const AUTHORITY_CLAIM_SCHEMA: &str = "molten.claim-authority.claim.v1";
@@ -518,7 +518,7 @@ fn validate_selector(selector: &ClaimSubjectSelector) -> Result<()> {
         | SELECTOR_RELEASE_CHANNEL
         | SELECTOR_CLUSTER_ID
         | SELECTOR_POLICY_DEFINED => validate_text("claim selector value", &selector.selector_value)?,
-        other => return Err(MoltenError::invalid_harness(format!("unsupported claim selector kind {other}"))),
+        other => return Err(Failure::invalid_harness(format!("unsupported claim selector kind {other}"))),
     }
     validate_text("claim selector subject kind", &selector.subject_kind)?;
     validate_refs(&selector.policy_refs, "claim selector policy ref")?;
@@ -561,12 +561,12 @@ fn validate_refs(refs: &[String], label: &str) -> Result<()> {
 
 fn validate_ref(reference: &str, label: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference)
-        .map_err(|error| MoltenError::invalid_harness(format!("invalid {label} {reference}: {error}")))
+        .map_err(|error| Failure::invalid_harness(format!("invalid {label} {reference}: {error}")))
 }
 
 fn validate_text(label: &str, value: &str) -> Result<()> {
     if value.trim().is_empty() {
-        Err(MoltenError::invalid_harness(format!("{label} must not be empty")))
+        Err(Failure::invalid_harness(format!("{label} must not be empty")))
     } else {
         Ok(())
     }

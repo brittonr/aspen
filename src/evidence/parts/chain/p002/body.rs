@@ -57,7 +57,7 @@ fn ensure_entry_ref(kind: &str, entry_ref: &str, parsed_ref: &str) -> Result<()>
         return Ok(());
     }
 
-    Err(MoltenError::invalid_harness(format!(
+    Err(Failure::invalid_harness(format!(
         "ledger {kind} ref mismatch: index entry {entry_ref} parsed as {parsed_ref}"
     )))
 }
@@ -145,7 +145,7 @@ fn finish_heads(index: &mut ChainIndex) -> Result<()> {
         let mut heads = links.clone();
         for link_ref in links {
             let Some(link) = index.links_by_ref.get(link_ref) else {
-                return Err(MoltenError::invalid_harness(format!("chain index missing link {link_ref}")));
+                return Err(Failure::invalid_harness(format!("chain index missing link {link_ref}")));
             };
             if let Some(parent_ref) = &link.previous_link_ref {
                 heads.remove(parent_ref);
@@ -177,19 +177,19 @@ pub fn build_chain_index(root: &Path) -> Result<ChainIndex> {
 fn prior_head(index: &ChainIndex, link: &ChainLink) -> Result<Option<String>> {
     if let Some(previous_ref) = &link.previous_link_ref {
         let previous = index.links_by_ref.get(previous_ref).ok_or_else(|| {
-            MoltenError::invalid_harness(format!("append previous link {previous_ref} is unavailable in ledger"))
+            Failure::invalid_harness(format!("append previous link {previous_ref} is unavailable in ledger"))
         })?;
         validate_append(previous, link)?;
         let children = index.children_for_parent(previous_ref);
         if !children.is_empty() {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "unexpected fork for parent {previous_ref}: existing children {:?}",
                 children
             )));
         }
         let current_heads = index.heads_for_chain(&link.chain);
         if current_heads != vec![previous_ref.clone()] {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "stale chain head for {:?}: expected current head {}, found {:?}",
                 link.chain, previous_ref, current_heads
             )));
@@ -201,7 +201,7 @@ fn prior_head(index: &ChainIndex, link: &ChainLink) -> Result<Option<String>> {
     validate_genesis(link)?;
     let current_heads = index.heads_for_chain(&link.chain);
     if !current_heads.is_empty() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "genesis append has stale chain head for {:?}: existing heads {:?}",
             link.chain, current_heads
         )));
@@ -213,7 +213,7 @@ fn prior_head(index: &ChainIndex, link: &ChainLink) -> Result<Option<String>> {
 fn idempotent_head_before(index: &ChainIndex, link: &ChainLink) -> Result<Option<String>> {
     if let Some(previous_ref) = &link.previous_link_ref {
         let previous = index.links_by_ref.get(previous_ref).ok_or_else(|| {
-            MoltenError::invalid_harness(format!("existing append previous link {previous_ref} is unavailable in ledger"))
+            Failure::invalid_harness(format!("existing append previous link {previous_ref} is unavailable in ledger"))
         })?;
         validate_append(previous, link)?;
     } else {
@@ -225,7 +225,7 @@ fn idempotent_head_before(index: &ChainIndex, link: &ChainLink) -> Result<Option
         return Ok(link.previous_link_ref.clone());
     }
 
-    Err(MoltenError::invalid_harness(format!(
+    Err(Failure::invalid_harness(format!(
         "chain link {} is already present but is not the current chain head for {:?}: current heads {:?}",
         link.link_ref, link.chain, current_heads
     )))
@@ -261,7 +261,7 @@ pub fn append_chain_link(root: &Path, value: &IoValue) -> Result<ChainAppend> {
     let link = parse_chain_link(value)?;
     let index = build_chain_index(root)?;
     crate::ledger::read_artifact(root, &link.payload.artifact_ref).map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "chain link payload {} is unavailable in ledger: {error}",
             link.payload.artifact_ref
         ))
@@ -273,7 +273,7 @@ pub fn append_chain_link(root: &Path, value: &IoValue) -> Result<ChainAppend> {
         let head_before = prior_head(&index, &link)?;
         let imported = crate::ledger::import_artifact(root, value)?;
         if imported.artifact_ref != link.link_ref {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "imported chain link ref mismatch: got {}, expected {}",
                 imported.artifact_ref, link.link_ref
             )));
@@ -286,7 +286,7 @@ pub fn append_chain_link(root: &Path, value: &IoValue) -> Result<ChainAppend> {
     let receipt_ref = canonical_hash(&receipt_value)?;
     let imported_receipt = crate::ledger::import_artifact(root, &receipt_value)?;
     if imported_receipt.artifact_ref != receipt_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "imported chain append receipt ref mismatch: got {}, expected {receipt_ref}",
             imported_receipt.artifact_ref
         )));

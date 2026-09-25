@@ -153,14 +153,14 @@ fn remote_proxy_preflight_receipt_value(config: &RemoteProxyExecutorConfig) -> R
 
 fn validate_steel_executor_config(actor_id: &str, config: &SteelExecutorConfig) -> Result<()> {
     if config.source.trim().is_empty() {
-        return Err(MoltenError::invalid_harness(format!("Steel executor source for actor {actor_id} is empty")));
+        return Err(crate::error::Failure::invalid_harness(format!("Steel executor source for actor {actor_id} is empty")));
     }
     if config.callable.trim().is_empty() {
-        return Err(MoltenError::invalid_harness(format!("Steel executor callable for actor {actor_id} is empty")));
+        return Err(crate::error::Failure::invalid_harness(format!("Steel executor callable for actor {actor_id} is empty")));
     }
     for token in FORBIDDEN_STEEL_SOURCE_TOKENS {
         if config.source.contains(token) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "Steel executor source for actor {actor_id} references forbidden ambient IO token {token}; reviewed Steel preflight remains fail-closed"
             )));
         }
@@ -222,30 +222,30 @@ fn wasm_inspection_receipt_value(config: &WasmExecutorConfig) -> Result<IoValue>
 
 fn validate_wasm_executor_config(actor_id: &str, config: &WasmExecutorConfig) -> Result<()> {
     if config.wit.trim().is_empty() {
-        return Err(MoltenError::invalid_harness(format!("Wasm executor WIT interface for actor {actor_id} is empty")));
+        return Err(crate::error::Failure::invalid_harness(format!("Wasm executor WIT interface for actor {actor_id} is empty")));
     }
     let inspection = inspect_wasm_module(config).map_err(|error| {
-        MoltenError::invalid_harness(format!("Wasm executor module for actor {actor_id} failed preflight: {error}"))
+        crate::error::Failure::invalid_harness(format!("Wasm executor module for actor {actor_id} failed preflight: {error}"))
     })?;
     validate_wasm_imports(actor_id, &inspection.imports, &config.allowed_hostcalls)
 }
 
 fn validate_adapter_executor_config(actor_id: &str, config: &AdapterExecutorConfig) -> Result<()> {
     if config.manifest.trim().is_empty() {
-        return Err(MoltenError::invalid_harness(format!("adapter executor manifest for actor {actor_id} is empty")));
+        return Err(crate::error::Failure::invalid_harness(format!("adapter executor manifest for actor {actor_id} is empty")));
     }
     if config.abi.trim().is_empty() {
-        return Err(MoltenError::invalid_harness(format!("adapter executor ABI for actor {actor_id} is empty")));
+        return Err(crate::error::Failure::invalid_harness(format!("adapter executor ABI for actor {actor_id} is empty")));
     }
     for token in FORBIDDEN_ADAPTER_MANIFEST_TOKENS {
         if config.manifest.contains(token) || config.abi.contains(token) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "adapter executor manifest for actor {actor_id} references forbidden ambient or stale token {token}"
             )));
         }
     }
     if config.transcript != "deterministic-local" && config.transcript != "verified" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "adapter executor transcript profile for actor {actor_id} must be deterministic-local or verified"
         )));
     }
@@ -257,31 +257,31 @@ const FORBIDDEN_ADAPTER_MANIFEST_TOKENS: &[&str] =
 
 fn validate_remote_proxy_executor_config(actor_id: &str, config: &RemoteProxyExecutorConfig) -> Result<()> {
     if config.peer.trim().is_empty() {
-        return Err(MoltenError::invalid_harness(format!("remote-proxy peer for actor {actor_id} is empty")));
+        return Err(crate::error::Failure::invalid_harness(format!("remote-proxy peer for actor {actor_id} is empty")));
     }
     if config.peer == "unknown" || config.peer.contains("revoked") {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "remote-proxy peer for actor {actor_id} cannot satisfy trusted deterministic gate evidence"
         )));
     }
     if config.endpoint.trim().is_empty() {
-        return Err(MoltenError::invalid_harness(format!("remote-proxy endpoint for actor {actor_id} is empty")));
+        return Err(crate::error::Failure::invalid_harness(format!("remote-proxy endpoint for actor {actor_id} is empty")));
     }
     if !config.endpoint.starts_with("iroh:") {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "remote-proxy endpoint for actor {actor_id} must use an explicit iroh: transport profile"
         )));
     }
     if config.contract.trim().is_empty() {
-        return Err(MoltenError::invalid_harness(format!("remote-proxy contract for actor {actor_id} is empty")));
+        return Err(crate::error::Failure::invalid_harness(format!("remote-proxy contract for actor {actor_id} is empty")));
     }
     if config.contract.contains("stale-signature") {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "remote-proxy contract for actor {actor_id} references stale signature evidence"
         )));
     }
     if config.transcript != "verified" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "remote-proxy transcript profile for actor {actor_id} must be verified before deterministic gates"
         )));
     }

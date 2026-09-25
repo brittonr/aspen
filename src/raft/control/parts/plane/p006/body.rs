@@ -32,10 +32,10 @@ fn field_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Value<IoVal
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     let values = fields[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {label}")))?;
     Ok(values.iter().cloned().collect())
 }
 
@@ -48,7 +48,7 @@ fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
             let check = value_to_iovalue(check);
             let fields = check
                 .collect_simple_record("check", Some(2))
-                .ok_or_else(|| MoltenError::invalid_harness("expected raft check"))?;
+                .ok_or_else(|| Failure::invalid_harness("expected raft check"))?;
             Ok((required_string(&fields[0], "check name")?, required_string(&fields[1], "check status")?))
         })
         .collect()
@@ -58,7 +58,7 @@ fn require_check(checks: &[(String, String)], name: &str, context: &str) -> Resu
     if checks.iter().any(|(check, status)| check == name && status == "pass") {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!("{context} missing passing {name} check")))
+    Err(Failure::invalid_harness(format!("{context} missing passing {name} check")))
 }
 
 fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result<()> {
@@ -66,7 +66,7 @@ fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("expected {field} {expected}, got {actual}")))
+        Err(Failure::invalid_harness(format!("expected {field} {expected}, got {actual}")))
     }
 }
 
@@ -80,18 +80,18 @@ fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
 fn ensure_store_tables(root: &Path) -> Result<Database> {
-    std::fs::create_dir_all(root).map_err(MoltenError::from)?;
+    std::fs::create_dir_all(root).map_err(Failure::from)?;
     let db = Database::create(root.join(STORE_FILE)).map_err(store_error)?;
     let write_txn = db.begin_write().map_err(store_error)?;
     {
@@ -104,8 +104,8 @@ fn ensure_store_tables(root: &Path) -> Result<Database> {
     Ok(db)
 }
 
-fn store_error(error: impl std::fmt::Display) -> MoltenError {
-    MoltenError::invalid_harness(format!("control registry redb store error: {error}"))
+fn store_error(error: impl std::fmt::Display) -> Failure {
+    Failure::invalid_harness(format!("control registry redb store error: {error}"))
 }
 
 fn synthetic_ref(label: &str) -> Result<String> {

@@ -55,7 +55,7 @@ fn plan_name_move(command: Command) -> Outcome<()> {
         return Err(wrong_handler("plan-name-move"));
     };
     if source_gate_receipts.is_empty() {
-        return Err(molten::error::MoltenError::invalid_harness(
+        return Err(molten::error::Failure::invalid_harness(
             "upgrade plan-name-move requires --source-gate-receipt for strict Octet source-gate validation",
         ));
     }
@@ -175,6 +175,6 @@ fn cli_upgrade_ref(kind: &str, label: &str) -> Outcome<String> {
     ]))
 }
 
-fn wrong_handler(name: &str) -> molten::error::MoltenError {
-    molten::error::MoltenError::invalid_harness(format!("upgrade {name} handler called with another command"))
+fn wrong_handler(name: &str) -> molten::error::Failure {
+    molten::error::Failure::invalid_harness(format!("upgrade {name} handler called with another command"))
 }

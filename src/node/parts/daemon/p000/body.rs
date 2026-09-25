@@ -1,32 +1,32 @@
 type IoValue = preserves::IOValue;
 type Ipv4Addr = std::net::Ipv4Addr;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Path = std::path::Path;
 type PathBuf = std::path::PathBuf;
 type Result<T> = crate::error::Result<T>;
 type SocketAddr = std::net::SocketAddr;
 
 trait NodeStateAuthority {
-    fn acquire_node_state_root(&self) -> Result<crate::node_state::NodeStateRoot>;
+    fn acquire_node_state_root(&self) -> Result<crate::node_state::Root>;
 }
 
 #[cfg(test)]
 impl NodeStateAuthority for Path {
-    fn acquire_node_state_root(&self) -> Result<crate::node_state::NodeStateRoot> {
-        crate::node_state::NodeStateRoot::open(self)
+    fn acquire_node_state_root(&self) -> Result<crate::node_state::Root> {
+        crate::node_state::Root::open(self)
     }
 }
 
-impl NodeStateAuthority for crate::node_state::NodeStateRoot {
-    fn acquire_node_state_root(&self) -> Result<crate::node_state::NodeStateRoot> {
+impl NodeStateAuthority for crate::node_state::Root {
+    fn acquire_node_state_root(&self) -> Result<crate::node_state::Root> {
         Ok(self.clone())
     }
 }
 
 #[cfg(test)]
 impl NodeStateAuthority for PathBuf {
-    fn acquire_node_state_root(&self) -> Result<crate::node_state::NodeStateRoot> {
-        crate::node_state::NodeStateRoot::open(self)
+    fn acquire_node_state_root(&self) -> Result<crate::node_state::Root> {
+        crate::node_state::Root::open(self)
     }
 }
 

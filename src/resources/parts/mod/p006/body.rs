@@ -176,7 +176,7 @@ pub fn validate_watch_events(events: &[WatchEvent]) -> Result<Vec<String>> {
         return Ok(Vec::new());
     }
     if events.len() > MAX_WATCH_EVENTS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "watch event count {} exceeds maximum {MAX_WATCH_EVENTS}",
             events.len()
         )));
@@ -188,14 +188,14 @@ pub fn validate_watch_events(events: &[WatchEvent]) -> Result<Vec<String>> {
         validate_non_empty(&event.resource_type, "watch event resource type")?;
         require_ref(&event.scope_ref, "watch event scope ref")?;
         if event.generation == 0 {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "watch event {} has zero generation", i
             )));
         }
         require_ref(&event.event_body_ref, "watch event body ref")?;
 
         if event.next_cursor.cursor <= event.prior_cursor.cursor {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "watch event {} has non-advancing cursor: {} -> {}",
                 i, event.prior_cursor.cursor, event.next_cursor.cursor,
             )));
@@ -207,7 +207,7 @@ pub fn validate_watch_events(events: &[WatchEvent]) -> Result<Vec<String>> {
         let prev = &window[0];
         let curr = &window[1];
         if curr.prior_cursor != prev.next_cursor {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "cursor gap between event {} -> {}: expected prior {} but got {}",
                 prev.next_cursor.cursor,
                 curr.next_cursor.cursor,
@@ -227,7 +227,7 @@ pub fn validate_cursor_freshness(
     retained_window_start: RevisionCursor,
 ) -> Result<()> {
     if resume_cursor.cursor < retained_window_start.cursor {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "stale cursor {} before retained window start {}, must relist",
             resume_cursor.cursor, retained_window_start.cursor,
         )));
@@ -246,20 +246,20 @@ pub fn validate_selector_authority(
     has_label_authority: &[String],
 ) -> Result<()> {
     if selector.is_cross_scope && !has_cross_scope_authority {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "cross-scope selector denied: missing cross-scope authority",
         ));
     }
 
     if selector.label_selectors.len() > MAX_SELECTOR_LABELS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "label selector count {} exceeds maximum {MAX_SELECTOR_LABELS}",
             selector.label_selectors.len()
         )));
     }
 
     if selector.field_selectors.len() > MAX_SELECTOR_FIELDS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "field selector count {} exceeds maximum {MAX_SELECTOR_FIELDS}",
             selector.field_selectors.len()
         )));
@@ -268,7 +268,7 @@ pub fn validate_selector_authority(
     // Each label selector must be authorized
     for label in &selector.label_selectors {
         if !has_label_authority.contains(&label.key) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "unauthorized label selector: {}", label.key
             )));
         }

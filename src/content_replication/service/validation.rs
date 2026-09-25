@@ -2,7 +2,7 @@ use super::*;
 
 pub(super) fn require_active(instance: &ServiceInstance) -> Result<()> {
     if instance.state != LifecycleState::Active {
-        return Err(MoltenError::invalid_harness("content-replication reconcile requires an active instance"));
+        return Err(Failure::invalid_harness("content-replication reconcile requires an active instance"));
     }
     Ok(())
 }
@@ -14,7 +14,7 @@ pub(super) fn validate_authority(manifest: &Manifest, observation: &AuthorityObs
         || observation.service_id != manifest.service_id
         || observation.generation != manifest.generation
     {
-        return Err(MoltenError::invalid_harness("content-replication authority observation denied or drifted"));
+        return Err(Failure::invalid_harness("content-replication authority observation denied or drifted"));
     }
     Ok(())
 }
@@ -26,7 +26,7 @@ pub(super) fn validate_identity(manifest: &Manifest, observation: &IdentityObser
         || observation.service_id != manifest.service_id
         || observation.generation != manifest.generation
     {
-        return Err(MoltenError::invalid_harness("content-replication identity observation is stale or mismatched"));
+        return Err(Failure::invalid_harness("content-replication identity observation is stale or mismatched"));
     }
     Ok(())
 }
@@ -34,7 +34,7 @@ pub(super) fn validate_identity(manifest: &Manifest, observation: &IdentityObser
 pub(super) fn validate_membership(manifest: &Manifest, observation: &MembershipObservation) -> Result<()> {
     validate_ref(&observation.observation_ref, "replication membership observation")?;
     if !observation.current || observation.membership_epoch != manifest.membership_epoch {
-        return Err(MoltenError::invalid_harness("content-replication membership observation is stale"));
+        return Err(Failure::invalid_harness("content-replication membership observation is stale"));
     }
     Ok(())
 }
@@ -45,7 +45,7 @@ pub(super) fn validate_placement(manifest: &Manifest, observation: &PlacementObs
         || observation.membership_epoch != manifest.membership_epoch
         || observation.placement_epoch != manifest.placement_epoch
     {
-        return Err(MoltenError::invalid_harness("content-replication placement observation is stale"));
+        return Err(Failure::invalid_harness("content-replication placement observation is stale"));
     }
     Ok(())
 }
@@ -53,7 +53,7 @@ pub(super) fn validate_placement(manifest: &Manifest, observation: &PlacementObs
 pub(super) fn validate_resources(manifest: &Manifest, plan: &Plan, observation: &ResourceObservation) -> Result<()> {
     validate_ref(&observation.reservation_ref, "replication resource reservation")?;
     if !observation.admitted || observation.plan_ref != plan.plan_ref || observation.generation != manifest.generation {
-        return Err(MoltenError::invalid_harness("content-replication resource reservation denied or drifted"));
+        return Err(Failure::invalid_harness("content-replication resource reservation denied or drifted"));
     }
     Ok(())
 }
@@ -65,7 +65,7 @@ pub(super) fn validate_pin(manifest: &Manifest, action: &Action, observation: &P
         || observation.content_ref != action.content_ref
         || observation.generation != manifest.generation
     {
-        return Err(MoltenError::invalid_harness("content-replication retention pin denied or drifted"));
+        return Err(Failure::invalid_harness("content-replication retention pin denied or drifted"));
     }
     Ok(())
 }
@@ -77,7 +77,7 @@ pub(super) fn validate_cleanup(manifest: &Manifest, action: &Action, observation
         || observation.content_ref != action.content_ref
         || observation.generation != manifest.generation
     {
-        return Err(MoltenError::invalid_harness("content-replication cleanup admission denied or drifted"));
+        return Err(Failure::invalid_harness("content-replication cleanup admission denied or drifted"));
     }
     Ok(())
 }
@@ -101,7 +101,7 @@ pub(super) fn validate_envelope(manifest: &Manifest, action: &Action, envelope: 
         || envelope.encoded_bytes != action.encoded_bytes
         || envelope.protected != action.preserve_protected_form
     {
-        return Err(MoltenError::invalid_harness("content-replication transfer envelope is stale or mismatched"));
+        return Err(Failure::invalid_harness("content-replication transfer envelope is stale or mismatched"));
     }
     Ok(())
 }
@@ -125,14 +125,14 @@ pub(super) fn validate_verification(
         || !replica.identity_verified
         || replica.protected != action.preserve_protected_form
     {
-        return Err(MoltenError::invalid_harness("content-replication verification is incomplete or stale"));
+        return Err(Failure::invalid_harness("content-replication verification is incomplete or stale"));
     }
     Ok(())
 }
 
 pub(super) fn validate_ref(reference: &str, field: &str) -> Result<()> {
     if !valid_ref(reference) {
-        return Err(MoltenError::invalid_harness(format!("{field} is not a canonical BLAKE3 reference")));
+        return Err(Failure::invalid_harness(format!("{field} is not a canonical BLAKE3 reference")));
     }
     Ok(())
 }

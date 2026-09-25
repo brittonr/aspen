@@ -147,7 +147,7 @@ pub fn read_key(root: &Path, key_ref: &str) -> Result<Key> {
     let read_txn = db.begin_read().map_err(index_error)?;
     let keys = read_txn.open_table(INDEX_KEYS).map_err(index_error)?;
     let Some(bytes) = keys.get(key_ref).map_err(index_error)? else {
-        return Err(MoltenError::invalid_harness(format!("eval cache key {key_ref} not found")));
+        return Err(Failure::invalid_harness(format!("eval cache key {key_ref} not found")));
     };
     parse_key(&parse_canonical_bytes(bytes.value())?)
 }
@@ -158,7 +158,7 @@ pub fn read_value(root: &Path, key_ref: &str) -> Result<Value> {
     let read_txn = db.begin_read().map_err(index_error)?;
     let values = read_txn.open_table(INDEX_VALUES).map_err(index_error)?;
     let Some(bytes) = values.get(key_ref).map_err(index_error)? else {
-        return Err(MoltenError::invalid_harness(format!("eval cache value for key {key_ref} not found")));
+        return Err(Failure::invalid_harness(format!("eval cache value for key {key_ref} not found")));
     };
     parse_value(&parse_canonical_bytes(bytes.value())?)
 }
@@ -169,7 +169,7 @@ pub fn read_receipt(root: &Path, receipt_ref: &str) -> Result<Receipt> {
     let read_txn = db.begin_read().map_err(index_error)?;
     let receipts = read_txn.open_table(INDEX_RECEIPTS).map_err(index_error)?;
     let Some(bytes) = receipts.get(receipt_ref).map_err(index_error)? else {
-        return Err(MoltenError::invalid_harness(format!("eval cache receipt {receipt_ref} not found")));
+        return Err(Failure::invalid_harness(format!("eval cache receipt {receipt_ref} not found")));
     };
     parse_receipt(&parse_canonical_bytes(bytes.value())?)
 }

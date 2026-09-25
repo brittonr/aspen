@@ -149,7 +149,7 @@ fn validate_actor_registry(suite: &super::schema::Suite) -> Result<()> {
     for step in &suite.steps {
         for actor in super::schema::actor_ids_for_step(step) {
             if !ids.contains(actor) {
-                return Err(MoltenError::invalid_harness(format!("unknown actor {actor} in harness step")));
+                return Err(Failure::invalid_harness(format!("unknown actor {actor} in harness step")));
             }
         }
     }

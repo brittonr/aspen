@@ -3,7 +3,7 @@ pub fn parse_policy(value: &IoValue) -> Result<crate::runtime::AdmissionPolicy> 
     let policy = simple_record(value, "policy-v1", 2)?;
     let schema = required_string(&policy[0], "policy schema")?;
     if schema != crate::preserves_rail::HARNESS_POLICY_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported policy schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_POLICY_SCHEMA
         )));
@@ -15,7 +15,7 @@ pub fn parse_policy(value: &IoValue) -> Result<crate::runtime::AdmissionPolicy> 
         if rule_value.collect_simple_record("steel-predicate", None).is_some()
             || rule_value.collect_simple_record("dynamic-predicate", None).is_some()
         {
-            return Err(MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "Steel predicates require reviewed callable receipts and are disabled in local harness policy fixtures",
             ));
         }
@@ -26,7 +26,7 @@ pub fn parse_policy(value: &IoValue) -> Result<crate::runtime::AdmissionPolicy> 
         let value = optional_runtime_match_value(&rule[3])?;
         let reason = required_string(&rule[4], "policy deny reason")?;
         if reason.is_empty() {
-            return Err(MoltenError::invalid_harness("policy deny reason must not be empty"));
+            return Err(crate::error::Failure::invalid_harness("policy deny reason must not be empty"));
         }
         rules.push(crate::runtime::AdmissionDenyRule {
             actor,
@@ -43,7 +43,7 @@ pub fn parse_actor_registry(value: &IoValue) -> Result<Vec<ActorDecl>> {
     let registry = simple_record(value, "actor-registry-v1", 2)?;
     let schema = required_string(&registry[0], "actor registry schema")?;
     if schema != crate::preserves_rail::HARNESS_ACTOR_REGISTRY_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported actor registry schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_ACTOR_REGISTRY_SCHEMA
         )));
@@ -55,16 +55,16 @@ pub fn parse_actor_registry(value: &IoValue) -> Result<Vec<ActorDecl>> {
         let actor_value = value_to_iovalue(&actor);
         let actor = actor_value
             .collect_simple_record("actor", None)
-            .ok_or_else(|| MoltenError::invalid_harness("expected <actor ...> in actor registry"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("expected <actor ...> in actor registry"))?;
         let arity = actor.fields_iter().count();
         if arity != 2 && arity != 3 {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "actor registry entry arity must be 2 or 3, got {arity}"
             )));
         }
         let id = required_string(&actor[0], "actor id")?;
         if !seen.insert(id.clone()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate actor id {id}")));
+            return Err(crate::error::Failure::invalid_harness(format!("duplicate actor id {id}")));
         }
         let kind = parse_actor_kind(&required_string(&actor[1], "actor kind")?)?;
         let executor = if arity == 3 {
@@ -80,7 +80,7 @@ pub fn parse_actor_registry(value: &IoValue) -> Result<Vec<ActorDecl>> {
 fn parse_actor_executor_config(value: &IoValue, kind: &ActorKind, actor_id: &str) -> Result<ActorExecutorConfig> {
     if value.collect_simple_record("steel-executor-v1", None).is_some() {
         if kind != &ActorKind::Steel {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "actor {actor_id} kind {} cannot use Steel executor config",
                 kind.as_str()
             )));
@@ -89,7 +89,7 @@ fn parse_actor_executor_config(value: &IoValue, kind: &ActorKind, actor_id: &str
     }
     if value.collect_simple_record("wasm-executor-v1", None).is_some() {
         if kind != &ActorKind::Wasm {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "actor {actor_id} kind {} cannot use Wasm executor config",
                 kind.as_str()
             )));
@@ -98,7 +98,7 @@ fn parse_actor_executor_config(value: &IoValue, kind: &ActorKind, actor_id: &str
     }
     if value.collect_simple_record("adapter-executor-v1", None).is_some() {
         if kind != &ActorKind::Adapter {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "actor {actor_id} kind {} cannot use adapter executor config",
                 kind.as_str()
             )));
@@ -107,14 +107,14 @@ fn parse_actor_executor_config(value: &IoValue, kind: &ActorKind, actor_id: &str
     }
     if value.collect_simple_record("remote-proxy-executor-v1", None).is_some() {
         if kind != &ActorKind::RemoteProxy {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "actor {actor_id} kind {} cannot use remote-proxy executor config",
                 kind.as_str()
             )));
         }
         return parse_remote_proxy_executor_config(value).map(ActorExecutorConfig::RemoteProxy);
     }
-    Err(MoltenError::invalid_harness(format!(
+    Err(crate::error::Failure::invalid_harness(format!(
         "unsupported executor config for actor {actor_id}; expected <steel-executor-v1 ...>, <wasm-executor-v1 ...>, <adapter-executor-v1 ...>, or <remote-proxy-executor-v1 ...>"
     )))
 }
@@ -123,7 +123,7 @@ fn parse_steel_executor_config(value: &IoValue) -> Result<SteelExecutorConfig> {
     let config = simple_record(value, "steel-executor-v1", 4)?;
     let schema = required_string(&config[0], "Steel executor schema")?;
     if schema != crate::preserves_rail::RUNTIME_STEEL_EXECUTOR_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported Steel executor schema {schema}; expected {}",
             crate::preserves_rail::RUNTIME_STEEL_EXECUTOR_SCHEMA
         )));
@@ -146,7 +146,7 @@ fn parse_wasm_executor_config(value: &IoValue) -> Result<WasmExecutorConfig> {
     let config = simple_record(value, "wasm-executor-v1", 4)?;
     let schema = required_string(&config[0], "Wasm executor schema")?;
     if schema != crate::preserves_rail::RUNTIME_WASM_EXECUTOR_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported Wasm executor schema {schema}; expected {}",
             crate::preserves_rail::RUNTIME_WASM_EXECUTOR_SCHEMA
         )));
@@ -172,7 +172,7 @@ fn parse_adapter_executor_config(value: &IoValue) -> Result<AdapterExecutorConfi
     let config = simple_record(value, "adapter-executor-v1", 5)?;
     let schema = required_string(&config[0], "adapter executor schema")?;
     if schema != crate::preserves_rail::RUNTIME_ADAPTER_EXECUTOR_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported adapter executor schema {schema}; expected {}",
             crate::preserves_rail::RUNTIME_ADAPTER_EXECUTOR_SCHEMA
         )));
@@ -197,7 +197,7 @@ fn parse_remote_proxy_executor_config(value: &IoValue) -> Result<RemoteProxyExec
     let config = simple_record(value, "remote-proxy-executor-v1", 6)?;
     let schema = required_string(&config[0], "remote-proxy executor schema")?;
     if schema != crate::preserves_rail::RUNTIME_REMOTE_PROXY_EXECUTOR_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported remote-proxy executor schema {schema}; expected {}",
             crate::preserves_rail::RUNTIME_REMOTE_PROXY_EXECUTOR_SCHEMA
         )));
@@ -225,7 +225,7 @@ fn normalize_allowed_hostcalls(values: Vec<String>) -> Result<Vec<String>> {
     for value in values {
         parse_admission_action(&value)?;
         if !seen.insert(value.clone()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate allowed hostcall {value}")));
+            return Err(crate::error::Failure::invalid_harness(format!("duplicate allowed hostcall {value}")));
         }
     }
     Ok(seen.into_iter().collect())

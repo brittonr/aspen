@@ -50,7 +50,7 @@ impl LiveIrohPublication {
         );
         let bytes = rail::canonical_bytes(&value)?;
         if bytes.len() > MAX_LIVE_HANDOFF_BYTES {
-            return Err(MoltenError::invalid_harness("live handoff exceeds byte bound"));
+            return Err(Failure::invalid_harness("live handoff exceeds byte bound"));
         }
         Ok(bytes)
     }
@@ -77,7 +77,7 @@ pub fn admit_live_handoff(
         || expected.address.ip().is_unspecified()
         || expected.address.port() == 0
     {
-        return Err(MoltenError::invalid_harness("live handoff input/profile/address denied"));
+        return Err(Failure::invalid_harness("live handoff input/profile/address denied"));
     }
     let value = rail::parse_canonical_bytes(bytes)?;
     let fields = rail::simple_record_fields(&value, HANDOFF_RECORD, 4)?;
@@ -93,15 +93,15 @@ pub fn admit_live_handoff(
             .iter()
             .any(|chunk| chunk.length > profile.bounds.max_chunk_bytes || chunk.transform != "identity")
     {
-        return Err(MoltenError::invalid_harness("live handoff manifest bounds denied"));
+        return Err(Failure::invalid_harness("live handoff manifest bounds denied"));
     }
     let backend_hint_ref = rail::required_content_ref_string(&fields[1], "backend hint ref")?;
     if rail::required_string_field(&fields[2], "provider")? != expected.provider.to_string() {
-        return Err(MoltenError::invalid_harness("live handoff provider mismatch"));
+        return Err(Failure::invalid_harness("live handoff provider mismatch"));
     }
     let entries = rail::required_sequence_field(&fields[3], "locators")?;
     if entries.len() != manifest.chunks.len() {
-        return Err(MoltenError::invalid_harness("live handoff locator count mismatch"));
+        return Err(Failure::invalid_harness("live handoff locator count mismatch"));
     }
     let address = iroh::EndpointAddr::new(expected.provider).with_ip_addr(expected.address);
     let mut locators = Vec::with_capacity(entries.len());
@@ -112,15 +112,15 @@ pub fn admit_live_handoff(
         if rail::required_string_field(&fields[0], "locator position")? != position.to_string()
             || chunk_ref != manifest.chunks[position].chunk_ref
         {
-            return Err(MoltenError::invalid_harness("live handoff locator order/membership mismatch"));
+            return Err(Failure::invalid_harness("live handoff locator order/membership mismatch"));
         }
         let text = rail::required_string_field(&fields[2], "blob ticket")?;
         if text.len() > MAX_LIVE_TICKET_BYTES {
-            return Err(MoltenError::invalid_harness("live handoff ticket exceeds byte bound"));
+            return Err(Failure::invalid_harness("live handoff ticket exceeds byte bound"));
         }
         let ticket: BlobTicket = text.parse().map_err(iroh_error)?;
         if ticket.addr().id != expected.provider || ticket.format() != BlobFormat::Raw {
-            return Err(MoltenError::invalid_harness("live handoff ticket provider/format mismatch"));
+            return Err(Failure::invalid_harness("live handoff ticket provider/format mismatch"));
         }
         locators.push(LiveChunkLocator {
             chunk_ref,

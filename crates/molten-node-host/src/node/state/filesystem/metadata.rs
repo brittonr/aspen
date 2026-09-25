@@ -15,7 +15,7 @@ pub(super) fn existing_leaf(
             }
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(crate::error::MoltenError::from(error)),
+        Err(error) => return Err(crate::error::Failure::from(error)),
     }
     Ok(())
 }
@@ -25,7 +25,7 @@ pub(super) fn opened_file(
     path: &std::path::Path,
     operation: &str,
 ) -> crate::error::Result<cap_std::fs::Metadata> {
-    let metadata = file.metadata().map_err(crate::error::MoltenError::from)?;
+    let metadata = file.metadata().map_err(crate::error::Failure::from)?;
     if !metadata.is_file() {
         return Err(crate::node_state::invalid(format!(
             "node state {operation} leaf {} changed away from a regular file",

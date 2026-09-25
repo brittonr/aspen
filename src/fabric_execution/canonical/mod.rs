@@ -4,7 +4,7 @@ use preserves::IOValue;
 
 use self::records::*;
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric::DeterminismClass;
 use crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA;
@@ -201,6 +201,6 @@ pub fn fabric_execution_port_descriptor(profile: &CanonicalExecutionProfile) -> 
     }
 }
 
-fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label} denied: {issues:?}"))
+fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> Failure {
+    Failure::invalid_harness(format!("{label} denied: {issues:?}"))
 }

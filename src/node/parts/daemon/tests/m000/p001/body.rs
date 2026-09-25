@@ -84,7 +84,7 @@
         })
         .expect("process queued missing provenance");
         assert_eq!(loop_result.processed_request_refs, vec![queued.request_ref.clone()]);
-        let state_root = crate::node_state::NodeStateRoot::open(root).expect("open node state root");
+        let state_root = crate::node_state::Root::open(root).expect("open node state root");
         let value = read_preserves(
             &state_root,
             &control_outbox_receipt_path(&queued.request_ref).expect("outbox receipt path"),

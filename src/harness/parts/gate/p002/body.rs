@@ -35,10 +35,10 @@ fn check_report(value: &IoValue, artifact_kind: String, artifact_ref: Option<Str
     let replay = super::replay::replay_report_value(value)?;
     let report = super::schema::parse_report(value)?;
     if validation.report_ref != replay.expected_report_ref || validation.report_ref != replay.actual_report_ref {
-        return Err(MoltenError::invalid_harness("gate replay report refs do not match validation report ref"));
+        return Err(Failure::invalid_harness("gate replay report refs do not match validation report ref"));
     }
     if validation.final_state_hash != replay.final_state_hash {
-        return Err(MoltenError::invalid_harness("gate replay final state does not match validation final state"));
+        return Err(Failure::invalid_harness("gate replay final state does not match validation final state"));
     }
     let refs = evidence_refs(&report)?;
     let deterministic_replay_verify_value =
@@ -96,19 +96,19 @@ fn evidence_refs(report: &super::schema::Report) -> Result<EvidenceRefs> {
     let policy = report
         .policy_gate
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("missing policy gate evidence"))?;
+        .ok_or_else(|| Failure::invalid_harness("missing policy gate evidence"))?;
     let budget = report
         .budget_gate
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("missing budget gate evidence"))?;
+        .ok_or_else(|| Failure::invalid_harness("missing budget gate evidence"))?;
     let capability = report
         .capability_gate
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("missing capability gate evidence"))?;
+        .ok_or_else(|| Failure::invalid_harness("missing capability gate evidence"))?;
     let preflights = report
         .executor_preflights
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("missing executor preflight evidence"))?;
+        .ok_or_else(|| Failure::invalid_harness("missing executor preflight evidence"))?;
     let authority_refs = authority_aggregate_refs(&report.observations)?;
     Ok(EvidenceRefs {
         executor_preflights_ref: canonical_hash(&preflights.value)?,

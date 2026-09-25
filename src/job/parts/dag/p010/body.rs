@@ -228,10 +228,10 @@ fn adjacent_chains(dag: &JobDag, order_ids: &[String]) -> Result<(Vec<IoValue>, 
     for edge in edges {
         let from = node_map
             .get(&edge.from_node)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("fusion edge from missing node {}", edge.from_node)))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("fusion edge from missing node {}", edge.from_node)))?;
         let to = node_map
             .get(&edge.to_node)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("fusion edge to missing node {}", edge.to_node)))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("fusion edge to missing node {}", edge.to_node)))?;
         if fusion_edge_safe(from, to, edge) {
             let chain = vec![from.id.clone(), to.id.clone()];
             push_bounded(&mut chain_values, adjacent_chain_value(&chain), MAX_JOB_EDGES, "job fusion chain values")?;

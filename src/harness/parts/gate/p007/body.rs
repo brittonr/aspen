@@ -4,11 +4,11 @@ fn validate_tool_record(value: &Value<IoValue>) -> Result<()> {
     let tool = simple_record(&value, "tool", 2)?;
     let name = required_string(&tool[0], "gate receipt tool name")?;
     if name != "molten" {
-        return Err(MoltenError::invalid_harness(format!("unsupported gate receipt tool {name}")));
+        return Err(Failure::invalid_harness(format!("unsupported gate receipt tool {name}")));
     }
     let version = required_string(&tool[1], "gate receipt tool version")?;
     if version.is_empty() {
-        return Err(MoltenError::invalid_harness("gate receipt tool version must not be empty"));
+        return Err(Failure::invalid_harness("gate receipt tool version must not be empty"));
     }
     Ok(())
 }
@@ -33,7 +33,7 @@ fn require_artifact_ref(refs: &[(String, String)], kind: &str, expected: &str) -
     if refs.iter().any(|(actual_kind, actual_ref)| actual_kind == kind && actual_ref == expected) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("gate receipt artifact refs missing {kind} ref {expected}")))
+        Err(Failure::invalid_harness(format!("gate receipt artifact refs missing {kind} ref {expected}")))
     }
 }
 
@@ -48,7 +48,7 @@ fn require_artifact_kind(refs: &[(String, String)], kind: &str) -> Result<()> {
     if refs.iter().any(|(actual_kind, _)| actual_kind == kind) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("gate receipt artifact refs missing {kind} ref")))
+        Err(Failure::invalid_harness(format!("gate receipt artifact refs missing {kind} ref")))
     }
 }
 
@@ -73,7 +73,7 @@ fn required_record_optional_hash(value: &Value<IoValue>, label: &str, field: &st
     } else if let Some(some) = optional.collect_simple_record("some", Some(1)) {
         required_hash(&some[0], field).map(Some)
     } else {
-        Err(MoltenError::invalid_harness(format!("expected <none> or <some ref> for {field}")))
+        Err(Failure::invalid_harness(format!("expected <none> or <some ref> for {field}")))
     }
 }
 
@@ -116,27 +116,27 @@ fn required_chain_scope(value: &Value<IoValue>) -> Result<crate::evidence_chain:
 fn simple_record<'a>(value: &'a IoValue, label: &str, arity: usize) -> Result<Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
 fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {field}")))
 }
 
 fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn required_hash(value: &Value<IoValue>, field: &str) -> Result<String> {
     let hash = required_string(value, field)?;
     validate_content_ref(&hash).map_err(|error| {
-        MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {hash}: {error}"))
+        Failure::invalid_harness(format!("expected canonical content ref for {field}, got {hash}: {error}"))
     })?;
     Ok(hash)
 }
@@ -144,6 +144,6 @@ fn required_hash(value: &Value<IoValue>, field: &str) -> Result<String> {
 fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }

@@ -54,7 +54,7 @@ fn recompute_execution_closure(
     let roots = admission_roots(target_registry, dag, &selected)?;
     let closure = crate::artifacts::dependency_closure(target_registry, &roots)?;
     if !closure.missing_refs.is_empty() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "job execution target closure missing refs: {}",
             closure.missing_refs.join(",")
         )));
@@ -71,7 +71,7 @@ fn recompute_execution_closure_with_root(
     let roots = admission_roots_with_root(target_registry, dag, &selected)?;
     let closure = crate::artifacts::dependency_closure_with_root(target_registry, &roots)?;
     if !closure.missing_refs.is_empty() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "job execution target closure missing refs: {}",
             closure.missing_refs.join(",")
         )));
@@ -158,7 +158,7 @@ fn validate_output_request_roots(dag: &JobDag, request: &JobOutputRequest) -> Re
     let node_ids = dag.nodes.iter().map(|node| node.id.clone()).collect::<OrderedSet<_>>();
     for root in roots {
         if !node_ids.contains(&root) {
-            return Err(MoltenError::invalid_harness(format!("job output root {root} is not a node")));
+            return Err(Failure::invalid_harness(format!("job output root {root} is not a node")));
         }
     }
     Ok(())
@@ -169,13 +169,13 @@ fn dependency_ids(plan: &TrellisExecutionPlan, node_id: &str) -> Result<Vec<Stri
     let mut ids = Vec::with_capacity(deps.len());
     for dep in deps {
         let dep_index = usize::try_from(dep).map_err(|error| {
-            MoltenError::invalid_harness(format!("trellis dependency index cannot convert to usize: {error}"))
+            Failure::invalid_harness(format!("trellis dependency index cannot convert to usize: {error}"))
         })?;
         let dep_id = plan
             .node_index
             .iter()
             .find_map(|(id, index)| (*index == dep_index).then_some(id.clone()))
-            .ok_or_else(|| MoltenError::invalid_harness(format!("trellis dependency index {dep_index} has no node")))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("trellis dependency index {dep_index} has no node")))?;
         ids.push(dep_id);
     }
     ids.sort();

@@ -1,7 +1,7 @@
 use molten_core::addressable_actor::*;
 use preserves::IOValue;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub const ACTOR_COMMIT_RECEIPT_SCHEMA: &str = "molten.addressable-actor.commit-receipt.v1";
@@ -96,7 +96,7 @@ pub fn canonical_actor_commit_receipt(receipt: &ActorCommitReceipt) -> Result<Ca
         || receipt.claims_runtime_survival
         || receipt.non_claims != required_addressable_actor_non_claims()
     {
-        return Err(MoltenError::invalid_harness("addressable actor receipt is invalid"));
+        return Err(Failure::invalid_harness("addressable actor receipt is invalid"));
     }
     let effect_observations = receipt
         .effect_observations
@@ -135,7 +135,7 @@ pub fn canonical_actor_commit_receipt(receipt: &ActorCommitReceipt) -> Result<Ca
     ]);
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     if bytes.len() > MAX_ACTOR_RECEIPT_BYTES {
-        return Err(MoltenError::invalid_harness("addressable actor receipt exceeds its byte bound"));
+        return Err(Failure::invalid_harness("addressable actor receipt exceeds its byte bound"));
     }
     Ok(CanonicalActorCommitReceipt {
         receipt_ref: hash_bytes(ACTOR_RECEIPT_DOMAIN, &bytes),
@@ -147,7 +147,7 @@ pub fn canonical_actor_commit_receipt(receipt: &ActorCommitReceipt) -> Result<Ca
 
 pub fn identify_canonical_actor_status(status: &ActorStatus) -> Result<String> {
     if status.payloads_rendered || status.authorizes_mutation {
-        return Err(MoltenError::invalid_harness("addressable actor status exceeds its authority boundary"));
+        return Err(Failure::invalid_harness("addressable actor status exceeds its authority boundary"));
     }
     let value = record(ACTOR_STATUS_RECORD, vec![
         field("schema", string(&status.schema)),
@@ -173,7 +173,7 @@ pub fn identify_canonical_actor_status(status: &ActorStatus) -> Result<String> {
     ]);
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     if bytes.len() > MAX_ACTOR_STATUS_BYTES {
-        return Err(MoltenError::invalid_harness("addressable actor status exceeds its byte bound"));
+        return Err(Failure::invalid_harness("addressable actor status exceeds its byte bound"));
     }
     Ok(hash_bytes(ACTOR_STATUS_DOMAIN, &bytes))
 }

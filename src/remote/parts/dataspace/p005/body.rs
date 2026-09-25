@@ -354,7 +354,7 @@ fn traversal_plan_receipt_value(
 fn validate_traversal_refs(refs: &[String], label: &str) -> Result<()> {
     for reference in refs {
         crate::preserves_rail::validate_content_ref(reference).map_err(|error| {
-            MoltenError::invalid_harness(format!("expected canonical content ref for {label}, got {reference}: {error}"))
+            Failure::invalid_harness(format!("expected canonical content ref for {label}, got {reference}: {error}"))
         })?;
     }
     Ok(())
@@ -363,7 +363,7 @@ fn validate_traversal_refs(refs: &[String], label: &str) -> Result<()> {
 fn validate_external_digest_algorithm(algorithm: &str) -> Result<()> {
     match algorithm {
         EXTERNAL_DIGEST_CID_SHA2_256 | EXTERNAL_DIGEST_CID_SHA2_512 | EXTERNAL_DIGEST_BLAKE3 => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported external digest algorithm {algorithm}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported external digest algorithm {algorithm}"))),
     }
 }
 

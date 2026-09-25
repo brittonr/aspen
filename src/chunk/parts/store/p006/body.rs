@@ -85,7 +85,7 @@ pub fn publish_iroh_blobs_with_roots(
                 ("deny-unsupported-transform", "pass"),
             ]);
         store_receipt(store_root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(message));
+        return Err(Failure::invalid_harness(message));
     }
 
     let manifest_blob_ref = write_head(HeadInput {
@@ -147,7 +147,7 @@ pub fn fetch_iroh_blobs_with_roots(
                 ("deny-unsupported-transform", "pass"),
             ]);
         store_receipt(dest_root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(message));
+        return Err(Failure::invalid_harness(message));
     }
 
     let ticket_chunks = ticket_parts(&parsed_ticket);
@@ -250,7 +250,7 @@ pub fn pin_chunk_with_root(root: &CapabilityChunkRoot, chunk_ref: &str) -> Resul
             details: vec![record("pin-kind", vec![string("chunk")])],
         });
         store_receipt(root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(format!("cannot pin missing chunk {chunk_ref}")));
+        return Err(Failure::invalid_harness(format!("cannot pin missing chunk {chunk_ref}")));
     }
     root.root().write(&chunk_pin_path(chunk_ref)?, chunk_ref.as_bytes())?;
     let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
@@ -305,7 +305,7 @@ pub fn manifest_is_pinned(root: &Path, manifest_ref: &str) -> Result<bool> {
 
 pub fn manifest_is_pinned_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) -> Result<bool> {
     validate_content_ref(manifest_ref)
-        .map_err(|error| MoltenError::invalid_harness(format!("chunk manifest pin ref is invalid: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("chunk manifest pin ref is invalid: {error}")))?;
     root.root().try_exists(&manifest_pin_path(manifest_ref)?)
 }
 
@@ -316,7 +316,7 @@ pub fn chunk_is_pinned(root: &Path, chunk_ref: &str) -> Result<bool> {
 
 pub fn chunk_is_pinned_with_root(root: &CapabilityChunkRoot, chunk_ref: &str) -> Result<bool> {
     validate_content_ref(chunk_ref)
-        .map_err(|error| MoltenError::invalid_harness(format!("chunk pin ref is invalid: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("chunk pin ref is invalid: {error}")))?;
     root.root().try_exists(&chunk_pin_path(chunk_ref)?)
 }
 

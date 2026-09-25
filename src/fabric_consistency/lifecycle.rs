@@ -6,7 +6,7 @@ use super::ConsistencyOutcomeKind;
 use super::ConsistencyPortOutcome;
 use super::ConsistencyPortPlan;
 use super::canonical::binding_value;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 // r[impl molten.fabric_consistency.extension_port]
@@ -56,7 +56,7 @@ fn validate_application_binding(
         || outcome.request_ref != plan.request_ref
         || outcome.binding_ref != binding.binding_ref
     {
-        return Err(MoltenError::invalid_harness("stale or mismatched consistency outcome cannot change group state"));
+        return Err(Failure::invalid_harness("stale or mismatched consistency outcome cannot change group state"));
     }
     Ok(())
 }

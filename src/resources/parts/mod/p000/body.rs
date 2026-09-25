@@ -1,6 +1,6 @@
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 type Value<T> = preserves::Value<T>;
 type VecDeque<T> = std::collections::VecDeque<T>;
@@ -183,12 +183,12 @@ pub fn resource_grant_value(input: &ResourceGrantInput) -> Result<IoValue> {
 pub fn parse_resource_grant(value: &IoValue) -> Result<ResourceGrant> {
     let fields = value
         .collect_simple_record("resource-grant-v1", Some(13))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <resource-grant-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <resource-grant-v1 ...>"))?;
     require_schema(&fields[0], RESOURCE_GRANT_SCHEMA, "resource grant schema")?;
     let validity = value_to_iovalue(&fields[7]);
     let validity_fields = validity
         .collect_simple_record("validity", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("resource grant missing validity"))?;
+        .ok_or_else(|| Failure::invalid_harness("resource grant missing validity"))?;
     let checks = parse_checks(&fields[12])?;
     require_check(&checks, "resource-grant-not-data-authority")?;
     Ok(ResourceGrant {
@@ -271,7 +271,7 @@ pub fn resource_consumption_value(grant: &ResourceGrant, amount: u64, sequence_n
 pub fn parse_consumption(value: &IoValue) -> Result<ResourceConsumption> {
     let fields = value
         .collect_simple_record("resource-consumption-v1", Some(6))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <resource-consumption-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <resource-consumption-v1 ...>"))?;
     require_schema(&fields[0], RESOURCE_CONSUMPTION_SCHEMA, "resource consumption schema")?;
     Ok(ResourceConsumption {
         grant_ref: record_string(&fields[1], "grant")?,

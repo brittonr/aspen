@@ -1,5 +1,5 @@
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub(super) struct AppendEntriesInput {
@@ -34,7 +34,7 @@ pub(super) fn handle_append_entries(transition: &mut MessageTransition, input: A
         return Ok(());
     }
     if transition.next.role == ReplicaRole::Leader && input.leader_id != transition.next.node_id {
-        return Err(MoltenError::invalid_harness("Raft observed two leaders in one term"));
+        return Err(Failure::invalid_harness("Raft observed two leaders in one term"));
     }
     become_follower(transition, input.leader_id);
     if !support::previous_log_matches(&transition.next, input.prev_log_index, input.prev_log_term) {
@@ -64,7 +64,7 @@ pub(super) fn handle_append_response(transition: &mut MessageTransition, input: 
         return Ok(());
     }
     if input.follower_id != input.from {
-        return Err(MoltenError::invalid_harness("Raft append response follower does not match its sender"));
+        return Err(Failure::invalid_harness("Raft append response follower does not match its sender"));
     }
     if input.is_success {
         apply_successful_response(transition, input)?;
@@ -121,7 +121,7 @@ fn arm_election_timer(transition: &mut MessageTransition) -> Result<()> {
 fn apply_successful_response(transition: &mut MessageTransition, input: AppendResponseInput) -> Result<()> {
     if input.match_index < input.request_prev_log_index || input.match_index > support::last_log_index(&transition.next)
     {
-        return Err(MoltenError::invalid_harness("Raft follower acknowledged an invalid log range"));
+        return Err(Failure::invalid_harness("Raft follower acknowledged an invalid log range"));
     }
     let prior_match = transition.next.match_index.get(&input.follower_id).copied().unwrap_or(0);
     if input.match_index < prior_match {
@@ -130,7 +130,7 @@ fn apply_successful_response(transition: &mut MessageTransition, input: AppendRe
     let next_index = input
         .match_index
         .checked_add(NEXT_LOG_INDEX_STEP)
-        .ok_or_else(|| MoltenError::invalid_harness("Raft follower next index overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("Raft follower next index overflow"))?;
     transition.next.match_index.insert(input.follower_id.clone(), input.match_index);
     transition.next.next_index.insert(input.follower_id, next_index);
     transition.next.quorum_confirmed_term = Some(transition.next.current_term);
@@ -146,7 +146,7 @@ fn apply_failed_response(transition: &mut MessageTransition, input: AppendRespon
     let response_next = input
         .request_prev_log_index
         .checked_add(NEXT_LOG_INDEX_STEP)
-        .ok_or_else(|| MoltenError::invalid_harness("Raft append response prefix overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("Raft append response prefix overflow"))?;
     if response_next != local_next {
         return Ok(());
     }
@@ -237,7 +237,7 @@ fn merge_entries(
     };
     let change_index = incoming[first_change].index;
     if change_index <= state.commit_index {
-        return Err(MoltenError::invalid_harness("Raft append would overwrite a committed entry"));
+        return Err(Failure::invalid_harness("Raft append would overwrite a committed entry"));
     }
     let truncate_from = state.log.iter().any(|entry| entry.index >= change_index).then_some(change_index);
     state.log.retain(|entry| entry.index < change_index);

@@ -145,7 +145,7 @@
         let tampered_report = parse_text(&tampered_text).expect("parse tampered policy decision report");
         let error = replay_report_value(&tampered_report).expect_err("tampered policy decision diverges");
         match &error {
-            MoltenError::HarnessDivergence(divergence) => {
+            crate::error::Failure::HarnessDivergence(divergence) => {
                 assert_eq!(divergence.kind, "policy-decision");
                 assert_eq!(divergence.step, Some(0));
             }

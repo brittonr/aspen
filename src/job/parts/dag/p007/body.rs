@@ -70,7 +70,7 @@ pub fn sync_plan_value(
     let roots = sync_roots(source_registry, &dag, &request)?;
     let closure = crate::artifacts::dependency_closure(source_registry, &roots)?;
     if !closure.missing_refs.is_empty() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "job sync source dependency closure missing refs: {}",
             closure.missing_refs.join(",")
         )));
@@ -234,14 +234,14 @@ fn apply_candidates(
             },
         })?;
         if installed.decision != "pass" || installed.artifact_ref != candidate.artifact_ref {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "job sync install mismatch for {}: decision={} installed={}",
                 candidate.artifact_ref, installed.decision, installed.artifact_ref
             )));
         }
         let target = crate::artifacts::read_artifact(target_registry, &candidate.artifact_ref)?;
         if target.value != candidate.source.value {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "job sync target artifact {} differs from source",
                 candidate.artifact_ref
             )));

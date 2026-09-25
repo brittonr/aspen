@@ -2,7 +2,7 @@
 use std::time::Duration;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 #[allow(
     tigerstyle::non_trait_imports,
@@ -40,7 +40,7 @@ impl DeterministicTransportAdapter {
     // r[impl molten.fabric_transport.live_sim_parity]
     pub fn new(profile: CanonicalTransportProfile) -> Result<Self> {
         if profile.profile.adapter_kind != TransportAdapterKind::DeterministicSimulation {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "deterministic transport adapter requires a deterministic-simulation profile",
             ));
         }
@@ -72,7 +72,7 @@ impl DeterministicTransportAdapter {
         match fault {
             None => self.execute(command),
             Some(SimulatedTransportFault::LocalOverload) => {
-                Err(MoltenError::invalid_harness("simulated transport overload before adapter I/O"))
+                Err(Failure::invalid_harness("simulated transport overload before adapter I/O"))
             }
             Some(SimulatedTransportFault::RemoteRefusal) => {
                 self.fail_for_command(command, TransportFailureClass::RemoteRefusal, true)
@@ -86,7 +86,7 @@ impl DeterministicTransportAdapter {
             Some(SimulatedTransportFault::DisconnectAfterSubmission) => {
                 let _submitted = self.execute(command)?;
                 let session_id = command_session_id(command).cloned().ok_or_else(|| {
-                    MoltenError::invalid_harness("disconnect-after-submission requires a session command")
+                    Failure::invalid_harness("disconnect-after-submission requires a session command")
                 })?;
                 self.fail_session(command.operation_id(), &session_id, TransportFailureClass::Disconnect, false)
             }
@@ -109,7 +109,7 @@ impl DeterministicTransportAdapter {
         delivery_definitive: bool,
     ) -> Result<CanonicalTransportTransition> {
         let session_id = command_session_id(command)
-            .ok_or_else(|| MoltenError::invalid_harness("simulated transport fault requires a session command"))?;
+            .ok_or_else(|| Failure::invalid_harness("simulated transport fault requires a session command"))?;
         self.fail_session(command.operation_id(), session_id, class, delivery_definitive)
     }
 
@@ -166,7 +166,7 @@ impl IrohTransportAdapter {
     // r[impl molten.fabric_transport.live_sim_parity]
     pub fn new(profile: CanonicalTransportProfile) -> Result<Self> {
         if profile.profile.adapter_kind != TransportAdapterKind::IrohLive {
-            return Err(MoltenError::invalid_harness("Iroh transport adapter requires an iroh-live profile"));
+            return Err(Failure::invalid_harness("Iroh transport adapter requires an iroh-live profile"));
         }
         Ok(Self {
             profile,
@@ -212,7 +212,7 @@ impl IrohTransportAdapter {
         observed_tick: u64,
     ) -> Result<LiveIrohLoopbackResult> {
         let payload_bytes = u64::try_from(payload.len())
-            .map_err(|_| MoltenError::invalid_harness("live Iroh payload size does not fit u64"))?;
+            .map_err(|_| Failure::invalid_harness("live Iroh payload size does not fit u64"))?;
         let payload_ref = blake3_ref(payload);
         validate_outer_frame(&self.profile.profile, &payload_ref, &payload_ref, payload_bytes)
             .map_err(|issues| adapter_validation_error("live Iroh outer frame", &issues))?;
@@ -226,7 +226,7 @@ impl IrohTransportAdapter {
         };
         let submitted = self.execute(&send)?;
         if submitted.decision != TransportTransitionDecision::Applied {
-            return Err(MoltenError::invalid_harness("live Iroh frame was backpressured before adapter I/O"));
+            return Err(Failure::invalid_harness("live Iroh frame was backpressured before adapter I/O"));
         }
 
         let network = run_iroh_loopback(alpn, payload, self.profile.profile.limits.max_frame_bytes).await;
@@ -251,7 +251,7 @@ impl IrohTransportAdapter {
                 delivery_definitive: false,
             };
             let _failure_evidence = self.execute(&failure)?;
-            return Err(MoltenError::invalid_harness("live Iroh loopback payload mismatch"));
+            return Err(Failure::invalid_harness("live Iroh loopback payload mismatch"));
         }
         let echoed_payload_ref = blake3_ref(&echoed);
         let acknowledged = self.execute(&TransportCommand::AcknowledgeFrame {
@@ -281,7 +281,7 @@ impl TransportCommandShell for IrohTransportAdapter {
 
 async fn run_iroh_loopback(alpn: &str, payload: &[u8], max_frame_bytes: u64) -> Result<(Vec<u8>, String)> {
     let read_limit = usize::try_from(max_frame_bytes)
-        .map_err(|_| MoltenError::invalid_harness("Iroh read bound does not fit usize"))?;
+        .map_err(|_| Failure::invalid_harness("Iroh read bound does not fit usize"))?;
     let timeout = Duration::from_secs(LIVE_LOOPBACK_TIMEOUT_SECONDS);
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
     let alpn_bytes = alpn.as_bytes().to_vec();
@@ -306,64 +306,64 @@ async fn run_iroh_loopback(alpn: &str, payload: &[u8], max_frame_bytes: u64) -> 
     let server_task = tokio::spawn(async move {
         let incoming = tokio::time::timeout(timeout, server_endpoint.accept())
             .await
-            .map_err(|_| MoltenError::invalid_harness("live Iroh accept timed out"))?
-            .ok_or_else(|| MoltenError::invalid_harness("live Iroh endpoint closed before accept"))?;
+            .map_err(|_| Failure::invalid_harness("live Iroh accept timed out"))?
+            .ok_or_else(|| Failure::invalid_harness("live Iroh endpoint closed before accept"))?;
         let connection = tokio::time::timeout(timeout, incoming)
             .await
-            .map_err(|_| MoltenError::invalid_harness("live Iroh handshake timed out"))?
+            .map_err(|_| Failure::invalid_harness("live Iroh handshake timed out"))?
             .map_err(iroh_error)?;
         let remote_transport_identity_ref = blake3_ref(connection.remote_id().to_string().as_bytes());
         let (mut send, mut receive) = tokio::time::timeout(timeout, connection.accept_bi())
             .await
-            .map_err(|_| MoltenError::invalid_harness("live Iroh stream accept timed out"))?
+            .map_err(|_| Failure::invalid_harness("live Iroh stream accept timed out"))?
             .map_err(iroh_error)?;
         let received = tokio::time::timeout(timeout, receive.read_to_end(read_limit))
             .await
-            .map_err(|_| MoltenError::invalid_harness("live Iroh bounded frame read timed out"))?
+            .map_err(|_| Failure::invalid_harness("live Iroh bounded frame read timed out"))?
             .map_err(iroh_error)?;
         tokio::time::timeout(timeout, send.write_all(&received))
             .await
-            .map_err(|_| MoltenError::invalid_harness("live Iroh echo write timed out"))?
+            .map_err(|_| Failure::invalid_harness("live Iroh echo write timed out"))?
             .map_err(iroh_error)?;
         send.finish().map_err(iroh_error)?;
         tokio::time::timeout(timeout, connection.closed())
             .await
-            .map_err(|_| MoltenError::invalid_harness("live Iroh peer close timed out"))?;
-        Ok::<_, MoltenError>((received, remote_transport_identity_ref))
+            .map_err(|_| Failure::invalid_harness("live Iroh peer close timed out"))?;
+        Ok::<_, Failure>((received, remote_transport_identity_ref))
     });
 
     let client_result = async {
         let connection = tokio::time::timeout(timeout, client.connect(server.addr(), &alpn_bytes))
             .await
-            .map_err(|_| MoltenError::invalid_harness("live Iroh connect timed out"))?
+            .map_err(|_| Failure::invalid_harness("live Iroh connect timed out"))?
             .map_err(iroh_error)?;
         let (mut send, mut receive) = tokio::time::timeout(timeout, connection.open_bi())
             .await
-            .map_err(|_| MoltenError::invalid_harness("live Iroh stream open timed out"))?
+            .map_err(|_| Failure::invalid_harness("live Iroh stream open timed out"))?
             .map_err(iroh_error)?;
         tokio::time::timeout(timeout, send.write_all(payload))
             .await
-            .map_err(|_| MoltenError::invalid_harness("live Iroh frame write timed out"))?
+            .map_err(|_| Failure::invalid_harness("live Iroh frame write timed out"))?
             .map_err(iroh_error)?;
         send.finish().map_err(iroh_error)?;
         let echoed = tokio::time::timeout(timeout, receive.read_to_end(read_limit))
             .await
-            .map_err(|_| MoltenError::invalid_harness("live Iroh echo read timed out"))?
+            .map_err(|_| Failure::invalid_harness("live Iroh echo read timed out"))?
             .map_err(iroh_error)?;
         connection.close(IROH_CLOSE_CODE.into(), IROH_CLOSE_REASON);
-        Ok::<_, MoltenError>(echoed)
+        Ok::<_, Failure>(echoed)
     }
     .await;
 
     let server_result = server_task
         .await
-        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh server task failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("live Iroh server task failed: {error}")))?;
     client.close().await;
     server.close().await;
     let echoed = client_result?;
     let (received, remote_transport_identity_ref) = server_result?;
     if received != payload {
-        return Err(MoltenError::invalid_harness("live Iroh server observed a different frame"));
+        return Err(Failure::invalid_harness("live Iroh server observed a different frame"));
     }
     Ok((echoed, remote_transport_identity_ref))
 }
@@ -396,10 +396,10 @@ fn blake3_ref(bytes: &[u8]) -> String {
     format!("blake3:{}", blake3::hash(bytes).to_hex())
 }
 
-fn iroh_error(error: impl std::fmt::Display) -> MoltenError {
-    MoltenError::invalid_harness(format!("live Iroh transport failed: {error}"))
+fn iroh_error(error: impl std::fmt::Display) -> Failure {
+    Failure::invalid_harness(format!("live Iroh transport failed: {error}"))
 }
 
-fn adapter_validation_error(label: &str, issues: &impl std::fmt::Debug) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label} denied: {issues:?}"))
+fn adapter_validation_error(label: &str, issues: &impl std::fmt::Debug) -> Failure {
+    Failure::invalid_harness(format!("{label} denied: {issues:?}"))
 }

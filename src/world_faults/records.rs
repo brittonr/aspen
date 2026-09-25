@@ -1,7 +1,7 @@
 use molten_core::world_faults::*;
 use preserves::IOValue;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub const WORLD_FAULT_RECEIPT_RECORD: &str = "molten-world-fault-conformance-receipt-v1";
@@ -23,7 +23,7 @@ pub fn canonical_world_fault_receipt(
 ) -> Result<CanonicalWorldFaultReceipt> {
     let issues = validate_world_fault_receipt(receipt, profile);
     if !issues.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("world fault receipt denied: {issues:?}")));
+        return Err(Failure::invalid_harness(format!("world fault receipt denied: {issues:?}")));
     }
     let value = record(WORLD_FAULT_RECEIPT_RECORD, vec![
         string(receipt.schema),
@@ -46,12 +46,12 @@ pub fn canonical_world_fault_receipt(
     ]);
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     if bytes.len() > MAX_WORLD_FAULT_RECEIPT_BYTES {
-        return Err(MoltenError::invalid_harness("world fault receipt exceeds its canonical byte bound"));
+        return Err(Failure::invalid_harness("world fault receipt exceeds its canonical byte bound"));
     }
     let mut hasher = blake3::Hasher::new_derive_key(WORLD_FAULT_RECEIPT_CONTEXT);
     update(&mut hasher, WORLD_FAULT_RECEIPT_RECORD)?;
     let byte_length = u64::try_from(bytes.len())
-        .map_err(|_| MoltenError::invalid_harness("world fault receipt length exceeds u64"))?;
+        .map_err(|_| Failure::invalid_harness("world fault receipt length exceeds u64"))?;
     hasher.update(&byte_length.to_be_bytes());
     hasher.update(&bytes);
     Ok(CanonicalWorldFaultReceipt {
@@ -241,7 +241,7 @@ fn issue_code(issue: &WorldFaultIssue) -> &'static str {
 
 fn update(hasher: &mut blake3::Hasher, value: &str) -> Result<()> {
     let length = u64::try_from(value.len())
-        .map_err(|_| MoltenError::invalid_harness("world fault receipt identity field exceeds u64"))?;
+        .map_err(|_| Failure::invalid_harness("world fault receipt identity field exceeds u64"))?;
     hasher.update(&length.to_be_bytes());
     hasher.update(value.as_bytes());
     Ok(())

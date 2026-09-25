@@ -167,7 +167,7 @@ pub fn protocol_manifest_value(input: &ProtocolManifestInput) -> Result<IoValue>
 pub fn parse_protocol_manifest(value: &IoValue) -> Result<ProtocolManifest> {
     let fields = value
         .collect_simple_record("protocol-manifest-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-manifest-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <protocol-manifest-v1 ...>"))?;
     require_schema(&fields[0], PROTOCOL_MANIFEST_SCHEMA, "protocol manifest schema")?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "finite-protocol", "protocol manifest")?;
@@ -235,13 +235,13 @@ pub fn protocol_session_state_value(input: &ProtocolSessionStateInput) -> Result
     let endpoint = parse_protocol_endpoint(&input.endpoint)?;
     let _local_state = parse_protocol_local_state(&input.local_state)?;
     if endpoint.protocol_ref != input.protocol_ref {
-        return Err(MoltenError::invalid_harness("protocol session endpoint protocol mismatch"));
+        return Err(Failure::invalid_harness("protocol session endpoint protocol mismatch"));
     }
     validate_refs(&input.seen_message_refs, "protocol session seen message ref")?;
     validate_refs(&input.authority_refs, "protocol session authority ref")?;
     validate_refs(&input.resource_refs, "protocol session resource ref")?;
     if endpoint.role != input.role {
-        return Err(MoltenError::invalid_harness("protocol session endpoint role mismatch"));
+        return Err(Failure::invalid_harness("protocol session endpoint role mismatch"));
     }
     Ok(record("protocol-session-state-v1", vec![
         string(PROTOCOL_SESSION_STATE_SCHEMA),
@@ -265,7 +265,7 @@ pub fn protocol_session_state_value(input: &ProtocolSessionStateInput) -> Result
 pub fn parse_protocol_session_state(value: &IoValue) -> Result<ProtocolSessionState> {
     let fields = value
         .collect_simple_record("protocol-session-state-v1", Some(11))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-session-state-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <protocol-session-state-v1 ...>"))?;
     require_schema(&fields[0], PROTOCOL_SESSION_STATE_SCHEMA, "protocol session state schema")?;
     let checks = parse_checks(&fields[10])?;
     require_check(&checks, "projected-local-state", "protocol session state")?;

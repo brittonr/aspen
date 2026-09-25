@@ -5,9 +5,9 @@ use std::rc::Rc;
 use molten_core::world_commit::WorldCommitRef;
 use molten_core::world_head::*;
 use molten_core::world_promotion::*;
-use molten_node_host::node_state::NodeStateNamespace;
-use molten_node_host::node_state::NodeStateNamespaceKind;
-use molten_node_host::node_state::NodeStateRoot;
+use molten_node_host::node_state::DirectoryView;
+use molten_node_host::node_state::NamespaceKind;
+use molten_node_host::node_state::Root;
 
 use super::super::*;
 use crate::error::Result;
@@ -22,15 +22,15 @@ pub(super) const EXPECTED_RESERVATIONS: usize = 1;
 
 pub(super) struct TestState {
     pub _temporary: cap_tempfile::TempDir,
-    pub storage: NodeStateNamespace,
+    pub storage: DirectoryView,
     pub store: LocalWorldPromotionStore,
 }
 
 pub(super) fn test_state(request: &WorldPromotionRequest) -> TestState {
     let temporary = cap_tempfile::tempdir(cap_std::ambient_authority()).expect("temporary state root");
-    let root = NodeStateRoot::from_dir(temporary.try_clone().expect("clone temporary root"));
+    let root = Root::from_dir(temporary.try_clone().expect("clone temporary root"));
     root.create_layout().expect("state layout");
-    let storage = root.namespace(NodeStateNamespaceKind::Storage).expect("storage namespace");
+    let storage = root.namespace(NamespaceKind::Storage).expect("storage namespace");
     let mut store = LocalWorldPromotionStore::open(&storage).expect("promotion store");
     seed_head(&mut store, request);
     TestState {

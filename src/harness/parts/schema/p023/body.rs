@@ -3,14 +3,14 @@ fn effect_participants(event: &IoValue) -> Result<Option<Vec<String>>> {
     if let Some(request) = event.collect_simple_record("effect-request", None) {
         let arity = request.fields_iter().count();
         if arity != 3 && arity != 4 {
-            return Err(MoltenError::invalid_harness(format!("effect-request arity must be 3 or 4, got {arity}")));
+            return Err(crate::error::Failure::invalid_harness(format!("effect-request arity must be 3 or 4, got {arity}")));
         }
         return Ok(Some(vec![required_string(&request[1], "effect request actor")?]));
     }
     if let Some(response) = event.collect_simple_record("effect-response", None) {
         let arity = response.fields_iter().count();
         if arity != 4 && arity != 5 {
-            return Err(MoltenError::invalid_harness(format!("effect-response arity must be 4 or 5, got {arity}")));
+            return Err(crate::error::Failure::invalid_harness(format!("effect-response arity must be 4 or 5, got {arity}")));
         }
         return Ok(Some(vec![required_string(&response[1], "effect response actor")?]));
     }
@@ -43,7 +43,7 @@ fn boundary_participants(event: &IoValue) -> Result<Option<Vec<String>>> {
     if let Some(request) = event.collect_simple_record("hostcall-request-v1", None) {
         let arity = request.fields_iter().count();
         if arity != 9 && arity != 11 && arity != 15 {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "hostcall-request arity must be 9, 11, or 15, got {arity}"
             )));
         }
@@ -82,7 +82,7 @@ fn require_declared_actor(
         return Ok(());
     }
     let location = observation.map_or_else(String::new, |position| format!(" at observation {position}"));
-    Err(MoltenError::invalid_harness(format!(
+    Err(crate::error::Failure::invalid_harness(format!(
         "actor {actor} in {context}{location} is not declared in explicit actor registry"
     )))
 }
@@ -111,7 +111,7 @@ fn parse_admission_action(action: &str) -> Result<crate::runtime::AdmissionActio
         "retract" => Ok(crate::runtime::AdmissionAction::Retract),
         "clock" => Ok(crate::runtime::AdmissionAction::Clock),
         "random" => Ok(crate::runtime::AdmissionAction::Random),
-        other => Err(MoltenError::invalid_harness(format!("unknown admission action {other}"))),
+        other => Err(crate::error::Failure::invalid_harness(format!("unknown admission action {other}"))),
     }
 }
 
@@ -122,7 +122,7 @@ fn parse_actor_kind(kind: &str) -> Result<ActorKind> {
         "wasm" => Ok(ActorKind::Wasm),
         "adapter" => Ok(ActorKind::Adapter),
         "remote-proxy" => Ok(ActorKind::RemoteProxy),
-        other => Err(MoltenError::invalid_harness(format!("unknown actor kind {other}"))),
+        other => Err(crate::error::Failure::invalid_harness(format!("unknown actor kind {other}"))),
     }
 }
 
@@ -203,7 +203,7 @@ fn parse_report_repro_bundle(bundle_value: &IoValue, bundle: &Record<Value<IoVal
 fn parse_report_body(bundle: &Record<Value<IoValue>>) -> Result<ReportBundleBody> {
     let kind = required_record_string(&bundle[1], "bundle-kind", "repro bundle kind")?;
     if kind != "report" {
-        return Err(MoltenError::invalid_harness(format!("expected report repro bundle kind, got {kind}")));
+        return Err(crate::error::Failure::invalid_harness(format!("expected report repro bundle kind, got {kind}")));
     }
     validate_tool_record(&bundle[2])?;
     validate_sequence_record(&bundle[3], "command", "repro bundle command")?;

@@ -125,7 +125,7 @@ pub fn control_supervisor_policy_value(input: &ControlSupervisorPolicyInput<'_>)
 pub fn parse_control_supervisor_policy(value: &IoValue) -> Result<ControlSupervisorPolicy> {
     let fields = value
         .collect_simple_record("node-control-supervisor-policy-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-supervisor-policy-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-control-supervisor-policy-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::NODE_CONTROL_SUPERVISOR_POLICY_SCHEMA,
@@ -135,7 +135,7 @@ pub fn parse_control_supervisor_policy(value: &IoValue) -> Result<ControlSupervi
         "allow" => true,
         "deny" => false,
         other => {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "node control supervisor stale lock recovery must be allow or deny, got {other}"
             )));
         }
@@ -163,12 +163,12 @@ pub fn parse_control_supervisor_policy(value: &IoValue) -> Result<ControlSupervi
 
 pub fn import_control_supervisor_policy(state_root: &Path, policy_value: &IoValue) -> Result<ControlSupervisorPolicy> {
     validate_state_root(state_root)?;
-    let root = crate::node_state::NodeStateRoot::open(state_root)?;
+    let root = crate::node_state::Root::open(state_root)?;
     import_control_supervisor_policy_with_root(&root, policy_value)
 }
 
 pub fn import_control_supervisor_policy_with_root(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::Root,
     policy_value: &IoValue,
 ) -> Result<ControlSupervisorPolicy> {
     ensure_state_layout(root)?;
@@ -180,7 +180,7 @@ pub fn import_control_supervisor_policy_with_root(
 fn parse_control_supervisor_receipt(value: &IoValue) -> Result<ControlSupervisorReceipt> {
     let fields = value
         .collect_simple_record("node-control-supervisor-receipt-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-supervisor-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-control-supervisor-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::NODE_CONTROL_SUPERVISOR_RECEIPT_SCHEMA,
@@ -204,25 +204,25 @@ fn service_run_supervisor_policy_ref(value: &IoValue) -> Result<Option<String>> 
 }
 
 fn count_prior_supervised_service_runs(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::Root,
     supervisor_policy_ref: &str,
 ) -> Result<u64> {
     let service = root.control_service()?;
     let mut count = 0_u64;
     for entry in service.list_entries()? {
-        if entry.kind != crate::node_state::NodeStateEntryKind::RegularFile
+        if entry.kind != crate::node_state::EntryKind::RegularFile
             || !entry.name.ends_with(".service-run-receipt.preserves")
         {
             continue;
         }
         let bytes = service.read_entry(&entry, crate::node_state::MAX_NODE_STATE_FILE_BYTES)?;
         let text = String::from_utf8(bytes)
-            .map_err(|error| MoltenError::invalid_harness(format!("node service receipt is not UTF-8: {error}")))?;
+            .map_err(|error| Failure::invalid_harness(format!("node service receipt is not UTF-8: {error}")))?;
         let value = crate::preserves_rail::parse_text(&text)?;
         if service_run_supervisor_policy_ref(&value)?.as_deref() == Some(supervisor_policy_ref) {
             count = count
                 .checked_add(1)
-                .ok_or_else(|| MoltenError::invalid_harness("node supervised service run count overflow"))?;
+                .ok_or_else(|| Failure::invalid_harness("node supervised service run count overflow"))?;
         }
     }
     Ok(count)
@@ -230,29 +230,29 @@ fn count_prior_supervised_service_runs(
 
 pub fn init_local(input: &InitInput<'_>) -> Result<Init> {
     validate_state_root(input.state_root)?;
-    let root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let root = crate::node_state::Root::open(input.state_root)?;
     init_local_with_root(&root, input)
 }
 
-pub fn init_local_with_root(root: &crate::node_state::NodeStateRoot, input: &InitInput<'_>) -> Result<Init> {
+pub fn init_local_with_root(root: &crate::node_state::Root, input: &InitInput<'_>) -> Result<Init> {
     validate_node_id(input.node_id)?;
     verify_init_state(root)
-        .map_err(|error| MoltenError::invalid_harness(format!("node init state verification failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("node init state verification failed: {error}")))?;
     ensure_state_layout(root)
-        .map_err(|error| MoltenError::invalid_harness(format!("node init layout creation failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("node init layout creation failed: {error}")))?;
     let policy_refs = vec![local_ref("node-policy", input.node_id)?];
     let mut identity_config = crate::node_identity::Config::new(input.node_id, PathBuf::from("identity"));
     identity_config.policy_refs = policy_refs.clone();
     let identity_root = root
         .identity()
-        .map_err(|error| MoltenError::invalid_harness(format!("node init identity namespace failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("node init identity namespace failed: {error}")))?;
     let identity_resolution = crate::node_identity::resolve_with_root(&identity_config, &identity_root)
-        .map_err(|error| MoltenError::invalid_harness(format!("node init identity resolution failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("node init identity resolution failed: {error}")))?;
     let identity = identity_resolution
         .identity
-        .ok_or_else(|| MoltenError::invalid_harness("node daemon identity resolution denied"))?;
+        .ok_or_else(|| Failure::invalid_harness("node daemon identity resolution denied"))?;
     let adapters = default_adapter_bindings(root)
-        .map_err(|error| MoltenError::invalid_harness(format!("node init adapter binding failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("node init adapter binding failed: {error}")))?;
     let capability_refs = vec![local_ref("node-capability", input.node_id)?];
     let resource_refs = vec![local_ref("node-resource", input.node_id)?];
     let effect_profile_refs = vec![local_ref("node-effect-profile", input.node_id)?];
@@ -293,12 +293,12 @@ pub fn init_local_with_root(root: &crate::node_state::NodeStateRoot, input: &Ini
 
 pub fn init_with_profile(input: &ProfileInitInput<'_>) -> Result<Init> {
     validate_state_root(input.state_root)?;
-    let root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let root = crate::node_state::Root::open(input.state_root)?;
     init_with_profile_and_root(&root, input)
 }
 
 pub fn init_with_profile_and_root(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::Root,
     input: &ProfileInitInput<'_>,
 ) -> Result<Init> {
     validate_node_id(input.node_id)?;
@@ -311,7 +311,7 @@ pub fn init_with_profile_and_root(
     let identity_resolution = crate::node_identity::resolve_with_root(&identity_config, &identity_root)?;
     let identity = identity_resolution
         .identity
-        .ok_or_else(|| MoltenError::invalid_harness("node daemon identity resolution denied"))?;
+        .ok_or_else(|| Failure::invalid_harness("node daemon identity resolution denied"))?;
     let profile_resolution = crate::node_profile_config::resolve_profile_backed_config(
         &crate::node_profile_config::ProfileBackedConfigInput {
             identity_ref: identity.identity_ref.clone(),
@@ -320,7 +320,7 @@ pub fn init_with_profile_and_root(
         },
     )?;
     if profile_resolution.decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "node profile-backed init denied: {}",
             profile_resolution.diagnostics.join("; ")
         )));

@@ -20,7 +20,7 @@ pub fn sync_missing_chunks_with_roots(
                 ("deny-unsupported-transform", "pass"),
             ]);
         store_receipt(dest_root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(message));
+        return Err(Failure::invalid_harness(message));
     }
     let manifest_bytes = source_root.root().read(&manifest_path(manifest_ref)?)?;
     write_immutable_bytes(
@@ -121,7 +121,7 @@ fn copy_refs(input: CopyInput<'_>) -> Result<Vec<String>> {
             .chunks
             .iter()
             .find(|candidate| &candidate.chunk_ref == chunk_ref)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("manifest missing expected chunk {chunk_ref}")))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("manifest missing expected chunk {chunk_ref}")))?;
         let bytes = read_verified_chunk(input.source_root, chunk, input.chunk_size)?;
         input.dest_root.root().write(&chunk_path(&chunk.chunk_ref)?, &bytes)?;
         push_bounded(
@@ -162,7 +162,7 @@ fn write_head(input: HeadInput<'_>) -> Result<String> {
                 ("transport-does-not-grant-trust", "pass"),
             ]);
         store_receipt(input.store_root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(message));
+        return Err(Failure::invalid_harness(message));
     }
     write_immutable_blob(
         input.iroh_root,
@@ -288,7 +288,7 @@ fn claim_manifest(
                 vec![("ticket-shape", "fail"), ("deny-unsupported-ticket", "pass")],
             );
             store_receipt(dest_root, &receipt_value)?;
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "unsupported Iroh chunk ticket; expected iroh-local-chunk:<manifest-ref>",
             ));
         }
@@ -302,7 +302,7 @@ fn claim_manifest(
             ("deny-wrong-manifest", "pass"),
         ]);
         store_receipt(dest_root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(message));
+        return Err(Failure::invalid_harness(message));
     }
     Ok(advertised_manifest_ref.to_string())
 }

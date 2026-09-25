@@ -1,7 +1,7 @@
 use molten_core::dag_sync::*;
 use preserves::IOValue;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const DAG_RECORD_IDENTITY_CONTEXT: &str = "onixresearch.molten.dag-sync.record.identity.v1";
@@ -43,7 +43,7 @@ pub fn canonical_dag_node(node: &DagNode) -> Result<CanonicalDagRecord> {
 
 pub fn canonical_dag_root(root: &DagRoot) -> Result<CanonicalDagRecord> {
     root.validate_domain()
-        .map_err(|issue| MoltenError::invalid_harness(format!("invalid DAG root domain: {issue:?}")))?;
+        .map_err(|issue| Failure::invalid_harness(format!("invalid DAG root domain: {issue:?}")))?;
     canonical(
         "root",
         record(DAG_ROOT_RECORD, vec![
@@ -141,7 +141,7 @@ pub fn canonical_dag_progress(progress: &DagSyncProgress) -> Result<CanonicalDag
 pub fn canonical_dag_receipt(receipt: &DagSyncReceipt) -> Result<CanonicalDagRecord> {
     let expected_non_claims = DAG_SYNC_NON_CLAIMS.iter().map(ToString::to_string).collect::<Vec<_>>();
     if receipt.non_claims != expected_non_claims {
-        return Err(MoltenError::invalid_harness("DAG-sync receipt non-claims are incomplete"));
+        return Err(Failure::invalid_harness("DAG-sync receipt non-claims are incomplete"));
     }
     canonical(
         "receipt",
@@ -197,7 +197,7 @@ fn canonical(kind: &str, value: IOValue) -> Result<CanonicalDagRecord> {
     let mut hasher = blake3::Hasher::new_derive_key(DAG_RECORD_IDENTITY_CONTEXT);
     update(&mut hasher, kind);
     let length =
-        u64::try_from(bytes.len()).map_err(|_| MoltenError::invalid_harness("DAG record byte length exceeds u64"))?;
+        u64::try_from(bytes.len()).map_err(|_| Failure::invalid_harness("DAG record byte length exceeds u64"))?;
     hasher.update(&length.to_be_bytes());
     hasher.update(&bytes);
     Ok(CanonicalDagRecord {

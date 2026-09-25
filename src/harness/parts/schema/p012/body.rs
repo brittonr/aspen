@@ -79,7 +79,7 @@ pub fn profiled_repro_bundle_value_with_command(
     profile: ReproExportProfile,
 ) -> Result<IoValue> {
     if profile == ReproExportProfile::DenySensitive {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "deny-sensitive repro export must use sealed pass bundle construction",
         ));
     }
@@ -257,7 +257,7 @@ enum RedactionTraversalFrame {
 
 fn ensure_redaction_bound(count: usize, limit: usize, context: &str) -> Result<()> {
     if count > limit {
-        return Err(MoltenError::invalid_harness(format!("{context} exceeds redaction transform bound {limit}")));
+        return Err(crate::error::Failure::invalid_harness(format!("{context} exceeds redaction transform bound {limit}")));
     }
     Ok(())
 }

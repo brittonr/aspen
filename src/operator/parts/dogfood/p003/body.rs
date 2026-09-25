@@ -84,7 +84,7 @@ pub fn verify_nix_dogfood_evidence(input: &NixDogfoodVerifyInput<'_>) -> Result<
 pub fn parse_nix_dogfood_verify_receipt(value: &IoValue) -> Result<NixDogfoodVerifyReceipt> {
     let fields = value
         .collect_simple_record("nix-dogfood-release-verify-receipt-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <nix-dogfood-release-verify-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <nix-dogfood-release-verify-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::OPERATOR_NIX_DOGFOOD_VERIFY_RECEIPT_SCHEMA,
@@ -160,7 +160,7 @@ pub fn parse_release_evidence_bundle(value: &IoValue) -> Result<ReleaseEvidenceB
     )?;
     let fields = value
         .collect_simple_record("release-evidence-bundle-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <release-evidence-bundle-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <release-evidence-bundle-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::OPERATOR_RELEASE_EVIDENCE_BUNDLE_SCHEMA,

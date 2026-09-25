@@ -178,8 +178,8 @@ where F: Fn(&str) -> Result<CanonicalRef<D>, ReferenceError> {
     values.iter().map(|value| constructor(value).map_err(reference_error)).collect()
 }
 
-fn reference_error(error: ReferenceError) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(format!("nominal reference admission failed: {error:?}"))
+fn reference_error(error: ReferenceError) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("nominal reference admission failed: {error:?}"))
 }
 
 pub fn nominal_domain_declarations() -> &'static [(&'static str, &'static str)] {

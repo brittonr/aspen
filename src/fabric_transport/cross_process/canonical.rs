@@ -3,7 +3,7 @@ use preserves::Value;
 use preserves::ValueImpl;
 
 use super::super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
@@ -107,14 +107,14 @@ pub fn parse_canonical_cross_process_endpoint(value: &IOValue) -> Result<Canonic
     let mut outer = outer.as_slice().iter();
     let schema = required_string(next_field(&mut outer, "endpoint handoff schema")?, "endpoint handoff schema")?;
     if schema != CROSS_PROCESS_ENDPOINT_HANDOFF_SCHEMA {
-        return Err(MoltenError::invalid_harness("cross-process endpoint handoff schema mismatch"));
+        return Err(Failure::invalid_harness("cross-process endpoint handoff schema mismatch"));
     }
     let declared_descriptor_ref =
         required_ref(next_field(&mut outer, "endpoint descriptor ref")?, "endpoint descriptor ref")?;
     let binding_value = crate::preserves_rail::value_to_iovalue(next_field(&mut outer, "endpoint binding")?);
     let actual_descriptor_ref = canonical_hash(&binding_value)?;
     if declared_descriptor_ref != actual_descriptor_ref {
-        return Err(MoltenError::invalid_harness("cross-process endpoint descriptor ref mismatch"));
+        return Err(Failure::invalid_harness("cross-process endpoint descriptor ref mismatch"));
     }
     let descriptor = parse_endpoint_binding(&binding_value, &declared_descriptor_ref)?;
     let handoff_ref = canonical_hash(value)?;
@@ -275,9 +275,9 @@ fn parse_endpoint_binding(value: &IOValue, descriptor_ref: &str) -> Result<Cross
 fn parse_locators(value: &Value<IOValue>) -> Result<Vec<EndpointLocator>> {
     let values = value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("cross-process endpoint locators must be a sequence"))?;
+        .ok_or_else(|| Failure::invalid_harness("cross-process endpoint locators must be a sequence"))?;
     if values.len() > MAX_CANONICAL_LOCATORS {
-        return Err(MoltenError::invalid_harness("cross-process endpoint locator count exceeds bound"));
+        return Err(Failure::invalid_harness("cross-process endpoint locator count exceeds bound"));
     }
     values
         .iter()
@@ -295,9 +295,9 @@ fn parse_locators(value: &Value<IOValue>) -> Result<Vec<EndpointLocator>> {
 fn parse_locator_classes(value: &Value<IOValue>) -> Result<Vec<EndpointLocatorClass>> {
     let values = value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("endpoint disclosure classes must be a sequence"))?;
+        .ok_or_else(|| Failure::invalid_harness("endpoint disclosure classes must be a sequence"))?;
     if values.len() > MAX_CANONICAL_LOCATORS {
-        return Err(MoltenError::invalid_harness("endpoint disclosure class count exceeds bound"));
+        return Err(Failure::invalid_harness("endpoint disclosure class count exceeds bound"));
     }
     values
         .iter()
@@ -311,7 +311,7 @@ fn parse_locator_class(value: &str) -> Result<EndpointLocatorClass> {
         "relay" => Ok(EndpointLocatorClass::Relay),
         "custom" => Ok(EndpointLocatorClass::Custom),
         "private" => Ok(EndpointLocatorClass::Private),
-        other => Err(MoltenError::invalid_harness(format!("unsupported endpoint locator class {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported endpoint locator class {other}"))),
     }
 }
 
@@ -339,7 +339,7 @@ fn parse_validity(value: &Value<IOValue>) -> Result<EndpointValidityCohort> {
 fn parse_non_claims(value: &Value<IOValue>) -> Result<Vec<TransportNonClaim>> {
     let values = value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("endpoint non-claims must be a sequence"))?;
+        .ok_or_else(|| Failure::invalid_harness("endpoint non-claims must be a sequence"))?;
     values
         .iter()
         .map(|value| parse_non_claim(&required_string(&value, "endpoint non-claim")?))
@@ -350,7 +350,7 @@ fn parse_non_claim(value: &str) -> Result<TransportNonClaim> {
     REQUIRED_TRANSPORT_NON_CLAIMS
         .into_iter()
         .find(|claim| claim.as_str() == value)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("unsupported endpoint non-claim {value}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("unsupported endpoint non-claim {value}")))
 }
 
 fn field(name: &str, value: IOValue) -> IOValue {
@@ -368,7 +368,7 @@ fn checks(values: &[&str]) -> IOValue {
 fn simple_record(value: &IOValue, label: &str, field_count: usize) -> Result<Vec<Value<IOValue>>> {
     let fields = value
         .collect_simple_record(label, Some(field_count))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     Ok(fields.iter().collect())
 }
 
@@ -378,14 +378,14 @@ fn next_field<'a, 'b>(
 ) -> Result<&'a Value<IOValue>> {
     fields
         .next()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("cross-process endpoint missing {label}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("cross-process endpoint missing {label}")))
 }
 
 fn required_string(value: &Value<IOValue>, label: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {label}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {label}")))
 }
 
 fn required_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
@@ -397,14 +397,14 @@ fn required_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
 fn required_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {label}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {label}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
 fn required_bool(value: &Value<IOValue>, label: &str) -> Result<bool> {
-    value.as_boolean().ok_or_else(|| MoltenError::invalid_harness(format!("expected bool for {label}")))
+    value.as_boolean().ok_or_else(|| Failure::invalid_harness(format!("expected bool for {label}")))
 }
 
-fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label} denied: {issues:?}"))
+fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> Failure {
+    Failure::invalid_harness(format!("{label} denied: {issues:?}"))
 }

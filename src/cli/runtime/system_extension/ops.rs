@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use molten::error::MoltenError;
+use molten::error::Failure;
 use molten::error::Result;
 use molten::system_extension::ExecutableSystemExtensionFixtureRun;
 use molten::system_extension::ExecutionProfile;
@@ -32,14 +32,14 @@ pub(super) fn run_fixture(profile: ExecutionProfile, out: PathBuf) -> Result<()>
 }
 
 pub(super) fn show(status: PathBuf) -> Result<()> {
-    let metadata = std::fs::metadata(&status).map_err(MoltenError::from)?;
+    let metadata = std::fs::metadata(&status).map_err(Failure::from)?;
     if metadata.len() > MAX_STATUS_ARTIFACT_BYTES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "system-extension status artifact is {} bytes; maximum is {MAX_STATUS_ARTIFACT_BYTES}",
             metadata.len()
         )));
     }
-    let source = std::fs::read_to_string(&status).map_err(MoltenError::from)?;
+    let source = std::fs::read_to_string(&status).map_err(Failure::from)?;
     let value = molten::preserves_rail::parse_text(&source)?;
     let readback = molten::system_extension::parse_operator_status_readback(&value)?;
     println!(
@@ -88,13 +88,13 @@ fn planned(relative_path: impl Into<PathBuf>, value: &preserves::IOValue) -> Res
 }
 
 fn write_artifacts(root: &Path, artifacts: &[PlannedArtifact]) -> Result<()> {
-    std::fs::create_dir_all(root).map_err(MoltenError::from)?;
+    std::fs::create_dir_all(root).map_err(Failure::from)?;
     for artifact in artifacts {
         let path = root.join(&artifact.relative_path);
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(MoltenError::from)?;
+            std::fs::create_dir_all(parent).map_err(Failure::from)?;
         }
-        std::fs::write(path, artifact.content.as_bytes()).map_err(MoltenError::from)?;
+        std::fs::write(path, artifact.content.as_bytes()).map_err(Failure::from)?;
     }
     Ok(())
 }

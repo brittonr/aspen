@@ -135,7 +135,7 @@ pub fn suite_value(input: &SuiteInput) -> Result<preserves::IOValue> {
 pub fn parse_suite(value: &preserves::IOValue) -> Result<Suite> {
     let fields = value
         .collect_simple_record("service-runtime-suite-v1", Some(6))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <service-runtime-suite-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <service-runtime-suite-v1 ...>"))?;
     require_schema(&fields[0], RUNTIME_SUITE_SCHEMA, "service runtime suite schema")?;
     let checks = parse_checks(&fields[5])?;
     require_check(&checks, "canonical-service-runtime-suite", "service runtime suite")?;
@@ -182,7 +182,7 @@ fn manifest_map(
     let mut mapped = OrderedMap::new();
     for manifest in manifests {
         if mapped.insert(manifest.service_id.clone(), manifest.clone()).is_some() {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "duplicate service manifest for {}",
                 manifest.service_id
             )));
@@ -202,9 +202,9 @@ fn sorted_demands(demands: &[crate::service_records::ServiceDemand]) -> Vec<crat
 fn next_pass_count(passes: usize) -> Result<usize> {
     let next = passes
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness("service dependency pass count overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("service dependency pass count overflow"))?;
     if next > MAX_DEPENDENCY_PASSES {
-        return Err(MoltenError::invalid_harness("service dependency evaluation exceeded pass bound"));
+        return Err(Failure::invalid_harness("service dependency evaluation exceeded pass bound"));
     }
     Ok(next)
 }
@@ -249,7 +249,7 @@ pub fn replay_report(value: &preserves::IOValue) -> Result<Replay> {
     }
     .to_string();
     if decision == "deny" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "service runtime replay divergence: expected {expected_report_ref}, got {}",
             rerun.report_ref
         )));
@@ -264,7 +264,7 @@ pub fn replay_report(value: &preserves::IOValue) -> Result<Replay> {
 pub fn parse_report(value: &preserves::IOValue) -> Result<Run> {
     let fields = value
         .collect_simple_record("service-runtime-report-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <service-runtime-report-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <service-runtime-report-v1 ...>"))?;
     require_schema(&fields[0], RUNTIME_REPORT_SCHEMA, "service runtime report schema")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "canonical-service-runtime-report", "service runtime report")?;

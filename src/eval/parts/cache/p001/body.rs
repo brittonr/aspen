@@ -61,7 +61,7 @@ pub fn key_value(input: &KeyInput) -> Result<IoValue> {
 pub fn parse_key(value: &IoValue) -> Result<Key> {
     let fields = value
         .collect_simple_record("eval-cache-key-v1", Some(23))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <eval-cache-key-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <eval-cache-key-v1 ...>"))?;
     require_schema(&fields[0], EVAL_CACHE_KEY_SCHEMA, "eval cache key")?;
     let deps = value_to_iovalue(&fields[6]);
     let dep_fields = simple_record(&deps, "dependencies", 2)?;
@@ -120,7 +120,7 @@ pub fn value_value(key_ref: &str, input: &ValueInput, output_ref: &OutputRef) ->
 pub fn parse_value(value: &IoValue) -> Result<Value> {
     let fields = value
         .collect_simple_record("eval-cache-value-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <eval-cache-value-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <eval-cache-value-v1 ...>"))?;
     require_schema(&fields[0], EVAL_CACHE_VALUE_SCHEMA, "eval cache value")?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "determinism-inputs-bound", "eval cache value")?;
@@ -164,7 +164,7 @@ pub fn put(root: &Path, key_input: &KeyInput, value_input: &ValueInput) -> Resul
             }
         }
         _ => {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "eval cache output bytes must be present whenever output value is present",
             ));
         }
@@ -252,7 +252,7 @@ pub fn get(root: &Path, key_ref: &str, input: &GetInput) -> Result<Get> {
     })
 }
 
-fn denied_tombstone(root: &Path, key_ref: &str, reason: &str) -> Result<MoltenError> {
+fn denied_tombstone(root: &Path, key_ref: &str, reason: &str) -> Result<Failure> {
     let receipt = store_and_return_receipt(root, &ReceiptValueInput {
         operation: "miss",
         decision: "deny",
@@ -262,13 +262,13 @@ fn denied_tombstone(root: &Path, key_ref: &str, reason: &str) -> Result<MoltenEr
         diagnostics: &[format!("cache key tombstoned: {reason}")],
         checks: &[("cache-miss", "pass"), ("tombstone", "pass")],
     })?;
-    Ok(MoltenError::invalid_harness(format!(
+    Ok(Failure::invalid_harness(format!(
         "eval cache miss: key {key_ref} tombstoned ({})",
         parse_receipt(&receipt)?.receipt_ref
     )))
 }
 
-fn denied_missing(root: &Path, key_ref: &str) -> Result<MoltenError> {
+fn denied_missing(root: &Path, key_ref: &str) -> Result<Failure> {
     let receipt = store_and_return_receipt(root, &ReceiptValueInput {
         operation: "miss",
         decision: "deny",
@@ -278,13 +278,13 @@ fn denied_missing(root: &Path, key_ref: &str) -> Result<MoltenError> {
         diagnostics: &["cache key not found".to_string()],
         checks: &[("cache-miss", "pass")],
     })?;
-    Ok(MoltenError::invalid_harness(format!(
+    Ok(Failure::invalid_harness(format!(
         "eval cache miss: key {key_ref} not found ({})",
         parse_receipt(&receipt)?.receipt_ref
     )))
 }
 
-fn denied_trace_only(root: &Path, key_ref: &str, value_ref: &str, refs: &[String]) -> Result<MoltenError> {
+fn denied_trace_only(root: &Path, key_ref: &str, value_ref: &str, refs: &[String]) -> Result<Failure> {
     let receipt = store_and_return_receipt(root, &ReceiptValueInput {
         operation: "trace-only",
         decision: "deny",
@@ -294,13 +294,13 @@ fn denied_trace_only(root: &Path, key_ref: &str, value_ref: &str, refs: &[String
         diagnostics: &["production trace-only cache value cannot be returned as semantic output".to_string()],
         checks: &[("trace-only-not-semantic", "pass")],
     })?;
-    Ok(MoltenError::invalid_harness(format!(
+    Ok(Failure::invalid_harness(format!(
         "eval cache trace-only denial: {}",
         parse_receipt(&receipt)?.receipt_ref
     )))
 }
 
-fn denied_stale(root: &Path, key_ref: &str, value_ref: &str, refs: &[String]) -> Result<MoltenError> {
+fn denied_stale(root: &Path, key_ref: &str, value_ref: &str, refs: &[String]) -> Result<Failure> {
     let receipt = store_and_return_receipt(root, &ReceiptValueInput {
         operation: "stale-deny",
         decision: "deny",
@@ -310,7 +310,7 @@ fn denied_stale(root: &Path, key_ref: &str, value_ref: &str, refs: &[String]) ->
         diagnostics: &["policy-current refs do not match current request refs".to_string()],
         checks: &[("policy-current-revalidation", "fail"), ("stale-deny", "pass")],
     })?;
-    Ok(MoltenError::invalid_harness(format!(
+    Ok(Failure::invalid_harness(format!(
         "eval cache stale policy-current entry denied: {}",
         parse_receipt(&receipt)?.receipt_ref
     )))
@@ -322,7 +322,7 @@ fn denied_invalid_hit(
     value_ref: &str,
     refs: &[String],
     diagnostics: &[String],
-) -> Result<MoltenError> {
+) -> Result<Failure> {
     let receipt = store_and_return_receipt(root, &ReceiptValueInput {
         operation: "invalid-hit-deny",
         decision: "deny",
@@ -332,7 +332,7 @@ fn denied_invalid_hit(
         diagnostics,
         checks: &[("cache-hit-validity", "fail"), ("stale-deny", "pass")],
     })?;
-    Ok(MoltenError::invalid_harness(format!(
+    Ok(Failure::invalid_harness(format!(
         "eval cache hit denied by validity checks: {}",
         parse_receipt(&receipt)?.receipt_ref
     )))

@@ -145,11 +145,11 @@
         })
         .expect("init node");
         run_local(&RunInput { state_root: &root, startup_evidence: None }).expect("run node");
-        let state_root = crate::node_state::NodeStateRoot::open(&root).expect("open node state root");
+        let state_root = crate::node_state::Root::open(&root).expect("open node state root");
         let identity = crate::node_identity::parse_identity(
             &read_preserves(
                 &state_root,
-                &crate::node_state::NodeStatePath::parse(IDENTITY_FILE).expect("identity path"),
+                &crate::node_state::RelativePath::parse(IDENTITY_FILE).expect("identity path"),
             )
             .expect("identity"),
         )
@@ -238,7 +238,7 @@
         let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
         runtime.block_on(async {
             let (root, identity) = init_send_case();
-            let state_root = crate::node_state::NodeStateRoot::open(&root).expect("open node state root");
+            let state_root = crate::node_state::Root::open(&root).expect("open node state root");
             let lookup = iroh::address_lookup::memory::MemoryLookup::new();
             let receiver_endpoint = live_gossip_endpoint(
                 &lookup,

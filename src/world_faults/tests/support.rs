@@ -5,12 +5,12 @@ use std::rc::Rc;
 use molten_core::fabric_simulation::EligibleChoice;
 use molten_core::world_faults::*;
 use molten_node_host::node_state::MAX_NODE_STATE_FILE_BYTES;
-use molten_node_host::node_state::NodeStateNamespaceKind;
-use molten_node_host::node_state::NodeStatePath;
-use molten_node_host::node_state::NodeStateRoot;
+use molten_node_host::node_state::NamespaceKind;
+use molten_node_host::node_state::RelativePath;
+use molten_node_host::node_state::Root;
 
 use super::super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub(super) const TEST_SOURCE_REVISION: &str = "06cd7ca465550d2a35e0511cbbd7989e434d8f51";
@@ -57,9 +57,9 @@ pub(super) struct LocalRestartPort {
 
 impl WorldFaultRestartPort for LocalRestartPort {
     fn restart(&mut self, case: &WorldFaultCase) -> Result<()> {
-        let root = NodeStateRoot::open_existing(&self.root)?;
-        let storage = root.namespace(NodeStateNamespaceKind::Storage)?;
-        storage.write(&NodeStatePath::parse(RESTART_MARKER_PATH)?, case.case_id.as_bytes())?;
+        let root = Root::open_existing(&self.root)?;
+        let storage = root.namespace(NamespaceKind::Storage)?;
+        storage.write(&RelativePath::parse(RESTART_MARKER_PATH)?, case.case_id.as_bytes())?;
         self.restarts = self.restarts.saturating_add(1);
         self.events.borrow_mut().push(format!("restart:{}", case.case_id));
         Ok(())
@@ -74,12 +74,12 @@ pub(super) struct LocalDurableObservationPort {
 impl WorldFaultDurableObservationPort for LocalDurableObservationPort {
     fn read_back(&mut self, case: &WorldFaultCase) -> Result<DurableReadBack> {
         if matches!(case.phase, FaultPhase::ProcessRestart | FaultPhase::RecoveryReadBack) {
-            let reopened = NodeStateRoot::open_existing(&self.root)?;
-            let storage = reopened.namespace(NodeStateNamespaceKind::Storage)?;
+            let reopened = Root::open_existing(&self.root)?;
+            let storage = reopened.namespace(NamespaceKind::Storage)?;
             let marker =
-                storage.read_to_string(&NodeStatePath::parse(RESTART_MARKER_PATH)?, MAX_NODE_STATE_FILE_BYTES)?;
+                storage.read_to_string(&RelativePath::parse(RESTART_MARKER_PATH)?, MAX_NODE_STATE_FILE_BYTES)?;
             if marker != case.case_id {
-                return Err(MoltenError::invalid_harness("world fault restart marker crossed case identity"));
+                return Err(Failure::invalid_harness("world fault restart marker crossed case identity"));
             }
         }
         self.events.borrow_mut().push(format!("read-back:{}", case.case_id));
@@ -126,7 +126,7 @@ impl WorldConcurrentSchedulePort for DeterministicSchedulePort {
         operations.sort();
         operations.dedup();
         if operations.len() != WORLD_FAULT_CONTENDER_COUNT {
-            return Err(MoltenError::invalid_harness("world fault schedule contender count is invalid"));
+            return Err(Failure::invalid_harness("world fault schedule contender count is invalid"));
         }
         let release_count =
             u32::from(matches!(schedule.mutation, WorldMutationKind::Promotion | WorldMutationKind::Outbox));

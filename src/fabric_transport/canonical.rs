@@ -1,7 +1,7 @@
 use preserves::IOValue;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric::DeterminismClass;
 use crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA;
@@ -142,7 +142,7 @@ pub fn canonical_transport_transition(
 ) -> Result<CanonicalTransportTransition> {
     validate_transport_profile(&profile.profile).map_err(|issues| validation_error("transport profile", &issues))?;
     if transition.events.is_empty() || transition.events.len() > MAX_CANONICAL_TRANSPORT_EVENTS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "transport transition event count {} outside canonical bound",
             transition.events.len()
         )));
@@ -220,7 +220,7 @@ pub fn transport_status_readback(
     let inflight_bytes = state.sessions.values().try_fold(0_u64, |total, session| {
         total
             .checked_add(session.inflight_bytes)
-            .ok_or_else(|| MoltenError::invalid_harness("transport status inflight-byte overflow"))
+            .ok_or_else(|| Failure::invalid_harness("transport status inflight-byte overflow"))
     })?;
     let value = record(TRANSPORT_STATUS_RECORD, vec![
         string(TRANSPORT_STATUS_SCHEMA),
@@ -282,9 +282,9 @@ impl ExtensionTransportContext {
         let binding = host
             .manifest()
             .binding_for(&key)
-            .ok_or_else(|| MoltenError::invalid_harness("system extension has no admitted transport port binding"))?;
+            .ok_or_else(|| Failure::invalid_harness("system extension has no admitted transport port binding"))?;
         if binding.binding.implementation_profile != profile.profile.profile_id {
-            return Err(MoltenError::invalid_harness("system-extension transport profile substitution denied"));
+            return Err(Failure::invalid_harness("system-extension transport profile substitution denied"));
         }
         Ok(Self {
             service_id: host.manifest().manifest().service_id.clone(),
@@ -311,17 +311,17 @@ impl ExtensionTransportContext {
         accounted_bytes: u64,
     ) -> Result<()> {
         if self.profile_id != profile.profile.profile_id {
-            return Err(MoltenError::invalid_harness("transport profile substitution denied"));
+            return Err(Failure::invalid_harness("transport profile substitution denied"));
         }
         if command.generation() != self.generation {
-            return Err(MoltenError::invalid_harness("transport command uses a stale service generation"));
+            return Err(Failure::invalid_harness("transport command uses a stale service generation"));
         }
         let command_service = command_service_id(command);
         if command_service != self.service_id {
-            return Err(MoltenError::invalid_harness("transport command service identity mismatch"));
+            return Err(Failure::invalid_harness("transport command service identity mismatch"));
         }
         if accounted_bytes > self.max_frame_bytes {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "transport command bytes {accounted_bytes} exceed {}",
                 self.max_frame_bytes
             )));
@@ -468,9 +468,9 @@ fn count_value(value: usize) -> Result<IOValue> {
 }
 
 fn count(value: usize) -> Result<u64> {
-    u64::try_from(value).map_err(|_| MoltenError::invalid_harness("transport collection count overflow"))
+    u64::try_from(value).map_err(|_| Failure::invalid_harness("transport collection count overflow"))
 }
 
-fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label} validation denied: {issues:?}"))
+fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> Failure {
+    Failure::invalid_harness(format!("{label} validation denied: {issues:?}"))
 }

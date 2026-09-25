@@ -2,7 +2,7 @@
 pub fn parse_chain_checkpoint(value: &IoValue) -> Result<ChainCheckpoint> {
     let checkpoint = value
         .collect_simple_record("chain-checkpoint-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <chain-checkpoint-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <chain-checkpoint-v1 ...>"))?;
     require_schema(&checkpoint[0], EVIDENCE_CHAIN_CHECKPOINT_SCHEMA, "chain checkpoint schema")?;
     let range = parse_checkpoint_range(&checkpoint[3])?;
     let parsed = ChainCheckpoint {
@@ -26,13 +26,13 @@ pub fn parse_chain_checkpoint(value: &IoValue) -> Result<ChainCheckpoint> {
 pub fn validate_genesis(link: &ChainLink) -> Result<()> {
     validate_chain_link_shape(link)?;
     if link.sequence != 0 {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "genesis chain link sequence must be 0, got {}",
             link.sequence
         )));
     }
     if link.previous_link_ref.is_some() {
-        return Err(MoltenError::invalid_harness("genesis chain link must not name a previous link"));
+        return Err(Failure::invalid_harness("genesis chain link must not name a previous link"));
     }
     require_trellis_pass(link, GENESIS_VALID_PREDICATE)?;
     require_pass_check(link, "genesis-sequence")?;
@@ -45,25 +45,25 @@ pub fn validate_append(previous: &ChainLink, link: &ChainLink) -> Result<()> {
     validate_chain_link_shape(previous)?;
     validate_chain_link_shape(link)?;
     if previous.chain != link.chain {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "append link must stay in the same chain scope/id/epoch: previous={:?} next={:?}",
             previous.chain, link.chain
         )));
     }
     let Some(previous_link_ref) = &link.previous_link_ref else {
-        return Err(MoltenError::invalid_harness("append chain link must name a previous link"));
+        return Err(Failure::invalid_harness("append chain link must name a previous link"));
     };
     if previous_link_ref != &previous.link_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "append previous link ref mismatch: got {previous_link_ref}, expected {}",
             previous.link_ref
         )));
     }
     let expected_sequence = previous.sequence.checked_add(1).ok_or_else(|| {
-        MoltenError::invalid_harness(format!("cannot append after max sequence {}", previous.sequence))
+        Failure::invalid_harness(format!("cannot append after max sequence {}", previous.sequence))
     })?;
     if link.sequence != expected_sequence {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "append sequence must be previous + 1: got {}, expected {expected_sequence}",
             link.sequence
         )));
@@ -84,25 +84,25 @@ fn validate_checkpoint_input(root: &Path, input: &ChainCheckpointInput) -> Resul
     let index = build_chain_index(root)?;
     validate_checkpoint_prior(&index, input)?;
     let Some(anchor) = index.links_by_ref.get(&input.anchor_link_ref) else {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "checkpoint anchor link {} is unavailable in ledger",
             input.anchor_link_ref
         )));
     };
     if anchor.chain != input.chain {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "checkpoint anchor link {} belongs to {:?}, expected {:?}",
             input.anchor_link_ref, anchor.chain, input.chain
         )));
     }
     let Some(head) = index.links_by_ref.get(&input.head_ref) else {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "checkpoint head {} is unavailable in ledger",
             input.head_ref
         )));
     };
     if head.chain != input.chain {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "checkpoint head {} belongs to {:?}, expected {:?}",
             input.head_ref, head.chain, input.chain
         )));
@@ -137,18 +137,18 @@ fn validate_checkpoint_prior(index: &ChainIndex, input: &ChainCheckpointInput) -
     match input.prior_checkpoint_ref.as_deref() {
         Some(prior_checkpoint_ref) => {
             let prior = index.checkpoints_by_ref.get(prior_checkpoint_ref).ok_or_else(|| {
-                MoltenError::invalid_harness(format!(
+                Failure::invalid_harness(format!(
                     "prior checkpoint {prior_checkpoint_ref} is unavailable in ledger"
                 ))
             })?;
             if prior.chain != input.chain {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(Failure::invalid_harness(format!(
                     "prior checkpoint {prior_checkpoint_ref} belongs to {:?}, expected {:?}",
                     prior.chain, input.chain
                 )));
             }
             if checkpoint_child_count(index, prior_checkpoint_ref, &input.chain) > 0 {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(Failure::invalid_harness(format!(
                     "prior checkpoint {prior_checkpoint_ref} already has an accepted successor"
                 )));
             }
@@ -159,7 +159,7 @@ fn validate_checkpoint_prior(index: &ChainIndex, input: &ChainCheckpointInput) -
             if existing.is_empty() {
                 Ok(())
             } else {
-                Err(MoltenError::invalid_harness(format!(
+                Err(Failure::invalid_harness(format!(
                     "checkpoint prior checkpoint is required for {:?}; existing checkpoints {:?}",
                     input.chain, existing
                 )))
@@ -183,7 +183,7 @@ fn validate_checkpoint_head_freshness(index: &ChainIndex, input: &ChainCheckpoin
     if heads == vec![input.head_ref.clone()] {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "checkpoint head {} is not the current chain head for {:?}: current heads {:?}",
             input.head_ref, input.chain, heads
         )))
@@ -197,10 +197,10 @@ fn ensure_link_descends_from(
     ancestor_ref: &str,
 ) -> Result<()> {
     let ancestor = index.links_by_ref.get(ancestor_ref).ok_or_else(|| {
-        MoltenError::invalid_harness(format!("prior checkpoint head {ancestor_ref} is unavailable in ledger"))
+        Failure::invalid_harness(format!("prior checkpoint head {ancestor_ref} is unavailable in ledger"))
     })?;
     if &ancestor.chain != chain {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "prior checkpoint head {ancestor_ref} belongs to {:?}, expected {:?}",
             ancestor.chain, chain
         )));
@@ -213,15 +213,15 @@ fn ensure_link_descends_from(
     let mut seen = OrderedSet::new();
     for _ in 0..=index.links_by_ref.len() {
         if !seen.insert(current_ref.clone()) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "checkpoint descent from {descendant_ref} to {ancestor_ref} encountered a cycle at {current_ref}"
             )));
         }
         let current = index.links_by_ref.get(&current_ref).ok_or_else(|| {
-            MoltenError::invalid_harness(format!("checkpoint head walk reached unavailable link {current_ref}"))
+            Failure::invalid_harness(format!("checkpoint head walk reached unavailable link {current_ref}"))
         })?;
         if &current.chain != chain {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "checkpoint head walk crossed into {:?}, expected {:?}",
                 current.chain, chain
             )));
@@ -234,7 +234,7 @@ fn ensure_link_descends_from(
         }
         current_ref.clone_from(previous_ref);
     }
-    Err(MoltenError::invalid_harness(format!(
+    Err(Failure::invalid_harness(format!(
         "checkpoint head {descendant_ref} does not descend from prior checkpoint head {ancestor_ref}"
     )))
 }
@@ -243,7 +243,7 @@ fn validate_checkpoint_verify_receipt(input: CheckpointVerifyReceiptValidationIn
     let receipt = input
         .value
         .collect_simple_record("chain-verify-receipt-v1", Some(11))
-        .ok_or_else(|| MoltenError::invalid_harness("expected chain verify receipt for checkpoint"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected chain verify receipt for checkpoint"))?;
     let root = input.root;
     let chain = input.chain;
     let anchor_link_ref = input.anchor_link_ref;
@@ -252,28 +252,28 @@ fn validate_checkpoint_verify_receipt(input: CheckpointVerifyReceiptValidationIn
     require_schema(&receipt[0], EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA, "chain verify receipt schema")?;
     let decision = record_string(&receipt[1], "decision", "chain verify decision")?;
     if decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "checkpoint verify receipt decision must be pass, got {decision}"
         )));
     }
     let receipt_chain = parse_chain(&receipt[2])?;
     if &receipt_chain != chain {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "checkpoint verify receipt chain {:?} does not match {:?}",
             receipt_chain, chain
         )));
     }
     let anchor = record_optional_ref(&receipt[3], "anchor")?
-        .ok_or_else(|| MoltenError::invalid_harness("checkpoint verify receipt must name an anchor"))?;
+        .ok_or_else(|| Failure::invalid_harness("checkpoint verify receipt must name an anchor"))?;
     if anchor != anchor_link_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "checkpoint verify receipt anchor {anchor} does not match {anchor_link_ref}"
         )));
     }
     let expected_head = record_optional_ref(&receipt[4], "expected-head")?
-        .ok_or_else(|| MoltenError::invalid_harness("checkpoint verify receipt must name expected head"))?;
+        .ok_or_else(|| Failure::invalid_harness("checkpoint verify receipt must name expected head"))?;
     if expected_head != head_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "checkpoint verify receipt head {expected_head} does not match {head_ref}"
         )));
     }
@@ -291,50 +291,50 @@ fn validate_range_binding(input: RangeBindingInput<'_>) -> Result<()> {
     let receipt = input
         .value
         .collect_simple_record("chain-verify-receipt-v1", Some(11))
-        .ok_or_else(|| MoltenError::invalid_harness("expected chain verify receipt for checkpoint"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected chain verify receipt for checkpoint"))?;
     let predicate_refs = record_ref_sequence(&receipt[8], "predicates")?;
     if !predicate_refs.iter().any(|predicate_ref| predicate_ref == input.range_predicate_ref) {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "checkpoint verify receipt does not bind range predicate {}",
             input.range_predicate_ref
         )));
     }
     let predicate_value = crate::ledger::read_artifact(input.root, input.range_predicate_ref).map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "checkpoint range predicate {} is unavailable in ledger: {error}",
             input.range_predicate_ref
         ))
     })?;
     let predicate = parse_chain_predicate_receipt(&predicate_value)?;
     if predicate.predicate != CHECKPOINT_COVERS_RANGE_PREDICATE || predicate.decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "checkpoint range predicate {} must be a passing {CHECKPOINT_COVERS_RANGE_PREDICATE} receipt",
             input.range_predicate_ref
         )));
     }
     let verified_links = record_ref_sequence(&receipt[6], "verified-links")?;
     if verified_links.first().map(String::as_str) != Some(input.anchor_link_ref) {
-        return Err(MoltenError::invalid_harness("checkpoint verify receipt segment does not begin at anchor"));
+        return Err(Failure::invalid_harness("checkpoint verify receipt segment does not begin at anchor"));
     }
     if verified_links.last().map(String::as_str) != Some(input.head_ref) {
-        return Err(MoltenError::invalid_harness("checkpoint verify receipt segment does not end at head"));
+        return Err(Failure::invalid_harness("checkpoint verify receipt segment does not end at head"));
     }
     let payload_refs = record_ref_sequence(&receipt[7], "payloads")?;
     if predicate.subject_refs != verified_links {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "checkpoint range predicate {} subjects do not match verified range",
             input.range_predicate_ref
         )));
     }
     if predicate.input_refs != payload_refs {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "checkpoint range predicate {} inputs do not match verified payload refs",
             input.range_predicate_ref
         )));
     }
     let expected_context_refs = scope_context_refs(input.chain)?;
     if predicate.context_refs != expected_context_refs {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "checkpoint range predicate {} context does not match checkpoint chain scope",
             input.range_predicate_ref
         )));

@@ -46,7 +46,7 @@ pub async fn publish_control_live_ingress(
             .sender
             .broadcast(crate::preserves_rail::canonical_bytes(&envelope.value)?.into())
             .await
-            .map_err(|error| MoltenError::invalid_harness(format!("live Iroh node control publish failed: {error}")))?;
+            .map_err(|error| Failure::invalid_harness(format!("live Iroh node control publish failed: {error}")))?;
     }
     let receipt_value = live_transport_receipt_value(&LiveTransportReceiptValueInput {
         operation: "publish",
@@ -75,12 +75,12 @@ pub fn receive_control_live_ingress_event(
     topic: &str,
     receiver_node: &str,
 ) -> Result<Option<ControlLiveIngressReceive>> {
-    let state_root = crate::node_state::NodeStateRoot::open(state_root)?;
+    let state_root = crate::node_state::Root::open(state_root)?;
     receive_control_live_ingress_event_with_root(&state_root, event, topic, receiver_node)
 }
 
 fn receive_control_live_ingress_event_with_root(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     event: &iroh_gossip::api::Event,
     topic: &str,
     receiver_node: &str,
@@ -103,7 +103,7 @@ fn receive_control_live_ingress_event_with_root(
 pub fn receive_control_live_ingress_bytes(
     input: &ControlLiveIngressReceiveBytesInput<'_>,
 ) -> Result<ControlLiveIngressReceive> {
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::Root::open(input.state_root)?;
     validate_state_root(input.state_root)?;
     receive_control_live_ingress_bytes_with_root(
         &state_root,
@@ -115,7 +115,7 @@ pub fn receive_control_live_ingress_bytes(
 }
 
 fn receive_control_live_ingress_bytes_with_root(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     topic: &str,
     receiver_node: &str,
     delivered_from: &str,
@@ -186,7 +186,7 @@ fn envelope_for_loopback(input: &ControlLiveLoopbackInput<'_>) -> Result<Control
 }
 
 pub async fn control_live_iroh_loopback(input: &ControlLiveLoopbackInput<'_>) -> Result<ControlLiveLoopback> {
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::Root::open(input.state_root)?;
     validate_state_root(input.state_root)?;
     ensure_state_layout(&state_root)?;
     let envelope = envelope_for_loopback(input)?;
@@ -209,16 +209,16 @@ pub async fn control_live_iroh_loopback(input: &ControlLiveLoopbackInput<'_>) ->
     let mut receiver_topic = receiver_gossip
         .subscribe(topic_id, vec![sender_id])
         .await
-        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh receiver subscribe failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("live Iroh receiver subscribe failed: {error}")))?;
     let sender_topic = sender_gossip
         .subscribe_and_join(topic_id, vec![receiver_id])
         .await
-        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh sender join failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("live Iroh sender join failed: {error}")))?;
     let (sender, _receiver_unused) = sender_topic.split();
     receiver_topic
         .joined()
         .await
-        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh receiver join failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("live Iroh receiver join failed: {error}")))?;
     let published = publish_control_live_ingress(&ControlLiveIngressPublishInput {
         sender: &sender,
         envelope_value: &envelope.value,
@@ -234,15 +234,15 @@ pub async fn control_live_iroh_loopback(input: &ControlLiveLoopbackInput<'_>) ->
         receive_first_live_ingress_event(&state_root, &mut receiver_topic, input.topic, input.to_node),
     )
     .await
-    .map_err(|_| MoltenError::invalid_harness("live Iroh node control loopback timed out waiting for envelope"))??;
+    .map_err(|_| Failure::invalid_harness("live Iroh node control loopback timed out waiting for envelope"))??;
     receiver_router
         .shutdown()
         .await
-        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh receiver router shutdown failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("live Iroh receiver router shutdown failed: {error}")))?;
     sender_router
         .shutdown()
         .await
-        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh sender router shutdown failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("live Iroh sender router shutdown failed: {error}")))?;
     Ok(ControlLiveLoopback {
         envelope_ref: envelope.envelope_ref,
         publish_receipt_ref: published.transport_receipt_ref,
@@ -255,13 +255,13 @@ pub async fn control_live_iroh_loopback(input: &ControlLiveLoopbackInput<'_>) ->
 }
 
 pub fn preflight_control_live_send(input: &ControlLiveSendInput<'_>) -> Result<ControlLiveSendPreflight> {
-    let state_root = input.state_root.map(crate::node_state::NodeStateRoot::open).transpose()?;
+    let state_root = input.state_root.map(crate::node_state::Root::open).transpose()?;
     preflight_control_live_send_with_root(input, state_root.as_ref())
 }
 
 fn preflight_control_live_send_with_root(
     input: &ControlLiveSendInput<'_>,
-    state_root: Option<&crate::node_state::NodeStateRoot>,
+    state_root: Option<&crate::node_state::Root>,
 ) -> Result<ControlLiveSendPreflight> {
     if let Some(path) = input.state_root {
         validate_state_root(path)?;

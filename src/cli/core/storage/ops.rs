@@ -60,7 +60,7 @@ pub(super) fn get(command: super::Command) -> molten::error::Result<()> {
     let admission = molten::typed_storage::Admission::local_fixture(&format!("cli:{namespace}:{key}"));
     let get = if let Some(migration_recipe) = migration_recipe.as_ref() {
         let expected_schema_ref = schema_ref.as_deref().ok_or_else(|| {
-            molten::error::MoltenError::invalid_harness("storage get --migration-recipe requires --schema-ref target")
+            molten::error::Failure::invalid_harness("storage get --migration-recipe requires --schema-ref target")
         })?;
         let recipe_value = super::io::read_preserves_file(migration_recipe)?;
         molten::typed_storage::get_value_with_migration(molten::typed_storage::MigrationGetInput {
@@ -177,5 +177,5 @@ pub(super) fn verify(command: super::Command) -> molten::error::Result<()> {
 }
 
 fn dispatch_mismatch(command: &str) -> molten::error::Result<()> {
-    Err(molten::error::MoltenError::invalid_harness(format!("storage {command} dispatch mismatch")))
+    Err(molten::error::Failure::invalid_harness(format!("storage {command} dispatch mismatch")))
 }

@@ -14,7 +14,7 @@ use super::ReplicaState;
 use super::STATIC_VOTER_COUNT;
 use super::StaticMembership;
 use super::election_timer_ref;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric_consistency::ConsistencyGroupBinding;
 use crate::fabric_consistency::ConsistencyGroupLifecycle;
@@ -98,27 +98,27 @@ pub(crate) fn plan_live_replica_start(input: ReplicaStartInput) -> Result<Replic
 fn validate_group(group: &ConsistencyGroupBinding, profile: &ReplicaProfile) -> Result<()> {
     validate_group_integrity(group)?;
     if group.lifecycle != ConsistencyGroupLifecycle::Active {
-        return Err(MoltenError::invalid_harness("live Raft startup requires an active consistency group"));
+        return Err(Failure::invalid_harness("live Raft startup requires an active consistency group"));
     }
     if group.engine_algorithm_profile != LIVE_RAFT_ALGORITHM_PROFILE
         || group.engine_implementation_profile != LIVE_RAFT_IMPLEMENTATION_PROFILE
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "live Raft startup requires the exact admitted algorithm and implementation profile",
         ));
     }
     if profile.group_binding_ref != group.binding_ref {
-        return Err(MoltenError::invalid_harness("live Raft profile uses a substituted consistency-group binding"));
+        return Err(Failure::invalid_harness("live Raft profile uses a substituted consistency-group binding"));
     }
     if profile.service_generation != group.service_generation {
-        return Err(MoltenError::invalid_harness("live Raft profile uses a stale service generation"));
+        return Err(Failure::invalid_harness("live Raft profile uses a stale service generation"));
     }
     if profile.placement_ref != group.placement_ref
         || profile.fencing_ref != group.fencing_ref
         || profile.fencing_epoch != group.fencing_epoch
         || profile.resource_profile_ref != group.resource_profile_ref
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "live Raft profile placement, fencing, or resource binding does not match the group",
         ));
     }
@@ -149,7 +149,7 @@ fn validate_group_integrity(group: &ConsistencyGroupBinding) -> Result<()> {
     let expected_value = crate::fabric_consistency::canonical::binding_value(&input, group.lifecycle);
     let expected_ref = crate::preserves_rail::canonical_hash(&expected_value)?;
     if group.value != expected_value || group.binding_ref != expected_ref {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "live Raft consistency-group binding failed canonical integrity validation",
         ));
     }
@@ -173,26 +173,26 @@ fn validate_profile(profile: &ReplicaProfile) -> Result<()> {
         validate_content_ref(reference, label)?;
     }
     if profile.service_generation == 0 || profile.fencing_epoch == 0 {
-        return Err(MoltenError::invalid_harness("live Raft generation and fencing epoch must be positive"));
+        return Err(Failure::invalid_harness("live Raft generation and fencing epoch must be positive"));
     }
     if profile.heartbeat_ticks == 0
         || profile.election_min_ticks <= profile.heartbeat_ticks
         || profile.election_max_ticks < profile.election_min_ticks
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "live Raft timer bounds require heartbeat < election minimum <= election maximum",
         ));
     }
     if profile.max_log_entries == 0 || profile.max_log_entries > MAX_REPLICA_LOG_ENTRIES {
-        return Err(MoltenError::invalid_harness("live Raft log-entry bound is outside the admitted range"));
+        return Err(Failure::invalid_harness("live Raft log-entry bound is outside the admitted range"));
     }
     if profile.max_message_entries == 0 || profile.max_message_entries > MAX_REPLICA_MESSAGE_ENTRIES {
-        return Err(MoltenError::invalid_harness("live Raft message-entry bound is outside the admitted range"));
+        return Err(Failure::invalid_harness("live Raft message-entry bound is outside the admitted range"));
     }
     if profile.max_effects_per_step < MINIMUM_LIVE_REPLICA_STEP_EFFECTS
         || profile.max_effects_per_step > MAX_REPLICA_EFFECTS
     {
-        return Err(MoltenError::invalid_harness("live Raft effect bound cannot admit a complete static-replica step"));
+        return Err(Failure::invalid_harness("live Raft effect bound cannot admit a complete static-replica step"));
     }
     Ok(())
 }
@@ -205,10 +205,10 @@ fn validate_membership(
     validate_identifier(node_id, "live Raft node id")?;
     validate_content_ref(&membership.membership_ref, "live Raft membership ref")?;
     if membership.membership_ref != group.membership_ref || membership.config_epoch != group.config_epoch {
-        return Err(MoltenError::invalid_harness("live Raft membership ref or configuration epoch is stale"));
+        return Err(Failure::invalid_harness("live Raft membership ref or configuration epoch is stale"));
     }
     if membership.voters.len() != STATIC_VOTER_COUNT {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "initial live Raft profile requires exactly {STATIC_VOTER_COUNT} voters"
         )));
     }
@@ -216,11 +216,11 @@ fn validate_membership(
     for voter in &membership.voters {
         validate_identifier(voter, "live Raft voter id")?;
         if !unique.insert(voter.as_str()) {
-            return Err(MoltenError::invalid_harness("live Raft membership contains a duplicate voter"));
+            return Err(Failure::invalid_harness("live Raft membership contains a duplicate voter"));
         }
     }
     if !unique.contains(node_id) {
-        return Err(MoltenError::invalid_harness("live Raft node is absent from the admitted static membership"));
+        return Err(Failure::invalid_harness("live Raft node is absent from the admitted static membership"));
     }
     membership.voters.sort();
     Ok(membership)
@@ -228,7 +228,7 @@ fn validate_membership(
 
 fn validate_port_bindings(mut bindings: Vec<ReplicaPortBinding>) -> Result<Vec<ReplicaPortBinding>> {
     if bindings.len() != REQUIRED_REPLICA_PORT_COUNT {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "live Raft startup requires exactly {REQUIRED_REPLICA_PORT_COUNT} admitted fabric port bindings"
         )));
     }
@@ -237,12 +237,12 @@ fn validate_port_bindings(mut bindings: Vec<ReplicaPortBinding>) -> Result<Vec<R
         validate_identifier(&binding.implementation_profile, "live Raft port implementation profile")?;
         validate_content_ref(&binding.binding_ref, "live Raft port binding ref")?;
         if !unique.insert((binding.port_id.as_str(), binding.version.as_str())) {
-            return Err(MoltenError::invalid_harness("live Raft startup contains a duplicate fabric port binding"));
+            return Err(Failure::invalid_harness("live Raft startup contains a duplicate fabric port binding"));
         }
     }
     for (port_id, version) in REQUIRED_REPLICA_PORTS {
         if !unique.contains(&(port_id, version)) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "live Raft startup is missing required fabric port {port_id}@{version}"
             )));
         }
@@ -262,7 +262,7 @@ fn initial_effects(state: &ReplicaState) -> Result<Vec<ReplicaEffect>> {
         },
     ];
     if effects.len() > state.profile.max_effects_per_step {
-        return Err(MoltenError::invalid_harness("live Raft startup exceeds its admitted effect bound"));
+        return Err(Failure::invalid_harness("live Raft startup exceeds its admitted effect bound"));
     }
     Ok(effects)
 }
@@ -307,17 +307,17 @@ fn initial_state(
 
 fn validate_identifier(value: &str, label: &str) -> Result<()> {
     if value.is_empty() || value.len() > MAX_REPLICA_IDENTIFIER_BYTES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "{label} must be non-empty and at most {MAX_REPLICA_IDENTIFIER_BYTES} bytes"
         )));
     }
     if !value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':')) {
-        return Err(MoltenError::invalid_harness(format!("{label} contains unsupported characters")));
+        return Err(Failure::invalid_harness(format!("{label} contains unsupported characters")));
     }
     Ok(())
 }
 
 fn validate_content_ref(value: &str, label: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value)
-        .map_err(|error| MoltenError::invalid_harness(format!("invalid {label}: {error}")))
+        .map_err(|error| Failure::invalid_harness(format!("invalid {label}: {error}")))
 }

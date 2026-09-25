@@ -155,7 +155,7 @@ Preferred stable API for new boundary work:
 
 Current public root modules are classified as:
 
-- stable API: `prelude`, `core_api`, `MoltenError`, `Result`;
+- stable API: `prelude`, `core_api`, `Failure`, `Result`;
 - compatibility aliases: domain aliases created with `compat_module!`;
 - internal implementation compatibility: `#[doc(hidden)]` root modules that back aliases;
 - generated/test support: ordinal `parts/**` shards and `test_support`.

@@ -1,7 +1,7 @@
 use molten_core::world_benchmark::*;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const ROOT_REFERENCE_BYTES: u64 = 64;
@@ -60,7 +60,7 @@ impl WorldBenchmarkSnapshotPort for DeterministicWorldBenchmarkFixture {
                 .snapshot
                 .clone()
                 .map(Some)
-                .ok_or_else(|| MoltenError::invalid_harness("opaque fixture is missing an exact snapshot binding")),
+                .ok_or_else(|| Failure::invalid_harness("opaque fixture is missing an exact snapshot binding")),
             _ => Ok(None),
         }
     }
@@ -82,7 +82,7 @@ fn fixture_facts(
     let snapshot_physical = dataset
         .changed_objects
         .checked_mul(dataset.page_size_bytes)
-        .ok_or_else(|| MoltenError::invalid_harness("snapshot fixture physical byte count overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("snapshot fixture physical byte count overflow"))?;
     let mut facts = WorldBenchmarkOperationFacts {
         adapter_ref: "molten-deterministic-world-benchmark-v1".to_string(),
         logical_bytes: 0,

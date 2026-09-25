@@ -35,7 +35,7 @@ pub(super) fn aggregate(
             crate::preserves_rail::u64_value(state.last_applied),
             crate::preserves_rail::u64_value(
                 u64::try_from(ledger.records.len())
-                    .map_err(|_| MoltenError::invalid_harness("live Raft evidence record count exceeds u64"))?,
+                    .map_err(|_| Failure::invalid_harness("live Raft evidence record count exceeds u64"))?,
             ),
             crate::preserves_rail::u64_value(ledger.suppressed_heartbeat_count),
             crate::preserves_rail::bool_value(ledger.saturated),

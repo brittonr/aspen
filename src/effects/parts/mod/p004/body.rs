@@ -1,16 +1,16 @@
 
 fn require_scope_match(scope: &EffectScope, request: &EffectHandleRequest<'_>, label: &str) -> Result<()> {
     if scope.run_ref != request.run_ref {
-        return Err(MoltenError::invalid_harness(format!("{label} run scope does not match request")));
+        return Err(Failure::invalid_harness(format!("{label} run scope does not match request")));
     }
     if scope.session_ref != request.session_ref {
-        return Err(MoltenError::invalid_harness(format!("{label} session scope does not match request")));
+        return Err(Failure::invalid_harness(format!("{label} session scope does not match request")));
     }
     if scope.actor_ref.as_deref() != request.actor_ref {
-        return Err(MoltenError::invalid_harness(format!("{label} actor scope does not match request")));
+        return Err(Failure::invalid_harness(format!("{label} actor scope does not match request")));
     }
     if scope.turn_ref.as_deref() != request.turn_ref {
-        return Err(MoltenError::invalid_harness(format!("{label} turn scope does not match request")));
+        return Err(Failure::invalid_harness(format!("{label} turn scope does not match request")));
     }
     Ok(())
 }
@@ -155,7 +155,7 @@ fn declared_effect_fields(value: &IoValue) -> Result<(std::borrow::Cow<'_, Recor
     value
         .collect_simple_record("declared-effect", Some(DECLARED_EFFECT_LEGACY_FIELD_COUNT))
         .map(|fields| (fields, false))
-        .ok_or_else(|| MoltenError::invalid_harness("expected declared effect record"))
+        .ok_or_else(|| Failure::invalid_harness("expected declared effect record"))
 }
 
 fn parse_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
@@ -169,7 +169,7 @@ fn parse_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
         let name = required_string(&check[0], "effect check name")?;
         let status = required_string(&check[1], "effect check status")?;
         if status != "pass" {
-            return Err(MoltenError::invalid_harness(format!("effect check {name} status is {status}")));
+            return Err(Failure::invalid_harness(format!("effect check {name} status is {status}")));
         }
         checks.push(name);
     }
@@ -180,13 +180,13 @@ fn require_check(checks: &[String], expected: &str, label: &str) -> Result<()> {
     if checks.iter().any(|check| check == expected) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} missing {expected} check")))
+        Err(Failure::invalid_harness(format!("{label} missing {expected} check")))
     }
 }
 
 fn validate_declared_effects(effects: &[DeclaredEffect]) -> Result<()> {
     if effects.is_empty() {
-        return Err(MoltenError::invalid_harness("effect manifest must declare at least one effect"));
+        return Err(Failure::invalid_harness("effect manifest must declare at least one effect"));
     }
     let mut seen = std::collections::BTreeSet::new();
     for effect in effects {
@@ -199,7 +199,7 @@ fn validate_declared_effects(effects: &[DeclaredEffect]) -> Result<()> {
         validate_refs(&effect.evidence_refs, "declared effect evidence ref")?;
         let key = (effect.effect_id.as_str(), effect.operation.as_str());
         if !seen.insert(key) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "duplicate declared effect {} operation {}",
                 effect.effect_id, effect.operation
             )));
@@ -210,13 +210,13 @@ fn validate_declared_effects(effects: &[DeclaredEffect]) -> Result<()> {
 
 fn validate_operations(operations: &[String]) -> Result<()> {
     if operations.is_empty() {
-        return Err(MoltenError::invalid_harness("effect operation set must not be empty"));
+        return Err(Failure::invalid_harness("effect operation set must not be empty"));
     }
     let mut seen = std::collections::BTreeSet::new();
     for operation in operations {
         validate_operation(operation)?;
         if !seen.insert(operation.as_str()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate effect operation {operation}")));
+            return Err(Failure::invalid_harness(format!("duplicate effect operation {operation}")));
         }
     }
     Ok(())
@@ -227,7 +227,7 @@ fn validate_effect_id(effect_id: &str) -> Result<()> {
     if !effect_id.chars().all(|character| {
         character.is_ascii_lowercase() || character.is_ascii_digit() || matches!(character, '-' | '_' | ':' | '/' | '.')
     }) {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "effect id {effect_id} must use lowercase ascii, digits, or effect separators"
         )));
     }
@@ -237,7 +237,7 @@ fn validate_effect_id(effect_id: &str) -> Result<()> {
 fn validate_operation(operation: &str) -> Result<()> {
     validate_non_empty(operation, "effect operation")?;
     if !operation.chars().all(is_effect_token_character) {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "effect operation {operation} must use lowercase ascii, digits, or effect separators"
         )));
     }
@@ -247,7 +247,7 @@ fn validate_operation(operation: &str) -> Result<()> {
 fn validate_resource_class(resource_class: &str) -> Result<()> {
     validate_non_empty(resource_class, "effect resource class")?;
     if !resource_class.chars().all(is_effect_token_character) {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "effect resource class {resource_class} must use lowercase ascii, digits, or effect separators"
         )));
     }
@@ -261,7 +261,7 @@ fn is_effect_token_character(character: char) -> bool {
 fn validate_executor_kind(executor_kind: &str) -> Result<()> {
     match executor_kind {
         "native" | "steel" | "wasm" | "adapter" | "remote-proxy" | "job" | "protocol" => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported effect manifest executor kind {executor_kind}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported effect manifest executor kind {executor_kind}"))),
     }
 }
 
@@ -274,21 +274,21 @@ fn validate_handler_profile(profile: &str) -> Result<()> {
         | HANDLER_PROFILE_PROFILING
         | HANDLER_PROFILE_DRY_RUN
         | HANDLER_PROFILE_REPLAY => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported effect handler profile {profile}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported effect handler profile {profile}"))),
     }
 }
 
 fn validate_decision(decision: &str) -> Result<()> {
     match decision {
         "pass" | "deny" => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported effect decision {decision}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported effect decision {decision}"))),
     }
 }
 
 fn validate_transfer(transfer: &str) -> Result<()> {
     match transfer {
         TRANSFER_LOCAL_ONLY | TRANSFER_ATTENUATED_DELEGATION | TRANSFER_REMOTE_PROXY => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported effect handle transfer policy {transfer}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported effect handle transfer policy {transfer}"))),
     }
 }
 
@@ -304,7 +304,7 @@ fn validate_unique_refs(refs: &[String], field: &str) -> Result<()> {
     for value in refs {
         require_ref(value, field)?;
         if !seen.insert(value.as_str()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate {field} {value}")));
+            return Err(Failure::invalid_harness(format!("duplicate {field} {value}")));
         }
     }
     Ok(())
@@ -314,7 +314,7 @@ fn validate_operation_subset(parent: &[String], child: &[String]) -> Result<()> 
     validate_operations(child)?;
     for operation in child {
         if !parent.iter().any(|candidate| candidate == operation) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "attenuated effect handle operation {operation} is not in parent operation set"
             )));
         }
@@ -325,17 +325,17 @@ fn validate_operation_subset(parent: &[String], child: &[String]) -> Result<()> 
 fn validate_scope_narrows(parent: &EffectScope, child: &EffectScope) -> Result<()> {
     validate_scope(child)?;
     if parent.run_ref != child.run_ref || parent.session_ref != child.session_ref {
-        return Err(MoltenError::invalid_harness("attenuated effect handle cannot widen run/session scope"));
+        return Err(Failure::invalid_harness("attenuated effect handle cannot widen run/session scope"));
     }
     if let Some(parent_actor) = parent.actor_ref.as_deref()
         && child.actor_ref.as_deref() != Some(parent_actor)
     {
-        return Err(MoltenError::invalid_harness("attenuated effect handle cannot escape parent actor scope"));
+        return Err(Failure::invalid_harness("attenuated effect handle cannot escape parent actor scope"));
     }
     if let Some(parent_turn) = parent.turn_ref.as_deref()
         && child.turn_ref.as_deref() != Some(parent_turn)
     {
-        return Err(MoltenError::invalid_harness("attenuated effect handle cannot escape parent turn scope"));
+        return Err(Failure::invalid_harness("attenuated effect handle cannot escape parent turn scope"));
     }
     Ok(())
 }

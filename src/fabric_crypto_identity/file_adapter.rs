@@ -1,12 +1,12 @@
 use std::str::FromStr;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::node_state::MAX_NODE_SECRET_BYTES;
-use crate::node_state::NodeStateFileObservation;
-use crate::node_state::NodeStateNamespace;
-use crate::node_state::NodeStatePath;
+use crate::node_state::FileObservation;
+use crate::node_state::DirectoryView;
+use crate::node_state::RelativePath;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::content_ref_from_bytes;
 use crate::preserves_rail::record;
@@ -87,28 +87,28 @@ pub(crate) struct ExactArtifactAuthSignature {
 }
 
 pub struct IrohEd25519FileAdapter<'a> {
-    namespace: &'a NodeStateNamespace,
+    namespace: &'a DirectoryView,
     profile: CanonicalCryptoProfile,
     backend_ref: String,
 }
 
 impl<'a> IrohEd25519FileAdapter<'a> {
     pub fn new(
-        namespace: &'a NodeStateNamespace,
+        namespace: &'a DirectoryView,
         profile: CanonicalCryptoProfile,
         backend_ref: String,
     ) -> Result<Self> {
         admit_profile_for_production(&profile.profile)
             .map_err(|issues| validation_error("production crypto profile", &issues))?;
         if !profile.profile.backend_classes.contains(&KeyBackendClass::CapabilityFile) {
-            return Err(MoltenError::invalid_harness("production crypto profile does not admit capability-file keys"));
+            return Err(Failure::invalid_harness("production crypto profile does not admit capability-file keys"));
         }
         require_blake3_ref("crypto file backend", &backend_ref)?;
         match namespace.kind() {
-            crate::node_state::NodeStateNamespaceKind::Identity
-            | crate::node_state::NodeStateNamespaceKind::Secrets => {}
+            crate::node_state::NamespaceKind::Identity
+            | crate::node_state::NamespaceKind::Secrets => {}
             other => {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(Failure::invalid_harness(format!(
                     "crypto file adapter requires identity or secrets namespace, got {other:?}"
                 )));
             }
@@ -135,18 +135,18 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         require_not_revoked(self.namespace, purpose)?;
         let path = key_path(purpose)?;
         match self.namespace.observe_file(&path)? {
-            NodeStateFileObservation::Missing => {
+            FileObservation::Missing => {
                 if !permit_first_boot_generation {
-                    return Err(MoltenError::invalid_harness(
+                    return Err(Failure::invalid_harness(
                         "required production key is unavailable and replacement generation is disabled",
                     ));
                 }
                 self.generate_first_key(purpose, policy_ref, &path)
             }
-            NodeStateFileObservation::NonRegular(kind) => {
-                Err(MoltenError::invalid_harness(format!("production key leaf must be a regular file, got {kind:?}")))
+            FileObservation::NonRegular(kind) => {
+                Err(Failure::invalid_harness(format!("production key leaf must be a regular file, got {kind:?}")))
             }
-            NodeStateFileObservation::Regular(file) => {
+            FileObservation::Regular(file) => {
                 let permission_status = permission_status(&file);
                 require_restricted_permission(permission_status)?;
                 let bytes = file.read_bounded(MAX_NODE_SECRET_BYTES)?;
@@ -160,14 +160,14 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         &self,
         purpose: KeyPurpose,
         policy_ref: &str,
-        path: &NodeStatePath,
+        path: &RelativePath,
     ) -> Result<ResolvedProductionKey> {
         let entropy_profile_ref = self
             .profile
             .profile
             .entropy_profile_ref
             .clone()
-            .ok_or_else(|| MoltenError::invalid_harness("production crypto profile has no entropy profile"))?;
+            .ok_or_else(|| Failure::invalid_harness("production crypto profile has no entropy profile"))?;
         let request = KeyGenerationRequest {
             operation_id: format!("generate-{}", purpose.as_str()),
             profile_ref: self.profile.profile.profile_ref.clone(),
@@ -245,7 +245,7 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         let plan = plan_sign(&self.profile.profile, &request)
             .map_err(|issues| validation_error("production signing", &issues))?;
         if domain.domain_ref != canonical_hash(&domain.value)? {
-            return Err(MoltenError::invalid_harness("signature domain ref does not match canonical value"));
+            return Err(Failure::invalid_harness("signature domain ref does not match canonical value"));
         }
         let record = self.load_current_record(requested_handle.purpose)?;
         let signature = record.secret_key.sign(&domain.bytes).to_bytes().to_vec();
@@ -263,21 +263,21 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         let current = self.resolve_or_generate(requested_handle.purpose, policy_ref, false)?;
         require_current_handle(requested_handle, &current.handle.handle)?;
         if statement.scope.profile_id != self.profile.profile.profile_id {
-            return Err(MoltenError::invalid_harness("artifact-auth statement profile does not match the key profile"));
+            return Err(Failure::invalid_harness("artifact-auth statement profile does not match the key profile"));
         }
         if statement.scope.purpose != requested_handle.purpose.as_str() {
-            return Err(MoltenError::invalid_harness("artifact-auth statement purpose does not match the key purpose"));
+            return Err(Failure::invalid_harness("artifact-auth statement purpose does not match the key purpose"));
         }
         let record = self.load_current_record(requested_handle.purpose)?;
         let public_key = record.secret_key.public();
         let key_identity = artifact_auth_ed25519::public_key_identity(public_key.as_bytes());
         if statement.key_identity != key_identity {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "artifact-auth statement full-key identity does not match the current key",
             ));
         }
         let statement_bytes = artifact_auth_core::canonical_statement_bytes(statement)
-            .map_err(|_| MoltenError::invalid_harness("artifact-auth statement is not canonicalizable"))?;
+            .map_err(|_| Failure::invalid_harness("artifact-auth statement is not canonicalizable"))?;
         let signature_bytes = record.secret_key.sign(&statement_bytes).to_bytes().to_vec();
         debug_assert_eq!(public_key.as_bytes().len(), artifact_auth_ed25519::ED25519_PUBLIC_KEY_BYTES);
         debug_assert_eq!(signature_bytes.len(), artifact_auth_ed25519::ED25519_SIGNATURE_BYTES);
@@ -301,7 +301,7 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         require_canonical_domain(&self.profile, expected_domain)?;
         require_canonical_signature(signature)?;
         let public_key = iroh::PublicKey::from_str(public_key)
-            .map_err(|_| MoltenError::invalid_harness("verification public key is malformed"))?;
+            .map_err(|_| Failure::invalid_harness("verification public key is malformed"))?;
         let public_key_ref = content_ref_from_bytes(public_key.as_bytes());
         let parsed_signature = iroh::Signature::try_from(signature.signature.as_slice()).ok();
         let crypto_passed = parsed_signature
@@ -352,7 +352,7 @@ impl<'a> IrohEd25519FileAdapter<'a> {
 
     pub fn rotate(&self, request: &KeyRotationRequest) -> Result<CompletedProductionRotation> {
         if request.overlap != RotationOverlapPolicy::None {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "capability-file crypto adapter supports no-overlap rotation only",
             ));
         }
@@ -393,8 +393,8 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         receipt_refs: Vec<String>,
     ) -> Result<CryptoStatusReadback> {
         let path = key_path(purpose)?;
-        let NodeStateFileObservation::Regular(file) = self.namespace.observe_file(&path)? else {
-            return Err(MoltenError::invalid_harness("production key status is unavailable"));
+        let FileObservation::Regular(file) = self.namespace.observe_file(&path)? else {
+            return Err(Failure::invalid_harness("production key status is unavailable"));
         };
         let permission_status = permission_status(&file);
         let record = decode_key_record(&file.read_bounded(MAX_NODE_SECRET_BYTES)?)?;
@@ -417,7 +417,7 @@ impl<'a> IrohEd25519FileAdapter<'a> {
     #[cfg(test)]
     pub(crate) fn load_transport_secret(&self, handle: &OpaqueKeyHandle) -> Result<iroh::SecretKey> {
         if handle.purpose != KeyPurpose::TransportEndpoint {
-            return Err(MoltenError::invalid_harness("only transport-purpose handles may configure an Iroh endpoint"));
+            return Err(Failure::invalid_harness("only transport-purpose handles may configure an Iroh endpoint"));
         }
         let current = self.resolve_or_generate(
             KeyPurpose::TransportEndpoint,
@@ -427,7 +427,7 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         if current.handle.handle.handle_ref != handle.handle_ref
             || current.handle.handle.generation != handle.generation
         {
-            return Err(MoltenError::invalid_harness("stale transport key handle denied"));
+            return Err(Failure::invalid_harness("stale transport key handle denied"));
         }
         Ok(self.load_current_record(KeyPurpose::TransportEndpoint)?.secret_key)
     }
@@ -435,8 +435,8 @@ impl<'a> IrohEd25519FileAdapter<'a> {
     fn load_current_record(&self, purpose: KeyPurpose) -> Result<KeyRecord> {
         let path = key_path(purpose)?;
         let observation = self.namespace.observe_file(&path)?;
-        let NodeStateFileObservation::Regular(file) = observation else {
-            return Err(MoltenError::invalid_harness("current production key is unavailable"));
+        let FileObservation::Regular(file) = observation else {
+            return Err(Failure::invalid_harness("current production key is unavailable"));
         };
         require_restricted_permission(permission_status(&file))?;
         decode_key_record(&file.read_bounded(MAX_NODE_SECRET_BYTES)?)
@@ -485,7 +485,7 @@ pub fn fixture_blake3_profile(profile_ref: String) -> CryptoAdapterProfile {
     }
 }
 
-pub(crate) fn transport_key_path() -> Result<NodeStatePath> {
+pub(crate) fn transport_key_path() -> Result<RelativePath> {
     key_path(KeyPurpose::TransportEndpoint)
 }
 
@@ -545,32 +545,32 @@ pub(crate) fn transport_endpoint_material(
 }
 
 pub(crate) fn load_transport_secret_for_identity(
-    namespace: &NodeStateNamespace,
+    namespace: &DirectoryView,
     expected_endpoint_id: &str,
     expected_handle_ref: &str,
     backend_ref: &str,
 ) -> Result<iroh::SecretKey> {
     require_not_revoked(namespace, KeyPurpose::TransportEndpoint)?;
     let observation = namespace.observe_file(&transport_key_path()?)?;
-    let NodeStateFileObservation::Regular(file) = observation else {
-        return Err(MoltenError::invalid_harness("persisted transport key is unavailable"));
+    let FileObservation::Regular(file) = observation else {
+        return Err(Failure::invalid_harness("persisted transport key is unavailable"));
     };
     require_restricted_permission(permission_status(&file))?;
     let bytes = file.read_bounded(MAX_NODE_SECRET_BYTES)?;
     let material = transport_endpoint_material(&bytes, backend_ref)?;
     if material.endpoint_id != expected_endpoint_id || material.handle_ref != expected_handle_ref {
-        return Err(MoltenError::invalid_harness("persisted transport key does not match admitted node identity"));
+        return Err(Failure::invalid_harness("persisted transport key does not match admitted node identity"));
     }
     Ok(decode_key_record(&bytes)?.secret_key)
 }
 
-fn key_path(purpose: KeyPurpose) -> Result<NodeStatePath> {
-    NodeStatePath::parse(key_file_name(purpose))
+fn key_path(purpose: KeyPurpose) -> Result<RelativePath> {
+    RelativePath::parse(key_file_name(purpose))
 }
 
-fn revocation_path(purpose: KeyPurpose) -> Result<NodeStatePath> {
+fn revocation_path(purpose: KeyPurpose) -> Result<RelativePath> {
     let path = format!("{}{REVOCATION_MARKER_SUFFIX}", key_file_name(purpose));
-    NodeStatePath::parse(&path)
+    RelativePath::parse(&path)
 }
 
 const fn key_file_name(purpose: KeyPurpose) -> &'static str {
@@ -583,33 +583,33 @@ const fn key_file_name(purpose: KeyPurpose) -> &'static str {
     }
 }
 
-fn is_revoked(namespace: &NodeStateNamespace, purpose: KeyPurpose) -> Result<bool> {
+fn is_revoked(namespace: &DirectoryView, purpose: KeyPurpose) -> Result<bool> {
     match namespace.observe_file(&revocation_path(purpose)?)? {
-        NodeStateFileObservation::Missing => Ok(false),
-        NodeStateFileObservation::Regular(file) => {
+        FileObservation::Missing => Ok(false),
+        FileObservation::Regular(file) => {
             require_restricted_permission(permission_status(&file))?;
             let marker = file.read_bounded(MAX_NODE_SECRET_BYTES)?;
             if marker.is_empty() {
-                return Err(MoltenError::invalid_harness("cryptographic key revocation marker is empty"));
+                return Err(Failure::invalid_harness("cryptographic key revocation marker is empty"));
             }
             Ok(true)
         }
-        NodeStateFileObservation::NonRegular(kind) => Err(MoltenError::invalid_harness(format!(
+        FileObservation::NonRegular(kind) => Err(Failure::invalid_harness(format!(
             "cryptographic key revocation marker must be a regular file, got {kind:?}"
         ))),
     }
 }
 
-fn require_not_revoked(namespace: &NodeStateNamespace, purpose: KeyPurpose) -> Result<()> {
+fn require_not_revoked(namespace: &DirectoryView, purpose: KeyPurpose) -> Result<()> {
     if is_revoked(namespace, purpose)? {
-        return Err(MoltenError::invalid_harness(format!("{} key is revoked", purpose.as_str())));
+        return Err(Failure::invalid_harness(format!("{} key is revoked", purpose.as_str())));
     }
     Ok(())
 }
 
 fn require_current_handle(requested: &OpaqueKeyHandle, current: &OpaqueKeyHandle) -> Result<()> {
     if requested != current {
-        return Err(MoltenError::invalid_harness("stale or mismatched cryptographic key handle denied"));
+        return Err(Failure::invalid_harness("stale or mismatched cryptographic key handle denied"));
     }
     Ok(())
 }
@@ -625,20 +625,20 @@ fn encode_key_record(record: &KeyRecord) -> [u8; KEY_RECORD_BYTES] {
 fn decode_key_record(bytes: &[u8]) -> Result<KeyRecord> {
     let bytes: [u8; KEY_RECORD_BYTES] = bytes
         .try_into()
-        .map_err(|_| MoltenError::invalid_harness("production key record has an invalid length"))?;
+        .map_err(|_| Failure::invalid_harness("production key record has an invalid length"))?;
     if &bytes[..KEY_GENERATION_START] != KEY_RECORD_SCHEMA {
-        return Err(MoltenError::invalid_harness("production key record schema is malformed"));
+        return Err(Failure::invalid_harness("production key record schema is malformed"));
     }
     let generation_bytes: [u8; KEY_GENERATION_BYTES] = bytes[KEY_GENERATION_START..KEY_SECRET_START]
         .try_into()
-        .map_err(|_| MoltenError::invalid_harness("production key generation is malformed"))?;
+        .map_err(|_| Failure::invalid_harness("production key generation is malformed"))?;
     let generation = u64::from_be_bytes(generation_bytes);
     if generation == 0 {
-        return Err(MoltenError::invalid_harness("production key generation must be positive"));
+        return Err(Failure::invalid_harness("production key generation must be positive"));
     }
     let secret_bytes: [u8; ED25519_SECRET_BYTES] = bytes[KEY_SECRET_START..]
         .try_into()
-        .map_err(|_| MoltenError::invalid_harness("production secret key bytes are malformed"))?;
+        .map_err(|_| Failure::invalid_harness("production secret key bytes are malformed"))?;
     Ok(KeyRecord {
         generation,
         secret_key: iroh::SecretKey::from_bytes(&secret_bytes),
@@ -651,7 +651,7 @@ fn decode_secret_hex(secret: &str) -> Result<[u8; ED25519_SECRET_BYTES]> {
     const EXPECTED_HEX_CHARS: usize = ED25519_SECRET_BYTES * HEX_CHARS_PER_BYTE;
     let secret = secret.trim();
     if secret.len() != EXPECTED_HEX_CHARS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "explicit Ed25519 secret must contain exactly {EXPECTED_HEX_CHARS} lowercase hexadecimal characters"
         )));
     }
@@ -659,15 +659,15 @@ fn decode_secret_hex(secret: &str) -> Result<[u8; ED25519_SECRET_BYTES]> {
     for (index, slot) in bytes.iter_mut().enumerate() {
         let offset = index
             .checked_mul(HEX_CHARS_PER_BYTE)
-            .ok_or_else(|| MoltenError::invalid_harness("secret hex offset overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("secret hex offset overflow"))?;
         let pair = &secret[offset..offset + HEX_CHARS_PER_BYTE];
         if !pair.chars().all(|character| matches!(character, '0'..='9' | 'a'..='f')) {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "explicit Ed25519 secret must use lowercase hexadecimal characters",
             ));
         }
         *slot = u8::from_str_radix(pair, HEX_RADIX)
-            .map_err(|_| MoltenError::invalid_harness("explicit Ed25519 secret contains malformed hex"))?;
+            .map_err(|_| Failure::invalid_harness("explicit Ed25519 secret contains malformed hex"))?;
     }
     Ok(bytes)
 }
@@ -689,7 +689,7 @@ fn currentness_evidence_ref(
     ]))
 }
 
-fn permission_status(file: &crate::node_state::NodeStateFile) -> KeyPermissionStatus {
+fn permission_status(file: &crate::node_state::AcquiredFile) -> KeyPermissionStatus {
     #[cfg(unix)]
     {
         match file.unix_mode() {
@@ -708,14 +708,14 @@ fn permission_status(file: &crate::node_state::NodeStateFile) -> KeyPermissionSt
 fn require_canonical_domain(profile: &CanonicalCryptoProfile, supplied: &CanonicalSignatureDomain) -> Result<()> {
     let rebuilt = canonical_signature_domain(profile, &supplied.domain)?;
     if &rebuilt != supplied {
-        return Err(MoltenError::invalid_harness("signature domain does not match its canonical Preserves identity"));
+        return Err(Failure::invalid_harness("signature domain does not match its canonical Preserves identity"));
     }
     Ok(())
 }
 
 fn require_canonical_signature(supplied: &CanonicalSignatureOutcome) -> Result<()> {
     let signature_bytes = u64::try_from(supplied.signature.len())
-        .map_err(|_| MoltenError::invalid_harness("signature length does not fit u64"))?;
+        .map_err(|_| Failure::invalid_harness("signature length does not fit u64"))?;
     let signature_ref = content_ref_from_bytes(&supplied.signature);
     let value = canonical_signature_value(&supplied.metadata, &supplied.signature);
     let outcome_ref = canonical_hash(&value)?;
@@ -724,7 +724,7 @@ fn require_canonical_signature(supplied: &CanonicalSignatureOutcome) -> Result<(
         || supplied.value != value
         || supplied.outcome_ref != outcome_ref
     {
-        return Err(MoltenError::invalid_harness("signature outcome does not match its canonical Preserves identity"));
+        return Err(Failure::invalid_harness("signature outcome does not match its canonical Preserves identity"));
     }
     Ok(())
 }
@@ -733,10 +733,10 @@ fn require_restricted_permission(status: KeyPermissionStatus) -> Result<()> {
     match status {
         KeyPermissionStatus::Restricted => Ok(()),
         KeyPermissionStatus::Unsafe => {
-            Err(MoltenError::invalid_harness("production key permissions are not owner-only"))
+            Err(Failure::invalid_harness("production key permissions are not owner-only"))
         }
         KeyPermissionStatus::Unsupported => {
-            Err(MoltenError::invalid_harness("production key permission verification is unavailable"))
+            Err(Failure::invalid_harness("production key permission verification is unavailable"))
         }
     }
 }
@@ -750,10 +750,10 @@ fn require_blake3_ref(label: &str, value: &str) -> Result<()> {
     if is_valid {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} ref is malformed")))
+        Err(Failure::invalid_harness(format!("{label} ref is malformed")))
     }
 }
 
-fn validation_error<T: std::fmt::Debug>(label: &str, issues: &[T]) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label} validation failed: {issues:?}"))
+fn validation_error<T: std::fmt::Debug>(label: &str, issues: &[T]) -> Failure {
+    Failure::invalid_harness(format!("{label} validation failed: {issues:?}"))
 }

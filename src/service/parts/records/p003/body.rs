@@ -73,7 +73,7 @@ fn validate_monitor_parsed(monitor: &ServiceMonitor) -> Result<()> {
 fn validate_restart_policy_input(input: &ServiceRestartPolicyInput) -> Result<()> {
     validate_non_empty(&input.policy_id, "service restart policy id")?;
     if input.window_steps == 0 {
-        return Err(MoltenError::invalid_harness("service restart policy window must be positive"));
+        return Err(Failure::invalid_harness("service restart policy window must be positive"));
     }
     validate_refs(&input.resource_refs, "service restart resource ref")?;
     require_non_empty_refs(&input.resource_refs, "service restart resource refs")
@@ -82,7 +82,7 @@ fn validate_restart_policy_input(input: &ServiceRestartPolicyInput) -> Result<()
 fn validate_restart_policy_parsed(policy: &ServiceRestartPolicy) -> Result<()> {
     validate_non_empty(&policy.policy_id, "service restart policy id")?;
     if policy.window_steps == 0 {
-        return Err(MoltenError::invalid_harness("service restart policy window must be positive"));
+        return Err(Failure::invalid_harness("service restart policy window must be positive"));
     }
     require_non_empty_refs(&policy.resource_refs, "service restart resource refs")
 }
@@ -164,14 +164,14 @@ fn validate_service_id(value: &str, field: &str) -> Result<()> {
     if value.starts_with("svc:") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("expected svc: service id for {field}, got {value}")))
+        Err(Failure::invalid_harness(format!("expected svc: service id for {field}, got {value}")))
     }
 }
 
 fn validate_state(state: &str) -> Result<()> {
     match state {
         "demanded" | "waiting" | "starting" | "ready" | "degraded" | "failed" | "stopped" => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported service state {state}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported service state {state}"))),
     }
 }
 
@@ -179,28 +179,28 @@ fn validate_operation(operation: &str) -> Result<()> {
     match operation {
         "declare" | "demand" | "status" | "start" | "ready" | "fail" | "restart" | "stop" | "cleanup"
         | "dependency-wait" => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported service lifecycle operation {operation}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported service lifecycle operation {operation}"))),
     }
 }
 
 fn validate_decision(decision: &str) -> Result<()> {
     match decision {
         "pass" | "deny" | "diagnostic" | "backoff" => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported service decision {decision}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported service decision {decision}"))),
     }
 }
 
 fn validate_propagation(propagation: &str) -> Result<()> {
     match propagation {
         "restart" | "stop" | "notify" | "ignore" => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported service failure propagation {propagation}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported service failure propagation {propagation}"))),
     }
 }
 
 fn validate_notification_policy(policy: &str) -> Result<()> {
     match policy {
         "failure" | "status" | "all" => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported service monitor notification policy {policy}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported service monitor notification policy {policy}"))),
     }
 }
 
@@ -214,7 +214,7 @@ fn validate_diagnostics(diagnostics: &[String]) -> Result<()> {
 
 fn validate_non_empty(value: &str, field: &str) -> Result<()> {
     if value.trim().is_empty() {
-        Err(MoltenError::invalid_harness(format!("{field} must not be empty")))
+        Err(Failure::invalid_harness(format!("{field} must not be empty")))
     } else {
         Ok(())
     }
@@ -222,7 +222,7 @@ fn validate_non_empty(value: &str, field: &str) -> Result<()> {
 
 fn require_non_empty_refs(refs: &[String], field: &str) -> Result<()> {
     if refs.is_empty() {
-        Err(MoltenError::invalid_harness(format!("{field} must not be empty")))
+        Err(Failure::invalid_harness(format!("{field} must not be empty")))
     } else {
         validate_refs(refs, field)
     }
@@ -246,7 +246,7 @@ fn validate_optional_ref(reference: Option<&str>, field: &str) -> Result<()> {
 
 fn require_ref(reference: &str, field: &str) -> Result<()> {
     validate_content_ref(reference).map_err(|error| {
-        MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
+        Failure::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
     })
 }
 
@@ -254,7 +254,7 @@ fn ensure_count_at_most(actual: usize, maximum: usize, label: &str) -> Result<()
     if actual <= maximum {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
+        Err(Failure::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
     }
 }
 

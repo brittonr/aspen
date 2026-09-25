@@ -2,7 +2,7 @@
 pub fn parse_compatibility(value: &IoValue) -> Result<Compatibility> {
     let fields = value
         .collect_simple_record("schema-compatibility-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <schema-compatibility-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <schema-compatibility-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::SCHEMA_COMPATIBILITY_SCHEMA, "schema compatibility")?;
     let checks = parse_checks(&fields[8])?;
     require_check(&checks, "unique-not-structural-by-default", "schema compatibility")?;
@@ -61,7 +61,7 @@ fn compatibility_admits_scope(
 ) -> Result<bool> {
     let parsed = parse_compatibility(value)?;
     if parsed.expected_schema_ref != expected_schema_ref || parsed.actual_schema_ref != actual_schema_ref {
-        return Err(MoltenError::invalid_harness(format!("schema compatibility refs do not match {context}")));
+        return Err(Failure::invalid_harness(format!("schema compatibility refs do not match {context}")));
     }
     Ok(matches!(
         parsed.decision.as_str(),
@@ -102,7 +102,7 @@ pub fn compatibility_receipt_value(operation: &str, compatibility_value: &IoValu
 pub fn parse_compatibility_receipt(value: &IoValue) -> Result<CompatibilityReceipt> {
     let fields = value
         .collect_simple_record("schema-compatibility-receipt-v1", Some(7))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <schema-compatibility-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <schema-compatibility-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::SCHEMA_COMPATIBILITY_RECEIPT_SCHEMA,
@@ -169,7 +169,7 @@ fn compatibility_decision(input: &CompatibilityInput) -> Result<String> {
 
 fn normalize_record_shape(fields: &Record<Value<IoValue>>) -> Result<IoValue> {
     if fields.len() != 3 {
-        return Err(MoltenError::invalid_harness("record shape expects label and field sequence"));
+        return Err(Failure::invalid_harness("record shape expects label and field sequence"));
     }
     let label = required_string(&fields[1], "record shape label")?;
     let field_items = required_sequence(&fields[2], "record shape fields")?;
@@ -183,7 +183,7 @@ fn normalize_record_shape(fields: &Record<Value<IoValue>>) -> Result<IoValue> {
 
 fn normalize_field_shape(fields: &Record<Value<IoValue>>) -> Result<IoValue> {
     if fields.len() != 3 {
-        return Err(MoltenError::invalid_harness("field shape expects name and nested shape"));
+        return Err(Failure::invalid_harness("field shape expects name and nested shape"));
     }
     Ok(record("shape", vec![
         string("field"),
@@ -194,14 +194,14 @@ fn normalize_field_shape(fields: &Record<Value<IoValue>>) -> Result<IoValue> {
 
 fn normalize_unary_shape(kind: &'static str, fields: &Record<Value<IoValue>>) -> Result<IoValue> {
     if fields.len() != 2 {
-        return Err(MoltenError::invalid_harness(format!("{kind} shape expects one nested shape")));
+        return Err(Failure::invalid_harness(format!("{kind} shape expects one nested shape")));
     }
     Ok(record("shape", vec![string(kind), normalize_shape(&value_to_iovalue(&fields[1]))?]))
 }
 
 fn normalize_binary_shape(kind: &'static str, fields: &Record<Value<IoValue>>) -> Result<IoValue> {
     if fields.len() != 3 {
-        return Err(MoltenError::invalid_harness(format!("{kind} shape expects two nested shapes")));
+        return Err(Failure::invalid_harness(format!("{kind} shape expects two nested shapes")));
     }
     Ok(record("shape", vec![
         string(kind),
@@ -233,7 +233,7 @@ fn validate_mode(mode: &str) -> Result<()> {
     if matches!(mode, MODE_STRUCTURAL | MODE_UNIQUE | MODE_BRANDED_STRUCTURAL) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "unsupported schema identity mode {mode}; expected structural, unique, or branded-structural"
         )))
     }
@@ -243,7 +243,7 @@ fn validate_alias_scope(scope: &str) -> Result<()> {
     if matches!(scope, "storage" | "effect" | "protocol" | "policy" | "global-local-fixture") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "unsupported schema alias scope {scope}; expected storage, effect, protocol, policy, or global-local-fixture"
         )))
     }

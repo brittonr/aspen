@@ -150,7 +150,7 @@ where
         return Ok(refs);
     }
     for entry in root.root().list_entries(&directory)? {
-        if entry.kind != crate::local_store::LocalStoreEntryKind::File {
+        if entry.kind != crate::local_store::ObjectKind::File {
             continue;
         }
         let value = read_store_value_with_root(root, &entry.path)?;
@@ -174,7 +174,7 @@ fn optional_string_value(value: Option<&str>) -> IoValue {
 fn record_optional_string(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected {label} record")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected {label} record")))?;
     optional_record_string(&fields[0], label)
 }
 
@@ -185,7 +185,7 @@ fn optional_record_string(value: &Value<IoValue>, label: &str) -> Result<Option<
     } else {
         let some = inner
             .collect_simple_record("some", Some(1))
-            .ok_or_else(|| MoltenError::invalid_harness(format!("expected optional string for {label}")))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("expected optional string for {label}")))?;
         Ok(Some(required_string(&some[0], label)?))
     }
 }
@@ -193,14 +193,14 @@ fn optional_record_string(value: &Value<IoValue>, label: &str) -> Result<Option<
 fn record_optional_ref_with_status(value: &Value<IoValue>, label: &str) -> Result<(Option<String>, String)> {
     let fields = value
         .collect_simple_record(label, Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected retention GC audit {label} record")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected retention GC audit {label} record")))?;
     let inner = crate::preserves_rail::value_to_iovalue(&fields[0]);
     let reference = if inner.collect_simple_record("none", Some(0)).is_some() {
         None
     } else {
         let some = inner
             .collect_simple_record("some", Some(1))
-            .ok_or_else(|| MoltenError::invalid_harness(format!("expected optional ref for {label}")))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("expected optional ref for {label}")))?;
         let reference = required_string(&some[0], label)?;
         require_ref(&reference, label)?;
         Some(reference)
@@ -214,7 +214,7 @@ pub fn parse_receipt(value: &IoValue) -> Result<Receipt> {
     crate::preserves_rail::validate_boundary_schema(value, &crate::preserves_rail::RETENTION_RECEIPT_BOUNDARY_SCHEMA)?;
     let fields = value
         .collect_simple_record("retention-receipt-v1", Some(14))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-receipt-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::RETENTION_RECEIPT_SCHEMA, "retention receipt schema")?;
     let decision = record_string(&fields[1], "decision")?;
     let action = record_string(&fields[2], "action")?;
@@ -252,7 +252,7 @@ pub fn parse_receipt(value: &IoValue) -> Result<Receipt> {
 pub fn parse_tombstone(value: &IoValue) -> Result<Tombstone> {
     let fields = value
         .collect_simple_record("retention-tombstone-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-tombstone-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-tombstone-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::RETENTION_TOMBSTONE_SCHEMA, "retention tombstone schema")?;
     let (object_ref, object_kind) = parse_object_value(&fields[1])?;
     let retention_class = record_string(&fields[2], "class")?;
@@ -297,7 +297,7 @@ pub fn read_tombstone_with_root(root: &CapabilityRetentionRoot, tombstone_ref: &
     let value = read_store_value_with_root(root, &capability_ref_path(TOMBSTONE_DIR, tombstone_ref)?)?;
     let tombstone = parse_tombstone(&value)?;
     if tombstone.tombstone_ref != tombstone_ref {
-        return Err(MoltenError::invalid_harness("stored retention tombstone ref mismatch"));
+        return Err(Failure::invalid_harness("stored retention tombstone ref mismatch"));
     }
     Ok(tombstone)
 }

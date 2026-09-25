@@ -1,5 +1,5 @@
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Record<T> = preserves::Record<T>;
 type Result<T> = crate::error::Result<T>;
 type Value<T> = preserves::Value<T>;

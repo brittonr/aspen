@@ -10,15 +10,15 @@ type Path = std::path::Path;
 type PathBuf = std::path::PathBuf;
 #[cfg(test)]
 use std::fs;
-type StorePath = crate::local_store::LocalStorePath;
-type StoreEntryKind = crate::local_store::LocalStoreEntryKind;
+type StorePath = crate::local_store::RelativeLocator;
+type StoreEntryKind = crate::local_store::ObjectKind;
 type CompoundClass = preserves::CompoundClass;
 type Record<T> = preserves::Record<T>;
 type Value<T> = preserves::Value<T>;
 type ValueClass = preserves::ValueClass;
 type Database = redb::Database;
 type TableDefinition<K, V> = redb::TableDefinition<'static, K, V>;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 const CHUNK_LINEAGE_SCHEMA: &str = crate::preserves_rail::CHUNK_LINEAGE_SCHEMA;

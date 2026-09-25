@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric::DeterminismClass;
 use crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA;
@@ -56,7 +56,7 @@ impl ReferenceServiceExecutor {
         port_profiles: &[SimulatedPortProfile],
     ) -> Result<Self> {
         if operations.values().any(|operation| operation.kind() != kind) {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "reference executor operation kind does not match its extension service",
             ));
         }
@@ -212,7 +212,7 @@ pub fn reference_manifest_input(
     let mut required_ports = Vec::with_capacity(required_classes.len());
     for class in required_classes {
         let profile = profiles.iter().find(|profile| profile.class == class).ok_or_else(|| {
-            MoltenError::invalid_harness(format!("missing {} reference port profile", class.as_str()))
+            Failure::invalid_harness(format!("missing {} reference port profile", class.as_str()))
         })?;
         required_ports.push(FabricPortRequirement {
             port_id: profile.port_id.clone(),

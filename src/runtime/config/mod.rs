@@ -37,7 +37,7 @@ pub struct RuntimeSubscriptionConfig {
 impl RuntimeStartupConfig {
     pub fn from_nickel_export_json(source: &str) -> crate::error::Result<Self> {
         let config: Self = serde_json::from_str(source).map_err(|error| {
-            crate::error::MoltenError::invalid_harness(format!("invalid Nickel runtime export JSON: {error}"))
+            crate::error::Failure::invalid_harness(format!("invalid Nickel runtime export JSON: {error}"))
         })?;
         config.validate()?;
         Ok(config)
@@ -45,25 +45,25 @@ impl RuntimeStartupConfig {
 
     pub fn validate(&self) -> crate::error::Result<()> {
         if self.source_language != RuntimeConfigSource::Nickel {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "runtime startup config must come from Nickel export",
             ));
         }
         crate::raft_control_plane::validate_cluster_consensus_config(&self.consensus)?;
         if self.actors.len() > MAX_RUNTIME_ACTORS {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "runtime startup config exceeds {MAX_RUNTIME_ACTORS} actors"
             )));
         }
         if self.subscriptions.len() > MAX_RUNTIME_SUBSCRIPTIONS {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "runtime startup config exceeds {MAX_RUNTIME_SUBSCRIPTIONS} subscriptions"
             )));
         }
         for subscription in &self.subscriptions {
             super::RuntimeValue::new(crate::preserves_rail::parse_text(&subscription.subject_preserves)?)?;
             if !self.actors.iter().any(|actor| actor.id == subscription.actor) {
-                return Err(crate::error::MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "subscription actor {} is not declared",
                     subscription.actor.as_str()
                 )));

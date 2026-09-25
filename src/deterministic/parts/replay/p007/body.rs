@@ -25,7 +25,7 @@ fn sequence_diagnostic(entries: &[EffectLogEntry]) -> Result<Option<String>> {
         }
         expected = expected
             .checked_add(EFFECT_LOG_SEQUENCE_STEP)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("effect sequence overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("effect sequence overflow"))?;
     }
     Ok(None)
 }
@@ -106,7 +106,7 @@ fn consumed_effect_value(consumed: ConsumedEffect) -> IoValue {
 
 fn validate_effect_log_count(count: usize, label: &str) -> Result<()> {
     if count > EFFECT_LOG_ENTRY_LIMIT {
-        Err(crate::error::MoltenError::invalid_harness(format!(
+        Err(crate::error::Failure::invalid_harness(format!(
             "{label} count {count} exceeds bound {EFFECT_LOG_ENTRY_LIMIT}"
         )))
     } else {
@@ -116,11 +116,11 @@ fn validate_effect_log_count(count: usize, label: &str) -> Result<()> {
 
 fn validate_effect_kind(value: &str) -> Result<()> {
     if value.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness("effect kind cannot be empty"));
+        return Err(crate::error::Failure::invalid_harness("effect kind cannot be empty"));
     }
     if value.chars().all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_') {
         Ok(())
     } else {
-        Err(crate::error::MoltenError::invalid_harness("effect kind must be lowercase ascii token"))
+        Err(crate::error::Failure::invalid_harness("effect kind must be lowercase ascii token"))
     }
 }

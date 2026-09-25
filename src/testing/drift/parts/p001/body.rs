@@ -2,7 +2,7 @@ fn normalize_input(input: &ComparisonInput) -> Result<NormalizedInput> {
     validate_text("left workflow", &input.left.workflow)?;
     validate_text("right workflow", &input.right.workflow)?;
     if input.left.workflow != input.right.workflow {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "drift summaries compare different workflows: {} vs {}",
             input.left.workflow, input.right.workflow
         )));
@@ -20,10 +20,10 @@ fn normalize_input(input: &ComparisonInput) -> Result<NormalizedInput> {
 
 fn field_map(label: &str, fields: &[EvidenceField]) -> Result<OrderedMap<String, EvidenceField>> {
     if fields.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("{label} drift summary requires fields")));
+        return Err(Failure::invalid_harness(format!("{label} drift summary requires fields")));
     }
     if fields.len() > MAX_DRIFT_FIELDS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "{label} drift summary field count {} exceeds bound {MAX_DRIFT_FIELDS}",
             fields.len()
         )));
@@ -32,7 +32,7 @@ fn field_map(label: &str, fields: &[EvidenceField]) -> Result<OrderedMap<String,
     for field in fields {
         validate_field(field)?;
         if map.insert(field.path.clone(), field.clone()).is_some() {
-            return Err(MoltenError::invalid_harness(format!("duplicate {label} drift field path {}", field.path)));
+            return Err(Failure::invalid_harness(format!("duplicate {label} drift field path {}", field.path)));
         }
     }
     Ok(map)
@@ -44,7 +44,7 @@ fn variance_map(
     right_fields: &OrderedMap<String, EvidenceField>,
 ) -> Result<OrderedMap<String, String>> {
     if variances.len() > MAX_DRIFT_VARIANCES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "drift variance count {} exceeds bound {MAX_DRIFT_VARIANCES}",
             variances.len()
         )));
@@ -54,13 +54,13 @@ fn variance_map(
         validate_text("variance path", &variance.path)?;
         validate_variance_reason(&variance.reason)?;
         if !left_fields.contains_key(&variance.path) && !right_fields.contains_key(&variance.path) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "variance path {} does not name a compared field",
                 variance.path
             )));
         }
         if map.insert(variance.path.clone(), variance.reason.clone()).is_some() {
-            return Err(MoltenError::invalid_harness(format!("duplicate drift variance path {}", variance.path)));
+            return Err(Failure::invalid_harness(format!("duplicate drift variance path {}", variance.path)));
         }
     }
     Ok(map)
@@ -92,7 +92,7 @@ fn first_divergence(normalized: &NormalizedInput) -> Result<Vec<Diagnostic>> {
             (Some(left), None) => return Ok(vec![diagnostic(&path, "missing-right-field", &left.value, "<missing>")]),
             (None, Some(right)) => return Ok(vec![diagnostic(&path, "missing-left-field", "<missing>", &right.value)]),
             (None, None) => {
-                return Err(MoltenError::invalid_harness(format!("drift path {path} disappeared during comparison")));
+                return Err(Failure::invalid_harness(format!("drift path {path} disappeared during comparison")));
             }
         }
     }
@@ -113,7 +113,7 @@ fn validate_field(field: &EvidenceField) -> Result<()> {
     validate_text("field value", &field.value)?;
     if field.is_ref {
         crate::preserves_rail::validate_content_ref(&field.value).map_err(|error| {
-            MoltenError::invalid_harness(format!("invalid drift field ref {}: {error}", field.path))
+            Failure::invalid_harness(format!("invalid drift field ref {}: {error}", field.path))
         })?;
     }
     Ok(())
@@ -122,13 +122,13 @@ fn validate_field(field: &EvidenceField) -> Result<()> {
 fn validate_variance_reason(reason: &str) -> Result<()> {
     match reason {
         "runtime-path" | "diagnostic-log" | "store-path" | "temporary-root" | "rendered-output" => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported drift variance reason {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported drift variance reason {other}"))),
     }
 }
 
 fn validate_text(label: &str, value: &str) -> Result<()> {
     if value.trim().is_empty() {
-        Err(MoltenError::invalid_harness(format!("drift {label} must not be empty")))
+        Err(Failure::invalid_harness(format!("drift {label} must not be empty")))
     } else {
         Ok(())
     }
@@ -138,7 +138,7 @@ fn validate_decision(decision: &str) -> Result<()> {
     match decision {
         "pass" | "deny" => Ok(()),
         other => {
-            Err(MoltenError::invalid_harness(format!("unsupported drift decision {other}; expected pass or deny")))
+            Err(Failure::invalid_harness(format!("unsupported drift decision {other}; expected pass or deny")))
         }
     }
 }
@@ -169,7 +169,7 @@ fn status(is_denied: bool) -> &'static str {
 
 fn field_values(fields: &[EvidenceField]) -> Result<Vec<IoValue>> {
     if fields.len() > MAX_DRIFT_FIELDS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "drift normalized field count {} exceeds bound {MAX_DRIFT_FIELDS}",
             fields.len()
         )));
@@ -188,7 +188,7 @@ fn field_values(fields: &[EvidenceField]) -> Result<Vec<IoValue>> {
 
 fn diagnostic_values(diagnostics: &[Diagnostic]) -> Result<Vec<IoValue>> {
     if diagnostics.len() > MAX_DRIFT_FIELDS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "drift diagnostic count {} exceeds bound {MAX_DRIFT_FIELDS}",
             diagnostics.len()
         )));

@@ -202,13 +202,13 @@ fn apply_value(input: &ApplyValueInput<'_>) -> Result<IoValue> {
 pub fn parse_gc_apply(value: &IoValue) -> Result<GcApply> {
     let fields = value
         .collect_simple_record("retention-gc-apply-v1", Some(15))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-gc-apply-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-gc-apply-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::RETENTION_GC_APPLY_SCHEMA, "retention GC apply schema")?;
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     let mode = record_string(&fields[2], "mode")?;
     if mode != "apply" {
-        return Err(MoltenError::invalid_harness("retention GC apply mode must be apply"));
+        return Err(Failure::invalid_harness("retention GC apply mode must be apply"));
     }
     let subsystem = record_string(&fields[3], "subsystem")?;
     validate_name(&subsystem, "retention GC apply subsystem")?;
@@ -259,7 +259,7 @@ pub fn read_gc_apply_with_root(root: &CapabilityRetentionRoot, apply_ref: &str) 
     let value = read_store_value_with_root(root, &capability_ref_path(GC_APPLY_DIR, apply_ref)?)?;
     let apply = parse_gc_apply(&value)?;
     if apply.apply_ref != apply_ref {
-        return Err(MoltenError::invalid_harness("stored retention GC apply ref mismatch"));
+        return Err(Failure::invalid_harness("stored retention GC apply ref mismatch"));
     }
     Ok(apply)
 }
@@ -277,7 +277,7 @@ pub fn read_gc_execution_gate_with_root(
     let value = read_store_value_with_root(root, &capability_ref_path(GC_EXECUTE_DIR, execution_ref)?)?;
     let gate = parse_gc_execution_gate(&value)?;
     if gate.execution_ref != execution_ref {
-        return Err(MoltenError::invalid_harness("stored retention GC execution ref mismatch"));
+        return Err(Failure::invalid_harness("stored retention GC execution ref mismatch"));
     }
     Ok(gate)
 }

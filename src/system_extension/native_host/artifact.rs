@@ -4,7 +4,7 @@ use preserves::IOValue;
 
 use super::super::*;
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
@@ -91,7 +91,7 @@ pub fn build_native_artifact_index(
         .and_then(|value| value.checked_add(instance.completed_operations.len()))
         .and_then(|value| value.checked_add(instance.evidence_refs.len()))
         .and_then(|value| value.checked_add(4))
-        .ok_or_else(|| MoltenError::invalid_harness("native artifact index member count overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("native artifact index member count overflow"))?;
     let mut members = Vec::with_capacity(estimated);
     members.push(NativeArtifactMember {
         role: NativeArtifactRole::Executable,
@@ -191,7 +191,7 @@ pub fn build_native_artifact_index(
         value,
     };
     verify_native_artifact_index(&index)
-        .map_err(|issues| MoltenError::invalid_harness(format!("native artifact index denied: {issues:?}")))?;
+        .map_err(|issues| Failure::invalid_harness(format!("native artifact index denied: {issues:?}")))?;
     Ok(index)
 }
 

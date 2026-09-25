@@ -1,7 +1,7 @@
 use serde_json::json;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const PROMETHEUS_MEDIA_TYPE: &str = "text/plain; version=0.0.4";
@@ -85,7 +85,7 @@ pub fn execute_event_export(
             | ObservationAdapterClass::OpenTelemetry
             | ObservationAdapterClass::DeterministicSimulation
     ) {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "event export requires tracing, OpenTelemetry, or deterministic simulation adapter",
         ));
     }
@@ -178,7 +178,7 @@ fn render_event(
         "attributes": attributes,
         "observed_tick": canonical.artifact.context.observed_tick,
     }))
-    .map_err(|error| MoltenError::invalid_harness(format!("OpenTelemetry event rendering failed: {error}")))?;
+    .map_err(|error| Failure::invalid_harness(format!("OpenTelemetry event rendering failed: {error}")))?;
     Ok((OTLP_EVENT_MEDIA_TYPE, payload))
 }
 
@@ -236,7 +236,7 @@ pub fn render_opentelemetry_snapshot(snapshot: &ObservationSnapshot) -> Result<V
                 "sample_refs": series.source_sample_refs,
                 "observed_tick": series.latest_observed_tick,
             }))
-            .map_err(|error| MoltenError::invalid_harness(format!("OpenTelemetry JSON rendering failed: {error}")))?,
+            .map_err(|error| Failure::invalid_harness(format!("OpenTelemetry JSON rendering failed: {error}")))?,
         );
     }
     let mut payload = lines.join("\n").into_bytes();
@@ -255,7 +255,7 @@ pub struct DeterministicSimulationSink {
 impl DeterministicSimulationSink {
     pub fn new(completion_tick: u64, max_records: usize) -> Result<Self> {
         if max_records == 0 {
-            return Err(MoltenError::invalid_harness("deterministic observation sink record bound must be positive"));
+            return Err(Failure::invalid_harness("deterministic observation sink record bound must be positive"));
         }
         Ok(Self {
             completion_tick,
@@ -337,7 +337,7 @@ fn require_export_class(class: ObservationAdapterClass, format: ExportFormat) ->
     if matches {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness("observation adapter class does not match requested exporter format"))
+        Err(Failure::invalid_harness("observation adapter class does not match requested exporter format"))
     }
 }
 
@@ -347,9 +347,9 @@ fn validate_request_binding(
     payload_len: usize,
 ) -> Result<()> {
     let payload_bytes = u64::try_from(payload_len)
-        .map_err(|_| MoltenError::invalid_harness("export payload length does not fit u64"))?;
+        .map_err(|_| Failure::invalid_harness("export payload length does not fit u64"))?;
     if request.payload_ref != expected_payload_ref || request.payload_bytes != payload_bytes {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "export request does not bind the canonical snapshot ref and rendered byte length",
         ));
     }

@@ -104,7 +104,7 @@ pub fn run_control_registry_fixture() -> Result<ControlRegistryRuntime> {
             group_ref: runtime.manifest.manifest_ref.clone(),
             client_session: "client:fixture".to_string(),
             sequence: u64::try_from(index + 1)
-                .map_err(|error| MoltenError::invalid_harness(format!("fixture sequence overflow: {error}")))?,
+                .map_err(|error| Failure::invalid_harness(format!("fixture sequence overflow: {error}")))?,
             command,
             authority_refs: vec![synthetic_ref("authority")?],
             policy_refs: runtime.manifest.policy_refs.clone(),
@@ -142,7 +142,7 @@ fn pass_draft(runtime: &ControlRegistryRuntime, envelope: &RaftCommandEnvelope) 
     let next_index = runtime
         .committed_index
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness("raft committed index overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("raft committed index overflow"))?;
     let append_predicate = pass_predicate(
         "trellis-append-consistency",
         runtime,

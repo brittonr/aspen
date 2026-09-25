@@ -86,7 +86,7 @@ fn run_release_profile(args: ReleaseProfileArgs) -> Outcome<()> {
         })?;
     super::io::emit_gate_receipt(args.out.as_ref(), &validation.value)?;
     if validation.decision == "deny" {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "release profile denied: {}",
             validation.diagnostics.join(",")
         )));

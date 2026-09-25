@@ -14,7 +14,7 @@ fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
             "pass" | "fail" | "diagnostic" => {
                 parsed.push_limited((name, status), MAX_COORDINATION_CHECKS, "coordination checks")?
             }
-            _ => return Err(MoltenError::invalid_harness("coordination check status must be pass/fail/diagnostic")),
+            _ => return Err(Failure::invalid_harness("coordination check status must be pass/fail/diagnostic")),
         }
     }
     Ok(parsed)
@@ -24,7 +24,7 @@ fn require_check(checks: &[(String, String)], expected: &str, context: &str) -> 
     if checks.iter().any(|(name, _)| name == expected) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{context} missing {expected} check")))
+        Err(Failure::invalid_harness(format!("{context} missing {expected} check")))
     }
 }
 
@@ -33,7 +33,7 @@ fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Resu
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported {context} schema {actual}; expected {expected}")))
+        Err(Failure::invalid_harness(format!("unsupported {context} schema {actual}; expected {expected}")))
     }
 }
 
@@ -41,7 +41,7 @@ fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Resu
 fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {field}")))
 }
 
 fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
@@ -110,12 +110,12 @@ fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.to_string())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
-    let number = value.as_u64().ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?;
-    number.map_err(|_| MoltenError::invalid_harness(format!("u64 out of range for {field}")))
+    let number = value.as_u64().ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {field}")))?;
+    number.map_err(|_| Failure::invalid_harness(format!("u64 out of range for {field}")))
 }
 
 fn validate_request_input(input: &CoordinationRequestInput) -> Result<()> {
@@ -136,14 +136,14 @@ fn validate_service_id(value: &str) -> Result<()> {
     if value.starts_with("coordination:") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness("coordination service id must start with coordination:"))
+        Err(Failure::invalid_harness("coordination service id must start with coordination:"))
     }
 }
 
 fn validate_services(values: &[String]) -> Result<()> {
     ensure_count_at_most(values.len(), MAX_COORDINATION_SERVICES, "coordination services")?;
     if values.is_empty() {
-        return Err(MoltenError::invalid_harness("coordination manifest requires at least one service"));
+        return Err(Failure::invalid_harness("coordination manifest requires at least one service"));
     }
     for value in values {
         validate_service(value)?;
@@ -155,7 +155,7 @@ fn validate_service(value: &str) -> Result<()> {
     match value {
         SERVICE_LOCK | SERVICE_QUEUE | SERVICE_SEMAPHORE | SERVICE_RATE_LIMIT | SERVICE_ELECTION | SERVICE_BARRIER
         | SERVICE_REGISTRY => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported coordination service {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported coordination service {value}"))),
     }
 }
 
@@ -184,7 +184,7 @@ fn validate_operation(service: &str, operation: &str) -> Result<()> {
     if is_valid {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "unsupported coordination operation {operation} for service {service}"
         )))
     }
@@ -203,14 +203,14 @@ fn validate_capacity(value: u64, label: &str) -> Result<()> {
     if value > 0 {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} must be positive")))
+        Err(Failure::invalid_harness(format!("{label} must be positive")))
     }
 }
 
 fn validate_decision(value: &str) -> Result<()> {
     match value {
         "pass" | "deny" => Ok(()),
-        _ => Err(MoltenError::invalid_harness("coordination decision must be pass or deny")),
+        _ => Err(Failure::invalid_harness("coordination decision must be pass or deny")),
     }
 }
 
@@ -221,7 +221,7 @@ fn validate_transition_kind(value: &str) -> Result<()> {
         | TRANSITION_KIND_DUPLICATE_REPLAY
         | TRANSITION_KIND_CONFLICTING_DUPLICATE
         | TRANSITION_KIND_READ_OBSERVE => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported coordination transition kind {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported coordination transition kind {value}"))),
     }
 }
 
@@ -253,7 +253,7 @@ fn validate_receipt_transition(
         TRANSITION_KIND_DUPLICATE_REPLAY | TRANSITION_KIND_READ_OBSERVE => {
             validate_no_advance_transition(state_ref, transition)
         }
-        _ => Err(MoltenError::invalid_harness("unsupported coordination transition kind")),
+        _ => Err(Failure::invalid_harness("unsupported coordination transition kind")),
     }
 }
 
@@ -263,13 +263,13 @@ fn validate_advance_transition(
     transition: ReceiptTransitionInput<'_>,
 ) -> Result<()> {
     if decision != "pass" {
-        return Err(MoltenError::invalid_harness("advance transition requires pass decision"));
+        return Err(Failure::invalid_harness("advance transition requires pass decision"));
     }
     if transition.after_state_ref != Some(state_ref) || transition.preserved_state_ref.is_some() {
-        return Err(MoltenError::invalid_harness("advance transition must bind after-state as receipt state"));
+        return Err(Failure::invalid_harness("advance transition must bind after-state as receipt state"));
     }
     if transition.control_plane_intent_ref.is_none() {
-        return Err(MoltenError::invalid_harness("advance transition must bind control-plane intent"));
+        return Err(Failure::invalid_harness("advance transition must bind control-plane intent"));
     }
     Ok(())
 }
@@ -280,14 +280,14 @@ fn validate_preserved_transition(
     transition: ReceiptTransitionInput<'_>,
 ) -> Result<()> {
     if decision != "deny" {
-        return Err(MoltenError::invalid_harness("preserved transition requires deny decision"));
+        return Err(Failure::invalid_harness("preserved transition requires deny decision"));
     }
     validate_no_advance_transition(state_ref, transition)
 }
 
 fn validate_no_advance_transition(state_ref: &str, transition: ReceiptTransitionInput<'_>) -> Result<()> {
     if transition.after_state_ref.is_some() || transition.preserved_state_ref != Some(state_ref) {
-        return Err(MoltenError::invalid_harness("no-advance transition must bind preserved-state as receipt state"));
+        return Err(Failure::invalid_harness("no-advance transition must bind preserved-state as receipt state"));
     }
     Ok(())
 }
@@ -295,7 +295,7 @@ fn validate_no_advance_transition(state_ref: &str, transition: ReceiptTransition
 fn validate_read_consistency_mode(value: &str) -> Result<()> {
     match value {
         READ_CONSISTENCY_LINEARIZABLE | READ_CONSISTENCY_LOCAL_STALE => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported coordination read consistency mode {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported coordination read consistency mode {value}"))),
     }
 }
 
@@ -303,7 +303,7 @@ fn validate_read_consistency_mode(value: &str) -> Result<()> {
 fn validate_ref(value: &str, label: &str) -> Result<()> {
     validate_non_empty(value, label)?;
     validate_content_ref(value).map_err(|error| {
-        MoltenError::invalid_harness(format!("{label} must be a canonical blake3 content ref: {error}"))
+        Failure::invalid_harness(format!("{label} must be a canonical blake3 content ref: {error}"))
     })
 }
 
@@ -317,7 +317,7 @@ fn validate_refs(values: &[String], label: &str) -> Result<()> {
 
 fn validate_non_empty(value: &str, label: &str) -> Result<()> {
     if value.is_empty() {
-        Err(MoltenError::invalid_harness(format!("{label} must not be empty")))
+        Err(Failure::invalid_harness(format!("{label} must not be empty")))
     } else {
         Ok(())
     }
@@ -328,11 +328,11 @@ fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()>
 }
 
 fn vec_len_u64<T>(values: &[T]) -> Result<u64> {
-    u64::try_from(values.len()).map_err(|_| MoltenError::invalid_harness("coordination vector length overflow"))
+    u64::try_from(values.len()).map_err(|_| Failure::invalid_harness("coordination vector length overflow"))
 }
 
 fn set_len_u64<T>(values: &OrderedSet<T>) -> Result<u64> {
-    u64::try_from(values.len()).map_err(|_| MoltenError::invalid_harness("coordination set length overflow"))
+    u64::try_from(values.len()).map_err(|_| Failure::invalid_harness("coordination set length overflow"))
 }
 
 fn fixture_ref(label: &str) -> String {

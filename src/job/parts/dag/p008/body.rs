@@ -185,7 +185,7 @@ fn scan_stage(
     let node = input
         .node_map
         .get(input.node_id)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("job admission missing node {}", input.node_id)))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("job admission missing node {}", input.node_id)))?;
     if node.stage_artifact_ref.is_none() {
         readiness.has_executable_artifacts = false;
         stage_diagnostics.push(format!("stage {} lacks artifact-backed executable operation", input.node_id));
@@ -202,7 +202,7 @@ fn scan_stage(
         "job admission stage verdicts",
     )?;
     let node_index = *input.plan.node_index.get(input.node_id).ok_or_else(|| {
-        MoltenError::invalid_harness(format!("job admission missing trellis index for {}", input.node_id))
+        Failure::invalid_harness(format!("job admission missing trellis index for {}", input.node_id))
     })?;
     push_bounded(&mut readiness.stage_order, input.node_id.to_string(), MAX_JOB_NODES, "job admission stage order")?;
     usize_to_u64(node_index, "job admission completed node index")

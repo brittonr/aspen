@@ -1,6 +1,6 @@
 type IoValue = preserves::IOValue;
 type Value<T> = preserves::Value<T>;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 pub const HARNESS_SUITE_SCHEMA: &str = "molten.harness.suite.v1";

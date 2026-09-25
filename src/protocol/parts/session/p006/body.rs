@@ -66,7 +66,7 @@ fn local_state_from_trellis(
             }
         }
     }
-    Err(MoltenError::invalid_harness("projected local state exceeds protocol step bound"))
+    Err(Failure::invalid_harness("projected local state exceeds protocol step bound"))
 }
 
 fn local_branches_from_trellis(
@@ -113,14 +113,14 @@ fn linear_actions_from_trellis(
                 current = next;
             }
             trellis::choreography_local::LocalChoreo::InternalChoice { branches: _ } => {
-                return Err(MoltenError::invalid_harness("nested internal choice projection is unsupported"));
+                return Err(Failure::invalid_harness("nested internal choice projection is unsupported"));
             }
             trellis::choreography_local::LocalChoreo::Offer { from: _, branches: _ } => {
-                return Err(MoltenError::invalid_harness("nested offer projection is unsupported"));
+                return Err(Failure::invalid_harness("nested offer projection is unsupported"));
             }
         }
     }
-    Err(MoltenError::invalid_harness("projected branch actions exceed protocol step bound"))
+    Err(Failure::invalid_harness("projected branch actions exceed protocol step bound"))
 }
 
 fn local_action(
@@ -158,12 +158,12 @@ fn protocol_endpoint(
 fn parse_protocol_endpoint(value: &IoValue) -> Result<ProtocolEndpoint> {
     let fields = value
         .collect_simple_record("protocol-endpoint-v1", Some(6))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-endpoint-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <protocol-endpoint-v1 ...>"))?;
     require_schema(&fields[0], PROTOCOL_ENDPOINT_SCHEMA, "protocol endpoint schema")?;
     let protocol_ref = record_ref(&fields[1], "protocol")?;
     let role = record_string(&fields[2], "role")?;
     let role_id = u32::try_from(record_u64(&fields[3], "role-id")?)
-        .map_err(|error| MoltenError::invalid_harness(format!("protocol role id out of range: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("protocol role id out of range: {error}")))?;
     let local_value = record_iovalue(&fields[4], "state")?;
     let local_state = parse_protocol_local_state(&local_value)?;
     Ok(ProtocolEndpoint {
@@ -193,7 +193,7 @@ fn protocol_local_state_value(state: &ProtocolLocalState) -> Result<IoValue> {
 fn parse_protocol_local_state(value: &IoValue) -> Result<ProtocolLocalState> {
     let fields = value
         .collect_simple_record("protocol-local-state-v1", Some(4))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-local-state-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <protocol-local-state-v1 ...>"))?;
     require_schema(&fields[0], PROTOCOL_LOCAL_STATE_SCHEMA, "protocol local state schema")?;
     Ok(ProtocolLocalState {
         actions: parse_local_actions(&fields[1])?,
@@ -239,14 +239,14 @@ fn local_branch_sequence(branches: &[ProtocolLocalBranch]) -> Result<IoValue> {
 fn parse_local_actions(value: &Value<IoValue>) -> Result<Vec<ProtocolLocalAction>> {
     let fields = value
         .collect_simple_record("actions", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("expected protocol local actions"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected protocol local actions"))?;
     parse_local_action_sequence(&fields[0])
 }
 
 fn parse_local_action_sequence(value: &Value<IoValue>) -> Result<Vec<ProtocolLocalAction>> {
     let values = value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("expected protocol local action sequence"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected protocol local action sequence"))?;
     ensure_count_at_most(values.len(), MAX_PROTOCOL_STEPS, "protocol local actions")?;
     let mut actions = Vec::with_capacity(values.len());
     for action in values.iter() {
@@ -266,7 +266,7 @@ fn parse_local_action(value: &Value<IoValue>) -> Result<ProtocolLocalAction> {
     }
     let fields = value
         .collect_simple_record("recv", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("expected protocol local send or recv"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected protocol local send or recv"))?;
     Ok(ProtocolLocalAction {
         direction: "recv".to_string(),
         peer: required_string(&fields[0], "recv peer")?,
@@ -278,7 +278,7 @@ fn parse_local_action(value: &Value<IoValue>) -> Result<ProtocolLocalAction> {
 fn parse_local_terminal(value: &Value<IoValue>) -> Result<ProtocolLocalTerminal> {
     let fields = value
         .collect_simple_record("terminal", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("expected protocol local terminal"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected protocol local terminal"))?;
     if fields[0].collect_simple_record("end", Some(0)).is_some() {
         return Ok(ProtocolLocalTerminal::End);
     }
@@ -287,7 +287,7 @@ fn parse_local_terminal(value: &Value<IoValue>) -> Result<ProtocolLocalTerminal>
     }
     let offer = fields[0]
         .collect_simple_record("offer", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("expected protocol local terminal value"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected protocol local terminal value"))?;
     Ok(ProtocolLocalTerminal::Offer {
         from_role: record_string(&offer[0], "from")?,
         branches: parse_local_branches_record(&offer[1])?,

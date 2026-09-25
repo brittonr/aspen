@@ -167,10 +167,10 @@ fn coverage_row_value(row: &CoverageRow) -> IoValue {
 
 fn validate_coverage_row_count(rows: &[CoverageRow]) -> Result<()> {
     if rows.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness("replay coverage matrix requires rows"));
+        return Err(crate::error::Failure::invalid_harness("replay coverage matrix requires rows"));
     }
     if rows.len() > COVERAGE_ROW_LIMIT {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "replay coverage rows {} exceed bound {COVERAGE_ROW_LIMIT}",
             rows.len()
         )));
@@ -180,7 +180,7 @@ fn validate_coverage_row_count(rows: &[CoverageRow]) -> Result<()> {
 
 fn validate_ref_slice(refs: &[String], field: &str) -> Result<()> {
     if refs.len() > COVERAGE_ROW_LIMIT {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "{field} count {} exceeds bound {COVERAGE_ROW_LIMIT}",
             refs.len()
         )));
@@ -194,7 +194,7 @@ fn validate_ref_slice(refs: &[String], field: &str) -> Result<()> {
 fn validate_optional_ref(reference: Option<&str>, field: &str) -> Result<()> {
     if let Some(reference) = reference {
         validate_content_ref(reference).map_err(|error| {
-            crate::error::MoltenError::invalid_harness(format!("invalid {field} {reference}: {error}"))
+            crate::error::Failure::invalid_harness(format!("invalid {field} {reference}: {error}"))
         })?;
     }
     Ok(())
@@ -202,12 +202,12 @@ fn validate_optional_ref(reference: Option<&str>, field: &str) -> Result<()> {
 
 fn validate_token(value: &str, field: &str) -> Result<()> {
     if value.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness(format!("{field} cannot be empty")));
+        return Err(crate::error::Failure::invalid_harness(format!("{field} cannot be empty")));
     }
     if value.chars().all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_') {
         Ok(())
     } else {
-        Err(crate::error::MoltenError::invalid_harness(format!("{field} must be lowercase ascii token")))
+        Err(crate::error::Failure::invalid_harness(format!("{field} must be lowercase ascii token")))
     }
 }
 

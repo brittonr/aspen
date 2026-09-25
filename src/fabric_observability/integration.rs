@@ -1,5 +1,5 @@
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub struct HealthProjectionInput<'a> {
@@ -48,7 +48,7 @@ pub fn node_health_input(input: HealthProjectionInput<'_>, node_decision: &str) 
         "unavailable" | "stopped" => HealthState::Unavailable,
         "deny" | "failed" => HealthState::Failed,
         other => {
-            return Err(MoltenError::invalid_harness(format!("unsupported node health decision {other}")));
+            return Err(Failure::invalid_harness(format!("unsupported node health decision {other}")));
         }
     };
     Ok(HealthInput {

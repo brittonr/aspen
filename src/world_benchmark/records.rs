@@ -1,7 +1,7 @@
 use molten_core::world_benchmark::*;
 use preserves::IOValue;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const WORLD_BENCHMARK_RECORD_CONTEXT: &str = "onixresearch.molten.world-benchmark.record.v1";
@@ -40,7 +40,7 @@ pub fn canonical_world_benchmark_plan(plan: &WorldBenchmarkPlan) -> Result<Canon
 pub fn canonical_world_benchmark_receipt(receipt: &WorldBenchmarkReceipt) -> Result<CanonicalWorldBenchmarkRecord> {
     require_non_claims(&receipt.non_claims)?;
     if !validate_world_benchmark_receipt(receipt, &receipt.source_revision).is_empty() {
-        return Err(MoltenError::invalid_harness("world benchmark receipt is invalid"));
+        return Err(Failure::invalid_harness("world benchmark receipt is invalid"));
     }
     canonical(
         "receipt",
@@ -160,7 +160,7 @@ fn canonical(kind: &str, value: IOValue) -> Result<CanonicalWorldBenchmarkRecord
     let mut hasher = blake3::Hasher::new_derive_key(WORLD_BENCHMARK_RECORD_CONTEXT);
     update(&mut hasher, kind)?;
     let length = u64::try_from(bytes.len())
-        .map_err(|_| MoltenError::invalid_harness("world benchmark record length exceeds u64"))?;
+        .map_err(|_| Failure::invalid_harness("world benchmark record length exceeds u64"))?;
     hasher.update(&length.to_be_bytes());
     hasher.update(&bytes);
     Ok(CanonicalWorldBenchmarkRecord {
@@ -172,14 +172,14 @@ fn canonical(kind: &str, value: IOValue) -> Result<CanonicalWorldBenchmarkRecord
 
 fn require_non_claims(non_claims: &[String]) -> Result<()> {
     if non_claims != world_benchmark_non_claims() {
-        return Err(MoltenError::invalid_harness("world benchmark non-claims are incomplete"));
+        return Err(Failure::invalid_harness("world benchmark non-claims are incomplete"));
     }
     Ok(())
 }
 
 fn update(hasher: &mut blake3::Hasher, value: &str) -> Result<()> {
     let length = u64::try_from(value.len())
-        .map_err(|_| MoltenError::invalid_harness("world benchmark identity length exceeds u64"))?;
+        .map_err(|_| Failure::invalid_harness("world benchmark identity length exceeds u64"))?;
     hasher.update(&length.to_be_bytes());
     hasher.update(value.as_bytes());
     Ok(())

@@ -108,7 +108,7 @@ struct Http3GatewayOutcome {
 
 fn validate_http3_adapter_input(input: &Http3IrohReadbackInput<'_>) -> Result<()> {
     if input.route.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("HTTP3-over-Iroh route must not be empty"));
+        return Err(Failure::invalid_harness("HTTP3-over-Iroh route must not be empty"));
     }
     validate_content_ref(input.session_ref)?;
     validate_content_ref(input.requester_ref)?;

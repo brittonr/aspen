@@ -19,14 +19,14 @@ fn service_run_receipt_ref(value: &IoValue) -> Result<String> {
         )?;
         return crate::preserves_rail::canonical_hash(value);
     }
-    Err(MoltenError::invalid_harness("expected <node-control-service-run-receipt-v1 ...>"))
+    Err(Failure::invalid_harness("expected <node-control-service-run-receipt-v1 ...>"))
 }
 
 fn live_transport_receipt_ref(value: &IoValue) -> Result<(String, String, String)> {
     let fields = value
         .collect_simple_record("node-control-live-transport-receipt-v1", Some(13))
         .or_else(|| value.collect_simple_record("node-control-live-transport-receipt-v1", Some(11)))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-transport-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-control-live-transport-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA,
@@ -43,7 +43,7 @@ fn live_listener_receipt_refs(value: &IoValue) -> Result<(String, Vec<String>, S
     let fields = value
         .collect_simple_record("node-control-live-listener-receipt-v1", Some(16))
         .or_else(|| value.collect_simple_record("node-control-live-listener-receipt-v1", Some(14)))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-listener-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-control-live-listener-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA,
@@ -57,7 +57,7 @@ fn live_listener_receipt_refs(value: &IoValue) -> Result<(String, Vec<String>, S
 }
 
 pub async fn serve_control_live_listener(input: &ControlLiveServeInput<'_>) -> Result<ControlLiveServe> {
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::Root::open(input.state_root)?;
     validate_state_root(input.state_root)?;
     validate_node_id(input.topic)?;
     validate_listener_event_limit(input.max_events)?;
@@ -65,7 +65,7 @@ pub async fn serve_control_live_listener(input: &ControlLiveServeInput<'_>) -> R
     ensure_state_layout(&state_root)?;
     let identity = crate::node_identity::parse_identity(&read_preserves(
         &state_root,
-        &crate::node_state::NodeStatePath::parse(IDENTITY_FILE)?,
+        &crate::node_state::RelativePath::parse(IDENTITY_FILE)?,
     )?)?;
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
     let endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(&state_root, &identity)?)).await?;
@@ -77,7 +77,7 @@ pub async fn serve_control_live_listener(input: &ControlLiveServeInput<'_>) -> R
     let mut topic = gossip
         .subscribe(control_live_topic_id(input.topic), Vec::new())
         .await
-        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh serve subscribe failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("live Iroh serve subscribe failed: {error}")))?;
     let served = serve_node_control_live_listener_with_topic(
         &state_root,
         input,
@@ -90,7 +90,7 @@ pub async fn serve_control_live_listener(input: &ControlLiveServeInput<'_>) -> R
     router
         .shutdown()
         .await
-        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh serve router shutdown failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("live Iroh serve router shutdown failed: {error}")))?;
     let mut served = served?;
     served.live_ticket_ref = Some(live_ticket.ticket_ref);
     served.live_ticket_value = Some(live_ticket.value);
@@ -100,7 +100,7 @@ pub async fn serve_control_live_listener(input: &ControlLiveServeInput<'_>) -> R
 pub async fn control_live_serve_listener_loopback(
     input: &ControlLiveServeLoopbackInput<'_>,
 ) -> Result<ControlLiveServeLoopback> {
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::Root::open(input.state_root)?;
     validate_state_root(input.state_root)?;
     ensure_state_layout(&state_root)?;
     let envelope_input = ControlIngressEnvelopeInput {
@@ -157,12 +157,12 @@ pub async fn control_live_serve_listener_loopback(
     listener.live_ticket_ref = Some(ticket_ref);
     listener.live_ticket_value = Some(ticket_value);
     receiver_router.shutdown().await.map_err(|error| {
-        MoltenError::invalid_harness(format!("live Iroh listener receiver shutdown failed: {error}"))
+        Failure::invalid_harness(format!("live Iroh listener receiver shutdown failed: {error}"))
     })?;
     sender_router
         .shutdown()
         .await
-        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh listener sender shutdown failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("live Iroh listener sender shutdown failed: {error}")))?;
     Ok(ControlLiveServeLoopback {
         envelope_ref: envelope.envelope_ref,
         publish_receipt_ref: published.transport_receipt_ref,
@@ -182,10 +182,10 @@ struct LoopbackPair {
     endpoint_id: String,
 }
 
-async fn loopback_pair(state_root: &crate::node_state::NodeStateRoot, topic: &str) -> Result<LoopbackPair> {
+async fn loopback_pair(state_root: &crate::node_state::Root, topic: &str) -> Result<LoopbackPair> {
     let identity = crate::node_identity::parse_identity(&read_preserves(
         state_root,
-        &crate::node_state::NodeStatePath::parse(IDENTITY_FILE)?,
+        &crate::node_state::RelativePath::parse(IDENTITY_FILE)?,
     )?)?;
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
     let receiver_endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(state_root, &identity)?)).await?;
@@ -206,12 +206,12 @@ async fn loopback_pair(state_root: &crate::node_state::NodeStateRoot, topic: &st
         .spawn();
     let topic_id = control_live_topic_id(topic);
     let receiver_topic = receiver_gossip.subscribe(topic_id, vec![sender_id]).await.map_err(|error| {
-        MoltenError::invalid_harness(format!("live Iroh listener receiver subscribe failed: {error}"))
+        Failure::invalid_harness(format!("live Iroh listener receiver subscribe failed: {error}"))
     })?;
     let sender_topic = sender_gossip
         .subscribe_and_join(topic_id, vec![receiver_id])
         .await
-        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh listener sender join failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("live Iroh listener sender join failed: {error}")))?;
     let (sender, _unused_receiver) = sender_topic.split();
     Ok(LoopbackPair {
         ticket_ref: ticket.ticket_ref,
@@ -234,13 +234,13 @@ struct EventScan {
 }
 
 async fn scan_events(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     input: &ControlLiveServeInput<'_>,
     receiver: &mut iroh_gossip::api::GossipTopic,
     node_id: &str,
 ) -> Result<EventScan> {
     let event_capacity = usize::try_from(input.max_events)
-        .map_err(|_| MoltenError::invalid_harness("node control live listener max events exceeds usize capacity"))?;
+        .map_err(|_| Failure::invalid_harness("node control live listener max events exceeds usize capacity"))?;
     let mut diagnostics = Vec::with_capacity(event_capacity.saturating_add(2));
     let mut transport_receipt_refs = Vec::with_capacity(event_capacity);
     let mut neighbor_events = Vec::with_capacity(event_capacity);

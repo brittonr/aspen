@@ -1,5 +1,5 @@
 type HarnessDivergence = crate::error::HarnessDivergence;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 type RuntimeObserver = crate::runtime::RuntimeObserver;
 
@@ -59,19 +59,19 @@ struct SuiteRunMaterial {
 
 fn prepare_suite_run(suite: &super::schema::Suite) -> Result<SuiteRunMaterial> {
     if !suite.actors_explicit {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "missing explicit actor registry fixture; inferred actors cannot execute evidence-bearing suites",
         ));
     }
     validate_actor_registry(suite)?;
     super::schema::validate_executor_preflight_inputs(suite)?;
     if !suite.capabilities_explicit {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "missing explicit capability fixture; implicit authority cannot execute evidence-bearing suites",
         ));
     }
     if !suite.budget_explicit {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "missing explicit budget fixture; default resource policy cannot execute evidence-bearing suites",
         ));
     }

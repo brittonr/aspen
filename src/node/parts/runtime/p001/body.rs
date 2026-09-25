@@ -210,14 +210,14 @@ pub fn start_node_runtime(input: &NodeRuntimeStartInput) -> Result<NodeRuntimeSt
 pub fn parse_node_config(value: &IoValue) -> Result<NodeConfig> {
     let fields = value
         .collect_simple_record("node-config-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-config-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-config-v1 ...>"))?;
     require_schema(&fields[0], NODE_CONFIG_SCHEMA, "node config")?;
     let checks = parse_checks(&fields[8])?;
     require_check(&checks, "explicit-state-root", "node config")?;
     require_check(&checks, "no-ambient-authority", "node config")?;
     let adapters = parse_adapter_bindings(&fields[3])?;
     if adapters.is_empty() {
-        return Err(MoltenError::invalid_harness("node config requires explicit adapter profiles"));
+        return Err(Failure::invalid_harness("node config requires explicit adapter profiles"));
     }
     Ok(NodeConfig {
         config_ref: canonical_hash(value)?,

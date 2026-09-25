@@ -146,7 +146,7 @@ fn validate_hard_caps(caps: RuntimeLimitHardCaps) -> Result<()> {
 fn select_limit(profile_value: u64, override_value: Option<u64>, label: &str) -> Result<u64> {
     let selected = override_value.unwrap_or(profile_value);
     if selected == 0 {
-        Err(MoltenError::invalid_harness(format!("{label} must be positive")))
+        Err(Failure::invalid_harness(format!("{label} must be positive")))
     } else {
         Ok(selected)
     }
@@ -178,12 +178,12 @@ fn check_widened(
 
 fn validate_limit_token(value: &str, field: &str) -> Result<()> {
     if value.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("{field} cannot be empty")));
+        return Err(Failure::invalid_harness(format!("{field} cannot be empty")));
     }
     if value.chars().all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_') {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{field} must be lowercase ascii token")))
+        Err(Failure::invalid_harness(format!("{field} must be lowercase ascii token")))
     }
 }
 

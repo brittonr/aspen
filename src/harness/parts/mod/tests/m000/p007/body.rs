@@ -268,7 +268,7 @@
         let tampered_report = parse_text(&tampered_text).expect("parse tampered Wasm execution report");
         let error = replay_report_value(&tampered_report).expect_err("tampered Wasm execution receipt diverges");
         match error {
-            MoltenError::HarnessDivergence(divergence) => {
+            crate::error::Failure::HarnessDivergence(divergence) => {
                 assert_eq!(divergence.kind, "wasm-execution");
                 assert_eq!(divergence.step, Some(0));
             }

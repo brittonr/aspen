@@ -10,7 +10,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use molten::error::MoltenError;
+use molten::error::Failure;
 use molten::error::Result;
 use molten::world_promotion::LocalWorldPromotionStore;
 use molten::world_promotion::WorldPromotionTransactionPort;
@@ -20,8 +20,8 @@ use molten_core::world_head::WorldBranchClass;
 use molten_core::world_head::WorldBranchId;
 use molten_core::world_head::WorldHeadPolicyRef;
 use molten_core::world_promotion::*;
-use molten_node_host::node_state::NodeStateNamespaceKind;
-use molten_node_host::node_state::NodeStateRoot;
+use molten_node_host::node_state::NamespaceKind;
+use molten_node_host::node_state::Root;
 use serde::Deserialize;
 
 #[derive(Debug, clap::Subcommand)]
@@ -123,7 +123,7 @@ pub(crate) fn run_world_promotion_command(command: WorldPromotionCommand) -> Res
             acknowledge_unknown_outcome,
         } => {
             if !acknowledge_unknown_outcome {
-                return Err(MoltenError::invalid_harness("abandon requires explicit unknown-outcome acknowledgement"));
+                return Err(Failure::invalid_harness("abandon requires explicit unknown-outcome acknowledgement"));
             }
             unavailable_mutation(&state_root, "abandon", &attempt_ref)
         }
@@ -133,7 +133,7 @@ pub(crate) fn run_world_promotion_command(command: WorldPromotionCommand) -> Res
 fn plan(request_path: &Path, out: &Path) -> Result<()> {
     let request = read_request(request_path)?;
     let plan = plan_world_promotion(&request)
-        .map_err(|issues| MoltenError::invalid_harness(format!("world promotion planning denied: {issues:?}")))?;
+        .map_err(|issues| Failure::invalid_harness(format!("world promotion planning denied: {issues:?}")))?;
     let canonical = canonical_promotion_plan(&plan)?;
     std::fs::write(out, &canonical.bytes)?;
     println!("plan_ref={}", plan.plan_ref);
@@ -148,11 +148,11 @@ fn unavailable_promote(state_root: &Path, request_path: &Path) -> Result<()> {
     let _store = open_store(state_root)?;
     let request = read_request(request_path)?;
     let plan = plan_world_promotion(&request)
-        .map_err(|issues| MoltenError::invalid_harness(format!("world promotion planning denied: {issues:?}")))?;
+        .map_err(|issues| Failure::invalid_harness(format!("world promotion planning denied: {issues:?}")))?;
     println!("plan_ref={}", plan.plan_ref);
     println!("decision=denied");
     println!("issue=current-authority-adapter-unavailable");
-    Err(MoltenError::invalid_harness(
+    Err(Failure::invalid_harness(
         "standalone promotion is disabled until current authority and intent-closure adapters are composed",
     ))
 }
@@ -181,14 +181,14 @@ fn retry_plan(
     let _next_attempt_ref = WorldReleaseAttemptRef::new(next_attempt_ref.to_string()).map_err(reference_error)?;
     let reservation = store
         .read_reservation(&reservation_ref)?
-        .ok_or_else(|| MoltenError::invalid_harness("reservation not found"))?;
-    let attempt = store.read_attempt(&attempt_ref)?.ok_or_else(|| MoltenError::invalid_harness("attempt not found"))?;
+        .ok_or_else(|| Failure::invalid_harness("reservation not found"))?;
+    let attempt = store.read_attempt(&attempt_ref)?.ok_or_else(|| Failure::invalid_harness("attempt not found"))?;
     println!("reservation_ref={}", reservation.reservation_ref);
     println!("attempt_state={}", attempt.state.as_str());
     println!("duplicate_risk_acknowledged={is_acknowledged}");
     println!("decision=denied");
     println!("issue=current-plan-and-authority-adapters-unavailable");
-    Err(MoltenError::invalid_harness(
+    Err(Failure::invalid_harness(
         "standalone retry planning requires the current immutable promotion plan and authority adapters",
     ))
 }
@@ -215,19 +215,19 @@ fn reconcile(state_root: &Path) -> Result<()> {
 fn unavailable_mutation(state_root: &Path, action: &str, reference: &str) -> Result<()> {
     let _store = open_store(state_root)?;
     molten::preserves_rail::validate_content_ref(reference)
-        .map_err(|_| MoltenError::invalid_harness("operator reference is invalid"))?;
+        .map_err(|_| Failure::invalid_harness("operator reference is invalid"))?;
     println!("action={action}");
     println!("reference={reference}");
     println!("decision=denied");
     println!("issue=current-operator-authority-adapter-unavailable");
-    Err(MoltenError::invalid_harness(
+    Err(Failure::invalid_harness(
         "standalone outbox mutation is disabled until current operator authority is composed",
     ))
 }
 
 fn read_request(path: &Path) -> Result<WorldPromotionRequest> {
     let document: PromotionDocument = serde_json::from_slice(&std::fs::read(path)?)
-        .map_err(|error| MoltenError::invalid_harness(format!("parse promotion request: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("parse promotion request: {error}")))?;
     let policy_ref = WorldHeadPolicyRef::new(document.policy_ref).map_err(head_reference_error)?;
     Ok(WorldPromotionRequest {
         operation_ref: WorldPromotionOperationRef::new(document.operation_ref).map_err(reference_error)?,
@@ -266,24 +266,24 @@ fn parse_release_class(value: &str) -> Result<WorldIntentReleaseClass> {
         "deny" => Ok(WorldIntentReleaseClass::Deny),
         "simulate" => Ok(WorldIntentReleaseClass::Simulate),
         "retain" => Ok(WorldIntentReleaseClass::Retain),
-        _ => Err(MoltenError::invalid_harness("unsupported intent release class")),
+        _ => Err(Failure::invalid_harness("unsupported intent release class")),
     }
 }
 
 fn open_store(state_root: &Path) -> Result<LocalWorldPromotionStore> {
-    let root = NodeStateRoot::open_existing(state_root)?;
-    let storage = root.namespace(NodeStateNamespaceKind::Storage)?;
+    let root = Root::open_existing(state_root)?;
+    let storage = root.namespace(NamespaceKind::Storage)?;
     LocalWorldPromotionStore::open(&storage)
 }
 
-fn reference_error(error: WorldPromotionReferenceError) -> MoltenError {
-    MoltenError::invalid_harness(format!("invalid world promotion reference: {error:?}"))
+fn reference_error(error: WorldPromotionReferenceError) -> Failure {
+    Failure::invalid_harness(format!("invalid world promotion reference: {error:?}"))
 }
 
-fn head_reference_error(error: molten_core::world_head::WorldHeadReferenceError) -> MoltenError {
-    MoltenError::invalid_harness(format!("invalid world head reference: {error}"))
+fn head_reference_error(error: molten_core::world_head::WorldHeadReferenceError) -> Failure {
+    Failure::invalid_harness(format!("invalid world head reference: {error}"))
 }
 
-fn commit_reference_error(error: molten_core::world_commit::WorldCommitReferenceError) -> MoltenError {
-    MoltenError::invalid_harness(format!("invalid world commit reference: {error:?}"))
+fn commit_reference_error(error: molten_core::world_commit::WorldCommitReferenceError) -> Failure {
+    Failure::invalid_harness(format!("invalid world commit reference: {error:?}"))
 }

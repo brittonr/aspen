@@ -66,7 +66,7 @@ pub fn verify_release_evidence_bundle(
 pub fn parse_release_evidence_bundle_verify_receipt(value: &IoValue) -> Result<ReleaseEvidenceBundleVerifyReceipt> {
     let fields = value
         .collect_simple_record("release-evidence-bundle-verify-receipt-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <release-evidence-bundle-verify-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <release-evidence-bundle-verify-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::OPERATOR_RELEASE_EVIDENCE_BUNDLE_VERIFY_RECEIPT_SCHEMA,

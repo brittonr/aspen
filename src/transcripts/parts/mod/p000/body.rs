@@ -1,6 +1,6 @@
 type Counter = std::sync::atomic::AtomicU64;
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type PathBuf = std::path::PathBuf;
 type PreservesRecord<T> = preserves::Record<T>;
 type PreservesValue<T> = preserves::Value<T>;
@@ -189,7 +189,7 @@ impl TranscriptRunMode {
             "save" => Ok(Self::Save),
             "fork" | "fork-denied" => Ok(Self::ForkDenied),
             "in-place" | "in-place-denied" => Ok(Self::InPlaceDenied),
-            other => Err(MoltenError::invalid_harness(format!("unsupported transcript run mode {other}"))),
+            other => Err(Failure::invalid_harness(format!("unsupported transcript run mode {other}"))),
         }
     }
 }
@@ -311,10 +311,10 @@ pub fn parse_markdown(source: &str, input: &TranscriptParseInput) -> Result<Tran
 pub fn parse_transcript_artifact(value: &IoValue) -> Result<TranscriptArtifact> {
     let fields = value
         .collect_simple_record("transcript-artifact-v1", None)
-        .ok_or_else(|| MoltenError::invalid_harness("expected <transcript-artifact-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <transcript-artifact-v1 ...>"))?;
     let field_count = fields.fields_iter().count();
     if field_count != TRANSCRIPT_ARTIFACT_FIELD_COUNT && field_count != TRANSCRIPT_ARTIFACT_LEGACY_FIELD_COUNT {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "transcript artifact field count {field_count} is unsupported"
         )));
     }

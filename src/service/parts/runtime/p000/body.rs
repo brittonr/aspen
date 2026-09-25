@@ -1,7 +1,7 @@
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 type Value<T> = preserves::Value<T>;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 const SERVICE_READINESS_ASSERTION_SCHEMA: &str = crate::preserves_rail::SERVICE_READINESS_ASSERTION_SCHEMA;
@@ -124,7 +124,7 @@ impl BoundedValues {
             .values
             .len()
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("{} count overflow", self.label)))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("{} count overflow", self.label)))?;
         ensure_count_at_most(total, self.label)?;
         self.values.push(value);
         Ok(())

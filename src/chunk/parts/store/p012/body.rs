@@ -2,10 +2,10 @@
 fn parse_transforms_field(value: &Value<IoValue>) -> Result<ChunkTransforms> {
     let fields = value
         .collect_simple_record("transforms", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <transforms ...> field"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <transforms ...> field"))?;
     let transform_record = fields[0]
         .collect_simple_record("transforms-v1", Some(6))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <transforms-v1 ...> value"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <transforms-v1 ...> value"))?;
     require_schema(&transform_record[0], CHUNK_TRANSFORMS_SCHEMA, "chunk transforms")?;
     let compression = record_string(&transform_record[1], "compression")?;
     let encryption = record_string(&transform_record[2], "encryption")?;
@@ -23,19 +23,19 @@ fn parse_transforms_field(value: &Value<IoValue>) -> Result<ChunkTransforms> {
 
 fn validate_transform_shape(transforms: &ChunkTransforms) -> Result<()> {
     if transforms.compression != "none" && transforms.compression != "zstd-placeholder" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported chunk compression mode {}",
             transforms.compression
         )));
     }
     if transforms.encryption != "none" && transforms.encryption != "protected-commitment" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported chunk encryption mode {}",
             transforms.encryption
         )));
     }
     if transforms.confidentiality != "public" && transforms.confidentiality != "confidential" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported chunk confidentiality mode {}",
             transforms.confidentiality
         )));
@@ -46,27 +46,27 @@ fn validate_transform_shape(transforms: &ChunkTransforms) -> Result<()> {
         ("none", "protected-commitment") => "encrypt",
         ("zstd-placeholder", "protected-commitment") => "compress-then-encrypt",
         _ => {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "unsupported chunk transform pair compression={} encryption={}",
                 transforms.compression, transforms.encryption
             )));
         }
     };
     if transforms.ordering != expected_ordering {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "chunk transform ordering {} does not match expected {expected_ordering}",
             transforms.ordering
         )));
     }
     if transforms.confidentiality == "confidential" {
         let Some(commitment_ref) = &transforms.protected_commitment_ref else {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "confidential chunk transforms require a protected commitment ref",
             ));
         };
         validate_content_ref_field(commitment_ref, "confidential chunk protected commitment ref")?;
         if transforms.encryption != "protected-commitment" {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "confidential chunk transforms require protected-commitment encryption",
             ));
         }
@@ -77,12 +77,12 @@ fn validate_transform_shape(transforms: &ChunkTransforms) -> Result<()> {
 fn validate_put_transforms(transforms: &ChunkTransforms) -> Result<()> {
     validate_transform_shape(transforms)?;
     if transforms.confidentiality == "confidential" {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "confidential chunk-store writes require a protected encryption implementation before chunk refs may be emitted",
         ));
     }
     if transforms != &ChunkTransforms::public_plaintext() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported chunk-store transform for writes: compression={} encryption={} ordering={}",
             transforms.compression, transforms.encryption, transforms.ordering
         )));
@@ -185,10 +185,10 @@ pub fn parse_receipt_value(value: &IoValue, expected_receipt_ref: Option<&str>) 
     let check_values = record_sequence(&fields[5], "checks")?;
     let details = record_sequence(&fields[6], "details")?;
     if operation.is_empty() {
-        return Err(MoltenError::invalid_harness("chunk store receipt operation must not be empty"));
+        return Err(Failure::invalid_harness("chunk store receipt operation must not be empty"));
     }
     if decision != "pass" && decision != "deny" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "chunk store receipt decision must be pass or deny, got {decision}"
         )));
     }
@@ -204,10 +204,10 @@ pub fn parse_receipt_value(value: &IoValue, expected_receipt_ref: Option<&str>) 
         let name = required_string(&check[0], "check name")?;
         let status = required_string(&check[1], "check status")?;
         if name.is_empty() {
-            return Err(MoltenError::invalid_harness("chunk store receipt check name must not be empty"));
+            return Err(Failure::invalid_harness("chunk store receipt check name must not be empty"));
         }
         if status != "pass" && status != "fail" {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "chunk store receipt check status must be pass or fail, got {status}"
             )));
         }
@@ -222,7 +222,7 @@ pub fn parse_receipt_value(value: &IoValue, expected_receipt_ref: Option<&str>) 
     if let Some(expected) = expected_receipt_ref
         && receipt_ref != expected
     {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "chunk store receipt hash mismatch: got {receipt_ref}, expected {expected}"
         )));
     }

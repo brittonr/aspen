@@ -5,14 +5,14 @@ fn parse_payloads(value: &Value<IoValue>) -> Result<Vec<ProtocolPayload>> {
     for (index, payload) in values.iter().enumerate() {
         let fields = payload
             .collect_simple_record("payload", Some(2))
-            .ok_or_else(|| MoltenError::invalid_harness("expected protocol payload"))?;
+            .ok_or_else(|| Failure::invalid_harness("expected protocol payload"))?;
         let tag = required_string(&fields[0], "payload tag")?;
         let schema_ref = required_ref(&fields[1], "payload schema ref")?;
         payloads.push(ProtocolPayload {
             tag,
             schema_ref,
             payload_id: u32::try_from(index)
-                .map_err(|error| MoltenError::invalid_harness(format!("payload id out of range: {error}")))?,
+                .map_err(|error| Failure::invalid_harness(format!("payload id out of range: {error}")))?,
         });
     }
     Ok(payloads)
@@ -22,10 +22,10 @@ fn field_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Value<IoVal
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} [...]>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} [...]>")))?;
     let values = fields[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {label}")))?;
     ensure_count_at_most(values.len(), MAX_PROTOCOL_ITEMS, label)?;
     Ok(values.iter().cloned().collect())
 }
@@ -54,7 +54,7 @@ fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     for value in &values {
         let fields = value
             .collect_simple_record("check", Some(2))
-            .ok_or_else(|| MoltenError::invalid_harness("expected protocol check"))?;
+            .ok_or_else(|| Failure::invalid_harness("expected protocol check"))?;
         checks.push((required_string(&fields[0], "check name")?, required_string(&fields[1], "check status")?));
     }
     Ok(checks)
@@ -64,7 +64,7 @@ fn require_check(checks: &[(String, String)], name: &str, label: &str) -> Result
     if checks.iter().any(|(check, status)| check == name && status == "pass") {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!("missing passing check {name} for {label}")))
+    Err(Failure::invalid_harness(format!("missing passing check {name} for {label}")))
 }
 
 fn strings_sequence(values: &[String]) -> IoValue {
@@ -94,7 +94,7 @@ fn record_iovalue(value: &Value<IoValue>, label: &str) -> Result<IoValue> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} VALUE>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} VALUE>")))?;
     Ok(value_to_iovalue(&fields[0]))
 }
 
@@ -102,7 +102,7 @@ fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} STRING>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} STRING>")))?;
     required_string(&fields[0], label)
 }
 
@@ -115,13 +115,13 @@ fn record_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
 fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} OPTION>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} OPTION>")))?;
     if fields[0].collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
     let some = fields[0]
         .collect_simple_record("some", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected optional ref for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected optional ref for {label}")))?;
     Ok(Some(required_ref(&some[0], label)?))
 }
 
@@ -129,7 +129,7 @@ fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} U64>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} U64>")))?;
     required_u64(&fields[0], label)
 }
 
@@ -137,14 +137,14 @@ fn required_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {label}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {label}")))
 }
 
 fn required_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {label}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {label}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
 fn required_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
@@ -158,14 +158,14 @@ fn require_schema(value: &Value<IoValue>, expected: &str, label: &str) -> Result
     if actual == expected {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!("expected {expected} for {label}, got {actual}")))
+    Err(Failure::invalid_harness(format!("expected {expected} for {label}, got {actual}")))
 }
 
 fn validate_protocol_id(value: &str) -> Result<()> {
     if value.starts_with("proto:") {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!("expected proto: protocol id, got {value}")))
+    Err(Failure::invalid_harness(format!("expected proto: protocol id, got {value}")))
 }
 
 fn validate_protocol_ref(value: &str, label: &str) -> Result<()> {
@@ -176,21 +176,21 @@ fn validate_session_id(value: &str) -> Result<()> {
     if value.starts_with("session:") {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!("expected session: protocol session id, got {value}")))
+    Err(Failure::invalid_harness(format!("expected session: protocol session id, got {value}")))
 }
 
 fn validate_direction(value: &str) -> Result<()> {
     if value == "send" || value == "recv" {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!("unsupported protocol local action direction {value}")))
+    Err(Failure::invalid_harness(format!("unsupported protocol local action direction {value}")))
 }
 
 fn validate_gate_decision(value: &str, label: &str) -> Result<()> {
     if matches!(value, "pass" | "deny") {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!("unsupported {label} {value}")))
+    Err(Failure::invalid_harness(format!("unsupported {label} {value}")))
 }
 
 fn validate_name(value: &str, label: &str) -> Result<()> {
@@ -200,7 +200,7 @@ fn validate_name(value: &str, label: &str) -> Result<()> {
     if !value.is_empty() && has_valid_chars {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!("invalid {label}: {value}")))
+    Err(Failure::invalid_harness(format!("invalid {label}: {value}")))
 }
 
 fn validate_unique_names(values: &[String], label: &str) -> Result<()> {
@@ -211,7 +211,7 @@ fn validate_unique_names(values: &[String], label: &str) -> Result<()> {
     for (index, left) in values.iter().enumerate() {
         for right in values.iter().skip(index + 1) {
             if left == right {
-                return Err(MoltenError::invalid_harness(format!("duplicate {label} entry {left}")));
+                return Err(Failure::invalid_harness(format!("duplicate {label} entry {left}")));
             }
         }
     }
@@ -222,7 +222,7 @@ fn validate_unique_branch_labels(branches: &[ProtocolBranchInput]) -> Result<()>
     for (index, left) in branches.iter().enumerate() {
         for right in branches.iter().skip(index + 1) {
             if left.label == right.label {
-                return Err(MoltenError::invalid_harness(format!("duplicate protocol branch label {}", left.label)));
+                return Err(Failure::invalid_harness(format!("duplicate protocol branch label {}", left.label)));
             }
         }
     }
@@ -233,14 +233,14 @@ fn require_member(value: &str, values: &[String], label: &str) -> Result<()> {
     if values.iter().any(|item| item == value) {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!("unknown {label}: {value}")))
+    Err(Failure::invalid_harness(format!("unknown {label}: {value}")))
 }
 
 fn require_payload(value: &str, manifest: &ProtocolManifest) -> Result<()> {
     if manifest.payloads.iter().any(|payload| payload.tag == value) {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!("unknown protocol payload tag {value}")))
+    Err(Failure::invalid_harness(format!("unknown protocol payload tag {value}")))
 }
 
 fn registry_id(entries: &[RegistryEntry], name: &str, label: &str) -> Result<u32> {
@@ -249,7 +249,7 @@ fn registry_id(entries: &[RegistryEntry], name: &str, label: &str) -> Result<u32
             return Ok(entry.id);
         }
     }
-    Err(MoltenError::invalid_harness(format!("missing {label} registry entry {name}")))
+    Err(Failure::invalid_harness(format!("missing {label} registry entry {name}")))
 }
 
 fn registry_name(entries: &[RegistryEntry], id: u32, label: &str) -> Result<String> {
@@ -258,7 +258,7 @@ fn registry_name(entries: &[RegistryEntry], id: u32, label: &str) -> Result<Stri
             return Ok(entry.name.clone());
         }
     }
-    Err(MoltenError::invalid_harness(format!("missing {label} registry id {id}")))
+    Err(Failure::invalid_harness(format!("missing {label} registry id {id}")))
 }
 
 fn validate_refs(refs: &[String], label: &str) -> Result<()> {
@@ -272,7 +272,7 @@ fn validate_refs(refs: &[String], label: &str) -> Result<()> {
 // r[impl molten.runtime_spine.canonical_content_refs.migration]
 fn require_ref(reference: &str, label: &str) -> Result<()> {
     validate_content_ref(reference).map_err(|error| {
-        MoltenError::invalid_harness(format!("expected canonical content ref for {label}, got {reference}: {error}"))
+        Failure::invalid_harness(format!("expected canonical content ref for {label}, got {reference}: {error}"))
     })
 }
 
@@ -280,7 +280,7 @@ fn ensure_count_at_most(actual: usize, maximum: usize, label: &str) -> Result<()
     if actual <= maximum {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
+    Err(Failure::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
 }
 
 fn synthetic_ref(label: &str) -> Result<String> {

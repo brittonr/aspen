@@ -1,6 +1,6 @@
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 type Value<T> = preserves::Value<T>;
 
@@ -173,7 +173,7 @@ pub fn service_owned_state_value(input: &ServiceOwnedStateInput) -> Result<IoVal
 pub fn parse_service_owned_state(value: &IoValue) -> Result<ServiceOwnedState> {
     let fields = value
         .collect_simple_record("service-owned-state-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <service-owned-state-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <service-owned-state-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::SERVICE_OWNED_STATE_SCHEMA, "service owned-state schema")?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "cleanup-index", "service owned state")?;
@@ -216,7 +216,7 @@ pub fn service_supervision_suite_value(input: &ServiceSupervisionSuiteInput) -> 
 pub fn parse_service_supervision_suite(value: &IoValue) -> Result<ServiceSupervisionSuite> {
     let fields = value
         .collect_simple_record("service-supervision-suite-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <service-supervision-suite-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <service-supervision-suite-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::SERVICE_SUPERVISION_SUITE_SCHEMA,

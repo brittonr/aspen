@@ -3,16 +3,16 @@ fn parse_observation(value: &Value<IoValue>) -> Result<Observation> {
     let value = value_to_iovalue(value);
     let observation = value
         .collect_simple_record("turn-observation-v1", None)
-        .ok_or_else(|| MoltenError::invalid_harness("expected <turn-observation-v1 ...>"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected <turn-observation-v1 ...>"))?;
     let arity = observation.len();
     if arity != 6 && arity != 7 {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "turn observation arity {arity} is unsupported; expected 6 or 7"
         )));
     }
     let schema = required_string(&observation[0], "observation schema")?;
     if schema != crate::preserves_rail::HARNESS_OBSERVATION_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported observation schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_OBSERVATION_SCHEMA
         )));
@@ -86,7 +86,7 @@ fn parse_step(value: &Value<IoValue>) -> Result<super::core::CoreStep> {
             upper: required_u64(&record[1], "random upper bound")?,
         });
     }
-    Err(MoltenError::invalid_harness("unknown harness step record"))
+    Err(crate::error::Failure::invalid_harness("unknown harness step record"))
 }
 
 fn tuple_set<T, F>(label: &'static str, values: &OrderedSet<T>, mut render: F) -> IoValue
@@ -101,18 +101,18 @@ fn effect_name(effect: &super::core::CoreEffect) -> &'static str {
     }
 }
 
-fn error_kind(error: &MoltenError) -> String {
+fn error_kind(error: &crate::error::Failure) -> String {
     match error {
-        MoltenError::Io(_) => "io".to_string(),
-        MoltenError::Preserves(_) => "preserves".to_string(),
-        MoltenError::InvalidHarness(_) => "invalid-harness".to_string(),
-        MoltenError::HarnessDivergence(divergence) => divergence.kind.clone(),
+        crate::error::Failure::Io(_) => "io".to_string(),
+        crate::error::Failure::Preserves(_) => "preserves".to_string(),
+        crate::error::Failure::InvalidHarness(_) => "invalid-harness".to_string(),
+        crate::error::Failure::HarnessDivergence(divergence) => divergence.kind.clone(),
     }
 }
 
-fn error_diagnostics(error: &MoltenError) -> Vec<IoValue> {
+fn error_diagnostics(error: &crate::error::Failure) -> Vec<IoValue> {
     match error {
-        MoltenError::HarnessDivergence(divergence) => {
+        crate::error::Failure::HarnessDivergence(divergence) => {
             let mut diagnostics = Vec::new();
             if let Some(step) = divergence.step {
                 diagnostics.push(record("step", vec![u64_value(step)]));
@@ -122,7 +122,7 @@ fn error_diagnostics(error: &MoltenError) -> Vec<IoValue> {
             diagnostics.push(record("detail", vec![string(&divergence.detail)]));
             diagnostics
         }
-        MoltenError::Io(_) | MoltenError::Preserves(_) | MoltenError::InvalidHarness(_) => Vec::new(),
+        crate::error::Failure::Io(_) | crate::error::Failure::Preserves(_) | crate::error::Failure::InvalidHarness(_) => Vec::new(),
     }
 }
 
@@ -133,7 +133,7 @@ fn simple_record<'a>(
 ) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 fn value_has_record_label(value: &Value<IoValue>, label: &str) -> bool {
@@ -144,20 +144,20 @@ fn value_has_record_label(value: &Value<IoValue>, label: &str) -> bool {
 fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected sequence for {field}")))
 }
 
 fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn required_bool(value: &Value<IoValue>, field: &str) -> Result<bool> {
     value
         .as_boolean()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected boolean for {field}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected boolean for {field}")))
 }
 
 fn optional_string(value: &Value<IoValue>, field: &str) -> Result<Option<String>> {
@@ -220,7 +220,7 @@ fn optional_runtime_match_value(value: &Value<IoValue>) -> Result<Option<super::
 fn required_hash(value: &Value<IoValue>, field: &str) -> Result<String> {
     let hash = required_string(value, field)?;
     validate_content_ref(&hash).map_err(|error| {
-        MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {hash}: {error}"))
+        crate::error::Failure::invalid_harness(format!("expected canonical content ref for {field}, got {hash}: {error}"))
     })?;
     Ok(hash)
 }
@@ -232,8 +232,8 @@ fn required_runtime_value(value: &Value<IoValue>, _field: &str) -> Result<super:
 fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| crate::error::Failure::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
 #[cfg(test)]

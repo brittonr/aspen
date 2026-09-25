@@ -1,5 +1,5 @@
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Record<T> = preserves::Record<T>;
 type Result<T> = crate::error::Result<T>;
 type Value<T> = preserves::Value<T>;
@@ -257,7 +257,7 @@ pub fn node_config_value(input: &ConfigValueInput<'_>) -> Result<IoValue> {
     validate_ref(input.identity_ref, "node config identity ref")?;
     validate_ref(input.state_root_ref, "node config state root ref")?;
     if input.adapters.is_empty() {
-        return Err(MoltenError::invalid_harness("node config requires explicit adapter profiles"));
+        return Err(Failure::invalid_harness("node config requires explicit adapter profiles"));
     }
     validate_refs(input.policy_refs, "node config policy ref")?;
     validate_refs(input.capability_refs, "node config capability ref")?;

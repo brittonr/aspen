@@ -2,7 +2,7 @@
 pub fn parse_job_sync_request_value(value: &IoValue) -> Result<JobSyncRequest> {
     let fields = value
         .collect_simple_record("job-sync-request-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <job-sync-request-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <job-sync-request-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::JOB_SYNC_REQUEST_SCHEMA, "job sync request")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "no-execution", "job sync request")?;
@@ -48,7 +48,7 @@ pub fn job_admission_request_value(input: AdmissionRequestValueInput<'_>) -> Res
 pub fn parse_job_admission_request_value(value: &IoValue) -> Result<JobAdmissionRequest> {
     let fields = value
         .collect_simple_record("job-admission-request-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <job-admission-request-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <job-admission-request-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::JOB_ADMISSION_REQUEST_SCHEMA, "job admission request")?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "no-execution", "job admission request")?;
@@ -105,7 +105,7 @@ pub fn job_execution_request_value(input: ExecutionRequestValueInput<'_>) -> Res
 pub fn parse_job_execution_request_value(value: &IoValue) -> Result<JobExecutionRequest> {
     let fields = value
         .collect_simple_record("job-execution-request-v1", Some(12))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <job-execution-request-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <job-execution-request-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::JOB_EXECUTION_REQUEST_SCHEMA, "job execution request")?;
     let checks = parse_checks(&fields[11])?;
     require_check(&checks, "admission-required", "job execution request")?;
@@ -170,7 +170,7 @@ pub fn parse_job_ref_submission_value(value: &IoValue) -> Result<BlobRefJobSubmi
     reject_blob_ref_job_inline_tokens(value)?;
     let fields = value
         .collect_simple_record("job-ref-submission-v1", Some(15))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <job-ref-submission-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <job-ref-submission-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::JOB_REF_SUBMISSION_SCHEMA, "job ref submission")?;
     let checks = parse_checks(&fields[14])?;
     require_check(&checks, "content-refs-only", "job ref submission")?;

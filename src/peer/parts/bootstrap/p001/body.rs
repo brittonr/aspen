@@ -146,7 +146,7 @@ fn select_features(
     let handler_profiles = intersection_all(&local.handler_profiles, &remote.handler_profiles);
     let transports = intersection_all(&local.transports, &remote.transports);
     if transports.is_empty() {
-        return Err(MoltenError::invalid_harness("peer negotiation requires at least one common transport"));
+        return Err(Failure::invalid_harness("peer negotiation requires at least one common transport"));
     }
     Ok(FeatureVector {
         runtime_versions,
@@ -203,7 +203,7 @@ fn feature_vector_value(features: &FeatureVector) -> IoValue {
 fn parse_feature_vector(value: &IoValue) -> Result<FeatureVector> {
     let fields = value
         .collect_simple_record("features", Some(7))
-        .ok_or_else(|| MoltenError::invalid_harness("expected peer features"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected peer features"))?;
     Ok(FeatureVector {
         runtime_versions: parse_string_sequence(&fields[0], "runtime")?,
         registry_protocols: parse_string_sequence(&fields[1], "registry")?,
@@ -228,7 +228,7 @@ fn offer_value(offer: &CapabilityOffer) -> IoValue {
 fn parse_offer(value: &IoValue) -> Result<CapabilityOffer> {
     let fields = value
         .collect_simple_record("capability-offer", Some(5))
-        .ok_or_else(|| MoltenError::invalid_harness("expected capability offer"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected capability offer"))?;
     let offer = CapabilityOffer {
         capability: record_string(&fields[0], "capability")?,
         scope: record_string(&fields[1], "scope")?,
@@ -256,7 +256,7 @@ fn join_value(join: &JoinRequest) -> IoValue {
 fn parse_join(value: &IoValue) -> Result<JoinRequest> {
     let fields = value
         .collect_simple_record("join-request", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("expected join request"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected join request"))?;
     let join = JoinRequest {
         kind: record_string(&fields[0], "kind")?,
         target: record_string(&fields[1], "target")?,
@@ -283,7 +283,7 @@ fn resource_limits_value(limits: &ResourceLimits) -> IoValue {
 fn parse_resource_limits(value: &IoValue) -> Result<ResourceLimits> {
     let fields = value
         .collect_simple_record("resource-limits", Some(4))
-        .ok_or_else(|| MoltenError::invalid_harness("expected resource limits"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected resource limits"))?;
     Ok(ResourceLimits {
         max_inflight: record_u64(&fields[0], "max-inflight")?,
         max_bytes: record_u64(&fields[1], "max-bytes")?,

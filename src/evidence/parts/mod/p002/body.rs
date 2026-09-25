@@ -3,12 +3,12 @@ fn parent_refs(value: &preserves::Value<IoValue>) -> Result<Vec<String>> {
     let parents_value = value_to_iovalue(value);
     let parents_record = parents_value
         .collect_simple_record("parents", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("signed receipt missing parents record"))?;
+        .ok_or_else(|| Failure::invalid_harness("signed receipt missing parents record"))?;
     let parent_values = parents_record[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("signed receipt parents must be a sequence"))?;
+        .ok_or_else(|| Failure::invalid_harness("signed receipt parents must be a sequence"))?;
     if parent_values.len() > MAX_SIGNED_RECEIPT_PARENTS {
-        return Err(MoltenError::invalid_harness("signed receipt parent ref count exceeds bound"));
+        return Err(Failure::invalid_harness("signed receipt parent ref count exceeds bound"));
     }
     let mut parents = Vec::with_capacity(parent_values.len());
     for parent in parent_values.iter() {
@@ -25,10 +25,10 @@ fn parent_refs(value: &preserves::Value<IoValue>) -> Result<Vec<String>> {
 fn signed_receipt_envelope(value: &IoValue) -> Result<SignedReceiptEnvelope> {
     let signed = value
         .collect_simple_record("signed-receipt-v1", Some(7))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <signed-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <signed-receipt-v1 ...>"))?;
     let schema = required_string(&signed[0], "signed receipt schema")?;
     if schema != EVIDENCE_SIGNED_RECEIPT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported signed receipt schema {schema}; expected {EVIDENCE_SIGNED_RECEIPT_SCHEMA}"
         )));
     }
@@ -46,16 +46,16 @@ fn parse_signed_checks(value: &preserves::Value<IoValue>) -> Result<Vec<(String,
     let checks_value = value_to_iovalue(value);
     let checks_record = checks_value
         .collect_simple_record("checks", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("signed receipt missing checks record"))?;
+        .ok_or_else(|| Failure::invalid_harness("signed receipt missing checks record"))?;
     let check_values = checks_record[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("signed receipt checks must be a sequence"))?;
+        .ok_or_else(|| Failure::invalid_harness("signed receipt checks must be a sequence"))?;
     let mut checks = Vec::with_capacity(check_values.len());
     for check in check_values.iter() {
         let check_value = value_to_iovalue(check);
         let fields = check_value
             .collect_simple_record("check", Some(2))
-            .ok_or_else(|| MoltenError::invalid_harness("expected signed receipt check record"))?;
+            .ok_or_else(|| Failure::invalid_harness("expected signed receipt check record"))?;
         push_bounded(
             &mut checks,
             (
@@ -73,7 +73,7 @@ fn require_signed_check(checks: &[(String, String)], name: &str) -> Result<()> {
     if checks.iter().any(|(check_name, status)| check_name == name && status == "pass") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("signed receipt missing pass check {name}")))
+        Err(Failure::invalid_harness(format!("signed receipt missing pass check {name}")))
     }
 }
 
@@ -89,20 +89,20 @@ fn optional_ref(value: &preserves::Value<IoValue>, field: &str) -> Result<Option
     if let Some(fields) = inner.collect_simple_record("some", Some(1)) {
         return Ok(Some(required_string(&fields[0], field)?));
     }
-    Err(MoltenError::invalid_harness(format!("expected <some ref> or <none> for {field}")))
+    Err(Failure::invalid_harness(format!("expected <some ref> or <none> for {field}")))
 }
 
 fn require_non_empty(value: &str, label: &str) -> Result<()> {
     if value.trim().is_empty() {
-        Err(MoltenError::invalid_harness(format!("{label} must not be empty")))
+        Err(Failure::invalid_harness(format!("{label} must not be empty")))
     } else {
         Ok(())
     }
 }
 
 fn required_u64(value: &preserves::Value<IoValue>, field: &str) -> Result<u64> {
-    let number = value.as_u64().ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?;
-    number.map_err(|_| MoltenError::invalid_harness(format!("u64 out of range for {field}")))
+    let number = value.as_u64().ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {field}")))?;
+    number.map_err(|_| Failure::invalid_harness(format!("u64 out of range for {field}")))
 }
 
 fn key_ref_suffix(key_ref: Option<&str>) -> String {
@@ -129,7 +129,7 @@ fn required_record_string(value: &Value<IoValue>, label: &str, field: &str) -> R
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     required_string(&record[0], field)
 }
 
@@ -137,9 +137,9 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
     let total = values
         .item_count()
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("{label} count overflow")))?;
     if total > maximum {
-        return Err(MoltenError::invalid_harness(format!("{label} count {total} exceeds bound {maximum}")));
+        return Err(Failure::invalid_harness(format!("{label} count {total} exceeds bound {maximum}")));
     }
     values.push_item(value);
     Ok(())
@@ -149,7 +149,7 @@ fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 #[cfg(test)]

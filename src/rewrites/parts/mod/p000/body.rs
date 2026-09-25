@@ -7,7 +7,7 @@ type CompoundClass = preserves::CompoundClass;
 type Record<T> = preserves::Record<T>;
 type Value<T> = preserves::Value<T>;
 type ValueClass = preserves::ValueClass;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 fn bool_value(value: bool) -> IoValue {

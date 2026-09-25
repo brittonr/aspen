@@ -174,7 +174,7 @@ pub fn parse_protocol_facade_generation_receipt(value: &IoValue) -> Result<Proto
             "protocol-facade-generation-receipt-v1",
             Some(PROTOCOL_FACADE_GENERATION_RECEIPT_FIELDS),
         )
-        .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-facade-generation-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <protocol-facade-generation-receipt-v1 ...>"))?;
     require_schema(&fields[0], PROTOCOL_FACADE_GENERATION_RECEIPT_SCHEMA, "protocol facade generation schema")?;
     let checks = parse_checks(&fields[12])?;
     require_check(&checks, "facade-non-authority", "protocol facade generation receipt")?;
@@ -468,7 +468,7 @@ fn next_facade_state(
 ) -> Result<ProtocolSessionState> {
     let next_local_state = transition
         .next_local_state
-        .ok_or_else(|| MoltenError::invalid_harness("protocol facade transition missing next local state"))?;
+        .ok_or_else(|| Failure::invalid_harness("protocol facade transition missing next local state"))?;
     advance_state(
         state,
         next_local_state,
@@ -496,7 +496,7 @@ fn protocol_facade_receipt_ref_capacity(input: &ProtocolFacadeTransitionInput) -
         .len()
         .checked_add(input.authority_refs.len())
         .and_then(|count| count.checked_add(input.resource_refs.len()))
-        .ok_or_else(|| MoltenError::invalid_harness(FACADE_REF_CAPACITY_OVERFLOW))
+        .ok_or_else(|| Failure::invalid_harness(FACADE_REF_CAPACITY_OVERFLOW))
 }
 
 fn protocol_facade_generation_checks(decision: &str) -> Vec<IoValue> {

@@ -231,21 +231,21 @@ fn validate_scope_profile(profile: &str) -> Result<()> {
         | SCOPE_REMOTE_TOPIC
         | SCOPE_JOB_WORKER
         | SCOPE_CONTROL_COMMAND => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported delivery scope profile {profile}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported delivery scope profile {profile}"))),
     }
 }
 
 fn validate_decision(decision: &str) -> Result<()> {
     match decision {
         "first" | "duplicate" | "conflict" | "stale" | "gap" | "retry" | "deny" => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported idempotency decision {decision}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported idempotency decision {decision}"))),
     }
 }
 
 fn validate_side_effect(side_effect: &str) -> Result<()> {
     match side_effect {
         "commit" | "suppress" => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported delivery side effect {side_effect}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported delivery side effect {side_effect}"))),
     }
 }
 
@@ -259,7 +259,7 @@ fn validate_diagnostics(diagnostics: &[String]) -> Result<()> {
 
 fn validate_name(value: &str, label: &str) -> Result<()> {
     if value.trim().is_empty() || value.contains('\0') || value.len() > MAX_SCOPE_NAME_LEN {
-        return Err(MoltenError::invalid_harness(format!("invalid {label} {value:?}")));
+        return Err(Failure::invalid_harness(format!("invalid {label} {value:?}")));
     }
     Ok(())
 }
@@ -274,7 +274,7 @@ fn validate_refs(refs: &[String], label: &str) -> Result<()> {
 
 fn require_ref(reference: &str, label: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference).map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "unsupported {label} {reference}; expected canonical content ref: {error}"
         ))
     })
@@ -284,6 +284,6 @@ fn ensure_count_at_most(actual: usize, maximum: usize, label: &str) -> Result<()
     if actual <= maximum {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
+        Err(Failure::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
     }
 }

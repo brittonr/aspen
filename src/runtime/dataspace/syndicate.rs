@@ -24,9 +24,9 @@ impl BoundedPush<Event> for Vec<Event> {
         let next = self
             .len()
             .checked_add(1)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("syndicate event count overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("syndicate event count overflow"))?;
         if next > MAX_SYNDICATE_EVENTS {
-            return Err(crate::error::MoltenError::invalid_harness("syndicate events exceeded bound"));
+            return Err(crate::error::Failure::invalid_harness("syndicate events exceeded bound"));
         }
         self.push(event);
         Ok(())
@@ -38,9 +38,9 @@ impl BoundedPush<String> for Vec<String> {
         let next = self
             .len()
             .checked_add(1)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("syndicate diagnostic count overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("syndicate diagnostic count overflow"))?;
         if next > MAX_SYNDICATE_DIAGNOSTICS {
-            return Err(crate::error::MoltenError::invalid_harness("syndicate diagnostics exceeded bound"));
+            return Err(crate::error::Failure::invalid_harness("syndicate diagnostics exceeded bound"));
         }
         self.push(diagnostic);
         Ok(())
@@ -150,7 +150,7 @@ impl ReferenceHarness {
             Step::Assert { value, .. } | Step::Retract { value, .. } => self.matching_observer_count(value)?,
             Step::Send { .. } | Step::Clock { .. } | Step::Random { .. } => usize::default(),
         };
-        u64::try_from(count).map_err(|_| crate::error::MoltenError::invalid_harness("syndicate fanout count overflow"))
+        u64::try_from(count).map_err(|_| crate::error::Failure::invalid_harness("syndicate fanout count overflow"))
     }
 
     // r[impl molten.syndicate_dataspace.facet_cleanup]
@@ -308,7 +308,7 @@ pub fn run_reference_harness(
 
         let fanout = syndicate_state.preview_fanout(step)?;
         let fanout_usize = usize::try_from(fanout)
-            .map_err(|_| crate::error::MoltenError::invalid_harness("syndicate fanout count overflow"))?;
+            .map_err(|_| crate::error::Failure::invalid_harness("syndicate fanout count overflow"))?;
         let flow = flow_control_receipt(step, fanout_usize, budget)?;
         let is_flow_passed = flow.decision == SYNDICATE_DECISION_PASS;
         flow_control.push(flow);
@@ -491,5 +491,5 @@ fn refs_value(refs: &[String]) -> IoValue {
 
 fn usize_to_u64(value: usize, label: &str) -> Result<u64> {
     u64::try_from(value)
-        .map_err(|error| MoltenError::invalid_harness(format!("{label} cannot convert from usize to u64: {error}")))
+        .map_err(|error| Failure::invalid_harness(format!("{label} cannot convert from usize to u64: {error}")))
 }

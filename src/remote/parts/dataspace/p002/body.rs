@@ -116,7 +116,7 @@ pub fn deny_admission_receipt_value(
 pub fn parse_delivery_log(value: &IoValue) -> Result<DeliveryLog> {
     let fields = value
         .collect_simple_record("remote-dataspace-delivery-log-v1", Some(4))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <remote-dataspace-delivery-log-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <remote-dataspace-delivery-log-v1 ...>"))?;
     require_schema(&fields[0], DELIVERY_LOG_SCHEMA, "remote dataspace delivery log schema")?;
     let is_replayable = record_bool(&fields[1], "replayable")?;
     let entry_values = field_sequence(&fields[2], "entries")?;
@@ -139,7 +139,7 @@ pub fn delivery_log_with_idempotency_receipts(
     replayable: bool,
 ) -> Result<DeliveryLog> {
     if !idempotency_receipts.is_empty() && idempotency_receipts.len() != deliveries.len() {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "remote delivery log idempotency receipt count must match delivery count",
         ));
     }
@@ -154,7 +154,7 @@ pub fn delivery_log_with_idempotency_receipts(
         if let Some(receipt) = idempotency_receipts.get(index) {
             let parsed = crate::delivery_idempotency::parse_receipt(receipt)?;
             if parsed.operation_ref != delivery.envelope.operation_ref {
-                return Err(MoltenError::invalid_harness("remote delivery log idempotency operation ref mismatch"));
+                return Err(Failure::invalid_harness("remote delivery log idempotency operation ref mismatch"));
             }
             validate_replay_idempotency_receipt(&parsed)?;
             fields.push(record("idempotency-receipt", vec![receipt.clone()]));
@@ -185,10 +185,10 @@ fn validate_replay_idempotency_receipt(receipt: &crate::delivery_idempotency::Re
     match receipt.decision.as_str() {
         "first" => Ok(()),
         "duplicate" if receipt.prior_receipt_ref.is_some() => Ok(()),
-        "duplicate" => Err(MoltenError::invalid_harness(
+        "duplicate" => Err(Failure::invalid_harness(
             "remote delivery log duplicate idempotency receipt missing prior receipt",
         )),
-        _ => Err(MoltenError::invalid_harness(
+        _ => Err(Failure::invalid_harness(
             "remote delivery log idempotency receipt is not replay-admissible",
         )),
     }
@@ -196,7 +196,7 @@ fn validate_replay_idempotency_receipt(receipt: &crate::delivery_idempotency::Re
 
 pub fn replay_delivery_log(state: &mut RuntimeState, log: &DeliveryLog) -> Result<Vec<RuntimeEvent>> {
     if !log.replayable {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "remote dataspace delivery log is non-replayable and cannot satisfy deterministic replay",
         ));
     }
@@ -215,10 +215,10 @@ pub fn gate_receipt_value(
     turn_context_refs: &[String],
 ) -> Result<IoValue> {
     if !delivery_log.replayable {
-        return Err(MoltenError::invalid_harness("remote dataspace gate receipt requires a replayable delivery log"));
+        return Err(Failure::invalid_harness("remote dataspace gate receipt requires a replayable delivery log"));
     }
     if admission_receipts.is_empty() {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "remote dataspace gate receipt requires at least one admission receipt",
         ));
     }

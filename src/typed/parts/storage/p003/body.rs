@@ -105,7 +105,7 @@ fn stored_entry(input: &SourceInput<'_>) -> Result<IoValue> {
             details: vec![record("recipe", vec![string(&input.recipe.recipe_ref)])],
         });
         store_receipt(input.root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness("typed storage migration rejected: source record not found"));
+        return Err(Failure::invalid_harness("typed storage migration rejected: source record not found"));
     };
     parse_canonical_bytes(bytes.value())
 }
@@ -126,7 +126,7 @@ fn require_match(input: &SourceInput<'_>, typed_ref: &EntryRef) -> Result<()> {
         details: vec![record("recipe", vec![string(&input.recipe.recipe_ref)])],
     });
     store_receipt(input.root, &receipt_value)?;
-    Err(MoltenError::invalid_harness(
+    Err(Failure::invalid_harness(
         "typed storage migration rejected: source schema does not match recipe",
     ))
 }
@@ -149,7 +149,7 @@ fn source_value(input: &SourceInput<'_>, typed_ref: &EntryRef) -> Result<IoValue
         details: vec![record("recipe", vec![string(&input.recipe.recipe_ref)])],
     });
     store_receipt(input.root, &receipt_value)?;
-    Err(MoltenError::invalid_harness("typed storage migration source content integrity failed"))
+    Err(Failure::invalid_harness("typed storage migration source content integrity failed"))
 }
 
 fn entry_refs(typed_ref: &EntryRef, recipe: &MigrationRecipe) -> EntryRefs {
@@ -323,7 +323,7 @@ pub fn read_receipt(root: &Path, receipt_ref: &str) -> Result<Receipt> {
     let read_txn = db.begin_read().map_err(index_error)?;
     let table = read_txn.open_table(INDEX_RECEIPTS).map_err(index_error)?;
     let Some(bytes) = table.get(receipt_ref).map_err(index_error)? else {
-        return Err(MoltenError::invalid_harness(format!("unknown typed storage receipt {receipt_ref}")));
+        return Err(Failure::invalid_harness(format!("unknown typed storage receipt {receipt_ref}")));
     };
     let value = parse_canonical_bytes(bytes.value())?;
     parse_receipt_value(&value, Some(receipt_ref))

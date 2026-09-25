@@ -101,7 +101,7 @@ pub fn coordination_summary(value: &IoValue) -> Result<String> {
             assertion.receipt_ref
         ));
     }
-    Err(MoltenError::invalid_harness("unsupported coordination artifact"))
+    Err(Failure::invalid_harness("unsupported coordination artifact"))
 }
 
 fn apply_coordination_read(

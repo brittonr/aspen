@@ -70,7 +70,7 @@ fn validate_delivery_evidence(envelope: &Envelope, evidence: &DeliveryEvidence) 
     require_non_empty_refs(&evidence.authority_refs, "authority ref")?;
     for capability_ref in &envelope.capability_refs {
         if !evidence.capability_refs.contains(capability_ref) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "remote dataspace capability evidence missing declared capability {capability_ref}"
             )));
         }
@@ -84,7 +84,7 @@ fn validate_delivery_evidence(envelope: &Envelope, evidence: &DeliveryEvidence) 
         .collect();
     for evidence_ref in &envelope.evidence_refs {
         if !evidence_refs.contains(&evidence_ref) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "remote dataspace admission evidence missing declared evidence ref {evidence_ref}"
             )));
         }
@@ -94,7 +94,7 @@ fn validate_delivery_evidence(envelope: &Envelope, evidence: &DeliveryEvidence) 
 
 fn require_non_empty_refs(refs: &[String], label: &str) -> Result<()> {
     if refs.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("missing remote dataspace {label}")));
+        return Err(Failure::invalid_harness(format!("missing remote dataspace {label}")));
     }
     validate_refs(refs, label)
 }
@@ -129,7 +129,7 @@ fn envelope_policy_refs(capability_refs: &[String], evidence_refs: &[String]) ->
     let total = capability_refs
         .len()
         .checked_add(evidence_refs.len())
-        .ok_or_else(|| MoltenError::invalid_harness("remote dataspace policy ref count overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("remote dataspace policy ref count overflow"))?;
     ensure_count_at_most(total, MAX_REPLAY_EVENTS, "remote dataspace operation policy refs")?;
     let mut refs = Vec::with_capacity(total);
     refs.extend(capability_refs.iter().cloned());
@@ -179,7 +179,7 @@ fn envelope_value(input: &EnvelopeInput) -> Result<IoValue> {
 fn validate_envelope_identity(envelope: &Envelope) -> Result<()> {
     let actual_ref = canonical_hash(&envelope.value)?;
     if actual_ref != envelope.envelope_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "remote dataspace envelope ref {} does not match canonical ref {actual_ref}",
             envelope.envelope_ref
         )));
@@ -193,7 +193,7 @@ fn validate_content_refs_available_with_root(root: &CapabilityDataspaceRoot, ref
         let bytes = root.root().read(&blob_store_path(reference)?)?;
         let actual_ref = content_ref_from_bytes(&bytes);
         if actual_ref != *reference {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "remote dataspace content ref {reference} hashes to {actual_ref}"
             )));
         }
@@ -226,7 +226,7 @@ fn validate_refs(refs: &[String], label: &str) -> Result<()> {
 
 fn validate_ref(reference: &str, label: &str) -> Result<()> {
     validate_content_ref(reference).map_err(|error| {
-        MoltenError::invalid_harness(format!(
+        Failure::invalid_harness(format!(
             "unsupported {label} {reference}; expected canonical content ref: {error}"
         ))
     })
@@ -234,22 +234,22 @@ fn validate_ref(reference: &str, label: &str) -> Result<()> {
 
 fn validate_name(value: &str, field: &str) -> Result<()> {
     if value.trim().is_empty() || value.contains('\0') || value.contains('/') {
-        return Err(MoltenError::invalid_harness(format!("invalid remote dataspace {field} {value:?}")));
+        return Err(Failure::invalid_harness(format!("invalid remote dataspace {field} {value:?}")));
     }
     Ok(())
 }
 
-fn blob_store_path(reference: &str) -> Result<LocalStorePath> {
-    LocalStorePath::parse(&format!("blobs/{}", filename_for_ref(reference)?))
+fn blob_store_path(reference: &str) -> Result<RelativeLocator> {
+    RelativeLocator::parse(&format!("blobs/{}", filename_for_ref(reference)?))
 }
 
-fn envelope_store_path(topic: &str, envelope_ref: &str) -> Result<LocalStorePath> {
+fn envelope_store_path(topic: &str, envelope_ref: &str) -> Result<RelativeLocator> {
     topic_store_path(topic)?.join(&filename_for_ref(envelope_ref)?)
 }
 
-fn topic_store_path(topic: &str) -> Result<LocalStorePath> {
+fn topic_store_path(topic: &str) -> Result<RelativeLocator> {
     let topic_hash = blake3::hash(topic.as_bytes()).to_hex().to_string();
-    LocalStorePath::parse(&format!("gossip/topic_{topic_hash}"))
+    RelativeLocator::parse(&format!("gossip/topic_{topic_hash}"))
 }
 
 #[cfg(test)]

@@ -77,7 +77,7 @@ fn fixture_cleanup(core: &FixtureCore, retention: &crate::retention::Evaluation)
     let tombstone = retention
         .tombstone
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("secrets cleanup retention missing tombstone"))?;
+        .ok_or_else(|| Failure::invalid_harness("secrets cleanup retention missing tombstone"))?;
     let value = secret_cleanup_receipt_value(&SecretCleanupInput {
         secret_ref: core.secret.secret_ref.clone(),
         revocation_ref: fixture_ref("secret-revocation"),

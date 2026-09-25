@@ -9,7 +9,7 @@ use super::tests::NODE_A;
 use super::tests::NODE_B;
 use super::tests::NODE_C;
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric_transport::CanonicalCrossProcessEndpoint;
 
@@ -137,17 +137,17 @@ fn child_invocation_from_environment() -> Result<Option<(String, PathBuf, ChildM
         return Ok(None);
     };
     let run_directory = std::env::var_os(CHILD_RUN_DIRECTORY_ENV)
-        .ok_or_else(|| MoltenError::invalid_harness("live Raft child is missing its explicit run directory"))?;
+        .ok_or_else(|| Failure::invalid_harness("live Raft child is missing its explicit run directory"))?;
     let node_id = node_id
         .into_string()
-        .map_err(|_| MoltenError::invalid_harness("live Raft child node ID is not UTF-8"))?;
+        .map_err(|_| Failure::invalid_harness("live Raft child node ID is not UTF-8"))?;
     if ![NODE_A, NODE_B, NODE_C].contains(&node_id.as_str()) {
-        return Err(MoltenError::invalid_harness("live Raft child node is outside static membership"));
+        return Err(Failure::invalid_harness("live Raft child node is outside static membership"));
     }
     let mode = match std::env::var(CHILD_MODE_ENV).as_deref() {
         Ok("fresh") => ChildMode::Fresh,
         Ok("recover") => ChildMode::Recover,
-        _ => return Err(MoltenError::invalid_harness("live Raft child mode is absent or invalid")),
+        _ => return Err(Failure::invalid_harness("live Raft child mode is absent or invalid")),
     };
     Ok(Some((node_id, PathBuf::from(run_directory), mode)))
 }
@@ -181,7 +181,7 @@ fn wait_for_file(path: &Path) -> Result<()> {
         }
         std::thread::sleep(Duration::from_millis(FILE_POLL_MILLISECONDS));
     }
-    Err(MoltenError::invalid_harness(format!(
+    Err(Failure::invalid_harness(format!(
         "timed out waiting for explicit harness file {}",
         path.display()
     )))
@@ -197,16 +197,16 @@ fn write_signal(path: &Path, label: &str) -> Result<()> {
 fn write_value(path: &Path, value: &IOValue) -> Result<()> {
     let bytes = crate::preserves_rail::canonical_bytes(value)?;
     let temporary = path.with_extension("tmp");
-    std::fs::write(&temporary, bytes).map_err(MoltenError::from)?;
-    std::fs::rename(temporary, path).map_err(MoltenError::from)
+    std::fs::write(&temporary, bytes).map_err(Failure::from)?;
+    std::fs::rename(temporary, path).map_err(Failure::from)
 }
 
 fn read_value(path: &Path) -> Result<IOValue> {
-    let metadata = std::fs::metadata(path).map_err(MoltenError::from)?;
+    let metadata = std::fs::metadata(path).map_err(Failure::from)?;
     if metadata.len() > MAX_HARNESS_FILE_BYTES {
-        return Err(MoltenError::invalid_harness("live Raft harness file exceeds its byte bound"));
+        return Err(Failure::invalid_harness("live Raft harness file exceeds its byte bound"));
     }
-    let bytes = std::fs::read(path).map_err(MoltenError::from)?;
+    let bytes = std::fs::read(path).map_err(Failure::from)?;
     Ok(crate::preserves_rail::strict_canonical_decode(&bytes)?.value)
 }
 
@@ -248,6 +248,6 @@ fn remove_file_if_present(path: &Path) -> Result<()> {
     match std::fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(MoltenError::from(error)),
+        Err(error) => Err(Failure::from(error)),
     }
 }

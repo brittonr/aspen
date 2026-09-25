@@ -11,13 +11,13 @@ use molten_core::world_commit::RootObservation;
 use molten_core::world_commit::WorldCommitRef;
 use molten_core::world_commit::WorldRootRef;
 use molten_node_host::node_state::MAX_NODE_STATE_FILE_BYTES;
-use molten_node_host::node_state::NodeStateNamespace;
-use molten_node_host::node_state::NodeStateNamespaceKind;
-use molten_node_host::node_state::NodeStatePath;
+use molten_node_host::node_state::DirectoryView;
+use molten_node_host::node_state::NamespaceKind;
+use molten_node_host::node_state::RelativePath;
 
 use super::CanonicalCaptureReceipt;
 use super::PublicationOutcome;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const WORLD_COMMIT_DIRECTORY: &str = "world-commits";
@@ -105,20 +105,20 @@ pub trait WorldRestorePort {
 
 #[derive(Debug)]
 pub struct LocalWorldCommitStore {
-    objects: NodeStateNamespace,
-    commits: NodeStateNamespace,
-    receipts: NodeStateNamespace,
+    objects: DirectoryView,
+    commits: DirectoryView,
+    receipts: DirectoryView,
 }
 
 impl LocalWorldCommitStore {
-    pub fn open(storage: &NodeStateNamespace) -> Result<Self> {
-        if storage.kind() != NodeStateNamespaceKind::Storage {
-            return Err(MoltenError::invalid_harness("local world commit store requires the storage namespace"));
+    pub fn open(storage: &DirectoryView) -> Result<Self> {
+        if storage.kind() != NamespaceKind::Storage {
+            return Err(Failure::invalid_harness("local world commit store requires the storage namespace"));
         }
-        let root = storage.open_subdir(&NodeStatePath::parse(WORLD_COMMIT_DIRECTORY)?)?;
-        let objects = root.open_subdir(&NodeStatePath::parse(WORLD_COMMIT_OBJECT_DIRECTORY)?)?;
-        let commits = root.open_subdir(&NodeStatePath::parse(WORLD_COMMIT_COMMIT_DIRECTORY)?)?;
-        let receipts = root.open_subdir(&NodeStatePath::parse(WORLD_COMMIT_RECEIPT_DIRECTORY)?)?;
+        let root = storage.open_subdir(&RelativePath::parse(WORLD_COMMIT_DIRECTORY)?)?;
+        let objects = root.open_subdir(&RelativePath::parse(WORLD_COMMIT_OBJECT_DIRECTORY)?)?;
+        let commits = root.open_subdir(&RelativePath::parse(WORLD_COMMIT_COMMIT_DIRECTORY)?)?;
+        let receipts = root.open_subdir(&RelativePath::parse(WORLD_COMMIT_RECEIPT_DIRECTORY)?)?;
         Ok(Self {
             objects,
             commits,
@@ -222,21 +222,21 @@ impl WorldCommitPublicationPort for LocalWorldCommitStore {
     }
 }
 
-fn root_path(root: &WorldRootRef) -> std::result::Result<NodeStatePath, WorldCommitPortError> {
+fn root_path(root: &WorldRootRef) -> std::result::Result<RelativePath, WorldCommitPortError> {
     let digest = crate::preserves_rail::content_ref_hex(root.as_str())
         .map_err(|error| WorldCommitPortError::new("root-path", error.to_string()))?;
-    NodeStatePath::parse(&format!("{}-{digest}{ROOT_FILE_SUFFIX}", root.kind().as_str()))
+    RelativePath::parse(&format!("{}-{digest}{ROOT_FILE_SUFFIX}", root.kind().as_str()))
         .map_err(|error| WorldCommitPortError::new("root-path", error.to_string()))
 }
 
-fn digest_path(reference: &str, suffix: &str) -> Result<NodeStatePath> {
+fn digest_path(reference: &str, suffix: &str) -> Result<RelativePath> {
     let digest = crate::preserves_rail::content_ref_hex(reference)?;
-    NodeStatePath::parse(&format!("{digest}{suffix}"))
+    RelativePath::parse(&format!("{digest}{suffix}"))
 }
 
 fn sync_write_exact(
-    namespace: &NodeStateNamespace,
-    path: &NodeStatePath,
+    namespace: &DirectoryView,
+    path: &RelativePath,
     bytes: &[u8],
 ) -> std::result::Result<(), WorldCommitPortError> {
     let byte_count = u64::try_from(bytes.len())
@@ -291,6 +291,6 @@ fn store_bounds() -> molten_core::world_commit::WorldCommitBounds {
     }
 }
 
-fn port_to_molten(error: WorldCommitPortError) -> MoltenError {
-    MoltenError::invalid_harness(format!("local world commit store failed: {error}"))
+fn port_to_molten(error: WorldCommitPortError) -> Failure {
+    Failure::invalid_harness(format!("local world commit store failed: {error}"))
 }

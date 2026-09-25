@@ -1,4 +1,4 @@
-type MoltenError = molten::error::MoltenError;
+type Failure = molten::error::Failure;
 type Path = std::path::Path;
 type Result<T> = molten::error::Result<T>;
 type ScheduleLocal = super::command::worker::ScheduleLocal;
@@ -134,7 +134,7 @@ pub(crate) fn local(args: ScheduleLocal) -> Result<()> {
         Ok(())
     } else {
         let parsed = molten::job_dag::parse_job_worker_schedule_receipt_value(&result.receipt_value)?;
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "job worker-schedule-local denied: {}",
             parsed.diagnostics.join("; ")
         )))

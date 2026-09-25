@@ -1,9 +1,9 @@
 fn requirement_map(requirements: &[RequirementInput]) -> Result<OrderedMap<String, RequirementInput>> {
     if requirements.is_empty() {
-        return Err(MoltenError::invalid_harness("traceability manifest requires requirements"));
+        return Err(Failure::invalid_harness("traceability manifest requires requirements"));
     }
     if requirements.len() > MAX_REQUIREMENTS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "traceability requirement count {} exceeds bound {MAX_REQUIREMENTS}",
             requirements.len()
         )));
@@ -12,7 +12,7 @@ fn requirement_map(requirements: &[RequirementInput]) -> Result<OrderedMap<Strin
     for requirement in requirements {
         validate_requirement(requirement)?;
         if map.insert(requirement.id.clone(), requirement.clone()).is_some() {
-            return Err(MoltenError::invalid_harness(format!("duplicate traceability requirement {}", requirement.id)));
+            return Err(Failure::invalid_harness(format!("duplicate traceability requirement {}", requirement.id)));
         }
     }
     Ok(map)
@@ -20,7 +20,7 @@ fn requirement_map(requirements: &[RequirementInput]) -> Result<OrderedMap<Strin
 
 fn coverage_map(coverage: &[CoverageInput]) -> Result<OrderedMap<String, CoverageInput>> {
     if coverage.len() > MAX_COVERAGE_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "traceability coverage count {} exceeds bound {MAX_COVERAGE_ITEMS}",
             coverage.len()
         )));
@@ -29,7 +29,7 @@ fn coverage_map(coverage: &[CoverageInput]) -> Result<OrderedMap<String, Coverag
     for entry in coverage {
         validate_text("coverage requirement", &entry.requirement_id)?;
         if map.insert(entry.requirement_id.clone(), entry.clone()).is_some() {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "duplicate traceability coverage entry {}",
                 entry.requirement_id
             )));

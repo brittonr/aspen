@@ -1,6 +1,6 @@
 type ArtifactPayloadRef = crate::artifacts::ArtifactPayloadRef;
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Path = std::path::Path;
 type PreservesRecord<T> = preserves::Record<T>;
 type PreservesValue<T> = preserves::Value<T>;
@@ -267,7 +267,7 @@ pub fn view(registry_root: &Path, ledger_root: Option<&Path>, input: &ViewInput)
         };
         view_value(&summary, &summary.value, &rendered, true, input.redacted)?
     } else {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "catalog ref {full_ref} not found in registry and no ledger was supplied"
         )));
     };

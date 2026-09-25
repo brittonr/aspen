@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric_transport::CrossProcessFrameEvidence;
 use crate::fabric_transport::DeliveryOutcome;
@@ -52,7 +52,7 @@ impl ReplicaListenerSource for IrohCrossProcessListener {
 impl ReplicaListenerSource for Option<IrohCrossProcessListener> {
     fn admitted_listener(&mut self) -> Result<&mut IrohCrossProcessListener> {
         self.as_mut()
-            .ok_or_else(|| MoltenError::invalid_harness("live Raft listener is detached from its owner"))
+            .ok_or_else(|| Failure::invalid_harness("live Raft listener is detached from its owner"))
     }
 }
 
@@ -70,10 +70,10 @@ impl IrohReplicaTransportPort {
     ) -> Result<Self> {
         crate::preserves_rail::validate_content_ref(&protocol_ref)?;
         if peers.is_empty() {
-            return Err(MoltenError::invalid_harness("live Raft Iroh transport requires at least one admitted peer"));
+            return Err(Failure::invalid_harness("live Raft Iroh transport requires at least one admitted peer"));
         }
         if timeout.is_zero() {
-            return Err(MoltenError::invalid_harness("live Raft Iroh transport timeout must be positive"));
+            return Err(Failure::invalid_harness("live Raft Iroh transport timeout must be positive"));
         }
         for peer in peers.keys() {
             validate_peer_id(peer)?;
@@ -105,11 +105,11 @@ impl IrohReplicaIngressPump {
                         event_sender
                             .send(event)
                             .await
-                            .map_err(|_| MoltenError::invalid_harness("live Raft ingress consumer closed"))?;
+                            .map_err(|_| Failure::invalid_harness("live Raft ingress consumer closed"))?;
                     }
                 }
             }
-            Err(MoltenError::invalid_harness("live Raft ingress exhausted its delivery limit"))
+            Err(Failure::invalid_harness("live Raft ingress exhausted its delivery limit"))
         });
         Ok(Self {
             events,
@@ -122,21 +122,21 @@ impl IrohReplicaIngressPump {
         self.events
             .recv()
             .await
-            .ok_or_else(|| MoltenError::invalid_harness("live Raft ingress pump terminated before delivery"))
+            .ok_or_else(|| Failure::invalid_harness("live Raft ingress pump terminated before delivery"))
     }
 
     pub async fn shutdown(mut self) -> Result<IrohCrossProcessListener> {
         let cancel = self
             .cancel
             .take()
-            .ok_or_else(|| MoltenError::invalid_harness("live Raft ingress cancellation handle is absent"))?;
+            .ok_or_else(|| Failure::invalid_harness("live Raft ingress cancellation handle is absent"))?;
         let _cancel_result = cancel.send(());
         let task = self
             .task
             .take()
-            .ok_or_else(|| MoltenError::invalid_harness("live Raft ingress task handle is absent"))?;
+            .ok_or_else(|| Failure::invalid_harness("live Raft ingress task handle is absent"))?;
         task.await
-            .map_err(|error| MoltenError::invalid_harness(format!("live Raft ingress task failed: {error}")))?
+            .map_err(|error| Failure::invalid_harness(format!("live Raft ingress task failed: {error}")))?
     }
 }
 
@@ -158,7 +158,7 @@ impl ReplicaTransportEffects for IrohReplicaTransportPort {
             let (input, message, timeout) = prepared?;
             let evidence = exchange_cross_process_frame(input, &message.bytes, timeout).await?;
             if evidence.delivery != DeliveryOutcome::Delivered {
-                return Err(MoltenError::invalid_harness(
+                return Err(Failure::invalid_harness(
                     "live Raft Iroh transport completed without delivered frame evidence",
                 ));
             }
@@ -178,9 +178,9 @@ pub async fn receive_replica_event<L: ReplicaListenerSource>(
     let envelope = parse_canonical_replica_message(&received.payload)?;
     let refs = replica_transport_refs(&envelope)?;
     let payload_bytes = u64::try_from(received.payload.len())
-        .map_err(|_| MoltenError::invalid_harness("live Raft received payload length exceeds u64"))?;
+        .map_err(|_| Failure::invalid_harness("live Raft received payload length exceeds u64"))?;
     if received.evidence.request_ref != refs.request_ref || received.evidence.payload_bytes != payload_bytes {
-        return Err(MoltenError::invalid_harness("live Raft received payload shape does not match transport evidence"));
+        return Err(Failure::invalid_harness("live Raft received payload shape does not match transport evidence"));
     }
     Ok(ReceivedReplicaEvent {
         event: ReplicaEvent::Message { envelope },
@@ -203,7 +203,7 @@ fn prepare_send(
     let mut input = peers
         .get(&envelope.to)
         .cloned()
-        .ok_or_else(|| MoltenError::invalid_harness("live Raft Iroh transport has no admitted endpoint for peer"))?;
+        .ok_or_else(|| Failure::invalid_harness("live Raft Iroh transport has no admitted endpoint for peer"))?;
     input.request_ref.clone_from(&message.envelope_ref);
     Ok((input, message, timeout))
 }
@@ -216,13 +216,13 @@ fn derive_replica_request_ref(payload: &[u8]) -> Result<String> {
 pub(super) fn validate_ingress_config(config: &IrohReplicaIngressConfig) -> Result<()> {
     crate::preserves_rail::validate_content_ref(&config.session_ref)?;
     if config.accept_timeout.is_zero() {
-        return Err(MoltenError::invalid_harness("live Raft ingress timeout must be positive"));
+        return Err(Failure::invalid_harness("live Raft ingress timeout must be positive"));
     }
     if config.event_capacity == 0 || config.event_capacity > MAX_REPLICA_INGRESS_EVENTS {
-        return Err(MoltenError::invalid_harness("live Raft ingress capacity is outside its static bound"));
+        return Err(Failure::invalid_harness("live Raft ingress capacity is outside its static bound"));
     }
     if config.delivery_limit == 0 || config.delivery_limit > MAX_REPLICA_INGRESS_DELIVERIES {
-        return Err(MoltenError::invalid_harness("live Raft ingress delivery limit is outside its static bound"));
+        return Err(Failure::invalid_harness("live Raft ingress delivery limit is outside its static bound"));
     }
     Ok(())
 }
@@ -231,7 +231,7 @@ fn validate_peer_id(peer: &str) -> Result<()> {
     if peer.is_empty()
         || !peer.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':'))
     {
-        return Err(MoltenError::invalid_harness("live Raft Iroh peer id is empty or malformed"));
+        return Err(Failure::invalid_harness("live Raft Iroh peer id is empty or malformed"));
     }
     Ok(())
 }

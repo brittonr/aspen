@@ -1,7 +1,7 @@
 
 fn duplicate_control_live_send(
     input: &ControlLiveSendInput<'_>,
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     ticket: &ControlLiveTicket,
     envelope: &ControlIngressEnvelope,
 ) -> Result<Option<ControlLiveSend>> {
@@ -39,7 +39,7 @@ fn duplicate_control_live_send(
     let prior_send_value = read_preserves(state_root, &send_path)?;
     let prior_send = parse_control_live_send_receipt(&prior_send_value)?;
     if prior_send.receipt_ref != send_receipt_ref {
-        return Err(MoltenError::invalid_harness("node control live send prior receipt path is stale"));
+        return Err(Failure::invalid_harness("node control live send prior receipt path is stale"));
     }
     if prior_send.decision != "pass" || prior_send.envelope_ref != envelope.envelope_ref {
         return Ok(None);
@@ -121,7 +121,7 @@ pub fn parse_control_live_send_receipt(value: &IoValue) -> Result<ControlLiveSen
     let fields = value
         .collect_simple_record("node-control-live-send-receipt-v1", Some(15))
         .or_else(|| value.collect_simple_record("node-control-live-send-receipt-v1", Some(13)))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-send-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-control-live-send-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA,
@@ -237,7 +237,7 @@ impl FlowChecks<'_> {
 }
 
 fn import_flow_values(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     input: &ControlLiveWorkflowInput<'_>,
     receipt_ref: &str,
     receipt_value: &IoValue,
@@ -259,7 +259,7 @@ fn import_flow_values(
 }
 
 pub fn control_live_workflow_receipt(input: &ControlLiveWorkflowInput<'_>) -> Result<ControlLiveWorkflowReceipt> {
-    let state_root = input.state_root.map(crate::node_state::NodeStateRoot::open).transpose()?;
+    let state_root = input.state_root.map(crate::node_state::Root::open).transpose()?;
     if let Some(path) = input.state_root {
         validate_state_root(path)?;
     }

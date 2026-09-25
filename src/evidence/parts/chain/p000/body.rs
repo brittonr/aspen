@@ -4,7 +4,7 @@ type IoValue = preserves::IOValue;
 type Path = std::path::Path;
 
 type Value<T> = preserves::Value<T>;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 type SignReceiptInput<'a> = crate::evidence::SignReceiptInput<'a>;
 type SignedReceipt = crate::evidence::SignedReceipt;

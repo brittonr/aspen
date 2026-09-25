@@ -2,20 +2,20 @@
 fn parse_local_branches_record(value: &Value<IoValue>) -> Result<Vec<ProtocolLocalBranch>> {
     let fields = value
         .collect_simple_record("branches", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("expected protocol local branch record"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected protocol local branch record"))?;
     parse_local_branches(&fields[0])
 }
 
 fn parse_local_branches(value: &Value<IoValue>) -> Result<Vec<ProtocolLocalBranch>> {
     let values = value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("expected protocol local branch sequence"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected protocol local branch sequence"))?;
     ensure_count_at_most(values.len(), MAX_PROTOCOL_ITEMS, "protocol local branches")?;
     let mut branches = Vec::with_capacity(values.len());
     for branch in values.iter() {
         let fields = branch
             .collect_simple_record("branch", Some(2))
-            .ok_or_else(|| MoltenError::invalid_harness("expected protocol local branch"))?;
+            .ok_or_else(|| Failure::invalid_harness("expected protocol local branch"))?;
         branches.push(ProtocolLocalBranch {
             label: required_string(&fields[0], "protocol local branch label")?,
             actions: parse_local_action_sequence(&fields[1])?,
@@ -76,11 +76,11 @@ fn parse_registry(value: &Value<IoValue>, label: &str) -> Result<Vec<RegistryEnt
     for entry in values.iter() {
         let fields = entry
             .collect_simple_record("entry", Some(2))
-            .ok_or_else(|| MoltenError::invalid_harness("expected protocol registry entry"))?;
+            .ok_or_else(|| Failure::invalid_harness("expected protocol registry entry"))?;
         entries.push(RegistryEntry {
             name: required_string(&fields[0], "registry entry name")?,
             id: u32::try_from(required_u64(&fields[1], "registry entry id")?)
-                .map_err(|error| MoltenError::invalid_harness(format!("registry id out of range: {error}")))?,
+                .map_err(|error| Failure::invalid_harness(format!("registry id out of range: {error}")))?,
         });
     }
     Ok(entries)
@@ -405,7 +405,7 @@ fn advance_state(
 
 fn consume_first_action(local_state: &ProtocolLocalState) -> Result<ProtocolLocalState> {
     if local_state.actions.is_empty() {
-        return Err(MoltenError::invalid_harness("cannot advance local state with no actions"));
+        return Err(Failure::invalid_harness("cannot advance local state with no actions"));
     }
     let mut actions = Vec::with_capacity(local_state.actions.len().saturating_sub(1));
     for action in local_state.actions.iter().skip(1) {
@@ -448,13 +448,13 @@ fn admission_diagnostics(authority_refs: &[String], resource_refs: &[String]) ->
 fn required_message(run: &ProtocolOperationRun) -> Result<ProtocolMessage> {
     run.message
         .clone()
-        .ok_or_else(|| MoltenError::invalid_harness("expected protocol message in pass operation"))
+        .ok_or_else(|| Failure::invalid_harness("expected protocol message in pass operation"))
 }
 
 fn required_next_state(run: &ProtocolOperationRun) -> Result<ProtocolSessionState> {
     run.next_state
         .clone()
-        .ok_or_else(|| MoltenError::invalid_harness("expected next protocol state in pass operation"))
+        .ok_or_else(|| Failure::invalid_harness("expected next protocol state in pass operation"))
 }
 
 fn endpoint_for_role(endpoints: &[ProtocolEndpoint], role: &str) -> Result<ProtocolEndpoint> {
@@ -463,7 +463,7 @@ fn endpoint_for_role(endpoints: &[ProtocolEndpoint], role: &str) -> Result<Proto
             return Ok(endpoint.clone());
         }
     }
-    Err(MoltenError::invalid_harness(format!("missing endpoint for role {role}")))
+    Err(Failure::invalid_harness(format!("missing endpoint for role {role}")))
 }
 
 fn branch_for_label<'a>(branches: &'a [ProtocolLocalBranch], label: &str) -> Option<&'a ProtocolLocalBranch> {

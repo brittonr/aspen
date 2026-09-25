@@ -1,7 +1,7 @@
 
 fn insert_source_path_bounded(values: &mut std::collections::BTreeSet<String>, value: String) -> Result<()> {
     if !values.contains(&value) && values.len() >= MAX_SOURCE_INVENTORY_PATHS {
-        return Err(MoltenError::invalid_harness("source inventory exceeds path bound"));
+        return Err(Failure::invalid_harness("source inventory exceeds path bound"));
     }
     values.insert(value);
     Ok(())

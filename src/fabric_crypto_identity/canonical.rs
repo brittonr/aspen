@@ -1,7 +1,7 @@
 use preserves::IOValue;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric::DeterminismClass;
 use crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA;
@@ -215,9 +215,9 @@ pub fn canonical_signature_outcome(
     signature: Vec<u8>,
 ) -> Result<CanonicalSignatureOutcome> {
     let signature_bytes = u64::try_from(signature.len())
-        .map_err(|_| MoltenError::invalid_harness("signature length does not fit u64"))?;
+        .map_err(|_| Failure::invalid_harness("signature length does not fit u64"))?;
     if signature_bytes == 0 || signature_bytes > profile.profile.max_signature_bytes {
-        return Err(MoltenError::invalid_harness("signature length exceeds admitted profile"));
+        return Err(Failure::invalid_harness("signature length exceeds admitted profile"));
     }
     let signature_ref = crate::preserves_rail::content_ref_from_bytes(&signature);
     let metadata = SignatureMetadata {
@@ -373,8 +373,8 @@ fn issue_label(issue: &CryptoIdentityIssue) -> &'static str {
     }
 }
 
-fn validation_error<T: std::fmt::Debug>(label: &str, issues: &[T]) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label} validation failed: {issues:?}"))
+fn validation_error<T: std::fmt::Debug>(label: &str, issues: &[T]) -> Failure {
+    Failure::invalid_harness(format!("{label} validation failed: {issues:?}"))
 }
 
 fn field(name: &str, value: IOValue) -> IOValue {

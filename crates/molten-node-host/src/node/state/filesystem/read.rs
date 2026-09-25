@@ -2,7 +2,7 @@
 use std::io::Read;
 
 pub(in crate::node_state) fn consume(
-    observed: crate::node_state::NodeStateFile,
+    observed: crate::node_state::AcquiredFile,
     max_bytes: u64,
     label: &str,
 ) -> crate::error::Result<Vec<u8>> {
@@ -23,7 +23,7 @@ fn collect(file: cap_std::fs::File, max_bytes: u64, label: &str) -> crate::error
         .checked_add(1)
         .ok_or_else(|| crate::node_state::invalid("node state read bound overflow"))?;
     let mut bytes = Vec::new();
-    file.take(limit_bytes).read_to_end(&mut bytes).map_err(crate::error::MoltenError::from)?;
+    file.take(limit_bytes).read_to_end(&mut bytes).map_err(crate::error::Failure::from)?;
     if u64::try_from(bytes.len())
         .map_err(|_| crate::node_state::invalid("node state read length conversion overflow"))?
         > max_bytes

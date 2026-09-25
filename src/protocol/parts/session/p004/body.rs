@@ -152,7 +152,7 @@ fn replay_protocol_operation(
 ) -> Result<ProtocolOperationRun> {
     match receipt.operation.as_str() {
         "send" => {
-            let message = message.ok_or_else(|| MoltenError::invalid_harness("send replay requires message"))?;
+            let message = message.ok_or_else(|| Failure::invalid_harness("send replay requires message"))?;
             let evidence_refs =
                 send_evidence_prefix(&message.evidence_refs, &receipt.authority_refs, &receipt.resource_refs)?;
             send_protocol_message(ProtocolSendInput {
@@ -167,7 +167,7 @@ fn replay_protocol_operation(
             })
         }
         "receive" => {
-            let message = message.ok_or_else(|| MoltenError::invalid_harness("receive replay requires message"))?;
+            let message = message.ok_or_else(|| Failure::invalid_harness("receive replay requires message"))?;
             receive_protocol_message(ProtocolReceiveInput {
                 state: prior.value.clone(),
                 message: message.value.clone(),
@@ -190,7 +190,7 @@ fn replay_protocol_operation(
             resource_refs: receipt.resource_refs.clone(),
             carrier_refs: receipt.carrier_refs.clone(),
         }),
-        value => Err(MoltenError::invalid_harness(format!("unsupported protocol operation replay {value}"))),
+        value => Err(Failure::invalid_harness(format!("unsupported protocol operation replay {value}"))),
     }
 }
 
@@ -216,17 +216,17 @@ fn send_evidence_prefix(
     let suffix_count = authority_refs
         .len()
         .checked_add(resource_refs.len())
-        .ok_or_else(|| MoltenError::invalid_harness("protocol evidence suffix overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("protocol evidence suffix overflow"))?;
     if evidence_refs.len() < suffix_count {
-        return Err(MoltenError::invalid_harness("protocol message evidence is missing gate refs"));
+        return Err(Failure::invalid_harness("protocol message evidence is missing gate refs"));
     }
     let prefix_count = evidence_refs.len() - suffix_count;
     let authority_end = prefix_count + authority_refs.len();
     if &evidence_refs[prefix_count..authority_end] != authority_refs {
-        return Err(MoltenError::invalid_harness("protocol message evidence authority suffix mismatch"));
+        return Err(Failure::invalid_harness("protocol message evidence authority suffix mismatch"));
     }
     if &evidence_refs[authority_end..] != resource_refs {
-        return Err(MoltenError::invalid_harness("protocol message evidence resource suffix mismatch"));
+        return Err(Failure::invalid_harness("protocol message evidence resource suffix mismatch"));
     }
     Ok(evidence_refs[..prefix_count].to_vec())
 }
@@ -239,7 +239,7 @@ fn transition_branch_label(
     let branches = match (operation, &prior.local_state.terminal) {
         ("branch", ProtocolLocalTerminal::InternalChoice(branches)) => branches,
         ("offer", ProtocolLocalTerminal::Offer { branches, .. }) => branches,
-        _ => return Err(MoltenError::invalid_harness("protocol state does not contain requested branch shape")),
+        _ => return Err(Failure::invalid_harness("protocol state does not contain requested branch shape")),
     };
     let mut matched = Vec::with_capacity(branches.len());
     for branch in branches {
@@ -254,7 +254,7 @@ fn transition_branch_label(
     if matched.len() == 1 {
         return Ok(matched.remove(0));
     }
-    Err(MoltenError::invalid_harness("protocol branch transition is ambiguous or missing"))
+    Err(Failure::invalid_harness("protocol branch transition is ambiguous or missing"))
 }
 
 fn terminal_role_diagnostics(parsed: &ProtocolSessionGateParsed) -> Vec<String> {

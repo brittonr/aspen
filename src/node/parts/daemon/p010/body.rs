@@ -54,7 +54,7 @@ fn protocol_message(
     label: &str,
 ) -> Result<crate::protocol_session::ProtocolMessage> {
     run.message.clone().ok_or_else(|| {
-        MoltenError::invalid_harness(format!("node control live workflow protocol missing {label} message"))
+        Failure::invalid_harness(format!("node control live workflow protocol missing {label} message"))
     })
 }
 
@@ -63,7 +63,7 @@ fn protocol_next_state(
     label: &str,
 ) -> Result<crate::protocol_session::ProtocolSessionState> {
     run.next_state.clone().ok_or_else(|| {
-        MoltenError::invalid_harness(format!("node control live workflow protocol missing {label} next state"))
+        Failure::invalid_harness(format!("node control live workflow protocol missing {label} next state"))
     })
 }
 

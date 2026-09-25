@@ -10,7 +10,7 @@ const GROUP_OR_OTHER_SECRET_PERMISSION_BITS: u32 = 0o077;
 const IDENTITY_NAMESPACE_LABEL: &str = "node-state/identity";
 
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 type Value<T> = preserves::Value<T>;
 
@@ -293,14 +293,14 @@ pub fn admit_iroh_endpoint_observation(facts: &IrohEndpointObservationFacts) -> 
 
 struct ResolutionInput<'a> {
     config: &'a Config,
-    root: &'a crate::node_state::NodeStateNamespace,
+    root: &'a crate::node_state::DirectoryView,
     operation: &'a str,
     secret_record: &'a [u8],
     material: &'a EndpointMaterial,
     backend_ref: &'a str,
     source_metadata_ref: &'a str,
     permission_status: IrohSecretPermissionStatus,
-    endpoint_path: &'a crate::node_state::NodeStatePath,
+    endpoint_path: &'a crate::node_state::RelativePath,
     is_first_boot: bool,
 }
 
@@ -322,18 +322,18 @@ struct ReceiptValueInput<'a> {
 }
 
 pub fn resolve(config: &Config) -> Result<Resolution> {
-    let root = crate::node_state::NodeStateNamespace::open(
-        crate::node_state::NodeStateNamespaceKind::Identity,
+    let root = crate::node_state::DirectoryView::open(
+        crate::node_state::NamespaceKind::Identity,
         &config.data_dir,
     )?;
     resolve_with_root(config, &root)
 }
 
-pub fn resolve_with_root(config: &Config, root: &crate::node_state::NodeStateNamespace) -> Result<Resolution> {
+pub fn resolve_with_root(config: &Config, root: &crate::node_state::DirectoryView) -> Result<Resolution> {
     validate_config(config)?;
     validate_identity_namespace(root)?;
-    let secret_path = crate::node_state::NodeStatePath::parse(SECRET_FILE)?;
-    let endpoint_path = crate::node_state::NodeStatePath::parse(ENDPOINT_FILE)?;
+    let secret_path = crate::node_state::RelativePath::parse(SECRET_FILE)?;
+    let endpoint_path = crate::node_state::RelativePath::parse(ENDPOINT_FILE)?;
     let secret_observation = root.observe_file(&secret_path)?;
     let permission_status = secret_file_permission_status(&secret_observation);
     let source_decision = resolve_iroh_secret_source(&IrohSecretSourceFacts {
@@ -342,7 +342,7 @@ pub fn resolve_with_root(config: &Config, root: &crate::node_state::NodeStateNam
         managed_secret_required: config.require_secret_backend,
         persisted_file_present: !matches!(
             &secret_observation,
-            crate::node_state::NodeStateFileObservation::Missing
+            crate::node_state::FileObservation::Missing
         ),
         persisted_file_permission: permission_status,
         generation_allowed: config.allow_generate,
@@ -354,7 +354,7 @@ pub fn resolve_with_root(config: &Config, root: &crate::node_state::NodeStateNam
             let explicit_key = config
                 .explicit_key
                 .as_deref()
-                .ok_or_else(|| MoltenError::invalid_harness("explicit endpoint key metadata was selected but missing"))?;
+                .ok_or_else(|| Failure::invalid_harness("explicit endpoint key metadata was selected but missing"))?;
             let secret_record = crate::fabric_crypto_identity::transport_key_record_from_secret_hex(explicit_key)?;
             let material = derive_endpoint_material(&secret_record, &backend_ref)?;
             finish_resolution(ResolutionInput {
@@ -374,7 +374,7 @@ pub fn resolve_with_root(config: &Config, root: &crate::node_state::NodeStateNam
             let backend_key = config
                 .secret_backend_key
                 .as_deref()
-                .ok_or_else(|| MoltenError::invalid_harness("managed endpoint secret backend was selected but missing"))?;
+                .ok_or_else(|| Failure::invalid_harness("managed endpoint secret backend was selected but missing"))?;
             let secret_record = crate::fabric_crypto_identity::transport_key_record_from_secret_hex(backend_key)?;
             let material = derive_endpoint_material(&secret_record, &backend_ref)?;
             finish_resolution(ResolutionInput {
@@ -468,20 +468,20 @@ pub fn identity_value(
 pub fn parse_identity(value: &IoValue) -> Result<Identity> {
     let fields = value
         .collect_simple_record("node-identity-v1", Some(7))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-identity-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-identity-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::NODE_IDENTITY_SCHEMA, "node identity schema")?;
     let node = value_to_iovalue(&fields[1]);
     let node_fields = node
         .collect_simple_record("node", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("node identity missing node field"))?;
+        .ok_or_else(|| Failure::invalid_harness("node identity missing node field"))?;
     let endpoint = value_to_iovalue(&fields[2]);
     let endpoint_fields = endpoint
         .collect_simple_record("endpoint", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("node identity missing endpoint field"))?;
+        .ok_or_else(|| Failure::invalid_harness("node identity missing endpoint field"))?;
     let key_source = value_to_iovalue(&fields[3]);
     let key_source_fields = key_source
         .collect_simple_record("key-source", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("node identity missing key-source field"))?;
+        .ok_or_else(|| Failure::invalid_harness("node identity missing key-source field"))?;
     let policy_refs = parse_ref_sequence(&fields[4], "policy")?;
     let receipt_refs = parse_ref_sequence(&fields[5], "receipts")?;
     let checks = parse_checks(&fields[6])?;
@@ -504,7 +504,7 @@ pub fn parse_identity(value: &IoValue) -> Result<Identity> {
 
 pub fn bootstrap_handshake_value(identity: &Identity, peer: &str, policy_refs: &[String]) -> Result<IoValue> {
     if peer.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("node bootstrap peer must not be empty"));
+        return Err(Failure::invalid_harness("node bootstrap peer must not be empty"));
     }
     validate_refs(policy_refs, "node bootstrap policy ref")?;
     Ok(record("node-identity-bootstrap-v1", vec![

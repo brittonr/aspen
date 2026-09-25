@@ -206,7 +206,7 @@ fn validate_simulation_input(input: &SimulationInput) -> Result<()> {
 
 fn validate_topology(topology: &Topology) -> Result<()> {
     if topology.peers.is_empty() {
-        return Err(MoltenError::invalid_harness("distributed topology requires peers"));
+        return Err(Failure::invalid_harness("distributed topology requires peers"));
     }
     ensure_count_at_most(topology.peers.len(), MAX_DISTRIBUTED_PEERS, "distributed peers")?;
     ensure_count_at_most(topology.channels.len(), MAX_DISTRIBUTED_CHANNELS, "distributed channels")?;
@@ -217,7 +217,7 @@ fn validate_topology(topology: &Topology) -> Result<()> {
         ensure_count_at_most(peer.roles.len(), MAX_DISTRIBUTED_ROLES, "distributed peer roles")?;
         validate_strings("distributed peer role", &peer.roles, MAX_DISTRIBUTED_TEXT)?;
         if !peers.insert(peer.id.as_str()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate distributed peer {}", peer.id)));
+            return Err(Failure::invalid_harness(format!("duplicate distributed peer {}", peer.id)));
         }
     }
     let mut channels = OrderedSet::new();
@@ -225,13 +225,13 @@ fn validate_topology(topology: &Topology) -> Result<()> {
         validate_text("distributed channel", &channel.id)?;
         validate_text("distributed channel topic", &channel.topic)?;
         if !peers.contains(channel.from_peer.as_str()) || !peers.contains(channel.to_peer.as_str()) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "distributed channel {} references peer outside topology",
                 channel.id
             )));
         }
         if !channels.insert(channel.id.as_str()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate distributed channel {}", channel.id)));
+            return Err(Failure::invalid_harness(format!("duplicate distributed channel {}", channel.id)));
         }
     }
     Ok(())

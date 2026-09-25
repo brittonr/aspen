@@ -234,14 +234,14 @@ fn validate_profile(profile: &CiProfile, diagnostics: &mut impl DiagnosticSink) 
 fn validate_cost_class(value: &str) -> Result<()> {
     match value {
         COST_FAST | COST_MEDIUM | COST_HEAVY => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported distributed profile cost class {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported distributed profile cost class {other}"))),
     }
 }
 
 fn validate_release_status(value: &str) -> Result<()> {
     match value {
         RELEASE_REQUIRED | RELEASE_REQUIRED_WHEN_SUPPORTED | RELEASE_PILOT_SCOPE => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported distributed profile release status {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported distributed profile release status {other}"))),
     }
 }
 

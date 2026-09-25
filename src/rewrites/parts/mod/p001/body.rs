@@ -77,7 +77,7 @@ fn plan_refs(input: &PlanRefs<'_>) -> Result<Vec<String>> {
 pub fn apply(root: &Path, input: &RewritePlanInput) -> Result<RewriteApply> {
     let preview = preview(root, input)?;
     if preview.diffs.is_empty() {
-        return Err(MoltenError::invalid_harness("rewrite apply denied because preview has no diffs"));
+        return Err(Failure::invalid_harness("rewrite apply denied because preview has no diffs"));
     }
     let preview_receipt_ref = canonical_hash(&preview.receipt_value)?;
     let query_receipt_ref = canonical_hash(&preview.query.receipt_value)?;
@@ -221,7 +221,7 @@ pub fn upgrade_plan_from_apply(
 pub fn parse_rewrite_receipt(value: &IoValue) -> Result<RewriteReceipt> {
     let fields = value
         .collect_simple_record("rewrite-receipt-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <rewrite-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <rewrite-receipt-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::REWRITE_RECEIPT_SCHEMA, "rewrite receipt")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "canonical-receipt", "rewrite receipt")?;
@@ -257,7 +257,7 @@ pub fn rewrite_summary(value: &IoValue) -> Result<String> {
         require_schema(&fields[0], crate::preserves_rail::REWRITE_QUERY_SCHEMA, "rewrite query")?;
         return Ok(format!("rewrite query ref={}", canonical_hash(value)?));
     }
-    Err(MoltenError::invalid_harness("unsupported rewrite artifact for show"))
+    Err(Failure::invalid_harness("unsupported rewrite artifact for show"))
 }
 
 pub fn rewrite_query_value(input: &RewriteQueryInput) -> Result<IoValue> {

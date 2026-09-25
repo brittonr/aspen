@@ -145,7 +145,7 @@ pub fn read_receipt_with_root(root: &CapabilityChunkRoot, receipt_ref: &str) -> 
     let read_txn = db.begin_read().map_err(index_error)?;
     let table = read_txn.open_table(INDEX_RECEIPTS).map_err(index_error)?;
     let Some(bytes) = table.get(receipt_ref).map_err(index_error)? else {
-        return Err(MoltenError::invalid_harness(format!("unknown chunk store receipt {receipt_ref}")));
+        return Err(Failure::invalid_harness(format!("unknown chunk store receipt {receipt_ref}")));
     };
     let value = parse_canonical_bytes(bytes.value())?;
     parse_receipt_value(&value, Some(receipt_ref))
@@ -171,7 +171,7 @@ pub fn build_chunk_lineage_with_root(root: &CapabilityChunkRoot, manifest_ref: &
             .then_with(|| left.receipt_ref.cmp(&right.receipt_ref))
     });
     if receipts.is_empty() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "no pass chunk-store receipts available for lineage manifest {manifest_ref}"
         )));
     }

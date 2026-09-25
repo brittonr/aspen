@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use super::super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::fabric::CanonicalFabricPortBinding;
 use crate::fabric::FabricPortResult;
 use crate::preserves_rail::canonical_bytes;
@@ -30,8 +30,8 @@ pub enum NativeServiceError {
     MissingCheckpoint,
 }
 
-impl From<MoltenError> for NativeServiceError {
-    fn from(error: MoltenError) -> Self {
+impl From<Failure> for NativeServiceError {
+    fn from(error: Failure) -> Self {
         Self::Host(error.to_string())
     }
 }

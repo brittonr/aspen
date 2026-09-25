@@ -2,7 +2,7 @@
 //! All networking goes through the production Molten content adapter.
 use clap::{Parser, Subcommand};
 use molten::content_store_adapter::*;
-use molten::node_state::{NodeStateNamespace, NodeStateNamespaceKind};
+use molten::node_state::{DirectoryView, NamespaceKind};
 use molten::{chunk_store as chunks, fabric_crypto_identity as crypto, preserves_rail as rail};
 use serde::Deserialize;
 use serde_json::json;
@@ -120,8 +120,8 @@ fn reference(label: &str) -> String {
     rail::content_ref_from_bytes(label.as_bytes())
 }
 
-fn identity(root: &Path, generate: bool) -> Result<(NodeStateNamespace, LiveIrohIdentitySummary)> {
-    let namespace = NodeStateNamespace::open(NodeStateNamespaceKind::Identity, &root.join("identity"))?;
+fn identity(root: &Path, generate: bool) -> Result<(DirectoryView, LiveIrohIdentitySummary)> {
+    let namespace = DirectoryView::open(NamespaceKind::Identity, &root.join("identity"))?;
     let profile = crypto::canonical_crypto_profile(&crypto::production_ed25519_profile(
         policy_ref(),
         reference("vm-fixture-os-entropy"),
@@ -216,7 +216,7 @@ async fn main() -> Result<()> {
             let stored = chunks::read_manifest_with_root(&chunk_root, &manifest)?;
             let chunk = stored.chunks.first().ok_or("fault fixture has no chunk")?;
             let hex = rail::content_ref_hex(&chunk.chunk_ref)?;
-            let path = molten::local_store::LocalStorePath::parse(&format!("chunks/blake3_{hex}.bin"))?;
+            let path = molten::local_store::RelativeLocator::parse(&format!("chunks/blake3_{hex}.bin"))?;
             // Deliberate storage damage in a disposable cloned guest disk.
             // This is not canonical deletion, unpinning, or retention authority.
             if kind == "missing" {

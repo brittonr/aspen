@@ -1,7 +1,7 @@
 type PreservesValue = preserves::IOValue;
 type EventBoundary = super::schema::EventBoundary;
 type Divergence = crate::error::HarnessDivergence;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 #[path = "replay/compare.rs"]
@@ -33,15 +33,15 @@ pub fn validate_report_value(report_value: &PreservesValue) -> Result<ReportVali
     let policy_gate = report
         .policy_gate
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("missing policy gate evidence"))?;
+        .ok_or_else(|| Failure::invalid_harness("missing policy gate evidence"))?;
     let capability_gate = report
         .capability_gate
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("missing capability gate evidence"))?;
+        .ok_or_else(|| Failure::invalid_harness("missing capability gate evidence"))?;
     let budget_gate = report
         .budget_gate
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("missing budget gate evidence"))?;
+        .ok_or_else(|| Failure::invalid_harness("missing budget gate evidence"))?;
     super::schema::validate_admission_evidence(&suite, &report.observations, capability_gate)?;
     super::schema::validate_executor_preflight_evidence(
         &suite,
@@ -52,30 +52,30 @@ pub fn validate_report_value(report_value: &PreservesValue) -> Result<ReportVali
     super::schema::validate_hostcall_evidence(&suite, &report.observations, policy_gate, capability_gate, budget_gate)?;
     let observed_effect_log = super::schema::effect_log_from_observations(&report.observations)?;
     if observed_effect_log != report.effect_log {
-        return Err(MoltenError::invalid_harness("effect log does not match observed effect request/response records"));
+        return Err(Failure::invalid_harness("effect log does not match observed effect request/response records"));
     }
     let event_count: u64 = report.observations.iter().map(|observation| observation.events.len() as u64).sum();
     let report_bytes = crate::preserves_rail::canonical_bytes(report_value)?.len() as u64;
     let usage = &report.budget.usage;
     let limits = &report.budget.limits;
     if usage.steps != report.observations.len() as u64 {
-        return Err(MoltenError::invalid_harness("budget step usage does not match observations"));
+        return Err(Failure::invalid_harness("budget step usage does not match observations"));
     }
     if usage.effects != report.effect_log.len() as u64 {
-        return Err(MoltenError::invalid_harness("budget effect usage does not match effect log"));
+        return Err(Failure::invalid_harness("budget effect usage does not match effect log"));
     }
     if usage.events != event_count {
-        return Err(MoltenError::invalid_harness("budget event usage does not match observations"));
+        return Err(Failure::invalid_harness("budget event usage does not match observations"));
     }
     if usage.report_bytes != report_bytes {
-        return Err(MoltenError::invalid_harness("budget report byte usage does not match canonical report bytes"));
+        return Err(Failure::invalid_harness("budget report byte usage does not match canonical report bytes"));
     }
     if usage.steps > limits.max_steps
         || usage.effects > limits.max_effects
         || usage.events > limits.max_events
         || usage.report_bytes > limits.max_report_bytes
     {
-        return Err(MoltenError::invalid_harness("budget usage exceeds declared limits"));
+        return Err(Failure::invalid_harness("budget usage exceeds declared limits"));
     }
     Ok(ReportValidation {
         report_ref: report.report_ref,
@@ -155,6 +155,6 @@ fn divergence(
     expected: impl Into<String>,
     actual: impl Into<String>,
     detail: impl Into<String>,
-) -> MoltenError {
-    MoltenError::harness_divergence(Divergence::new(kind, step, expected, actual, detail))
+) -> Failure {
+    Failure::harness_divergence(Divergence::new(kind, step, expected, actual, detail))
 }

@@ -59,7 +59,7 @@ pub fn service_manifest_value(input: &ServiceManifestInput) -> Result<IoValue> {
 pub fn parse_service_manifest(value: &IoValue) -> Result<ServiceManifest> {
     let fields = value
         .collect_simple_record("service-manifest-v1", Some(11))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <service-manifest-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <service-manifest-v1 ...>"))?;
     require_schema(&fields[0], SERVICE_MANIFEST_SCHEMA, "service manifest schema")?;
     let checks = parse_checks(&fields[10])?;
     require_check(&checks, "explicit-authority", "service manifest")?;
@@ -97,7 +97,7 @@ pub fn service_demand_value(input: &ServiceDemandInput) -> Result<IoValue> {
 pub fn parse_service_demand(value: &IoValue) -> Result<ServiceDemand> {
     let fields = value
         .collect_simple_record("service-demand-v1", Some(7))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <service-demand-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <service-demand-v1 ...>"))?;
     require_schema(&fields[0], SERVICE_DEMAND_SCHEMA, "service demand schema")?;
     let checks = parse_checks(&fields[6])?;
     require_check(&checks, "startup-admission-required", "service demand")?;
@@ -136,7 +136,7 @@ pub fn service_status_value(input: &ServiceStatusInput) -> Result<IoValue> {
 pub fn parse_service_status(value: &IoValue) -> Result<ServiceStatus> {
     let fields = value
         .collect_simple_record("service-status-v1", Some(12))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <service-status-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <service-status-v1 ...>"))?;
     require_schema(&fields[0], SERVICE_STATUS_SCHEMA, "service status schema")?;
     let checks = parse_checks(&fields[11])?;
     require_check(&checks, "replay-identity-bound", "service status")?;
@@ -175,7 +175,7 @@ pub fn service_supervisor_value(input: &ServiceSupervisorInput) -> Result<IoValu
 pub fn parse_service_supervisor(value: &IoValue) -> Result<ServiceSupervisor> {
     let fields = value
         .collect_simple_record("service-supervisor-v1", Some(7))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <service-supervisor-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <service-supervisor-v1 ...>"))?;
     require_schema(&fields[0], SERVICE_SUPERVISOR_SCHEMA, "service supervisor schema")?;
     let checks = parse_checks(&fields[6])?;
     require_check(&checks, "logical-supervision", "service supervisor")?;
@@ -208,7 +208,7 @@ pub fn service_link_value(input: &ServiceLinkInput) -> Result<IoValue> {
 pub fn parse_service_link(value: &IoValue) -> Result<ServiceLink> {
     let fields = value
         .collect_simple_record("service-link-v1", Some(7))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <service-link-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <service-link-v1 ...>"))?;
     require_schema(&fields[0], SERVICE_LINK_SCHEMA, "service link schema")?;
     let checks = parse_checks(&fields[6])?;
     require_check(&checks, "no-os-parentage", "service link")?;
@@ -241,7 +241,7 @@ pub fn service_monitor_value(input: &ServiceMonitorInput) -> Result<IoValue> {
 pub fn parse_service_monitor(value: &IoValue) -> Result<ServiceMonitor> {
     let fields = value
         .collect_simple_record("service-monitor-v1", Some(7))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <service-monitor-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <service-monitor-v1 ...>"))?;
     require_schema(&fields[0], SERVICE_MONITOR_SCHEMA, "service monitor schema")?;
     let checks = parse_checks(&fields[6])?;
     require_check(&checks, "observer-ref-bound", "service monitor")?;
@@ -274,7 +274,7 @@ pub fn service_restart_policy_value(input: &ServiceRestartPolicyInput) -> Result
 pub fn parse_service_restart_policy(value: &IoValue) -> Result<ServiceRestartPolicy> {
     let fields = value
         .collect_simple_record("service-restart-policy-v1", Some(7))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <service-restart-policy-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <service-restart-policy-v1 ...>"))?;
     require_schema(&fields[0], SERVICE_RESTART_POLICY_SCHEMA, "service restart policy schema")?;
     let checks = parse_checks(&fields[6])?;
     require_check(&checks, "bounded-restart", "service restart policy")?;

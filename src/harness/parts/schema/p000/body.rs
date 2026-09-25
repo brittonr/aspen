@@ -2,7 +2,6 @@ use preserves::ValueImpl;
 
 type CompoundClass = preserves::CompoundClass;
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 type Record<T> = preserves::Record<T>;
 type Result<T> = crate::error::Result<T>;
@@ -136,7 +135,7 @@ impl ReproExportProfile {
             "deny-sensitive" => Ok(Self::DenySensitive),
             "redacted-diagnostic" => Ok(Self::RedactedDiagnostic),
             "encrypted-private" => Ok(Self::EncryptedPrivate),
-            _ => Err(MoltenError::invalid_harness(format!(
+            _ => Err(crate::error::Failure::invalid_harness(format!(
                 "unsupported repro export profile {name}; expected deny-sensitive, redacted-diagnostic, or encrypted-private"
             ))),
         }

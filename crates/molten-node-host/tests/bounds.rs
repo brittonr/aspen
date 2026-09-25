@@ -1,9 +1,9 @@
 #[test]
 fn reads_preserve_zero_exact_and_hard_bounds() {
     let temp = cap_tempfile::TempDir::new(cap_std::ambient_authority()).unwrap();
-    let root = molten_node_host::node_state::NodeStateRoot::from_dir(temp.try_clone().unwrap());
+    let root = molten_node_host::node_state::Root::from_dir(temp.try_clone().unwrap());
     let namespace = root.control_service().unwrap();
-    let leaf = molten_node_host::node_state::NodeStatePath::parse("value").unwrap();
+    let leaf = molten_node_host::node_state::RelativePath::parse("value").unwrap();
     namespace.write(&leaf, b"").unwrap();
     assert_eq!(namespace.read(&leaf, 0).unwrap(), b"");
     namespace.write(&leaf, b"data").unwrap();
@@ -18,12 +18,11 @@ fn reads_preserve_zero_exact_and_hard_bounds() {
 #[test]
 fn growth_after_observation_cannot_bypass_read_bound() {
     let temp = cap_tempfile::TempDir::new(cap_std::ambient_authority()).unwrap();
-    let root = molten_node_host::node_state::NodeStateRoot::from_dir(temp.try_clone().unwrap());
+    let root = molten_node_host::node_state::Root::from_dir(temp.try_clone().unwrap());
     let namespace = root.control_service().unwrap();
-    let leaf = molten_node_host::node_state::NodeStatePath::parse("value").unwrap();
+    let leaf = molten_node_host::node_state::RelativePath::parse("value").unwrap();
     namespace.write(&leaf, b"data").unwrap();
-    let molten_node_host::node_state::NodeStateFileObservation::Regular(observed) =
-        namespace.observe_file(&leaf).unwrap()
+    let molten_node_host::node_state::FileObservation::Regular(observed) = namespace.observe_file(&leaf).unwrap()
     else {
         panic!("fixture must produce an observed regular file");
     };

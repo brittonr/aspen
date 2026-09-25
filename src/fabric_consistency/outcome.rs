@@ -11,7 +11,7 @@ use super::binding::validate_content_ref;
 use super::binding::validate_content_refs;
 use super::binding::validate_identifier;
 use super::canonical::outcome_value;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -124,7 +124,7 @@ fn validate_outcome_input(input: &ConsistencyOutcomeInput) -> Result<()> {
         true,
     )?;
     if input.diagnostics.len() > MAX_CONSISTENCY_DIAGNOSTICS {
-        return Err(MoltenError::invalid_harness("consistency outcome diagnostics exceed the bounded maximum"));
+        return Err(Failure::invalid_harness("consistency outcome diagnostics exceed the bounded maximum"));
     }
     for diagnostic in &input.diagnostics {
         validate_identifier(diagnostic, "consistency outcome diagnostic")?;
@@ -144,7 +144,7 @@ fn validate_outcome_binding(
         || binding.config_epoch != input.config_epoch
         || binding.fencing_epoch != input.fencing_epoch
     {
-        return Err(MoltenError::invalid_harness("consistency outcome binding, generation, or epoch mismatch"));
+        return Err(Failure::invalid_harness("consistency outcome binding, generation, or epoch mismatch"));
     }
     Ok(())
 }
@@ -154,7 +154,7 @@ fn validate_outcome_kind(plan: &ConsistencyPortPlan, kind: ConsistencyOutcomeKin
         if kind == ConsistencyOutcomeKind::Denied {
             return Ok(());
         }
-        return Err(MoltenError::invalid_harness("denied consistency plan cannot produce a non-denial outcome"));
+        return Err(Failure::invalid_harness("denied consistency plan cannot produce a non-denial outcome"));
     }
     let compatible = kind.is_non_mutating_failure()
         || matches!(
@@ -186,17 +186,17 @@ fn validate_outcome_kind(plan: &ConsistencyPortPlan, kind: ConsistencyOutcomeKin
     if compatible {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness("consistency outcome kind does not match the admitted operation"))
+        Err(Failure::invalid_harness("consistency outcome kind does not match the admitted operation"))
     }
 }
 
 fn validate_outcome_shape(input: &ConsistencyOutcomeInput) -> Result<()> {
     if input.kind.is_non_mutating_failure() {
         if input.diagnostics.is_empty() || input.result_ref.is_some() {
-            return Err(MoltenError::invalid_harness("failure outcome requires diagnostics and excludes a result ref"));
+            return Err(Failure::invalid_harness("failure outcome requires diagnostics and excludes a result ref"));
         }
     } else if input.result_ref.is_none() || !input.diagnostics.is_empty() {
-        return Err(MoltenError::invalid_harness("successful outcome requires a result ref and no diagnostics"));
+        return Err(Failure::invalid_harness("successful outcome requires a result ref and no diagnostics"));
     }
     Ok(())
 }

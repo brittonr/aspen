@@ -39,7 +39,7 @@ struct LocalRunState<'a> {
 
 impl<'a> LocalRunState<'a> {
     fn new(state_root: &'a Path, state_root_ref: String) -> Result<Self> {
-        std::fs::create_dir_all(state_root).map_err(MoltenError::from)?;
+        std::fs::create_dir_all(state_root).map_err(Failure::from)?;
         Ok(Self {
             state_root,
             state_root_ref,
@@ -223,7 +223,7 @@ pub fn operator_dogfood_summary(value: &IoValue) -> Result<String> {
     if let Some(summary) = export_summary(value) {
         return Ok(summary);
     }
-    Err(MoltenError::invalid_harness("unsupported operator dogfood artifact for summary"))
+    Err(Failure::invalid_harness("unsupported operator dogfood artifact for summary"))
 }
 
 fn base_summary(value: &IoValue) -> Option<String> {

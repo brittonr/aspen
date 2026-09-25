@@ -251,22 +251,22 @@ fn load_current_octet_run(
         diagnostics,
     );
     let Some(status_file) = status_file else {
-        return Err(MoltenError::invalid_harness("octet baseline requires status.json"));
+        return Err(Failure::invalid_harness("octet baseline requires status.json"));
     };
     let Some(summary) = summary else {
-        return Err(MoltenError::invalid_harness("octet baseline requires summary.txt"));
+        return Err(Failure::invalid_harness("octet baseline requires summary.txt"));
     };
     let Some(object_corpus) = object_corpus else {
-        return Err(MoltenError::invalid_harness("octet baseline requires object-corpus-receipt.json"));
+        return Err(Failure::invalid_harness("octet baseline requires object-corpus-receipt.json"));
     };
     let Some(status) = parse_status(Some(&status_file), checks, diagnostics) else {
-        return Err(MoltenError::invalid_harness("octet baseline requires parseable status.json"));
+        return Err(Failure::invalid_harness("octet baseline requires parseable status.json"));
     };
     validate_command(command.as_ref(), checks, diagnostics);
     validate_metadata_binding(command.as_ref(), Some(&status), checks, diagnostics);
     let has_valid_object_corpus = validate_object_corpus(Some(&object_corpus), checks, diagnostics).is_some();
     if !has_valid_object_corpus {
-        return Err(MoltenError::invalid_harness("octet baseline requires valid object corpus receipt"));
+        return Err(Failure::invalid_harness("octet baseline requires valid object corpus receipt"));
     }
     let (findings, parsed_count) = parse_summary_findings(&summary, &status);
     let unkeyed_findings = status.total_findings.saturating_sub(parsed_count);

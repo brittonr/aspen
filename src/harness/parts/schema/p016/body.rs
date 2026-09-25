@@ -3,11 +3,11 @@ fn inspect_wasm_module(config: &WasmExecutorConfig) -> Result<WasmInspection> {
     let bytes = wasm_module_bytes(config)?;
     wasmparser::Validator::new()
         .validate_all(&bytes)
-        .map_err(|error| MoltenError::invalid_harness(format!("wasmparser validation failed: {error}")))?;
+        .map_err(|error| crate::error::Failure::invalid_harness(format!("wasmparser validation failed: {error}")))?;
     let mut module_kind = None;
     let mut imports = Vec::new();
     for payload in wasmparser::Parser::new(0).parse_all(&bytes) {
-        match payload.map_err(|error| MoltenError::invalid_harness(format!("wasmparser parse failed: {error}")))? {
+        match payload.map_err(|error| crate::error::Failure::invalid_harness(format!("wasmparser parse failed: {error}")))? {
             wasmparser::Payload::Version { encoding, .. } => {
                 module_kind = Some(match encoding {
                     wasmparser::Encoding::Module => "core-module".to_string(),
@@ -17,7 +17,7 @@ fn inspect_wasm_module(config: &WasmExecutorConfig) -> Result<WasmInspection> {
             wasmparser::Payload::ImportSection(section) => {
                 for import in section {
                     let import = import
-                        .map_err(|error| MoltenError::invalid_harness(format!("wasm import parse failed: {error}")))?;
+                        .map_err(|error| crate::error::Failure::invalid_harness(format!("wasm import parse failed: {error}")))?;
                     push_bounded(
                         &mut imports,
                         WasmImportEvidence {
@@ -33,7 +33,7 @@ fn inspect_wasm_module(config: &WasmExecutorConfig) -> Result<WasmInspection> {
             wasmparser::Payload::ComponentImportSection(section) => {
                 for import in section {
                     let import = import.map_err(|error| {
-                        MoltenError::invalid_harness(format!("wasm component import parse failed: {error}"))
+                        crate::error::Failure::invalid_harness(format!("wasm component import parse failed: {error}"))
                     })?;
                     push_bounded(
                         &mut imports,
@@ -60,13 +60,13 @@ fn validate_wasm_imports(actor_id: &str, imports: &[WasmImportEvidence], allowed
     for import in imports {
         if import.module == "molten:hostcall" {
             if import.kind != "func" {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "Wasm executor import {}::{} for actor {actor_id} must be a function hostcall",
                     import.module, import.name
                 )));
             }
             if !allowed_hostcalls.iter().any(|allowed| allowed == &import.name) {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "Wasm executor import {}::{} for actor {actor_id} is not in allowed hostcalls",
                     import.module, import.name
                 )));
@@ -76,7 +76,7 @@ fn validate_wasm_imports(actor_id: &str, imports: &[WasmImportEvidence], allowed
         if import.module == "component" && allowed_hostcalls.iter().any(|allowed| allowed == &import.name) {
             continue;
         }
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "Wasm executor import {}::{} for actor {actor_id} is not an allowed Molten hostcall; WASI and ambient imports remain disabled",
             import.module, import.name
         )));
@@ -133,15 +133,15 @@ fn normalize_hex(input: &str, field: &str) -> Result<String> {
             continue;
         }
         if !character.is_ascii_hexdigit() {
-            return Err(MoltenError::invalid_harness(format!("{field} contains non-hex character {character:?}")));
+            return Err(crate::error::Failure::invalid_harness(format!("{field} contains non-hex character {character:?}")));
         }
         normalized.push(character.to_ascii_lowercase());
     }
     if normalized.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("{field} must not be empty")));
+        return Err(crate::error::Failure::invalid_harness(format!("{field} must not be empty")));
     }
     if !normalized.len().is_multiple_of(2) {
-        return Err(MoltenError::invalid_harness(format!("{field} must contain an even number of hex digits")));
+        return Err(crate::error::Failure::invalid_harness(format!("{field} must contain an even number of hex digits")));
     }
     Ok(normalized)
 }
@@ -151,7 +151,7 @@ fn decode_hex_bytes(input: &str, field: &str) -> Result<Vec<u8>> {
     let mut bytes = Vec::with_capacity(normalized.len() / 2);
     for index in (0..normalized.len()).step_by(2) {
         let byte = u8::from_str_radix(&normalized[index..index + 2], 16).map_err(|error| {
-            MoltenError::invalid_harness(format!("{field} contains invalid byte at offset {index}: {error}"))
+            crate::error::Failure::invalid_harness(format!("{field} contains invalid byte at offset {index}: {error}"))
         })?;
         bytes.push(byte);
     }
@@ -182,7 +182,7 @@ pub fn parse_executor_preflights(value: &IoValue) -> Result<ExecutorPreflightsEv
     let preflights = simple_record(value, "executor-preflights-v1", 2)?;
     let schema = required_string(&preflights[0], "executor preflights schema")?;
     if schema != crate::preserves_rail::HARNESS_EXECUTOR_PREFLIGHTS_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported executor preflights schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_EXECUTOR_PREFLIGHTS_SCHEMA
         )));
@@ -201,16 +201,16 @@ pub fn parse_executor_preflights(value: &IoValue) -> Result<ExecutorPreflightsEv
 fn parse_executor_preflight(value: &IoValue) -> Result<ExecutorPreflightEvidence> {
     let preflight = value
         .collect_simple_record("executor-preflight-v1", None)
-        .ok_or_else(|| MoltenError::invalid_harness("expected <executor-preflight-v1 ...>"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected <executor-preflight-v1 ...>"))?;
     let arity = preflight.fields_iter().count();
     if arity != 8 && arity != 9 {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "expected <executor-preflight-v1 ...> with arity 8 or 9, got {arity}"
         )));
     }
     let schema = required_string(&preflight[0], "executor preflight schema")?;
     if schema != crate::preserves_rail::RUNTIME_EXECUTOR_PREFLIGHT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported executor preflight schema {schema}; expected {}",
             crate::preserves_rail::RUNTIME_EXECUTOR_PREFLIGHT_SCHEMA
         )));
@@ -255,10 +255,10 @@ pub fn validate_executor_preflight_evidence(
     observations: &[Observation],
     preflights: Option<&ExecutorPreflightsEvidence>,
 ) -> Result<()> {
-    let preflights = preflights.ok_or_else(|| MoltenError::invalid_harness("missing executor preflight evidence"))?;
+    let preflights = preflights.ok_or_else(|| crate::error::Failure::invalid_harness("missing executor preflight evidence"))?;
     let expected = executor_preflights_value(suite)?;
     if preflights.value != expected {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "executor preflight evidence mismatch: got {}, expected {}",
             canonical_hash(&preflights.value)?,
             canonical_hash(&expected)?
@@ -275,7 +275,7 @@ fn preflights_by_actor(preflights: &[ExecutorPreflightEvidence]) -> Result<Prefl
     let mut by_actor = std::collections::BTreeMap::new();
     for preflight in preflights {
         if by_actor.insert(preflight.actor_id.as_str(), preflight).is_some() {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "duplicate executor preflight for actor {}",
                 preflight.actor_id
             )));
@@ -287,10 +287,10 @@ fn preflights_by_actor(preflights: &[ExecutorPreflightEvidence]) -> Result<Prefl
 fn validate_actor_preflights(suite: &Suite, by_actor: &PreflightMap<'_>) -> Result<()> {
     for actor in &suite.actors {
         let Some(preflight) = by_actor.get(actor.id.as_str()) else {
-            return Err(MoltenError::invalid_harness(format!("missing executor preflight for actor {}", actor.id)));
+            return Err(crate::error::Failure::invalid_harness(format!("missing executor preflight for actor {}", actor.id)));
         };
         if preflight.kind != actor.kind {
-            return Err(MoltenError::invalid_harness(format!("executor kind binding mismatch for actor {}", actor.id)));
+            return Err(crate::error::Failure::invalid_harness(format!("executor kind binding mismatch for actor {}", actor.id)));
         }
         validate_actor_executor_preflight(actor, preflight)?;
     }

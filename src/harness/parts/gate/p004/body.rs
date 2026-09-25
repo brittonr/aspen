@@ -7,47 +7,47 @@ fn validate_gate_chain_verify_receipt(
 ) -> Result<()> {
     let receipt = value
         .collect_simple_record("chain-verify-receipt-v1", Some(11))
-        .ok_or_else(|| MoltenError::invalid_harness("gate chain evidence missing chain verify receipt"))?;
+        .ok_or_else(|| Failure::invalid_harness("gate chain evidence missing chain verify receipt"))?;
     let schema = required_string(&receipt[0], "chain verify receipt schema")?;
     if schema != EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported chain verify receipt schema {schema}; expected {EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA}"
         )));
     }
     let decision = required_record_string(&receipt[1], "decision", "chain verify decision")?;
     if decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "gate chain verify receipt decision must be pass, got {decision}"
         )));
     }
     let anchor_ref = required_record_optional_hash(&receipt[3], "anchor", "chain verify anchor")?
-        .ok_or_else(|| MoltenError::invalid_harness("gate chain verify receipt missing anchor"))?;
+        .ok_or_else(|| Failure::invalid_harness("gate chain verify receipt missing anchor"))?;
     let expected_head = required_record_optional_hash(&receipt[4], "expected-head", "chain verify expected head")?
-        .ok_or_else(|| MoltenError::invalid_harness("gate chain verify receipt missing expected head"))?;
+        .ok_or_else(|| Failure::invalid_harness("gate chain verify receipt missing expected head"))?;
     if anchor_ref != link.link_ref || expected_head != link.link_ref {
-        return Err(MoltenError::invalid_harness("gate chain verify receipt does not bind the anchored head"));
+        return Err(Failure::invalid_harness("gate chain verify receipt does not bind the anchored head"));
     }
     let discovered_heads = required_record_hash_sequence(&receipt[5], "discovered-heads")?;
     let verified_links = required_record_hash_sequence(&receipt[6], "verified-links")?;
     let payload_refs = required_record_hash_sequence(&receipt[7], "payloads")?;
     let predicate_refs = required_record_hash_sequence(&receipt[8], "predicates")?;
     if discovered_heads != vec![link.link_ref.clone()] || verified_links != vec![link.link_ref.clone()] {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "gate chain verify receipt must cover exactly the anchored report link",
         ));
     }
     if payload_refs != vec![link.payload.artifact_ref.clone()] {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "gate chain verify receipt payload refs do not bind the report payload",
         ));
     }
     if predicate_refs != predicate_receipt_refs {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "gate chain verify receipt predicate refs do not match embedded predicate receipts",
         ));
     }
     if !predicate_refs.iter().any(|predicate_ref| predicate_ref == range_predicate_ref) {
-        return Err(MoltenError::invalid_harness("gate chain verify receipt does not bind checkpoint range predicate"));
+        return Err(Failure::invalid_harness("gate chain verify receipt does not bind checkpoint range predicate"));
     }
     Ok(())
 }
@@ -60,9 +60,9 @@ fn require_chain_predicate<'a>(
     let predicate = predicates
         .iter()
         .find(|predicate| predicate.receipt_ref == expected_ref)
-        .ok_or_else(|| MoltenError::invalid_harness("gate chain evidence missing checkpoint range predicate"))?;
+        .ok_or_else(|| Failure::invalid_harness("gate chain evidence missing checkpoint range predicate"))?;
     if predicate.predicate != expected_kind || predicate.decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "gate chain predicate {expected_ref} must be a passing {expected_kind} receipt"
         )));
     }
@@ -79,7 +79,7 @@ fn require_chain_predicate_kind(
     {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "gate chain evidence missing passing {expected_kind} predicate receipt"
         )))
     }
@@ -102,7 +102,7 @@ struct LinkEnds<'a> {
 fn build_turn_journals(report: &super::schema::Report) -> Result<TurnJournalEvidence> {
     let suite = super::schema::parse_suite(&report.suite_value)?;
     if suite.steps.len() != report.observations.len() {
-        return Err(MoltenError::invalid_harness("turn journal evidence requires one observation per suite step"));
+        return Err(Failure::invalid_harness("turn journal evidence requires one observation per suite step"));
     }
     let mut builders: OrderedMap<String, TurnJournalBuilder> = OrderedMap::new();
     for (position, observation) in report.observations.iter().enumerate() {
@@ -130,7 +130,7 @@ fn append_turn_journal_observation(
     let actor_id = step.primary_actor().to_string();
     let computed_step_ref = canonical_hash(&super::schema::step_value(step))?;
     if observation.step_ref != computed_step_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "turn journal observation {} step ref does not match embedded suite step",
             observation.index
         )));
@@ -212,10 +212,10 @@ fn build_turn_journal_chain(
 
 fn link_ends(link_refs: &[String]) -> Result<LinkEnds<'_>> {
     let Some(anchor_ref) = link_refs.first() else {
-        return Err(MoltenError::invalid_harness("turn journal chain must contain at least one link"));
+        return Err(Failure::invalid_harness("turn journal chain must contain at least one link"));
     };
     let Some(head_ref) = link_refs.last() else {
-        return Err(MoltenError::invalid_harness("turn journal chain must contain a head link"));
+        return Err(Failure::invalid_harness("turn journal chain must contain a head link"));
     };
     Ok(LinkEnds { anchor_ref, head_ref })
 }

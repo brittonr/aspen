@@ -1,5 +1,5 @@
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric_durability::AppendRequest;
 use crate::fabric_durability::DurabilityLevel;
@@ -39,7 +39,7 @@ impl RedbReplicaDurabilityPort {
 
     pub fn plan_recovery(&self, start_plan: ReplicaStartPlan) -> Result<ReplicaRecoveryPlan> {
         if !self.adapter.state().buffered_log.is_empty() {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "live Raft recovery denies while buffered durability records remain",
             ));
         }
@@ -69,7 +69,7 @@ impl RedbReplicaDurabilityPort {
         let descriptor = &self.adapter.state().descriptor;
         let expected_sequence =
             self.adapter.state().next_log_sequence().map_err(|error| {
-                MoltenError::invalid_harness(format!("live Raft durable sequence denied: {error:?}"))
+                Failure::invalid_harness(format!("live Raft durable sequence denied: {error:?}"))
             })?;
         let request = AppendRequest {
             adapter_id: descriptor.adapter_id.clone(),
@@ -121,7 +121,7 @@ impl ReplicaDurabilityEffects for RedbReplicaDurabilityPort {
 
     fn persist_commit(&mut self, through_index: u64) -> Result<String> {
         if through_index == INITIAL_COMMIT_INDEX {
-            return Err(MoltenError::invalid_harness("live Raft commit boundary must be positive"));
+            return Err(Failure::invalid_harness("live Raft commit boundary must be positive"));
         }
         self.append_value(
             crate::preserves_rail::record("raft-commit-boundary-v1", vec![crate::preserves_rail::u64_value(
@@ -133,7 +133,7 @@ impl ReplicaDurabilityEffects for RedbReplicaDurabilityPort {
 
     fn persist_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> Result<String> {
         if snapshot.snapshot_ref != snapshot_ref(snapshot)? {
-            return Err(MoltenError::invalid_harness("live Raft snapshot identity mismatch before persistence"));
+            return Err(Failure::invalid_harness("live Raft snapshot identity mismatch before persistence"));
         }
         let value = snapshot_value(snapshot);
         let bytes = crate::preserves_rail::canonical_bytes(&value)?;

@@ -3,11 +3,11 @@ fn validate_transfer_attenuation(parent: &str, child: &str) -> Result<()> {
     validate_transfer(parent)?;
     validate_transfer(child)?;
     match parent {
-        TRANSFER_LOCAL_ONLY if child != TRANSFER_LOCAL_ONLY => Err(MoltenError::invalid_harness(
+        TRANSFER_LOCAL_ONLY if child != TRANSFER_LOCAL_ONLY => Err(Failure::invalid_harness(
             "attenuated effect handle cannot make a local-only parent transferable",
         )),
         TRANSFER_ATTENUATED_DELEGATION if child == TRANSFER_REMOTE_PROXY => {
-            Err(MoltenError::invalid_harness("attenuated delegation handle cannot become a remote-proxy handle"))
+            Err(Failure::invalid_harness("attenuated delegation handle cannot become a remote-proxy handle"))
         }
         _ => Ok(()),
     }
@@ -15,7 +15,7 @@ fn validate_transfer_attenuation(parent: &str, child: &str) -> Result<()> {
 
 fn validate_non_empty(value: &str, field: &str) -> Result<()> {
     if value.is_empty() {
-        Err(MoltenError::invalid_harness(format!("{field} must not be empty")))
+        Err(Failure::invalid_harness(format!("{field} must not be empty")))
     } else {
         Ok(())
     }
@@ -25,7 +25,7 @@ fn require_operation(operations: &[String], operation: &str, label: &str) -> Res
     if operations.iter().any(|candidate| candidate == operation) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} does not admit effect operation {operation}")))
+        Err(Failure::invalid_harness(format!("{label} does not admit effect operation {operation}")))
     }
 }
 
@@ -34,7 +34,7 @@ fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported {field} {actual}; expected {expected}")))
+        Err(Failure::invalid_harness(format!("unsupported {field} {actual}; expected {expected}")))
     }
 }
 
@@ -45,28 +45,28 @@ fn simple_record<'a>(
 ) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
 fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {field}")))
 }
 
 fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
 fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {
@@ -77,7 +77,7 @@ fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {
 
 fn require_ref(value: &str, field: &str) -> Result<()> {
     validate_content_ref(value).map_err(|error| {
-        MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {value}: {error}"))
+        Failure::invalid_harness(format!("expected canonical content ref for {field}, got {value}: {error}"))
     })
 }
 
@@ -92,7 +92,7 @@ fn required_record_bool(value: &Value<IoValue>, label: &str, field: &str) -> Res
     let record = simple_record(&value, label, 1)?;
     record[0]
         .as_boolean()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected boolean for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected boolean for {field}")))
 }
 
 fn required_record_ref(value: &Value<IoValue>, label: &str, field: &str) -> Result<String> {

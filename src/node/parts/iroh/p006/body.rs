@@ -193,7 +193,7 @@ fn validate_alpn_registry_refs(refs: &[String], label: &str) -> crate::error::Re
     validate_bounded_value_count(refs.len(), MAX_REF_COUNT, label)?;
     for reference in refs {
         crate::preserves_rail::validate_content_ref(reference).map_err(|error| {
-            crate::error::MoltenError::invalid_harness(format!("invalid {label} {reference}: {error}"))
+            crate::error::Failure::invalid_harness(format!("invalid {label} {reference}: {error}"))
         })?;
     }
     Ok(())
@@ -202,7 +202,7 @@ fn validate_alpn_registry_refs(refs: &[String], label: &str) -> crate::error::Re
 fn validate_alpn_lifecycle(value: &str) -> crate::error::Result<()> {
     match value {
         "proposed" | "active" | "deprecated" | "migration-only" | "removed" => Ok(()),
-        _ => Err(crate::error::MoltenError::invalid_harness("unsupported ALPN lifecycle state")),
+        _ => Err(crate::error::Failure::invalid_harness("unsupported ALPN lifecycle state")),
     }
 }
 
@@ -212,7 +212,7 @@ fn validate_alpn(value: &str) -> crate::error::Result<()> {
     if diagnostics.is_empty() {
         Ok(())
     } else {
-        Err(crate::error::MoltenError::invalid_harness("invalid ALPN"))
+        Err(crate::error::Failure::invalid_harness("invalid ALPN"))
     }
 }
 
@@ -222,7 +222,7 @@ fn validate_handler_kind(value: &str) -> crate::error::Result<()> {
     if diagnostics.is_empty() {
         Ok(())
     } else {
-        Err(crate::error::MoltenError::invalid_harness("invalid handler kind"))
+        Err(crate::error::Failure::invalid_harness("invalid handler kind"))
     }
 }
 

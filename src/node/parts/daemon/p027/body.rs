@@ -1,6 +1,6 @@
 
 fn live_peer_admission_diagnostics(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     envelope: &ControlIngressEnvelope,
     admission: &ControlLivePeerAdmission,
 ) -> Result<Vec<String>> {
@@ -67,7 +67,7 @@ fn live_peer_admission_diagnostics(
 }
 
 fn evaluate_live_authority_delegation(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::Root,
     envelope: &ControlIngressEnvelope,
 ) -> Result<Vec<String>> {
     let mut diagnostics = Vec::with_capacity(envelope.authority_refs.len().saturating_add(2));
@@ -229,13 +229,13 @@ fn ingress_idempotency_evidence_refs(envelope: &ControlIngressEnvelope) -> Vec<S
     refs
 }
 
-fn prior_queue_receipt_ref(root: &crate::node_state::NodeStateRoot, request_ref: &str) -> Result<String> {
+fn prior_queue_receipt_ref(root: &crate::node_state::Root, request_ref: &str) -> Result<String> {
     let receipt = read_preserves(root, &queue_receipt_path(request_ref)?)?;
     crate::preserves_rail::canonical_hash(&receipt)
 }
 
 fn prior_dispatch_for_request(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::Root,
     request: &crate::node_runtime::ControlRequest,
 ) -> Result<Option<ControlDispatch>> {
     let receipt_path = control_outbox_receipt_path(&request.request_ref)?;
@@ -247,7 +247,7 @@ fn prior_dispatch_for_request(
         let archived_value = read_preserves(root, &archived_path)?;
         let archived_ref = crate::preserves_rail::canonical_hash(&archived_value)?;
         if archived_ref != request.request_ref {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "node control duplicate request conflicts with archived request evidence",
             ));
         }
@@ -255,7 +255,7 @@ fn prior_dispatch_for_request(
     let control_receipt_value = read_preserves(root, &receipt_path)?;
     let control = crate::node_runtime::parse_control_receipt(&control_receipt_value)?;
     if control.request_ref != request.request_ref {
-        return Err(MoltenError::invalid_harness("node control duplicate receipt conflicts with request ref"));
+        return Err(Failure::invalid_harness("node control duplicate receipt conflicts with request ref"));
     }
     Ok(Some(ControlDispatch {
         operation: request.operation.clone(),
@@ -267,7 +267,7 @@ fn prior_dispatch_for_request(
 }
 
 fn write_dispatch_queue_receipt(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::Root,
     request: &crate::node_runtime::ControlRequest,
     phase: &str,
 ) -> Result<String> {
@@ -291,7 +291,7 @@ fn write_dispatch_queue_receipt(
 }
 
 fn dispatch_status_request(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::Root,
     request: &crate::node_runtime::ControlRequest,
 ) -> Result<ControlDispatch> {
     let status = status_local_node_with_request(root, request)?;
@@ -310,7 +310,7 @@ fn dispatch_status_request(
 }
 
 fn dispatch_shutdown_request(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::Root,
     request: &crate::node_runtime::ControlRequest,
 ) -> Result<ControlDispatch> {
     let stop = stop_local_node_with_request(root, request)?;
@@ -330,7 +330,7 @@ fn dispatch_shutdown_request(
 
 #[derive(Debug, Clone, Copy)]
 struct ControlProvenanceInput<'a> {
-    state_root: &'a crate::node_state::NodeStateRoot,
+    state_root: &'a crate::node_state::Root,
     request: &'a crate::node_runtime::ControlRequest,
     artifact_ref: &'a str,
     operation: &'a str,

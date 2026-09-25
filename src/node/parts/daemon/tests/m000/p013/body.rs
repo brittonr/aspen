@@ -10,11 +10,11 @@
             request_value: &request.value,
         })
         .expect("submit request");
-        let root = crate::node_state::NodeStateRoot::open(&root_path).expect("state root");
+        let root = crate::node_state::Root::open(&root_path).expect("state root");
         let pending = pending_control_request_by_name(&root, &submitted.inbox_entry).expect("discover request");
         let replacement = shutdown_request().expect("replacement request");
         let replacement_text = crate::preserves_rail::to_text(&replacement.value).expect("replacement text");
-        let entry_path = crate::node_state::NodeStatePath::parse(&submitted.inbox_entry).expect("entry path");
+        let entry_path = crate::node_state::RelativePath::parse(&submitted.inbox_entry).expect("entry path");
         let inbox = root.control_inbox().expect("inbox");
         inbox.write(&entry_path, replacement_text.as_bytes()).expect("replace request");
 
@@ -48,7 +48,7 @@
         use std::os::unix::fs::symlink;
 
         let root_path = initialized_control_root("node-control-lock-replacement", "node:lock-replacement");
-        let root = crate::node_state::NodeStateRoot::open(&root_path).expect("state root");
+        let root = crate::node_state::Root::open(&root_path).expect("state root");
         let outside_root =
             crate::test_support::process_workspace("node_control_lock_outside").expect("outside workspace");
         std::fs::create_dir_all(&outside_root).expect("outside root");
@@ -67,7 +67,7 @@
         let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
         runtime.block_on(async {
             let (root, identity) = init_send_case();
-            let state_root = crate::node_state::NodeStateRoot::open(&root).expect("open node state root");
+            let state_root = crate::node_state::Root::open(&root).expect("open node state root");
             let lookup = iroh::address_lookup::memory::MemoryLookup::new();
             let receiver_endpoint = live_gossip_endpoint(
                 &lookup,

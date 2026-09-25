@@ -314,12 +314,12 @@ fn parse_candidate_evidence_bindings(
         .into_iter()
         .map(|value| {
             let Some((artifact_ref, source_ref)) = value.split_once(BINDING_SEPARATOR) else {
-                return Err(molten::error::MoltenError::invalid_harness(format!(
+                return Err(molten::error::Failure::invalid_harness(format!(
                     "production readiness {label} binding must use ARTIFACT_REF@SOURCE_REF"
                 )));
             };
             if artifact_ref.trim().is_empty() || source_ref.trim().is_empty() {
-                return Err(molten::error::MoltenError::invalid_harness(format!(
+                return Err(molten::error::Failure::invalid_harness(format!(
                     "production readiness {label} binding members must not be empty"
                 )));
             }

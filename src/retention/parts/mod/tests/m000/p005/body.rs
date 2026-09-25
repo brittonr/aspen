@@ -40,7 +40,7 @@
         let identity_text = fs::read_to_string(state_root.join("identity.preserves")).expect("node identity file");
         let identity_value = crate::preserves_rail::parse_text(&identity_text).expect("parse node identity file");
         let identity = crate::node_identity::parse_identity(&identity_value).expect("parse node identity");
-        let node_state = crate::node_state::NodeStateRoot::open(state_root).expect("open node state root");
+        let node_state = crate::node_state::Root::open(state_root).expect("open node state root");
         let identity_namespace = node_state.identity().expect("identity namespace");
         let transport_secret = crate::fabric_crypto_identity::load_transport_secret_for_identity(
             &identity_namespace,

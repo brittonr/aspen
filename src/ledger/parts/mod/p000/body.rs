@@ -59,19 +59,19 @@ pub fn import_artifact_with_root(
     let bytes = crate::preserves_rail::canonical_bytes(artifact)?;
     let path = content_store_path(&artifact_ref)?;
     match root.root().entry_kind_optional(&path)? {
-        Some(crate::local_store::LocalStoreEntryKind::File) => {
+        Some(crate::local_store::ObjectKind::File) => {
             let existing = root.root().read(&path)?;
             let existing_value = crate::preserves_rail::parse_canonical_bytes(&existing)?;
             let existing_ref = crate::preserves_rail::canonical_hash(&existing_value)?;
             if existing_ref != artifact_ref {
-                return Err(crate::error::MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "ledger content path for {artifact_ref} contains corrupted bytes hashing to {existing_ref}"
                 )));
             }
         }
         None => root.root().write(&path, &bytes)?,
         Some(kind) => {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "ledger content path for {artifact_ref} must be a regular file, got {kind:?}"
             )));
         }
@@ -92,9 +92,9 @@ pub fn export_artifact(
     let artifact = read_artifact(root, artifact_ref)?;
     let artifact_kind = artifact_kind(&artifact).to_string();
     if let Some(parent) = out.parent() {
-        std::fs::create_dir_all(parent).map_err(crate::error::MoltenError::from)?;
+        std::fs::create_dir_all(parent).map_err(crate::error::Failure::from)?;
     }
-    std::fs::write(out, crate::preserves_rail::to_text(&artifact)?).map_err(crate::error::MoltenError::from)?;
+    std::fs::write(out, crate::preserves_rail::to_text(&artifact)?).map_err(crate::error::Failure::from)?;
     let receipt_value = crate::preserves_rail::record("ledger-export-receipt-v1", vec![
         crate::preserves_rail::string(crate::preserves_rail::EVIDENCE_LEDGER_EXPORT_RECEIPT_SCHEMA),
         crate::preserves_rail::record("decision", vec![crate::preserves_rail::string("pass")]),
@@ -133,7 +133,7 @@ pub fn read_artifact_with_root(
     let value = crate::preserves_rail::parse_canonical_bytes(&bytes)?;
     let actual_ref = crate::preserves_rail::canonical_hash(&value)?;
     if actual_ref != artifact_ref {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "ledger content hash mismatch: got {actual_ref}, expected {artifact_ref}"
         )));
     }
@@ -146,9 +146,9 @@ pub fn list_artifacts(root: &std::path::Path) -> crate::error::Result<Vec<Entry>
         return Ok(Vec::new());
     }
     let mut entries = Vec::new();
-    for entry in std::fs::read_dir(content).map_err(crate::error::MoltenError::from)? {
-        let entry = entry.map_err(crate::error::MoltenError::from)?;
-        if !entry.file_type().map_err(crate::error::MoltenError::from)?.is_file() {
+    for entry in std::fs::read_dir(content).map_err(crate::error::Failure::from)? {
+        let entry = entry.map_err(crate::error::Failure::from)?;
+        if !entry.file_type().map_err(crate::error::Failure::from)?.is_file() {
             continue;
         }
         let Some(artifact_ref) = ref_from_filename(&entry.file_name().to_string_lossy()) else {
@@ -172,7 +172,7 @@ pub fn list_artifacts(root: &std::path::Path) -> crate::error::Result<Vec<Entry>
 pub fn pin_artifact(root: &std::path::Path, artifact_ref: &str) -> crate::error::Result<()> {
     ensure_dirs(root)?;
     read_artifact(root, artifact_ref)?;
-    std::fs::write(pin_path(root, artifact_ref)?, artifact_ref).map_err(crate::error::MoltenError::from)
+    std::fs::write(pin_path(root, artifact_ref)?, artifact_ref).map_err(crate::error::Failure::from)
 }
 
 pub fn gc(root: &std::path::Path, input: GcInput<'_>) -> crate::error::Result<Gc> {

@@ -1,7 +1,7 @@
 use molten_core::coordination_delivery::*;
 use preserves::IOValue;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub const DELIVERY_COMMIT_RECEIPT_SCHEMA: &str = "molten.coordination-delivery-commit-receipt.v1";
@@ -85,7 +85,7 @@ pub fn canonical_delivery_commit_receipt(receipt: &DeliveryCommitReceipt) -> Res
         || receipt.claims_exactly_once
         || receipt.non_claims != required_delivery_non_claims()
     {
-        return Err(MoltenError::invalid_harness("coordination delivery receipt is invalid"));
+        return Err(Failure::invalid_harness("coordination delivery receipt is invalid"));
     }
     let value = record(DELIVERY_COMMIT_RECEIPT_RECORD, vec![
         field("schema", string(DELIVERY_COMMIT_RECEIPT_SCHEMA)),
@@ -110,7 +110,7 @@ pub fn canonical_delivery_commit_receipt(receipt: &DeliveryCommitReceipt) -> Res
     ]);
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     if bytes.len() > MAX_DELIVERY_RECEIPT_BYTES {
-        return Err(MoltenError::invalid_harness("coordination delivery receipt exceeds its byte bound"));
+        return Err(Failure::invalid_harness("coordination delivery receipt exceeds its byte bound"));
     }
     Ok(CanonicalDeliveryCommitReceipt {
         receipt_ref: hash_bytes(DELIVERY_RECEIPT_DOMAIN, &bytes),
@@ -155,7 +155,7 @@ pub fn identify_canonical_delivery_status(status: &DeliveryStatus) -> Result<Str
     ]);
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     if bytes.len() > MAX_DELIVERY_STATUS_BYTES || status.payloads_rendered {
-        return Err(MoltenError::invalid_harness("coordination delivery status is invalid or over bound"));
+        return Err(Failure::invalid_harness("coordination delivery status is invalid or over bound"));
     }
     Ok(hash_bytes(DELIVERY_STATUS_DOMAIN, &bytes))
 }

@@ -1,10 +1,10 @@
 use redb::ReadableDatabase;
 use redb::ReadableTable;
 
-type LocalStorePath = crate::local_store::LocalStorePath;
+type RelativeLocator = crate::local_store::RelativeLocator;
 type Path = std::path::Path;
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 type TableDef<'a, K, V> = redb::TableDefinition<'a, K, V>;
@@ -484,7 +484,7 @@ pub fn install_artifact_with_root(
     let artifact = build_install_artifact(input, &payload.payload_ref)?;
     let identity_receipt = artifact_identity_receipt(&identity_input_from_artifact(&artifact))?;
     if identity_receipt.decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "artifact identity denied: {}",
             identity_receipt.diagnostics.join("; ")
         )));

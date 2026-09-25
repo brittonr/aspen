@@ -3,12 +3,12 @@ pub fn import_control_live_workflow_bundle(
     input: &ControlLiveWorkflowBundleImportInput<'_>,
 ) -> Result<ControlLiveWorkflowBundleImport> {
     validate_state_root(input.state_root)?;
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::Root::open(input.state_root)?;
     import_control_live_workflow_bundle_with_root(&state_root, input)
 }
 
 fn import_control_live_workflow_bundle_with_root(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     input: &ControlLiveWorkflowBundleImportInput<'_>,
 ) -> Result<ControlLiveWorkflowBundleImport> {
     ensure_state_layout(state_root)?;
@@ -72,7 +72,7 @@ fn import_control_live_workflow_bundle_with_root(
 }
 
 fn import_parts(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     input: &ControlLiveWorkflowBundleImportInput<'_>,
     bundle: &ControlLiveWorkflowBundle,
 ) -> Result<(ImportParts, Vec<String>)> {

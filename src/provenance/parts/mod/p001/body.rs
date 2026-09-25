@@ -183,7 +183,7 @@ pub fn parse_record(value: &IoValue) -> Result<Record> {
     }
     let fields = value
         .collect_simple_record("provenance-record-v1", Some(11))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <provenance-record-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <provenance-record-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::PROVENANCE_RECORD_SCHEMA, "provenance record")?;
     let trust_state = record_string(&fields[2], "trust-state")?;
     validate_trust_state(&trust_state)?;
@@ -207,7 +207,7 @@ pub fn parse_record(value: &IoValue) -> Result<Record> {
 pub fn parse_build_record(value: &IoValue) -> Result<BuildRecord> {
     let fields = value
         .collect_simple_record("provenance-build-record-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <provenance-build-record-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <provenance-build-record-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::PROVENANCE_BUILD_RECORD_SCHEMA, "provenance build record")?;
     let build_params = record_build_params_sequence(&fields[5], "build-params")?;
     Ok(BuildRecord {
@@ -228,7 +228,7 @@ pub fn parse_build_record(value: &IoValue) -> Result<BuildRecord> {
 pub fn parse_build_verification_receipt(value: &IoValue) -> Result<BuildVerificationReceipt> {
     let fields = value
         .collect_simple_record("provenance-build-verify-receipt-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <provenance-build-verify-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <provenance-build-verify-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::PROVENANCE_BUILD_VERIFY_RECEIPT_SCHEMA,
@@ -236,7 +236,7 @@ pub fn parse_build_verification_receipt(value: &IoValue) -> Result<BuildVerifica
     )?;
     let decision = record_string(&fields[1], "decision")?;
     if !matches!(decision.as_str(), "pass" | "deny") {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "invalid provenance build verification decision `{decision}`"
         )));
     }

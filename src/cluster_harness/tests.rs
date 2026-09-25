@@ -96,7 +96,7 @@ fn failure_bundle_is_canonical_diagnostic_evidence_not_pass_evidence() {
     // r[verify molten.testing.cluster_failure_repro_bundles.privacy_and_nonpass]
     let parent = build_cluster_harness_parent(&parent_input()).expect("parent receipt");
     let failure =
-        crate::harness::failure_value("execute", &crate::error::MoltenError::invalid_harness("fixture failure"), vec![
+        crate::harness::failure_value("execute", &crate::error::Failure::invalid_harness("fixture failure"), vec![
             crate::preserves_rail::record("cluster-run-ref", vec![crate::preserves_rail::string(&parent.receipt_ref)]),
         ]);
     let bundle = crate::harness::failure_repro_bundle_value_with_command(&failure, &[

@@ -2,7 +2,7 @@ use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 
-use molten::error::MoltenError;
+use molten::error::Failure;
 use molten::error::Result;
 use molten::fabric_time::CanonicalTimeEventKind;
 use molten::fabric_time::ExecutableFabricTimeFixtureRun;
@@ -37,14 +37,14 @@ pub(super) fn run_fixture(selection: FabricTimeFixtureSelection, out: PathBuf) -
 }
 
 pub(super) fn show(report: PathBuf) -> Result<()> {
-    let metadata = std::fs::metadata(&report).map_err(MoltenError::from)?;
+    let metadata = std::fs::metadata(&report).map_err(Failure::from)?;
     if metadata.len() > MAX_REPORT_ARTIFACT_BYTES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "fabric-time report is {} bytes; maximum is {MAX_REPORT_ARTIFACT_BYTES}",
             metadata.len()
         )));
     }
-    let source = std::fs::read_to_string(&report).map_err(MoltenError::from)?;
+    let source = std::fs::read_to_string(&report).map_err(Failure::from)?;
     let value = molten::preserves_rail::parse_text(&source)?;
     let readback = molten::fabric_time::parse_fabric_time_run_readback(&value)?;
     println!(
@@ -69,9 +69,9 @@ fn plan_fixture_artifacts(run: &ExecutableFabricTimeFixtureRun) -> Result<Vec<Pl
         .events
         .len()
         .checked_add(FIXED_ARTIFACT_COUNT)
-        .ok_or_else(|| MoltenError::invalid_harness("fabric-time artifact count overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("fabric-time artifact count overflow"))?;
     if artifact_count > MAX_ARTIFACTS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "fabric-time artifact count {artifact_count} exceeds {MAX_ARTIFACTS}"
         )));
     }
@@ -101,7 +101,7 @@ fn validate_artifact_plan(artifacts: &[PlannedArtifact]) -> Result<()> {
     for artifact in artifacts {
         validate_relative_artifact_path(&artifact.relative_path)?;
         if !paths.insert(artifact.relative_path.clone()) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "duplicate fabric-time artifact path {}",
                 artifact.relative_path.display()
             )));
@@ -112,13 +112,13 @@ fn validate_artifact_plan(artifacts: &[PlannedArtifact]) -> Result<()> {
 
 fn validate_relative_artifact_path(path: &Path) -> Result<()> {
     if path.as_os_str().is_empty() || path.is_absolute() {
-        return Err(MoltenError::invalid_harness("fabric-time artifact path must be non-empty and relative"));
+        return Err(Failure::invalid_harness("fabric-time artifact path must be non-empty and relative"));
     }
     if path
         .components()
         .any(|component| matches!(component, Component::ParentDir | Component::RootDir | Component::Prefix(_)))
     {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "fabric-time artifact path escapes output root: {}",
             path.display()
         )));
@@ -127,13 +127,13 @@ fn validate_relative_artifact_path(path: &Path) -> Result<()> {
 }
 
 fn write_artifacts(root: &Path, artifacts: &[PlannedArtifact]) -> Result<()> {
-    std::fs::create_dir_all(root).map_err(MoltenError::from)?;
+    std::fs::create_dir_all(root).map_err(Failure::from)?;
     for artifact in artifacts {
         let path = root.join(&artifact.relative_path);
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(MoltenError::from)?;
+            std::fs::create_dir_all(parent).map_err(Failure::from)?;
         }
-        std::fs::write(path, artifact.content.as_bytes()).map_err(MoltenError::from)?;
+        std::fs::write(path, artifact.content.as_bytes()).map_err(Failure::from)?;
     }
     Ok(())
 }

@@ -60,7 +60,7 @@ pub fn build_artifact_auth_operational_receipt(
     let is_standalone_passed = report.dual_run.standalone.as_ref().is_some_and(|decision| decision.passed);
     let compatibility = &report.dual_run.compatibility;
     if report.cryptographic_failure_code.is_some() || !is_standalone_passed || !compatibility.case_explained {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "artifact-auth operational receipt requires passing explained standalone evidence",
         ));
     }
@@ -69,7 +69,7 @@ pub fn build_artifact_auth_operational_receipt(
         || report.signature_ref != signed.signature_ref
         || report.signature_hex != signed.signature_hex
     {
-        return Err(MoltenError::invalid_harness("artifact-auth operational receipt shell carrier drift"));
+        return Err(Failure::invalid_harness("artifact-auth operational receipt shell carrier drift"));
     }
     let mut receipt = MoltenArtifactAuthOperationalReceipt {
         schema: OPERATIONAL_RECEIPT_SCHEMA.to_string(),
@@ -101,10 +101,10 @@ pub fn build_artifact_auth_operational_receipt(
 // r[impl molten.artifact_auth_operational_receipt.identity]
 pub fn validate_artifact_auth_operational_receipt(receipt: &MoltenArtifactAuthOperationalReceipt) -> Result<()> {
     if receipt.schema != OPERATIONAL_RECEIPT_SCHEMA || receipt.consumer != OPERATIONAL_RECEIPT_CONSUMER {
-        return Err(MoltenError::invalid_harness("artifact-auth operational receipt schema or consumer mismatch"));
+        return Err(Failure::invalid_harness("artifact-auth operational receipt schema or consumer mismatch"));
     }
     if receipt.key_generation == 0 || receipt.key_purpose.is_empty() {
-        return Err(MoltenError::invalid_harness("artifact-auth operational receipt key state is invalid"));
+        return Err(Failure::invalid_harness("artifact-auth operational receipt key state is invalid"));
     }
     for (label, value) in [
         ("statement", receipt.statement_ref.as_str()),
@@ -121,10 +121,10 @@ pub fn validate_artifact_auth_operational_receipt(receipt: &MoltenArtifactAuthOp
         || receipt.public_key_ref != receipt.signed.public_key_ref
         || receipt.signature_ref != receipt.signed.signature_ref
     {
-        return Err(MoltenError::invalid_harness("artifact-auth operational receipt carrier refs drifted"));
+        return Err(Failure::invalid_harness("artifact-auth operational receipt carrier refs drifted"));
     }
     let public_key = iroh::PublicKey::from_str(&receipt.signed.public_key)
-        .map_err(|_| MoltenError::invalid_harness("artifact-auth operational receipt public key is malformed"))?;
+        .map_err(|_| Failure::invalid_harness("artifact-auth operational receipt public key is malformed"))?;
     require_carrier_identity(
         "public key",
         &receipt.signed.public_key_ref,
@@ -147,58 +147,58 @@ pub fn validate_artifact_auth_operational_receipt(receipt: &MoltenArtifactAuthOp
         || !receipt.rollback_available
         || receipt.non_claim != OPERATIONAL_RECEIPT_NON_CLAIM
     {
-        return Err(MoltenError::invalid_harness("artifact-auth operational receipt authority boundary drifted"));
+        return Err(Failure::invalid_harness("artifact-auth operational receipt authority boundary drifted"));
     }
     require_carrier_identity("receipt", &receipt.receipt_blake3, &operational_receipt_identity(receipt)?)?;
     Ok(())
 }
 
 // r[impl molten.artifact_auth_operational_receipt.persistence]
-pub fn artifact_auth_operational_receipt_path(statement_ref: &str) -> Result<NodeStatePath> {
+pub fn artifact_auth_operational_receipt_path(statement_ref: &str) -> Result<RelativePath> {
     require_blake3_ref("statement", statement_ref)?;
     let digest = statement_ref
         .strip_prefix("blake3:")
-        .ok_or_else(|| MoltenError::invalid_harness("artifact-auth statement ref prefix is invalid"))?;
-    NodeStatePath::parse(&format!("{OPERATIONAL_RECEIPT_DIR}/{digest}.{OPERATIONAL_RECEIPT_EXTENSION}"))
+        .ok_or_else(|| Failure::invalid_harness("artifact-auth statement ref prefix is invalid"))?;
+    RelativePath::parse(&format!("{OPERATIONAL_RECEIPT_DIR}/{digest}.{OPERATIONAL_RECEIPT_EXTENSION}"))
 }
 
 // r[impl molten.artifact_auth_operational_receipt.persistence]
 pub fn write_artifact_auth_operational_receipt(
-    namespace: &NodeStateNamespace,
+    namespace: &DirectoryView,
     receipt: &MoltenArtifactAuthOperationalReceipt,
-) -> Result<NodeStatePath> {
+) -> Result<RelativePath> {
     require_receipts_namespace(namespace)?;
     validate_artifact_auth_operational_receipt(receipt)?;
-    let directory = NodeStatePath::parse(OPERATIONAL_RECEIPT_DIR)?;
+    let directory = RelativePath::parse(OPERATIONAL_RECEIPT_DIR)?;
     let path = artifact_auth_operational_receipt_path(&receipt.statement_ref)?;
     namespace.create_dir_all(&directory)?;
     if namespace.try_exists(&path)? {
         let existing = read_artifact_auth_operational_receipt(namespace, &path)?;
         if existing != *receipt {
-            return Err(MoltenError::invalid_harness("artifact-auth operational receipt replacement denied"));
+            return Err(Failure::invalid_harness("artifact-auth operational receipt replacement denied"));
         }
         return Ok(path);
     }
     let bytes = serde_json::to_vec(receipt).map_err(|error| {
-        MoltenError::invalid_harness(format!("artifact-auth receipt serialization failed: {error}"))
+        Failure::invalid_harness(format!("artifact-auth receipt serialization failed: {error}"))
     })?;
     namespace.write(&path, &bytes)?;
     let reopened = read_artifact_auth_operational_receipt(namespace, &path)?;
     if reopened != *receipt {
-        return Err(MoltenError::invalid_harness("artifact-auth operational receipt write verification failed"));
+        return Err(Failure::invalid_harness("artifact-auth operational receipt write verification failed"));
     }
     Ok(path)
 }
 
 // r[impl molten.artifact_auth_operational_receipt.persistence]
 pub fn read_artifact_auth_operational_receipt(
-    namespace: &NodeStateNamespace,
-    path: &NodeStatePath,
+    namespace: &DirectoryView,
+    path: &RelativePath,
 ) -> Result<MoltenArtifactAuthOperationalReceipt> {
     require_receipts_namespace(namespace)?;
     let bytes = namespace.read(path, MAX_NODE_STATE_FILE_BYTES)?;
     let receipt = serde_json::from_slice::<MoltenArtifactAuthOperationalReceipt>(&bytes)
-        .map_err(|error| MoltenError::invalid_harness(format!("artifact-auth receipt parsing failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("artifact-auth receipt parsing failed: {error}")))?;
     validate_artifact_auth_operational_receipt(&receipt)?;
     Ok(receipt)
 }
@@ -206,8 +206,8 @@ pub fn read_artifact_auth_operational_receipt(
 // r[impl molten.artifact_auth_operational_receipt.replay]
 pub fn replay_artifact_auth_operational_receipt(
     adapter: &IrohEd25519FileAdapter<'_>,
-    namespace: &NodeStateNamespace,
-    path: &NodeStatePath,
+    namespace: &DirectoryView,
+    path: &RelativePath,
     input: &MoltenArtifactAuthShellInput<'_>,
 ) -> Result<MoltenArtifactAuthShellReport> {
     let receipt = read_artifact_auth_operational_receipt(namespace, path)?;
@@ -218,12 +218,12 @@ pub fn replay_artifact_auth_operational_receipt(
         || current.handle.handle != *input.handle
         || receipt.signing_policy_ref != input.signing_policy_ref
     {
-        return Err(MoltenError::invalid_harness("artifact-auth operational receipt current key state drifted"));
+        return Err(Failure::invalid_harness("artifact-auth operational receipt current key state drifted"));
     }
     let report = evaluate_artifact_auth_shell_dual_run(&input.statement, &receipt.signed)?;
     let expected = build_artifact_auth_operational_receipt(input, &receipt.signed, &report)?;
     if expected != receipt {
-        return Err(MoltenError::invalid_harness("artifact-auth operational receipt replay drifted"));
+        return Err(Failure::invalid_harness("artifact-auth operational receipt replay drifted"));
     }
     debug_assert!(report.dual_run.compatibility.legacy_authoritative);
     debug_assert!(!report.dual_run.compatibility.standalone_authority_admitted);
@@ -251,25 +251,25 @@ fn operational_receipt_identity(receipt: &MoltenArtifactAuthOperationalReceipt) 
         non_claim: &receipt.non_claim,
     };
     let bytes = serde_json::to_vec(&material)
-        .map_err(|error| MoltenError::invalid_harness(format!("artifact-auth receipt hashing failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("artifact-auth receipt hashing failed: {error}")))?;
     Ok(content_ref_from_bytes(&bytes))
 }
 
-fn require_receipts_namespace(namespace: &NodeStateNamespace) -> Result<()> {
-    if namespace.kind() != NodeStateNamespaceKind::Receipts {
-        return Err(MoltenError::invalid_harness("artifact-auth operational receipts require receipts namespace"));
+fn require_receipts_namespace(namespace: &DirectoryView) -> Result<()> {
+    if namespace.kind() != NamespaceKind::Receipts {
+        return Err(Failure::invalid_harness("artifact-auth operational receipts require receipts namespace"));
     }
     Ok(())
 }
 
 fn require_blake3_ref(label: &str, value: &str) -> Result<()> {
     let Some(digest) = value.strip_prefix("blake3:") else {
-        return Err(MoltenError::invalid_harness(format!("artifact-auth {label} ref must use blake3")));
+        return Err(Failure::invalid_harness(format!("artifact-auth {label} ref must use blake3")));
     };
     if digest.len() != BLAKE3_HEX_CHARS
         || !digest.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
     {
-        return Err(MoltenError::invalid_harness(format!("artifact-auth {label} ref is malformed")));
+        return Err(Failure::invalid_harness(format!("artifact-auth {label} ref is malformed")));
     }
     Ok(())
 }

@@ -3,14 +3,14 @@ fn parse_redaction_transform_receipt(value: &IoValue) -> Result<RedactionTransfo
     let receipt = simple_record(value, "redaction-transform-receipt-v1", 12)?;
     let schema = required_string(&receipt[0], "redaction transform schema")?;
     if schema != crate::preserves_rail::HARNESS_REDACTION_TRANSFORM_RECEIPT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported redaction transform schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_REDACTION_TRANSFORM_RECEIPT_SCHEMA
         )));
     }
     let decision = required_record_string(&receipt[1], "decision", "redaction transform decision")?;
     if decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!("unsupported redaction transform decision {decision}")));
+        return Err(crate::error::Failure::invalid_harness(format!("unsupported redaction transform decision {decision}")));
     }
     let source_report_ref = required_record_hash(&receipt[2], "source-report", "redaction source report")?;
     let source_suite_ref = required_record_hash(&receipt[3], "source-suite", "redaction source suite")?;
@@ -22,7 +22,7 @@ fn parse_redaction_transform_receipt(value: &IoValue) -> Result<RedactionTransfo
     let loss_classification =
         required_record_string(&receipt[8], "loss-classification", "redaction loss classification")?;
     if loss_classification != profile.loss_classification() {
-        return Err(MoltenError::invalid_harness("redaction transform loss classification is not canonical"));
+        return Err(crate::error::Failure::invalid_harness("redaction transform loss classification is not canonical"));
     }
     let marker_refs = required_record_hash_sequence(&receipt[9], "markers", "redaction marker refs")?;
     let encrypted_refs = required_record_hash_sequence(&receipt[10], "encrypted-refs", "redaction encrypted refs")?;
@@ -47,7 +47,7 @@ fn parse_redaction_transform_receipt(value: &IoValue) -> Result<RedactionTransfo
 
 fn redaction_gate_value(report_value: &IoValue, report: &Report) -> Result<IoValue> {
     if let Some(marker) = first_sensitive_marker(report_value) {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "redaction preflight found sensitive marker {marker}; sealed pass repro bundles require explicit redaction before export"
         )));
     }
@@ -153,7 +153,7 @@ fn validate_redaction_evidence(
     let expected_policy_ref = canonical_hash(&expected_policy)?;
     let actual_policy_ref = canonical_hash(policy_value)?;
     if actual_policy_ref != expected_policy_ref || policy_value != &expected_policy {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "redaction policy evidence mismatch: policy hashes to {actual_policy_ref}, expected {expected_policy_ref}"
         )));
     }
@@ -162,7 +162,7 @@ fn validate_redaction_evidence(
     let expected_gate_ref = canonical_hash(&expected_gate)?;
     let actual_gate_ref = canonical_hash(gate_value)?;
     if actual_gate_ref != expected_gate_ref || gate_value != &expected_gate {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "redaction gate evidence mismatch: gate hashes to {actual_gate_ref}, expected {expected_gate_ref}"
         )));
     }
@@ -174,14 +174,14 @@ fn parse_redaction_policy(value: &IoValue) -> Result<()> {
     let policy = simple_record(value, "redaction-policy-v1", 3)?;
     let schema = required_string(&policy[0], "redaction policy schema")?;
     if schema != crate::preserves_rail::HARNESS_REDACTION_POLICY_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported redaction policy schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_REDACTION_POLICY_SCHEMA
         )));
     }
     let mode = required_record_string(&policy[1], "mode", "redaction policy mode")?;
     if mode != "deny-sensitive-markers" {
-        return Err(MoltenError::invalid_harness(format!("unsupported redaction policy mode {mode}")));
+        return Err(crate::error::Failure::invalid_harness(format!("unsupported redaction policy mode {mode}")));
     }
     let markers = required_record_sequence(&policy[2], "forbidden-markers", "redaction forbidden markers")?;
     let actual = markers
@@ -189,7 +189,7 @@ fn parse_redaction_policy(value: &IoValue) -> Result<()> {
         .map(|marker| required_string(&marker, "redaction marker"))
         .collect::<Result<Vec<_>>>()?;
     if actual != FORBIDDEN_REDACTION_MARKERS {
-        return Err(MoltenError::invalid_harness("redaction policy forbidden marker set is not canonical"));
+        return Err(crate::error::Failure::invalid_harness("redaction policy forbidden marker set is not canonical"));
     }
     Ok(())
 }
@@ -198,31 +198,31 @@ fn parse_redaction_gate(value: &IoValue, report: &Report, policy_ref: &str, repo
     let gate = simple_record(value, "redaction-gate-v1", 7)?;
     let schema = required_string(&gate[0], "redaction gate schema")?;
     if schema != crate::preserves_rail::HARNESS_REDACTION_GATE_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported redaction gate schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_REDACTION_GATE_SCHEMA
         )));
     }
     let decision = required_record_string(&gate[1], "decision", "redaction gate decision")?;
     if decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!("unsupported redaction gate decision {decision}")));
+        return Err(crate::error::Failure::invalid_harness(format!("unsupported redaction gate decision {decision}")));
     }
     let actual_policy_ref = required_record_hash(&gate[2], "policy-ref", "redaction policy ref")?;
     if actual_policy_ref != policy_ref {
-        return Err(MoltenError::invalid_harness("redaction gate policy ref does not match policy evidence"));
+        return Err(crate::error::Failure::invalid_harness("redaction gate policy ref does not match policy evidence"));
     }
     let report_ref = required_record_hash(&gate[3], "report-ref", "redaction gate report ref")?;
     if report_ref != report.report_ref {
-        return Err(MoltenError::invalid_harness("redaction gate report ref does not match embedded report"));
+        return Err(crate::error::Failure::invalid_harness("redaction gate report ref does not match embedded report"));
     }
     let suite_ref = required_record_hash(&gate[4], "suite-ref", "redaction gate suite ref")?;
     if suite_ref != report.suite_ref {
-        return Err(MoltenError::invalid_harness("redaction gate suite ref does not match embedded report"));
+        return Err(crate::error::Failure::invalid_harness("redaction gate suite ref does not match embedded report"));
     }
     let scan_root_ref = required_record_hash(&gate[5], "scan-root-ref", "redaction gate scan root ref")?;
     let actual_scan_root_ref = canonical_hash(report_value)?;
     if scan_root_ref != actual_scan_root_ref {
-        return Err(MoltenError::invalid_harness("redaction gate scan root ref does not match embedded report"));
+        return Err(crate::error::Failure::invalid_harness("redaction gate scan root ref does not match embedded report"));
     }
     let checks = parse_redaction_gate_checks(&gate[6])?;
     require_redaction_check(&checks, "redaction-policy")?;
@@ -246,7 +246,7 @@ fn parse_redaction_gate_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
         let name = required_string(&check[0], "redaction gate check name")?;
         let status = required_string(&check[1], "redaction gate check status")?;
         if status != "pass" {
-            return Err(MoltenError::invalid_harness(format!("redaction gate check {name} status is {status}")));
+            return Err(crate::error::Failure::invalid_harness(format!("redaction gate check {name} status is {status}")));
         }
         checks.push(name);
     }
@@ -257,7 +257,7 @@ fn require_redaction_check(checks: &[String], expected: &str) -> Result<()> {
     if checks.iter().any(|check| check == expected) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("redaction gate missing {expected} check")))
+        Err(crate::error::Failure::invalid_harness(format!("redaction gate missing {expected} check")))
     }
 }
 

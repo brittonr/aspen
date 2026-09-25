@@ -2,7 +2,7 @@ type AdmitLoopback = super::command::sync::AdmitLoopback;
 type AdmitPlan = super::command::sync::AdmitPlan;
 type ExecuteLoopback = super::command::sync::ExecuteLoopback;
 type Loopback = super::command::sync::Loopback;
-type MoltenError = molten::error::MoltenError;
+type Failure = molten::error::Failure;
 type Plan = super::command::sync::Plan;
 type Result<T> = molten::error::Result<T>;
 
@@ -130,7 +130,7 @@ pub(crate) fn execute_loopback(args: ExecuteLoopback) -> Result<()> {
     finish_execution(args.receipt_out.as_ref(), executed)
 }
 
-fn missing_admission(args: ExecuteLoopback, error: MoltenError) -> Result<()> {
+fn missing_admission(args: ExecuteLoopback, error: Failure) -> Result<()> {
     let request = input::from_admission_ref(input::ExecutionFromAdmissionInput {
         target_registry: &args.target_registry,
         job: &args.job,
@@ -175,7 +175,7 @@ fn finish_execution(
         );
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "job execute-loopback denied: {}",
             executed.diagnostics.join("; ")
         )))

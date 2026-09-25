@@ -13,7 +13,7 @@ use std::collections::VecDeque;
 use std::path::Path;
 use std::path::PathBuf;
 
-use molten::error::MoltenError;
+use molten::error::Failure;
 use molten::error::Result;
 use molten::world_commit::CanonicalWorldCommit;
 use molten::world_commit::LocalWorldCommitStore;
@@ -34,8 +34,8 @@ use molten_core::world_merge::WorldMergeSchemaRef;
 use molten_core::world_merge::WorldMergeValue;
 use molten_core::world_merge::diff_world_roots;
 use molten_core::world_merge::plan_world_merge;
-use molten_node_host::node_state::NodeStateNamespaceKind;
-use molten_node_host::node_state::NodeStateRoot;
+use molten_node_host::node_state::NamespaceKind;
+use molten_node_host::node_state::Root;
 
 const MAX_ANCESTRY_COMMITS: usize = 4_096;
 
@@ -115,7 +115,7 @@ pub(crate) fn run_world_merge_command(command: WorldMergeCommand) -> Result<()> 
 fn diff(state_root: &Path, base: &str, left: &str, right: &str, out: Option<&Path>) -> Result<()> {
     let (_, request) = load_request(state_root, base, left, right, default_profile()?)?;
     let report = diff_world_roots(&request)
-        .map_err(|issues| MoltenError::invalid_harness(format!("world diff denied: {issues:?}")))?;
+        .map_err(|issues| Failure::invalid_harness(format!("world diff denied: {issues:?}")))?;
     let canonical = canonical_world_diff(&report)?;
     if let Some(out) = out {
         std::fs::write(out, &canonical.bytes)?;
@@ -141,7 +141,7 @@ fn plan(input: PlanInput) -> Result<()> {
     let profile = conservative_profile(&input.profile_ref, &input.policy_ref)?;
     let (_, request) = load_request(&input.state_root, &input.base, &input.left, &input.right, profile)?;
     let plan = plan_world_merge(&request, None)
-        .map_err(|issues| MoltenError::invalid_harness(format!("world merge planning denied: {issues:?}")))?;
+        .map_err(|issues| Failure::invalid_harness(format!("world merge planning denied: {issues:?}")))?;
     let canonical = canonical_world_merge_plan(&plan)?;
     std::fs::write(&input.out, &canonical.bytes)?;
     println!("plan_ref={}", plan.plan_ref);
@@ -160,13 +160,13 @@ fn inspect_conflict(path: &Path) -> Result<()> {
 }
 
 fn publish(state_root: &Path, plan: &Path) -> Result<()> {
-    let _root = NodeStateRoot::open_existing(state_root)?;
+    let _root = Root::open_existing(state_root)?;
     let bytes = std::fs::read(plan)?;
     let decoded = molten::preserves_rail::strict_canonical_decode(&bytes)?;
     println!("plan_artifact_ref={}", decoded.value_ref);
     println!("decision=denied");
     println!("issue=current-merge-authority-adapter-unavailable");
-    Err(MoltenError::invalid_harness(
+    Err(Failure::invalid_harness(
         "standalone merge publication is disabled until authority, migration, and handler adapters are composed",
     ))
 }
@@ -181,8 +181,8 @@ fn load_request(
     let base_ref = parse_commit_ref(base)?;
     let left_ref = parse_commit_ref(left)?;
     let right_ref = parse_commit_ref(right)?;
-    let root = NodeStateRoot::open_existing(state_root)?;
-    let storage = root.namespace(NodeStateNamespaceKind::Storage)?;
+    let root = Root::open_existing(state_root)?;
+    let storage = root.namespace(NamespaceKind::Storage)?;
     let store = LocalWorldCommitStore::open(&storage)?;
     let base_commit = load_commit(&store, &base_ref)?;
     let left_commit = load_commit(&store, &left_ref)?;
@@ -204,7 +204,7 @@ fn load_request(
 fn load_commit(store: &LocalWorldCommitStore, reference: &WorldCommitRef) -> Result<CanonicalWorldCommit> {
     let bytes = store
         .read_commit(reference)
-        .map_err(|error| MoltenError::invalid_harness(format!("world commit read failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("world commit read failed: {error}")))?;
     molten::world_commit::parse_canonical_world_commit_with_ref(&bytes, reference, &operator_world_bounds())
 }
 
@@ -226,7 +226,7 @@ fn is_ancestor(
             continue;
         }
         if seen.len() > MAX_ANCESTRY_COMMITS {
-            return Err(MoltenError::invalid_harness("world merge ancestry exceeds its bound"));
+            return Err(Failure::invalid_harness("world merge ancestry exceeds its bound"));
         }
         let parent = load_commit(store, &reference)?;
         queue.extend(parent.core.parents);
@@ -274,7 +274,7 @@ fn schema_for(commit: &CanonicalWorldCommit) -> Result<Option<WorldMergeSchemaRe
         .find(|root| root.kind() == RootKind::Schema)
         .map(|root| {
             WorldMergeSchemaRef::new(root.as_str().to_string())
-                .map_err(|error| MoltenError::invalid_harness(format!("invalid merge schema ref: {error}")))
+                .map_err(|error| Failure::invalid_harness(format!("invalid merge schema ref: {error}")))
         })
         .transpose()
 }
@@ -296,9 +296,9 @@ fn default_profile() -> Result<WorldMergeProfile> {
 fn conservative_profile(profile_ref: &str, policy_ref: &str) -> Result<WorldMergeProfile> {
     Ok(WorldMergeProfile {
         profile_ref: WorldMergeProfileRef::new(profile_ref.to_string())
-            .map_err(|error| MoltenError::invalid_harness(format!("invalid merge profile ref: {error}")))?,
+            .map_err(|error| Failure::invalid_harness(format!("invalid merge profile ref: {error}")))?,
         policy_ref: WorldMergePolicyRef::new(policy_ref.to_string())
-            .map_err(|error| MoltenError::invalid_harness(format!("invalid merge policy ref: {error}")))?,
+            .map_err(|error| Failure::invalid_harness(format!("invalid merge policy ref: {error}")))?,
         root_modes: BTreeMap::from([
             (RootKind::Artifact, WorldMergeMode::IdenticalOnly),
             (RootKind::Schema, WorldMergeMode::IdenticalOnly),
@@ -322,7 +322,7 @@ fn operator_world_bounds() -> molten_core::world_commit::WorldCommitBounds {
 
 fn parse_commit_ref(value: &str) -> Result<WorldCommitRef> {
     WorldCommitRef::new(value.to_string())
-        .map_err(|error| MoltenError::invalid_harness(format!("invalid world commit ref: {error:?}")))
+        .map_err(|error| Failure::invalid_harness(format!("invalid world commit ref: {error:?}")))
 }
 
 fn reference(label: &str) -> String {

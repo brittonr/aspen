@@ -7,18 +7,18 @@ fn validate_profiled_output(value: &IoValue, profile: ReproExportProfile) -> Res
             if let Some(label) = current.label().as_symbol() {
                 let label = label.as_ref();
                 if matches!(label, "secret" | "confidential" | "credential" | "private" | "secret-ref-v1") {
-                    return Err(MoltenError::invalid_harness(format!(
+                    return Err(crate::error::Failure::invalid_harness(format!(
                         "redaction transform missed sensitive marker {label}"
                     )));
                 }
                 if label == "encrypted-ref" {
-                    return Err(MoltenError::invalid_harness(
+                    return Err(crate::error::Failure::invalid_harness(
                         "malformed encrypted-ref marker in redacted repro bundle",
                     ));
                 }
                 if label == "encrypted-ref-v1" {
                     if profile != ReproExportProfile::EncryptedPrivate {
-                        return Err(MoltenError::invalid_harness(
+                        return Err(crate::error::Failure::invalid_harness(
                             "encrypted refs are allowed only in encrypted-private repro bundles",
                         ));
                     }
@@ -182,7 +182,7 @@ fn required_record_sequence(value: &Value<IoValue>, label: &str, field: &str) ->
     let owned = value_to_iovalue(&record[0]);
     Ok(owned
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))?
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected sequence for {field}")))?
         .into_owned())
 }
 
@@ -212,11 +212,11 @@ fn validate_tool_record(value: &Value<IoValue>) -> Result<()> {
     let tool = simple_record(&value, "tool", 2)?;
     let name = required_string(&tool[0], "repro bundle tool name")?;
     if name != "molten" {
-        return Err(MoltenError::invalid_harness(format!("unsupported repro bundle tool {name}")));
+        return Err(crate::error::Failure::invalid_harness(format!("unsupported repro bundle tool {name}")));
     }
     let version = required_string(&tool[1], "repro bundle tool version")?;
     if version.is_empty() {
-        return Err(MoltenError::invalid_harness("repro bundle tool version must not be empty"));
+        return Err(crate::error::Failure::invalid_harness("repro bundle tool version must not be empty"));
     }
     Ok(())
 }
@@ -248,7 +248,7 @@ fn require_artifact_ref(refs: &[(String, String)], kind: &str, expected: &str) -
     if refs.iter().any(|(actual_kind, actual_ref)| actual_kind == kind && actual_ref == expected) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("repro bundle artifact refs missing {kind} ref {expected}")))
+        Err(crate::error::Failure::invalid_harness(format!("repro bundle artifact refs missing {kind} ref {expected}")))
     }
 }
 

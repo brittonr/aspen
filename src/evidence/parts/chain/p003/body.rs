@@ -55,7 +55,7 @@ pub fn publish_chain_anchor(
     let link_value = crate::ledger::read_artifact(root, link_ref)?;
     let link = parse_chain_link(&link_value)?;
     if &link.chain != chain {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "anchor link {link_ref} belongs to {:?}, expected {:?}",
             link.chain, chain
         )));
@@ -107,7 +107,7 @@ pub fn validate_chain_checkpoint_freshness(
     let value = crate::ledger::read_artifact(root, checkpoint_ref)?;
     let checkpoint = parse_chain_checkpoint(&value)?;
     if &checkpoint.chain != chain {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "checkpoint {checkpoint_ref} belongs to {:?}, expected {:?}",
             checkpoint.chain, chain
         )));
@@ -115,7 +115,7 @@ pub fn validate_chain_checkpoint_freshness(
     if let Some(expected_head) = expected_head
         && checkpoint.head_ref != expected_head
     {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "checkpoint head {} does not match expected head {expected_head}",
             checkpoint.head_ref
         )));
@@ -123,7 +123,7 @@ pub fn validate_chain_checkpoint_freshness(
     let index = build_chain_index(root)?;
     let heads = index.heads_for_chain(chain);
     if heads != vec![checkpoint.head_ref.clone()] {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "checkpoint {checkpoint_ref} is stale: checkpoint head {}, current heads {:?}",
             checkpoint.head_ref, heads
         )));

@@ -4,7 +4,7 @@ use super::super::*;
 use super::model::*;
 use super::support::*;
 use super::validation::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 struct ReplayInputRecords {
@@ -63,7 +63,7 @@ pub fn run_world_replay(
     ports: WorldReplayPorts<'_>,
 ) -> Result<WorldReplayRunOutcome> {
     if initial_commit.commit_ref != request.trace.initial_commit {
-        return Err(MoltenError::invalid_harness("world replay initial commit does not match the transition trace"));
+        return Err(Failure::invalid_harness("world replay initial commit does not match the transition trace"));
     }
     validate_initial_profile(&request.trace.profile, initial_commit)?;
     validate_dependency_refs(dependency_refs)?;
@@ -165,7 +165,7 @@ fn execute_replay_steps(
         execution.matched_steps = execution
             .matched_steps
             .checked_add(comparison.matched_steps)
-            .ok_or_else(|| MoltenError::invalid_harness("world replay matched-step count overflowed"))?;
+            .ok_or_else(|| Failure::invalid_harness("world replay matched-step count overflowed"))?;
     }
     Ok(execution)
 }
@@ -176,7 +176,7 @@ fn compare_captured_step(
     capture: &WorldReplayCaptureObservation,
 ) -> Result<WorldReplayComparison> {
     if capture.transition.position != step.position {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "world replay successor capture returned the wrong transition position",
         ));
     }

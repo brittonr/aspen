@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric::FabricPortError;
 use crate::fabric::FabricPortResult;
@@ -31,7 +31,7 @@ impl<A: DurableCommandShell> RegisteredDurableEffectPort<A> {
     pub fn register(&mut self, request_ref: String, command: DurablePortCommand) -> Result<()> {
         crate::preserves_rail::validate_content_ref(&request_ref)?;
         if self.requests.insert(request_ref.clone(), command).is_some() {
-            return Err(MoltenError::invalid_harness(format!("durable request {request_ref} is already registered")));
+            return Err(Failure::invalid_harness(format!("durable request {request_ref} is already registered")));
         }
         Ok(())
     }

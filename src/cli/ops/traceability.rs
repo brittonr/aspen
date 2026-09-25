@@ -428,7 +428,7 @@ fn run_scan(input: ScanInput) -> Outcome<()> {
     if manifest.decision == "pass" {
         Ok(())
     } else {
-        Err(molten::error::MoltenError::invalid_harness(format!(
+        Err(molten::error::Failure::invalid_harness(format!(
             "requirement traceability denied: {}",
             summary.replace('\n', "; ")
         )))
@@ -459,7 +459,7 @@ fn run_verification_run(input: VerificationRunCommandInput) -> Outcome<()> {
 }
 
 fn run_ci_run_receipt(input: CiRunReceiptCommandInput) -> Outcome<()> {
-    let junit_text = std::fs::read_to_string(&input.junit).map_err(molten::error::MoltenError::from)?;
+    let junit_text = std::fs::read_to_string(&input.junit).map_err(molten::error::Failure::from)?;
     let counts = parse_junit_counts(&junit_text)?;
     let receipt = molten::testing_hardening::build_ci_test_run_receipt(&molten::testing_hardening::CiTestRunInput {
         source_ref: molten::preserves_rail::content_ref_from_bytes(input.source_marker.as_bytes()),
@@ -480,7 +480,7 @@ fn run_ci_run_receipt(input: CiRunReceiptCommandInput) -> Outcome<()> {
 }
 
 fn run_nextest_profile_matrix(input: NextestProfileMatrixCommandInput) -> Outcome<()> {
-    let config_text = std::fs::read_to_string(&input.nextest_config).map_err(molten::error::MoltenError::from)?;
+    let config_text = std::fs::read_to_string(&input.nextest_config).map_err(molten::error::Failure::from)?;
     let config = parse_nextest_config(&config_text)?;
     let profiles = nextest_profiles_from_config(&config)?;
     let matrix = molten::testing_hardening::build_nextest_profile_matrix(
@@ -492,7 +492,7 @@ fn run_nextest_profile_matrix(input: NextestProfileMatrixCommandInput) -> Outcom
     if matrix.decision == "pass" {
         Ok(())
     } else {
-        Err(molten::error::MoltenError::invalid_harness(format!(
+        Err(molten::error::Failure::invalid_harness(format!(
             "nextest profile matrix denied: {}",
             matrix.diagnostics.join(DIAGNOSTIC_JOIN_SEPARATOR)
         )))
@@ -501,7 +501,7 @@ fn run_nextest_profile_matrix(input: NextestProfileMatrixCommandInput) -> Outcom
 
 fn parse_nextest_config(text: &str) -> Outcome<toml::Value> {
     toml::from_str::<toml::Value>(text)
-        .map_err(|error| molten::error::MoltenError::invalid_harness(format!("invalid nextest config TOML: {error}")))
+        .map_err(|error| molten::error::Failure::invalid_harness(format!("invalid nextest config TOML: {error}")))
 }
 
 fn nextest_profiles_from_config(config: &toml::Value) -> Outcome<Vec<molten::testing_hardening::SemanticProfileInput>> {
@@ -533,7 +533,7 @@ fn nextest_retry_policy(config: &toml::Value, profile_id: &str) -> Outcome<Strin
 fn nextest_profile_string(config: &toml::Value, profile_id: &str, field: &str) -> Outcome<Option<String>> {
     nextest_profile_field(config, profile_id, field)?.map_or(Ok(None), |value| {
         value.as_str().map(|text| Some(text.to_string())).ok_or_else(|| {
-            molten::error::MoltenError::invalid_harness(format!("profile {profile_id} field {field} must be a string"))
+            molten::error::Failure::invalid_harness(format!("profile {profile_id} field {field} must be a string"))
         })
     })
 }
@@ -546,7 +546,7 @@ fn nextest_profile_nested_string(
 ) -> Outcome<Option<String>> {
     nextest_profile_nested_field(config, profile_id, table_field, field)?.map_or(Ok(None), |value| {
         value.as_str().map(|text| Some(text.to_string())).ok_or_else(|| {
-            molten::error::MoltenError::invalid_harness(format!(
+            molten::error::Failure::invalid_harness(format!(
                 "profile {profile_id} field {table_field}.{field} must be a string"
             ))
         })
@@ -556,7 +556,7 @@ fn nextest_profile_nested_string(
 fn nextest_profile_integer(config: &toml::Value, profile_id: &str, field: &str) -> Outcome<Option<i64>> {
     nextest_profile_field(config, profile_id, field)?.map_or(Ok(None), |value| {
         value.as_integer().map(Some).ok_or_else(|| {
-            molten::error::MoltenError::invalid_harness(format!(
+            molten::error::Failure::invalid_harness(format!(
                 "profile {profile_id} field {field} must be an integer"
             ))
         })
@@ -581,7 +581,7 @@ fn nextest_profile_field<'a>(
         };
         current_profile = parent.to_string();
     }
-    Err(molten::error::MoltenError::invalid_harness(format!(
+    Err(molten::error::Failure::invalid_harness(format!(
         "profile {profile_id} inheritance exceeds bound"
     )))
 }
@@ -607,7 +607,7 @@ fn nextest_profile_nested_field<'a>(
         };
         current_profile = parent.to_string();
     }
-    Err(molten::error::MoltenError::invalid_harness(format!(
+    Err(molten::error::Failure::invalid_harness(format!(
         "profile {profile_id} inheritance exceeds bound"
     )))
 }
@@ -647,7 +647,7 @@ fn run_config_lint(input: ConfigLintCommandInput) -> Outcome<()> {
     if report.decision == "pass" {
         Ok(())
     } else {
-        Err(molten::error::MoltenError::invalid_harness(format!(
+        Err(molten::error::Failure::invalid_harness(format!(
             "config portability denied: {}",
             report.diagnostics.join(DIAGNOSTIC_JOIN_SEPARATOR)
         )))
@@ -660,7 +660,7 @@ fn read_config_lint_files(
     let mut records = Vec::with_capacity(CONFIG_LINT_FILES.len());
     for (relative_path, release_scoped) in CONFIG_LINT_FILES {
         let path = root.join(relative_path);
-        let contents = std::fs::read_to_string(&path).map_err(molten::error::MoltenError::from)?;
+        let contents = std::fs::read_to_string(&path).map_err(molten::error::Failure::from)?;
         records.push(molten::project_config_portability::ConfigFileRecord {
             path: (*relative_path).to_string(),
             contents,
@@ -673,8 +673,8 @@ fn read_config_lint_files(
 fn read_source_pin_records(
     root: &std::path::Path,
 ) -> Outcome<Vec<molten::project_config_portability::SourcePinRecord>> {
-    let cargo_lock = std::fs::read_to_string(root.join("Cargo.lock")).map_err(molten::error::MoltenError::from)?;
-    let flake = std::fs::read_to_string(root.join("flake.nix")).map_err(molten::error::MoltenError::from)?;
+    let cargo_lock = std::fs::read_to_string(root.join("Cargo.lock")).map_err(molten::error::Failure::from)?;
+    let flake = std::fs::read_to_string(root.join("flake.nix")).map_err(molten::error::Failure::from)?;
     let cargo_revisions = cargo_private_revisions(&cargo_lock);
     let nix_revisions = nix_private_revisions(&flake);
     let mut dependencies = std::collections::BTreeSet::new();
@@ -765,7 +765,7 @@ fn run_effective_config(input: EffectiveConfigCommandInput) -> Outcome<()> {
     if readback.decision == "pass" {
         Ok(())
     } else {
-        Err(molten::error::MoltenError::invalid_harness(format!(
+        Err(molten::error::Failure::invalid_harness(format!(
             "effective config denied: {}",
             readback.diagnostics.join(DIAGNOSTIC_JOIN_SEPARATOR)
         )))
@@ -779,12 +779,12 @@ fn parse_effective_config_fields(
     for field in fields {
         let parts = field.split(EFFECTIVE_CONFIG_FIELD_SEPARATOR).map(str::to_string).collect::<Vec<_>>();
         if parts.len() != EFFECTIVE_CONFIG_FIELD_PARTS {
-            return Err(molten::error::MoltenError::invalid_harness(format!(
+            return Err(molten::error::Failure::invalid_harness(format!(
                 "effective config field must have {EFFECTIVE_CONFIG_FIELD_PARTS} pipe-delimited parts"
             )));
         }
         if parts.iter().take(EFFECTIVE_CONFIG_FIELD_PARTS - 1).any(|part| part.trim().is_empty()) {
-            return Err(molten::error::MoltenError::invalid_harness("effective config field parts must not be empty"));
+            return Err(molten::error::Failure::invalid_harness("effective config field parts must not be empty"));
         }
         let caveats = if parts[4].trim().is_empty() {
             Vec::new()
@@ -850,7 +850,7 @@ fn run_context_profile(input: ContextProfileCommandInput) -> Outcome<()> {
     if expansion.decision == "pass" {
         Ok(())
     } else {
-        Err(molten::error::MoltenError::invalid_harness(format!(
+        Err(molten::error::Failure::invalid_harness(format!(
             "context profile expansion denied: {}",
             expansion.diagnostics.join(DIAGNOSTIC_JOIN_SEPARATOR)
         )))
@@ -877,7 +877,7 @@ fn collect_spec_sources(root: &std::path::Path) -> Outcome<Vec<molten::requireme
 }
 
 fn raw_file_ref(path: &std::path::Path) -> Outcome<String> {
-    let bytes = std::fs::read(path).map_err(molten::error::MoltenError::from)?;
+    let bytes = std::fs::read(path).map_err(molten::error::Failure::from)?;
     Ok(molten::preserves_rail::content_ref_from_bytes(&bytes))
 }
 
@@ -888,7 +888,7 @@ fn parse_junit_counts(text: &str) -> Outcome<molten::testing_hardening::CiTestCo
     let skipped = junit_optional_attribute(text, JUNIT_SKIPPED_ATTRIBUTE)?;
     let failed = failures
         .checked_add(errors)
-        .ok_or_else(|| molten::error::MoltenError::invalid_harness("JUnit failure/error count overflow"))?;
+        .ok_or_else(|| molten::error::Failure::invalid_harness("JUnit failure/error count overflow"))?;
     Ok(molten::testing_hardening::CiTestCounts {
         total,
         passed: junit_passed_count(total, failed, skipped)?,
@@ -901,7 +901,7 @@ fn junit_passed_count(total: u64, failed: u64, skipped: u64) -> Outcome<u64> {
     total
         .checked_sub(failed)
         .and_then(|count| count.checked_sub(skipped))
-        .ok_or_else(|| molten::error::MoltenError::invalid_harness("JUnit passed count underflow"))
+        .ok_or_else(|| molten::error::Failure::invalid_harness("JUnit passed count underflow"))
 }
 
 fn junit_optional_attribute(text: &str, name: &str) -> Outcome<u64> {
@@ -913,7 +913,7 @@ fn junit_optional_attribute(text: &str, name: &str) -> Outcome<u64> {
 
 fn junit_attribute(text: &str, name: &str) -> Outcome<u64> {
     let Some(value) = junit_attribute_value(text, name)? else {
-        return Err(molten::error::MoltenError::invalid_harness(format!("JUnit missing {name} attribute")));
+        return Err(molten::error::Failure::invalid_harness(format!("JUnit missing {name} attribute")));
     };
     parse_junit_attribute_value(value, name)
 }
@@ -926,7 +926,7 @@ fn junit_attribute_value<'a>(text: &'a str, name: &str) -> Outcome<Option<&'a st
     };
     let rest = &text[start_index..];
     let Some(end_index) = rest.find(JUNIT_QUOTE) else {
-        return Err(molten::error::MoltenError::invalid_harness(format!("JUnit unterminated {name} attribute")));
+        return Err(molten::error::Failure::invalid_harness(format!("JUnit unterminated {name} attribute")));
     };
     Ok(Some(&rest[..end_index]))
 }
@@ -934,7 +934,7 @@ fn junit_attribute_value<'a>(text: &'a str, name: &str) -> Outcome<Option<&'a st
 fn parse_junit_attribute_value(value: &str, name: &str) -> Outcome<u64> {
     value
         .parse::<u64>()
-        .map_err(|error| molten::error::MoltenError::invalid_harness(format!("JUnit invalid {name} count: {error}")))
+        .map_err(|error| molten::error::Failure::invalid_harness(format!("JUnit invalid {name} count: {error}")))
 }
 
 fn collect_specs_under(
@@ -947,7 +947,7 @@ fn collect_specs_under(
     }
     if path.is_file() {
         if path.file_name().is_some_and(|name| name == std::ffi::OsStr::new("spec.md")) {
-            let markdown = std::fs::read_to_string(path).map_err(molten::error::MoltenError::from)?;
+            let markdown = std::fs::read_to_string(path).map_err(molten::error::Failure::from)?;
             sources.push(molten::requirement_traceability::SpecSource {
                 source: path.display().to_string(),
                 markdown,
@@ -958,9 +958,9 @@ fn collect_specs_under(
         return Ok(());
     }
     let mut entries = std::fs::read_dir(path)
-        .map_err(molten::error::MoltenError::from)?
+        .map_err(molten::error::Failure::from)?
         .collect::<std::result::Result<Vec<_>, _>>()
-        .map_err(molten::error::MoltenError::from)?;
+        .map_err(molten::error::Failure::from)?;
     entries.sort_by_key(|entry| entry.path());
     for entry in entries {
         collect_specs_under(&entry.path(), changed, sources)?;
@@ -990,7 +990,7 @@ fn parse_coverage_inputs(
             "positive" => entry.positive.push(evidence),
             "negative" => entry.negative.push(evidence),
             other => {
-                return Err(molten::error::MoltenError::invalid_harness(format!(
+                return Err(molten::error::Failure::invalid_harness(format!(
                     "coverage kind {other} must be positive or negative"
                 )));
             }
@@ -1021,7 +1021,7 @@ fn parse_receipt_inputs(
 ) -> Outcome<Vec<molten::requirement_traceability::CoverageInput>> {
     let mut sources = Vec::with_capacity(receipt_paths.len());
     for path in receipt_paths {
-        let text = std::fs::read_to_string(&path).map_err(molten::error::MoltenError::from)?;
+        let text = std::fs::read_to_string(&path).map_err(molten::error::Failure::from)?;
         let value = molten::preserves_rail::parse_text(&text)?;
         let receipt = molten::requirement_traceability::parse_verification_run_receipt(&value)?;
         let target_exists = root.join(&receipt.target).exists();
@@ -1054,12 +1054,12 @@ fn evidence_from_fields(
 fn split_fields(item: &str, expected: usize, label: &str) -> Outcome<Vec<String>> {
     let fields = item.split('|').map(str::to_string).collect::<Vec<_>>();
     if fields.len() != expected {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "{label} entry must have {expected} pipe-delimited fields"
         )));
     }
     if fields.iter().any(|field| field.trim().is_empty()) {
-        return Err(molten::error::MoltenError::invalid_harness(format!("{label} fields must not be empty")));
+        return Err(molten::error::Failure::invalid_harness(format!("{label} fields must not be empty")));
     }
     Ok(fields)
 }
@@ -1072,9 +1072,9 @@ fn write_optional_preserves(path: Option<&FilePath>, value: &preserves::IOValue)
 fn write_optional_text(path: Option<&FilePath>, text: &str) -> Outcome<()> {
     if let Some(path) = path {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(molten::error::MoltenError::from)?;
+            std::fs::create_dir_all(parent).map_err(molten::error::Failure::from)?;
         }
-        std::fs::write(path, text).map_err(molten::error::MoltenError::from)?;
+        std::fs::write(path, text).map_err(molten::error::Failure::from)?;
     } else {
         println!("{text}");
     }

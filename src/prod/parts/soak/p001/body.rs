@@ -125,7 +125,7 @@ pub fn fault_matrix_value(input: &FaultMatrixInput<'_>) -> Result<IoValue> {
 
 fn validate_metric_bound(label: &str, actual: u64, maximum: u64) -> Result<()> {
     if actual > maximum {
-        Err(MoltenError::invalid_harness(format!("prod soak {label} {actual} exceeds bound {maximum}")))
+        Err(Failure::invalid_harness(format!("prod soak {label} {actual} exceeds bound {maximum}")))
     } else {
         Ok(())
     }
@@ -133,7 +133,7 @@ fn validate_metric_bound(label: &str, actual: u64, maximum: u64) -> Result<()> {
 
 fn validate_pass_category(label: &str, refs: &[String], decision: &str) -> Result<()> {
     if decision == "pass" && refs.is_empty() {
-        Err(MoltenError::invalid_harness(format!("passing prod soak run requires at least one {label} ref")))
+        Err(Failure::invalid_harness(format!("passing prod soak run requires at least one {label} ref")))
     } else {
         Ok(())
     }
@@ -141,7 +141,7 @@ fn validate_pass_category(label: &str, refs: &[String], decision: &str) -> Resul
 
 fn validate_pass_caveats(caveats: &[String], decision: &str) -> Result<()> {
     if decision == "pass" && caveats.is_empty() {
-        Err(MoltenError::invalid_harness("passing prod soak run requires explicit evidence-only caveats"))
+        Err(Failure::invalid_harness("passing prod soak run requires explicit evidence-only caveats"))
     } else {
         Ok(())
     }
@@ -149,7 +149,7 @@ fn validate_pass_caveats(caveats: &[String], decision: &str) -> Result<()> {
 
 fn validate_fault_profile_refs(fault_profile: &str, fault_refs: &[String], decision: &str) -> Result<()> {
     if decision == "pass" && fault_profile != "none" && fault_refs.is_empty() {
-        Err(MoltenError::invalid_harness(
+        Err(Failure::invalid_harness(
             "passing prod soak run with non-none fault profile requires fault refs",
         ))
     } else {
@@ -159,7 +159,7 @@ fn validate_fault_profile_refs(fault_profile: &str, fault_refs: &[String], decis
 
 fn validate_pass_fault_denials(expected_outcome: &str, denial_refs: &[String], decision: &str) -> Result<()> {
     if decision == "pass" && denial_required(expected_outcome) && denial_refs.is_empty() {
-        Err(MoltenError::invalid_harness(
+        Err(Failure::invalid_harness(
             "passing prod soak deny-before-side-effects fault requires denial refs",
         ))
     } else {
@@ -175,7 +175,7 @@ fn validate_fault_kind(kind: &str) -> Result<()> {
     if REQUIRED_NETWORK_FAULTS.contains(&kind) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "unsupported prod soak fault kind {kind}; expected one of {}",
             REQUIRED_NETWORK_FAULTS.join(", ")
         )))
@@ -184,7 +184,7 @@ fn validate_fault_kind(kind: &str) -> Result<()> {
 
 fn validate_fault_kinds(kinds: &[String]) -> Result<()> {
     if kinds.len() > MAX_TEXT_FIELDS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "prod soak fault kind count {} exceeds bound {MAX_TEXT_FIELDS}",
             kinds.len()
         )));
@@ -199,7 +199,7 @@ fn validate_fault_matrix_coverage(kinds: &[String], decision: &str) -> Result<()
     if decision == "pass"
         && let Some(missing) = missing_required_faults(kinds)
     {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "passing prod soak fault matrix missing fault kinds: {}",
             missing.join(", ")
         )))
@@ -220,7 +220,7 @@ fn missing_required_faults(kinds: &[String]) -> Option<Vec<String>> {
 
 fn validate_text_field(label: &str, value: &str) -> Result<()> {
     if value.trim().is_empty() {
-        Err(MoltenError::invalid_harness(format!("prod soak {label} must not be empty")))
+        Err(Failure::invalid_harness(format!("prod soak {label} must not be empty")))
     } else {
         Ok(())
     }
@@ -228,14 +228,14 @@ fn validate_text_field(label: &str, value: &str) -> Result<()> {
 
 fn validate_ref_slice(label: &str, refs: &[String]) -> Result<()> {
     if refs.len() > MAX_REFS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "prod soak {label} ref count {} exceeds bound {MAX_REFS}",
             refs.len()
         )));
     }
     for reference in refs {
         validate_content_ref(reference).map_err(|error| {
-            MoltenError::invalid_harness(format!("invalid prod soak {label} ref {reference}: {error}"))
+            Failure::invalid_harness(format!("invalid prod soak {label} ref {reference}: {error}"))
         })?;
     }
     Ok(())
@@ -244,7 +244,7 @@ fn validate_ref_slice(label: &str, refs: &[String]) -> Result<()> {
 fn validate_decision(decision: &str) -> Result<()> {
     match decision {
         "pass" | "deny" | "unavailable" | "skipped" => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!(
+        other => Err(Failure::invalid_harness(format!(
             "unsupported prod soak decision {other}; expected pass, deny, unavailable, or skipped"
         ))),
     }
@@ -257,7 +257,7 @@ fn ref_values(refs: &[String]) -> Result<Vec<IoValue>> {
 
 fn string_values(label: &str, values: &[String], maximum: usize) -> Result<Vec<IoValue>> {
     if values.len() > maximum {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "prod soak {label} count {} exceeds bound {maximum}",
             values.len()
         )));

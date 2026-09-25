@@ -12,7 +12,7 @@ use std::collections::VecDeque;
 use std::path::Path;
 use std::path::PathBuf;
 
-use molten::error::MoltenError;
+use molten::error::Failure;
 use molten::error::Result;
 use molten::world_commit::LocalWorldCommitStore;
 use molten::world_commit::WorldCommitPublicationPort;
@@ -25,8 +25,8 @@ use molten_core::world_commit::WorldCommitRef;
 use molten_core::world_commit::plan_restore;
 use molten_core::world_commit::replay_class;
 use molten_core::world_commit::validate_closure;
-use molten_node_host::node_state::NodeStateNamespaceKind;
-use molten_node_host::node_state::NodeStateRoot;
+use molten_node_host::node_state::NamespaceKind;
+use molten_node_host::node_state::Root;
 
 #[derive(Debug, clap::Subcommand)]
 pub(crate) enum WorldCommitCommand {
@@ -103,7 +103,7 @@ fn validate(state_root: &Path, commit: &str, out: Option<&Path>) -> Result<()> {
         println!("issue={issue:?}");
     }
     if !is_complete {
-        return Err(MoltenError::invalid_harness("world commit closure validation denied"));
+        return Err(Failure::invalid_harness("world commit closure validation denied"));
     }
     Ok(())
 }
@@ -126,7 +126,7 @@ fn plan(state_root: &Path, commit: &str, out: Option<&Path>) -> Result<()> {
     let (canonical, store) = load_commit(state_root, commit)?;
     let closure = closure_report(&canonical, &store)?;
     let restore = plan_restore(&canonical.commit_ref, &canonical.core, &closure)
-        .map_err(|issue| MoltenError::invalid_harness(format!("world restore planning denied: {issue:?}")))?;
+        .map_err(|issue| Failure::invalid_harness(format!("world restore planning denied: {issue:?}")))?;
     let canonical_plan = molten::world_commit::canonical_restore_plan(&restore)?;
     write_optional(out, &canonical_plan.bytes)?;
     println!("commit_ref={}", canonical.commit_ref);
@@ -143,13 +143,13 @@ fn load_commit(
     commit: &str,
 ) -> Result<(molten::world_commit::CanonicalWorldCommit, LocalWorldCommitStore)> {
     let commit_ref = WorldCommitRef::new(commit.to_string())
-        .map_err(|issue| MoltenError::invalid_harness(format!("invalid world commit ref: {issue:?}")))?;
-    let root = NodeStateRoot::open_existing(state_root)?;
-    let storage = root.namespace(NodeStateNamespaceKind::Storage)?;
+        .map_err(|issue| Failure::invalid_harness(format!("invalid world commit ref: {issue:?}")))?;
+    let root = Root::open_existing(state_root)?;
+    let storage = root.namespace(NamespaceKind::Storage)?;
     let store = LocalWorldCommitStore::open(&storage)?;
     let bytes = store
         .read_commit(&commit_ref)
-        .map_err(|error| MoltenError::invalid_harness(format!("world commit read failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("world commit read failed: {error}")))?;
     let canonical =
         molten::world_commit::parse_canonical_world_commit_with_ref(&bytes, &commit_ref, &operator_bounds())?;
     Ok((canonical, store))
@@ -181,7 +181,7 @@ fn observe_root_closure(
 ) -> Result<RootClosureObservation> {
     let is_present = store
         .contains_root(root)
-        .map_err(|error| MoltenError::invalid_harness(format!("world root observation failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("world root observation failed: {error}")))?;
     let is_verified = is_present && store.read_root(root).is_ok();
     Ok(RootClosureObservation {
         root: root.clone(),
@@ -204,7 +204,7 @@ fn observe_parent_graph(
             continue;
         }
         if seen.len() > bounds.max_closure_objects {
-            return Err(MoltenError::invalid_harness("world commit parent closure exceeds its bound"));
+            return Err(Failure::invalid_harness("world commit parent closure exceeds its bound"));
         }
         match store.read_commit(&parent) {
             Ok(bytes) => {
@@ -237,7 +237,7 @@ fn operator_bounds() -> WorldCommitBounds {
 
 fn write_optional(path: Option<&Path>, bytes: &[u8]) -> Result<()> {
     if let Some(path) = path {
-        std::fs::write(path, bytes).map_err(MoltenError::from)?;
+        std::fs::write(path, bytes).map_err(Failure::from)?;
     }
     Ok(())
 }

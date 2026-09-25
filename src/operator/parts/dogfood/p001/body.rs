@@ -124,7 +124,7 @@ pub fn operator_step_value(input: &OperatorStepInput<'_>) -> Result<IoValue> {
 pub fn parse_operator_step(value: &IoValue) -> Result<OperatorStep> {
     let fields = value
         .collect_simple_record("operator-step-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <operator-step-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <operator-step-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::OPERATOR_STEP_SCHEMA, "operator step")?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "canonical-step", "operator step")?;
@@ -182,7 +182,7 @@ pub fn operator_checkpoint_value(input: &OperatorCheckpointInput<'_>) -> Result<
 pub fn parse_operator_checkpoint(value: &IoValue) -> Result<OperatorCheckpoint> {
     let fields = value
         .collect_simple_record("operator-checkpoint-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <operator-checkpoint-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <operator-checkpoint-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::OPERATOR_CHECKPOINT_SCHEMA, "operator checkpoint")?;
     let checks = parse_checks(&fields[8])?;
     require_check(&checks, "checkpoint-after-step", "operator checkpoint")?;
@@ -240,7 +240,7 @@ pub fn operator_workflow_value(input: &OperatorWorkflowInput<'_>) -> Result<IoVa
 pub fn parse_operator_workflow(value: &IoValue) -> Result<OperatorWorkflow> {
     let fields = value
         .collect_simple_record("operator-workflow-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <operator-workflow-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <operator-workflow-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::OPERATOR_WORKFLOW_SCHEMA, "operator workflow")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "canonical-workflow", "operator workflow")?;

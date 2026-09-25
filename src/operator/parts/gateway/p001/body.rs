@@ -97,18 +97,18 @@ fn required_chunks_for_range(
         return Ok(Vec::new());
     }
     let chunk_size = usize::try_from(manifest.chunk_size)
-        .map_err(|error| MoltenError::invalid_harness(format!("gateway chunk size unsupported: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("gateway chunk size unsupported: {error}")))?;
     if chunk_size < MIN_CHUNK_SIZE {
         push_diagnostic(diagnostics, "manifest chunk size must be non-zero")?;
         return Ok(Vec::new());
     }
     let offset = usize::try_from(range.offset)
-        .map_err(|error| MoltenError::invalid_harness(format!("gateway range offset unsupported: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("gateway range offset unsupported: {error}")))?;
     let end = usize::try_from(range.offset + range.length)
-        .map_err(|error| MoltenError::invalid_harness(format!("gateway range end unsupported: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("gateway range end unsupported: {error}")))?;
     let first = offset
         .checked_div(chunk_size)
-        .ok_or_else(|| MoltenError::invalid_harness("gateway chunk size must be non-zero"))?;
+        .ok_or_else(|| Failure::invalid_harness("gateway chunk size must be non-zero"))?;
     let last_exclusive = end.div_ceil(chunk_size);
     let chunk_count = last_exclusive.saturating_sub(first);
     let mut refs = Vec::with_capacity(chunk_count);
@@ -131,15 +131,15 @@ fn reconstruct_verified_range(
 ) -> Result<Vec<u8>> {
     let mut output = Vec::new();
     let offset = usize::try_from(range.offset)
-        .map_err(|error| MoltenError::invalid_harness(format!("gateway range offset unsupported: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("gateway range offset unsupported: {error}")))?;
     let end = usize::try_from(range.offset + range.length)
-        .map_err(|error| MoltenError::invalid_harness(format!("gateway range end unsupported: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("gateway range end unsupported: {error}")))?;
     if range.length == EMPTY_RANGE_LENGTH {
         return Ok(output);
     }
     let first = offset
         .checked_div(chunk_size)
-        .ok_or_else(|| MoltenError::invalid_harness("gateway chunk size must be non-zero"))?;
+        .ok_or_else(|| Failure::invalid_harness("gateway chunk size must be non-zero"))?;
     let last_exclusive = end.div_ceil(chunk_size);
     for index in first..last_exclusive {
         let Some(chunk) = manifest.chunks.get(index) else {

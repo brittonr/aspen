@@ -72,7 +72,7 @@ fn finish_verify(input: FinishInput<'_>) -> Result<ChainVerify> {
     let receipt_ref = canonical_hash(&receipt_value)?;
     let imported_receipt = crate::ledger::import_artifact(input.root, &receipt_value)?;
     if imported_receipt.artifact_ref != receipt_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "imported chain verify receipt ref mismatch: got {}, expected {receipt_ref}",
             imported_receipt.artifact_ref
         )));
@@ -162,7 +162,7 @@ pub fn chain_predicate_receipt_value(input: &ChainPredicateReceiptValueInput<'_>
 pub fn parse_chain_predicate_receipt(value: &IoValue) -> Result<ChainPredicateReceipt> {
     let receipt = value
         .collect_simple_record("chain-predicate-receipt-v1", Some(7))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <chain-predicate-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <chain-predicate-receipt-v1 ...>"))?;
     require_schema(&receipt[0], EVIDENCE_CHAIN_PREDICATE_RECEIPT_SCHEMA, "chain predicate receipt schema")?;
     let parsed = ChainPredicateReceipt {
         receipt_ref: canonical_hash(value)?,
@@ -222,10 +222,10 @@ pub fn signed_receipt_payload(signed_receipt_ref: impl Into<String>) -> ChainPay
 pub fn parse_chain_link(value: &IoValue) -> Result<ChainLink> {
     let link = value
         .collect_simple_record("chain-link-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <chain-link-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <chain-link-v1 ...>"))?;
     let schema = required_string(&link[0], "chain link schema")?;
     if schema != EVIDENCE_CHAIN_LINK_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported chain link schema {schema}; expected {EVIDENCE_CHAIN_LINK_SCHEMA}"
         )));
     }
@@ -248,7 +248,7 @@ pub fn parse_chain_link(value: &IoValue) -> Result<ChainLink> {
 pub fn parse_chain_fork_evidence(value: &IoValue) -> Result<ChainForkEvidence> {
     let fork = value
         .collect_simple_record("chain-fork-evidence-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <chain-fork-evidence-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <chain-fork-evidence-v1 ...>"))?;
     require_schema(&fork[0], EVIDENCE_CHAIN_FORK_EVIDENCE_SCHEMA, "chain fork evidence schema")?;
     let parsed = ChainForkEvidence {
         evidence_ref: canonical_hash(value)?,
@@ -267,7 +267,7 @@ pub fn parse_chain_fork_evidence(value: &IoValue) -> Result<ChainForkEvidence> {
 pub fn parse_chain_anchor(value: &IoValue) -> Result<ChainAnchor> {
     let anchor = value
         .collect_simple_record("chain-anchor-v1", Some(6))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <chain-anchor-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <chain-anchor-v1 ...>"))?;
     require_schema(&anchor[0], EVIDENCE_CHAIN_ANCHOR_SCHEMA, "chain anchor schema")?;
     let parsed = ChainAnchor {
         anchor_ref: canonical_hash(value)?,

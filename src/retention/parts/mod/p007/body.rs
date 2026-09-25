@@ -225,7 +225,7 @@ fn flow_refs(input: &RemoteGcClearanceLiveWorkflowValueInput<'_>) -> FlowRefs {
 pub fn parse_remote_gc_clearance_live_workflow(value: &IoValue) -> Result<RemoteGcClearanceLiveWorkflow> {
     let fields = value
         .collect_simple_record("retention-remote-gc-clearance-live-workflow-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-remote-gc-clearance-live-workflow-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-remote-gc-clearance-live-workflow-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_LIVE_WORKFLOW_SCHEMA,
@@ -246,12 +246,12 @@ pub fn parse_remote_gc_clearance_live_workflow(value: &IoValue) -> Result<Remote
         && decision == "pass"
         && response.request_ref != request.request_ref
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "retention remote clearance live workflow pass response request mismatch",
         ));
     }
     if decision == "pass" && (import.request_ref != request.request_ref || import.response_ref != response_ref) {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "retention remote clearance live workflow pass import binding mismatch",
         ));
     }

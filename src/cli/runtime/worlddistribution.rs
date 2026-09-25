@@ -10,7 +10,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use molten::error::MoltenError;
+use molten::error::Failure;
 use molten::error::Result;
 use molten::retention::CandidateExplainInput;
 use molten::retention::explain_candidate;
@@ -30,8 +30,8 @@ use molten_core::world_distribution::MAX_WORLD_DISTRIBUTION_OBJECTS;
 use molten_core::world_distribution::WorldSyncContext;
 use molten_core::world_distribution::plan_world_closure;
 use molten_core::world_head::WorldBranchId;
-use molten_node_host::node_state::NodeStateNamespaceKind;
-use molten_node_host::node_state::NodeStateRoot;
+use molten_node_host::node_state::NamespaceKind;
+use molten_node_host::node_state::Root;
 
 #[derive(Debug, clap::Subcommand)]
 pub(crate) enum WorldDistributionCommand {
@@ -158,14 +158,14 @@ fn sync_plan(input: SyncPlanInput) -> Result<()> {
         progress: None,
         peers: Vec::new(),
         epoch_ref: DagEpochRef::new(input.epoch_ref)
-            .map_err(|error| MoltenError::invalid_harness(format!("invalid sync epoch ref: {error:?}")))?,
+            .map_err(|error| Failure::invalid_harness(format!("invalid sync epoch ref: {error:?}")))?,
         generation: input.generation,
         policy_ref: DagPolicyRef::new(input.policy_ref)
-            .map_err(|error| MoltenError::invalid_harness(format!("invalid sync policy ref: {error:?}")))?,
+            .map_err(|error| Failure::invalid_harness(format!("invalid sync policy ref: {error:?}")))?,
         strategy: DagSyncStrategy::Resumable,
         bounds: dag_bounds(),
     })
-    .map_err(|issues| MoltenError::invalid_harness(format!("world sync planning denied: {issues:?}")))?;
+    .map_err(|issues| Failure::invalid_harness(format!("world sync planning denied: {issues:?}")))?;
     let canonical = canonical_world_closure_plan(&plan)?;
     std::fs::write(&input.out, &canonical.bytes)?;
     println!("commit_ref={}", projection.requested);
@@ -200,20 +200,20 @@ fn unavailable_sync(state_root: &Path, commit: &str, progress: Option<&Path>) ->
     println!("commit_ref={commit}");
     println!("decision=denied");
     println!("issue=current-authority-and-peer-transport-adapters-unavailable");
-    Err(MoltenError::invalid_harness(
+    Err(Failure::invalid_harness(
         "standalone world synchronization is disabled until current authority, resource, peer, and content adapters are composed",
     ))
 }
 
 fn claims_inspect(state_root: &Path, branch: &str) -> Result<()> {
     let branch = WorldBranchId::new(branch)
-        .map_err(|error| MoltenError::invalid_harness(format!("invalid world branch: {error}")))?;
-    let root = NodeStateRoot::open_existing(state_root)?;
-    let storage = root.namespace(NodeStateNamespaceKind::Storage)?;
+        .map_err(|error| Failure::invalid_harness(format!("invalid world branch: {error}")))?;
+    let root = Root::open_existing(state_root)?;
+    let storage = root.namespace(NamespaceKind::Storage)?;
     let store = LocalWorldHeadStore::open(&storage)?;
     let conflicts = store
         .read_conflicts(&branch)
-        .map_err(|error| MoltenError::invalid_harness(format!("read world claim conflicts: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("read world claim conflicts: {error}")))?;
     println!("branch={branch}");
     println!("conflicts={}", conflicts.len());
     for conflict in conflicts {
@@ -256,15 +256,15 @@ fn local_projection(
     state_root: &Path,
     commit: &WorldCommitRef,
 ) -> Result<molten_core::world_distribution::WorldDagProjection> {
-    let root = NodeStateRoot::open_existing(state_root)?;
-    let storage = root.namespace(NodeStateNamespaceKind::Storage)?;
+    let root = Root::open_existing(state_root)?;
+    let storage = root.namespace(NamespaceKind::Storage)?;
     let store = LocalWorldCommitStore::open(&storage)?;
     load_world_dag_projection(&store, commit, &world_bounds())
 }
 
 fn parse_commit_ref(value: &str) -> Result<WorldCommitRef> {
     WorldCommitRef::new(value.to_string())
-        .map_err(|error| MoltenError::invalid_harness(format!("invalid world commit ref: {error:?}")))
+        .map_err(|error| Failure::invalid_harness(format!("invalid world commit ref: {error:?}")))
 }
 
 fn world_bounds() -> WorldCommitBounds {

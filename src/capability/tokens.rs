@@ -289,7 +289,7 @@ pub fn parse_ucan_verification_receipt_value(value: &IoValue) -> Result<UcanVeri
     )?;
     let decision = record_string(&receipt[UCAN_VERIFICATION_DECISION_INDEX], "decision")?;
     if !matches!(decision.as_str(), DECISION_PASS | DECISION_DENY) {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported UCAN verification decision {decision}"
         )));
     }
@@ -558,7 +558,7 @@ fn validate_checks(value: &preserves::Value<IoValue>, decision: &str) -> Result<
         if name == "decision-bound" {
             saw_decision = status == decision;
         } else if decision == DECISION_PASS && status != CHECK_STATUS_PASS {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "passing UCAN verification receipt has failing check {name}"
             )));
         }
@@ -566,7 +566,7 @@ fn validate_checks(value: &preserves::Value<IoValue>, decision: &str) -> Result<
     if saw_decision {
         Ok(())
     } else {
-        Err(crate::error::MoltenError::invalid_harness("UCAN verification receipt missing decision-bound check"))
+        Err(crate::error::Failure::invalid_harness("UCAN verification receipt missing decision-bound check"))
     }
 }
 
@@ -640,7 +640,7 @@ fn require_string(value: &preserves::Value<IoValue>, expected: &str, label: &str
     if actual == expected {
         Ok(())
     } else {
-        Err(crate::error::MoltenError::invalid_harness(format!(
+        Err(crate::error::Failure::invalid_harness(format!(
             "unsupported {label} {actual}; expected {expected}"
         )))
     }

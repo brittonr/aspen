@@ -66,7 +66,7 @@ pub fn artifact_identity_receipt(input: &ArtifactIdentityInput<'_>) -> Result<Ar
 pub fn parse_artifact_identity_receipt(value: &IoValue) -> Result<ArtifactIdentityReceipt> {
     let fields = value
         .collect_simple_record("artifact-identity-receipt-v1", Some(15))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <artifact-identity-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <artifact-identity-receipt-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::ARTIFACT_IDENTITY_RECEIPT_SCHEMA, "artifact identity receipt")?;
     let checks = parse_checks(&fields[14])?;
     require_check(&checks, "identity-is-not-authority", "artifact identity receipt")?;
@@ -83,12 +83,12 @@ pub fn parse_artifact_identity_receipt(value: &IoValue) -> Result<ArtifactIdenti
 pub fn parse_artifact_value(value: &IoValue) -> Result<ArtifactRecord> {
     let fields = value
         .collect_simple_record("artifact-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <artifact-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <artifact-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::ARTIFACT_SCHEMA, "artifact")?;
     let kind = record_string(&fields[1], "kind")?;
     let domain = record_string(&fields[2], "domain")?;
     if domain != domain_for_kind(&kind) {
-        return Err(MoltenError::invalid_harness(format!("artifact domain {domain} does not match kind {kind}")));
+        return Err(Failure::invalid_harness(format!("artifact domain {domain} does not match kind {kind}")));
     }
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "domain-separated-identity", "artifact")?;
@@ -118,12 +118,12 @@ pub fn read_artifact_with_root(root: &CapabilityArtifactRoot, artifact_ref: &str
     let read_txn = db.begin_read().map_err(index_error)?;
     let table = read_txn.open_table(INDEX_ARTIFACTS).map_err(index_error)?;
     let Some(bytes) = table.get(artifact_ref).map_err(index_error)? else {
-        return Err(MoltenError::invalid_harness(format!("artifact {artifact_ref} not found")));
+        return Err(Failure::invalid_harness(format!("artifact {artifact_ref} not found")));
     };
     let value = parse_canonical_bytes(bytes.value())?;
     let artifact = parse_artifact_value(&value)?;
     if artifact.artifact_ref != artifact_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "artifact registry content hash mismatch: got {}, expected {artifact_ref}",
             artifact.artifact_ref
         )));
@@ -144,14 +144,14 @@ pub fn read_payload_with_root(root: &CapabilityArtifactRoot, artifact_ref: &str)
             let read_txn = db.begin_read().map_err(index_error)?;
             let table = read_txn.open_table(INDEX_PAYLOADS).map_err(index_error)?;
             let Some(bytes) = table.get(artifact_ref).map_err(index_error)? else {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(Failure::invalid_harness(format!(
                     "inline payload for artifact {artifact_ref} not found"
                 )));
             };
             let value = parse_canonical_bytes(bytes.value())?;
             let actual_ref = canonical_hash(&value)?;
             if &actual_ref != value_ref {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(Failure::invalid_harness(format!(
                     "artifact payload hash mismatch: got {actual_ref}, expected {value_ref}"
                 )));
             }
@@ -275,7 +275,7 @@ pub fn name_view_value(input: &ArtifactNameViewInput, previous_view_ref: Option<
 pub fn parse_name_view_value(value: &IoValue) -> Result<ArtifactNameView> {
     let fields = value
         .collect_simple_record("artifact-name-view-v1", Some(11))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <artifact-name-view-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <artifact-name-view-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::ARTIFACT_NAME_VIEW_SCHEMA, "artifact name view")?;
     let checks = parse_checks(&fields[10])?;
     require_check(&checks, "name-view-is-not-authority", "artifact name view")?;

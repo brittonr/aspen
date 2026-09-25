@@ -46,7 +46,7 @@ pub fn parse_job_worker_request_value(value: &IoValue) -> Result<JobWorkerReques
     reject_worker_ambient_tokens(value)?;
     let fields = value
         .collect_simple_record("job-worker-request-v1", Some(13))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <job-worker-request-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <job-worker-request-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::JOB_WORKER_REQUEST_SCHEMA, "job worker request")?;
     let checks = parse_checks(&fields[12])?;
     require_check(&checks, "target-admission-required", "job worker request")?;
@@ -75,7 +75,7 @@ pub fn parse_job_worker_request_value(value: &IoValue) -> Result<JobWorkerReques
 pub fn job_worker_envelope(input: JobWorkerEnvelopeInput<'_>) -> Result<crate::remote_dataspace::Envelope> {
     let request = parse_job_worker_request_value(input.request_value)?;
     if input.to_peer != request.target_peer {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "job worker envelope target {} does not match request target {}",
             input.to_peer, request.target_peer
         )));
@@ -120,7 +120,7 @@ pub fn live_unrecorded_worker_result(input: JobWorkerExecuteInput<'_>) -> Result
 pub fn parse_job_worker_result_value(value: &IoValue) -> Result<JobWorkerResult> {
     let fields = value
         .collect_simple_record("job-worker-result-v1", Some(12))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <job-worker-result-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <job-worker-result-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::JOB_WORKER_RESULT_SCHEMA, "job worker result")?;
     let decision = record_string(&fields[1], "decision")?;
     validate_worker_decision(&decision)?;
@@ -145,11 +145,11 @@ pub fn parse_job_worker_result_value(value: &IoValue) -> Result<JobWorkerResult>
 pub fn parse_job_worker_receipt_value(value: &IoValue) -> Result<JobWorkerReceipt> {
     let fields = value
         .collect_simple_record("job-worker-receipt-v1", Some(13))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <job-worker-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <job-worker-receipt-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::JOB_WORKER_RECEIPT_SCHEMA, "job worker receipt")?;
     let operation = record_string(&fields[1], "operation")?;
     if operation != "worker-execute" {
-        return Err(MoltenError::invalid_harness(format!("unsupported job worker receipt operation {operation}")));
+        return Err(Failure::invalid_harness(format!("unsupported job worker receipt operation {operation}")));
     }
     let decision = record_string(&fields[2], "decision")?;
     validate_worker_decision(&decision)?;
@@ -172,7 +172,7 @@ pub fn parse_job_worker_receipt_value(value: &IoValue) -> Result<JobWorkerReceip
 pub fn parse_job_worker_schedule_receipt_value(value: &IoValue) -> Result<JobWorkerScheduleReceipt> {
     let fields = value
         .collect_simple_record("job-worker-schedule-receipt-v1", Some(20))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <job-worker-schedule-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <job-worker-schedule-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::JOB_WORKER_SCHEDULE_RECEIPT_SCHEMA,
@@ -180,7 +180,7 @@ pub fn parse_job_worker_schedule_receipt_value(value: &IoValue) -> Result<JobWor
     )?;
     let operation = record_string(&fields[1], "operation")?;
     if operation != "worker-schedule-local" {
-        return Err(MoltenError::invalid_harness(format!("unsupported job worker schedule operation {operation}")));
+        return Err(Failure::invalid_harness(format!("unsupported job worker schedule operation {operation}")));
     }
     let decision = record_string(&fields[2], "decision")?;
     validate_decision(&decision)?;
@@ -207,7 +207,7 @@ pub fn parse_job_worker_schedule_receipt_value(value: &IoValue) -> Result<JobWor
 pub fn parse_blob_ref_job_receipt_value(value: &IoValue) -> Result<JobReceipt> {
     let fields = value
         .collect_simple_record("job-ref-receipt-v1", Some(18))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <job-ref-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <job-ref-receipt-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::JOB_REF_RECEIPT_SCHEMA, "job ref receipt")?;
     let checks = parse_checks(&fields[17])?;
     require_check(&checks, "content-refs-only", "job ref receipt")?;
@@ -230,35 +230,35 @@ pub fn parse_blob_ref_job_receipt_value(value: &IoValue) -> Result<JobReceipt> {
 pub fn parse_job_dag_value(value: &IoValue) -> Result<JobDag> {
     let fields = value
         .collect_simple_record("job-dag-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <job-dag-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <job-dag-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::JOB_DAG_SCHEMA, "job dag")?;
     let version = record_string(&fields[1], "version")?;
     if version != "v1" {
-        return Err(MoltenError::invalid_harness(format!("unsupported job dag version {version}")));
+        return Err(Failure::invalid_harness(format!("unsupported job dag version {version}")));
     }
     let nodes = parse_node_sequence(&fields[2])?;
     if nodes.is_empty() {
-        return Err(MoltenError::invalid_harness("job dag requires at least one node"));
+        return Err(Failure::invalid_harness("job dag requires at least one node"));
     }
     let mut node_ids = OrderedSet::new();
     for node in &nodes {
         if !node_ids.insert(node.id.clone()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate job node id {}", node.id)));
+            return Err(Failure::invalid_harness(format!("duplicate job node id {}", node.id)));
         }
     }
     let edges = parse_edge_sequence(&fields[3])?;
     for edge in &edges {
         if !node_ids.contains(&edge.from_node) {
-            return Err(MoltenError::invalid_harness(format!("job edge from unknown node {}", edge.from_node)));
+            return Err(Failure::invalid_harness(format!("job edge from unknown node {}", edge.from_node)));
         }
         if !node_ids.contains(&edge.to_node) {
-            return Err(MoltenError::invalid_harness(format!("job edge to unknown node {}", edge.to_node)));
+            return Err(Failure::invalid_harness(format!("job edge to unknown node {}", edge.to_node)));
         }
     }
     let output_roots = record_node_id_sequence(&fields[4], "outputs")?;
     for root in &output_roots {
         if !node_ids.contains(root) {
-            return Err(MoltenError::invalid_harness(format!("job output root {root} is not a node")));
+            return Err(Failure::invalid_harness(format!("job output root {root} is not a node")));
         }
     }
     let checks = parse_checks(&fields[9])?;

@@ -1,5 +1,5 @@
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 type Record<T> = preserves::Record<T>;
 type Value<T> = preserves::Value<T>;
@@ -685,7 +685,7 @@ fn parse_topology(value: &IoValue) -> Result<ParsedTopology> {
 
 fn parse_node_evidence_values(values: &[IoValue]) -> Result<Vec<ParsedNodeEvidence>> {
     if values.len() > MAX_VM_VALIDATION_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "VM node evidence count {} exceeds bound {MAX_VM_VALIDATION_ITEMS}",
             values.len()
         )));
@@ -739,7 +739,7 @@ fn parse_test_run(value: &IoValue) -> Result<ParsedTestRun> {
 
 fn parse_child_receipts(values: &[IoValue]) -> Result<Vec<ParsedChildReceipt>> {
     if values.len() > MAX_VM_VALIDATION_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "VM child artifact count {} exceeds bound {MAX_VM_VALIDATION_ITEMS}",
             values.len()
         )));
@@ -749,7 +749,7 @@ fn parse_child_receipts(values: &[IoValue]) -> Result<Vec<ParsedChildReceipt>> {
     for value in values {
         let receipt = parse_child_receipt(value)?;
         if !refs.insert(receipt.child_ref.clone()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate VM child artifact ref {}", receipt.child_ref)));
+            return Err(Failure::invalid_harness(format!("duplicate VM child artifact ref {}", receipt.child_ref)));
         }
         receipts.push(receipt);
     }
@@ -805,7 +805,7 @@ fn child_receipt_operation_id(value: &IoValue) -> Option<String> {
 
 fn parse_fault_descriptors(values: &[IoValue]) -> Result<Vec<ParsedFaultDescriptor>> {
     if values.len() > MAX_VM_VALIDATION_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "VM fault descriptor count {} exceeds bound {MAX_VM_VALIDATION_ITEMS}",
             values.len()
         )));
@@ -857,7 +857,7 @@ fn parse_fault_descriptor(value: &IoValue) -> Result<ParsedFaultDescriptor> {
 
 fn parse_fault_receipts(values: &[IoValue]) -> Result<Vec<ParsedFaultReceipt>> {
     if values.len() > MAX_VM_VALIDATION_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "VM fault receipt count {} exceeds bound {MAX_VM_VALIDATION_ITEMS}",
             values.len()
         )));
@@ -909,7 +909,7 @@ fn parse_fault_receipt(value: &IoValue) -> Result<ParsedFaultReceipt> {
 
 fn parse_prod_soaks(values: &[IoValue]) -> Result<Vec<ParsedProdSoakRun>> {
     if values.len() > MAX_VM_VALIDATION_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "VM prod-soak count {} exceeds bound {MAX_VM_VALIDATION_ITEMS}",
             values.len()
         )));
@@ -924,7 +924,7 @@ fn parse_prod_soaks(values: &[IoValue]) -> Result<Vec<ParsedProdSoakRun>> {
 fn parse_prod_soak_run(value: &IoValue) -> Result<ParsedProdSoakRun> {
     let run = value
         .collect_simple_record("prod-soak-run-v1", None)
-        .ok_or_else(|| MoltenError::invalid_harness("expected prod-soak-run-v1 receipt"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected prod-soak-run-v1 receipt"))?;
     require_schema(&run[0], crate::preserves_rail::PROD_SOAK_RUN_SCHEMA, "prod soak run")?;
     Ok(ParsedProdSoakRun {
         decision: required_record_string(&run[SOAK_RUN_DECISION_INDEX], "decision", "prod soak decision")?,
@@ -1006,10 +1006,10 @@ fn canonical_refs(values: &[IoValue]) -> Result<Vec<String>> {
 
 fn validate_manifest_entries(entries: &[VmEvidenceManifestEntry]) -> Result<()> {
     if entries.is_empty() {
-        return Err(MoltenError::invalid_harness("VM evidence manifest requires entries"));
+        return Err(Failure::invalid_harness("VM evidence manifest requires entries"));
     }
     if entries.len() > MAX_VM_VALIDATION_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "VM evidence manifest entry count {} exceeds bound {MAX_VM_VALIDATION_ITEMS}",
             entries.len()
         )));
@@ -1020,7 +1020,7 @@ fn validate_manifest_entries(entries: &[VmEvidenceManifestEntry]) -> Result<()> 
         validate_text("manifest kind", &entry.kind)?;
         crate::preserves_rail::validate_content_ref(&entry.content_ref)?;
         if !paths.insert(entry.path.as_str()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate VM evidence manifest path {}", entry.path)));
+            return Err(Failure::invalid_harness(format!("duplicate VM evidence manifest path {}", entry.path)));
         }
     }
     Ok(())
@@ -1028,7 +1028,7 @@ fn validate_manifest_entries(entries: &[VmEvidenceManifestEntry]) -> Result<()> 
 
 fn validate_required_artifacts(required_artifacts: &[VmEvidenceManifestRequiredArtifact]) -> Result<()> {
     if required_artifacts.len() > MAX_VM_VALIDATION_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "VM required artifact count {} exceeds bound {MAX_VM_VALIDATION_ITEMS}",
             required_artifacts.len()
         )));
@@ -1112,7 +1112,7 @@ fn node_names(value: &Value<IoValue>) -> Result<Vec<String>> {
     for item in sequence.iter() {
         let node = item
             .collect_simple_record("node", Some(1))
-            .ok_or_else(|| MoltenError::invalid_harness("topology node must be <node string>"))?;
+            .ok_or_else(|| Failure::invalid_harness("topology node must be <node string>"))?;
         nodes.push(required_string(&node[0], "topology node")?);
     }
     Ok(nodes)
@@ -1137,7 +1137,7 @@ fn required_sequence_record(value: &Value<IoValue>, label: &str, context: &str) 
     let record = simple_field_record(value, label, context)?;
     let sequence = record[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {context}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {context}")))?;
     Ok(sequence.into_owned())
 }
 
@@ -1156,8 +1156,8 @@ fn required_record_u64(value: &Value<IoValue>, label: &str, context: &str) -> Re
     let record = simple_field_record(value, label, context)?;
     record[0]
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {context}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {context}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {context}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {context}: {error}")))
 }
 
 fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Result<()> {
@@ -1165,7 +1165,7 @@ fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Resu
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unexpected {context} schema {actual}; expected {expected}")))
+        Err(Failure::invalid_harness(format!("unexpected {context} schema {actual}; expected {expected}")))
     }
 }
 
@@ -1176,7 +1176,7 @@ fn simple_record<'a>(
 ) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 fn simple_field_record<'a>(
@@ -1186,19 +1186,19 @@ fn simple_field_record<'a>(
 ) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> for {context}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> for {context}")))
 }
 
 fn required_string(value: &Value<IoValue>, context: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {context}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {context}")))
 }
 
 fn validate_ref_list(label: &str, refs: &[String]) -> Result<()> {
     if refs.len() > MAX_VM_VALIDATION_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "VM {label} ref count {} exceeds bound {MAX_VM_VALIDATION_ITEMS}",
             refs.len()
         )));
@@ -1211,7 +1211,7 @@ fn validate_ref_list(label: &str, refs: &[String]) -> Result<()> {
 
 fn validate_strings(label: &str, values: &[String]) -> Result<()> {
     if values.len() > MAX_VM_VALIDATION_ITEMS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "VM {label} count {} exceeds bound {MAX_VM_VALIDATION_ITEMS}",
             values.len()
         )));
@@ -1224,7 +1224,7 @@ fn validate_strings(label: &str, values: &[String]) -> Result<()> {
 
 fn validate_text(label: &str, value: &str) -> Result<()> {
     if value.trim().is_empty() {
-        Err(MoltenError::invalid_harness(format!("VM {label} must not be empty")))
+        Err(Failure::invalid_harness(format!("VM {label} must not be empty")))
     } else {
         Ok(())
     }
@@ -1233,7 +1233,7 @@ fn validate_text(label: &str, value: &str) -> Result<()> {
 fn validate_decision(decision: &str) -> Result<()> {
     match decision {
         "pass" | "deny" => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported VM decision {other}; expected pass or deny"))),
+        other => Err(Failure::invalid_harness(format!("unsupported VM decision {other}; expected pass or deny"))),
     }
 }
 
@@ -1247,7 +1247,7 @@ fn push_if(diagnostics: &mut Vec<String>, condition: bool, diagnostic: &'static 
 fn push_diagnostic(diagnostics: &mut Vec<String>, diagnostic: String) -> Result<()> {
     validate_text("diagnostic", &diagnostic)?;
     if diagnostics.len() >= MAX_VM_VALIDATION_ITEMS {
-        return Err(MoltenError::invalid_harness("VM validation diagnostics exceeded bound"));
+        return Err(Failure::invalid_harness("VM validation diagnostics exceeded bound"));
     }
     diagnostics.push(diagnostic);
     Ok(())

@@ -2,7 +2,7 @@
 fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result<()> {
     let actual = required_string(value, field)?;
     if actual != expected {
-        return Err(MoltenError::invalid_harness(format!("expected {field} {expected}, got {actual}")));
+        return Err(Failure::invalid_harness(format!("expected {field} {expected}, got {actual}")));
     }
     Ok(())
 }
@@ -11,7 +11,7 @@ fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 #[cfg(test)]

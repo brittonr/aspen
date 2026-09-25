@@ -1,5 +1,5 @@
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Record<T> = preserves::Record<T>;
 type Result<T> = crate::error::Result<T>;
 type Value<T> = preserves::Value<T>;
@@ -126,7 +126,7 @@ pub struct CompatibilityReceipt {
 pub fn normalize_shape(shape: &IoValue) -> Result<IoValue> {
     if let Some(fields) = shape.collect_simple_record("shape", None) {
         if fields.len() == 0 {
-            return Err(MoltenError::invalid_harness("schema shape record requires kind"));
+            return Err(Failure::invalid_harness("schema shape record requires kind"));
         }
         let kind = required_string(&fields[0], "shape kind")?;
         match kind.as_str() {
@@ -137,14 +137,14 @@ pub fn normalize_shape(shape: &IoValue) -> Result<IoValue> {
             "map" => normalize_binary_shape("map", &fields),
             "string" | "bytes" | "u64" | "i64" | "bool" | "symbol" | "any-preserves" => {
                 if fields.len() != 1 {
-                    return Err(MoltenError::invalid_harness(format!("shape {kind} expects no additional fields")));
+                    return Err(Failure::invalid_harness(format!("shape {kind} expects no additional fields")));
                 }
                 Ok(record("shape", vec![string(kind)]))
             }
-            other => Err(MoltenError::invalid_harness(format!("unsupported normalized schema shape kind {other}"))),
+            other => Err(Failure::invalid_harness(format!("unsupported normalized schema shape kind {other}"))),
         }
     } else {
-        Err(MoltenError::invalid_harness("expected <shape ...> normalized schema shape"))
+        Err(Failure::invalid_harness("expected <shape ...> normalized schema shape"))
     }
 }
 
@@ -168,10 +168,10 @@ pub fn identity_value(input: &IdentityInput) -> Result<IoValue> {
         validate_ref(brand_ref, "schema identity brand ref")?;
     }
     if input.mode == MODE_BRANDED_STRUCTURAL && input.brand_ref.is_none() {
-        return Err(MoltenError::invalid_harness("branded-structural schema identity requires brand ref"));
+        return Err(Failure::invalid_harness("branded-structural schema identity requires brand ref"));
     }
     if input.mode != MODE_BRANDED_STRUCTURAL && input.brand_ref.is_some() {
-        return Err(MoltenError::invalid_harness("only branded-structural schema identity may include brand ref"));
+        return Err(Failure::invalid_harness("only branded-structural schema identity may include brand ref"));
     }
     let (normalized_shape, normalized_shape_ref, fingerprint) = structural_fingerprint(&input.shape)?;
     Ok(record("schema-identity-v1", vec![
@@ -195,7 +195,7 @@ pub fn identity_value(input: &IdentityInput) -> Result<IoValue> {
 pub fn parse_identity(value: &IoValue) -> Result<Identity> {
     let fields = value
         .collect_simple_record("schema-identity-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <schema-identity-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <schema-identity-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::SCHEMA_IDENTITY_SCHEMA, "schema identity")?;
     let mode = record_string(&fields[1], "mode")?;
     validate_mode(&mode)?;
@@ -206,16 +206,16 @@ pub fn parse_identity(value: &IoValue) -> Result<Identity> {
     let normalized = value_to_iovalue(&shape_fields[2]);
     let (_normalized, actual_shape_ref, actual_fingerprint) = structural_fingerprint(&normalized)?;
     if actual_shape_ref != normalized_shape_ref || actual_fingerprint != fingerprint {
-        return Err(MoltenError::invalid_harness("schema identity shape fingerprint mismatch"));
+        return Err(Failure::invalid_harness("schema identity shape fingerprint mismatch"));
     }
     let checks = parse_checks(&fields[8])?;
     require_check(&checks, "names-not-identity", "schema identity")?;
     let brand_ref = record_optional_ref(&fields[4], "brand")?;
     if mode == MODE_BRANDED_STRUCTURAL && brand_ref.is_none() {
-        return Err(MoltenError::invalid_harness("branded-structural schema identity missing brand ref"));
+        return Err(Failure::invalid_harness("branded-structural schema identity missing brand ref"));
     }
     if mode != MODE_BRANDED_STRUCTURAL && brand_ref.is_some() {
-        return Err(MoltenError::invalid_harness("non-branded schema identity includes brand ref"));
+        return Err(Failure::invalid_harness("non-branded schema identity includes brand ref"));
     }
     Ok(Identity {
         identity_ref: canonical_hash(value)?,
@@ -251,7 +251,7 @@ pub fn alias_value(input: &AliasInput) -> Result<IoValue> {
 pub fn parse_alias(value: &IoValue) -> Result<Alias> {
     let fields = value
         .collect_simple_record("schema-alias-v1", Some(7))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <schema-alias-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <schema-alias-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::SCHEMA_ALIAS_SCHEMA, "schema alias")?;
     let checks = parse_checks(&fields[6])?;
     require_check(&checks, "alias-is-not-name", "schema alias")?;

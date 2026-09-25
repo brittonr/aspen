@@ -9,7 +9,7 @@ fn write_immutable_blob(
         let existing = root.root().read(path)?;
         let existing_ref = hash_blob_bytes(&existing);
         if existing_ref != expected_ref {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "immutable blob path for {expected_ref} contains corrupted bytes hashing to {existing_ref}"
             )));
         }
@@ -26,13 +26,13 @@ fn simple_record<'a>(
 ) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 fn simple_record_any<'a>(value: &'a IoValue, label: &str) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, None)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> record")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> record")))
 }
 
 fn record_arity(record: &Record<Value<IoValue>>) -> usize {
@@ -42,24 +42,24 @@ fn record_arity(record: &Record<Value<IoValue>>) -> usize {
 fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let record = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> field")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> field")))?;
     required_string(&record[0], label)
 }
 
 fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let record = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> field")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> field")))?;
     required_u64(&record[0], label)
 }
 
 fn record_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<IoValue>> {
     let record = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> field")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> field")))?;
     let sequence = record[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {label}")))?;
     Ok(sequence.iter().map(value_to_iovalue).collect())
 }
 
@@ -70,20 +70,20 @@ fn record_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Str
 fn record_optional_string(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let record = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> field")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> field")))?;
     if let Some(value) = record[0].as_string() {
         Ok(Some(value.into_owned()))
     } else if record[0].collect_simple_record("none", Some(0)).is_some() {
         Ok(None)
     } else {
-        Err(MoltenError::invalid_harness(format!("expected string or <none> for {label}")))
+        Err(Failure::invalid_harness(format!("expected string or <none> for {label}")))
     }
 }
 
 fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result<()> {
     let actual = required_string(value, field)?;
     if actual != expected {
-        return Err(MoltenError::invalid_harness(format!("expected {field} schema {expected}, got {actual}")));
+        return Err(Failure::invalid_harness(format!("expected {field} schema {expected}, got {actual}")));
     }
     Ok(())
 }
@@ -92,14 +92,14 @@ fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
 #[cfg(test)]

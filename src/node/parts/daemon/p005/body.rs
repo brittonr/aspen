@@ -2,7 +2,7 @@
 pub fn parse_control_authority_grant(value: &IoValue) -> Result<ControlAuthorityGrant> {
     let fields = value
         .collect_simple_record("node-control-authority-grant-v1", Some(12))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-authority-grant-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-control-authority-grant-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::NODE_CONTROL_AUTHORITY_GRANT_SCHEMA,
@@ -10,7 +10,7 @@ pub fn parse_control_authority_grant(value: &IoValue) -> Result<ControlAuthority
     )?;
     let operations = record_strings(&fields[3], "operations")?;
     if operations.is_empty() {
-        return Err(MoltenError::invalid_harness("node control authority grant operations missing"));
+        return Err(Failure::invalid_harness("node control authority grant operations missing"));
     }
     Ok(ControlAuthorityGrant {
         grant_ref: crate::preserves_rail::canonical_hash(value)?,
@@ -30,7 +30,7 @@ pub fn parse_control_authority_grant(value: &IoValue) -> Result<ControlAuthority
 
 pub fn import_control_authority_grant(state_root: &Path, grant_value: &IoValue) -> Result<ControlAuthorityGrant> {
     validate_state_root(state_root)?;
-    let root = crate::node_state::NodeStateRoot::open(state_root)?;
+    let root = crate::node_state::Root::open(state_root)?;
     ensure_state_layout(&root)?;
     let grant = parse_control_authority_grant(grant_value)?;
     import_artifact(&root, grant_value)?;
@@ -91,16 +91,16 @@ pub fn control_live_ticket_value(input: &ControlLiveTicketInput<'_>) -> Result<I
 pub fn parse_control_live_ticket(value: &IoValue) -> Result<ControlLiveTicket> {
     let fields = value
         .collect_simple_record("node-control-live-ticket-v1", Some(6))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-ticket-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-control-live-ticket-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::NODE_CONTROL_LIVE_TICKET_SCHEMA, "node control live ticket")?;
     let node = crate::preserves_rail::value_to_iovalue(&fields[1]);
     let node_fields = node
         .collect_simple_record("node", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("node control live ticket missing node"))?;
+        .ok_or_else(|| Failure::invalid_harness("node control live ticket missing node"))?;
     let live = crate::preserves_rail::value_to_iovalue(&fields[2]);
     let live_fields = live
         .collect_simple_record("live", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("node control live ticket missing live endpoint"))?;
+        .ok_or_else(|| Failure::invalid_harness("node control live ticket missing live endpoint"))?;
     Ok(ControlLiveTicket {
         ticket_ref: crate::preserves_rail::canonical_hash(value)?,
         node_id: record_string(&node_fields[0], "id")?,
@@ -116,13 +116,13 @@ pub fn parse_control_live_ticket(value: &IoValue) -> Result<ControlLiveTicket> {
 }
 
 pub fn export_control_live_ticket(input: &ControlLiveTicketExportInput<'_>) -> Result<ControlLiveTicket> {
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::Root::open(input.state_root)?;
     validate_state_root(input.state_root)?;
     validate_node_id(input.topic)?;
     ensure_state_layout(&state_root)?;
     let identity = crate::node_identity::parse_identity(&read_preserves(
         &state_root,
-        &crate::node_state::NodeStatePath::parse(IDENTITY_FILE)?,
+        &crate::node_state::RelativePath::parse(IDENTITY_FILE)?,
     )?)?;
     let address_refs = Vec::new();
     let value = control_live_ticket_value(&ControlLiveTicketInput {
@@ -141,7 +141,7 @@ pub fn export_control_live_ticket(input: &ControlLiveTicketExportInput<'_>) -> R
 }
 
 pub fn admit_control_live_peer(input: &ControlLivePeerAdmitInput<'_>) -> Result<ControlLivePeerAdmission> {
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::Root::open(input.state_root)?;
     validate_state_root(input.state_root)?;
     validate_node_id(input.peer_id)?;
     validate_ingress_refs(input.policy_refs, "node control live peer admission policy ref")?;
@@ -151,7 +151,7 @@ pub fn admit_control_live_peer(input: &ControlLivePeerAdmitInput<'_>) -> Result<
     import_artifact(&state_root, input.ticket_value)?;
     let identity = crate::node_identity::parse_identity(&read_preserves(
         &state_root,
-        &crate::node_state::NodeStatePath::parse(IDENTITY_FILE)?,
+        &crate::node_state::RelativePath::parse(IDENTITY_FILE)?,
     )?)?;
     let mut diagnostics = Vec::new();
     if ticket.node_id != identity.node_id {
@@ -234,7 +234,7 @@ fn control_live_peer_admission_value(input: &LivePeerAdmissionValueInput<'_>) ->
 pub fn parse_control_live_peer_admission(value: &IoValue) -> Result<ControlLivePeerAdmission> {
     let fields = value
         .collect_simple_record("node-control-live-peer-admission-v1", Some(12))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-peer-admission-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-control-live-peer-admission-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA,

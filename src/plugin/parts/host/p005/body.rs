@@ -14,7 +14,7 @@ fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
             PLUGIN_DECISION_PASS | PLUGIN_CHECK_FAIL | "diagnostic" => {
                 parsed.push_limited((name, status), MAX_PLUGIN_CHECKS, "plugin checks")?
             }
-            _ => return Err(MoltenError::invalid_harness("plugin check status must be pass/fail/diagnostic")),
+            _ => return Err(Failure::invalid_harness("plugin check status must be pass/fail/diagnostic")),
         }
     }
     Ok(parsed)
@@ -24,7 +24,7 @@ fn require_check(checks: &[(String, String)], expected: &str, context: &str) -> 
     if checks.iter().any(|(name, _)| name == expected) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{context} missing {expected} check")))
+        Err(Failure::invalid_harness(format!("{context} missing {expected} check")))
     }
 }
 
@@ -33,7 +33,7 @@ fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Resu
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported {context} schema {actual}; expected {expected}")))
+        Err(Failure::invalid_harness(format!("unsupported {context} schema {actual}; expected {expected}")))
     }
 }
 
@@ -41,7 +41,7 @@ fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Resu
 fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {field}")))
 }
 
 fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
@@ -78,14 +78,14 @@ fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.to_string())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
 fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
@@ -117,7 +117,7 @@ pub fn plugin_extension_contract_value(input: &PluginExtensionContractInput<'_>)
         "plugin extension hostcall descriptors",
     )?;
     if input.hostcall_descriptors.is_empty() {
-        return Err(MoltenError::invalid_harness("plugin extension contract requires hostcall descriptors"));
+        return Err(Failure::invalid_harness("plugin extension contract requires hostcall descriptors"));
     }
     require_non_empty_refs(input.policy_refs, "plugin extension policy refs")?;
     require_non_empty_refs(input.supply_chain_refs, "plugin extension supply-chain refs")?;
@@ -209,7 +209,7 @@ pub fn parse_plugin_extension_contract(value: &IoValue) -> Result<PluginExtensio
     validate_abi(&compatible_host_abi)?;
     validate_lifecycle_callbacks(&lifecycle_callbacks)?;
     if hostcall_descriptors.is_empty() {
-        return Err(MoltenError::invalid_harness("plugin extension contract requires hostcall descriptors"));
+        return Err(Failure::invalid_harness("plugin extension contract requires hostcall descriptors"));
     }
     require_non_empty_refs(&policy_refs, "plugin extension policy refs")?;
     require_non_empty_refs(&supply_chain_refs, "plugin extension supply-chain refs")?;
@@ -294,7 +294,7 @@ fn parse_profile(value: &Value<IoValue>) -> Result<bool> {
     match profile.as_str() {
         PLUGIN_PROFILE_PRODUCTION => Ok(true),
         PLUGIN_PROFILE_DEVELOPMENT => Ok(false),
-        _ => Err(MoltenError::invalid_harness(format!(
+        _ => Err(Failure::invalid_harness(format!(
             "plugin extension profile {profile} must be production or development"
         ))),
     }
@@ -702,7 +702,7 @@ fn ensure_unique_descriptors(descriptors: &[PluginHostcallDescriptor]) -> Result
     for descriptor in descriptors {
         let key = (descriptor.operation.clone(), descriptor.descriptor_ref.clone());
         if !seen.insert(key) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "duplicate plugin extension hostcall descriptor {}",
                 descriptor.operation
             )));
@@ -714,7 +714,7 @@ fn ensure_unique_descriptors(descriptors: &[PluginHostcallDescriptor]) -> Result
 fn validate_extension_id(value: &str) -> Result<()> {
     validate_non_empty(value, "plugin extension id")?;
     if !value.starts_with("plugin-extension:") {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "plugin extension id {value} must start with plugin-extension:"
         )));
     }
@@ -722,7 +722,7 @@ fn validate_extension_id(value: &str) -> Result<()> {
         .chars()
         .all(|character| character.is_ascii_alphanumeric() || matches!(character, ':' | '-' | '_' | '.'))
     {
-        return Err(MoltenError::invalid_harness(format!("unsupported plugin extension id {value}")));
+        return Err(Failure::invalid_harness(format!("unsupported plugin extension id {value}")));
     }
     Ok(())
 }
@@ -733,7 +733,7 @@ fn validate_extension_version(value: &str) -> Result<()> {
         .chars()
         .all(|character| character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_'))
     {
-        return Err(MoltenError::invalid_harness(format!("unsupported plugin extension version {value}")));
+        return Err(Failure::invalid_harness(format!("unsupported plugin extension version {value}")));
     }
     Ok(())
 }
@@ -768,7 +768,7 @@ fn semver_parts(version: &str) -> Result<Vec<u64>> {
             parts.push_limited(0, PLUGIN_SEMVER_PARTS, "plugin extension semver parts")?;
         } else {
             let parsed = numeric.parse::<u64>().map_err(|error| {
-                MoltenError::invalid_harness(format!("plugin extension version {version} has unsupported numeric part: {error}"))
+                Failure::invalid_harness(format!("plugin extension version {version} has unsupported numeric part: {error}"))
             })?;
             parts.push_limited(parsed, PLUGIN_SEMVER_PARTS, "plugin extension semver parts")?;
         }

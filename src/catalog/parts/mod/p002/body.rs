@@ -97,7 +97,7 @@ fn short_id_receipt_value(
 pub fn parse_receipt(value: &IoValue) -> Result<Receipt> {
     let fields = value
         .collect_simple_record("catalog-receipt-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <catalog-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <catalog-receipt-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::CATALOG_RECEIPT_SCHEMA, "catalog receipt")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "canonical-receipt", "catalog receipt")?;
@@ -142,7 +142,7 @@ pub fn summary(value: &IoValue) -> Result<String> {
     if value.collect_simple_record("chunk-manifest-catalog-v1", Some(8)).is_some() {
         return Ok(format!("chunk manifest catalog ref={}", canonical_hash(value)?));
     }
-    Err(MoltenError::invalid_harness("unsupported catalog artifact for show"))
+    Err(Failure::invalid_harness("unsupported catalog artifact for show"))
 }
 
 fn graph_query(

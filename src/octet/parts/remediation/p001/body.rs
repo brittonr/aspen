@@ -1,7 +1,7 @@
 
 fn run_metrics(artifacts: &RunArtifacts, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<RunMetrics> {
     let status: StatusArtifact = serde_json::from_str(&artifacts.status.text)
-        .map_err(|error| MoltenError::invalid_harness(format!("malformed {}: {error}", artifacts.status.name)))?;
+        .map_err(|error| Failure::invalid_harness(format!("malformed {}: {error}", artifacts.status.name)))?;
     let summary = parse_summary_metrics(&artifacts.summary.text)?;
     if summary.parsed_findings != status.total_findings {
         push_diagnostic(
@@ -40,16 +40,16 @@ fn read_focused_object_corpus(
         return Ok(None);
     };
     let parsed: ObjectCorpusReceipt = serde_json::from_str(&artifact.text)
-        .map_err(|error| MoltenError::invalid_harness(format!("malformed object corpus receipt: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("malformed object corpus receipt: {error}")))?;
     let object_count = parsed
         .object_count
-        .ok_or_else(|| MoltenError::invalid_harness("object corpus receipt missing object_count"))?;
+        .ok_or_else(|| Failure::invalid_harness("object corpus receipt missing object_count"))?;
     let pure_cache_blocked_count = parsed
         .pure_cache_blocked_count
-        .ok_or_else(|| MoltenError::invalid_harness("object corpus receipt missing pure_cache_blocked_count"))?;
+        .ok_or_else(|| Failure::invalid_harness("object corpus receipt missing pure_cache_blocked_count"))?;
     let source_paths = parsed
         .source_paths
-        .ok_or_else(|| MoltenError::invalid_harness("object corpus receipt missing source_paths"))?;
+        .ok_or_else(|| Failure::invalid_harness("object corpus receipt missing source_paths"))?;
     Ok(Some(ObjectCorpusMetrics {
         content_ref: artifact.content_ref,
         object_set_hash: parsed.object_set_hash,
@@ -96,7 +96,7 @@ fn parse_count_section(text: &str, header: &str) -> Result<Map<String, u64>> {
     let mut is_parsing_section = false;
     for (line_index, line) in text.lines().enumerate() {
         if line_index >= MAX_SUMMARY_LINES {
-            return Err(MoltenError::invalid_harness("octet summary exceeds line bound"));
+            return Err(Failure::invalid_harness("octet summary exceeds line bound"));
         }
         let trimmed = line.trim();
         if trimmed == header {
@@ -125,7 +125,7 @@ fn parse_index_findings(text: &str) -> Result<Vec<FindingIndexEntry>> {
     let mut parsed_rows = 0usize;
     for (line_index, line) in text.lines().enumerate() {
         if line_index >= MAX_SUMMARY_LINES {
-            return Err(MoltenError::invalid_harness("octet summary exceeds line bound"));
+            return Err(Failure::invalid_harness("octet summary exceeds line bound"));
         }
         let trimmed = line.trim();
         if trimmed == "Index:" {
@@ -141,7 +141,7 @@ fn parse_index_findings(text: &str) -> Result<Vec<FindingIndexEntry>> {
         }
         parsed_rows = parsed_rows.saturating_add(1);
         if parsed_rows > MAX_INDEX_FINDINGS {
-            return Err(MoltenError::invalid_harness("octet finding index exceeds row bound"));
+            return Err(Failure::invalid_harness("octet finding index exceeds row bound"));
         }
         let lint = parts[1].to_string();
         let crate_name = parts[2].to_string();

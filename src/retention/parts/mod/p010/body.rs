@@ -277,10 +277,10 @@ fn parse_plan_gates(value: &Value<IoValue>) -> Result<Vec<PlanGate>> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("gates", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("expected retention GC plan gates"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected retention GC plan gates"))?;
     let entries = fields[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("expected retention GC plan gate sequence"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected retention GC plan gate sequence"))?;
     let mut gates = Vec::with_capacity(entries.len());
     for entry in entries.iter() {
         let gate_value = crate::preserves_rail::value_to_iovalue(entry);

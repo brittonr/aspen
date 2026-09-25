@@ -1,7 +1,7 @@
 use preserves::IOValue;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
@@ -121,7 +121,7 @@ pub struct SimulationRunReadback {
 // r[impl molten.fabric_simulation.same_core]
 pub fn canonical_admit_simulated_world(manifest: &SimulatedWorldManifest) -> Result<CanonicalSimulatedWorld> {
     let admitted = admit_simulated_world(manifest)
-        .map_err(|issues| MoltenError::invalid_harness(format!("fabric simulation world denied: {issues:?}")))?;
+        .map_err(|issues| Failure::invalid_harness(format!("fabric simulation world denied: {issues:?}")))?;
     let value = world_value(&admitted.manifest);
     let world_ref = canonical_hash(&value)?;
     Ok(CanonicalSimulatedWorld {
@@ -380,7 +380,7 @@ pub fn canonical_simulation_repro_bundle(
     shrink: Option<&CanonicalSimulationShrink>,
 ) -> Result<CanonicalSimulationReproBundle> {
     if run.world_ref != world.world_ref {
-        return Err(MoltenError::invalid_harness("simulation repro run does not bind the supplied world"));
+        return Err(Failure::invalid_harness("simulation repro run does not bind the supplied world"));
     }
     let value = record("fabric-simulation-repro-v1", vec![
         string(FABRIC_SIMULATION_REPRO_SCHEMA),
@@ -410,21 +410,21 @@ pub fn canonical_simulation_repro_bundle(
 pub fn parse_simulation_run_readback(value: &IOValue) -> Result<SimulationRunReadback> {
     let fields = value
         .collect_simple_record("fabric-simulation-run-v1", Some(RUN_READBACK_FIELD_COUNT))
-        .ok_or_else(|| MoltenError::invalid_harness("expected canonical fabric-simulation run"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected canonical fabric-simulation run"))?;
     let schema = required_string(&fields[0], "simulation run schema")?;
     if schema != FABRIC_SIMULATION_RUN_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!("fabric-simulation run schema mismatch: {schema}")));
+        return Err(Failure::invalid_harness(format!("fabric-simulation run schema mismatch: {schema}")));
     }
     let decision = record_string_field(&fields[RUN_DECISION_FIELD_INDEX], "decision")?;
     let profile = record_string_field(&fields[RUN_PROFILE_FIELD_INDEX], "profile")?;
     if !matches!(decision.as_str(), "pass" | "invariant-failed" | "diverged" | "bound-exceeded" | "denied") {
-        return Err(MoltenError::invalid_harness(format!("unsupported simulation decision: {decision}")));
+        return Err(Failure::invalid_harness(format!("unsupported simulation decision: {decision}")));
     }
     if !matches!(
         profile.as_str(),
         "pure-model" | "deterministic-whole-system" | "multi-process-live" | "host-chaos" | "vm-hardware"
     ) {
-        return Err(MoltenError::invalid_harness(format!("unsupported simulation profile: {profile}")));
+        return Err(Failure::invalid_harness(format!("unsupported simulation profile: {profile}")));
     }
     let world_ref = record_string_field(&fields[RUN_WORLD_REF_FIELD_INDEX], "world-ref")?;
     crate::preserves_rail::validate_content_ref(&world_ref)?;
@@ -616,13 +616,13 @@ fn record_optional_divergence(value: &preserves::Value<IOValue>) -> Result<Optio
     }
     let some = field_value
         .collect_simple_record("some", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("expected optional simulation divergence"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected optional simulation divergence"))?;
     Ok(Some(canonical_hash((&some[0]).into())?))
 }
 
 fn validate_count(label: &str, actual: usize) -> Result<()> {
     if actual > MAX_CANONICAL_SIMULATION_ITEMS {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "fabric simulation {label} count {actual} exceeds {MAX_CANONICAL_SIMULATION_ITEMS}"
         )))
     } else {
@@ -640,7 +640,7 @@ fn validate_refs(label: &str, refs: &[String]) -> Result<()> {
 
 fn u64_len(value: usize) -> Result<IOValue> {
     let converted = u64::try_from(value)
-        .map_err(|_| MoltenError::invalid_harness("fabric simulation collection length overflow"))?;
+        .map_err(|_| Failure::invalid_harness("fabric simulation collection length overflow"))?;
     Ok(u64_value(converted))
 }
 
@@ -677,22 +677,22 @@ fn record_string_field(value: &preserves::Value<IOValue>, label: &str) -> Result
 fn record_u64_field(value: &preserves::Value<IOValue>, label: &str) -> Result<u64> {
     named_field_value(value, label)?
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {label}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {label}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
 fn record_string_sequence_field(value: &preserves::Value<IOValue>, label: &str) -> Result<Vec<String>> {
     let field_value = named_field_value(value, label)?;
     let sequence = field_value
         .as_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {label}")))?;
     sequence.map(|item| required_string(&item, label)).collect()
 }
 
 fn named_field_value(value: &preserves::Value<IOValue>, label: &str) -> Result<preserves::Value<IOValue>> {
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected named field {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected named field {label}")))?;
     Ok(fields[0].clone())
 }
 
@@ -700,5 +700,5 @@ fn required_string(value: &preserves::Value<IOValue>, label: &str) -> Result<Str
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {label}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {label}")))
 }

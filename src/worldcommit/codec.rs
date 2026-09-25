@@ -16,7 +16,7 @@ use preserves::ValueImpl;
 use super::CanonicalWorldCommit;
 use super::WORLD_COMMIT_RECORD;
 use super::canonical_world_commit;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const WORLD_COMMIT_RECORD_ARITY: usize = 6;
@@ -31,7 +31,7 @@ pub fn parse_canonical_world_commit(bytes: &[u8], bounds: &WorldCommitBounds) ->
         crate::preserves_rail::simple_record_fields(&decoded.value, WORLD_COMMIT_RECORD, WORLD_COMMIT_RECORD_ARITY)?;
     let schema = crate::preserves_rail::required_string_field(&fields[0], "world commit schema")?;
     if schema != molten_core::world_commit::WORLD_COMMIT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!("world commit schema {schema} is not supported")));
+        return Err(Failure::invalid_harness(format!("world commit schema {schema} is not supported")));
     }
     let core = WorldCommitCore {
         version: parse_version(&fields[1])?,
@@ -42,7 +42,7 @@ pub fn parse_canonical_world_commit(bytes: &[u8], bounds: &WorldCommitBounds) ->
     };
     let canonical = canonical_world_commit(&core, bounds)?;
     if canonical.bytes != bytes {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "world commit input is canonical Preserves but not normalized world-commit order",
         ));
     }
@@ -56,7 +56,7 @@ pub fn parse_canonical_world_commit_with_ref(
 ) -> Result<CanonicalWorldCommit> {
     let canonical = parse_canonical_world_commit(bytes, bounds)?;
     if canonical.commit_ref != *expected_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "world commit identity mismatch: expected {expected_ref}, got {}",
             canonical.commit_ref
         )));
@@ -68,23 +68,23 @@ fn parse_version(value: &Value<IOValue>) -> Result<WorldCommitVersion> {
     let fields = wrapped_fields(value, "version", 1)?;
     let version = crate::preserves_rail::required_string_field(&fields[0], "world commit version")?;
     WorldCommitVersion::parse(&version)
-        .map_err(|_| MoltenError::invalid_harness(format!("unsupported world commit version {version}")))
+        .map_err(|_| Failure::invalid_harness(format!("unsupported world commit version {version}")))
 }
 
 fn parse_profile(value: &Value<IOValue>) -> Result<SnapshotProfile> {
     let fields = wrapped_fields(value, "profile", PROFILE_RECORD_ARITY)?;
     let kind_text = crate::preserves_rail::required_string_field(&fields[0], "snapshot profile kind")?;
     let kind = SnapshotProfileKind::parse(&kind_text)
-        .map_err(|_| MoltenError::invalid_harness(format!("unsupported snapshot profile kind {kind_text}")))?;
+        .map_err(|_| Failure::invalid_harness(format!("unsupported snapshot profile kind {kind_text}")))?;
     let profile_ref = crate::preserves_rail::required_content_ref_string(&fields[1], "snapshot profile ref")?;
     let cohort_ref = parse_optional_ref(&fields[2], "snapshot cohort ref")?
         .map(SnapshotCohortRef::new)
         .transpose()
-        .map_err(|issue| MoltenError::invalid_harness(format!("invalid snapshot cohort ref: {issue:?}")))?;
+        .map_err(|issue| Failure::invalid_harness(format!("invalid snapshot cohort ref: {issue:?}")))?;
     Ok(SnapshotProfile {
         kind,
         profile_ref: SnapshotProfileRef::new(profile_ref)
-            .map_err(|issue| MoltenError::invalid_harness(format!("invalid snapshot profile ref: {issue:?}")))?,
+            .map_err(|issue| Failure::invalid_harness(format!("invalid snapshot profile ref: {issue:?}")))?,
         cohort_ref,
     })
 }
@@ -97,7 +97,7 @@ fn parse_parents(value: &Value<IOValue>, maximum: usize) -> Result<Vec<WorldComm
         .map(|value| {
             let reference = crate::preserves_rail::required_content_ref_string(value, "world commit parent")?;
             WorldCommitRef::new(reference)
-                .map_err(|issue| MoltenError::invalid_harness(format!("invalid world commit parent: {issue:?}")))
+                .map_err(|issue| Failure::invalid_harness(format!("invalid world commit parent: {issue:?}")))
         })
         .collect()
 }
@@ -111,10 +111,10 @@ fn parse_root(value: &Value<IOValue>) -> Result<WorldRootRef> {
     let fields = wrapped_fields(value, "typed-root", TYPED_ROOT_RECORD_ARITY)?;
     let kind_text = crate::preserves_rail::required_string_field(&fields[0], "world root kind")?;
     let kind = RootKind::parse(&kind_text)
-        .map_err(|_| MoltenError::invalid_harness(format!("unsupported world root kind {kind_text}")))?;
+        .map_err(|_| Failure::invalid_harness(format!("unsupported world root kind {kind_text}")))?;
     let reference = crate::preserves_rail::required_content_ref_string(&fields[1], "world root ref")?;
     WorldRootRef::parse(kind, reference)
-        .map_err(|issue| MoltenError::invalid_harness(format!("invalid {} root ref: {issue:?}", kind.as_str())))
+        .map_err(|issue| Failure::invalid_harness(format!("invalid {} root ref: {issue:?}", kind.as_str())))
 }
 
 fn parse_completeness(value: &Value<IOValue>, maximum: usize) -> Result<CompletenessClaim> {
@@ -124,7 +124,7 @@ fn parse_completeness(value: &Value<IOValue>, maximum: usize) -> Result<Complete
         let kind_text = crate::preserves_rail::required_string_field(value, "completeness root kind")?;
         required_roots
             .push(RootKind::parse(&kind_text).map_err(|_| {
-                MoltenError::invalid_harness(format!("unsupported completeness root kind {kind_text}"))
+                Failure::invalid_harness(format!("unsupported completeness root kind {kind_text}"))
             })?);
     }
     Ok(CompletenessClaim { required_roots })
@@ -137,7 +137,7 @@ fn parse_optional_ref(value: &Value<IOValue>, field: &str) -> Result<Option<Stri
     }
     let fields = value
         .collect_simple_record("some", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <none> or <some ref> for {field}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <none> or <some ref> for {field}")))?;
     crate::preserves_rail::required_content_ref_string(&fields[0], field).map(Some)
 }
 
@@ -151,7 +151,7 @@ fn wrapped_sequence(value: &Value<IOValue>, label: &str, maximum: usize) -> Resu
     let fields = wrapped_fields(value, label, 1)?;
     let values = crate::preserves_rail::required_sequence_field(&fields[0], label)?;
     if values.len() > maximum {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "world commit {label} count {} exceeds maximum {maximum}",
             values.len()
         )));

@@ -3,7 +3,7 @@ use preserves::Value;
 use preserves::ValueImpl;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric_durability::LogRecord;
 
@@ -33,13 +33,13 @@ pub fn plan_replica_recovery(
     let mut durable_record_refs = Vec::with_capacity(durable_records.len());
     for record in durable_records {
         if record.sequence != expected_sequence {
-            return Err(MoltenError::invalid_harness("live Raft recovery durable sequence has a gap"));
+            return Err(Failure::invalid_harness("live Raft recovery durable sequence has a gap"));
         }
         expected_sequence = expected_sequence
             .checked_add(NEXT_LOG_INDEX_STEP)
-            .ok_or_else(|| MoltenError::invalid_harness("live Raft recovery durable sequence overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("live Raft recovery durable sequence overflow"))?;
         if crate::preserves_rail::content_ref_from_bytes(&record.value) != record.value_ref {
-            return Err(MoltenError::invalid_harness("live Raft recovery durable record content ref mismatch"));
+            return Err(Failure::invalid_harness("live Raft recovery durable record content ref mismatch"));
         }
         replay_record(&mut state, &mut durable_commit_index, &record.value)?;
         durable_record_refs.push(record.value_ref.clone());
@@ -50,7 +50,7 @@ pub fn plan_replica_recovery(
     }
     install_recovery_snapshot(&mut state, durable_commit_index, snapshot)?;
     if durable_commit_index > support_last_log_index(&state) {
-        return Err(MoltenError::invalid_harness("live Raft recovery commit boundary exceeds durable log"));
+        return Err(Failure::invalid_harness("live Raft recovery commit boundary exceeds durable log"));
     }
     state.commit_index = durable_commit_index;
     let replay_start = state.snapshot.as_ref().map_or(INITIAL_COMMIT_INDEX, |snapshot| snapshot.last_included_index);
@@ -89,7 +89,7 @@ pub fn plan_replica_recovery(
         timer_ref: state.active_election_timer_ref.clone(),
     });
     if effects.len() > state.profile.max_effects_per_step {
-        return Err(MoltenError::invalid_harness("live Raft recovery exceeds the admitted effect bound"));
+        return Err(Failure::invalid_harness("live Raft recovery exceeds the admitted effect bound"));
     }
     let recovery_ref = recovery_ref(&state, &durable_record_refs, snapshot_bytes)?;
     start_plan.state = state;
@@ -131,7 +131,7 @@ fn replay_record(state: &mut ReplicaState, durable_commit_index: &mut u64, bytes
         let fields = fields.iter().collect::<Vec<_>>();
         let term = canonical::required_u64(&fields[0], "recovered hard-state term")?;
         if term < state.current_term {
-            return Err(MoltenError::invalid_harness("live Raft recovery hard-state term regressed"));
+            return Err(Failure::invalid_harness("live Raft recovery hard-state term regressed"));
         }
         state.current_term = term;
         state.voted_for = optional_string(&fields[1])?;
@@ -148,7 +148,7 @@ fn replay_record(state: &mut ReplicaState, durable_commit_index: &mut u64, bytes
         let fields = fields.iter().collect::<Vec<_>>();
         let through_index = canonical::required_u64(&fields[0], "recovered flush boundary")?;
         if through_index > support_last_log_index(state) {
-            return Err(MoltenError::invalid_harness("live Raft recovery flush boundary exceeds durable log"));
+            return Err(Failure::invalid_harness("live Raft recovery flush boundary exceeds durable log"));
         }
         return Ok(());
     }
@@ -156,12 +156,12 @@ fn replay_record(state: &mut ReplicaState, durable_commit_index: &mut u64, bytes
         let fields = fields.iter().collect::<Vec<_>>();
         let through_index = canonical::required_u64(&fields[0], "recovered commit boundary")?;
         if through_index <= *durable_commit_index || through_index > support_last_log_index(state) {
-            return Err(MoltenError::invalid_harness("live Raft recovery commit boundary is stale or beyond the log"));
+            return Err(Failure::invalid_harness("live Raft recovery commit boundary is stale or beyond the log"));
         }
         *durable_commit_index = through_index;
         return Ok(());
     }
-    Err(MoltenError::invalid_harness("live Raft recovery found an unsupported durable record"))
+    Err(Failure::invalid_harness("live Raft recovery found an unsupported durable record"))
 }
 
 fn apply_log_mutation(
@@ -172,27 +172,27 @@ fn apply_log_mutation(
 ) -> Result<()> {
     if let Some(truncate_from) = truncate_from {
         if truncate_from <= durable_commit_index {
-            return Err(MoltenError::invalid_harness("live Raft recovery attempted to truncate committed state"));
+            return Err(Failure::invalid_harness("live Raft recovery attempted to truncate committed state"));
         }
         state.log.retain(|entry| entry.index < truncate_from);
     }
     let mut expected_index = support_last_log_index(state)
         .checked_add(NEXT_LOG_INDEX_STEP)
-        .ok_or_else(|| MoltenError::invalid_harness("live Raft recovery log index overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("live Raft recovery log index overflow"))?;
     for entry in entries {
         if entry.index != expected_index || entry.term == INITIAL_TERM {
-            return Err(MoltenError::invalid_harness("live Raft recovery log entries are noncontiguous"));
+            return Err(Failure::invalid_harness("live Raft recovery log entries are noncontiguous"));
         }
         for reference in [&entry.request_ref, &entry.command_ref, &entry.command_schema_ref] {
             crate::preserves_rail::validate_content_ref(reference)?;
         }
         expected_index = expected_index
             .checked_add(NEXT_LOG_INDEX_STEP)
-            .ok_or_else(|| MoltenError::invalid_harness("live Raft recovery log index overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("live Raft recovery log index overflow"))?;
         state.log.push(entry);
     }
     if state.log.len() > state.profile.max_log_entries {
-        return Err(MoltenError::invalid_harness("live Raft recovery exceeds the admitted log bound"));
+        return Err(Failure::invalid_harness("live Raft recovery exceeds the admitted log bound"));
     }
     Ok(())
 }
@@ -200,7 +200,7 @@ fn apply_log_mutation(
 fn parse_entries(value: &Value<IOValue>) -> Result<Vec<ReplicatedEntry>> {
     let sequence = value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("recovered Raft entries must be a sequence"))?;
+        .ok_or_else(|| Failure::invalid_harness("recovered Raft entries must be a sequence"))?;
     sequence.as_ref().as_slice().iter().map(canonical::parse_entry).collect()
 }
 
@@ -235,7 +235,7 @@ pub(super) fn parse_snapshot(bytes: &[u8]) -> Result<ReplicaSnapshot> {
         completed_requests: parse_completed_requests(&fields[8])?,
     };
     if snapshot.snapshot_ref != snapshot_ref(&snapshot)? {
-        return Err(MoltenError::invalid_harness("live Raft recovered snapshot identity mismatch"));
+        return Err(Failure::invalid_harness("live Raft recovered snapshot identity mismatch"));
     }
     Ok(snapshot)
 }
@@ -243,7 +243,7 @@ pub(super) fn parse_snapshot(bytes: &[u8]) -> Result<ReplicaSnapshot> {
 fn parse_completed_requests(value: &Value<IOValue>) -> Result<std::collections::BTreeMap<String, u64>> {
     let sequence = value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("recovered completed requests must be a sequence"))?;
+        .ok_or_else(|| Failure::invalid_harness("recovered completed requests must be a sequence"))?;
     let mut completed = std::collections::BTreeMap::new();
     for value in sequence.as_ref().as_slice() {
         let fields = canonical::required_record(value, "completed-request", COMPLETED_REQUEST_ARITY)?;
@@ -251,7 +251,7 @@ fn parse_completed_requests(value: &Value<IOValue>) -> Result<std::collections::
         let index = canonical::required_u64(&fields[1], "recovered completed request index")?;
         crate::preserves_rail::validate_content_ref(&request_ref)?;
         if completed.insert(request_ref, index).is_some() {
-            return Err(MoltenError::invalid_harness("recovered snapshot contains duplicate completed request"));
+            return Err(Failure::invalid_harness("recovered snapshot contains duplicate completed request"));
         }
     }
     Ok(completed)
@@ -271,11 +271,11 @@ fn install_recovery_snapshot(
         || snapshot.fencing_epoch != state.profile.fencing_epoch
         || snapshot.last_included_index > durable_commit_index
     {
-        return Err(MoltenError::invalid_harness("live Raft recovered snapshot binding or boundary mismatch"));
+        return Err(Failure::invalid_harness("live Raft recovered snapshot binding or boundary mismatch"));
     }
     for index in snapshot.completed_requests.values() {
         if *index == INITIAL_COMMIT_INDEX || *index > snapshot.last_included_index {
-            return Err(MoltenError::invalid_harness("recovered snapshot completed request index is out of range"));
+            return Err(Failure::invalid_harness("recovered snapshot completed request index is out of range"));
         }
     }
     state.completed_requests.clone_from(&snapshot.completed_requests);

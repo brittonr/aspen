@@ -8,7 +8,7 @@ use preserves::Value;
 
 use super::super::*;
 use super::admit_native_callback_value;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric::FabricPortKey;
 use crate::preserves_rail::canonical_bytes;
@@ -160,14 +160,14 @@ pub fn decode_native_callback_envelope(
     let fields = simple_record_fields(&decoded.value, CALLBACK_ENVELOPE_RECORD, ENVELOPE_FIELD_COUNT)?;
     let schema = required_string_field(&fields[0], "callback envelope schema")?;
     if schema != NATIVE_CALLBACK_ENVELOPE_SCHEMA {
-        return Err(MoltenError::invalid_harness("native callback envelope schema mismatch"));
+        return Err(Failure::invalid_harness("native callback envelope schema mismatch"));
     }
     let callback_name = required_string_field(&fields[7], "callback kind")?;
     let callback = CallbackKind::parse(&callback_name)
-        .ok_or_else(|| MoltenError::invalid_harness("native callback kind is unsupported"))?;
+        .ok_or_else(|| Failure::invalid_harness("native callback kind is unsupported"))?;
     let framing = required_string_field(&fields[17], "callback framing")?;
     if framing != NATIVE_FRAMING {
-        return Err(MoltenError::invalid_harness("native callback framing mismatch"));
+        return Err(Failure::invalid_harness("native callback framing mismatch"));
     }
     let payload = parse_optional_value(&fields[10], "callback payload", maximum_value_bytes)?;
     let state = parse_optional_value(&fields[13], "callback state", maximum_value_bytes)?;
@@ -231,7 +231,7 @@ pub fn decode_native_callback_outcome(
     let fields = simple_record_fields(&decoded.value, CALLBACK_OUTCOME_RECORD, OUTCOME_FIELD_COUNT)?;
     let schema = required_string_field(&fields[0], "callback outcome schema")?;
     if schema != NATIVE_CALLBACK_OUTCOME_SCHEMA {
-        return Err(MoltenError::invalid_harness("native callback outcome schema mismatch"));
+        return Err(Failure::invalid_harness("native callback outcome schema mismatch"));
     }
     let output_values = required_sequence_field(&fields[1], "callback outputs")?;
     let effect_values = required_sequence_field(&fields[2], "callback effects")?;
@@ -242,7 +242,7 @@ pub fn decode_native_callback_outcome(
         .checked_add(effect_values.len())
         .and_then(|count| count.checked_add(state.iter().count()))
         .and_then(|count| count.checked_add(checkpoint.iter().count()))
-        .ok_or_else(|| MoltenError::invalid_harness("native callback value count overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("native callback value count overflow"))?;
     require_item_bound(value_count, maximum_items, "callback output values")?;
     let outputs = output_values
         .iter()
@@ -283,10 +283,10 @@ fn parse_effect(value: &Value<IOValue>, maximum_value_bytes: u64) -> Result<Nati
     let fields = simple_record_fields(&value, EFFECT_RECORD, EFFECT_FIELD_COUNT)?;
     let target_value = crate::preserves_rail::value_to_iovalue(&fields[0]);
     let target_fields = simple_record_fields(&target_value, PORT_TARGET_RECORD, PORT_TARGET_FIELD_COUNT)
-        .map_err(|_| MoltenError::invalid_harness("native callback effect target must be an exact fabric port"))?;
+        .map_err(|_| Failure::invalid_harness("native callback effect target must be an exact fabric port"))?;
     let schema = required_string_field(&fields[7], "effect schema")?;
     if schema != NATIVE_CALLBACK_OUTCOME_SCHEMA {
-        return Err(MoltenError::invalid_harness("native callback effect schema mismatch"));
+        return Err(Failure::invalid_harness("native callback effect schema mismatch"));
     }
     let request = parse_value(&fields[4], "effect request", maximum_value_bytes)?;
     Ok(NativeMaterializedEffectRequest {
@@ -350,7 +350,7 @@ fn parse_bytes(value: &Value<IOValue>, field: &str, maximum_bytes: u64) -> Resul
         .map(|value| {
             let number = required_u64(value, field)?;
             u8::try_from(number)
-                .map_err(|_| MoltenError::invalid_harness(format!("{field} contains a value outside the byte range")))
+                .map_err(|_| Failure::invalid_harness(format!("{field} contains a value outside the byte range")))
         })
         .collect()
 }
@@ -361,10 +361,10 @@ fn require_input_links(
     inputs: &NativeCallbackInputs,
 ) -> Result<()> {
     if invocation.payload_ref.as_deref() != inputs.payload.as_ref().map(|value| value.value_ref.as_str()) {
-        return Err(MoltenError::invalid_harness("native callback payload reference lacks exact bytes"));
+        return Err(Failure::invalid_harness("native callback payload reference lacks exact bytes"));
     }
     if context.state_ref.as_deref() != inputs.state.as_ref().map(|value| value.value_ref.as_str()) {
-        return Err(MoltenError::invalid_harness("native callback state reference lacks exact bytes"));
+        return Err(Failure::invalid_harness("native callback state reference lacks exact bytes"));
     }
     for value in inputs.payload.iter().chain(inputs.state.iter()) {
         admit_native_callback_value(value, u64::MAX).map_err(value_error)?;
@@ -385,8 +385,8 @@ fn parse_ref_sequence(value: &Value<IOValue>, field: &str, maximum: u64) -> Resu
 fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
 fn parse_health(value: &str) -> Result<HealthState> {
@@ -398,7 +398,7 @@ fn parse_health(value: &str) -> Result<HealthState> {
         "failed" => Ok(HealthState::Failed),
         "quarantined" => Ok(HealthState::Quarantined),
         "stopped" => Ok(HealthState::Stopped),
-        _ => Err(MoltenError::invalid_harness("native callback health is unsupported")),
+        _ => Err(Failure::invalid_harness("native callback health is unsupported")),
     }
 }
 
@@ -408,22 +408,22 @@ fn require_byte_bound(bytes: &[u8], maximum: u64, label: &str) -> Result<()> {
 
 fn require_byte_bound_len(actual: usize, maximum: u64, label: &str) -> Result<()> {
     let actual =
-        u64::try_from(actual).map_err(|_| MoltenError::invalid_harness(format!("{label} length does not fit u64")))?;
+        u64::try_from(actual).map_err(|_| Failure::invalid_harness(format!("{label} length does not fit u64")))?;
     if actual > maximum {
-        return Err(MoltenError::invalid_harness(format!("{label} exceeds {maximum} bytes")));
+        return Err(Failure::invalid_harness(format!("{label} exceeds {maximum} bytes")));
     }
     Ok(())
 }
 
 fn require_item_bound(actual: usize, maximum: u64, label: &str) -> Result<()> {
     let actual =
-        u64::try_from(actual).map_err(|_| MoltenError::invalid_harness(format!("{label} count does not fit u64")))?;
+        u64::try_from(actual).map_err(|_| Failure::invalid_harness(format!("{label} count does not fit u64")))?;
     if actual > maximum {
-        return Err(MoltenError::invalid_harness(format!("{label} exceeds its item bound")));
+        return Err(Failure::invalid_harness(format!("{label} exceeds its item bound")));
     }
     Ok(())
 }
 
-fn value_error(error: super::NativeValuePortFailure) -> MoltenError {
-    MoltenError::invalid_harness(error.message)
+fn value_error(error: super::NativeValuePortFailure) -> Failure {
+    Failure::invalid_harness(error.message)
 }

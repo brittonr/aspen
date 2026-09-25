@@ -2,7 +2,7 @@
 pub fn parse_bootstrap_handshake(value: &IoValue) -> Result<BootstrapHandshake> {
     let fields = value
         .collect_simple_record("node-identity-bootstrap-v1", Some(5))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-identity-bootstrap-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-identity-bootstrap-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::NODE_IDENTITY_BOOTSTRAP_SCHEMA,
@@ -11,7 +11,7 @@ pub fn parse_bootstrap_handshake(value: &IoValue) -> Result<BootstrapHandshake> 
     let node = value_to_iovalue(&fields[1]);
     let node_fields = node
         .collect_simple_record("node", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("node bootstrap missing node field"))?;
+        .ok_or_else(|| Failure::invalid_harness("node bootstrap missing node field"))?;
     let checks = parse_checks(&fields[4])?;
     require_check(&checks, "join-admission-still-required")?;
     Ok(BootstrapHandshake {
@@ -85,20 +85,20 @@ fn source_denial_checks(key_source_class: &str) -> Vec<&'static str> {
 
 fn finish_resolution(input: ResolutionInput<'_>) -> Result<Resolution> {
     if input.secret_record.is_empty() {
-        return Err(MoltenError::invalid_harness("node endpoint key record must not be empty"));
+        return Err(Failure::invalid_harness("node endpoint key record must not be empty"));
     }
     let existing_endpoint = match input.root.observe_file(input.endpoint_path)? {
-        crate::node_state::NodeStateFileObservation::Missing => None,
-        crate::node_state::NodeStateFileObservation::NonRegular(kind) => {
-            return Err(MoltenError::invalid_harness(format!(
+        crate::node_state::FileObservation::Missing => None,
+        crate::node_state::FileObservation::NonRegular(kind) => {
+            return Err(Failure::invalid_harness(format!(
                 "node endpoint identity leaf must be a regular file, got {kind:?}"
             )));
         }
-        crate::node_state::NodeStateFileObservation::Regular(file) => {
+        crate::node_state::FileObservation::Regular(file) => {
             let bytes = file.read_bounded(crate::node_state::MAX_NODE_SECRET_BYTES)?;
             Some(
                 String::from_utf8(bytes)
-                    .map_err(|error| MoltenError::invalid_harness(format!("node endpoint id is not UTF-8: {error}")))?
+                    .map_err(|error| Failure::invalid_harness(format!("node endpoint id is not UTF-8: {error}")))?
                     .trim()
                     .to_string(),
             )
@@ -315,12 +315,12 @@ pub fn admitted_rotation_receipt_ref(
     ]))
 }
 
-fn validate_identity_namespace(root: &crate::node_state::NodeStateNamespace) -> Result<()> {
+fn validate_identity_namespace(root: &crate::node_state::DirectoryView) -> Result<()> {
     match root.kind() {
-        crate::node_state::NodeStateNamespaceKind::Identity | crate::node_state::NodeStateNamespaceKind::Secrets => {
+        crate::node_state::NamespaceKind::Identity | crate::node_state::NamespaceKind::Secrets => {
             Ok(())
         }
-        other => Err(MoltenError::invalid_harness(format!(
+        other => Err(Failure::invalid_harness(format!(
             "node identity requires identity or secrets namespace, got {other:?}"
         ))),
     }
@@ -328,13 +328,13 @@ fn validate_identity_namespace(root: &crate::node_state::NodeStateNamespace) -> 
 
 fn validate_config(config: &Config) -> Result<()> {
     if config.node_id.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("node id must not be empty"));
+        return Err(Failure::invalid_harness("node id must not be empty"));
     }
     if config.display_name.trim().is_empty() {
-        return Err(MoltenError::invalid_harness("node display name must not be empty"));
+        return Err(Failure::invalid_harness("node display name must not be empty"));
     }
     if config.data_dir.as_os_str().is_empty() {
-        return Err(MoltenError::invalid_harness("node data dir must not be empty"));
+        return Err(Failure::invalid_harness("node data dir must not be empty"));
     }
     if let Some(backend_ref) = config.secret_backend_ref.as_deref() {
         require_ref(backend_ref, "managed secret backend ref")?;
@@ -346,16 +346,16 @@ fn validate_config(config: &Config) -> Result<()> {
 }
 
 fn write_secret_restricted(
-    root: &crate::node_state::NodeStateNamespace,
-    path: &crate::node_state::NodeStatePath,
+    root: &crate::node_state::DirectoryView,
+    path: &crate::node_state::RelativePath,
     secret_record: &[u8],
 ) -> Result<()> {
     root.write_restricted(path, secret_record, OWNER_ONLY_SECRET_FILE_MODE)
 }
 
-fn read_observed_secret(observation: crate::node_state::NodeStateFileObservation) -> Result<Vec<u8>> {
-    let crate::node_state::NodeStateFileObservation::Regular(file) = observation else {
-        return Err(MoltenError::invalid_harness(
+fn read_observed_secret(observation: crate::node_state::FileObservation) -> Result<Vec<u8>> {
+    let crate::node_state::FileObservation::Regular(file) = observation else {
+        return Err(Failure::invalid_harness(
             "persisted endpoint secret changed after source selection",
         ));
     };
@@ -363,12 +363,12 @@ fn read_observed_secret(observation: crate::node_state::NodeStateFileObservation
 }
 
 fn secret_file_permission_status(
-    observation: &crate::node_state::NodeStateFileObservation,
+    observation: &crate::node_state::FileObservation,
 ) -> IrohSecretPermissionStatus {
     match observation {
-        crate::node_state::NodeStateFileObservation::Missing => IrohSecretPermissionStatus::NotPresent,
-        crate::node_state::NodeStateFileObservation::NonRegular(_) => IrohSecretPermissionStatus::Unsafe,
-        crate::node_state::NodeStateFileObservation::Regular(file) => {
+        crate::node_state::FileObservation::Missing => IrohSecretPermissionStatus::NotPresent,
+        crate::node_state::FileObservation::NonRegular(_) => IrohSecretPermissionStatus::Unsafe,
+        crate::node_state::FileObservation::Regular(file) => {
             #[cfg(unix)]
             {
                 file.unix_mode().map_or(IrohSecretPermissionStatus::Unsupported, |mode| {
@@ -405,7 +405,7 @@ fn validate_refs(refs: &[String], field: &str) -> Result<()> {
 
 fn require_ref(reference: &str, field: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference).map_err(|error| {
-        MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
+        Failure::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
     })
 }
 
@@ -413,17 +413,17 @@ fn validate_endpoint_id(endpoint_id: &str, field: &str) -> Result<()> {
     if endpoint_id.starts_with(IROH_ENDPOINT_PREFIX) && endpoint_id.len() > IROH_ENDPOINT_PREFIX.len() {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!("expected Iroh endpoint id for {field}, got {endpoint_id}")))
+    Err(Failure::invalid_harness(format!("expected Iroh endpoint id for {field}, got {endpoint_id}")))
 }
 
 fn parse_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     let values = record[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {label}")))?;
     values
         .iter()
         .map(|value| {
@@ -438,17 +438,17 @@ fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record("checks", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("expected node identity checks"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected node identity checks"))?;
     let values = record[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("node identity checks must be a sequence"))?;
+        .ok_or_else(|| Failure::invalid_harness("node identity checks must be a sequence"))?;
     values
         .iter()
         .map(|check| {
             let check = value_to_iovalue(check);
             let fields = check
                 .collect_simple_record("check", Some(2))
-                .ok_or_else(|| MoltenError::invalid_harness("expected node identity check"))?;
+                .ok_or_else(|| Failure::invalid_harness("expected node identity check"))?;
             Ok((required_string(&fields[0], "check name")?, required_string(&fields[1], "check status")?))
         })
         .collect()
@@ -458,7 +458,7 @@ fn require_check(checks: &[(String, String)], name: &str) -> Result<()> {
     if checks.iter().any(|(check, status)| check == name && status == "pass") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("node identity evidence missing passing {name} check")))
+        Err(Failure::invalid_harness(format!("node identity evidence missing passing {name} check")))
     }
 }
 
@@ -466,6 +466,6 @@ fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     required_string(&record[0], label)
 }

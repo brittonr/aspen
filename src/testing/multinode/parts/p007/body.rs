@@ -150,7 +150,7 @@ trait DiagnosticSink {
 impl DiagnosticSink for Vec<String> {
     fn push_bounded(&mut self, diagnostic: String) -> Result<()> {
         if self.len() >= MAX_MULTINODE_ITEMS {
-            return Err(MoltenError::invalid_harness("multinode diagnostics exceeded bound"));
+            return Err(Failure::invalid_harness("multinode diagnostics exceeded bound"));
         }
         self.push(diagnostic);
         Ok(())
@@ -161,7 +161,7 @@ fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()>
     if count <= maximum {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} count {count} exceeds bound {maximum}")))
+        Err(Failure::invalid_harness(format!("{label} count {count} exceeds bound {maximum}")))
     }
 }
 

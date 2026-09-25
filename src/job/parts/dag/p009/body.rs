@@ -193,7 +193,7 @@ pub fn execution_loopback(input: ExecutionLoopbackInput<'_>) -> Result<JobExecut
 }
 
 pub fn execution_loopback_with_node_state(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     admission_receipt_value: &IoValue,
     request_value: &IoValue,
 ) -> Result<JobExecutionLoopback> {

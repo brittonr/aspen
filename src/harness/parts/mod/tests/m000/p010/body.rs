@@ -153,7 +153,7 @@
         .expect("parse low effect budget suite");
         let error = run_suite_value(&suite).expect_err("configured effect budget should fail");
         match error {
-            MoltenError::HarnessDivergence(divergence) => {
+            crate::error::Failure::HarnessDivergence(divergence) => {
                 assert_eq!(divergence.kind, "resource");
                 assert_eq!(divergence.step, Some(1));
                 assert_eq!(divergence.detail, "effect count exceeds budget");

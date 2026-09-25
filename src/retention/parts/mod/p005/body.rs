@@ -96,7 +96,7 @@ pub fn remote_gc_clearance_response_value(
 pub fn parse_remote_gc_clearance_response(value: &IoValue) -> Result<RemoteGcClearanceResponse> {
     let fields = value
         .collect_simple_record("retention-remote-gc-clearance-response-v1", Some(6))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-remote-gc-clearance-response-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-remote-gc-clearance-response-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_RESPONSE_SCHEMA,
@@ -111,7 +111,7 @@ pub fn parse_remote_gc_clearance_response(value: &IoValue) -> Result<RemoteGcCle
     require_check(&checks, "request-ref-verified", "retention remote clearance response")?;
     require_check(&checks, "clearance-ref-verified", "retention remote clearance response")?;
     if decision != clearance.decision {
-        return Err(MoltenError::invalid_harness("remote clearance response decision does not match clearance"));
+        return Err(Failure::invalid_harness("remote clearance response decision does not match clearance"));
     }
     validate_remote_gc_clearance_workflow_scope(&request, &clearance)?;
     Ok(RemoteGcClearanceResponse {
@@ -237,7 +237,7 @@ pub fn remote_gc_clearance_import_value(input: &RemoteGcClearanceImportValueInpu
 pub fn parse_remote_gc_clearance_import(value: &IoValue) -> Result<RemoteGcClearanceImport> {
     let fields = value
         .collect_simple_record("retention-remote-gc-clearance-import-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-remote-gc-clearance-import-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <retention-remote-gc-clearance-import-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_IMPORT_SCHEMA,

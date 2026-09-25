@@ -26,7 +26,7 @@ fn protocol_drain_expected_protocol_refs_from_bindings(
         }
     }
     if refs.is_empty() {
-        return Err(MoltenError::invalid_harness("drain-sessions task has no protocol ref binding"));
+        return Err(Failure::invalid_harness("drain-sessions task has no protocol ref binding"));
     }
     let refs: Vec<String> = refs.into_iter().collect();
     validate_refs(&refs, "upgrade protocol drain expected protocol ref")?;
@@ -79,7 +79,7 @@ fn read_plan(root: &Path, plan_ref: &str) -> Result<UpgradePlan> {
 
 fn validate_upgrade_source_gates(input: &UpgradePlanInput) -> Result<Vec<String>> {
     if input.source_gate_receipt_values.is_empty() {
-        return Err(MoltenError::invalid_harness("upgrade plan requires strict Octet source gate receipt values"));
+        return Err(Failure::invalid_harness("upgrade plan requires strict Octet source gate receipt values"));
     }
     ensure_count_at_most(
         input.source_gate_receipt_values.len(),
@@ -113,7 +113,7 @@ fn validate_upgrade_source_gates(input: &UpgradePlanInput) -> Result<Vec<String>
         }
     }
     if validation_refs.is_empty() || !diagnostics.is_empty() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "upgrade plan source gate validation failed: {}",
             diagnostics.join("; ")
         )));
@@ -148,13 +148,13 @@ fn validate_plan_input(input: &UpgradePlanInput) -> Result<()> {
     validate_external_workflow_non_claims(&input.reason, &input.summary)?;
     validate_compatibility(&input.compatibility)?;
     if input.tasks.is_empty() {
-        return Err(MoltenError::invalid_harness("upgrade plan must contain at least one task"));
+        return Err(Failure::invalid_harness("upgrade plan must contain at least one task"));
     }
     let mut seen = BtreeSet::new();
     for task in &input.tasks {
         validate_task_input(task)?;
         if !seen.insert(task.task_id.clone()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate upgrade task id {}", task.task_id)));
+            return Err(Failure::invalid_harness(format!("duplicate upgrade task id {}", task.task_id)));
         }
     }
     Ok(())
@@ -172,19 +172,19 @@ fn validate_parsed_plan(plan: &UpgradePlan) -> Result<()> {
     validate_external_workflow_non_claims(&plan.reason, &plan.summary)?;
     validate_compatibility(&plan.compatibility)?;
     if plan.tasks.is_empty() {
-        return Err(MoltenError::invalid_harness("upgrade plan must contain at least one task"));
+        return Err(Failure::invalid_harness("upgrade plan must contain at least one task"));
     }
     let mut seen = BtreeSet::new();
     for task in &plan.tasks {
         validate_task(task)?;
         if !seen.insert(task.task_id.clone()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate upgrade task id {}", task.task_id)));
+            return Err(Failure::invalid_harness(format!("duplicate upgrade task id {}", task.task_id)));
         }
     }
     if plan.tasks.iter().any(|task| task.kind == "cutover")
         && !plan.tasks.iter().any(|task| task.kind == "transcript-rerun")
     {
-        return Err(MoltenError::invalid_harness("upgrade cutover requires a transcript-rerun task before cutover"));
+        return Err(Failure::invalid_harness("upgrade cutover requires a transcript-rerun task before cutover"));
     }
     Ok(())
 }
@@ -224,21 +224,21 @@ fn validate_task_shape(kind: &str, from_ref: Option<&str>, to_ref: Option<&str>,
         "move-name" | "compatibility-alias" | "cutover" | "rollback-pointer" | "replace-artifact" | "migrate-schema"
         | "update-policy" | "update-handler-profile" | "update-handler-policy" | "install-protocol-bridge" => {
             if from_ref.is_none() || to_ref.is_none() {
-                return Err(MoltenError::invalid_harness(format!("upgrade task kind {kind} requires from/to refs")));
+                return Err(Failure::invalid_harness(format!("upgrade task kind {kind} requires from/to refs")));
             }
         }
         "migrate-storage" => {
             if from_ref.is_none() || to_ref.is_none() {
-                return Err(MoltenError::invalid_harness("storage migration upgrade task requires recipe/source refs"));
+                return Err(Failure::invalid_harness("storage migration upgrade task requires recipe/source refs"));
             }
             if reversible {
-                return Err(MoltenError::invalid_harness(
+                return Err(Failure::invalid_harness(
                     "storage migration upgrade task cannot claim reversible rollback",
                 ));
             }
         }
         "cleanup" if from_ref.is_none() && to_ref.is_none() => {
-            return Err(MoltenError::invalid_harness("cleanup upgrade task requires an artifact ref"));
+            return Err(Failure::invalid_harness("cleanup upgrade task requires an artifact ref"));
         }
         "cleanup" => {}
         _ => {}
@@ -250,7 +250,7 @@ fn validate_task_kind(kind: &str) -> Result<()> {
     if SUPPORTED_TASK_KINDS.contains(&kind) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "unsupported upgrade task kind {kind}; expected one of {:?}",
             SUPPORTED_TASK_KINDS
         )))
@@ -263,7 +263,7 @@ fn validate_compatibility(compatibility: &UpgradeCompatibilityWindow) -> Result<
     require_non_empty_refs(&compatibility.policy_refs, "compatibility policy refs")?;
     let old: BtreeSet<_> = compatibility.old_refs.iter().collect();
     if compatibility.new_refs.iter().any(|new_ref| old.contains(new_ref)) {
-        return Err(MoltenError::invalid_harness("compatibility window old/new refs must be explicit and distinct"));
+        return Err(Failure::invalid_harness("compatibility window old/new refs must be explicit and distinct"));
     }
     Ok(())
 }

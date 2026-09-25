@@ -37,9 +37,9 @@ The canonical command and existing compiler selections remain unchanged.
 
 ## Non-goals
 
-No public renames, enum variant changes, new aliases, directory relocation, wildcard arms, blanket allows, repr changes, new provider policy, authority widening, filesystem behavior changes, compiler/toolchain acquisition, Stage0, or startup-policy relaxation.
+At this proposal's frozen source revision, no public renames, enum variant changes, new aliases, directory relocation, wildcard arms, blanket allows, repr changes, new provider policy, authority widening, filesystem behavior changes, compiler/toolchain acquisition, Stage0, or startup-policy relaxation were proposed. The later approved breaking public type-name cutover supersedes the name restriction for current source only: `local_store::Category`, `node_state::NamespaceKind`, and `node_state::FileObservation` replace the three names above without aliases. It does not change their variants or closed-domain semantics, rewrite frozen evidence, or approve startup.
 No May-26 runtime build/binding, approved cohort, VM launch, physical deployment, or replay evidence is claimed.
-Other 26 node-host findings remain outside this proposal; the current complete command still reports 30 errors.
+Other 26 node-host findings remained outside this proposal; at the proposal's frozen source revision, the complete command reported 30 errors. This historical count does not describe the renamed current source.
 
 ## Acceptance
 

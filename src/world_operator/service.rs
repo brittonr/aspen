@@ -1,7 +1,7 @@
 use molten_core::world_operator::*;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const MAX_LINKS_PER_EXECUTED_OPERATION: usize = 2;
@@ -141,7 +141,7 @@ fn current_admission(
 
 fn core_plan(request: &WorldWorkflowRequest) -> Result<WorldWorkflowPlan> {
     plan_world_workflow(request)
-        .map_err(|issues| MoltenError::invalid_harness(format!("world workflow planning denied: {issues:?}")))
+        .map_err(|issues| Failure::invalid_harness(format!("world workflow planning denied: {issues:?}")))
 }
 
 fn build_run(
@@ -151,11 +151,11 @@ fn build_run(
     shell_blocker: Option<WorldWorkflowBlocker>,
 ) -> Result<WorldOperatorRun> {
     let receipt = build_world_workflow_receipt(&plan, links, shell_blocker)
-        .map_err(|issues| MoltenError::invalid_harness(format!("world workflow receipt denied: {issues:?}")))?;
+        .map_err(|issues| Failure::invalid_harness(format!("world workflow receipt denied: {issues:?}")))?;
     let summary = summarize_world_workflow(&plan, &receipt)
-        .map_err(|issue| MoltenError::invalid_harness(format!("world workflow summary denied: {issue:?}")))?;
+        .map_err(|issue| Failure::invalid_harness(format!("world workflow summary denied: {issue:?}")))?;
     let rendered_summary = render_world_workflow_summary(&summary)
-        .map_err(|issue| MoltenError::invalid_harness(format!("world workflow rendering denied: {issue:?}")))?;
+        .map_err(|issue| Failure::invalid_harness(format!("world workflow rendering denied: {issue:?}")))?;
     let request_record = canonical_world_workflow_request(request, &plan)?;
     let plan_record = canonical_world_workflow_plan(&plan)?;
     let receipt_record = canonical_world_workflow_receipt(&receipt)?;
@@ -177,12 +177,12 @@ fn validate_handler_registry(handlers: &[&mut dyn WorldOperationHandler]) -> Res
     for handler in handlers {
         let kind = handler.kind();
         if handler.owner() != kind.owner() {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "world workflow handler registry crosses a component owner boundary",
             ));
         }
         if !kinds.insert(kind) {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "world workflow handler registry contains a duplicate operation kind",
             ));
         }

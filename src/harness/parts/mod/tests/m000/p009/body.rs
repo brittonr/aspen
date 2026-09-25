@@ -23,7 +23,7 @@
         let tampered_report = parse_text(&tampered_text).expect("parse tampered report");
         let error = replay_report_value(&tampered_report).expect_err("tampered report must diverge");
         match error {
-            MoltenError::HarnessDivergence(divergence) => {
+            crate::error::Failure::HarnessDivergence(divergence) => {
                 assert_eq!(divergence.kind, "effect-response");
                 assert_eq!(divergence.step, Some(3));
             }
@@ -44,7 +44,7 @@
         let tampered_report = parse_text(&tampered_text).expect("parse tampered report");
         let error = replay_report_value(&tampered_report).expect_err("tampered effect log must diverge");
         match error {
-            MoltenError::HarnessDivergence(divergence) => {
+            crate::error::Failure::HarnessDivergence(divergence) => {
                 assert_eq!(divergence.kind, "effect-request");
                 assert_eq!(divergence.step, Some(4));
             }
@@ -68,7 +68,7 @@
         let tampered_report = parse_text(&tampered_text).expect("parse tampered report");
         let error = replay_report_value(&tampered_report).expect_err("missing effect log must diverge");
         match error {
-            MoltenError::HarnessDivergence(divergence) => {
+            crate::error::Failure::HarnessDivergence(divergence) => {
                 assert_eq!(divergence.kind, "effect-log");
                 assert_eq!(divergence.step, Some(3));
             }
@@ -89,7 +89,7 @@
         let tampered_report = parse_text(&tampered_text).expect("parse tampered report");
         let error = replay_report_value(&tampered_report).expect_err("tampered runtime predicate must diverge");
         match error {
-            MoltenError::HarnessDivergence(divergence) => {
+            crate::error::Failure::HarnessDivergence(divergence) => {
                 assert_eq!(divergence.kind, "runtime-predicate");
                 assert_eq!(divergence.step, Some(0));
             }
@@ -122,7 +122,7 @@
         let tampered_report = parse_text(&tampered_text).expect("parse tampered report");
         let error = replay_report_value(&tampered_report).expect_err("tampered report must diverge");
         match error {
-            MoltenError::HarnessDivergence(divergence) => {
+            crate::error::Failure::HarnessDivergence(divergence) => {
                 assert_eq!(divergence.kind, "final-state");
                 assert_eq!(divergence.step, None);
             }
@@ -153,7 +153,7 @@
         .expect("parse suite");
         let error = run_suite_value(&suite).expect_err("step budget should fail");
         match error {
-            MoltenError::HarnessDivergence(divergence) => {
+            crate::error::Failure::HarnessDivergence(divergence) => {
                 assert_eq!(divergence.kind, "resource");
                 assert_eq!(divergence.detail, "suite step count exceeds budget");
             }
@@ -173,7 +173,7 @@
         .expect("parse suite");
         let error = run_suite_value(&suite).expect_err("effect budget should fail");
         match error {
-            MoltenError::HarnessDivergence(divergence) => {
+            crate::error::Failure::HarnessDivergence(divergence) => {
                 assert_eq!(divergence.kind, "resource");
                 assert_eq!(divergence.step, Some(16));
                 assert_eq!(divergence.detail, "effect count exceeds budget");

@@ -258,7 +258,7 @@ impl ConsensusEngineRecovery for RaftControlPlaneEngine {
 impl ControlPlaneConsensusEngine for RaftControlPlaneEngine {}
 
 pub fn unsupported_consensus_capability(engine_profile: &str, capability: &str) -> Result<()> {
-    Err(MoltenError::invalid_harness(format!(
+    Err(Failure::invalid_harness(format!(
         "consensus engine {engine_profile} does not support capability {capability}"
     )))
 }
@@ -393,7 +393,7 @@ fn borrowed_strings(values: &[&str]) -> Vec<String> {
 pub fn parse_consensus_engine_descriptor(value: &IoValue) -> Result<ConsensusEngineDescriptor> {
     let fields = value
         .collect_simple_record("consensus-engine-descriptor-v1", Some(CONSENSUS_ENGINE_DESCRIPTOR_FIELD_COUNT))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <consensus-engine-descriptor-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <consensus-engine-descriptor-v1 ...>"))?;
     require_schema(&fields[0], CONSENSUS_ENGINE_DESCRIPTOR_SCHEMA, "consensus engine descriptor schema")?;
     let profile_id = record_string(&fields[1], "profile")?;
     let profile_version = record_string(&fields[2], "version")?;
@@ -456,7 +456,7 @@ fn validate_engine_descriptor_core(
 fn consensus_engine_registry_value(entries: &[ConsensusEngineDescriptor]) -> Result<IoValue> {
     ensure_count_at_most(entries.len(), MAX_RAFT_REFS, "consensus engine registry entries")?;
     if entries.is_empty() {
-        return Err(MoltenError::invalid_harness("consensus engine registry requires entries"));
+        return Err(Failure::invalid_harness("consensus engine registry requires entries"));
     }
     Ok(record("consensus-engine-registry-v1", vec![
         string(CONSENSUS_ENGINE_REGISTRY_SCHEMA),
@@ -468,7 +468,7 @@ fn consensus_engine_registry_value(entries: &[ConsensusEngineDescriptor]) -> Res
 pub fn parse_consensus_engine_registry(value: &IoValue) -> Result<ConsensusEngineRegistry> {
     let fields = value
         .collect_simple_record("consensus-engine-registry-v1", Some(CONSENSUS_ENGINE_REGISTRY_FIELD_COUNT))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <consensus-engine-registry-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <consensus-engine-registry-v1 ...>"))?;
     require_schema(&fields[0], CONSENSUS_ENGINE_REGISTRY_SCHEMA, "consensus engine registry schema")?;
     let values = field_sequence(&fields[1], "entries")?;
     ensure_count_at_most(values.len(), MAX_RAFT_REFS, "consensus engine registry entries")?;
@@ -490,7 +490,7 @@ fn require_unique_engine_keys(entries: &[ConsensusEngineDescriptor]) -> Result<(
     for entry in entries {
         let key = engine_key(&entry.profile_id, &entry.profile_version);
         if !keys.insert(key.clone()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate consensus engine registry entry {key}")));
+            return Err(Failure::invalid_harness(format!("duplicate consensus engine registry entry {key}")));
         }
     }
     Ok(())
@@ -623,7 +623,7 @@ fn consensus_engine_admission_receipt_value(
 pub fn parse_consensus_engine_admission_receipt(value: &IoValue) -> Result<ConsensusEngineAdmissionReceipt> {
     let fields = value
         .collect_simple_record("consensus-engine-admission-receipt-v1", Some(CONSENSUS_ENGINE_ADMISSION_FIELD_COUNT))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <consensus-engine-admission-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <consensus-engine-admission-receipt-v1 ...>"))?;
     require_schema(&fields[0], CONSENSUS_ENGINE_ADMISSION_RECEIPT_SCHEMA, "consensus engine admission schema")?;
     require_check(&parse_checks(&fields[11])?, "engine-registry-resolved", "consensus engine admission")?;
     Ok(ConsensusEngineAdmissionReceipt {
@@ -726,7 +726,7 @@ struct ReadReceiptFields {
 fn read_receipt_fields(value: &IoValue) -> Result<ReadReceiptFields> {
     let fields = value
         .collect_simple_record("raft-read-receipt-v1", Some(15))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <raft-read-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <raft-read-receipt-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::RAFT_READ_RECEIPT_SCHEMA, "raft read receipt schema")?;
     Ok(ReadReceiptFields {
         group_ref: record_ref(&fields[2], "group")?,
@@ -788,7 +788,7 @@ fn consensus_engine_receipt_value(input: &ConsensusEngineReceiptValueInput<'_>) 
 pub fn parse_consensus_engine_receipt(value: &IoValue) -> Result<ConsensusEngineReceipt> {
     let fields = value
         .collect_simple_record("consensus-engine-receipt-v1", Some(CONSENSUS_ENGINE_RECEIPT_FIELD_COUNT))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <consensus-engine-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <consensus-engine-receipt-v1 ...>"))?;
     require_schema(&fields[0], CONSENSUS_ENGINE_RECEIPT_SCHEMA, "consensus engine receipt schema")?;
     let receipt_kind = record_string(&fields[1], "kind")?;
     let decision = record_string(&fields[2], "decision")?;
@@ -944,17 +944,17 @@ pub fn parse_consensus_engine_switchover_receipt(value: &IoValue) -> Result<Cons
             "consensus-engine-switchover-receipt-v1",
             Some(CONSENSUS_ENGINE_SWITCHOVER_FIELD_COUNT),
         )
-        .ok_or_else(|| MoltenError::invalid_harness("expected <consensus-engine-switchover-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <consensus-engine-switchover-receipt-v1 ...>"))?;
     require_schema(&fields[0], CONSENSUS_ENGINE_SWITCHOVER_RECEIPT_SCHEMA, "consensus switchover schema")?;
     require_check(&parse_checks(&fields[15])?, "fencing-epoch-advanced", "consensus switchover receipt")?;
     let source_fields = value_to_iovalue(&fields[2]);
     let source = source_fields
         .collect_simple_record("source", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("expected consensus switchover source"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected consensus switchover source"))?;
     let target_fields = value_to_iovalue(&fields[3]);
     let target = target_fields
         .collect_simple_record("target", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("expected consensus switchover target"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected consensus switchover target"))?;
     Ok(ConsensusEngineSwitchoverReceipt {
         receipt_ref: canonical_hash(value)?,
         decision: record_string(&fields[1], "decision")?,
@@ -1040,7 +1040,7 @@ fn consensus_engine_epoch_gate_value(
 pub fn parse_consensus_engine_epoch_gate(value: &IoValue) -> Result<ConsensusEngineEpochGateReceipt> {
     let fields = value
         .collect_simple_record("consensus-engine-epoch-gate-v1", Some(CONSENSUS_ENGINE_EPOCH_GATE_FIELD_COUNT))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <consensus-engine-epoch-gate-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <consensus-engine-epoch-gate-v1 ...>"))?;
     require_schema(&fields[0], CONSENSUS_ENGINE_EPOCH_GATE_SCHEMA, "consensus engine epoch gate schema")?;
     require_check(&parse_checks(&fields[9])?, "active-engine-epoch-bound", "consensus engine epoch gate")?;
     Ok(ConsensusEngineEpochGateReceipt {
@@ -1138,7 +1138,7 @@ fn consensus_engine_conformance_receipt_value(
 pub fn parse_consensus_engine_conformance_receipt(value: &IoValue) -> Result<ConsensusEngineConformanceReceipt> {
     let fields = value
         .collect_simple_record("consensus-engine-conformance-receipt-v1", Some(CONSENSUS_ENGINE_CONFORMANCE_FIELD_COUNT))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <consensus-engine-conformance-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <consensus-engine-conformance-receipt-v1 ...>"))?;
     require_schema(&fields[0], CONSENSUS_ENGINE_CONFORMANCE_RECEIPT_SCHEMA, "consensus conformance schema")?;
     require_check(&parse_checks(&fields[10])?, "deterministic-engine-conformance", "consensus conformance receipt")?;
     Ok(ConsensusEngineConformanceReceipt {
@@ -1153,7 +1153,7 @@ pub fn parse_consensus_engine_conformance_receipt(value: &IoValue) -> Result<Con
 fn validate_string_items(values: &[String], label: &str) -> Result<()> {
     ensure_count_at_most(values.len(), MAX_RAFT_REFS, label)?;
     if values.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("{label} list must not be empty")));
+        return Err(Failure::invalid_harness(format!("{label} list must not be empty")));
     }
     for value in values {
         validate_non_empty(value, label)?;
@@ -1164,6 +1164,6 @@ fn validate_string_items(values: &[String], label: &str) -> Result<()> {
 fn validate_decision(value: &str) -> Result<()> {
     match value {
         ENGINE_DECISION_PASS | ENGINE_DECISION_DENY | ENGINE_DECISION_DIAGNOSTIC => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported consensus engine decision {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported consensus engine decision {value}"))),
     }
 }

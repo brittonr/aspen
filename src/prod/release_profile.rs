@@ -1,6 +1,6 @@
 type IoValue = preserves::IOValue;
 type Result<T> = crate::error::Result<T>;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 
 const RELEASE_PROFILE_SCHEMA: &str = "molten.prod-ops.release-profile-validation.v1";
@@ -310,12 +310,12 @@ fn bool_value(value: bool) -> IoValue {
 
 fn validate_ref(reference: &str, label: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference)
-        .map_err(|error| MoltenError::invalid_harness(format!("invalid {label} ref {reference}: {error}")))
+        .map_err(|error| Failure::invalid_harness(format!("invalid {label} ref {reference}: {error}")))
 }
 
 fn validate_text(label: &str, value: &str) -> Result<()> {
     if value.trim().is_empty() {
-        Err(MoltenError::invalid_harness(format!("{label} must not be empty")))
+        Err(Failure::invalid_harness(format!("{label} must not be empty")))
     } else {
         Ok(())
     }

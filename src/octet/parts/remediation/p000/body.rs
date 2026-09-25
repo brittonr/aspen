@@ -1,6 +1,6 @@
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Path = std::path::Path;
 type PathBuf = std::path::PathBuf;
 type Result<T> = crate::error::Result<T>;
@@ -259,7 +259,7 @@ fn read_run_artifacts(scope: &str, artifacts_dir: &Path, require_object_corpus: 
     let object_corpus = if object_path.exists() {
         Some(read_artifact_text(object_path, OBJECT_CORPUS_RECEIPT_NAME)?)
     } else if require_object_corpus {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "octet remediation requires {} under {}",
             OBJECT_CORPUS_RECEIPT_NAME,
             artifacts_dir.display()
@@ -278,7 +278,7 @@ fn read_run_artifacts(scope: &str, artifacts_dir: &Path, require_object_corpus: 
 fn read_artifact_text(path: PathBuf, name: &str) -> Result<ArtifactText> {
     let bytes = fs::read(&path)?;
     let text = String::from_utf8(bytes.clone()).map_err(|error| {
-        MoltenError::invalid_harness(format!("octet remediation artifact {name} is not UTF-8: {error}"))
+        Failure::invalid_harness(format!("octet remediation artifact {name} is not UTF-8: {error}"))
     })?;
     Ok(ArtifactText {
         name: name.to_string(),

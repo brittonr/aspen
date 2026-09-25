@@ -190,7 +190,7 @@ fn cli_rewrite_pattern(kind: &str, pattern: &str) -> Outcome<molten::rewrites::R
         "string-contains" => Ok(molten::rewrites::RewritePattern::StringContains(pattern.to_string())),
         "schema-shape-kind" => Ok(molten::rewrites::RewritePattern::SchemaShapeKind(pattern.to_string())),
         "ref-contains" => Ok(molten::rewrites::RewritePattern::RefContains(pattern.to_string())),
-        other => Err(molten::error::MoltenError::invalid_harness(format!(
+        other => Err(molten::error::Failure::invalid_harness(format!(
             "unsupported rewrite pattern kind {other}; expected any, artifact-kind, record-label, string-equals, \
              string-contains, schema-shape-kind, or ref-contains"
         ))),
@@ -201,6 +201,6 @@ fn cli_rewrite_ref(kind: &str, label: &str) -> Outcome<String> {
     molten::rewrites::default_local_ref(kind, label)
 }
 
-fn wrong_handler(name: &str) -> molten::error::MoltenError {
-    molten::error::MoltenError::invalid_harness(format!("rewrite {name} handler called with another command"))
+fn wrong_handler(name: &str) -> molten::error::Failure {
+    molten::error::Failure::invalid_harness(format!("rewrite {name} handler called with another command"))
 }

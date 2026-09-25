@@ -19,7 +19,7 @@ use molten_core::cluster_harness::RunDirectoryAssessment;
 use molten_core::cluster_harness::assess_run_directory;
 
 use super::canonical::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub const DEFAULT_CLUSTER_CHILD_TIMEOUT_MS: u64 = 30_000;
@@ -117,7 +117,7 @@ struct PreparedArtifact {
 pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<ClusterHarnessExecution> {
     validate_execution_input(input)?;
     prepare_output_roots(input)?;
-    let fixture_source = std::fs::read_to_string(&input.fixture_path).map_err(MoltenError::from)?;
+    let fixture_source = std::fs::read_to_string(&input.fixture_path).map_err(Failure::from)?;
     let node_names = crate::cluster::parse_cluster_manifest(&fixture_source)?;
     let plan = crate::cluster::plan_cluster(&input.state_root, &node_names)?;
     let node_ids = plan.nodes.iter().map(|node| node.node_id.clone()).collect::<Vec<_>>();
@@ -308,7 +308,7 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
         append_log_entries(&input.output_directory, artifacts.into_iter().map(|item| item.entry).collect(), &plan)?;
     let index_text = render_run_index(&entries);
     let index_path = input.output_directory.join(RUN_INDEX_FILE);
-    std::fs::write(&index_path, &index_text).map_err(MoltenError::from)?;
+    std::fs::write(&index_path, &index_text).map_err(Failure::from)?;
     let index_ref = content_ref_for_text(TEXT_ARTIFACT_DOMAIN, &index_text);
     let assessment = assess_indexed_run_directory(&input.output_directory, &entries);
     let verification = cluster_run_verification_value(&index_ref, &assessment)?;
@@ -371,7 +371,7 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> Result<C
 // r[impl molten.testing.receipt_first_cluster_harness.run_artifact_directory]
 pub fn verify_cluster_run_directory(run_directory: &Path) -> Result<ClusterRunDirectoryVerification> {
     let index_path = run_directory.join(RUN_INDEX_FILE);
-    let index_text = std::fs::read_to_string(&index_path).map_err(MoltenError::from)?;
+    let index_text = std::fs::read_to_string(&index_path).map_err(Failure::from)?;
     let entries = parse_run_index(&index_text)?;
     let index_ref = content_ref_for_text(TEXT_ARTIFACT_DOMAIN, &index_text);
     let mut assessment = assess_indexed_run_directory(run_directory, &entries);
@@ -402,7 +402,7 @@ pub fn verify_cluster_run_directory(run_directory: &Path) -> Result<ClusterRunDi
 
 fn validate_execution_input(input: &ClusterHarnessExecutionInput) -> Result<()> {
     if input.child_timeout_ms == 0 || input.child_timeout_ms > MAX_CLUSTER_CHILD_TIMEOUT_MS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "cluster child timeout must be between 1 and {MAX_CLUSTER_CHILD_TIMEOUT_MS} milliseconds"
         )));
     }
@@ -413,14 +413,14 @@ fn validate_execution_input(input: &ClusterHarnessExecutionInput) -> Result<()> 
         ("node binary", &input.node_binary),
     ] {
         if path.as_os_str().is_empty() {
-            return Err(MoltenError::invalid_harness(format!("cluster harness requires explicit {label}")));
+            return Err(Failure::invalid_harness(format!("cluster harness requires explicit {label}")));
         }
     }
     if input.state_root == input.output_directory
         || input.state_root.starts_with(&input.output_directory)
         || input.output_directory.starts_with(&input.state_root)
     {
-        return Err(MoltenError::invalid_harness("cluster harness state root and output directory must be isolated"));
+        return Err(Failure::invalid_harness("cluster harness state root and output directory must be isolated"));
     }
     Ok(())
 }
@@ -429,14 +429,14 @@ fn prepare_output_roots(input: &ClusterHarnessExecutionInput) -> Result<()> {
     for path in [&input.state_root, &input.output_directory] {
         if path.exists() {
             if !input.force {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(Failure::invalid_harness(format!(
                     "cluster harness path already exists: {}; pass --force to replace it",
                     path.display()
                 )));
             }
-            std::fs::remove_dir_all(path).map_err(MoltenError::from)?;
+            std::fs::remove_dir_all(path).map_err(Failure::from)?;
         }
-        std::fs::create_dir_all(path).map_err(MoltenError::from)?;
+        std::fs::create_dir_all(path).map_err(Failure::from)?;
     }
     Ok(())
 }
@@ -634,9 +634,9 @@ fn finalize_child_execution(
     );
     let log_path = input.output_directory.join(format!("logs/{phase}-{}.log", node.path_component));
     if let Some(parent) = log_path.parent() {
-        std::fs::create_dir_all(parent).map_err(MoltenError::from)?;
+        std::fs::create_dir_all(parent).map_err(Failure::from)?;
     }
-    std::fs::write(&log_path, &log).map_err(MoltenError::from)?;
+    std::fs::write(&log_path, &log).map_err(Failure::from)?;
     let diagnostic_log_ref = content_ref_for_text(TEXT_ARTIFACT_DOMAIN, &log);
     let command_profile_ref = content_ref_for_text(COMMAND_PROFILE_DOMAIN, &format!("{phase}:{}", node.node_id));
     let value = child_process_value(&ClusterHarnessChildProcessInput {
@@ -871,14 +871,14 @@ fn collect_ticket_paths(root: &Path, current: &Path, paths: &mut Vec<PathBuf>) -
         return Ok(());
     }
     if paths.len() >= MAX_TICKET_FILES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "cluster harness ticket file count exceeds bound {MAX_TICKET_FILES} under {}",
             root.display()
         )));
     }
-    for entry in std::fs::read_dir(current).map_err(MoltenError::from)? {
-        let entry = entry.map_err(MoltenError::from)?;
-        let file_type = entry.file_type().map_err(MoltenError::from)?;
+    for entry in std::fs::read_dir(current).map_err(Failure::from)? {
+        let entry = entry.map_err(Failure::from)?;
+        let file_type = entry.file_type().map_err(Failure::from)?;
         if file_type.is_dir() {
             collect_ticket_paths(root, &entry.path(), paths)?;
         } else if file_type.is_file() && entry.file_name().to_string_lossy().to_ascii_lowercase().contains("ticket") {
@@ -921,7 +921,7 @@ fn append_log_entries(
             if !path.exists() {
                 continue;
             }
-            let text = std::fs::read_to_string(path).map_err(MoltenError::from)?;
+            let text = std::fs::read_to_string(path).map_err(Failure::from)?;
             entries.push(RunArtifactIndexEntry {
                 relative_path,
                 artifact_kind: DIAGNOSTIC_LOG_KIND.to_string(),
@@ -944,9 +944,9 @@ fn child_log_ref(
         .iter()
         .find(|node| node.node_id == child.node_id)
         .map(|node| node.path_component.as_str())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("missing cluster plan node {}", child.node_id)))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("missing cluster plan node {}", child.node_id)))?;
     let text = std::fs::read_to_string(output_directory.join(format!("logs/{}-{component}.log", child.phase)))
-        .map_err(MoltenError::from)?;
+        .map_err(Failure::from)?;
     Ok(content_ref_for_text(TEXT_ARTIFACT_DOMAIN, &text))
 }
 
@@ -968,9 +968,9 @@ fn render_run_index(entries: &[RunArtifactIndexEntry]) -> String {
 
 fn parse_run_index(source: &str) -> Result<Vec<RunArtifactIndexEntry>> {
     let mut lines = source.lines();
-    let header = lines.next().ok_or_else(|| MoltenError::invalid_harness("cluster run index is empty"))?;
+    let header = lines.next().ok_or_else(|| Failure::invalid_harness("cluster run index is empty"))?;
     if header != RUN_INDEX_HEADER {
-        return Err(MoltenError::invalid_harness("cluster run index has unsupported header"));
+        return Err(Failure::invalid_harness("cluster run index has unsupported header"));
     }
     let mut entries = Vec::new();
     for (line_index, line) in lines.enumerate() {
@@ -979,7 +979,7 @@ fn parse_run_index(source: &str) -> Result<Vec<RunArtifactIndexEntry>> {
         }
         let fields = line.split('\t').collect::<Vec<_>>();
         if fields.len() != RUN_INDEX_FIELD_COUNT {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "cluster run index line {} must have four tab-separated fields",
                 line_index.saturating_add(RUN_INDEX_ENTRY_LINE_OFFSET)
             )));
@@ -1113,16 +1113,16 @@ fn collect_run_files(root: &Path) -> Result<Vec<String>> {
 }
 
 fn collect_run_files_from(root: &Path, current: &Path, files: &mut Vec<String>) -> Result<()> {
-    for entry in std::fs::read_dir(current).map_err(MoltenError::from)? {
-        let entry = entry.map_err(MoltenError::from)?;
-        let file_type = entry.file_type().map_err(MoltenError::from)?;
+    for entry in std::fs::read_dir(current).map_err(Failure::from)? {
+        let entry = entry.map_err(Failure::from)?;
+        let file_type = entry.file_type().map_err(Failure::from)?;
         if file_type.is_dir() {
             collect_run_files_from(root, &entry.path(), files)?;
         } else if file_type.is_file() || file_type.is_symlink() {
             let relative = entry
                 .path()
                 .strip_prefix(root)
-                .map_err(|_| MoltenError::invalid_harness("cluster run file escaped root"))?
+                .map_err(|_| Failure::invalid_harness("cluster run file escaped root"))?
                 .to_string_lossy()
                 .replace(std::path::MAIN_SEPARATOR, "/");
             files.push(relative);
@@ -1155,19 +1155,19 @@ fn add_verification_companion_diagnostic(assessment: &mut RunDirectoryAssessment
 
 fn write_preserves_path(path: &Path, value: &IoValue) -> Result<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(MoltenError::from)?;
+        std::fs::create_dir_all(parent).map_err(Failure::from)?;
     }
-    std::fs::write(path, crate::preserves_rail::to_text(value)?).map_err(MoltenError::from)
+    std::fs::write(path, crate::preserves_rail::to_text(value)?).map_err(Failure::from)
 }
 
 fn read_preserves_path(path: &Path) -> Result<IoValue> {
     if !is_regular_file_without_symlink(path) {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "expected regular non-symlink Preserves file at {}",
             path.display()
         )));
     }
-    let text = std::fs::read_to_string(path).map_err(MoltenError::from)?;
+    let text = std::fs::read_to_string(path).map_err(Failure::from)?;
     crate::preserves_rail::parse_text(&text)
 }
 

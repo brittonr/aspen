@@ -2,11 +2,11 @@
 pub fn parse_job_output_request_value(value: &IoValue, expected_dag_ref: &str) -> Result<JobOutputRequest> {
     let fields = value
         .collect_simple_record("job-output-request-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <job-output-request-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <job-output-request-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::JOB_DAG_OUTPUT_REQUEST_SCHEMA, "job output request")?;
     let dag_ref = record_ref(&fields[1], "dag")?;
     if dag_ref != expected_dag_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "job output request dag ref {dag_ref} does not match job {expected_dag_ref}"
         )));
     }
@@ -30,7 +30,7 @@ pub fn parse_job_output_request_value(value: &IoValue, expected_dag_ref: &str) -
 pub fn parse_job_receipt(value: &IoValue) -> Result<JobReceipt> {
     let fields = value
         .collect_simple_record("job-dag-receipt-v1", Some(14))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <job-dag-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <job-dag-receipt-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::JOB_DAG_RECEIPT_SCHEMA, "job dag receipt")?;
     let checks = parse_checks(&fields[13])?;
     require_check(&checks, "canonical-receipt", "job dag receipt")?;
@@ -52,7 +52,7 @@ pub fn parse_job_receipt(value: &IoValue) -> Result<JobReceipt> {
 pub fn parse_job_admission_receipt_value(value: &IoValue) -> Result<JobAdmissionReceipt> {
     let fields = value
         .collect_simple_record("job-admission-receipt-v1", Some(15))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <job-admission-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <job-admission-receipt-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::JOB_ADMISSION_RECEIPT_SCHEMA, "job admission receipt")?;
     let checks = parse_checks(&fields[14])?;
     require_check(&checks, "canonical-receipt", "job admission receipt")?;
@@ -143,7 +143,7 @@ pub fn job_artifact_ref(registry_root: &FilePath, job_ref: &str) -> Result<Strin
             return Ok(artifact.artifact_ref);
         }
     }
-    Err(MoltenError::invalid_harness(format!("job artifact {job_ref} not found in registry")))
+    Err(Failure::invalid_harness(format!("job artifact {job_ref} not found in registry")))
 }
 
 pub fn job_artifact_ref_with_root(
@@ -158,7 +158,7 @@ pub fn job_artifact_ref_with_root(
             return Ok(artifact.artifact_ref);
         }
     }
-    Err(MoltenError::invalid_harness(format!("job artifact {job_ref} not found in registry")))
+    Err(Failure::invalid_harness(format!("job artifact {job_ref} not found in registry")))
 }
 
 pub fn read_job_dag(registry_root: &FilePath, reference: &str) -> Result<JobDag> {
@@ -176,7 +176,7 @@ pub fn read_job_dag(registry_root: &FilePath, reference: &str) -> Result<JobDag>
             }
         }
     }
-    Err(MoltenError::invalid_harness(format!("job dag {reference} not found in registry")))
+    Err(Failure::invalid_harness(format!("job dag {reference} not found in registry")))
 }
 
 pub fn read_job_dag_with_root(
@@ -197,13 +197,13 @@ pub fn read_job_dag_with_root(
             }
         }
     }
-    Err(MoltenError::invalid_harness(format!("job dag {reference} not found in registry")))
+    Err(Failure::invalid_harness(format!("job dag {reference} not found in registry")))
 }
 
 pub fn read_job_dag_file_or_registry(registry_root: &FilePath, spec: &str) -> Result<JobDag> {
     let path = FilePath::new(spec);
     if path.exists() {
-        let text = std::fs::read_to_string(path).map_err(MoltenError::from)?;
+        let text = std::fs::read_to_string(path).map_err(Failure::from)?;
         let value = crate::preserves_rail::parse_text(&text)?;
         parse_job_dag_value(&value)
     } else {
@@ -291,7 +291,7 @@ fn run_stages(
         if !trellis::job_dag::all_deps_satisfied(&deps, &completed_indices)
             || trellis::job_dag::unsatisfied_count(&deps, &completed_indices) != 0
         {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "trellis dependency readiness failed for job node {node_id}"
             )));
         }
@@ -308,14 +308,14 @@ fn run_stages(
         let node_index = *plan
             .node_index
             .get(node_id)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("trellis node index missing for {node_id}")))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("trellis node index missing for {node_id}")))?;
         let output_refs_slot = output_refs_by_index.get_mut(node_index).ok_or_else(|| {
-            MoltenError::invalid_harness(format!("job output refs index {node_index} outside node set"))
+            Failure::invalid_harness(format!("job output refs index {node_index} outside node set"))
         })?;
         *output_refs_slot = Some(stage.output_refs.clone());
         let output_slot = outputs_by_index
             .get_mut(node_index)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("job output index {node_index} outside node set")))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("job output index {node_index} outside node set")))?;
         *output_slot = Some(stage.output_values);
         push_bounded(
             &mut completed_indices,
@@ -346,7 +346,7 @@ fn run_stages_with_capabilities(
         if !trellis::job_dag::all_deps_satisfied(&deps, &completed_indices)
             || trellis::job_dag::unsatisfied_count(&deps, &completed_indices) != 0
         {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "trellis dependency readiness failed for job node {node_id}"
             )));
         }
@@ -360,14 +360,14 @@ fn run_stages_with_capabilities(
         let node_index = *plan
             .node_index
             .get(node_id)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("trellis node index missing for {node_id}")))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("trellis node index missing for {node_id}")))?;
         let output_refs_slot = output_refs_by_index.get_mut(node_index).ok_or_else(|| {
-            MoltenError::invalid_harness(format!("job output refs index {node_index} outside node set"))
+            Failure::invalid_harness(format!("job output refs index {node_index} outside node set"))
         })?;
         *output_refs_slot = Some(stage.output_refs.clone());
         let output_slot = outputs_by_index
             .get_mut(node_index)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("job output index {node_index} outside node set")))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("job output index {node_index} outside node set")))?;
         *output_slot = Some(stage.output_values);
         push_bounded(
             &mut completed_indices,

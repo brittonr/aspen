@@ -8,7 +8,7 @@ use molten_core::world_commit::WorldRootRef;
 use molten_core::world_snapshot::*;
 
 use super::super::super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const DIGEST_HEX_LENGTH: usize = 64;
@@ -170,7 +170,7 @@ impl CurrentSnapshotAdmissionPort for Admission {
             generation: self
                 .generations
                 .pop_front()
-                .ok_or_else(|| MoltenError::invalid_harness("admission fixture exhausted"))?,
+                .ok_or_else(|| Failure::invalid_harness("admission fixture exhausted"))?,
             allowed: true,
         })
     }
@@ -213,7 +213,7 @@ impl SnapshotReceiptPort for Receipts {
         self.published = self
             .published
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("receipt count overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("receipt count overflow"))?;
         Ok(())
     }
 }

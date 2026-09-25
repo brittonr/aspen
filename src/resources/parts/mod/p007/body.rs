@@ -160,19 +160,19 @@ pub fn evaluate_placement_fit(request: &PlacementRequest) -> Result<PlacementDec
 
     // Validate requests <= limits
     if request.requests.cpu_millis > request.limits.cpu_millis {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "cpu request exceeds limit",
         ));
     }
     if request.requests.memory_bytes > request.limits.memory_bytes {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "memory request exceeds limit",
         ));
     }
 
     // Validate constraints
     if request.constraints.len() > MAX_CONSTRAINTS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "constraint count {} exceeds maximum {MAX_CONSTRAINTS}",
             request.constraints.len(),
         )));
@@ -233,13 +233,13 @@ pub fn evaluate_taint_toleration_match(
     tolerations: &[Toleration],
 ) -> Result<Vec<TaintEffect>> {
     if taints.len() > MAX_TAINT_TOLERATION_PAIRS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "taint count {} exceeds maximum {MAX_TAINT_TOLERATION_PAIRS}",
             taints.len(),
         )));
     }
     if tolerations.len() > MAX_TAINT_TOLERATION_PAIRS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "toleration count {} exceeds maximum {MAX_TAINT_TOLERATION_PAIRS}",
             tolerations.len(),
         )));

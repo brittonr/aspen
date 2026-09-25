@@ -3,11 +3,11 @@ fn chain_ends(link_refs: &[String]) -> Result<Ends> {
     let head_ref = link_refs
         .last()
         .cloned()
-        .ok_or_else(|| MoltenError::invalid_harness("chunk lineage requires at least one chain link"))?;
+        .ok_or_else(|| Failure::invalid_harness("chunk lineage requires at least one chain link"))?;
     let anchor_ref = link_refs
         .first()
         .cloned()
-        .ok_or_else(|| MoltenError::invalid_harness("chunk lineage requires at least one chain link"))?;
+        .ok_or_else(|| Failure::invalid_harness("chunk lineage requires at least one chain link"))?;
     Ok(Ends { head_ref, anchor_ref })
 }
 
@@ -124,7 +124,7 @@ pub fn parse_chunk_lineage_value(value: &IoValue) -> Result<ChunkLineage> {
     require_lineage_check(&checks, "lineage-continuity")?;
     require_lineage_check(&checks, "lineage-predicate-receipts")?;
     if link_values.is_empty() || link_values.len() != receipt_values.len() {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "chunk lineage must contain matching non-empty link and receipt sequences",
         ));
     }
@@ -153,7 +153,7 @@ pub fn parse_chunk_lineage_value(value: &IoValue) -> Result<ChunkLineage> {
     if range_predicate.subject_refs.as_slice() != entries.link_refs.as_slice()
         || range_predicate.input_refs.as_slice() != entries.receipt_refs.as_slice()
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "chunk lineage range predicate does not bind lineage links and receipts",
         ));
     }
@@ -219,7 +219,7 @@ fn parsed_entries(input: EntryInput<'_>) -> Result<ParsedEntries> {
         )?;
         push_bounded(&mut link_refs, entry.link_ref, MAX_CHUNK_STORE_RECEIPTS, "chunk lineage link refs")?;
     }
-    let first_chain = first_chain.ok_or_else(|| MoltenError::invalid_harness("chunk lineage missing first link"))?;
+    let first_chain = first_chain.ok_or_else(|| Failure::invalid_harness("chunk lineage missing first link"))?;
     Ok(ParsedEntries {
         first_chain,
         link_refs,
@@ -243,27 +243,27 @@ struct CheckedEntry {
 
 fn checked_entry(input: LinkInput<'_>) -> Result<CheckedEntry> {
     if input.receipt.manifest_ref.as_deref() != Some(input.manifest_ref) || input.receipt.decision != "pass" {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "chunk lineage receipt does not bind the lineage manifest as pass evidence",
         ));
     }
     let link = crate::evidence_chain::parse_chain_link(input.value)?;
     if link.chain.scope != "chunk-lineage" || link.chain.id != input.manifest_ref || link.chain.epoch != input.root_ref
     {
-        return Err(MoltenError::invalid_harness("chunk lineage link scope must be per manifest/root, not global"));
+        return Err(Failure::invalid_harness("chunk lineage link scope must be per manifest/root, not global"));
     }
     if link.sequence != input.position as u64 {
-        return Err(MoltenError::invalid_harness("chunk lineage link sequence is not contiguous"));
+        return Err(Failure::invalid_harness("chunk lineage link sequence is not contiguous"));
     }
     if input.position == 0 {
         if link.previous_link_ref.is_some() {
-            return Err(MoltenError::invalid_harness("chunk lineage genesis link must not name a previous link"));
+            return Err(Failure::invalid_harness("chunk lineage genesis link must not name a previous link"));
         }
     } else if link.previous_link_ref.as_deref() != input.previous_ref {
-        return Err(MoltenError::invalid_harness("chunk lineage link does not bind previous lineage receipt"));
+        return Err(Failure::invalid_harness("chunk lineage link does not bind previous lineage receipt"));
     }
     if link.payload.artifact_ref != input.receipt.receipt_ref || link.payload.schema != CHUNK_STORE_RECEIPT_SCHEMA {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "chunk lineage link payload does not bind embedded chunk-store receipt",
         ));
     }

@@ -18,7 +18,7 @@ use crate::dag_sync::DagContentVerificationPort;
 use crate::dag_sync::DagTransferOutcome;
 use crate::dag_sync::DagTransportEnvelope;
 use crate::dag_sync::DagTransportPort;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 #[derive(Debug, Default)]
@@ -42,7 +42,7 @@ impl WorldReplicationBridge {
             candidates.sort();
         }
         if actions.len() != plan.manifest.contents.len() {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "world replication bridge requires one transferable action set for every closure object",
             ));
         }
@@ -119,7 +119,7 @@ where C: ContentPort
         _authority_ref: &str,
     ) -> Result<DagResponseObservation> {
         let transfer = self.state.borrow_mut().envelopes.remove(envelope.object_ref.as_str()).ok_or_else(|| {
-            MoltenError::invalid_harness("world replication bridge has no matching transfer envelope")
+            Failure::invalid_harness("world replication bridge has no matching transfer envelope")
         })?;
         let action = select_action_for_transfer(&self.state.borrow(), &transfer)?.clone();
         let verification = self.inner.verify(&action, &transfer)?;
@@ -127,7 +127,7 @@ where C: ContentPort
             || verification.replica.content_ref != action.content_ref
             || verification.replica.peer_id != action.target_peer
         {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "world replication verification observation drifted from the transfer action",
             ));
         }
@@ -153,11 +153,11 @@ fn select_action<'a>(state: &'a BridgeState, request: &DagFetchRequest) -> Resul
     let candidates = state
         .actions
         .get(request.object_ref.as_str())
-        .ok_or_else(|| MoltenError::invalid_harness("DAG requested an object outside the world replication plan"))?;
+        .ok_or_else(|| Failure::invalid_harness("DAG requested an object outside the world replication plan"))?;
     candidates
         .iter()
         .find(|action| request.assigned_peer.as_ref().is_none_or(|peer| peer.as_str() == action.target_peer))
-        .ok_or_else(|| MoltenError::invalid_harness("DAG peer assignment has no matching world replication action"))
+        .ok_or_else(|| Failure::invalid_harness("DAG peer assignment has no matching world replication action"))
 }
 
 fn select_action_for_transfer<'a>(state: &'a BridgeState, transfer: &TransferEnvelope) -> Result<&'a Action> {
@@ -169,7 +169,7 @@ fn select_action_for_transfer<'a>(state: &'a BridgeState, transfer: &TransferEnv
                 action.operation_id == transfer.operation_id && action.target_peer == transfer.target_peer
             })
         })
-        .ok_or_else(|| MoltenError::invalid_harness("transfer envelope has no matching world replication action"))
+        .ok_or_else(|| Failure::invalid_harness("transfer envelope has no matching world replication action"))
 }
 
 fn validate_transfer_envelope(action: &Action, envelope: &TransferEnvelope) -> Result<()> {
@@ -179,11 +179,11 @@ fn validate_transfer_envelope(action: &Action, envelope: &TransferEnvelope) -> R
         || envelope.encoded_bytes != action.encoded_bytes
         || envelope.protected != action.preserve_protected_form
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "content replication returned a substituted or drifted world object envelope",
         ));
     }
     crate::preserves_rail::validate_content_ref(&envelope.transfer_ref)
-        .map_err(|_| MoltenError::invalid_harness("world transfer observation ref is invalid"))?;
+        .map_err(|_| Failure::invalid_harness("world transfer observation ref is invalid"))?;
     Ok(())
 }

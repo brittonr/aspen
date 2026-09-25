@@ -128,7 +128,7 @@ fn cli_gate_rejection_emits_canonical_failure_to_stdout_without_failure_out() ->
     let failure_artifact = dir.join("diagnostic.failure.preserves");
     let diagnostic = molten::harness::failure_value(
         "preflight",
-        &molten::error::MoltenError::invalid_harness("synthetic diagnostic"),
+        &molten::error::Failure::invalid_harness("synthetic diagnostic"),
         Vec::new(),
     );
     std::fs::write(&failure_artifact, molten::preserves_rail::to_text(&diagnostic)?)?;

@@ -4,7 +4,7 @@ type PreservesRecord<T> = preserves::Record<T>;
 type PreservesValue<T> = preserves::Value<T>;
 type Filter = crate::catalog::Filter;
 type VisibilityInput = crate::catalog::VisibilityInput;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 pub const READ_ONLY_TOOLS: &[&str] = &[
@@ -189,7 +189,7 @@ pub fn call_with_chunk_store(
 pub fn parse_mcp_request(value: &IoValue) -> Result<Request> {
     let fields = value
         .collect_simple_record("catalog-mcp-request-v1", Some(4))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <catalog-mcp-request-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <catalog-mcp-request-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::CATALOG_MCP_REQUEST_SCHEMA, "catalog MCP request")?;
     let checks = parse_checks(&fields[3])?;
     require_check(&checks, "read-only-surface", "catalog MCP request")?;
@@ -207,7 +207,7 @@ pub fn parse_mcp_request(value: &IoValue) -> Result<Request> {
 pub fn parse_mcp_receipt(value: &IoValue) -> Result<Receipt> {
     let fields = value
         .collect_simple_record("catalog-mcp-receipt-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <catalog-mcp-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <catalog-mcp-receipt-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::CATALOG_MCP_RECEIPT_SCHEMA, "catalog MCP receipt")?;
     let checks = parse_checks(&fields[8])?;
     require_check(&checks, "canonical-receipt", "catalog MCP receipt")?;
@@ -235,7 +235,7 @@ pub fn summary(value: &IoValue) -> Result<String> {
     if value.collect_simple_record("catalog-mcp-response-v1", Some(8)).is_some() {
         return Ok(format!("catalog MCP response ref={}", canonical_hash(value)?));
     }
-    Err(MoltenError::invalid_harness("unsupported catalog MCP artifact for show"))
+    Err(Failure::invalid_harness("unsupported catalog MCP artifact for show"))
 }
 
 struct DispatchPayload {
@@ -271,7 +271,7 @@ fn dispatch_read_only(
         "show_release_snapshot" => release_snapshot_result(registry_root, ledger_root, request),
         "explain_evidence" => artifact_search_result(registry_root, ledger_root, request),
         "catalog.short_id" | "short_id_resolve" => short_id_result(registry_root, ledger_root, request),
-        _ => Err(MoltenError::invalid_harness(format!(
+        _ => Err(Failure::invalid_harness(format!(
             "catalog MCP tool {} is not in the read-only dispatch allow-list",
             request.tool
         ))),

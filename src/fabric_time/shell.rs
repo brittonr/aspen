@@ -7,7 +7,7 @@
 )]
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric::FabricPortKey;
 use crate::system_extension::SystemExtensionExecutor;
@@ -76,10 +76,10 @@ impl ExtensionTimeContext {
     ) -> Result<TimerState> {
         ensure_bound_profile(&self.timer_profile, profile, "timer")?;
         if request.key.service_id != self.service_id {
-            return Err(MoltenError::invalid_harness("timer service identity mismatch"));
+            return Err(Failure::invalid_harness("timer service identity mismatch"));
         }
         if active_timer_count >= self.max_timers {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "system-extension timer limit {} exhausted",
                 self.max_timers
             )));
@@ -98,7 +98,7 @@ impl ExtensionTimeContext {
         ensure_bound_profile(&self.scheduler_profile, profile, "scheduler")?;
         let key = scheduler_command_key(command);
         if key.service_id != self.service_id {
-            return Err(MoltenError::invalid_harness("runnable service identity mismatch"));
+            return Err(Failure::invalid_harness("runnable service identity mismatch"));
         }
         if matches!(command, SchedulerCommand::Wake { .. }) {
             let active = u64::try_from(
@@ -108,9 +108,9 @@ impl ExtensionTimeContext {
                     .filter(|runnable| !matches!(runnable.phase, RunnablePhase::Completed | RunnablePhase::Cancelled))
                     .count(),
             )
-            .map_err(|_| MoltenError::invalid_harness("runnable count overflow"))?;
+            .map_err(|_| Failure::invalid_harness("runnable count overflow"))?;
             if active >= self.max_runnables {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(Failure::invalid_harness(format!(
                     "system-extension runnable limit {} exhausted",
                     self.max_runnables
                 )));
@@ -130,9 +130,9 @@ impl ExtensionTimeContext {
         ensure_bound_profile(&self.scheduler_profile, profile, "scheduler")?;
         let running =
             u64::try_from(state.runnables.iter().filter(|runnable| runnable.phase == RunnablePhase::Running).count())
-                .map_err(|_| MoltenError::invalid_harness("running runnable count overflow"))?;
+                .map_err(|_| Failure::invalid_harness("running runnable count overflow"))?;
         if running >= self.max_concurrency {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "system-extension concurrency limit {} exhausted",
                 self.max_concurrency
             )));
@@ -148,7 +148,7 @@ impl ExtensionTimeContext {
     ) -> Result<EntropyStreamState> {
         ensure_bound_profile(&self.entropy_profile, profile, "entropy")?;
         if !self.capability_refs.contains(&request.capability_ref) {
-            return Err(MoltenError::invalid_harness("entropy request lacks an admitted system-extension capability"));
+            return Err(Failure::invalid_harness("entropy request lacks an admitted system-extension capability"));
         }
         super::open_entropy_stream(profile, self.generation, request)
             .map_err(|error| core_error("system-extension entropy stream", error))
@@ -157,7 +157,7 @@ impl ExtensionTimeContext {
     pub fn admit_entropy_request(&self, request: EntropyRequest) -> Result<()> {
         let requested = request.requested_bytes();
         if requested > self.max_entropy_request_bytes {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "entropy request {requested} exceeds system-extension byte envelope {}",
                 self.max_entropy_request_bytes
             )));
@@ -181,12 +181,12 @@ fn bound_port_profile<E: SystemExtensionExecutor>(host: &SystemExtensionHost<E>,
 
 fn ensure_bound_profile(bound_profile: &Option<String>, profile: &AdmittedTimeProfile, port: &str) -> Result<()> {
     let Some(bound_profile) = bound_profile else {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "system extension has no admitted {port} fabric port binding"
         )));
     };
     if bound_profile != &profile.profile_id {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "system extension {port} profile {bound_profile} does not admit requested profile {}",
             profile.profile_id
         )));
@@ -204,6 +204,6 @@ fn scheduler_command_key(command: &SchedulerCommand) -> &RunnableKey {
     }
 }
 
-fn core_error(label: &str, error: impl std::fmt::Debug) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label} failed: {error:?}"))
+fn core_error(label: &str, error: impl std::fmt::Debug) -> Failure {
+    Failure::invalid_harness(format!("{label} failed: {error:?}"))
 }

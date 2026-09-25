@@ -182,14 +182,14 @@ fn accepted_schema(root: &Path, input: &PutInput, inferred_schema_ref: &str) -> 
         details: Vec::new(),
     });
     store_receipt(root, &receipt_value)?;
-    Err(MoltenError::invalid_harness(
+    Err(Failure::invalid_harness(
         "typed storage write rejected: declared schema ref does not match inferred value schema",
     ))
 }
 
 fn payload_parts(root: &Path, value_bytes: &[u8]) -> Result<PayloadParts> {
     let value_len = u64::try_from(value_bytes.len())
-        .map_err(|_| MoltenError::invalid_harness("typed storage value length exceeds u64"))?;
+        .map_err(|_| Failure::invalid_harness("typed storage value length exceeds u64"))?;
     if value_bytes.len() <= INLINE_VALUE_LIMIT {
         return Ok(PayloadParts {
             value: record("inline", vec![u64_value(value_len)]),
@@ -274,12 +274,12 @@ pub fn get_value_with_migration(input: MigrationGetInput<'_>) -> Result<Get> {
         Err(first_error) => {
             let recipe = parse_migration_recipe_value(input.migration_recipe_value)?;
             if recipe.target_schema_ref != input.expected_schema_ref {
-                return Err(MoltenError::invalid_harness(
+                return Err(Failure::invalid_harness(
                     "typed storage lazy migration rejected: recipe target schema does not match expected schema ref",
                 ));
             }
             if !matches!(recipe.mode.as_str(), "lazy-on-read" | "explicit") {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(Failure::invalid_harness(format!(
                     "typed storage lazy migration rejected: recipe mode {} cannot run on read",
                     recipe.mode
                 )));
@@ -287,7 +287,7 @@ pub fn get_value_with_migration(input: MigrationGetInput<'_>) -> Result<Get> {
             let migrated =
                 migrate_value(input.root, input.namespace, input.key, input.migration_recipe_value, input.admission)
                     .map_err(|migration_error| {
-                        MoltenError::invalid_harness(format!(
+                        Failure::invalid_harness(format!(
                             "typed storage lazy migration failed after load miss {first_error}: {migration_error}"
                         ))
                     })?;

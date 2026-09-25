@@ -1,5 +1,5 @@
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,7 +66,7 @@ impl ChannelReplicaControlPort {
                 receipt_ref: receipt_ref.clone(),
                 kind,
             })
-            .map_err(|_| MoltenError::invalid_harness("live Raft supervision receiver is unavailable"))?;
+            .map_err(|_| Failure::invalid_harness("live Raft supervision receiver is unavailable"))?;
         Ok(receipt_ref)
     }
 }
@@ -112,10 +112,10 @@ fn validate_control_config(config: &ReplicaControlConfig) -> Result<()> {
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':'))
     {
-        return Err(MoltenError::invalid_harness("live Raft supervision service id is empty or malformed"));
+        return Err(Failure::invalid_harness("live Raft supervision service id is empty or malformed"));
     }
     if config.service_generation == 0 {
-        return Err(MoltenError::invalid_harness("live Raft supervision generation must be positive"));
+        return Err(Failure::invalid_harness("live Raft supervision generation must be positive"));
     }
     crate::preserves_rail::validate_content_ref(&config.supervision_ref)
 }

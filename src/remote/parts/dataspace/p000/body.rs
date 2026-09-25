@@ -1,11 +1,11 @@
 type IoValue = preserves::IOValue;
 type Value<T> = preserves::Value<T>;
 
-type LocalStorePath = crate::local_store::LocalStorePath;
+type RelativeLocator = crate::local_store::RelativeLocator;
 type Path = std::path::Path;
 #[cfg(test)]
 type PathBuf = std::path::PathBuf;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 type RuntimeEvent = crate::runtime::RuntimeEvent;
 type RuntimeState = crate::runtime::RuntimeState;
@@ -94,7 +94,7 @@ impl Operation {
             "assert" => Ok(Self::Assert),
             "retract" => Ok(Self::Retract),
             "observe" => Ok(Self::Observe),
-            _ => Err(MoltenError::invalid_harness(format!("unsupported remote dataspace operation {value}"))),
+            _ => Err(Failure::invalid_harness(format!("unsupported remote dataspace operation {value}"))),
         }
     }
 }

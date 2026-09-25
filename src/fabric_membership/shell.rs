@@ -22,9 +22,9 @@ pub struct AdmittedProviderSnapshot {
 pub fn observe_provider(
     provider: &mut dyn MembershipPlacementProvider,
 ) -> crate::error::Result<AdmittedProviderSnapshot> {
-    let snapshot = provider.snapshot().map_err(crate::error::MoltenError::from)?;
+    let snapshot = provider.snapshot().map_err(crate::error::Failure::from)?;
     if provider.provider_kind() != snapshot.profile.provider_kind {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "membership provider kind differs from its source profile",
         ));
     }

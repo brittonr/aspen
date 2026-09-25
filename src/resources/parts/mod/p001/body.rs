@@ -216,7 +216,7 @@ fn validate_resource_kind(kind: &str) -> Result<()> {
         | KIND_EFFECT_CALLS
         | KIND_TRACE_BYTES
         | KIND_JOB_SLOTS => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported resource kind {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported resource kind {other}"))),
     }
 }
 
@@ -224,31 +224,31 @@ fn ensure_count_at_most(actual: usize, maximum: usize, label: &str) -> Result<()
     if actual <= maximum {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
+    Err(Failure::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
 }
 
 fn ensure_u64_at_most(actual: u64, maximum: u64, label: &str) -> Result<()> {
     if actual <= maximum {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
+    Err(Failure::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
 }
 
 fn count_to_u64(count: usize, label: &str) -> Result<u64> {
-    u64::try_from(count).map_err(|_| MoltenError::invalid_harness(format!("{label} count exceeds u64 bound")))
+    u64::try_from(count).map_err(|_| Failure::invalid_harness(format!("{label} count exceeds u64 bound")))
 }
 
 fn bounded_positive_count(count: u64, maximum: u64, label: &str) -> Result<usize> {
     let normalized = count.max(1);
     ensure_u64_at_most(normalized, maximum, label)?;
-    usize::try_from(normalized).map_err(|_| MoltenError::invalid_harness(format!("{label} count exceeds usize bound")))
+    usize::try_from(normalized).map_err(|_| Failure::invalid_harness(format!("{label} count exceeds usize bound")))
 }
 
 fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maximum: usize, label: &str) -> Result<()> {
     let total = values
         .item_count()
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("{label} count overflow")))?;
     ensure_count_at_most(total, maximum, label)?;
     values.push_item(value);
     Ok(())
@@ -256,7 +256,7 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
 
 fn validate_non_empty(value: &str, field: &str) -> Result<()> {
     if value.trim().is_empty() {
-        Err(MoltenError::invalid_harness(format!("{field} must not be empty")))
+        Err(Failure::invalid_harness(format!("{field} must not be empty")))
     } else {
         Ok(())
     }
@@ -271,7 +271,7 @@ fn validate_refs(refs: &[String], field: &str) -> Result<()> {
 
 fn require_ref(reference: &str, field: &str) -> Result<()> {
     validate_content_ref(reference).map_err(|error| {
-        MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
+        Failure::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
     })
 }
 

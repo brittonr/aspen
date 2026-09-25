@@ -94,7 +94,7 @@ fn gc_flow(
         profile: crate::retention::CandidateBundleExportProfile::Public,
     })?;
     let profile_value = crate::preserves_rail::parse_text(
-        &std::fs::read_to_string(input.bundle_dir.join("bundle-profile.preserves")).map_err(MoltenError::from)?,
+        &std::fs::read_to_string(input.bundle_dir.join("bundle-profile.preserves")).map_err(Failure::from)?,
     )?;
     let profile = crate::retention::parse_candidate_bundle_profile(&profile_value)?;
     let verify = crate::retention::verify_candidate_bundle(crate::retention::CandidateBundleVerifyInput {

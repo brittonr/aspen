@@ -1,7 +1,7 @@
 use molten_core::prolly_map::*;
-use molten_node_host::node_state::NodeStateNamespace;
-use molten_node_host::node_state::NodeStateNamespaceKind;
-use molten_node_host::node_state::NodeStatePath;
+use molten_node_host::node_state::DirectoryView;
+use molten_node_host::node_state::NamespaceKind;
+use molten_node_host::node_state::RelativePath;
 use redb::ReadableDatabase;
 use redb::ReadableTable;
 
@@ -26,11 +26,11 @@ pub struct LocalProllyBlockStore {
 }
 
 impl LocalProllyBlockStore {
-    pub fn open(storage: &NodeStateNamespace) -> ProllyPortResult<Self> {
-        if storage.kind() != NodeStateNamespaceKind::Storage {
+    pub fn open(storage: &DirectoryView) -> ProllyPortResult<Self> {
+        if storage.kind() != NamespaceKind::Storage {
             return Err(port_error("prolly-storage-namespace", "Prolly store requires the storage namespace"));
         }
-        let path = NodeStatePath::parse(PROLLY_DATABASE_FILE).map_err(molten_error)?;
+        let path = RelativePath::parse(PROLLY_DATABASE_FILE).map_err(molten_error)?;
         let file = storage.open_database_file(&path).map_err(molten_error)?;
         let database = redb::Database::builder().create_file(file).map_err(redb_error)?;
         initialize(&database)?;

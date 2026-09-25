@@ -107,7 +107,7 @@ fn record_decision(value: &Value<IoValue>) -> Result<String> {
     if decision == "pass" || decision == "deny" {
         Ok(decision)
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported secrets decision {decision}")))
+        Err(Failure::invalid_harness(format!("unsupported secrets decision {decision}")))
     }
 }
 
@@ -134,7 +134,7 @@ fn record_bool(value: &Value<IoValue>, record_name: &str, label: &str) -> Result
     let record = simple_record(&value, record_name, 1)?;
     record[0]
         .as_boolean()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected bool for {label}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected bool for {label}")))
 }
 
 fn record_strings(value: &Value<IoValue>, record_name: &str, label: &str) -> Result<Vec<String>> {
@@ -170,7 +170,7 @@ fn require_schema(value: &Value<IoValue>, expected: &str, label: &str) -> Result
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported {label} schema {actual}; expected {expected}")))
+        Err(Failure::invalid_harness(format!("unsupported {label} schema {actual}; expected {expected}")))
     }
 }
 
@@ -186,13 +186,13 @@ fn require_checks(value: &Value<IoValue>, expected: &[&str]) -> Result<()> {
         let name = required_string(&check[0], "check name")?;
         let status = required_string(&check[1], "check status")?;
         if status != "pass" && status != "fail" {
-            return Err(MoltenError::invalid_harness(format!("unsupported check status {status}")));
+            return Err(Failure::invalid_harness(format!("unsupported check status {status}")));
         }
         seen.insert(name);
     }
     for expected in expected {
         if !seen.contains(*expected) {
-            return Err(MoltenError::invalid_harness(format!("missing secrets check {expected}")));
+            return Err(Failure::invalid_harness(format!("missing secrets check {expected}")));
         }
     }
     Ok(())
@@ -201,41 +201,41 @@ fn require_checks(value: &Value<IoValue>, expected: &[&str]) -> Result<()> {
 fn simple_record<'a>(value: &'a IoValue, label: &str, arity: usize) -> Result<Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 fn required_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.to_string())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {label}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {label}")))
 }
 
 #[allow(clippy::owned_cow)]
 fn required_sequence<'a>(value: &'a Value<IoValue>, label: &str) -> Result<Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {label}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {label}")))
 }
 
 fn validate_classification(value: &str) -> Result<()> {
     match value {
         "secret" | "credential" | "private" | "policy" | "encrypted-ref" => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported confidential classification {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported confidential classification {value}"))),
     }
 }
 
 fn validate_redaction_reason(value: &str) -> Result<()> {
     match value {
         "secret" | "credential" | "private" | "policy" | "encrypted-ref" => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported redaction reason {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported redaction reason {value}"))),
     }
 }
 
 fn validate_purpose(value: &str) -> Result<()> {
     match value {
         "debug" | "replay" | "export" | "adapter-use" => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported secret purpose {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported secret purpose {value}"))),
     }
 }
 
@@ -249,7 +249,7 @@ fn validate_allowed_uses(values: &[String]) -> Result<()> {
 
 fn validate_non_empty(value: &str, label: &str) -> Result<()> {
     if value.is_empty() {
-        Err(MoltenError::invalid_harness(format!("{label} must not be empty")))
+        Err(Failure::invalid_harness(format!("{label} must not be empty")))
     } else {
         Ok(())
     }
@@ -257,7 +257,7 @@ fn validate_non_empty(value: &str, label: &str) -> Result<()> {
 
 fn validate_ref(value: &str, label: &str) -> Result<()> {
     validate_content_ref(value)
-        .map_err(|error| MoltenError::invalid_harness(format!("{label} must be a canonical content ref: {error}")))
+        .map_err(|error| Failure::invalid_harness(format!("{label} must be a canonical content ref: {error}")))
 }
 
 fn validate_optional_ref(value: Option<&str>, label: &str) -> Result<()> {

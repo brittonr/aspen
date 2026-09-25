@@ -14,7 +14,7 @@ use valence::preserves_evidence::PreservesEvidenceReport;
 use super::CanonicalWorldCommit;
 use super::WORLD_COMMIT_CLOSURE_REPORT_RECORD;
 use super::WORLD_COMMIT_RESTORE_PLAN_RECORD;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const VALENCE_MOLTEN_ENVELOPE_SCHEMA: &str = "molten.preserves-envelope.v1";
@@ -59,7 +59,7 @@ pub struct WorldCommitArtifactAuthInput<'a> {
 // r[impl molten.world_commit.restore]
 pub fn canonical_closure_report(commit_ref: &WorldCommitRef, report: &ClosureReport) -> Result<CanonicalClosureReport> {
     if report.commit_ref != *commit_ref {
-        return Err(MoltenError::invalid_harness("world commit closure report is bound to a different commit"));
+        return Err(Failure::invalid_harness("world commit closure report is bound to a different commit"));
     }
     let value = crate::preserves_rail::record(WORLD_COMMIT_CLOSURE_REPORT_RECORD, vec![
         crate::preserves_rail::string(molten_core::world_commit::WORLD_COMMIT_CLOSURE_REPORT_SCHEMA),
@@ -139,7 +139,7 @@ pub fn project_world_commit_to_valence(commit: &CanonicalWorldCommit) -> Result<
     };
     let report = valence::preserves_evidence::validate_preserves_bridge(&row);
     if !report.valid {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "world commit Valence projection denied: {:?}",
             report.issues
         )));
@@ -153,7 +153,7 @@ pub fn project_world_commit_artifact_auth_statement(
     input: WorldCommitArtifactAuthInput<'_>,
 ) -> Result<ArtifactStatement> {
     if input.producer_id.is_empty() || input.key_id.is_empty() {
-        return Err(MoltenError::invalid_harness("world commit artifact-auth producer and key ids must not be empty"));
+        return Err(Failure::invalid_harness("world commit artifact-auth producer and key ids must not be empty"));
     }
     let parents = commit
         .core

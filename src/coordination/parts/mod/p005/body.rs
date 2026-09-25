@@ -14,7 +14,7 @@ fn prepare_lock_acquire(runtime: &CoordinationRuntime, request: &CoordinationReq
         let mut state = runtime.state.clone();
         let next = token_number
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("coordination fencing token overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("coordination fencing token overflow"))?;
         state.next_fencing_token = next;
         state.locks.insert(request.key.clone(), LockState {
             owner: request.client_session.clone(),
@@ -33,7 +33,7 @@ fn prepare_lock_acquire(runtime: &CoordinationRuntime, request: &CoordinationReq
             checks: vec![("fencing-token-monotonic", "pass"), ("lock-lease-held", "pass")],
         });
     }
-    Err(MoltenError::invalid_harness(diagnostics.join("; ")))
+    Err(Failure::invalid_harness(diagnostics.join("; ")))
 }
 
 fn prepare_lock_release(runtime: &CoordinationRuntime, request: &CoordinationRequest) -> Result<PreparedMutation> {
@@ -42,15 +42,15 @@ fn prepare_lock_release(runtime: &CoordinationRuntime, request: &CoordinationReq
         .state
         .locks
         .get(&request.key)
-        .ok_or_else(|| MoltenError::invalid_harness("coordination lock is not held"))?;
+        .ok_or_else(|| Failure::invalid_harness("coordination lock is not held"))?;
     if token != lock.token {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "stale fencing token {token}; current token is {}",
             lock.token
         )));
     }
     if request.client_session != lock.owner {
-        return Err(MoltenError::invalid_harness("coordination lock release owner mismatch"));
+        return Err(Failure::invalid_harness("coordination lock release owner mismatch"));
     }
     let mut state = runtime.state.clone();
     state.locks.remove(&request.key);
@@ -70,7 +70,7 @@ fn prepare_queue_enqueue(runtime: &CoordinationRuntime, request: &CoordinationRe
         None => 0,
     };
     if current_len >= runtime.manifest.queue_capacity {
-        return Err(MoltenError::invalid_harness("coordination queue overflow"));
+        return Err(Failure::invalid_harness("coordination queue overflow"));
     }
     let queue = state.queues.entry(request.key.clone()).or_default();
     ensure_count_at_most(queue.len().saturating_add(1), MAX_COORDINATION_ITEMS, "coordination queue items")?;
@@ -88,13 +88,13 @@ fn prepare_queue_dequeue(runtime: &CoordinationRuntime, request: &CoordinationRe
         .state
         .queues
         .get(&request.key)
-        .ok_or_else(|| MoltenError::invalid_harness("coordination queue empty"))?;
-    let item = queue.first().cloned().ok_or_else(|| MoltenError::invalid_harness("coordination queue empty"))?;
+        .ok_or_else(|| Failure::invalid_harness("coordination queue empty"))?;
+    let item = queue.first().cloned().ok_or_else(|| Failure::invalid_harness("coordination queue empty"))?;
     let mut state = runtime.state.clone();
     let remaining = state
         .queues
         .get_mut(&request.key)
-        .ok_or_else(|| MoltenError::invalid_harness("coordination queue missing during dequeue"))?;
+        .ok_or_else(|| Failure::invalid_harness("coordination queue missing during dequeue"))?;
     remaining.remove(0);
     let depth = vec_len_u64(remaining)?;
     Ok(PreparedMutation {
@@ -109,10 +109,10 @@ fn prepare_semaphore_acquire(runtime: &CoordinationRuntime, request: &Coordinati
     let mut state = runtime.state.clone();
     let holders = state.semaphores.entry(request.key.clone()).or_default();
     if holders.contains(&request.client_session) {
-        return Err(MoltenError::invalid_harness("coordination semaphore already held by client"));
+        return Err(Failure::invalid_harness("coordination semaphore already held by client"));
     }
     if set_len_u64(holders)? >= runtime.manifest.semaphore_capacity {
-        return Err(MoltenError::invalid_harness("coordination semaphore exhausted"));
+        return Err(Failure::invalid_harness("coordination semaphore exhausted"));
     }
     ensure_count_at_most(holders.len().saturating_add(1), MAX_COORDINATION_ITEMS, "coordination semaphore holders")?;
     holders.insert(request.client_session.clone());
@@ -130,7 +130,7 @@ fn prepare_semaphore_release(runtime: &CoordinationRuntime, request: &Coordinati
     let holders = state
         .semaphores
         .get_mut(&request.key)
-        .ok_or_else(|| MoltenError::invalid_harness("coordination semaphore not held"))?;
+        .ok_or_else(|| Failure::invalid_harness("coordination semaphore not held"))?;
     if holders.remove(&request.client_session) {
         let available = runtime.manifest.semaphore_capacity.saturating_sub(set_len_u64(holders)?);
         Ok(PreparedMutation {
@@ -140,14 +140,14 @@ fn prepare_semaphore_release(runtime: &CoordinationRuntime, request: &Coordinati
             checks: vec![("semaphore-bounds", "pass"), ("release-committed", "pass")],
         })
     } else {
-        Err(MoltenError::invalid_harness("coordination semaphore release holder mismatch"))
+        Err(Failure::invalid_harness("coordination semaphore release holder mismatch"))
     }
 }
 
 fn prepare_rate_acquire(runtime: &CoordinationRuntime, request: &CoordinationRequest) -> Result<PreparedMutation> {
     let used = runtime.state.rates.get(&request.key).copied().unwrap_or(0);
     if used >= runtime.manifest.rate_limit {
-        return Err(MoltenError::invalid_harness("coordination rate limit exhausted"));
+        return Err(Failure::invalid_harness("coordination rate limit exhausted"));
     }
     let mut state = runtime.state.clone();
     state.rates.insert(request.key.clone(), used + 1);
@@ -170,16 +170,16 @@ fn prepare_election(runtime: &CoordinationRuntime, request: &CoordinationRequest
         .map_or_else(|| Ok(request.client_session.clone()), |payload| simple_payload_text(payload, "candidate"))?;
     if let Some(existing) = runtime.state.elections.get(&request.key) {
         if existing.leader == leader {
-            return Err(MoltenError::invalid_harness("coordination election already has same leader"));
+            return Err(Failure::invalid_harness("coordination election already has same leader"));
         }
-        return Err(MoltenError::invalid_harness(format!("coordination election already led by {}", existing.leader)));
+        return Err(Failure::invalid_harness(format!("coordination election already led by {}", existing.leader)));
     }
     let token_number = runtime.state.next_fencing_token;
     let token = pending_token(&request.key, &leader, token_number)?;
     let mut state = runtime.state.clone();
     state.next_fencing_token = token_number
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness("coordination election token overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("coordination election token overflow"))?;
     state.elections.insert(request.key.clone(), ElectionState {
         leader: leader.clone(),
         token: token_number,
@@ -253,7 +253,7 @@ fn prepare_registry_unregister(
             checks: vec![("service-registry-pointer", "pass")],
         })
     } else {
-        Err(MoltenError::invalid_harness("coordination registry entry missing"))
+        Err(Failure::invalid_harness("coordination registry entry missing"))
     }
 }
 

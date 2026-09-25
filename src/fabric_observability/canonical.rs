@@ -1,7 +1,7 @@
 use preserves::IOValue;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric::DeterminismClass;
 use crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA;
@@ -647,8 +647,8 @@ fn require_valid(label: &str, issues: &[ObservabilityIssue]) -> Result<()> {
     }
 }
 
-fn validation_error(label: &str, issues: &[ObservabilityIssue]) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label} denied: {issues:?}"))
+fn validation_error(label: &str, issues: &[ObservabilityIssue]) -> Failure {
+    Failure::invalid_harness(format!("{label} denied: {issues:?}"))
 }
 
 fn checks(names: &[&str]) -> IOValue {

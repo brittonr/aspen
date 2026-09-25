@@ -3,7 +3,7 @@ fn validate_adapter_operation(operation: &str) -> Result<()> {
     if matches!(operation, "start" | "verify" | "deny" | "shutdown") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported node adapter operation {operation}")))
+        Err(Failure::invalid_harness(format!("unsupported node adapter operation {operation}")))
     }
 }
 
@@ -11,7 +11,7 @@ fn validate_control_operation(operation: &str) -> Result<()> {
     if matches!(operation, "status" | "install" | "run" | "gate" | "shutdown") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported node control operation {operation}")))
+        Err(Failure::invalid_harness(format!("unsupported node control operation {operation}")))
     }
 }
 
@@ -19,14 +19,14 @@ fn validate_decision(decision: &str) -> Result<()> {
     if matches!(decision, "pass" | "deny") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported node runtime decision {decision}")))
+        Err(Failure::invalid_harness(format!("unsupported node runtime decision {decision}")))
     }
 }
 
 fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
     validate_non_empty(value_ref, field)?;
     crate::preserves_rail::validate_content_ref(value_ref).map_err(|error| {
-        MoltenError::invalid_harness(format!("{field} must be a canonical blake3 content ref: {error}"))
+        Failure::invalid_harness(format!("{field} must be a canonical blake3 content ref: {error}"))
     })
 }
 
@@ -47,7 +47,7 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
 
 fn validate_non_empty(value: &str, field: &str) -> Result<()> {
     if value.is_empty() {
-        Err(MoltenError::invalid_harness(format!("{field} cannot be empty")))
+        Err(Failure::invalid_harness(format!("{field} cannot be empty")))
     } else {
         Ok(())
     }

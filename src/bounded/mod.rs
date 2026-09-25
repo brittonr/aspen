@@ -1,4 +1,4 @@
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub(crate) trait VecSink<T> {
@@ -32,13 +32,13 @@ pub(crate) fn ensure_count_at_most(count: usize, maximum: usize, label: &str) ->
     if count <= maximum {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
+    Err(Failure::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
 }
 
 pub(crate) fn checked_count_sum(left: usize, right: usize, maximum: usize, label: &str) -> Result<usize> {
     let total = left
         .checked_add(right)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("{label} count overflow")))?;
     ensure_count_at_most(total, maximum, label)?;
     Ok(total)
 }

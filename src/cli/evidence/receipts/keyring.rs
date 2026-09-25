@@ -12,7 +12,7 @@ pub(crate) fn ensure_selector_has_ledger(
     key_id: Option<&str>,
 ) -> molten::error::Result<()> {
     if ledger.is_none() && (key_ref.is_some() || key_id.is_some()) {
-        Err(molten::error::MoltenError::invalid_harness(
+        Err(molten::error::Failure::invalid_harness(
             "signed receipt key selectors require --key-ledger or --signed-key-ledger",
         ))
     } else {
@@ -46,7 +46,7 @@ pub(crate) fn load(ledger: &std::path::Path) -> molten::error::Result<Set> {
 
 fn ensure_entry_count(count: usize, label: &str) -> molten::error::Result<()> {
     if count > ENTRY_LIMIT {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "{label} count {count} exceeds {ENTRY_LIMIT}"
         )));
     }
@@ -88,7 +88,7 @@ pub(crate) fn summary(value: &preserves::IOValue) -> molten::error::Result<Strin
                 revocation.superseded_by.as_deref().unwrap_or("none")
             ))
         }
-        kind => Err(molten::error::MoltenError::invalid_harness(format!(
+        kind => Err(molten::error::Failure::invalid_harness(format!(
             "unsupported signed receipt keyring artifact kind {kind}; expected signed-receipt-key or signed-receipt-key-revocation"
         ))),
     }

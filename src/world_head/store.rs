@@ -2,9 +2,9 @@ use molten_core::world_head::WorldBranchId;
 use molten_core::world_head::WorldHeadConflictSet;
 use molten_core::world_head::WorldHeadState;
 use molten_core::world_head::WorldHeadTransitionPlan;
-use molten_node_host::node_state::NodeStateNamespace;
-use molten_node_host::node_state::NodeStateNamespaceKind;
-use molten_node_host::node_state::NodeStatePath;
+use molten_node_host::node_state::DirectoryView;
+use molten_node_host::node_state::NamespaceKind;
+use molten_node_host::node_state::RelativePath;
 use redb::ReadableDatabase;
 use redb::ReadableTable;
 
@@ -18,7 +18,7 @@ use super::WorldHeadReconciliationPort;
 use super::WorldHeadStatePort;
 use super::canonical_world_head_state;
 use super::parse_canonical_world_head_state;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const WORLD_HEAD_DATABASE_FILE: &str = "world-heads.redb";
@@ -36,11 +36,11 @@ pub struct LocalWorldHeadStore {
 }
 
 impl LocalWorldHeadStore {
-    pub fn open(storage: &NodeStateNamespace) -> Result<Self> {
-        if storage.kind() != NodeStateNamespaceKind::Storage {
-            return Err(MoltenError::invalid_harness("local world-head store requires the storage namespace"));
+    pub fn open(storage: &DirectoryView) -> Result<Self> {
+        if storage.kind() != NamespaceKind::Storage {
+            return Err(Failure::invalid_harness("local world-head store requires the storage namespace"));
         }
-        let path = NodeStatePath::parse(WORLD_HEAD_DATABASE_FILE)?;
+        let path = RelativePath::parse(WORLD_HEAD_DATABASE_FILE)?;
         let file = storage.open_database_file(&path)?;
         let database = redb::Database::builder().create_file(file).map_err(store_error)?;
         initialize_tables(&database)?;
@@ -208,14 +208,14 @@ fn conflict_key(branch_id: &WorldBranchId, conflict_ref: &str) -> String {
     format!("{}{CONFLICT_KEY_SEPARATOR}{conflict_ref}", branch_id.as_str())
 }
 
-fn store_error(error: impl std::fmt::Display) -> MoltenError {
-    MoltenError::invalid_harness(format!("world-head store failed: {error}"))
+fn store_error(error: impl std::fmt::Display) -> Failure {
+    Failure::invalid_harness(format!("world-head store failed: {error}"))
 }
 
 fn port_store_error(error: impl std::fmt::Display) -> WorldHeadPortError {
     WorldHeadPortError::new("world-head-store", error.to_string())
 }
 
-fn port_molten_error(error: MoltenError) -> WorldHeadPortError {
+fn port_molten_error(error: Failure) -> WorldHeadPortError {
     WorldHeadPortError::new("world-head-codec", error.to_string())
 }

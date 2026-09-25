@@ -5,7 +5,7 @@ use transactional_reconciliation_core::PersistenceState;
 use transactional_reconciliation_core::QuarantineReason;
 use transactional_reconciliation_core::QuarantineStatus;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub const WORLD_PROMOTION_PLAN_SCHEMA: &str = "molten.world-promotion-plan.v1";
@@ -86,11 +86,11 @@ pub fn parse_reservation(bytes: &[u8]) -> Result<WorldReleaseReservation> {
         adapter_ref: WorldPromotionAdapterRef::new(content_ref(&fields[8], "adapter-ref")?).map_err(reference_error)?,
         generation: u64_field(&fields[9], "generation")?,
         state: WorldReleaseState::parse(&string_field(&fields[10], "state")?)
-            .ok_or_else(|| MoltenError::invalid_harness("unsupported world release state"))?,
+            .ok_or_else(|| Failure::invalid_harness("unsupported world release state"))?,
     };
     let canonical = canonical_reservation(&reservation)?;
     if canonical.bytes != decoded.canonical_bytes {
-        return Err(MoltenError::invalid_harness("world reservation bytes are not canonical"));
+        return Err(Failure::invalid_harness("world reservation bytes are not canonical"));
     }
     Ok(reservation)
 }
@@ -136,7 +136,7 @@ pub fn parse_attempt(bytes: &[u8]) -> Result<WorldAttemptRecord> {
             .map_err(reference_error)?,
         attempt_ref: WorldReleaseAttemptRef::new(content_ref(&fields[2], "attempt-ref")?).map_err(reference_error)?,
         state: WorldReleaseState::parse(&string_field(&fields[3], "state")?)
-            .ok_or_else(|| MoltenError::invalid_harness("unsupported world attempt state"))?,
+            .ok_or_else(|| Failure::invalid_harness("unsupported world attempt state"))?,
         observation_ref: crate::preserves_rail::optional_content_ref_string(
             &named_value(&fields[4], "observation-ref")?,
             "world attempt observation ref",
@@ -148,7 +148,7 @@ pub fn parse_attempt(bytes: &[u8]) -> Result<WorldAttemptRecord> {
     };
     let canonical = canonical_attempt(&record)?;
     if canonical.bytes != decoded.canonical_bytes {
-        return Err(MoltenError::invalid_harness("world attempt bytes are not canonical"));
+        return Err(Failure::invalid_harness("world attempt bytes are not canonical"));
     }
     Ok(record)
 }
@@ -180,7 +180,7 @@ fn canonical(value: IOValue) -> Result<CanonicalWorldPromotionRecord> {
 
 fn require_non_claims(non_claims: &[String]) -> Result<()> {
     if non_claims != promotion_non_claims() {
-        return Err(MoltenError::invalid_harness("world promotion non-claims are incomplete"));
+        return Err(Failure::invalid_harness("world promotion non-claims are incomplete"));
     }
     Ok(())
 }
@@ -190,7 +190,7 @@ fn require_schema(value: &preserves::Value<IOValue>, expected: &str) -> Result<(
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness("unsupported world promotion schema"))
+        Err(Failure::invalid_harness("unsupported world promotion schema"))
     }
 }
 
@@ -205,8 +205,8 @@ fn string_field(value: &preserves::Value<IOValue>, label: &str) -> Result<String
 fn u64_field(value: &preserves::Value<IOValue>, label: &str) -> Result<u64> {
     named_value(value, label)?
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {label}")))?
-        .map_err(|_| MoltenError::invalid_harness(format!("u64 out of range for {label}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {label}")))?
+        .map_err(|_| Failure::invalid_harness(format!("u64 out of range for {label}")))
 }
 
 fn bool_field(value: &preserves::Value<IOValue>, label: &str) -> Result<bool> {
@@ -216,14 +216,14 @@ fn bool_field(value: &preserves::Value<IOValue>, label: &str) -> Result<bool> {
     } else if value.collect_simple_record("false", Some(0)).is_some() {
         Ok(false)
     } else {
-        Err(MoltenError::invalid_harness(format!("expected boolean for {label}")))
+        Err(Failure::invalid_harness(format!("expected boolean for {label}")))
     }
 }
 
 fn named_value(value: &preserves::Value<IOValue>, label: &str) -> Result<preserves::Value<IOValue>> {
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} VALUE>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} VALUE>")))?;
     Ok(fields[0].clone())
 }
 
@@ -278,10 +278,10 @@ fn non_claims() -> IOValue {
     named("non-claims", sequence(WORLD_PROMOTION_NON_CLAIMS.iter().map(string).collect()))
 }
 
-fn reference_error(error: WorldPromotionReferenceError) -> MoltenError {
-    MoltenError::invalid_harness(format!("invalid world promotion reference: {error:?}"))
+fn reference_error(error: WorldPromotionReferenceError) -> Failure {
+    Failure::invalid_harness(format!("invalid world promotion reference: {error:?}"))
 }
 
-fn world_commit_error(error: molten_core::world_commit::WorldCommitReferenceError) -> MoltenError {
-    MoltenError::invalid_harness(format!("invalid world commit reference: {error:?}"))
+fn world_commit_error(error: molten_core::world_commit::WorldCommitReferenceError) -> Failure {
+    Failure::invalid_harness(format!("invalid world commit reference: {error:?}"))
 }

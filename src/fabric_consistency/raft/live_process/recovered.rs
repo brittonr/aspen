@@ -7,7 +7,7 @@ pub(super) async fn run(
     mut node: live_cluster::LiveNode,
     run_directory: &Path,
 ) -> Result<()> {
-    let listener = node.listener.take().ok_or_else(|| MoltenError::invalid_harness("recovered listener is absent"))?;
+    let listener = node.listener.take().ok_or_else(|| Failure::invalid_harness("recovered listener is absent"))?;
     let mut ingress = IrohReplicaIngressPump::spawn(listener, IrohReplicaIngressConfig {
         session_ref: node.session_ref.clone(),
         accept_timeout: Duration::from_secs(CHILD_TIMEOUT_SECONDS),
@@ -45,7 +45,7 @@ pub(super) async fn run(
             }
         }
     }
-    Err(MoltenError::invalid_harness("recovered replica exhausted its bounded event loop"))
+    Err(Failure::invalid_harness("recovered replica exhausted its bounded event loop"))
 }
 
 async fn send_stale_leader_frame(node: &mut live_cluster::LiveNode) -> Result<()> {

@@ -1,6 +1,6 @@
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 type Value<T> = preserves::Value<T>;
 
@@ -233,12 +233,12 @@ pub fn handshake_value(input: &HandshakeValueInput<'_>) -> Result<IoValue> {
 pub fn parse_handshake(value: &IoValue) -> Result<HandshakeRecord> {
     let fields = value
         .collect_simple_record("peer-handshake-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <peer-handshake-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <peer-handshake-v1 ...>"))?;
     require_schema(&fields[0], PEER_HANDSHAKE_SCHEMA, "peer handshake schema")?;
     let node = value_to_iovalue(&fields[1]);
     let node_fields = node
         .collect_simple_record("node", Some(4))
-        .ok_or_else(|| MoltenError::invalid_harness("peer handshake missing node field"))?;
+        .ok_or_else(|| Failure::invalid_harness("peer handshake missing node field"))?;
     let features = parse_feature_vector(&value_to_iovalue(&fields[2]))?;
     let requested_joins = parse_join_sequence(&fields[3], "requested-joins")?;
     let capability_offers = parse_offer_sequence(&fields[4], "capability-offers")?;

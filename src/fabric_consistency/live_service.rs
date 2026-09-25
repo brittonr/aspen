@@ -6,7 +6,7 @@ use super::raft::ReplicaStartInput;
 use super::raft::ReplicaStartPlan;
 use super::raft::StaticMembership;
 use super::raft::plan_live_replica_start;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric::FabricPortKey;
 use crate::system_extension::LifecyclePhase;
@@ -37,27 +37,27 @@ fn validate_host_scope<E: SystemExtensionExecutor>(
     group: &ConsistencyGroupBinding,
 ) -> Result<()> {
     if host.state().phase != LifecyclePhase::Running {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "live Raft startup requires a running supervised system-extension host",
         ));
     }
     let manifest = host.manifest();
     let admitted = manifest.manifest();
     if admitted.extension_id != group.extension_id || admitted.service_id != group.service_id {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "live Raft host extension or service identity does not match the consistency group",
         ));
     }
     if manifest.manifest_ref() != group.application_manifest_ref {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "live Raft host manifest ref does not match the consistency application manifest",
         ));
     }
     if host.state().generation != group.service_generation {
-        return Err(MoltenError::invalid_harness("live Raft host uses a stale service generation"));
+        return Err(Failure::invalid_harness("live Raft host uses a stale service generation"));
     }
     if !group.policy_refs.iter().all(|reference| admitted.policy_refs.contains(reference)) {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "live Raft group policy refs are not admitted by the system-extension host",
         ));
     }
@@ -74,7 +74,7 @@ fn project_required_port_bindings<E: SystemExtensionExecutor>(
             version: version.to_string(),
         };
         let binding = host.manifest().binding_for(&key).ok_or_else(|| {
-            MoltenError::invalid_harness(format!(
+            Failure::invalid_harness(format!(
                 "live Raft host is missing required admitted fabric port {port_id}@{version}"
             ))
         })?;

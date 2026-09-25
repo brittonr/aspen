@@ -12,29 +12,29 @@ pub struct Snapshot<'a> {
 // r[impl molten.startup_evidence.strict]
 pub fn evaluate(snapshot: Snapshot<'_>) -> Result<OctetGateEvaluation> {
     if snapshot.members.len() != snapshot.plan.members().len() {
-        return Err(MoltenError::invalid_harness("startup-evidence-member-inventory"));
+        return Err(Failure::invalid_harness("startup-evidence-member-inventory"));
     }
     for (index, bytes) in snapshot.members.iter().enumerate() {
         snapshot
             .plan
             .verify_member(index, bytes)
-            .map_err(|_| MoltenError::invalid_harness("startup-evidence-member-identity"))?;
+            .map_err(|_| Failure::invalid_harness("startup-evidence-member-identity"))?;
     }
     let source_files: Vec<SourceFile> = serde_json::from_slice(&snapshot.members[5])
-        .map_err(|_| MoltenError::invalid_harness("startup-evidence-source-inventory"))?;
+        .map_err(|_| Failure::invalid_harness("startup-evidence-source-inventory"))?;
     molten_core::node_startup::validate_source_inventory(snapshot.plan, &source_files)
-        .map_err(|_| MoltenError::invalid_harness("startup-evidence-source-context"))?;
+        .map_err(|_| Failure::invalid_harness("startup-evidence-source-context"))?;
     let text = |index: usize| -> Result<&str> {
-        std::str::from_utf8(&snapshot.members[index]).map_err(|_| MoltenError::invalid_harness("startup-evidence-utf8"))
+        std::str::from_utf8(&snapshot.members[index]).map_err(|_| Failure::invalid_harness("startup-evidence-utf8"))
     };
     let command = text(6)?;
     if command.trim() != DEFAULT_GATE_COMMAND {
-        return Err(MoltenError::invalid_harness("startup-evidence-command-profile"));
+        return Err(Failure::invalid_harness("startup-evidence-command-profile"));
     }
     let expected =
-        explicit_metadata(text(0)?, &snapshot.members[1], command.trim()).map_err(MoltenError::invalid_harness)?;
+        explicit_metadata(text(0)?, &snapshot.members[1], command.trim()).map_err(Failure::invalid_harness)?;
     let status: StatusArtifact =
-        serde_json::from_str(text(7)?).map_err(|_| MoltenError::invalid_harness("startup-evidence-status"))?;
+        serde_json::from_str(text(7)?).map_err(|_| Failure::invalid_harness("startup-evidence-status"))?;
     if status.metadata.toolchain != snapshot.plan.cohort().octet_toolchain
         || status.exit_code != 0
         || status.total_findings != 0
@@ -42,20 +42,20 @@ pub fn evaluate(snapshot: Snapshot<'_>) -> Result<OctetGateEvaluation> {
         || status.error_findings != 0
         || status.autofixable_findings != 0
     {
-        return Err(MoltenError::invalid_harness("startup-evidence-not-strict-clean"));
+        return Err(Failure::invalid_harness("startup-evidence-not-strict-clean"));
     }
     let summary = text(8)?;
     let mut totals = summary.lines().map(str::trim).filter(|line| line.starts_with("Findings:"));
     if totals.next() != Some("Findings: 0") || totals.next().is_some() {
-        return Err(MoltenError::invalid_harness("startup-evidence-summary-count"));
+        return Err(Failure::invalid_harness("startup-evidence-summary-count"));
     }
     let corpus: ObjectCorpusReceipt =
-        serde_json::from_str(text(9)?).map_err(|_| MoltenError::invalid_harness("startup-evidence-object-corpus"))?;
+        serde_json::from_str(text(9)?).map_err(|_| Failure::invalid_harness("startup-evidence-object-corpus"))?;
     // A replay command naming a file is not source coverage. Require actual corpus paths.
     let paths = corpus
         .source_paths
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("startup-evidence-source-coverage"))?;
+        .ok_or_else(|| Failure::invalid_harness("startup-evidence-source-coverage"))?;
     if paths.len() > molten_core::node_startup::MAX_SOURCE_FILES
         || paths.iter().any(|path| source_files.binary_search_by(|file| file.name.cmp(path)).is_err())
         || SOURCE_GATE_SOURCE_SCOPE_PATHS.iter().any(|required| !paths.iter().any(|p| p == required))
@@ -71,14 +71,14 @@ pub fn evaluate(snapshot: Snapshot<'_>) -> Result<OctetGateEvaluation> {
         .iter()
         .any(|required| !paths.iter().any(|p| p == required))
     {
-        return Err(MoltenError::invalid_harness("startup-evidence-source-coverage"));
+        return Err(Failure::invalid_harness("startup-evidence-source-coverage"));
     }
     let build_config: toml::Table =
-        text(4)?.parse().map_err(|_| MoltenError::invalid_harness("startup-evidence-build-toolchain"))?;
+        text(4)?.parse().map_err(|_| Failure::invalid_harness("startup-evidence-build-toolchain"))?;
     if build_config.get("toolchain").and_then(|v| v.get("channel")).and_then(toml::Value::as_str)
         != Some(snapshot.plan.cohort().build_toolchain.as_str())
     {
-        return Err(MoltenError::invalid_harness("startup-evidence-build-toolchain"));
+        return Err(Failure::invalid_harness("startup-evidence-build-toolchain"));
     }
     let gate_file = |index: usize| -> Result<GateFile> {
         Ok(GateFile {
@@ -96,7 +96,7 @@ pub fn evaluate(snapshot: Snapshot<'_>) -> Result<OctetGateEvaluation> {
     let mut diagnostics = Vec::new();
     let lints = parse_summary_lints(files.summary.as_ref(), &mut checks, &mut diagnostics);
     if lints.values().any(|count| *count != 0) || !diagnostics.is_empty() {
-        return Err(MoltenError::invalid_harness("startup-evidence-summary-count"));
+        return Err(Failure::invalid_harness("startup-evidence-summary-count"));
     }
     let mut initial_checks = vec![
         Check {

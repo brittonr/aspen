@@ -1,7 +1,7 @@
 //! Capability adapter for the normal node's optional protected content service.
 use crate::content_store_adapter::*;
-use crate::error::{MoltenError, Result};
-use crate::node_state::{NodeStatePath, NodeStateRoot};
+use crate::error::{Failure, Result};
+use crate::node_state::{RelativePath, Root};
 use crate::{chunk_store as chunks, preserves_rail as rail};
 use serde_json::json;
 use std::net::SocketAddr;
@@ -21,27 +21,27 @@ pub fn profile(policy_ref: String) -> Result<ContentAdapterProfile> {
     )
 }
 
-pub fn identity(root: &NodeStateRoot) -> Result<LiveIrohIdentitySummary> {
-    let bytes = root.read(&NodeStatePath::parse("identity.preserves")?, 65_536)?;
+pub fn identity(root: &Root) -> Result<LiveIrohIdentitySummary> {
+    let bytes = root.read(&RelativePath::parse("identity.preserves")?, 65_536)?;
     let value = rail::parse_text(
-        std::str::from_utf8(&bytes).map_err(|_| MoltenError::invalid_harness("node identity encoding"))?,
+        std::str::from_utf8(&bytes).map_err(|_| Failure::invalid_harness("node identity encoding"))?,
     )?;
     let identity = crate::node_identity::parse_identity(&value)?;
     let namespace = root.identity()?;
     let summary = inspect_live_iroh_identity(&namespace, &identity.backend_ref)?;
     if summary.endpoint_id != identity.endpoint_id || summary.handle_ref != identity.secret_ref {
-        return Err(MoltenError::invalid_harness("node content identity binding denied"));
+        return Err(Failure::invalid_harness("node content identity binding denied"));
     }
     Ok(summary)
 }
 
-pub fn prepare(root: &NodeStateRoot, bytes: &[u8], expected: &str) -> Result<String> {
-    admit_node_archive(bytes, expected).map_err(MoltenError::invalid_harness)?;
+pub fn prepare(root: &Root, bytes: &[u8], expected: &str) -> Result<String> {
+    admit_node_archive(bytes, expected).map_err(Failure::invalid_harness)?;
     identity(root)?;
     let store = root.chunk_store()?;
     let stored = chunks::put_bytes_with_root(&store, "artifact", bytes, NODE_CONTENT_CHUNK_BYTES)?;
     chunks::pin_manifest_with_root(&store, &stored.manifest_ref)?;
-    root.write(&NodeStatePath::parse(MANIFEST_FILE)?, stored.manifest_ref.as_bytes())?;
+    root.write(&RelativePath::parse(MANIFEST_FILE)?, stored.manifest_ref.as_bytes())?;
     Ok(stored.manifest_ref)
 }
 
@@ -55,12 +55,12 @@ pub(crate) struct Session {
 }
 
 impl Session {
-    pub(crate) fn start(root: &NodeStateRoot, plan: &NodeContentPlan, startup: &str, lock: &str) -> Result<Self> {
+    pub(crate) fn start(root: &Root, plan: &NodeContentPlan, startup: &str, lock: &str) -> Result<Self> {
         remove_handoff(root)?;
         write_status(root, &json!({"state":"starting"}))?;
         let store = root.chunk_store()?;
         if !chunks::manifest_is_pinned_with_root(&store, plan.grant().manifest_ref())? {
-            return Err(MoltenError::invalid_harness("node content canonical pin missing"));
+            return Err(Failure::invalid_harness("node content canonical pin missing"));
         }
         let id = identity(root)?;
         let namespace = root.identity()?;
@@ -81,7 +81,7 @@ impl Session {
             "handoff_blake3":blake3::hash(&wire).to_hex().to_string(),
             "startup_ref":startup, "service_lock_ref":lock, "denied_connections":0, "ticks":0});
         let written =
-            root.write(&NodeStatePath::parse(HANDOFF_FILE)?, &wire).and_then(|()| write_status(root, &status));
+            root.write(&RelativePath::parse(HANDOFF_FILE)?, &wire).and_then(|()| write_status(root, &status));
         if let Err(error) = written {
             runtime.block_on(publication.shutdown())?;
             remove_handoff(root)?;
@@ -95,7 +95,7 @@ impl Session {
         })
     }
 
-    pub(crate) fn tick(&mut self, root: &NodeStateRoot, tick: u64) -> Result<()> {
+    pub(crate) fn tick(&mut self, root: &Root, tick: u64) -> Result<()> {
         self.status["denied_connections"] = self.publication.denied_connections().into();
         self.status["ticks"] = tick.into();
         write_status(root, &self.status)?;
@@ -103,7 +103,7 @@ impl Session {
         Ok(())
     }
 
-    pub(crate) fn close(mut self, root: &NodeStateRoot) -> Result<()> {
+    pub(crate) fn close(mut self, root: &Root) -> Result<()> {
         self.status["denied_connections"] = self.publication.denied_connections().into();
         self.runtime.block_on(self.publication.shutdown())?;
         remove_handoff(root)?;
@@ -112,26 +112,26 @@ impl Session {
     }
 }
 
-fn write_status(root: &NodeStateRoot, status: &serde_json::Value) -> Result<()> {
+fn write_status(root: &Root, status: &serde_json::Value) -> Result<()> {
     root.control_service()?.write_atomic_leaf(
-        &NodeStatePath::parse("content-status.json")?,
+        &RelativePath::parse("content-status.json")?,
         &serde_json::to_vec(status).map_err(json_error)?,
     )
 }
 
-fn remove_handoff(root: &NodeStateRoot) -> Result<()> {
-    let path = NodeStatePath::parse(HANDOFF_FILE)?;
+fn remove_handoff(root: &Root) -> Result<()> {
+    let path = RelativePath::parse(HANDOFF_FILE)?;
     if root.try_exists(&path)? {
         root.remove_regular_file(&path)?;
     }
     Ok(())
 }
-fn json_error(error: serde_json::Error) -> MoltenError {
-    MoltenError::invalid_harness(format!("node content JSON: {error}"))
+fn json_error(error: serde_json::Error) -> Failure {
+    Failure::invalid_harness(format!("node content JSON: {error}"))
 }
 
 pub struct FetchInput<'a> {
-    pub root: &'a NodeStateRoot,
+    pub root: &'a Root,
     pub handoff: &'a [u8],
     pub manifest: &'a str,
     pub provider: &'a str,
@@ -143,7 +143,7 @@ pub struct FetchInput<'a> {
 /// Returns verified bytes; the CLI's explicit output grant owns publication.
 pub async fn fetch(input: FetchInput<'_>) -> Result<(Vec<u8>, String)> {
     if !valid_reader_key(input.expected) {
-        return Err(MoltenError::invalid_harness("node content expected digest denied"));
+        return Err(Failure::invalid_harness("node content expected digest denied"));
     }
     let policy_ref = rail::content_ref_from_bytes(NODE_CONTENT_SCHEMA.as_bytes());
     let profile = profile(policy_ref.clone())?;
@@ -155,7 +155,7 @@ pub async fn fetch(input: FetchInput<'_>) -> Result<(Vec<u8>, String)> {
             provider: input
                 .provider
                 .parse()
-                .map_err(|_| MoltenError::invalid_harness("node content provider denied"))?,
+                .map_err(|_| Failure::invalid_harness("node content provider denied"))?,
             address: input.address,
         },
     )?;
@@ -189,9 +189,9 @@ pub async fn fetch(input: FetchInput<'_>) -> Result<(Vec<u8>, String)> {
     )
     .await?;
     if result.state.artifact.terminal != ContentTerminal::Verified {
-        return Err(MoltenError::invalid_harness("node content transfer not verified; no archive published"));
+        return Err(Failure::invalid_harness("node content transfer not verified; no archive published"));
     }
     let bytes = assemble_verified_content(remote.manifest(), &result.state.artifact, &result.verified_chunks)?;
-    admit_node_archive(&bytes, input.expected).map_err(MoltenError::invalid_harness)?;
+    admit_node_archive(&bytes, input.expected).map_err(Failure::invalid_harness)?;
     Ok((bytes, result.state.artifact_ref))
 }

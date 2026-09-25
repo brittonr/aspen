@@ -24,7 +24,7 @@ use super::WorldRootObservationPort;
 use super::canonical_capture_receipt;
 use super::canonical_world_commit;
 use super::denied_capture_receipt;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -156,7 +156,7 @@ pub fn execute_restore_plan<P: WorldRestorePort>(plan: &RestorePlan, port: &mut 
         let outcome = port.execute_restore_step(step).map_err(port_error)?;
         crate::preserves_rail::validate_content_ref(&outcome.evidence_ref)?;
         if outcome.step != *step {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "world restore port returned evidence for a different restore step",
             ));
         }
@@ -252,6 +252,6 @@ pub(crate) fn port_issue(error: &WorldCommitPortError) -> String {
     format!("port:{}", error.class)
 }
 
-fn port_error(error: WorldCommitPortError) -> MoltenError {
-    MoltenError::invalid_harness(format!("world commit port failed: {error}"))
+fn port_error(error: WorldCommitPortError) -> Failure {
+    Failure::invalid_harness(format!("world commit port failed: {error}"))
 }

@@ -1,6 +1,6 @@
 type IoValue = preserves::IOValue;
 type Result<T> = crate::error::Result<T>;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 
@@ -269,7 +269,7 @@ fn select_source<'a>(
 ) -> Result<&'a ConfigSourceInput> {
     let mut selected = sources
         .first()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("field {field} has no sources")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("field {field} has no sources")))?;
     for source in sources.iter().skip(1) {
         let selected_precedence = source_precedence(&selected.source_class);
         let source_precedence = source_precedence(&source.source_class);
@@ -323,7 +323,7 @@ fn field_map(fields: &[EffectiveConfigField]) -> Result<OrderedMap<String, Effec
     let mut output = OrderedMap::new();
     for field in fields {
         if output.insert(field.field.clone(), field.clone()).is_some() {
-            return Err(MoltenError::invalid_harness(format!("duplicate effective field {}", field.field)));
+            return Err(Failure::invalid_harness(format!("duplicate effective field {}", field.field)));
         }
     }
     Ok(output)
@@ -421,7 +421,7 @@ fn bool_value(value: bool) -> IoValue {
 
 fn validate_ref(reference: &str, label: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference)
-        .map_err(|error| MoltenError::invalid_harness(format!("invalid {label} ref {reference}: {error}")))
+        .map_err(|error| Failure::invalid_harness(format!("invalid {label} ref {reference}: {error}")))
 }
 
 fn validate_ref_with_diagnostics(reference: &str, label: &str, diagnostics: &mut Vec<String>) {
@@ -432,7 +432,7 @@ fn validate_ref_with_diagnostics(reference: &str, label: &str, diagnostics: &mut
 
 fn validate_text(label: &str, value: &str) -> Result<()> {
     if value.trim().is_empty() {
-        Err(MoltenError::invalid_harness(format!("{label} must not be empty")))
+        Err(Failure::invalid_harness(format!("{label} must not be empty")))
     } else {
         Ok(())
     }

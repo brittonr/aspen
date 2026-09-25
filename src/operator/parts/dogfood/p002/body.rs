@@ -113,7 +113,7 @@ pub fn dogfood_report_value(input: &DogfoodReportInput<'_>) -> Result<IoValue> {
 pub fn parse_dogfood_report(value: &IoValue) -> Result<DogfoodReport> {
     let fields = value
         .collect_simple_record("dogfood-report-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <dogfood-report-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <dogfood-report-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::OPERATOR_DOGFOOD_REPORT_SCHEMA, "dogfood report")?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "canonical-report", "dogfood report")?;
@@ -137,7 +137,7 @@ pub fn parse_dogfood_report(value: &IoValue) -> Result<DogfoodReport> {
 pub fn release_gate_receipt_value(input: &ReleaseGateInput<'_>) -> Result<IoValue> {
     let report = parse_dogfood_report(input.report_value)?;
     if report.decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "dogfood release gate requires pass report {}; decision is {}",
             report.report_ref, report.decision
         )));
@@ -182,7 +182,7 @@ pub fn release_gate_receipt_value(input: &ReleaseGateInput<'_>) -> Result<IoValu
 pub fn parse_release_gate_receipt(value: &IoValue) -> Result<ReleaseGateReceipt> {
     let fields = value
         .collect_simple_record("release-gate-receipt-v1", Some(11))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <release-gate-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <release-gate-receipt-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::OPERATOR_RELEASE_GATE_RECEIPT_SCHEMA, "operator release gate")?;
     let checks = parse_checks(&fields[10])?;
     require_check(&checks, "dogfood-report-pass", "operator release gate")?;
@@ -245,7 +245,7 @@ pub fn nix_dogfood_release_evidence_value(input: &NixDogfoodEvidenceInput<'_>) -
 pub fn parse_nix_dogfood_evidence(value: &IoValue) -> Result<NixDogfoodEvidence> {
     let fields = value
         .collect_simple_record("nix-dogfood-release-evidence-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <nix-dogfood-release-evidence-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <nix-dogfood-release-evidence-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::OPERATOR_NIX_DOGFOOD_EVIDENCE_SCHEMA, "Nix dogfood evidence")?;
     let output_path = crate::preserves_rail::value_to_iovalue(&fields[1]);
     let output_fields = simple_record(&output_path, "output-path", 2)?;

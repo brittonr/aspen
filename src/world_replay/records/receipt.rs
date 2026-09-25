@@ -5,7 +5,7 @@ use super::CanonicalWorldReplayRecord;
 use super::WORLD_REPLAY_IMPORT_RECEIPT_RECORD;
 use super::WORLD_REPLAY_RECEIPT_RECORD;
 use super::support::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const WORLD_REPLAY_RECEIPT_IDENTITY_CONTEXT: &str = "onixresearch.molten.world-replay.receipt.v1";
@@ -24,7 +24,7 @@ pub fn canonicalize_world_replay_receipt(
         non_claims: &receipt.non_claims,
     })?;
     if receipt.schema != WORLD_REPLAY_RECEIPT_SCHEMA {
-        return Err(MoltenError::invalid_harness("world replay receipt schema is invalid"));
+        return Err(Failure::invalid_harness("world replay receipt schema is invalid"));
     }
     for reference in &receipt.actual_transition_refs {
         validate_ref(reference, "actual transition observation")?;
@@ -47,7 +47,7 @@ pub fn canonicalize_world_replay_import_receipt(
     mut receipt: WorldReplayImportReceipt,
 ) -> Result<(WorldReplayImportReceipt, CanonicalWorldReplayRecord)> {
     if receipt.schema != WORLD_REPLAY_IMPORT_RECEIPT_SCHEMA {
-        return Err(MoltenError::invalid_harness("world replay import receipt schema is invalid"));
+        return Err(Failure::invalid_harness("world replay import receipt schema is invalid"));
     }
     validate_ref(&receipt.capsule_ref, "import capsule")?;
     if let Some(reference) = &receipt.availability_ref {
@@ -56,7 +56,7 @@ pub fn canonicalize_world_replay_import_receipt(
     validate_diagnostics(&receipt.diagnostics)?;
     require_non_claims(&receipt.non_claims)?;
     if receipt.branch_moved || receipt.runtime_activated || receipt.authority_granted {
-        return Err(MoltenError::invalid_harness("world replay import receipt claims forbidden mutation or authority"));
+        return Err(Failure::invalid_harness("world replay import receipt claims forbidden mutation or authority"));
     }
     let identity_value = import_receipt_value(&receipt, false);
     receipt.receipt_ref = domain_identity(WORLD_REPLAY_IMPORT_RECEIPT_IDENTITY_CONTEXT, &identity_value)?;

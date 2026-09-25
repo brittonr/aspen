@@ -112,7 +112,7 @@ fn actor_decl_for_primary_actor<'a>(suite: &'a Suite, actor: &str) -> Result<&'a
         .actors
         .iter()
         .find(|decl| decl.id == actor)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("actor {actor} missing from executor registry")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("actor {actor} missing from executor registry")))
 }
 
 fn actor_kind_for_primary_actor<'a>(suite: &'a Suite, actor: &str) -> Result<&'a ActorKind> {
@@ -209,7 +209,7 @@ pub fn report_value(input: ReportValueInput<'_>) -> IoValue {
     ])
 }
 
-pub fn failure_value(phase: &str, error: &MoltenError, mut diagnostics: Vec<IoValue>) -> IoValue {
+pub fn failure_value(phase: &str, error: &crate::error::Failure, mut diagnostics: Vec<IoValue>) -> IoValue {
     diagnostics.extend(error_diagnostics(error));
     record("harness-failure-v1", vec![
         string(crate::preserves_rail::HARNESS_FAILURE_SCHEMA),
@@ -220,14 +220,14 @@ pub fn failure_value(phase: &str, error: &MoltenError, mut diagnostics: Vec<IoVa
     ])
 }
 
-pub fn suite_failure_value(phase: &str, error: &MoltenError, suite_value: &IoValue) -> Result<IoValue> {
+pub fn suite_failure_value(phase: &str, error: &crate::error::Failure, suite_value: &IoValue) -> Result<IoValue> {
     Ok(failure_value(phase, error, vec![
         record("suite-ref", vec![string(canonical_hash(suite_value)?)]),
         record("suite", vec![suite_value.clone()]),
     ]))
 }
 
-pub fn report_failure_value(phase: &str, error: &MoltenError, report_value: &IoValue) -> Result<IoValue> {
+pub fn report_failure_value(phase: &str, error: &crate::error::Failure, report_value: &IoValue) -> Result<IoValue> {
     Ok(failure_value(phase, error, vec![
         record("report-ref", vec![string(canonical_hash(report_value)?)]),
         record("report", vec![report_value.clone()]),
@@ -238,7 +238,7 @@ pub fn parse_failure(failure_value: &IoValue) -> Result<Failure> {
     let failure = simple_record(failure_value, "harness-failure-v1", 5)?;
     let schema = required_string(&failure[0], "failure schema")?;
     if schema != crate::preserves_rail::HARNESS_FAILURE_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported failure schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_FAILURE_SCHEMA
         )));
@@ -247,13 +247,13 @@ pub fn parse_failure(failure_value: &IoValue) -> Result<Failure> {
     let phase_record = simple_record(&phase_value, "phase", 1)?;
     let phase = required_string(&phase_record[0], "failure phase")?;
     if !matches!(phase.as_str(), "preflight" | "execute" | "replay" | "validate" | "export" | "verify" | "unpack") {
-        return Err(MoltenError::invalid_harness(format!("unsupported failure phase {phase}")));
+        return Err(crate::error::Failure::invalid_harness(format!("unsupported failure phase {phase}")));
     }
     let kind_value = value_to_iovalue(&failure[2]);
     let kind_record = simple_record(&kind_value, "kind", 1)?;
     let kind = required_string(&kind_record[0], "failure kind")?;
     if kind.is_empty() {
-        return Err(MoltenError::invalid_harness("failure kind must not be empty"));
+        return Err(crate::error::Failure::invalid_harness("failure kind must not be empty"));
     }
     let message_value = value_to_iovalue(&failure[3]);
     let message_record = simple_record(&message_value, "message", 1)?;

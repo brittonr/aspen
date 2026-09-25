@@ -48,19 +48,19 @@ fn report_artifact_refs(
     let policy_gate = report
         .policy_gate
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("report repro bundle missing policy gate evidence"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("report repro bundle missing policy gate evidence"))?;
     let capability_gate = report
         .capability_gate
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("report repro bundle missing capability gate evidence"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("report repro bundle missing capability gate evidence"))?;
     let budget_gate = report
         .budget_gate
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("report repro bundle missing budget gate evidence"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("report repro bundle missing budget gate evidence"))?;
     let executor_preflights = report
         .executor_preflights
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("report repro bundle missing executor preflight evidence"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("report repro bundle missing executor preflight evidence"))?;
     let authority_refs = report_authority_aggregate_refs(report)?;
     let mut refs = vec![
         ("report".to_string(), report.report_ref.clone()),
@@ -225,7 +225,7 @@ fn parse_repro_export_profile(value: &IoValue) -> Result<ReproExportProfileEvide
     let profile_value = simple_record(value, "repro-export-profile-v1", 6)?;
     let schema = required_string(&profile_value[0], "repro export profile schema")?;
     if schema != crate::preserves_rail::HARNESS_REDACTION_PROFILE_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported repro export profile schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_REDACTION_PROFILE_SCHEMA
         )));
@@ -235,16 +235,16 @@ fn parse_repro_export_profile(value: &IoValue) -> Result<ReproExportProfileEvide
     let loss_classification =
         required_record_string(&profile_value[2], "loss-classification", "repro export loss classification")?;
     if loss_classification != profile.loss_classification() {
-        return Err(MoltenError::invalid_harness("repro export profile loss classification is not canonical"));
+        return Err(crate::error::Failure::invalid_harness("repro export profile loss classification is not canonical"));
     }
     let is_gate_preserving =
         required_record_bool(&profile_value[3], "gate-preserving", "repro export gate preserving flag")?;
     if is_gate_preserving != profile.is_gate_preserving() {
-        return Err(MoltenError::invalid_harness("repro export gate-preserving flag is not canonical"));
+        return Err(crate::error::Failure::invalid_harness("repro export gate-preserving flag is not canonical"));
     }
     let is_requires_reveal = required_record_bool(&profile_value[4], "requires-reveal", "repro export reveal flag")?;
     if is_requires_reveal != profile.requires_reveal() {
-        return Err(MoltenError::invalid_harness("repro export reveal flag is not canonical"));
+        return Err(crate::error::Failure::invalid_harness("repro export reveal flag is not canonical"));
     }
     let checks = parse_redaction_gate_checks(&profile_value[5])?;
     require_redaction_check(&checks, "explicit-export-profile")?;

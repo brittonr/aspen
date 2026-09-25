@@ -167,7 +167,7 @@ pub fn consensus_algorithm_profile_from_cluster_config(
     let profile = match config.algorithm_profile.as_str() {
         CONSENSUS_PROFILE_RAFT => raft_algorithm_profile_from_cluster_config(input, config)?,
         CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL => leaderless_algorithm_profile_from_cluster_config(input, config),
-        value => return Err(MoltenError::invalid_harness(format!("unsupported consensus algorithm profile {value}"))),
+        value => return Err(Failure::invalid_harness(format!("unsupported consensus algorithm profile {value}"))),
     };
     validate_consensus_algorithm_profile(&profile)?;
     Ok(profile)
@@ -259,7 +259,7 @@ pub fn raft_group_manifest_value_with_profile(
 pub fn parse_raft_group_manifest(value: &IoValue) -> Result<RaftGroupManifest> {
     let fields = value
         .collect_simple_record("raft-group-manifest-v1", Some(RAFT_GROUP_MANIFEST_FIELD_COUNT))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <raft-group-manifest-v1 ...> with explicit profile"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <raft-group-manifest-v1 ...> with explicit profile"))?;
     require_schema(&fields[0], crate::preserves_rail::RAFT_GROUP_MANIFEST_SCHEMA, "raft group manifest schema")?;
     let group_id = record_string(&fields[1], "group-id")?;
     validate_group_id(&group_id)?;
@@ -331,7 +331,7 @@ pub fn control_registry_command_value(input: &ControlRegistryCommandInput) -> Re
 pub fn parse_control_registry_command(value: &IoValue) -> Result<ControlRegistryCommand> {
     let fields = value
         .collect_simple_record("control-registry-command-v1", Some(6))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <control-registry-command-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <control-registry-command-v1 ...>"))?;
     require_schema(
         &fields[0],
         crate::preserves_rail::CONTROL_REGISTRY_COMMAND_SCHEMA,
@@ -380,7 +380,7 @@ pub fn raft_command_envelope_value(input: &RaftCommandEnvelopeInput) -> Result<I
 pub fn parse_raft_command_envelope(value: &IoValue) -> Result<RaftCommandEnvelope> {
     let fields = value
         .collect_simple_record("raft-command-envelope-v1", Some(10))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <raft-command-envelope-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <raft-command-envelope-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::RAFT_COMMAND_ENVELOPE_SCHEMA, "raft command envelope schema")?;
     let command = record_iovalue(&fields[4], "command")?;
     require_check(&parse_checks(&fields[9])?, "control-plane-only", "raft command envelope")?;

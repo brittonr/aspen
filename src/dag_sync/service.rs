@@ -1,7 +1,7 @@
 use molten_core::dag_sync::*;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub struct DagSyncPorts<'a, A, R, T, C, P, O, E> {
@@ -45,7 +45,7 @@ where
 {
     let loaded = ports.progress.load(&request.epoch_ref)?;
     if request.progress.is_some() && loaded.is_some() && request.progress != loaded {
-        return Err(MoltenError::invalid_harness("DAG-sync caller progress differs from durable progress"));
+        return Err(Failure::invalid_harness("DAG-sync caller progress differs from durable progress"));
     }
     if request.progress.is_none() {
         request.progress = loaded;
@@ -53,7 +53,7 @@ where
     let result = plan_dag_sync(graph, &request);
     let plan = result
         .plan
-        .ok_or_else(|| MoltenError::invalid_harness(format!("DAG-sync planning denied: {:?}", result.issues)))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("DAG-sync planning denied: {:?}", result.issues)))?;
     let authority = ports.authority.observe_authority(&plan)?;
     validate_authority(&authority, &plan)?;
     let resources = ports.resources.reserve(&plan)?;
@@ -93,7 +93,7 @@ where
         evidence_refs.push(envelope.transport_observation_ref.clone());
         let response = ports.content.verify(&plan, &envelope, &authority.authority_ref)?;
         let next = admit_dag_response(&plan, &progress, &response)
-            .map_err(|issue| MoltenError::invalid_harness(format!("DAG response denied: {issue:?}")))?;
+            .map_err(|issue| Failure::invalid_harness(format!("DAG response denied: {issue:?}")))?;
         let canonical_response = canonical_dag_response(&response)?;
         ports.observations.publish_response(&canonical_response)?;
         evidence_refs.push(canonical_response.record_ref);
@@ -153,7 +153,7 @@ fn validate_authority(observation: &DagAuthorityObservation, plan: &DagSyncPlan)
         || observation.epoch_ref != plan.epoch_ref
         || observation.generation != plan.generation
     {
-        return Err(MoltenError::invalid_harness("DAG authority observation denied or drifted"));
+        return Err(Failure::invalid_harness("DAG authority observation denied or drifted"));
     }
     Ok(())
 }
@@ -161,7 +161,7 @@ fn validate_authority(observation: &DagAuthorityObservation, plan: &DagSyncPlan)
 fn validate_resources(observation: &DagResourceObservation, plan: &DagSyncPlan) -> Result<()> {
     validate_ref(&observation.reservation_ref, "DAG resource reservation")?;
     if !observation.admitted || observation.plan_ref != plan.plan_ref {
-        return Err(MoltenError::invalid_harness("DAG resource reservation denied or drifted"));
+        return Err(Failure::invalid_harness("DAG resource reservation denied or drifted"));
     }
     Ok(())
 }
@@ -173,12 +173,12 @@ fn validate_envelope(envelope: &DagTransportEnvelope, request: &DagFetchRequest)
         || envelope.encoded_bytes == 0
         || envelope.encoded_bytes > MAX_DAG_BYTES
     {
-        return Err(MoltenError::invalid_harness("DAG transport envelope was unsolicited, misassigned, or over-bound"));
+        return Err(Failure::invalid_harness("DAG transport envelope was unsolicited, misassigned, or over-bound"));
     }
     Ok(())
 }
 
 fn validate_ref(reference: &str, field: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference)
-        .map_err(|_| MoltenError::invalid_harness(format!("{field} is not a canonical content reference")))
+        .map_err(|_| Failure::invalid_harness(format!("{field} is not a canonical content reference")))
 }

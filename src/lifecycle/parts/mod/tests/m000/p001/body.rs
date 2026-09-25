@@ -368,7 +368,7 @@
         assert_transition_denies(super::State::Restarting, super::State::Ready);
     }
 
-    fn assert_error_contains(error: crate::error::MoltenError, expected: &str) {
+    fn assert_error_contains(error: crate::error::Failure, expected: &str) {
         assert!(
             error.to_string().contains(expected),
             "expected error to contain {expected:?}, got {error}"

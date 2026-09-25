@@ -1,7 +1,7 @@
 use molten_core::world_benchmark::*;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub struct WorldBenchmarkPorts<'a> {
@@ -69,7 +69,7 @@ pub fn run_world_benchmark(
     let receipt_record = canonical_world_benchmark_receipt(&receipt)?;
     let published_receipt_ref = ports.receipts.publish(&receipt_record)?;
     if published_receipt_ref != receipt_record.record_ref {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "world benchmark receipt publication substituted the canonical record ref",
         ));
     }
@@ -83,6 +83,6 @@ pub fn run_world_benchmark(
     })
 }
 
-fn core_issues(issues: Vec<WorldBenchmarkIssue>) -> MoltenError {
-    MoltenError::invalid_harness(format!("world benchmark denied: {issues:?}"))
+fn core_issues(issues: Vec<WorldBenchmarkIssue>) -> Failure {
+    Failure::invalid_harness(format!("world benchmark denied: {issues:?}"))
 }

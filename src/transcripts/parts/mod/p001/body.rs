@@ -2,7 +2,7 @@
 pub fn parse_transcript_stanza(value: &IoValue) -> Result<TranscriptStanza> {
     let fields = value
         .collect_simple_record("transcript-stanza-v1", Some(TRANSCRIPT_STANZA_FIELD_COUNT))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <transcript-stanza-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <transcript-stanza-v1 ...>"))?;
     require_schema(&fields[0], TRANSCRIPT_STANZA_SCHEMA, "transcript stanza")?;
     let input = value_to_iovalue(&fields[4]);
     let input_fields = simple_record(&input, "input", 1)?;
@@ -37,7 +37,7 @@ pub fn run_transcript(transcript: &TranscriptArtifact, input: &TranscriptRunInpu
             None => temp_state_root("save")?,
         },
         TranscriptRunMode::ForkDenied | TranscriptRunMode::InPlaceDenied => {
-            return Err(MoltenError::invalid_harness("denied transcript modes cannot allocate runner state"));
+            return Err(Failure::invalid_harness("denied transcript modes cannot allocate runner state"));
         }
     };
     let mut state = RunnerState::new(state_root.clone())?;
@@ -170,10 +170,10 @@ fn store_run(
 pub fn parse_transcript_run_receipt(value: &IoValue) -> Result<TranscriptRunReceipt> {
     let fields = value
         .collect_simple_record("transcript-run-receipt-v1", None)
-        .ok_or_else(|| MoltenError::invalid_harness("expected <transcript-run-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <transcript-run-receipt-v1 ...>"))?;
     let field_count = fields.fields_iter().count();
     if field_count != TRANSCRIPT_RUN_RECEIPT_FIELD_COUNT && field_count != TRANSCRIPT_RUN_RECEIPT_LEGACY_FIELD_COUNT {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "transcript run receipt field count {field_count} is unsupported"
         )));
     }
@@ -181,7 +181,7 @@ pub fn parse_transcript_run_receipt(value: &IoValue) -> Result<TranscriptRunRece
     let outcomes = record_ref_sequence(&fields[5], "outcomes")?;
     let checks = parse_checks(&fields[field_count - 1])?;
     if checks.is_empty() {
-        return Err(MoltenError::invalid_harness("transcript run receipt missing checks"));
+        return Err(Failure::invalid_harness("transcript run receipt missing checks"));
     }
     Ok(TranscriptRunReceipt {
         receipt_ref: canonical_hash(value)?,
@@ -262,15 +262,15 @@ impl TranscriptStanza {
 
 impl RunnerState {
     fn new(root: PathBuf) -> Result<Self> {
-        fs::create_dir_all(&root).map_err(MoltenError::from)?;
+        fs::create_dir_all(&root).map_err(Failure::from)?;
         let registry = root.join("registry");
         let ledger = root.join("ledger");
         let storage = root.join("typed-storage");
         let cache = root.join("eval-cache");
-        fs::create_dir_all(&registry).map_err(MoltenError::from)?;
-        fs::create_dir_all(&ledger).map_err(MoltenError::from)?;
-        fs::create_dir_all(&storage).map_err(MoltenError::from)?;
-        fs::create_dir_all(&cache).map_err(MoltenError::from)?;
+        fs::create_dir_all(&registry).map_err(Failure::from)?;
+        fs::create_dir_all(&ledger).map_err(Failure::from)?;
+        fs::create_dir_all(&storage).map_err(Failure::from)?;
+        fs::create_dir_all(&cache).map_err(Failure::from)?;
         Ok(Self {
             root,
             registry,

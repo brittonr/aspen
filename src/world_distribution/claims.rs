@@ -12,7 +12,7 @@ use molten_core::world_head::WorldHeadState;
 use super::CanonicalWorldDistributionRecord;
 use super::WorldDistributionReceiptPort;
 use super::canonical_world_claim_admission;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,11 +77,11 @@ where
     R: WorldDistributionReceiptPort,
 {
     if context.max_claims == 0 || context.max_claims > MAX_WORLD_DISTRIBUTION_CLAIMS {
-        return Err(MoltenError::invalid_harness("world claim maximum is invalid"));
+        return Err(Failure::invalid_harness("world claim maximum is invalid"));
     }
     let mut carriers = ports.transport.receive_claims(context.max_claims)?;
     if carriers.len() > context.max_claims {
-        return Err(MoltenError::invalid_harness("world claim transport exceeded the requested bound"));
+        return Err(Failure::invalid_harness("world claim transport exceeded the requested bound"));
     }
     carriers.sort_by(|left, right| left.claim_ref.cmp(&right.claim_ref));
     let mut claims = Vec::with_capacity(carriers.len());
@@ -119,7 +119,7 @@ where
         bounds: context.bounds.clone(),
         max_claims: context.max_claims,
     })
-    .map_err(|issues| MoltenError::invalid_harness(format!("world claim admission denied: {issues:?}")))?;
+    .map_err(|issues| Failure::invalid_harness(format!("world claim admission denied: {issues:?}")))?;
     let canonical_receipt = canonical_world_claim_admission(&admission)?;
     ports.receipts.publish_world_distribution_receipt(&canonical_receipt)?;
     evidence_refs.push(canonical_receipt.record_ref.clone());
@@ -134,5 +134,5 @@ where
 
 fn validate_evidence_ref(reference: &str, field: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference)
-        .map_err(|_| MoltenError::invalid_harness(format!("{field} is not a canonical content reference")))
+        .map_err(|_| Failure::invalid_harness(format!("{field} is not a canonical content reference")))
 }

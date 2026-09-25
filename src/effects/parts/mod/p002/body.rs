@@ -122,7 +122,7 @@ pub fn effect_handle_value(input: &EffectHandleInput) -> Result<IoValue> {
     if let (Some(not_before), Some(expires_at)) = (input.not_before, input.expires_at)
         && not_before > expires_at
     {
-        return Err(MoltenError::invalid_harness("effect handle validity not-before exceeds expiry"));
+        return Err(Failure::invalid_harness("effect handle validity not-before exceeds expiry"));
     }
     validate_refs(&input.revocation_refs, "effect handle revocation ref")?;
     validate_transfer(&input.transfer)?;
@@ -208,7 +208,7 @@ pub fn parse_effect_handle(value: &IoValue) -> Result<EffectHandle> {
     if let (Some(not_before), Some(expires_at)) = (not_before, expires_at)
         && not_before > expires_at
     {
-        return Err(MoltenError::invalid_harness("effect handle validity not-before exceeds expiry"));
+        return Err(Failure::invalid_harness("effect handle validity not-before exceeds expiry"));
     }
     Ok(EffectHandle {
         handle_ref: canonical_hash(value)?,
@@ -248,7 +248,7 @@ pub fn compound_handler_profile_value(input: &CompoundHandlerProfileInput) -> Re
     validate_unique_refs(&input.handler_binding_refs, "compound handler binding ref")?;
     validate_unique_refs(&input.child_handle_refs, "compound child handle ref")?;
     if input.child_handle_refs.is_empty() {
-        return Err(MoltenError::invalid_harness("compound handler profile must expose at least one child handle"));
+        return Err(Failure::invalid_harness("compound handler profile must expose at least one child handle"));
     }
     require_ref(&input.policy_ref, "compound handler policy ref")?;
     require_ref(&input.capability_context_ref, "compound handler capability context ref")?;

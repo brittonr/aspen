@@ -1,7 +1,7 @@
 use preserves::IOValue;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric::DeterminismClass;
 use crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA;
@@ -297,7 +297,7 @@ impl ExtensionDurabilityContext {
             };
             if let Some(binding) = host.manifest().binding_for(&key) {
                 if binding.binding.implementation_profile != profile.profile.profile_id {
-                    return Err(MoltenError::invalid_harness(format!(
+                    return Err(Failure::invalid_harness(format!(
                         "system-extension durability profile {} does not match {}",
                         binding.binding.implementation_profile, profile.profile.profile_id
                     )));
@@ -306,7 +306,7 @@ impl ExtensionDurabilityContext {
             }
         }
         if bound_ports.is_empty() {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "system extension has no admitted durable-state fabric port binding",
             ));
         }
@@ -344,21 +344,21 @@ impl ExtensionDurabilityContext {
         operation_bytes: u64,
     ) -> Result<()> {
         if self.profile_id != profile.profile.profile_id {
-            return Err(MoltenError::invalid_harness("durability profile substitution denied"));
+            return Err(Failure::invalid_harness("durability profile substitution denied"));
         }
         if !self.bound_ports.iter().any(|bound| bound == port_id) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "durability port {port_id} is not bound to the system extension"
             )));
         }
         if self.service_id != service_id {
-            return Err(MoltenError::invalid_harness("durability service identity mismatch"));
+            return Err(Failure::invalid_harness("durability service identity mismatch"));
         }
         if self.generation != generation {
-            return Err(MoltenError::invalid_harness("durability operation uses a stale service generation"));
+            return Err(Failure::invalid_harness("durability operation uses a stale service generation"));
         }
         if operation_bytes > self.max_operation_bytes {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "durability operation bytes {operation_bytes} exceed {}",
                 self.max_operation_bytes
             )));
@@ -421,9 +421,9 @@ fn optional_u64(value: Option<u64>) -> IOValue {
 }
 
 fn count(value: usize) -> Result<u64> {
-    u64::try_from(value).map_err(|_| MoltenError::invalid_harness("durability collection count overflow"))
+    u64::try_from(value).map_err(|_| Failure::invalid_harness("durability collection count overflow"))
 }
 
-fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label} validation denied: {issues:?}"))
+fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> Failure {
+    Failure::invalid_harness(format!("{label} validation denied: {issues:?}"))
 }

@@ -2,7 +2,7 @@ use molten_core::content_store_adapter::*;
 use molten_core::fabric::*;
 use preserves::IOValue;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const PROFILE_RECORD: &str = "content-store-adapter-profile-v1";
@@ -310,7 +310,7 @@ fn require_valid(label: &str, issues: &[ContentIssue]) -> Result<()> {
     if issues.is_empty() {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} denied: {issues:?}")))
+        Err(Failure::invalid_harness(format!("{label} denied: {issues:?}")))
     }
 }
 

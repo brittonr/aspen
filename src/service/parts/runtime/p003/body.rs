@@ -36,7 +36,7 @@ fn ready_status_map(statuses: &[crate::service_records::ServiceStatus]) -> Resul
     let mut ready = OrderedMap::new();
     for status in statuses {
         if status.state == "ready" && ready.insert(status.service_id.clone(), status.status_ref.clone()).is_some() {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "duplicate ready service status for {}",
                 status.service_id
             )));
@@ -76,7 +76,7 @@ fn dependency_cycle_exists(manifests: &OrderedMap<String, crate::service_records
                 continue;
             }
             if seen.len() > MAX_RUNTIME_ITEMS {
-                return Err(MoltenError::invalid_harness("service dependency graph exceeds bound"));
+                return Err(Failure::invalid_harness("service dependency graph exceeds bound"));
             }
             if let Some(manifest) = manifests.get(&next) {
                 for dependency in &manifest.dependencies {
@@ -150,7 +150,7 @@ fn parse_evidence(value: &Value<preserves::IOValue>) -> Result<EvidenceInput> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record("evidence", Some(7))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <evidence ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <evidence ...>"))?;
     Ok(EvidenceInput {
         authority_refs: parse_ref_sequence(&fields[0], "authority")?,
         policy_refs: parse_ref_sequence(&fields[1], "policy")?,
@@ -178,10 +178,10 @@ fn field_sequence(value: &Value<preserves::IOValue>, label: &str) -> Result<Vec<
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     let values = fields[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {label}")))?;
     Ok(values.iter().cloned().collect())
 }
 
@@ -189,7 +189,7 @@ fn record_iovalue(value: &Value<preserves::IOValue>, label: &str) -> Result<pres
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     Ok(value_to_iovalue(&fields[0]))
 }
 
@@ -197,7 +197,7 @@ fn record_optional_ref(value: &Value<preserves::IOValue>, label: &str) -> Result
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     parse_optional_ref_value(&fields[0])
 }
 
@@ -226,7 +226,7 @@ fn parse_checks(value: &Value<preserves::IOValue>) -> Result<Vec<(String, String
             let check = value_to_iovalue(check);
             let fields = check
                 .collect_simple_record("check", Some(2))
-                .ok_or_else(|| MoltenError::invalid_harness("expected service runtime check"))?;
+                .ok_or_else(|| Failure::invalid_harness("expected service runtime check"))?;
             Ok((required_string(&fields[0], "check name")?, required_string(&fields[1], "check status")?))
         })
         .collect()
@@ -236,7 +236,7 @@ fn require_check(checks: &[(String, String)], name: &str, context: &str) -> Resu
     if checks.iter().any(|(check, status)| check == name && status == "pass") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{context} missing passing {name} check")))
+        Err(Failure::invalid_harness(format!("{context} missing passing {name} check")))
     }
 }
 
@@ -245,7 +245,7 @@ fn require_schema(value: &Value<preserves::IOValue>, expected: &str, field: &str
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("expected {field} {expected}, got {actual}")))
+        Err(Failure::invalid_harness(format!("expected {field} {expected}, got {actual}")))
     }
 }
 
@@ -281,7 +281,7 @@ fn required_ref(value: &Value<preserves::IOValue>, field: &str) -> Result<String
 
 fn require_ref(reference: &str, field: &str) -> Result<()> {
     validate_content_ref(reference).map_err(|error| {
-        MoltenError::invalid_harness(format!("expected canonical blake3 content ref for {field}: {error}"))
+        Failure::invalid_harness(format!("expected canonical blake3 content ref for {field}: {error}"))
     })
 }
 
@@ -289,13 +289,13 @@ fn required_string(value: &Value<preserves::IOValue>, field: &str) -> Result<Str
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn ensure_count_at_most(actual: usize, label: &str) -> Result<()> {
     if actual <= MAX_RUNTIME_ITEMS {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} count {actual} exceeds bound {MAX_RUNTIME_ITEMS}")))
+        Err(Failure::invalid_harness(format!("{label} count {actual} exceeds bound {MAX_RUNTIME_ITEMS}")))
     }
 }

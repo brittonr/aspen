@@ -5,7 +5,7 @@ fn ensure_store_tables(root: &std::path::Path) -> Result<redb::Database> {
 }
 
 fn ensure_store_tables_with_root(root: &crate::local_store::DeliveryStoreRoot) -> Result<redb::Database> {
-    let path = crate::local_store::LocalStorePath::parse(STORE_FILE)?;
+    let path = crate::local_store::RelativeLocator::parse(STORE_FILE)?;
     let file = root.root().open_database_file(&path)?;
     let db = redb::Database::builder().create_file(file).map_err(store_error)?;
     let write_txn = db.begin_write().map_err(store_error)?;
@@ -19,8 +19,8 @@ fn ensure_store_tables_with_root(root: &crate::local_store::DeliveryStoreRoot) -
     Ok(db)
 }
 
-fn store_error(error: impl std::fmt::Display) -> MoltenError {
-    MoltenError::invalid_harness(format!("delivery idempotency redb store error: {error}"))
+fn store_error(error: impl std::fmt::Display) -> Failure {
+    Failure::invalid_harness(format!("delivery idempotency redb store error: {error}"))
 }
 
 fn strings_sequence(values: &[String]) -> IoValue {
@@ -41,16 +41,16 @@ fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("checks", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("expected checks record"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected checks record"))?;
     let entries = fields[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("expected checks sequence"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected checks sequence"))?;
     let mut checks = Vec::with_capacity(entries.len());
     for entry in entries.iter() {
         let check_value = crate::preserves_rail::value_to_iovalue(entry);
         let check_fields = check_value
             .collect_simple_record("check", Some(2))
-            .ok_or_else(|| MoltenError::invalid_harness("expected check record"))?;
+            .ok_or_else(|| Failure::invalid_harness("expected check record"))?;
         checks.push((
             required_string(&check_fields[0], "check name")?,
             required_string(&check_fields[1], "check status")?,
@@ -63,7 +63,7 @@ fn require_check(checks: &[(String, String)], name: &str, label: &str) -> Result
     if checks.iter().any(|(check_name, status)| check_name == name && status == "pass") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} missing pass check {name}")))
+        Err(Failure::invalid_harness(format!("{label} missing pass check {name}")))
     }
 }
 
@@ -77,14 +77,14 @@ fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<Str
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     let inner = crate::preserves_rail::value_to_iovalue(&fields[0]);
     if inner.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
     let some = inner
         .collect_simple_record("some", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected optional ref for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected optional ref for {label}")))?;
     let reference = required_string(&some[0], label)?;
     require_ref(&reference, label)?;
     Ok(Some(reference))
@@ -100,10 +100,10 @@ fn record_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Str
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     let entries = fields[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {label}")))?;
     entries.iter().map(|entry| required_string(entry, label)).collect()
 }
 
@@ -111,7 +111,7 @@ fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     required_string(&fields[0], label)
 }
 
@@ -119,11 +119,11 @@ fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     fields[0]
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {label}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {label}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
 fn require_schema(value: &Value<IoValue>, expected: &str, label: &str) -> Result<()> {
@@ -131,7 +131,7 @@ fn require_schema(value: &Value<IoValue>, expected: &str, label: &str) -> Result
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("expected {label} {expected}, got {actual}")))
+        Err(Failure::invalid_harness(format!("expected {label} {expected}, got {actual}")))
     }
 }
 
@@ -139,5 +139,5 @@ fn required_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {label}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {label}")))
 }

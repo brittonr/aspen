@@ -134,10 +134,10 @@ fn validate_rkyv_manifest_input(input: &RkyvDerivedArchiveManifestInput) -> Resu
 
 fn validate_rkyv_sources(sources: &[RkyvSourceDigest], label: &str) -> Result<()> {
     if sources.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("{label} refs cannot be empty")));
+        return Err(Failure::invalid_harness(format!("{label} refs cannot be empty")));
     }
     if sources.len() > RKYV_SOURCE_DIGEST_LIMIT {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "{label} count {} exceeds bound {RKYV_SOURCE_DIGEST_LIMIT}",
             sources.len()
         )));
@@ -147,7 +147,7 @@ fn validate_rkyv_sources(sources: &[RkyvSourceDigest], label: &str) -> Result<()
         validate_ref(&source.source_ref, label)?;
         validate_ref(&source.blake3_digest, label)?;
         if !seen.insert(source.source_ref.clone()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate {label} ref {}", source.source_ref)));
+            return Err(Failure::invalid_harness(format!("duplicate {label} ref {}", source.source_ref)));
         }
     }
     Ok(())
@@ -155,7 +155,7 @@ fn validate_rkyv_sources(sources: &[RkyvSourceDigest], label: &str) -> Result<()
 
 fn validate_rkyv_profile(profile: &str) -> Result<()> {
     if profile.is_empty() {
-        return Err(MoltenError::invalid_harness("rkyv profile cannot be empty"));
+        return Err(Failure::invalid_harness("rkyv profile cannot be empty"));
     }
     validate_rkyv_name(profile, "rkyv profile")
 }
@@ -163,13 +163,13 @@ fn validate_rkyv_profile(profile: &str) -> Result<()> {
 fn validate_rkyv_retention_class(value: &str) -> Result<()> {
     match value {
         RKYV_RETENTION_EPHEMERAL_CACHE | RKYV_RETENTION_REPLAY_SNAPSHOT => Ok(()),
-        _ => Err(MoltenError::invalid_harness(format!("unsupported rkyv retention class {value}"))),
+        _ => Err(Failure::invalid_harness(format!("unsupported rkyv retention class {value}"))),
     }
 }
 
 fn validate_rkyv_identity_claim(value: &str) -> Result<()> {
     if value.is_empty() {
-        Err(MoltenError::invalid_harness("rkyv identity claim cannot be empty"))
+        Err(Failure::invalid_harness("rkyv identity claim cannot be empty"))
     } else {
         Ok(())
     }
@@ -180,7 +180,7 @@ fn validate_rkyv_name(value: &str, field: &str) -> Result<()> {
     if value.chars().all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_') {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{field} must be lowercase ascii token")))
+        Err(Failure::invalid_harness(format!("{field} must be lowercase ascii token")))
     }
 }
 

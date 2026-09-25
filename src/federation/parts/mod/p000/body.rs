@@ -1,6 +1,6 @@
 type BtreeSet<T> = std::collections::BTreeSet<T>;
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Path = std::path::Path;
 type Result<T> = crate::error::Result<T>;
 type RuntimeAssertion = crate::runtime::RuntimeAssertion;

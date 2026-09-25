@@ -1,7 +1,7 @@
 
 fn validate_ingress_ref(reference: &str, label: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference).map_err(|error| {
-        MoltenError::invalid_harness(format!("{label} must be a canonical blake3 content ref: {error}"))
+        Failure::invalid_harness(format!("{label} must be a canonical blake3 content ref: {error}"))
     })
 }
 
@@ -9,7 +9,7 @@ fn validate_member_ref(actual: &str, expected: &str, label: &str) -> Result<()> 
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{label} ref {actual} does not match {expected}")))
+        Err(Failure::invalid_harness(format!("{label} ref {actual} does not match {expected}")))
     }
 }
 
@@ -18,9 +18,9 @@ fn validate_optional_member_ref(value: Option<&IoValue>, expected_ref: Option<&s
         (Some(value), Some(expected)) => {
             validate_member_ref(&crate::preserves_rail::canonical_hash(value)?, expected, label)
         }
-        (Some(_), None) => Err(MoltenError::invalid_harness(format!("{label} value present without ref"))),
+        (Some(_), None) => Err(Failure::invalid_harness(format!("{label} value present without ref"))),
         (None, Some(expected)) => {
-            Err(MoltenError::invalid_harness(format!("{label} ref {expected} present without value")))
+            Err(Failure::invalid_harness(format!("{label} ref {expected} present without value")))
         }
         (None, None) => Ok(()),
     }
@@ -29,41 +29,41 @@ fn validate_optional_member_ref(value: Option<&IoValue>, expected_ref: Option<&s
 fn require_schema(value: &preserves::Value<preserves::IOValue>, expected: &str, context: &str) -> Result<()> {
     let actual = value
         .as_string()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{context} schema must be a string")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("{context} schema must be a string")))?;
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "{context} schema mismatch: expected {expected}, got {actual}"
         )))
     }
 }
 
-fn verify_init_state(root: &crate::node_state::NodeStateRoot) -> Result<()> {
+fn verify_init_state(root: &crate::node_state::Root) -> Result<()> {
     let state = inspect_node_lifecycle_state_with_root(root)?;
     if state == NodeLifecycleState::Empty {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!(
+    Err(Failure::invalid_harness(format!(
         "node daemon init denied: state root already has {state:?} lifecycle state; use an explicit reset before reinitializing"
     )))
 }
 
 pub fn inspect_node_lifecycle_state(state_root: &Path) -> NodeLifecycleState {
-    let Ok(root) = crate::node_state::NodeStateRoot::open_existing(state_root) else {
+    let Ok(root) = crate::node_state::Root::open_existing(state_root) else {
         return NodeLifecycleState::Empty;
     };
     inspect_node_lifecycle_state_with_root(&root).unwrap_or(NodeLifecycleState::Inconsistent)
 }
 
 pub fn inspect_node_lifecycle_state_with_root(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::Root,
 ) -> Result<NodeLifecycleState> {
     Ok(node_lifecycle_state(&node_lifecycle_files_with_root(root)?))
 }
 
 pub fn node_lifecycle_files(state_root: &Path) -> NodeLifecycleFiles {
-    let Ok(root) = crate::node_state::NodeStateRoot::open_existing(state_root) else {
+    let Ok(root) = crate::node_state::Root::open_existing(state_root) else {
         return NodeLifecycleFiles {
             has_config: false,
             has_identity_receipt: false,
@@ -81,7 +81,7 @@ pub fn node_lifecycle_files(state_root: &Path) -> NodeLifecycleFiles {
     })
 }
 
-pub fn node_lifecycle_files_with_root(root: &crate::node_state::NodeStateRoot) -> Result<NodeLifecycleFiles> {
+pub fn node_lifecycle_files_with_root(root: &crate::node_state::Root) -> Result<NodeLifecycleFiles> {
     Ok(NodeLifecycleFiles {
         has_config: root.try_exists(&fixed_node_path(CONFIG_FILE)?)?,
         has_identity_receipt: root.try_exists(&fixed_node_path(IDENTITY_RECEIPT_FILE)?)?,
@@ -112,12 +112,12 @@ pub fn node_lifecycle_state(files: &NodeLifecycleFiles) -> NodeLifecycleState {
     NodeLifecycleState::Inconsistent
 }
 
-fn verify_restart_state(root: &crate::node_state::NodeStateRoot) -> Result<()> {
+fn verify_restart_state(root: &crate::node_state::Root) -> Result<()> {
     let startup_path = fixed_node_path(STARTUP_FILE)?;
     if root.try_exists(&startup_path)? {
         let shutdown_path = fixed_node_path(SHUTDOWN_FILE)?;
         if !root.try_exists(&shutdown_path)? {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "node daemon restart denied: previous startup has no clean shutdown receipt",
             ));
         }
@@ -138,7 +138,7 @@ fn verify_restart_state(root: &crate::node_state::NodeStateRoot) -> Result<()> {
         let health = crate::node_runtime::parse_node_health_receipt(&health_value)?;
         write_preserves(root, &fixed_node_path(HEALTH_FILE)?, &health_value)?;
         if health.decision != "pass" {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "node daemon restart recovery denied receipt={}",
                 health.receipt_ref
             )));
@@ -148,7 +148,7 @@ fn verify_restart_state(root: &crate::node_state::NodeStateRoot) -> Result<()> {
     Ok(())
 }
 
-fn default_adapter_bindings(root: &crate::node_state::NodeStateRoot) -> Result<Vec<crate::node_runtime::NodeAdapterBinding>> {
+fn default_adapter_bindings(root: &crate::node_state::Root) -> Result<Vec<crate::node_runtime::NodeAdapterBinding>> {
     let mut adapters = Vec::with_capacity(crate::node_runtime::REQUIRED_RUNTIME_ADAPTERS.len());
     for name in crate::node_runtime::REQUIRED_RUNTIME_ADAPTERS {
         let profile_ref =
@@ -241,15 +241,15 @@ fn index_receipt_refs<Root: ?Sized>(root: &Root) -> Result<Vec<String>> {
     Ok(refs)
 }
 
-fn resource_receipt_refs(root: &crate::node_state::NodeStateRoot) -> Result<Vec<String>> {
+fn resource_receipt_refs(root: &crate::node_state::Root) -> Result<Vec<String>> {
     Ok(vec![local_ref("node-resource-profile", &state_root_profile_ref(root)?)?])
 }
 
-fn capability_receipt_refs(root: &crate::node_state::NodeStateRoot) -> Result<Vec<String>> {
+fn capability_receipt_refs(root: &crate::node_state::Root) -> Result<Vec<String>> {
     Ok(vec![local_ref("node-authority-profile", &state_root_profile_ref(root)?)?])
 }
 
-fn profile_metadata_refs(root: &crate::node_state::NodeStateRoot) -> Result<Vec<String>> {
+fn profile_metadata_refs(root: &crate::node_state::Root) -> Result<Vec<String>> {
     let mut refs = vec![local_ref(
         "node-production-profile-metadata",
         &format!(
@@ -270,7 +270,7 @@ fn profile_metadata_refs(root: &crate::node_state::NodeStateRoot) -> Result<Vec<
 fn profile_resolution_metadata_refs(value: &IoValue) -> Result<Vec<String>> {
     let fields = value
         .collect_simple_record("node-profile-config-resolution-v1", Some(9))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-profile-config-resolution-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <node-profile-config-resolution-v1 ...>"))?;
     Ok(vec![record_ref_string(&fields[3], "profile")?])
 }
 
@@ -291,37 +291,37 @@ fn ensure_state_layout<Root: NodeStateAuthority + ?Sized>(source: &Root) -> Resu
 
 fn validate_state_root(state_root: &Path) -> Result<()> {
     if state_root.as_os_str().is_empty() {
-        return Err(MoltenError::invalid_harness("node daemon requires explicit state root"));
+        return Err(Failure::invalid_harness("node daemon requires explicit state root"));
     }
     if state_root == Path::new(".") {
-        return Err(MoltenError::invalid_harness("node daemon state root cannot be ambient current directory"));
+        return Err(Failure::invalid_harness("node daemon state root cannot be ambient current directory"));
     }
     Ok(())
 }
 
 fn validate_node_id(node_id: &str) -> Result<()> {
     if node_id.trim().is_empty() {
-        Err(MoltenError::invalid_harness("node daemon id must not be empty"))
+        Err(Failure::invalid_harness("node daemon id must not be empty"))
     } else {
         Ok(())
     }
 }
 
-fn fixed_node_path(value: &str) -> Result<crate::node_state::NodeStatePath> {
-    crate::node_state::NodeStatePath::parse(value)
+fn fixed_node_path(value: &str) -> Result<crate::node_state::RelativePath> {
+    crate::node_state::RelativePath::parse(value)
 }
 
 fn write_preserves(
-    root: &crate::node_state::NodeStateRoot,
-    path: &crate::node_state::NodeStatePath,
+    root: &crate::node_state::Root,
+    path: &crate::node_state::RelativePath,
     value: &IoValue,
 ) -> Result<()> {
     root.write(path, crate::preserves_rail::to_text(value)?.as_bytes())
 }
 
 fn read_preserves(
-    root: &crate::node_state::NodeStateRoot,
-    path: &crate::node_state::NodeStatePath,
+    root: &crate::node_state::Root,
+    path: &crate::node_state::RelativePath,
 ) -> Result<IoValue> {
     let text = root.read_to_string(path, crate::node_state::MAX_NODE_STATE_FILE_BYTES)?;
     crate::preserves_rail::parse_text(&text)
@@ -329,7 +329,7 @@ fn read_preserves(
 
 fn diagnostic_node_state_path(
     state_root: &Path,
-    locator: &crate::node_state::NodeStatePath,
+    locator: &crate::node_state::RelativePath,
 ) -> PathBuf {
     state_root.join(locator.as_path())
 }

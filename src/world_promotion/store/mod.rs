@@ -1,7 +1,7 @@
-use molten_node_host::node_state::NodeStateNamespace;
+use molten_node_host::node_state::DirectoryView;
 use redb::ReadableDatabase;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::world_head::LocalWorldHeadStore;
 
@@ -21,7 +21,7 @@ pub struct LocalWorldPromotionStore {
 }
 
 impl LocalWorldPromotionStore {
-    pub fn open(storage: &NodeStateNamespace) -> Result<Self> {
+    pub fn open(storage: &DirectoryView) -> Result<Self> {
         let heads = LocalWorldHeadStore::open(storage)?;
         initialize_tables(heads.database())?;
         Ok(Self { heads })
@@ -47,6 +47,6 @@ fn initialize_tables(database: &redb::Database) -> Result<()> {
     write.commit().map_err(store_error)
 }
 
-pub(super) fn store_error(error: impl std::fmt::Display) -> MoltenError {
-    MoltenError::invalid_harness(format!("world promotion store failed: {error}"))
+pub(super) fn store_error(error: impl std::fmt::Display) -> Failure {
+    Failure::invalid_harness(format!("world promotion store failed: {error}"))
 }

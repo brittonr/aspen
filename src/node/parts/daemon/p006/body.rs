@@ -1,12 +1,12 @@
 
 pub fn import_control_live_ticket(input: &ControlLiveTicketImportInput<'_>) -> Result<ControlLiveTicketImport> {
     validate_state_root(input.state_root)?;
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::Root::open(input.state_root)?;
     import_control_live_ticket_with_root(&state_root, input)
 }
 
 fn import_control_live_ticket_with_root(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     input: &ControlLiveTicketImportInput<'_>,
 ) -> Result<ControlLiveTicketImport> {
     ensure_state_layout(state_root)?;
@@ -63,12 +63,12 @@ pub fn import_control_authority_grant_checked(
     input: &ControlAuthorityGrantImportInput<'_>,
 ) -> Result<ControlAuthorityGrantImport> {
     validate_state_root(input.state_root)?;
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::Root::open(input.state_root)?;
     import_control_authority_grant_checked_with_root(&state_root, input)
 }
 
 fn import_control_authority_grant_checked_with_root(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     input: &ControlAuthorityGrantImportInput<'_>,
 ) -> Result<ControlAuthorityGrantImport> {
     ensure_state_layout(state_root)?;

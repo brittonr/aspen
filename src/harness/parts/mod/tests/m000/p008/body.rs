@@ -115,7 +115,7 @@
         let tampered_report = parse_text(&tampered_text).expect("parse tampered Steel execution report");
         let error = replay_report_value(&tampered_report).expect_err("tampered Steel execution receipt diverges");
         match error {
-            MoltenError::HarnessDivergence(divergence) => {
+            crate::error::Failure::HarnessDivergence(divergence) => {
                 assert_eq!(divergence.kind, "steel-execution");
                 assert_eq!(divergence.step, Some(0));
             }
@@ -259,7 +259,7 @@
         let tampered_report = parse_text(&tampered_text).expect("parse tampered report");
         let error = replay_report_value(&tampered_report).expect_err("tampered report must diverge");
         match error {
-            MoltenError::HarnessDivergence(divergence) => {
+            crate::error::Failure::HarnessDivergence(divergence) => {
                 assert_eq!(divergence.kind, "trace");
                 assert_eq!(divergence.step, Some(2));
             }

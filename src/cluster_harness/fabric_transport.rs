@@ -16,7 +16,7 @@ use preserves::IOValue;
 use preserves::Value;
 use preserves::ValueImpl;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric_transport::*;
 
@@ -179,17 +179,17 @@ struct ReapingChild {
 impl ReapingChild {
     fn spawn(binary: &Path, role_command: &str, run_directory: &Path, log_path: &Path) -> Result<Self> {
         if let Some(parent) = log_path.parent() {
-            std::fs::create_dir_all(parent).map_err(MoltenError::from)?;
+            std::fs::create_dir_all(parent).map_err(Failure::from)?;
         }
-        let stdout = File::create(log_path).map_err(MoltenError::from)?;
-        let stderr = stdout.try_clone().map_err(MoltenError::from)?;
+        let stdout = File::create(log_path).map_err(Failure::from)?;
+        let stderr = stdout.try_clone().map_err(Failure::from)?;
         let child = Command::new(binary)
             .args(["cluster", role_command, "--run-dir"])
             .arg(run_directory)
             .stdout(Stdio::from(stdout))
             .stderr(Stdio::from(stderr))
             .spawn()
-            .map_err(MoltenError::from)?;
+            .map_err(Failure::from)?;
         Ok(Self { child, finished: false })
     }
 
@@ -198,7 +198,7 @@ impl ReapingChild {
     }
 
     fn try_wait(&mut self) -> Result<Option<ExitStatus>> {
-        self.child.try_wait().map_err(MoltenError::from)
+        self.child.try_wait().map_err(Failure::from)
     }
 
     fn wait_bounded(&mut self, timeout: Duration, label: &str) -> Result<ExitStatus> {
@@ -212,7 +212,7 @@ impl ReapingChild {
                 let _kill = self.child.kill();
                 let _wait = self.child.wait();
                 self.finished = true;
-                return Err(MoltenError::invalid_harness(format!("distinct-process {label} child timed out")));
+                return Err(Failure::invalid_harness(format!("distinct-process {label} child timed out")));
             }
             std::thread::sleep(Duration::from_millis(CHILD_POLL_INTERVAL_MS));
         }
@@ -279,11 +279,11 @@ fn execute_prepared_distinct_process_transport_run(
 
     let client_status = client.wait_bounded(timeout, CLIENT_ROLE)?;
     if !client_status.success() {
-        return Err(MoltenError::invalid_harness(format!("distinct-process client child exited with {client_status}")));
+        return Err(Failure::invalid_harness(format!("distinct-process client child exited with {client_status}")));
     }
     let listener_status = listener.wait_bounded(timeout, LISTENER_ROLE)?;
     if !listener_status.success() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "distinct-process listener child exited with {listener_status}"
         )));
     }
@@ -328,7 +328,7 @@ fn execute_prepared_distinct_process_transport_run(
 pub fn run_distinct_process_listener_child(run_directory: &Path) -> Result<()> {
     validate_child_directory(run_directory)?;
     let runtime = tokio::runtime::Runtime::new()
-        .map_err(|error| MoltenError::invalid_harness(format!("listener runtime creation failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("listener runtime creation failed: {error}")))?;
     runtime.block_on(async {
         let mut listener = IrohCrossProcessListener::bind(IrohCrossProcessListenerInput {
             profile: fixture_profile(),
@@ -371,7 +371,7 @@ pub fn run_distinct_process_client_child(run_directory: &Path) -> Result<()> {
     validate_fixture_endpoint(&handoff)?;
     let (request_ref, payload) = read_transport_input(run_directory)?;
     let runtime = tokio::runtime::Runtime::new()
-        .map_err(|error| MoltenError::invalid_harness(format!("client runtime creation failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("client runtime creation failed: {error}")))?;
     runtime.block_on(async {
         let frame = exchange_cross_process_frame(
             IrohCrossProcessClientInput {
@@ -440,7 +440,7 @@ fn verify_distinct_process_run_directory_inner(
         diagnostics.push("parent-run-artifact-mismatch".to_string());
     }
     let parent_ref = crate::preserves_rail::canonical_hash(&actual_parent)?;
-    let index_text = std::fs::read_to_string(run_directory.join(INDEX_FILE)).map_err(MoltenError::from)?;
+    let index_text = std::fs::read_to_string(run_directory.join(INDEX_FILE)).map_err(Failure::from)?;
     let expected_index = render_index(&collect_indexed_artifacts(run_directory)?);
     if index_text != expected_index {
         diagnostics.push("artifact-index-mismatch".to_string());
@@ -481,20 +481,20 @@ fn verify_distinct_process_run_directory_inner(
 
 fn validate_run_input(input: &DistinctProcessTransportRunInput) -> Result<()> {
     if input.child_timeout_ms == 0 || input.child_timeout_ms > MAX_DISTINCT_PROCESS_TIMEOUT_MS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "distinct-process child timeout must be between 1 and {MAX_DISTINCT_PROCESS_TIMEOUT_MS} milliseconds"
         )));
     }
     if input.run_directory.as_os_str().is_empty() || input.process_binary.as_os_str().is_empty() {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "distinct-process run requires explicit run directory and process binary",
         ));
     }
     crate::preserves_rail::validate_content_ref(&input.request_ref)?;
     let payload_bytes = u64::try_from(input.payload.len())
-        .map_err(|_| MoltenError::invalid_harness("distinct-process payload length exceeds u64"))?;
+        .map_err(|_| Failure::invalid_harness("distinct-process payload length exceeds u64"))?;
     if input.payload.is_empty() || payload_bytes > FRAME_LIMIT {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "distinct-process payload must be nonempty and within the frame bound",
         ));
     }
@@ -502,18 +502,18 @@ fn validate_run_input(input: &DistinctProcessTransportRunInput) -> Result<()> {
 }
 
 fn write_transport_input(run_directory: &Path, request_ref: &str, payload: &[u8]) -> Result<()> {
-    std::fs::write(run_directory.join(REQUEST_INPUT_FILE), request_ref.as_bytes()).map_err(MoltenError::from)?;
-    std::fs::write(run_directory.join(PAYLOAD_INPUT_FILE), payload).map_err(MoltenError::from)
+    std::fs::write(run_directory.join(REQUEST_INPUT_FILE), request_ref.as_bytes()).map_err(Failure::from)?;
+    std::fs::write(run_directory.join(PAYLOAD_INPUT_FILE), payload).map_err(Failure::from)
 }
 
 fn read_transport_input(run_directory: &Path) -> Result<(String, Vec<u8>)> {
-    let request_ref = std::fs::read_to_string(run_directory.join(REQUEST_INPUT_FILE)).map_err(MoltenError::from)?;
+    let request_ref = std::fs::read_to_string(run_directory.join(REQUEST_INPUT_FILE)).map_err(Failure::from)?;
     crate::preserves_rail::validate_content_ref(&request_ref)?;
-    let payload = std::fs::read(run_directory.join(PAYLOAD_INPUT_FILE)).map_err(MoltenError::from)?;
+    let payload = std::fs::read(run_directory.join(PAYLOAD_INPUT_FILE)).map_err(Failure::from)?;
     let payload_bytes = u64::try_from(payload.len())
-        .map_err(|_| MoltenError::invalid_harness("distinct-process payload length exceeds u64"))?;
+        .map_err(|_| Failure::invalid_harness("distinct-process payload length exceeds u64"))?;
     if payload.is_empty() || payload_bytes > FRAME_LIMIT {
-        return Err(MoltenError::invalid_harness("distinct-process payload input is empty or over-bound"));
+        return Err(Failure::invalid_harness("distinct-process payload input is empty or over-bound"));
     }
     Ok((request_ref, payload))
 }
@@ -521,19 +521,19 @@ fn read_transport_input(run_directory: &Path) -> Result<(String, Vec<u8>)> {
 fn prepare_run_directory(run_directory: &Path, force: bool) -> Result<()> {
     if run_directory.exists() {
         if !force {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "distinct-process run directory already exists: {}",
                 run_directory.display()
             )));
         }
-        std::fs::remove_dir_all(run_directory).map_err(MoltenError::from)?;
+        std::fs::remove_dir_all(run_directory).map_err(Failure::from)?;
     }
-    std::fs::create_dir_all(run_directory).map_err(MoltenError::from)
+    std::fs::create_dir_all(run_directory).map_err(Failure::from)
 }
 
 fn validate_child_directory(run_directory: &Path) -> Result<()> {
     if !run_directory.is_dir() {
-        return Err(MoltenError::invalid_harness("distinct-process child requires an existing run directory"));
+        return Err(Failure::invalid_harness("distinct-process child requires an existing run directory"));
     }
     Ok(())
 }
@@ -546,10 +546,10 @@ fn wait_for_handoff(child: &mut ReapingChild, handoff_path: &Path, timeout: Dura
         }
         if let Some(status) = child.try_wait()? {
             child.finished = true;
-            return Err(MoltenError::invalid_harness(format!("listener exited before endpoint handoff with {status}")));
+            return Err(Failure::invalid_harness(format!("listener exited before endpoint handoff with {status}")));
         }
         if started.elapsed() >= timeout {
-            return Err(MoltenError::invalid_harness("listener did not publish endpoint handoff before timeout"));
+            return Err(Failure::invalid_harness("listener did not publish endpoint handoff before timeout"));
         }
         std::thread::sleep(Duration::from_millis(CHILD_POLL_INTERVAL_MS));
     }
@@ -649,7 +649,7 @@ fn expected_binding(endpoint: &CanonicalCrossProcessEndpoint) -> ExpectedEndpoin
 
 fn validate_fixture_endpoint(endpoint: &CanonicalCrossProcessEndpoint) -> Result<()> {
     validate_cross_process_endpoint(&fixture_profile().profile, &fixture_protocol(), &endpoint.descriptor)
-        .map_err(|issues| MoltenError::invalid_harness(format!("fixture endpoint denied: {issues:?}")))
+        .map_err(|issues| Failure::invalid_harness(format!("fixture endpoint denied: {issues:?}")))
 }
 
 fn participant_artifact(
@@ -850,10 +850,10 @@ fn parent_run_value(
     assessment: &DistinctProcessTransportAssessment,
 ) -> Result<IOValue> {
     if listener.handoff_ref != client.handoff_ref {
-        return Err(MoltenError::invalid_harness("participant handoff refs do not match"));
+        return Err(Failure::invalid_harness("participant handoff refs do not match"));
     }
     if listener.drain_reason == NOT_APPLICABLE || client.drain_reason != NOT_APPLICABLE {
-        return Err(MoltenError::invalid_harness("participant drain reason does not match its listener/client role"));
+        return Err(Failure::invalid_harness("participant drain reason does not match its listener/client role"));
     }
     let decision = if assessment.admitted {
         PASS_DECISION
@@ -1035,34 +1035,34 @@ fn read_endpoint_handoff(path: &Path) -> Result<CanonicalCrossProcessEndpoint> {
 
 fn read_preserves(path: &Path) -> Result<IOValue> {
     ensure_regular_file(path)?;
-    let bytes = std::fs::read(path).map_err(MoltenError::from)?;
+    let bytes = std::fs::read(path).map_err(Failure::from)?;
     crate::preserves_rail::parse_canonical_bytes(&bytes)
 }
 
 fn write_preserves(path: &Path, value: &IOValue) -> Result<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(MoltenError::from)?;
+        std::fs::create_dir_all(parent).map_err(Failure::from)?;
     }
     let bytes = crate::preserves_rail::canonical_bytes(value)?;
-    std::fs::write(path, bytes).map_err(MoltenError::from)
+    std::fs::write(path, bytes).map_err(Failure::from)
 }
 
 fn write_preserves_atomic(path: &Path, value: &IOValue) -> Result<()> {
     let parent = path
         .parent()
-        .ok_or_else(|| MoltenError::invalid_harness("endpoint handoff path requires a parent directory"))?;
-    std::fs::create_dir_all(parent).map_err(MoltenError::from)?;
+        .ok_or_else(|| Failure::invalid_harness("endpoint handoff path requires a parent directory"))?;
+    std::fs::create_dir_all(parent).map_err(Failure::from)?;
     let temporary = path.with_extension("preserves.tmp");
     let bytes = crate::preserves_rail::canonical_bytes(value)?;
-    let mut file = File::create(&temporary).map_err(MoltenError::from)?;
-    file.write_all(&bytes).map_err(MoltenError::from)?;
-    file.sync_all().map_err(MoltenError::from)?;
-    std::fs::rename(&temporary, path).map_err(MoltenError::from)
+    let mut file = File::create(&temporary).map_err(Failure::from)?;
+    file.write_all(&bytes).map_err(Failure::from)?;
+    file.sync_all().map_err(Failure::from)?;
+    std::fs::rename(&temporary, path).map_err(Failure::from)
 }
 
 fn write_index(run_directory: &Path) -> Result<()> {
     let entries = collect_indexed_artifacts(run_directory)?;
-    std::fs::write(run_directory.join(INDEX_FILE), render_index(&entries)).map_err(MoltenError::from)
+    std::fs::write(run_directory.join(INDEX_FILE), render_index(&entries)).map_err(Failure::from)
 }
 
 fn collect_indexed_artifacts(run_directory: &Path) -> Result<Vec<IndexedArtifact>> {
@@ -1083,7 +1083,7 @@ fn collect_indexed_artifacts(run_directory: &Path) -> Result<Vec<IndexedArtifact
     for (relative_path, artifact_kind, format) in definitions {
         let path = run_directory.join(relative_path);
         ensure_regular_file(&path)?;
-        let bytes = std::fs::read(&path).map_err(MoltenError::from)?;
+        let bytes = std::fs::read(&path).map_err(Failure::from)?;
         let expected_ref = if format == "preserves" {
             let value = crate::preserves_rail::parse_canonical_bytes(&bytes)?;
             crate::preserves_rail::canonical_hash(&value)?
@@ -1167,13 +1167,13 @@ fn expected_members() -> BTreeSet<String> {
 
 fn collect_relative_files(root: &Path, current: &Path, output: &mut BTreeSet<String>) -> Result<()> {
     if output.len() > MAX_RUN_FILES {
-        return Err(MoltenError::invalid_harness("distinct-process run directory file count exceeds bound"));
+        return Err(Failure::invalid_harness("distinct-process run directory file count exceeds bound"));
     }
-    for entry in std::fs::read_dir(current).map_err(MoltenError::from)? {
-        let entry = entry.map_err(MoltenError::from)?;
-        let file_type = entry.file_type().map_err(MoltenError::from)?;
+    for entry in std::fs::read_dir(current).map_err(Failure::from)? {
+        let entry = entry.map_err(Failure::from)?;
+        let file_type = entry.file_type().map_err(Failure::from)?;
         if file_type.is_symlink() {
-            return Err(MoltenError::invalid_harness("distinct-process run directory must not contain symlinks"));
+            return Err(Failure::invalid_harness("distinct-process run directory must not contain symlinks"));
         }
         if file_type.is_dir() {
             collect_relative_files(root, &entry.path(), output)?;
@@ -1181,27 +1181,27 @@ fn collect_relative_files(root: &Path, current: &Path, output: &mut BTreeSet<Str
             let relative = entry
                 .path()
                 .strip_prefix(root)
-                .map_err(|error| MoltenError::invalid_harness(format!("run path strip failed: {error}")))?
+                .map_err(|error| Failure::invalid_harness(format!("run path strip failed: {error}")))?
                 .to_string_lossy()
                 .into_owned();
             output.insert(relative);
         } else {
-            return Err(MoltenError::invalid_harness("distinct-process run directory contains a non-regular entry"));
+            return Err(Failure::invalid_harness("distinct-process run directory contains a non-regular entry"));
         }
     }
     Ok(())
 }
 
 fn ensure_regular_file(path: &Path) -> Result<()> {
-    let metadata = std::fs::symlink_metadata(path).map_err(MoltenError::from)?;
+    let metadata = std::fs::symlink_metadata(path).map_err(Failure::from)?;
     if !metadata.file_type().is_file() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "distinct-process artifact is not a regular file: {}",
             path.display()
         )));
     }
     if metadata.len() > MAX_ARTIFACT_BYTES {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "distinct-process artifact exceeds {MAX_ARTIFACT_BYTES} bytes: {}",
             path.display()
         )));
@@ -1235,19 +1235,19 @@ fn checks(names: &[&str]) -> IOValue {
 fn simple_record(value: &IOValue, label: &str, field_count: usize) -> Result<Vec<Value<IOValue>>> {
     let fields = value
         .collect_simple_record(label, Some(field_count))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...>")))?;
     Ok(fields.iter().collect())
 }
 
 fn next<'a>(fields: &mut impl Iterator<Item = &'a Value<IOValue>>, label: &str) -> Result<&'a Value<IOValue>> {
-    fields.next().ok_or_else(|| MoltenError::invalid_harness(format!("missing {label}")))
+    fields.next().ok_or_else(|| Failure::invalid_harness(format!("missing {label}")))
 }
 
 fn required_string(value: &Value<IOValue>, label: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {label}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {label}")))
 }
 
 fn required_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
@@ -1259,12 +1259,12 @@ fn required_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
 fn required_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {label}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {label}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
 fn required_bool(value: &Value<IOValue>, label: &str) -> Result<bool> {
-    value.as_boolean().ok_or_else(|| MoltenError::invalid_harness(format!("expected bool for {label}")))
+    value.as_boolean().ok_or_else(|| Failure::invalid_harness(format!("expected bool for {label}")))
 }
 
 fn require_schema(value: &Value<IOValue>, expected: &str) -> Result<()> {
@@ -1272,7 +1272,7 @@ fn require_schema(value: &Value<IOValue>, expected: &str) -> Result<()> {
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("schema mismatch: expected {expected}, got {actual}")))
+        Err(Failure::invalid_harness(format!("schema mismatch: expected {expected}, got {actual}")))
     }
 }
 
@@ -1281,7 +1281,7 @@ fn require_decision(value: &Value<IOValue>) -> Result<()> {
     if decision == PASS_DECISION {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("participant decision must pass, got {decision}")))
+        Err(Failure::invalid_harness(format!("participant decision must pass, got {decision}")))
     }
 }
 
@@ -1289,7 +1289,7 @@ fn parse_role(value: &str) -> Result<EndpointParticipantRole> {
     match value {
         LISTENER_ROLE => Ok(EndpointParticipantRole::Listener),
         CLIENT_ROLE => Ok(EndpointParticipantRole::Client),
-        other => Err(MoltenError::invalid_harness(format!("unsupported participant role {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported participant role {other}"))),
     }
 }
 
@@ -1300,7 +1300,7 @@ fn parse_delivery(value: &str) -> Result<DeliveryOutcome> {
         "delivered" => Ok(DeliveryOutcome::Delivered),
         "not-delivered" => Ok(DeliveryOutcome::NotDelivered),
         "uncertain" => Ok(DeliveryOutcome::Uncertain),
-        other => Err(MoltenError::invalid_harness(format!("unsupported delivery outcome {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported delivery outcome {other}"))),
     }
 }
 
@@ -1309,7 +1309,7 @@ fn parse_retry(value: &str) -> Result<RetryDisposition> {
         "not-applicable" => Ok(RetryDisposition::NotApplicable),
         "higher-level-policy-required" => Ok(RetryDisposition::HigherLevelPolicyRequired),
         "unsafe-without-reconciliation" => Ok(RetryDisposition::UnsafeWithoutReconciliation),
-        other => Err(MoltenError::invalid_harness(format!("unsupported retry disposition {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported retry disposition {other}"))),
     }
 }
 

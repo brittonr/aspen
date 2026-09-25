@@ -22,7 +22,7 @@ fn store_payload(root: &Path, value_bytes: &[u8]) -> Result<(IoValue, Vec<IoValu
 fn apply_migration_transform(recipe: &MigrationRecipe, old_value: &IoValue) -> Result<IoValue> {
     match recipe.transformer_kind.as_str() {
         "identity" | "schema-rename" => Ok(old_value.clone()),
-        other => Err(MoltenError::invalid_harness(format!(
+        other => Err(Failure::invalid_harness(format!(
             "unsupported typed storage migration transformer kind {other}"
         ))),
     }
@@ -35,14 +35,14 @@ fn read_payload_bytes(root: &Path, typed_ref: &EntryRef) -> Result<Vec<u8>> {
             let read_txn = db.begin_read().map_err(index_error)?;
             let table = read_txn.open_table(INDEX_INLINE_VALUES).map_err(index_error)?;
             let Some(bytes) = table.get(typed_ref.value_ref.as_str()).map_err(index_error)? else {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(Failure::invalid_harness(format!(
                     "missing inline typed storage value {}",
                     typed_ref.value_ref
                 )));
             };
             let bytes = bytes.value().to_vec();
             if bytes.len() as u64 != *length {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(Failure::invalid_harness(format!(
                     "inline typed storage length mismatch: got {}, expected {length}",
                     bytes.len()
                 )));
@@ -52,7 +52,7 @@ fn read_payload_bytes(root: &Path, typed_ref: &EntryRef) -> Result<Vec<u8>> {
         Payload::ContentRef { manifest_ref, length } => {
             let read = crate::chunk_store::read_object(&chunk_root(root), manifest_ref)?;
             if read.bytes.len() as u64 != *length {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(Failure::invalid_harness(format!(
                     "chunk-backed typed storage length mismatch: got {}, expected {length}",
                     read.bytes.len()
                 )));
@@ -67,7 +67,7 @@ fn read_entry_ref(root: &Path, storage_ref: &str) -> Result<IoValue> {
     let read_txn = db.begin_read().map_err(index_error)?;
     let refs = read_txn.open_table(INDEX_REFS).map_err(index_error)?;
     let Some(bytes) = refs.get(storage_ref).map_err(index_error)? else {
-        return Err(MoltenError::invalid_harness(format!("unknown typed storage ref {storage_ref}")));
+        return Err(Failure::invalid_harness(format!("unknown typed storage ref {storage_ref}")));
     };
     parse_canonical_bytes(bytes.value())
 }
@@ -144,7 +144,7 @@ fn parse_payload(value: &Value<IoValue>) -> Result<Payload> {
             length: required_u64(&content[1], "content payload length")?,
         });
     }
-    Err(MoltenError::invalid_harness("typed storage payload must be inline or content-ref"))
+    Err(Failure::invalid_harness("typed storage payload must be inline or content-ref"))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -175,8 +175,8 @@ fn chunk_root(root: &Path) -> std::path::PathBuf {
 }
 
 fn ensure_dirs(root: &Path) -> Result<()> {
-    std::fs::create_dir_all(root).map_err(MoltenError::from)?;
-    std::fs::create_dir_all(chunk_root(root)).map_err(MoltenError::from)
+    std::fs::create_dir_all(root).map_err(Failure::from)?;
+    std::fs::create_dir_all(chunk_root(root)).map_err(Failure::from)
 }
 
 fn ensure_index_tables(root: &Path) -> Result<Database> {
@@ -212,8 +212,8 @@ fn index_path(root: &Path) -> std::path::PathBuf {
     root.join(INDEX_FILE)
 }
 
-fn index_error(error: impl std::fmt::Display) -> MoltenError {
-    MoltenError::invalid_harness(format!("typed storage redb index error: {error}"))
+fn index_error(error: impl std::fmt::Display) -> Failure {
+    Failure::invalid_harness(format!("typed storage redb index error: {error}"))
 }
 
 fn validate_admission(admission: &Admission) -> Result<()> {
@@ -221,7 +221,7 @@ fn validate_admission(admission: &Admission) -> Result<()> {
     require_ref(&admission.capability_ref, "typed storage capability ref")?;
     require_ref(&admission.policy_ref, "typed storage policy ref")?;
     if admission.resource_refs.is_empty() {
-        return Err(MoltenError::invalid_harness("typed storage admission requires at least one resource ref"));
+        return Err(Failure::invalid_harness("typed storage admission requires at least one resource ref"));
     }
     validate_refs(&admission.resource_refs, "typed storage resource ref")?;
     validate_refs(&admission.evidence_refs, "typed storage admission evidence ref")
@@ -230,30 +230,30 @@ fn validate_admission(admission: &Admission) -> Result<()> {
 fn validate_namespace_key(namespace: &str, key: &str) -> Result<()> {
     validate_namespace(namespace)?;
     if key.is_empty() {
-        return Err(MoltenError::invalid_harness("typed storage key must not be empty"));
+        return Err(Failure::invalid_harness("typed storage key must not be empty"));
     }
     Ok(())
 }
 
 fn validate_namespace(namespace: &str) -> Result<()> {
     if namespace.is_empty() {
-        return Err(MoltenError::invalid_harness("typed storage namespace must not be empty"));
+        return Err(Failure::invalid_harness("typed storage namespace must not be empty"));
     }
     if namespace.chars().any(char::is_whitespace) {
-        return Err(MoltenError::invalid_harness("typed storage namespace must not contain whitespace"));
+        return Err(Failure::invalid_harness("typed storage namespace must not contain whitespace"));
     }
     Ok(())
 }
 
 fn validate_operations(operations: &[String]) -> Result<()> {
     if operations.is_empty() {
-        return Err(MoltenError::invalid_harness("storage effect manifest operations must not be empty"));
+        return Err(Failure::invalid_harness("storage effect manifest operations must not be empty"));
     }
     let mut seen = std::collections::BTreeSet::new();
     for operation in operations {
         validate_operation(operation)?;
         if !seen.insert(operation.as_str()) {
-            return Err(MoltenError::invalid_harness(format!("duplicate storage operation {operation}")));
+            return Err(Failure::invalid_harness(format!("duplicate storage operation {operation}")));
         }
     }
     Ok(())
@@ -261,14 +261,14 @@ fn validate_operations(operations: &[String]) -> Result<()> {
 
 fn validate_operation(operation: &str) -> Result<()> {
     if !matches!(operation, "put" | "get" | "verify" | "migrate") {
-        return Err(MoltenError::invalid_harness(format!("unsupported typed storage operation {operation}")));
+        return Err(Failure::invalid_harness(format!("unsupported typed storage operation {operation}")));
     }
     Ok(())
 }
 
 fn validate_transformer_kind(kind: &str) -> Result<()> {
     if !matches!(kind, "identity" | "schema-rename") {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported typed storage migration transformer kind {kind}"
         )));
     }
@@ -277,7 +277,7 @@ fn validate_transformer_kind(kind: &str) -> Result<()> {
 
 fn validate_migration_mode(mode: &str) -> Result<()> {
     if !matches!(mode, "explicit" | "lazy-on-read" | "batch") {
-        return Err(MoltenError::invalid_harness(format!("unsupported typed storage migration mode {mode}")));
+        return Err(Failure::invalid_harness(format!("unsupported typed storage migration mode {mode}")));
     }
     Ok(())
 }
@@ -286,9 +286,9 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
     let total = values
         .item_count()
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("{label} count overflow")))?;
     if total > maximum {
-        return Err(MoltenError::invalid_harness(format!("{label} count {total} exceeds bound {maximum}")));
+        return Err(Failure::invalid_harness(format!("{label} count {total} exceeds bound {maximum}")));
     }
     values.push_item(value);
     Ok(())

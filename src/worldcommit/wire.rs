@@ -6,7 +6,7 @@ use molten_core::world_commit::WorldCommitRef;
 use molten_core::world_commit::WorldRootRef;
 use preserves::IOValue;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub const WORLD_COMMIT_RECORD: &str = "molten-world-commit-v1";
@@ -68,7 +68,7 @@ pub fn canonical_world_commit(core: &WorldCommitCore, bounds: &WorldCommitBounds
     let value = world_commit_value(&normalized);
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     let commit_ref = molten_core::world_commit::identify_world_commit(&bytes)
-        .map_err(|issue| MoltenError::invalid_harness(format!("world commit identity denied: {issue:?}")))?;
+        .map_err(|issue| Failure::invalid_harness(format!("world commit identity denied: {issue:?}")))?;
     Ok(CanonicalWorldCommit {
         core: normalized,
         commit_ref,
@@ -197,33 +197,33 @@ pub fn denied_capture_receipt(
 fn validate_capture_receipt(receipt: &CaptureReceipt) -> Result<()> {
     crate::preserves_rail::validate_content_ref(&receipt.profile_ref)?;
     if receipt.persisted_roots.len() > molten_core::world_commit::MAX_WORLD_COMMIT_ROOTS {
-        return Err(MoltenError::invalid_harness("world commit capture receipt root count exceeds bound"));
+        return Err(Failure::invalid_harness("world commit capture receipt root count exceeds bound"));
     }
     if receipt.revision_fences.len() > molten_core::world_commit::MAX_WORLD_COMMIT_REVISION_FENCES {
-        return Err(MoltenError::invalid_harness("world commit capture receipt revision-fence count exceeds bound"));
+        return Err(Failure::invalid_harness("world commit capture receipt revision-fence count exceeds bound"));
     }
     if receipt.issues.len() > MAX_CAPTURE_RECEIPT_ISSUES {
-        return Err(MoltenError::invalid_harness("world commit capture receipt issue count exceeds bound"));
+        return Err(Failure::invalid_harness("world commit capture receipt issue count exceeds bound"));
     }
     if receipt
         .issues
         .iter()
         .any(|issue| issue.len() > MAX_CAPTURE_RECEIPT_ISSUE_BYTES || issue.chars().any(char::is_control))
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "world commit capture receipt issue is oversized or contains control text",
         ));
     }
     let has_commit = receipt.commit_ref.is_some();
     let is_success = receipt.decision == CaptureDecision::Published && receipt.publication.is_success();
     if is_success != has_commit {
-        return Err(MoltenError::invalid_harness("world commit capture receipt success and commit identity disagree"));
+        return Err(Failure::invalid_harness("world commit capture receipt success and commit identity disagree"));
     }
     if receipt.decision == CaptureDecision::Published && !receipt.issues.is_empty() {
-        return Err(MoltenError::invalid_harness("world commit capture receipt cannot publish with denial issues"));
+        return Err(Failure::invalid_harness("world commit capture receipt cannot publish with denial issues"));
     }
     if receipt.non_claims != WORLD_COMMIT_NON_CLAIMS {
-        return Err(MoltenError::invalid_harness("world commit capture receipt non-claims are incomplete"));
+        return Err(Failure::invalid_harness("world commit capture receipt non-claims are incomplete"));
     }
     Ok(())
 }
@@ -276,6 +276,6 @@ pub(crate) fn non_claims_value() -> IOValue {
     )])
 }
 
-fn core_validation_error(issues: Vec<CaptureIssue>) -> MoltenError {
-    MoltenError::invalid_harness(format!("world commit core validation denied: {issues:?}"))
+fn core_validation_error(issues: Vec<CaptureIssue>) -> Failure {
+    Failure::invalid_harness(format!("world commit core validation denied: {issues:?}"))
 }

@@ -1,6 +1,6 @@
 #[test]
 fn store_labels_keep_the_fixed_inventory() {
-    type Kind = molten_node_host::local_store::LocalStoreKind;
+    type Kind = molten_node_host::local_store::Category;
     let expected = [
         (Kind::Artifact, "artifact"),
         (Kind::Chunk, "chunk"),
@@ -18,7 +18,7 @@ fn store_labels_keep_the_fixed_inventory() {
 
 #[test]
 fn namespace_registry_keeps_order_and_intentional_aliases() {
-    type Kind = molten_node_host::node_state::NodeStateNamespaceKind;
+    type Kind = molten_node_host::node_state::NamespaceKind;
     let expected = [
         (Kind::Identity, "identity"),
         (Kind::Secrets, "identity"),
@@ -44,10 +44,10 @@ fn namespace_registry_keeps_order_and_intentional_aliases() {
 
 #[test]
 fn directory_aliases_do_not_share_entry_authority() {
-    type Kind = molten_node_host::node_state::NodeStateNamespaceKind;
+    type Kind = molten_node_host::node_state::NamespaceKind;
     let temp = cap_tempfile::TempDir::new(cap_std::ambient_authority()).unwrap();
-    let root = molten_node_host::node_state::NodeStateRoot::from_dir(temp.try_clone().unwrap());
-    let path = molten_node_host::node_state::NodeStatePath::parse("value").unwrap();
+    let root = molten_node_host::node_state::Root::from_dir(temp.try_clone().unwrap());
+    let path = molten_node_host::node_state::RelativePath::parse("value").unwrap();
     for (first, second) in [(Kind::Identity, Kind::Secrets), (Kind::ControlIngress, Kind::Ingress)] {
         assert_ne!(first, second);
         assert_eq!(first.as_str(), second.as_str());
@@ -71,12 +71,12 @@ fn directory_aliases_do_not_share_entry_authority() {
 
 #[test]
 fn observations_keep_absence_denial_and_acquired_handle_use_distinct() {
-    type Observation = molten_node_host::node_state::NodeStateFileObservation;
-    type Error = molten_node_host::error::MoltenError;
+    type Observation = molten_node_host::node_state::FileObservation;
+    type Error = molten_node_host::error::Failure;
     let temp = cap_tempfile::TempDir::new(cap_std::ambient_authority()).unwrap();
-    let root = molten_node_host::node_state::NodeStateRoot::from_dir(temp.try_clone().unwrap());
+    let root = molten_node_host::node_state::Root::from_dir(temp.try_clone().unwrap());
     let namespace = root.identity().unwrap();
-    let path = molten_node_host::node_state::NodeStatePath::parse("value").unwrap();
+    let path = molten_node_host::node_state::RelativePath::parse("value").unwrap();
     assert!(matches!(namespace.observe_file(&path).unwrap(), Observation::Missing));
     assert_eq!(namespace.unix_mode(&path).unwrap(), None);
     assert_eq!(
@@ -86,7 +86,7 @@ fn observations_keep_absence_denial_and_acquired_handle_use_distinct() {
     namespace.create_dir_all(&path).unwrap();
     assert!(matches!(
         namespace.observe_file(&path).unwrap(),
-        Observation::NonRegular(molten_node_host::node_state::NodeStateEntryKind::Directory)
+        Observation::NonRegular(molten_node_host::node_state::EntryKind::Directory)
     ));
     assert_eq!(
         namespace.read(&path, 5).unwrap_err(),
@@ -96,7 +96,7 @@ fn observations_keep_absence_denial_and_acquired_handle_use_distinct() {
         namespace.unix_mode(&path).unwrap_err(),
         Error::invalid_harness("node state leaf value must be a regular file")
     );
-    let file_path = molten_node_host::node_state::NodeStatePath::parse("regular").unwrap();
+    let file_path = molten_node_host::node_state::RelativePath::parse("regular").unwrap();
     namespace.write(&file_path, b"value").unwrap();
     let Observation::Regular(file) = namespace.observe_file(&file_path).unwrap() else {
         panic!("expected acquired regular file");

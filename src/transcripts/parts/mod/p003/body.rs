@@ -8,7 +8,7 @@ fn execute_storage_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<
             let value = state
                 .last_output
                 .clone()
-                .ok_or_else(|| MoltenError::invalid_harness("storage put requires prior preserves output"))?;
+                .ok_or_else(|| Failure::invalid_harness("storage put requires prior preserves output"))?;
             let admission = crate::typed_storage::Admission::local_fixture(&format!("transcript:{namespace}:{key}"));
             let put = crate::typed_storage::put_value(&state.storage, &crate::typed_storage::PutInput {
                 namespace,
@@ -30,8 +30,8 @@ fn execute_storage_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<
             let get = crate::typed_storage::get_value(&state.storage, namespace, key, schema_ref, &admission)?;
             Ok(Some(get.value))
         }
-        Some(other) => Err(MoltenError::invalid_harness(format!("unsupported transcript storage command {other}"))),
-        None => Err(MoltenError::invalid_harness("missing transcript storage command")),
+        Some(other) => Err(Failure::invalid_harness(format!("unsupported transcript storage command {other}"))),
+        None => Err(Failure::invalid_harness("missing transcript storage command")),
     }
 }
 
@@ -52,8 +52,8 @@ fn execute_cache_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<Io
                 entries.iter().map(|entry| string(&entry.key_ref)).collect(),
             )])))
         }
-        Some(other) => Err(MoltenError::invalid_harness(format!("unsupported transcript cache command {other}"))),
-        None => Err(MoltenError::invalid_harness("missing transcript cache command")),
+        Some(other) => Err(Failure::invalid_harness(format!("unsupported transcript cache command {other}"))),
+        None => Err(Failure::invalid_harness("missing transcript cache command")),
     }
 }
 
@@ -61,7 +61,7 @@ fn execute_report_cli(state: &RunnerState) -> Result<Option<IoValue>> {
     let value = state
         .last_output
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("report command requires prior output"))?;
+        .ok_or_else(|| Failure::invalid_harness("report command requires prior output"))?;
     let validation = crate::harness::validate_report_value(value)?;
     Ok(Some(record("report-validation", vec![string(validation.report_ref)])))
 }
@@ -82,9 +82,9 @@ fn execute_expectation(state: &RunnerState, content: &str) -> Result<Option<IoVa
         let actual = state
             .last_decision
             .as_ref()
-            .ok_or_else(|| MoltenError::invalid_harness("expect-decision requires previous outcome"))?;
+            .ok_or_else(|| Failure::invalid_harness("expect-decision requires previous outcome"))?;
         if &expected != actual {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "expect-decision mismatch: expected {expected}, got {actual}"
             )));
         }
@@ -112,7 +112,7 @@ fn execute_expectation(state: &RunnerState, content: &str) -> Result<Option<IoVa
     }
     if expectation.collect_simple_record("expect-output-absent", Some(0)).is_some() {
         if state.last_output.is_some() {
-            return Err(MoltenError::invalid_harness("expect-output-absent mismatch: previous output was present"));
+            return Err(Failure::invalid_harness("expect-output-absent mismatch: previous output was present"));
         }
         return Ok(Some(expectation));
     }
@@ -121,9 +121,9 @@ fn execute_expectation(state: &RunnerState, content: &str) -> Result<Option<IoVa
         let actual = state
             .last_kind
             .as_ref()
-            .ok_or_else(|| MoltenError::invalid_harness("expect-kind requires previous outcome"))?;
+            .ok_or_else(|| Failure::invalid_harness("expect-kind requires previous outcome"))?;
         if &expected != actual {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "expect-kind mismatch: expected {expected}, got {actual}"
             )));
         }
@@ -133,18 +133,18 @@ fn execute_expectation(state: &RunnerState, content: &str) -> Result<Option<IoVa
         let needle = required_string(&fields[0], "expected error substring")?;
         let haystack = state.last_diagnostics.join("\n");
         if !haystack.contains(&needle) {
-            return Err(MoltenError::invalid_harness(format!("expected previous diagnostics to contain {needle:?}")));
+            return Err(Failure::invalid_harness(format!("expected previous diagnostics to contain {needle:?}")));
         }
         return Ok(Some(expectation));
     }
     if expectation.collect_simple_record("expect-stdout", Some(1)).is_some()
         || expectation.collect_simple_record("expect-raw-output", Some(1)).is_some()
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "raw transcript output is diagnostic-only; use a canonical Preserves value or receipt oracle",
         ));
     }
-    Err(MoltenError::invalid_harness("unsupported transcript expectation"))
+    Err(Failure::invalid_harness("unsupported transcript expectation"))
 }
 
 fn expect_value_ref(state: &RunnerState, expected_ref: &str) -> Result<()> {
@@ -152,10 +152,10 @@ fn expect_value_ref(state: &RunnerState, expected_ref: &str) -> Result<()> {
     let actual = state
         .last_output
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("canonical value expectation requires previous output"))?;
+        .ok_or_else(|| Failure::invalid_harness("canonical value expectation requires previous output"))?;
     let actual_ref = canonical_hash(actual)?;
     if expected_ref != actual_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "expect-value-ref mismatch: expected {expected_ref}, got {actual_ref}"
         )));
     }
@@ -166,9 +166,9 @@ fn expect_receipt(state: &RunnerState, expected_kind: &str, expected_decision: O
     let actual = state
         .last_output
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("receipt expectation requires previous output"))?;
+        .ok_or_else(|| Failure::invalid_harness("receipt expectation requires previous output"))?;
     if actual.collect_simple_record(expected_kind, None).is_none() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "expect-receipt mismatch: previous output is not {expected_kind}"
         )));
     }
@@ -176,7 +176,7 @@ fn expect_receipt(state: &RunnerState, expected_kind: &str, expected_decision: O
         validate_decision_or_receipt_decision(expected_decision)?;
         let actual_decision = receipt_decision(actual, expected_kind)?;
         if actual_decision != expected_decision {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "expect-receipt decision mismatch: expected {expected_decision}, got {actual_decision}"
             )));
         }
@@ -188,14 +188,14 @@ fn expect_failure_class(state: &RunnerState, expected: &str) -> Result<()> {
     let decision = state
         .last_decision
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("failure-class expectation requires previous outcome"))?;
+        .ok_or_else(|| Failure::invalid_harness("failure-class expectation requires previous outcome"))?;
     if decision != DECISION_DENY && decision != DECISION_ERROR && decision != DECISION_KNOWN_BUG {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "expect-failure-class mismatch: previous decision was {decision}"
         )));
     }
     if !state.last_diagnostics.iter().any(|diagnostic| diagnostic.contains(expected)) {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "expect-failure-class mismatch: diagnostics did not contain {expected:?}"
         )));
     }
@@ -207,10 +207,10 @@ fn expect_trace_marker(state: &RunnerState, expected_ref: &str) -> Result<()> {
     let actual = state
         .last_output
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("trace marker expectation requires previous output"))?;
+        .ok_or_else(|| Failure::invalid_harness("trace marker expectation requires previous output"))?;
     let actual_text = to_text(actual)?;
     if !actual_text.contains(expected_ref) && canonical_hash(actual)? != expected_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "expect-trace-marker mismatch: previous output did not bind {expected_ref}"
         )));
     }
@@ -225,7 +225,7 @@ fn receipt_decision(value: &IoValue, expected_kind: &str) -> Result<String> {
         }
         "eval-cache-receipt-v1" => crate::eval_cache::parse_receipt(value).map(|receipt| receipt.decision),
         "transcript-run-receipt-v1" => parse_transcript_run_receipt(value).map(|receipt| receipt.decision),
-        other => Err(MoltenError::invalid_harness(format!(
+        other => Err(Failure::invalid_harness(format!(
             "unsupported transcript receipt oracle kind {other}"
         ))),
     }
@@ -235,7 +235,7 @@ fn validate_decision_or_receipt_decision(decision: &str) -> Result<()> {
     if matches!(decision, "pass" | "deny" | "error" | "skip" | "known-bug" | "trace-only") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported receipt decision {decision}")))
+        Err(Failure::invalid_harness(format!("unsupported receipt decision {decision}")))
     }
 }
 
@@ -329,7 +329,7 @@ fn transcript_run_bindings_value(transcript: &TranscriptArtifact) -> Result<IoVa
 fn parse_modifier_token(token: &str) -> Result<TranscriptModifier> {
     let token = token.strip_prefix(':').unwrap_or(token);
     if token.is_empty() {
-        return Err(MoltenError::invalid_harness("empty transcript modifier"));
+        return Err(Failure::invalid_harness("empty transcript modifier"));
     }
     let (name, value) = token.split_once('=').map_or((token, None), |(name, value)| (name, Some(value)));
     validate_modifier(name)?;
@@ -347,13 +347,13 @@ fn validate_kind(kind: &str) -> Result<()> {
     if matches!(kind, KIND_MOLTEN_CLI | KIND_PRESERVES | KIND_ARTIFACT | KIND_POLICY | KIND_EXPECT | KIND_COMMENT) {
         Ok(())
     } else if matches!(kind, "shell" | "sh" | "bash") {
-        Err(MoltenError::invalid_harness("ambient shell transcript stanzas are denied by default"))
+        Err(Failure::invalid_harness("ambient shell transcript stanzas are denied by default"))
     } else if matches!(kind, "ucm" | "unison" | "unison-transcript") {
-        Err(MoltenError::invalid_harness(
+        Err(Failure::invalid_harness(
             "UCM compatibility is denied; Unison transcripts are prior art only",
         ))
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported transcript stanza kind {kind}")))
+        Err(Failure::invalid_harness(format!("unsupported transcript stanza kind {kind}")))
     }
 }
 
@@ -377,7 +377,7 @@ fn validate_modifier(modifier: &str) -> Result<()> {
     ) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported transcript modifier {modifier}")))
+        Err(Failure::invalid_harness(format!("unsupported transcript modifier {modifier}")))
     }
 }
 
@@ -388,7 +388,7 @@ fn declared_refs_from_modifiers(modifiers: &[TranscriptModifier]) -> Result<Vec<
             continue;
         }
         let value = modifier.value.as_ref().ok_or_else(|| {
-            MoltenError::invalid_harness(format!("transcript modifier {} requires a ref value", modifier.name))
+            Failure::invalid_harness(format!("transcript modifier {} requires a ref value", modifier.name))
         })?;
         push_ref(&mut refs, value.clone(), "transcript stanza modifier ref")?;
     }
@@ -461,7 +461,7 @@ fn effective_ref_bindings(
             continue;
         }
         let value = candidate.value.as_ref().ok_or_else(|| {
-            MoltenError::invalid_harness(format!("transcript modifier {modifier} requires a ref value"))
+            Failure::invalid_harness(format!("transcript modifier {modifier} requires a ref value"))
         })?;
         push_ref(&mut refs, value.clone(), modifier)?;
     }
@@ -546,10 +546,10 @@ fn temp_state_root(label: &str) -> Result<PathBuf> {
         match fs::create_dir(&path) {
             Ok(()) => return Ok(path),
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(error) => return Err(MoltenError::from(error)),
+            Err(error) => return Err(Failure::from(error)),
         }
     }
-    Err(MoltenError::invalid_harness("exhausted bounded transcript temp root attempts"))
+    Err(Failure::invalid_harness("exhausted bounded transcript temp root attempts"))
 }
 
 fn local_ref(kind: &str, label: &str) -> Result<String> {

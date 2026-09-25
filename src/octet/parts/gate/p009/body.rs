@@ -37,7 +37,7 @@ fn ensure_count_at_most(actual: usize, maximum: usize, label: &str) -> Result<()
     if actual <= maximum {
         return Ok(());
     }
-    Err(MoltenError::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
+    Err(Failure::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
 }
 
 fn insert_bounded<K: Ord, V>(
@@ -51,7 +51,7 @@ fn insert_bounded<K: Ord, V>(
         let total = values
             .len()
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))?;
+            .ok_or_else(|| Failure::invalid_harness(format!("{label} count overflow")))?;
         ensure_count_at_most(total, maximum, label)?;
     }
     values.insert(key, value);

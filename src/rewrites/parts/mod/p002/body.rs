@@ -126,7 +126,7 @@ fn replacement_value(replacement: &RewriteReplacement) -> Result<IoValue> {
 fn rewrite_receipt_value(input: &RewriteReceiptValueInput<'_>) -> Result<IoValue> {
     validate_non_empty(input.operation, "rewrite receipt operation")?;
     if !matches!(input.decision, "pass" | "deny") {
-        return Err(MoltenError::invalid_harness(format!("unsupported rewrite decision {}", input.decision)));
+        return Err(Failure::invalid_harness(format!("unsupported rewrite decision {}", input.decision)));
     }
     validate_ref(input.subject_ref, "rewrite receipt subject ref")?;
     validate_refs(input.refs, "rewrite receipt ref")?;

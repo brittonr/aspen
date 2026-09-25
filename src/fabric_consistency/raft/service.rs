@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric_transport::CrossProcessFrameEvidence;
 use crate::fabric_transport::IrohCrossProcessListener;
@@ -33,10 +33,10 @@ impl<P: BoundLiveReplicaEffectPorts> ScopedLiveReplicaService<P> {
         let (state, startup_observations) = match startup {
             ReplicaExecutionOutcome::Applied(executed) => (executed.next, executed.observations),
             ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
-                return Err(MoltenError::invalid_harness(format!("live Raft startup denied: {diagnostic}")));
+                return Err(Failure::invalid_harness(format!("live Raft startup denied: {diagnostic}")));
             }
             ReplicaExecutionOutcome::Failed(failed) => {
-                return Err(MoltenError::invalid_harness(format!(
+                return Err(Failure::invalid_harness(format!(
                     "live Raft startup effect {} failed: {}",
                     failed.failed_kind.as_str(),
                     failed.diagnostic
@@ -96,12 +96,12 @@ impl<P: BoundLiveReplicaEffectPorts> ScopedLiveReplicaService<P> {
 
     pub async fn run_next(&mut self, timeout: Duration) -> Result<ReplicaExecutionOutcome> {
         if timeout.is_zero() {
-            return Err(MoltenError::invalid_harness("live Raft inbox timeout must be positive"));
+            return Err(Failure::invalid_harness("live Raft inbox timeout must be positive"));
         }
         let event = tokio::time::timeout(timeout, self.inbox.recv())
             .await
-            .map_err(|_| MoltenError::invalid_harness("live Raft inbox receive timed out"))?
-            .ok_or_else(|| MoltenError::invalid_harness("live Raft inbox closed"))?;
+            .map_err(|_| Failure::invalid_harness("live Raft inbox receive timed out"))?
+            .ok_or_else(|| Failure::invalid_harness("live Raft inbox closed"))?;
         Ok(self.handle_event(event).await)
     }
 

@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric::FabricPortError;
 use crate::fabric::FabricPortResult;
@@ -26,7 +26,7 @@ pub struct RegisteredTransportEffectPort<A: TransportCommandShell> {
 impl<A: TransportCommandShell> RegisteredTransportEffectPort<A> {
     pub fn new(adapter: A, context: ExtensionTransportContext, profile: CanonicalTransportProfile) -> Result<Self> {
         if adapter.profile_id() != profile.profile.profile_id {
-            return Err(MoltenError::invalid_harness("registered transport adapter profile mismatch"));
+            return Err(Failure::invalid_harness("registered transport adapter profile mismatch"));
         }
         Ok(Self {
             adapter,
@@ -39,7 +39,7 @@ impl<A: TransportCommandShell> RegisteredTransportEffectPort<A> {
     pub fn register(&mut self, request_ref: String, command: TransportCommand) -> Result<()> {
         crate::preserves_rail::validate_content_ref(&request_ref)?;
         if self.requests.insert(request_ref.clone(), command).is_some() {
-            return Err(MoltenError::invalid_harness(format!("transport request {request_ref} is already registered")));
+            return Err(Failure::invalid_harness(format!("transport request {request_ref} is already registered")));
         }
         Ok(())
     }

@@ -44,18 +44,18 @@ fn execute(
         .topology_profile_ref
         .as_deref()
         .map(|profile_ref| {
-            Ok::<_, molten::error::MoltenError>(molten::node_daemon::LiveTopologyProfile {
+            Ok::<_, molten::error::Failure>(molten::node_daemon::LiveTopologyProfile {
                 profile_ref,
                 expected_node: input.expected_node.as_deref().ok_or_else(|| {
-                    molten::error::MoltenError::invalid_harness("--topology-profile-ref requires --expected-node")
+                    molten::error::Failure::invalid_harness("--topology-profile-ref requires --expected-node")
                 })?,
                 expected_peer: input.from_peer.as_deref().or(input.expected_peer.as_deref()).ok_or_else(|| {
-                    molten::error::MoltenError::invalid_harness(
+                    molten::error::Failure::invalid_harness(
                         "--topology-profile-ref requires --from-peer or --expected-peer",
                     )
                 })?,
                 expected_topic: input.expected_topic.as_deref().ok_or_else(|| {
-                    molten::error::MoltenError::invalid_harness("--topology-profile-ref requires --expected-topic")
+                    molten::error::Failure::invalid_harness("--topology-profile-ref requires --expected-topic")
                 })?,
                 expected_endpoint: input.expected_endpoint.as_deref(),
                 allowed_alpns: &profile_alpn_refs,
@@ -76,7 +76,7 @@ fn execute(
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
-        .map_err(molten::error::MoltenError::from)?;
+        .map_err(molten::error::Failure::from)?;
     runtime.block_on(molten::node_daemon::apply_control_live_workflow_bundle(
         &molten::node_daemon::ControlLiveWorkflowBundleApplyInput {
             state_root: &input.state_root,

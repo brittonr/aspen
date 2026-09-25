@@ -11,7 +11,7 @@ fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
         let name = required_string(&check[0], "operator check name")?;
         let status = required_string(&check[1], "operator check status")?;
         if status != "pass" && status != "fail" && status != "diagnostic" {
-            return Err(MoltenError::invalid_harness(format!("operator check {name} has status {status}")));
+            return Err(Failure::invalid_harness(format!("operator check {name} has status {status}")));
         }
         parsed.push_limited_value((name, status), MAX_OPERATOR_REFS, "operator checks")?;
     }
@@ -26,7 +26,7 @@ fn require_check(checks: &[(String, String)], expected: &str, context: &str) -> 
     if checks.iter().any(|(name, _)| name == expected) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{context} missing {expected} check")))
+        Err(Failure::invalid_harness(format!("{context} missing {expected} check")))
     }
 }
 
@@ -35,7 +35,7 @@ fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Resu
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported {context} schema {actual}; expected {expected}")))
+        Err(Failure::invalid_harness(format!("unsupported {context} schema {actual}; expected {expected}")))
     }
 }
 
@@ -46,14 +46,14 @@ fn simple_record<'a>(
 ) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
 fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected sequence for {field}")))
 }
 
 fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
@@ -67,7 +67,7 @@ fn record_bool(value: &Value<IoValue>, label: &str) -> Result<bool> {
     let fields = simple_record(&value, label, 1)?;
     fields[0]
         .as_boolean()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected bool for {label}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected bool for {label}")))
 }
 
 fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
@@ -75,8 +75,8 @@ fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let fields = simple_record(&value, label, 1)?;
     let number = fields[0]
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {label}")))?;
-    number.map_err(|_| MoltenError::invalid_harness(format!("u64 out of range for {label}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {label}")))?;
+    number.map_err(|_| Failure::invalid_harness(format!("u64 out of range for {label}")))
 }
 
 fn record_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
@@ -145,7 +145,7 @@ fn member_ref(value: &Value<IoValue>, expected_name: &str) -> Result<String> {
     record_file_refs(value, "members")?
         .into_iter()
         .find_map(|(name, reference)| (name == expected_name).then_some(reference))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("release evidence bundle missing member {expected_name}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("release evidence bundle missing member {expected_name}")))
 }
 
 fn parse_optional_ref_value(value: &Value<IoValue>) -> Result<Option<String>> {
@@ -162,7 +162,7 @@ fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {
@@ -172,7 +172,7 @@ fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {
 }
 
 fn usize_to_u64(value: usize, field: &str) -> Result<u64> {
-    u64::try_from(value).map_err(|error| MoltenError::invalid_harness(format!("{field} overflows u64: {error}")))
+    u64::try_from(value).map_err(|error| Failure::invalid_harness(format!("{field} overflows u64: {error}")))
 }
 
 #[cfg(test)]

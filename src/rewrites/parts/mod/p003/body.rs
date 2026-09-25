@@ -38,11 +38,11 @@ impl<'a> TextTraversal<'a> {
     fn output(mut self) -> Result<IoValue> {
         let output_count = self.outputs.len();
         if output_count != 1 {
-            return Err(MoltenError::invalid_harness(format!("rewrite traversal produced {output_count} outputs")));
+            return Err(Failure::invalid_harness(format!("rewrite traversal produced {output_count} outputs")));
         }
         self.outputs
             .pop()
-            .ok_or_else(|| MoltenError::invalid_harness("rewrite traversal produced no output"))
+            .ok_or_else(|| Failure::invalid_harness("rewrite traversal produced no output"))
     }
 
     fn visit(&mut self, current: IoValue, current_path: String) -> Result<()> {
@@ -135,7 +135,7 @@ impl<'a> TextTraversal<'a> {
     }
 
     fn take_child_outputs(&mut self, child_count: usize, label: &str) -> Result<Vec<IoValue>> {
-        let start = self.outputs.len().checked_sub(child_count).ok_or_else(|| MoltenError::invalid_harness(label))?;
+        let start = self.outputs.len().checked_sub(child_count).ok_or_else(|| Failure::invalid_harness(label))?;
         Ok(self.outputs.split_off(start))
     }
 
@@ -215,10 +215,10 @@ fn validate_plan_input(input: &RewritePlanInput) -> Result<()> {
     validate_refs(&input.transcript_refs, "rewrite plan transcript ref")?;
     validate_refs(&input.schema_migration_recipe_refs, "rewrite plan schema migration recipe ref")?;
     if input.policy_refs.is_empty() {
-        return Err(MoltenError::invalid_harness("rewrite plan requires explicit policy refs"));
+        return Err(Failure::invalid_harness("rewrite plan requires explicit policy refs"));
     }
     if input.capability_refs.is_empty() {
-        return Err(MoltenError::invalid_harness("rewrite plan requires explicit capability refs"));
+        return Err(Failure::invalid_harness("rewrite plan requires explicit capability refs"));
     }
     match &input.replacement {
         RewriteReplacement::StringValue { from, .. } => validate_non_empty(from, "rewrite replacement from string"),
@@ -262,7 +262,7 @@ fn parse_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
         let name = required_string(&check[0], "rewrite check name")?;
         let status = required_string(&check[1], "rewrite check status")?;
         if status != "pass" && status != "fail" {
-            return Err(MoltenError::invalid_harness(format!("rewrite check {name} has status {status}")));
+            return Err(Failure::invalid_harness(format!("rewrite check {name} has status {status}")));
         }
         push_bounded(&mut parsed, name, MAX_REWRITE_ITEMS, "rewrite checks")?;
     }
@@ -273,7 +273,7 @@ fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()>
     if checks.iter().any(|check| check == expected) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("{context} missing {expected} check")))
+        Err(Failure::invalid_harness(format!("{context} missing {expected} check")))
     }
 }
 
@@ -282,7 +282,7 @@ fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Resu
     if actual == expected {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported {context} schema {actual}; expected {expected}")))
+        Err(Failure::invalid_harness(format!("unsupported {context} schema {actual}; expected {expected}")))
     }
 }
 
@@ -293,5 +293,5 @@ fn simple_record<'a>(
 ) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }

@@ -7,7 +7,7 @@ pub fn start_protocol_session(
     resource_refs: Vec<String>,
 ) -> Result<ProtocolSessionState> {
     if install.decision != "pass" {
-        return Err(MoltenError::invalid_harness("cannot start session from denied protocol install"));
+        return Err(Failure::invalid_harness("cannot start session from denied protocol install"));
     }
     validate_session_id(session_id)?;
     validate_refs(&authority_refs, "protocol session authority ref")?;
@@ -54,7 +54,7 @@ pub fn protocol_message_value(input: &ProtocolMessageInput) -> Result<IoValue> {
 pub fn parse_protocol_message(value: &IoValue) -> Result<ProtocolMessage> {
     let fields = value
         .collect_simple_record("protocol-message-v1", Some(11))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-message-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <protocol-message-v1 ...>"))?;
     require_schema(&fields[0], PROTOCOL_MESSAGE_SCHEMA, "protocol message schema")?;
     let checks = parse_checks(&fields[10])?;
     require_check(&checks, "projected-action", "protocol message")?;
@@ -126,7 +126,7 @@ pub fn send_protocol_message(input: ProtocolSendInput) -> Result<ProtocolOperati
     }
     let next_local_state = transition
         .next_local_state
-        .ok_or_else(|| MoltenError::invalid_harness("send transition missing next local state"))?;
+        .ok_or_else(|| Failure::invalid_harness("send transition missing next local state"))?;
     let next_state = advance_state(
         &state,
         next_local_state,
@@ -158,7 +158,7 @@ pub fn receive_protocol_message(input: ProtocolReceiveInput) -> Result<ProtocolO
     }
     let next_local_state = transition
         .next_local_state
-        .ok_or_else(|| MoltenError::invalid_harness("receive transition missing next local state"))?;
+        .ok_or_else(|| Failure::invalid_harness("receive transition missing next local state"))?;
     let next_state = advance_state(
         &state,
         next_local_state,
@@ -189,7 +189,7 @@ pub fn choose_protocol_branch(input: ProtocolBranchOperationInput) -> Result<Pro
     }
     let next_local_state = transition
         .next_local_state
-        .ok_or_else(|| MoltenError::invalid_harness("branch transition missing next local state"))?;
+        .ok_or_else(|| Failure::invalid_harness("branch transition missing next local state"))?;
     let next_state = advance_state(
         &state,
         next_local_state,
@@ -220,7 +220,7 @@ pub fn offer_protocol_branch(input: ProtocolBranchOperationInput) -> Result<Prot
     }
     let next_local_state = transition
         .next_local_state
-        .ok_or_else(|| MoltenError::invalid_harness("offer transition missing next local state"))?;
+        .ok_or_else(|| Failure::invalid_harness("offer transition missing next local state"))?;
     let next_state = advance_state(
         &state,
         next_local_state,
@@ -248,7 +248,7 @@ pub fn protocol_message_remote_envelope(input: ProtocolRemoteEnvelopeInput) -> R
 pub fn parse_protocol_install_receipt(value: &IoValue) -> Result<ProtocolInstallReceipt> {
     let fields = value
         .collect_simple_record("protocol-install-receipt-v1", Some(12))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-install-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <protocol-install-receipt-v1 ...>"))?;
     require_schema(&fields[0], PROTOCOL_INSTALL_RECEIPT_SCHEMA, "protocol install receipt schema")?;
     let manifest_value = record_iovalue(&fields[2], "manifest")?;
     let endpoints = parse_endpoint_sequence(&fields[6])?;
@@ -270,7 +270,7 @@ pub fn parse_protocol_install_receipt(value: &IoValue) -> Result<ProtocolInstall
 pub fn parse_protocol_operation_receipt(value: &IoValue) -> Result<ProtocolOperationReceipt> {
     let fields = value
         .collect_simple_record("protocol-operation-receipt-v1", Some(15))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-operation-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <protocol-operation-receipt-v1 ...>"))?;
     require_schema(&fields[0], PROTOCOL_OPERATION_RECEIPT_SCHEMA, "protocol operation receipt schema")?;
     Ok(ProtocolOperationReceipt {
         receipt_ref: canonical_hash(value)?,

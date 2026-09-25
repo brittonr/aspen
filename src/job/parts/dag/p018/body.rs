@@ -21,27 +21,27 @@ fn apply_map_op(op: &StageOperation, value: &IoValue) -> Result<IoValue> {
             let label = op
                 .argument
                 .as_ref()
-                .ok_or_else(|| MoltenError::invalid_harness("wrap operation requires label argument"))?
+                .ok_or_else(|| Failure::invalid_harness("wrap operation requires label argument"))?
                 .as_string()
                 .map(|value| value.into_owned())
-                .ok_or_else(|| MoltenError::invalid_harness("wrap operation label must be a string"))?;
+                .ok_or_else(|| Failure::invalid_harness("wrap operation label must be a string"))?;
             Ok(crate::preserves_rail::record("wrapped", vec![crate::preserves_rail::string(&label), value.clone()]))
         }
         "project-field" => {
             let label = op
                 .argument
                 .as_ref()
-                .ok_or_else(|| MoltenError::invalid_harness("project-field operation requires label argument"))?
+                .ok_or_else(|| Failure::invalid_harness("project-field operation requires label argument"))?
                 .as_string()
                 .map(|value| value.into_owned())
-                .ok_or_else(|| MoltenError::invalid_harness("project-field label must be a string"))?;
+                .ok_or_else(|| Failure::invalid_harness("project-field label must be a string"))?;
             if let Some(fields) = value.collect_simple_record(&label, Some(1)) {
                 Ok(crate::preserves_rail::value_to_iovalue(&fields[0]))
             } else {
-                Err(MoltenError::invalid_harness(format!("project-field did not match record label {label}")))
+                Err(Failure::invalid_harness(format!("project-field did not match record label {label}")))
             }
         }
-        other => Err(MoltenError::invalid_harness(format!("unsupported map operation {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported map operation {other}"))),
     }
 }
 
@@ -54,13 +54,13 @@ fn apply_filter_op(op: &StageOperation, value: &IoValue) -> Result<bool> {
             let label = op
                 .argument
                 .as_ref()
-                .ok_or_else(|| MoltenError::invalid_harness("match-record operation requires label argument"))?
+                .ok_or_else(|| Failure::invalid_harness("match-record operation requires label argument"))?
                 .as_string()
                 .map(|value| value.into_owned())
-                .ok_or_else(|| MoltenError::invalid_harness("match-record label must be a string"))?;
+                .ok_or_else(|| Failure::invalid_harness("match-record label must be a string"))?;
             Ok(value.collect_simple_record(&label, None).is_some())
         }
-        other => Err(MoltenError::invalid_harness(format!("unsupported filter operation {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported filter operation {other}"))),
     }
 }
 
@@ -186,7 +186,7 @@ fn stage_artifact_or_builtin_ref(node: &JobNode) -> Result<String> {
         "source" => builtin_stage_operation_ref("source"),
         "materialize" => builtin_stage_operation_ref("materialize"),
         "map" | "filter" | "reduce" => builtin_stage_operation_ref(&stage_operation(&node.config)?.name),
-        other => Err(MoltenError::invalid_harness(format!("unsupported stage kind {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported stage kind {other}"))),
     }
 }
 
@@ -275,7 +275,7 @@ fn parse_node_sequence(value: &Value<IoValue>) -> Result<Vec<JobNode>> {
 fn parse_job_node_value(value: &IoValue) -> Result<JobNode> {
     let fields = value
         .collect_simple_record("job-node-v1", Some(11))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <job-node-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <job-node-v1 ...>"))?;
     require_schema(&fields[0], crate::preserves_rail::JOB_DAG_NODE_SCHEMA, "job node")?;
     let id = record_string(&fields[1], "id")?;
     validate_node_id(&id)?;

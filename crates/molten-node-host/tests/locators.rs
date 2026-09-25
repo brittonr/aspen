@@ -1,8 +1,8 @@
 #[test]
 fn shared_recognition_preserves_boundary_specific_errors() {
-    type Local = molten_node_host::local_store::LocalStorePath;
-    type Node = molten_node_host::node_state::NodeStatePath;
-    type Error = molten_node_host::error::MoltenError;
+    type Local = molten_node_host::local_store::RelativeLocator;
+    type Node = molten_node_host::node_state::RelativePath;
+    type Error = molten_node_host::error::Failure;
     for value in [
         "iroh:value",
         "http:value",
@@ -29,9 +29,9 @@ fn shared_recognition_preserves_boundary_specific_errors() {
 
 #[test]
 fn earlier_admission_checks_keep_their_precedence() {
-    type Local = molten_node_host::local_store::LocalStorePath;
-    type Node = molten_node_host::node_state::NodeStatePath;
-    type Error = molten_node_host::error::MoltenError;
+    type Local = molten_node_host::local_store::RelativeLocator;
+    type Node = molten_node_host::node_state::RelativePath;
+    type Error = molten_node_host::error::Failure;
     assert_eq!(Local::parse("").unwrap_err(), Error::invalid_harness("local store path cannot be empty"));
     assert_eq!(Node::parse("").unwrap_err(), Error::invalid_harness("node state path cannot be empty"));
     let drive = "C://host";

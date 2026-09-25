@@ -54,7 +54,7 @@ fn validate_blob_ref_submission(submission: &BlobRefJobSubmission) -> Result<()>
 
 fn validate_job_content_ref(content: &JobContentRef, field: &str) -> Result<()> {
     if content.size > MAX_JOB_INLINE_BYTES && content.content_ref.is_empty() {
-        return Err(MoltenError::invalid_harness("large job content must use a content ref"));
+        return Err(Failure::invalid_harness("large job content must use a content ref"));
     }
     validate_ref(&content.content_ref, field)?;
     validate_non_empty(&content.format, "job content format")?;
@@ -68,7 +68,7 @@ fn validate_output_mode(output_mode: &str) -> Result<()> {
     if output_mode == "chunk-manifest" {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported job ref output mode {output_mode}")))
+        Err(Failure::invalid_harness(format!("unsupported job ref output mode {output_mode}")))
     }
 }
 
@@ -76,7 +76,7 @@ fn validate_blob_ref_handler_profile(handler_profile: &str) -> Result<()> {
     if handler_profile == "local-echo-v1" {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported job ref handler profile {handler_profile}")))
+        Err(Failure::invalid_harness(format!("unsupported job ref handler profile {handler_profile}")))
     }
 }
 
@@ -84,7 +84,7 @@ fn validate_blob_ref_state(state: &str) -> Result<()> {
     if matches!(state, "queued" | "fetching" | "running" | "result-ready" | "complete" | "failed" | "cancelled") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported job ref status state {state}")))
+        Err(Failure::invalid_harness(format!("unsupported job ref status state {state}")))
     }
 }
 
@@ -93,7 +93,7 @@ fn reject_blob_ref_job_inline_tokens(value: &IoValue) -> Result<()> {
     let text = crate::preserves_rail::to_text(value)?;
     for token in ["inline-bytes", "inline-executable", "inline-dataset"] {
         if text.contains(token) {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "job ref submission must use content refs, found inline token {token}"
             )));
         }
@@ -105,7 +105,7 @@ fn validate_stage_kind(kind: &str) -> Result<()> {
     if matches!(kind, "source" | "map" | "filter" | "reduce" | "materialize") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported job stage kind {kind}")))
+        Err(Failure::invalid_harness(format!("unsupported job stage kind {kind}")))
     }
 }
 
@@ -129,7 +129,7 @@ fn validate_stage_operation(operation: &str) -> Result<()> {
     ) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported job stage operation {operation}")))
+        Err(Failure::invalid_harness(format!("unsupported job stage operation {operation}")))
     }
 }
 
@@ -137,7 +137,7 @@ fn validate_partitioning(partitioning: &str) -> Result<()> {
     if matches!(partitioning, "single" | "partitioned") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported job edge partitioning {partitioning}")))
+        Err(Failure::invalid_harness(format!("unsupported job edge partitioning {partitioning}")))
     }
 }
 
@@ -145,7 +145,7 @@ fn validate_materialization(materialization: &str) -> Result<()> {
     if matches!(materialization, "stream" | "typed-ref" | "content-ref") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported job edge materialization {materialization}")))
+        Err(Failure::invalid_harness(format!("unsupported job edge materialization {materialization}")))
     }
 }
 
@@ -210,7 +210,7 @@ fn import_worker_artifacts(
 
 fn reject_worker_ambient_tokens(value: &IoValue) -> Result<()> {
     if let Some(marker) = crate::preserves_rail::find_ambient_job_token(value)? {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "job worker request contains mobile/ambient token {}",
             marker.token
         )))
@@ -223,7 +223,7 @@ fn validate_request_materialization(materialization: &str) -> Result<()> {
     if matches!(materialization, "inline" | "typed-storage" | "chunk-manifest") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported job output materialization {materialization}")))
+        Err(Failure::invalid_harness(format!("unsupported job output materialization {materialization}")))
     }
 }
 
@@ -231,7 +231,7 @@ fn validate_receipt_operation(operation: &str) -> Result<()> {
     if matches!(operation, "install" | "run" | "stage" | "memo-hit" | "memo-miss" | "materialize" | "deny") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported job receipt operation {operation}")))
+        Err(Failure::invalid_harness(format!("unsupported job receipt operation {operation}")))
     }
 }
 
@@ -239,7 +239,7 @@ fn validate_decision(decision: &str) -> Result<()> {
     if matches!(decision, "pass" | "deny") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported job receipt decision {decision}")))
+        Err(Failure::invalid_harness(format!("unsupported job receipt decision {decision}")))
     }
 }
 
@@ -247,7 +247,7 @@ fn validate_worker_decision(decision: &str) -> Result<()> {
     if matches!(decision, "pass" | "deny" | "non-replayable") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported job worker decision {decision}")))
+        Err(Failure::invalid_harness(format!("unsupported job worker decision {decision}")))
     }
 }
 
@@ -255,7 +255,7 @@ fn validate_worker_state(state: &str) -> Result<()> {
     if matches!(state, "received" | "running" | "completed" | "denied" | "non-replayable") {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("unsupported job worker state {state}")))
+        Err(Failure::invalid_harness(format!("unsupported job worker state {state}")))
     }
 }
 
@@ -264,7 +264,7 @@ fn validate_node_id(id: &str) -> Result<()> {
     if id.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.') {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "job node id {id} must use ascii alphanumeric, '-', '_' or '.'"
         )))
     }
@@ -274,7 +274,7 @@ fn validate_node_id(id: &str) -> Result<()> {
 fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
     validate_non_empty(value_ref, field)?;
     crate::preserves_rail::validate_content_ref(value_ref).map_err(|error| {
-        MoltenError::invalid_harness(format!("{field} must be a canonical blake3 content ref: {error}"))
+        Failure::invalid_harness(format!("{field} must be a canonical blake3 content ref: {error}"))
     })
 }
 

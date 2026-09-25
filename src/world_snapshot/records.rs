@@ -2,7 +2,7 @@ use molten_core::world_commit::WorldRootRef;
 use molten_core::world_snapshot::*;
 use preserves::IOValue;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub const SNAPSHOT_DESCRIPTOR_RECORD: &str = "molten-world-snapshot-descriptor-v1";
@@ -28,7 +28,7 @@ pub struct CanonicalSnapshotArtifact {
 pub fn canonical_snapshot_descriptor(descriptor: &SnapshotDescriptor) -> Result<CanonicalSnapshotArtifact> {
     let report = validate_snapshot(descriptor, &descriptor.cohort);
     if report.verdict != CompatibilityVerdict::Compatible {
-        return Err(MoltenError::invalid_harness(format!("snapshot descriptor denied: {:?}", report.issues)));
+        return Err(Failure::invalid_harness(format!("snapshot descriptor denied: {:?}", report.issues)));
     }
     let mut facts = descriptor.cohort.facts.clone();
     facts.sort_by_key(|fact| fact.kind);
@@ -77,17 +77,17 @@ pub fn parse_canonical_snapshot_descriptor(bytes: &[u8]) -> Result<(SnapshotDesc
     )?;
     let schema = crate::preserves_rail::required_string_field(&fields[0], "snapshot descriptor schema")?;
     if schema != SNAPSHOT_DESCRIPTOR_SCHEMA {
-        return Err(MoltenError::invalid_harness("unsupported snapshot descriptor schema"));
+        return Err(Failure::invalid_harness("unsupported snapshot descriptor schema"));
     }
     let class = SnapshotClass::parse(&required_named_string(&fields[1], "class")?).map_err(snapshot_parse_issue)?;
     let commit_ref = molten_core::world_commit::WorldCommitRef::new(required_named_ref(&fields[2], "commit-ref")?)
-        .map_err(|issue| MoltenError::invalid_harness(format!("invalid snapshot commit ref: {issue:?}")))?;
+        .map_err(|issue| Failure::invalid_harness(format!("invalid snapshot commit ref: {issue:?}")))?;
     let profile_ref =
         molten_core::world_commit::SnapshotProfileRef::new(required_named_ref(&fields[3], "profile-ref")?)
-            .map_err(|issue| MoltenError::invalid_harness(format!("invalid snapshot profile ref: {issue:?}")))?;
+            .map_err(|issue| Failure::invalid_harness(format!("invalid snapshot profile ref: {issue:?}")))?;
     let cohort_ref =
         molten_core::world_commit::SnapshotCohortRef::new(required_named_ref(&fields[4], "cohort-ref")?)
-            .map_err(|issue| MoltenError::invalid_harness(format!("invalid snapshot cohort ref: {issue:?}")))?;
+            .map_err(|issue| Failure::invalid_harness(format!("invalid snapshot cohort ref: {issue:?}")))?;
     let cohort_values = required_named_sequence(&fields[5], "cohort-facts", MAX_COHORT_FACTS)?;
     let facts = cohort_values.iter().map(parse_cohort_fact).collect::<Result<Vec<_>>>()?;
     let component_values = required_named_sequence(&fields[6], "components", MAX_SNAPSHOT_COMPONENTS)?;
@@ -105,7 +105,7 @@ pub fn parse_canonical_snapshot_descriptor(bytes: &[u8]) -> Result<(SnapshotDesc
     };
     let canonical = canonical_snapshot_descriptor(&descriptor)?;
     if canonical.bytes != decoded.canonical_bytes {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "snapshot descriptor is canonical Preserves but not normalized snapshot order",
         ));
     }
@@ -114,7 +114,7 @@ pub fn parse_canonical_snapshot_descriptor(bytes: &[u8]) -> Result<(SnapshotDesc
 
 pub fn canonical_snapshot_inventory(inventory: &SnapshotInventory) -> Result<CanonicalSnapshotArtifact> {
     if inventory.required.len() > MAX_SNAPSHOT_COMPONENTS || inventory.observed.len() > MAX_SNAPSHOT_COMPONENTS {
-        return Err(MoltenError::invalid_harness("snapshot inventory exceeds component bound"));
+        return Err(Failure::invalid_harness("snapshot inventory exceeds component bound"));
     }
     let mut required = inventory.required.clone();
     required.sort();
@@ -132,7 +132,7 @@ pub fn canonical_snapshot_inventory(inventory: &SnapshotInventory) -> Result<Can
 
 pub fn canonical_snapshot_compatibility(report: &CompatibilityReport) -> Result<CanonicalSnapshotArtifact> {
     if report.issues.len() > MAX_SNAPSHOT_COMPONENTS + MAX_COHORT_FACTS {
-        return Err(MoltenError::invalid_harness("snapshot compatibility issue count exceeds bound"));
+        return Err(Failure::invalid_harness("snapshot compatibility issue count exceeds bound"));
     }
     let mut issues = report.issues.clone();
     issues.sort();
@@ -148,7 +148,7 @@ pub fn canonical_snapshot_compatibility(report: &CompatibilityReport) -> Result<
 
 pub fn canonical_snapshot_restore_plan(plan: &SnapshotRestorePlan) -> Result<CanonicalSnapshotArtifact> {
     if plan.steps.is_empty() || plan.steps.len() > MAX_SNAPSHOT_COMPONENTS {
-        return Err(MoltenError::invalid_harness("snapshot restore step count is invalid"));
+        return Err(Failure::invalid_harness("snapshot restore step count is invalid"));
     }
     let value = record(SNAPSHOT_RESTORE_PLAN_RECORD, vec![
         string(SNAPSHOT_RESTORE_PLAN_SCHEMA),
@@ -163,7 +163,7 @@ pub fn canonical_snapshot_restore_plan(plan: &SnapshotRestorePlan) -> Result<Can
 
 pub fn canonical_snapshot_clone_plan(plan: &ClonePlanRequest) -> Result<CanonicalSnapshotArtifact> {
     validate_clone_plan(plan)
-        .map_err(|issues| MoltenError::invalid_harness(format!("snapshot clone plan denied: {issues:?}")))?;
+        .map_err(|issues| Failure::invalid_harness(format!("snapshot clone plan denied: {issues:?}")))?;
     let mut children = plan.children.clone();
     children.sort_by(|left, right| {
         (&left.memory_overlay, &left.device_overlay, &left.disk_overlay, &left.endpoint_overlay).cmp(&(
@@ -200,7 +200,7 @@ pub fn canonical_snapshot_clone_plan(plan: &ClonePlanRequest) -> Result<Canonica
 
 pub fn canonical_snapshot_receipt(receipt: &SnapshotReceipt) -> Result<CanonicalSnapshotArtifact> {
     validate_snapshot_receipt(receipt)
-        .map_err(|issues| MoltenError::invalid_harness(format!("snapshot receipt denied: {issues:?}")))?;
+        .map_err(|issues| Failure::invalid_harness(format!("snapshot receipt denied: {issues:?}")))?;
     let value = record(SNAPSHOT_RECEIPT_RECORD, vec![
         string(SNAPSHOT_RECEIPT_SCHEMA),
         field("decision", string(receipt.decision.as_str())),
@@ -248,16 +248,16 @@ fn parse_optional_root(value: &preserves::Value<IOValue>) -> Result<Option<World
     }
     let fields = value
         .collect_simple_record("some", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("snapshot root must be <none> or <some ROOT>"))?;
+        .ok_or_else(|| Failure::invalid_harness("snapshot root must be <none> or <some ROOT>"))?;
     let root_value = crate::preserves_rail::value_to_iovalue(&fields[0]);
     let root_fields = crate::preserves_rail::simple_record_fields(&root_value, "typed-root", TYPED_ROOT_ARITY)?;
     let kind_text = crate::preserves_rail::required_string_field(&root_fields[0], "snapshot root kind")?;
     let kind = molten_core::world_commit::RootKind::parse(&kind_text)
-        .map_err(|_| MoltenError::invalid_harness("unsupported snapshot root kind"))?;
+        .map_err(|_| Failure::invalid_harness("unsupported snapshot root kind"))?;
     let reference = crate::preserves_rail::required_content_ref_string(&root_fields[1], "snapshot root ref")?;
     molten_core::world_commit::WorldRootRef::parse(kind, reference)
         .map(Some)
-        .map_err(|issue| MoltenError::invalid_harness(format!("invalid snapshot root ref: {issue:?}")))
+        .map_err(|issue| Failure::invalid_harness(format!("invalid snapshot root ref: {issue:?}")))
 }
 
 fn parse_synchronization(value: &preserves::Value<IOValue>) -> Result<Option<SnapshotSynchronization>> {
@@ -267,20 +267,20 @@ fn parse_synchronization(value: &preserves::Value<IOValue>) -> Result<Option<Sna
     }
     let some = inner
         .collect_simple_record("some", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("snapshot synchronization must be <none> or <some FACT>"))?;
+        .ok_or_else(|| Failure::invalid_harness("snapshot synchronization must be <none> or <some FACT>"))?;
     let synchronization_value = crate::preserves_rail::value_to_iovalue(&some[0]);
     let fields =
         crate::preserves_rail::simple_record_fields(&synchronization_value, "synchronization", SYNCHRONIZATION_ARITY)?;
     let logical_commit_ref = molten_core::world_commit::WorldCommitRef::new(
         crate::preserves_rail::required_content_ref_string(&fields[0], "synchronized logical commit")?,
     )
-    .map_err(|issue| MoltenError::invalid_harness(format!("invalid synchronized commit: {issue:?}")))?;
+    .map_err(|issue| Failure::invalid_harness(format!("invalid synchronized commit: {issue:?}")))?;
     let opaque_ref = crate::preserves_rail::required_content_ref_string(&fields[1], "synchronized opaque root")?;
     let opaque_snapshot_ref = molten_core::world_commit::WorldRootRef::parse(
         molten_core::world_commit::RootKind::OpaqueMachineSnapshot,
         opaque_ref,
     )
-    .map_err(|issue| MoltenError::invalid_harness(format!("invalid synchronized opaque root: {issue:?}")))?;
+    .map_err(|issue| Failure::invalid_harness(format!("invalid synchronized opaque root: {issue:?}")))?;
     let observation_ref =
         crate::preserves_rail::required_content_ref_string(&fields[2], "snapshot synchronization observation")?;
     Ok(Some(SnapshotSynchronization {
@@ -306,7 +306,7 @@ fn required_named_sequence(
     let inner = named_field_value(value, label)?;
     let values = crate::preserves_rail::required_sequence_field(&inner, label)?;
     if values.len() > maximum {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "snapshot {label} count {} exceeds maximum {maximum}",
             values.len()
         )));
@@ -322,24 +322,24 @@ fn parse_named_boolean(value: &preserves::Value<IOValue>, label: &str) -> Result
     if inner.collect_simple_record("false", Some(0)).is_some() {
         return Ok(false);
     }
-    Err(MoltenError::invalid_harness(format!("snapshot {label} must be <true> or <false>")))
+    Err(Failure::invalid_harness(format!("snapshot {label} must be <true> or <false>")))
 }
 
 fn named_field_value(value: &preserves::Value<IOValue>, label: &str) -> Result<preserves::Value<IOValue>> {
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} VALUE>")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected <{label} VALUE>")))?;
     Ok(fields[0].clone())
 }
 
-fn snapshot_parse_issue(issue: SnapshotIssue) -> MoltenError {
-    MoltenError::invalid_harness(format!("snapshot descriptor parse denied: {issue:?}"))
+fn snapshot_parse_issue(issue: SnapshotIssue) -> Failure {
+    Failure::invalid_harness(format!("snapshot descriptor parse denied: {issue:?}"))
 }
 
 fn canonical(kind: SnapshotIdentityKind, value: IOValue) -> Result<CanonicalSnapshotArtifact> {
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     let artifact_ref = identify_snapshot_artifact(kind, &bytes)
-        .map_err(|issue| MoltenError::invalid_harness(format!("snapshot identity denied: {issue:?}")))?;
+        .map_err(|issue| Failure::invalid_harness(format!("snapshot identity denied: {issue:?}")))?;
     Ok(CanonicalSnapshotArtifact {
         artifact_ref,
         value,

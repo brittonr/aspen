@@ -9,7 +9,7 @@
 
 use std::path::PathBuf;
 
-use molten::error::MoltenError;
+use molten::error::Failure;
 use molten::error::Result;
 use molten::world_operator::plan_world_operator_request;
 use molten_core::world_operator::*;
@@ -123,16 +123,16 @@ fn plan_mutation(kind: WorldOperationKind, args: WorldMutationArgs) -> Result<()
     };
     let receipt_out = args
         .receipt_out
-        .ok_or_else(|| MoltenError::invalid_harness("world mutation apply requires an explicit receipt output"))?;
+        .ok_or_else(|| Failure::invalid_harness("world mutation apply requires an explicit receipt output"))?;
     write_apply_denial(&run, &submitted_plan_ref, &receipt_out)
 }
 
 fn require_one_operation(request: &WorldWorkflowRequest, expected: WorldOperationKind) -> Result<()> {
     let Some(operation) = request.operations.first() else {
-        return Err(MoltenError::invalid_harness("typed world command requires exactly one operation"));
+        return Err(Failure::invalid_harness("typed world command requires exactly one operation"));
     };
     if request.operations.len() != 1 || operation.kind != expected {
-        return Err(MoltenError::invalid_harness("typed world command does not match its request operation"));
+        return Err(Failure::invalid_harness("typed world command does not match its request operation"));
     }
     Ok(())
 }

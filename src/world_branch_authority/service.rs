@@ -12,7 +12,7 @@ use molten_core::world_branch_authority::valid_content_ref;
 
 use super::ports::*;
 use super::records::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const LINEAR_OPERATION_DOMAIN: &str = "onixresearch.molten.world-branch-authority.linear-operation.v1";
@@ -136,7 +136,7 @@ fn realize<R: WorldBranchAuthorityRuntime>(
         Some(WorldBranchMode::SimulationOnly) => runtime.bind_simulation(plan),
         Some(WorldBranchMode::PromotionGated) => realize_promotion(plan, runtime),
         Some(WorldBranchMode::NonBranchable) | None => {
-            Err(MoltenError::invalid_harness("branch-authority denied plan cannot be realized"))
+            Err(Failure::invalid_harness("branch-authority denied plan cannot be realized"))
         }
     }
 }
@@ -152,28 +152,28 @@ fn realize_linear<R: WorldBranchAuthorityRuntime>(
         || ownership.destination_active
         || !valid_content_ref(&ownership.observation_ref)
     {
-        return Err(MoltenError::invalid_harness("linear branch-authority ownership is stale or ambiguous"));
+        return Err(Failure::invalid_harness("linear branch-authority ownership is stale or ambiguous"));
     }
     let operation_ref = linear_operation_ref(plan, ownership.generation);
     let successor_generation = ownership
         .generation
         .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness("linear branch-authority generation overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("linear branch-authority generation overflow"))?;
     let observation = match runtime.transfer(plan, ownership.generation, operation_ref.as_str())? {
         LinearTransferOutcome::Committed(observation) => *observation,
         LinearTransferOutcome::Denied => {
-            return Err(MoltenError::invalid_harness("linear branch-authority transfer was denied"));
+            return Err(Failure::invalid_harness("linear branch-authority transfer was denied"));
         }
         LinearTransferOutcome::Unknown => runtime
             .reconcile_transfer(plan, operation_ref.as_str())?
-            .ok_or_else(|| MoltenError::invalid_harness("linear branch-authority transfer outcome is unknown"))?,
+            .ok_or_else(|| Failure::invalid_harness("linear branch-authority transfer outcome is unknown"))?,
     };
     if observation.operation_ref != operation_ref
         || observation.transfer_generation != Some(successor_generation)
         || observation.source_active
         || observation.destination_active
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "linear branch-authority transfer observation is crossed or ambiguous",
         ));
     }

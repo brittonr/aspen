@@ -4,7 +4,7 @@ mod canonical;
 mod tests;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric_consistency::raft::BoundLiveReplicaEffectPorts;
 use crate::fabric_consistency::raft::ReplicaAggregateHealthEvidence;
@@ -138,7 +138,7 @@ pub fn execute_consistency_operator_action<E: ConsistencyOperatorEffects>(
     effects: &mut E,
 ) -> Result<ConsistencyOperatorExecution> {
     if preflight.preflight_ref != canonical::preflight_ref(preflight.action, preflight.dry_run, &preflight.plan)? {
-        return Err(MoltenError::invalid_harness("consistency operator preflight identity mismatch"));
+        return Err(Failure::invalid_harness("consistency operator preflight identity mismatch"));
     }
     let (status, effect_ref) = if !preflight.plan.admitted() {
         (ConsistencyOperatorExecutionStatus::Denied, None)
@@ -228,7 +228,7 @@ fn action_for_operation(operation: &ConsistencyOperation) -> Result<ConsistencyO
         ConsistencyOperation::Snapshot { .. } => Ok(ConsistencyOperatorAction::Snapshot),
         ConsistencyOperation::Recover { .. } => Ok(ConsistencyOperatorAction::Recover),
         ConsistencyOperation::Remove => Ok(ConsistencyOperatorAction::Remove),
-        _ => Err(MoltenError::invalid_harness("operation is outside the bounded consistency operator surface")),
+        _ => Err(Failure::invalid_harness("operation is outside the bounded consistency operator surface")),
     }
 }
 
@@ -238,10 +238,10 @@ fn validate_readback_binding(
     health: &ReplicaAggregateHealthEvidence,
 ) -> Result<()> {
     if replica.group_binding_ref != binding.binding_ref || replica.service_generation != binding.service_generation {
-        return Err(MoltenError::invalid_harness("consistency operator readback binding mismatch"));
+        return Err(Failure::invalid_harness("consistency operator readback binding mismatch"));
     }
     if replica.last_applied > replica.commit_index {
-        return Err(MoltenError::invalid_harness("consistency operator readback applied index exceeds commit"));
+        return Err(Failure::invalid_harness("consistency operator readback applied index exceeds commit"));
     }
     crate::preserves_rail::validate_content_ref(&health.evidence_ref)
 }

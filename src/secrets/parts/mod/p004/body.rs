@@ -180,7 +180,7 @@ fn fixture_refs() -> FixtureRefs {
 
 fn fixture_secret(labels: &[ConfidentialLabel], refs: &FixtureRefs) -> Result<SecretRef> {
     let primary_label =
-        labels.first().ok_or_else(|| MoltenError::invalid_harness("secrets fixture missing field label"))?;
+        labels.first().ok_or_else(|| Failure::invalid_harness("secrets fixture missing field label"))?;
     let value = secret_ref_value(&SecretRefInput {
         secret_id: "secret:fixture".to_string(),
         scope_ref: fixture_ref("scope-service"),
@@ -217,10 +217,10 @@ fn fixture_redaction() -> Result<(RedactionMarker, RedactionTransformReceipt)> {
     let redacted = redacted_view(&sensitive_value, None)?;
     let marker = redacted
         .marker
-        .ok_or_else(|| MoltenError::invalid_harness("secrets fixture expected redaction marker"))?;
+        .ok_or_else(|| Failure::invalid_harness("secrets fixture expected redaction marker"))?;
     let transform = redacted
         .transform_receipt
-        .ok_or_else(|| MoltenError::invalid_harness("secrets fixture expected transform receipt"))?;
+        .ok_or_else(|| Failure::invalid_harness("secrets fixture expected transform receipt"))?;
     Ok((marker, transform))
 }
 

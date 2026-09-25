@@ -1,5 +1,5 @@
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type Failure = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type OrderedSet<T> = std::collections::BTreeSet<T>;
@@ -751,7 +751,7 @@ fn validate_boundary_requirement(item: &BoundaryRequirementInput) -> Result<()> 
     let mut diagnostics = Vec::new();
     validate_boundary_class(&item.class, &mut diagnostics);
     if !diagnostics.is_empty() {
-        return Err(MoltenError::invalid_harness(diagnostics.join(",")));
+        return Err(Failure::invalid_harness(diagnostics.join(",")));
     }
     validate_boundary_polarity(&item.polarity)?;
     validate_text("boundary requirement id", &item.requirement_id)
@@ -780,7 +780,7 @@ fn validate_boundary_class(class: &str, diagnostics: &mut Vec<String>) {
 fn validate_boundary_polarity(polarity: &str) -> Result<()> {
     match polarity {
         "positive" | "negative" | "diagnostic" => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported boundary polarity {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported boundary polarity {other}"))),
     }
 }
 
@@ -877,7 +877,7 @@ fn ci_diagnostics(input: &CiTestRunInput, diagnostics: &mut Vec<String>) -> Resu
         .passed
         .checked_add(input.counts.failed)
         .and_then(|count| count.checked_add(input.counts.skipped))
-        .ok_or_else(|| MoltenError::invalid_harness("ci counts overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("ci counts overflow"))?;
     if observed > input.counts.total {
         diagnostics.push("mismatched-counts".to_string());
     }
@@ -982,7 +982,7 @@ fn replay_deterministic_diagnostics(input: &ReplaySmokeInput, diagnostics: &mut 
 fn validate_replay_run(run: &ReplaySmokeRunInput) -> Result<()> {
     match run.role.as_str() {
         "fresh" | "replay" | "fresh-rerun" => {}
-        other => return Err(MoltenError::invalid_harness(format!("unsupported replay smoke role {other}"))),
+        other => return Err(Failure::invalid_harness(format!("unsupported replay smoke role {other}"))),
     }
     validate_ref(&run.report_ref, "replay report")?;
     validate_ref(&run.final_state_ref, "replay final state")?;
@@ -997,14 +997,14 @@ fn validate_replay_run(run: &ReplaySmokeRunInput) -> Result<()> {
 fn validate_replay_eligibility(value: &str) -> Result<()> {
     match value {
         "deterministic" | "exploratory" | "live-only" | "vm-unavailable" | "diagnostic-only" => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported replay eligibility {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported replay eligibility {other}"))),
     }
 }
 
 fn validate_variance(value: &str) -> Result<()> {
     match value {
         "temporary-root" | "runtime-path" | "store-path" | "diagnostic-log" | "rendered-output" | "trace-ref" => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported replay variance {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported replay variance {other}"))),
     }
 }
 
@@ -1126,7 +1126,7 @@ fn validate_semantic_profile_id(profile_id: &str) -> Result<()> {
         | "ci"
         | "deterministic"
         | "exploratory" => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported semantic profile {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported semantic profile {other}"))),
     }
 }
 
@@ -1153,7 +1153,7 @@ fn validate_cost_class(class: &str, diagnostics: &mut Vec<String>) -> Result<()>
 fn validate_rendered_output_kind(kind: &str) -> Result<()> {
     match kind {
         "stdout" | "stderr" | "markdown" | "json" | "junit" | "terminal-summary" => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported rendered output kind {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported rendered output kind {other}"))),
     }
 }
 
@@ -1164,7 +1164,7 @@ fn requirement_map(
     for requirement in requirements {
         validate_text("requirement id", &requirement.id)?;
         if output.insert(requirement.id.clone(), requirement.clone()).is_some() {
-            return Err(MoltenError::invalid_harness(format!("duplicate requirement {}", requirement.id)));
+            return Err(Failure::invalid_harness(format!("duplicate requirement {}", requirement.id)));
         }
     }
     Ok(output)
@@ -1612,12 +1612,12 @@ fn validate_ref_with_diagnostics(reference: &str, label: &str, diagnostics: &mut
 
 fn validate_ref(reference: &str, label: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference)
-        .map_err(|error| MoltenError::invalid_harness(format!("invalid {label} ref {reference}: {error}")))
+        .map_err(|error| Failure::invalid_harness(format!("invalid {label} ref {reference}: {error}")))
 }
 
 fn validate_text(label: &str, value: &str) -> Result<()> {
     if value.trim().is_empty() {
-        Err(MoltenError::invalid_harness(format!("{label} must not be empty")))
+        Err(Failure::invalid_harness(format!("{label} must not be empty")))
     } else {
         Ok(())
     }
@@ -1626,7 +1626,7 @@ fn validate_text(label: &str, value: &str) -> Result<()> {
 fn validate_decision(decision: &str) -> Result<()> {
     match decision {
         DECISION_PASS | DECISION_DENY => Ok(()),
-        other => Err(MoltenError::invalid_harness(format!("unsupported decision {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported decision {other}"))),
     }
 }
 

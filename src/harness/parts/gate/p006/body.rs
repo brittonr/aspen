@@ -8,41 +8,41 @@ fn validate_turn_journal_verify_receipt(
 ) -> Result<()> {
     let receipt = value
         .collect_simple_record("chain-verify-receipt-v1", Some(11))
-        .ok_or_else(|| MoltenError::invalid_harness("turn journal missing chain verify receipt"))?;
+        .ok_or_else(|| Failure::invalid_harness("turn journal missing chain verify receipt"))?;
     let schema = required_string(&receipt[0], "turn journal verify receipt schema")?;
     if schema != EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported turn journal verify receipt schema {schema}; expected {EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA}"
         )));
     }
     let decision = required_record_string(&receipt[1], "decision", "turn journal verify decision")?;
     if decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "turn journal verify receipt decision must be pass, got {decision}"
         )));
     }
     let receipt_chain = required_chain_scope(&receipt[2])?;
     if &receipt_chain != chain {
-        return Err(MoltenError::invalid_harness("turn journal verify receipt chain scope mismatch"));
+        return Err(Failure::invalid_harness("turn journal verify receipt chain scope mismatch"));
     }
     let anchor = required_record_optional_hash(&receipt[3], "anchor", "turn journal anchor")?
-        .ok_or_else(|| MoltenError::invalid_harness("turn journal verify receipt missing anchor"))?;
+        .ok_or_else(|| Failure::invalid_harness("turn journal verify receipt missing anchor"))?;
     let expected_head = required_record_optional_hash(&receipt[4], "expected-head", "turn journal expected head")?
-        .ok_or_else(|| MoltenError::invalid_harness("turn journal verify receipt missing expected head"))?;
+        .ok_or_else(|| Failure::invalid_harness("turn journal verify receipt missing expected head"))?;
     if Some(&anchor) != link_refs.first() || Some(&expected_head) != link_refs.last() {
-        return Err(MoltenError::invalid_harness("turn journal verify receipt does not bind actor-local anchor/head"));
+        return Err(Failure::invalid_harness("turn journal verify receipt does not bind actor-local anchor/head"));
     }
     if required_record_hash_sequence(&receipt[5], "discovered-heads")? != vec![expected_head] {
-        return Err(MoltenError::invalid_harness("turn journal verify receipt discovered head mismatch"));
+        return Err(Failure::invalid_harness("turn journal verify receipt discovered head mismatch"));
     }
     if required_record_hash_sequence(&receipt[6], "verified-links")? != link_refs {
-        return Err(MoltenError::invalid_harness("turn journal verify receipt link range mismatch"));
+        return Err(Failure::invalid_harness("turn journal verify receipt link range mismatch"));
     }
     if required_record_hash_sequence(&receipt[7], "payloads")? != payload_refs {
-        return Err(MoltenError::invalid_harness("turn journal verify receipt payload refs mismatch"));
+        return Err(Failure::invalid_harness("turn journal verify receipt payload refs mismatch"));
     }
     if required_record_hash_sequence(&receipt[8], "predicates")? != predicate_receipt_refs {
-        return Err(MoltenError::invalid_harness("turn journal verify receipt predicate refs mismatch"));
+        return Err(Failure::invalid_harness("turn journal verify receipt predicate refs mismatch"));
     }
     Ok(())
 }
@@ -55,7 +55,7 @@ fn require_context_ref(
     if context_refs.iter().any(|context| context.label == label && context.artifact_ref == expected) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("turn journal link missing {label} context ref {expected}")))
+        Err(Failure::invalid_harness(format!("turn journal link missing {label} context ref {expected}")))
     }
 }
 
@@ -63,7 +63,7 @@ fn require_context_ref_kind(context_refs: &[crate::evidence_chain::ChainContextR
     if context_refs.iter().any(|context| context.label == label) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("turn journal link missing {label} context ref")))
+        Err(Failure::invalid_harness(format!("turn journal link missing {label} context ref")))
     }
 }
 
@@ -117,7 +117,7 @@ fn parse_validation(value: &Value<IoValue>) -> Result<ValidationReceipt> {
     let validation = simple_record(&value, "validation", 7)?;
     let status = required_record_string(&validation[0], "status", "gate validation status")?;
     if status != "pass" {
-        return Err(MoltenError::invalid_harness(format!("unsupported gate validation status {status}")));
+        return Err(Failure::invalid_harness(format!("unsupported gate validation status {status}")));
     }
     let report_ref = required_record_hash(&validation[1], "report", "gate validation report ref")?;
     let suite_ref = required_record_hash(&validation[2], "suite", "gate validation suite ref")?;
@@ -126,7 +126,7 @@ fn parse_validation(value: &Value<IoValue>) -> Result<ValidationReceipt> {
     super::schema::parse_actor_registry(&value_to_iovalue(&validation[5]))?;
     let budget = super::schema::parse_budget(&value_to_iovalue(&validation[6]))?;
     if observations != budget.usage.steps {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "gate receipt validation observation count does not match budget step usage",
         ));
     }
@@ -142,7 +142,7 @@ fn parse_replay(value: &Value<IoValue>) -> Result<ReplayReceipt> {
     let replay = simple_record(&value, "replay", 6)?;
     let status = required_record_string(&replay[0], "status", "gate replay status")?;
     if status != "pass" {
-        return Err(MoltenError::invalid_harness(format!("unsupported gate replay status {status}")));
+        return Err(Failure::invalid_harness(format!("unsupported gate replay status {status}")));
     }
     let expected_report_ref = required_record_hash(&replay[1], "expected-report", "gate replay expected report ref")?;
     let actual_report_ref = required_record_hash(&replay[2], "actual-report", "gate replay actual report ref")?;
@@ -173,18 +173,18 @@ fn validate_harness_replay_verify_value(
 ) -> Result<()> {
     let actual_verify_ref = canonical_hash(value)?;
     if actual_verify_ref != expected_verify_ref {
-        return Err(MoltenError::invalid_harness("gate replay verify ref does not match embedded value"));
+        return Err(Failure::invalid_harness("gate replay verify ref does not match embedded value"));
     }
     let receipt = simple_record(value, "deterministic-replay-verify-v1", 7)?;
     let schema = required_string(&receipt[0], "deterministic replay verify schema")?;
     if schema != DETERMINISTIC_REPLAY_VERIFY_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported deterministic replay verify schema {schema}; expected {DETERMINISTIC_REPLAY_VERIFY_SCHEMA}"
         )));
     }
     let decision = required_string(&receipt[1], "deterministic replay verify decision")?;
     if decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported deterministic replay verify decision {decision}"
         )));
     }
@@ -195,7 +195,7 @@ fn validate_harness_replay_verify_value(
     let verify_final_state = required_record_hash(&receipt[4], "final-state-ref", "deterministic replay final state")?;
     let divergence = required_record_string(&receipt[5], "divergence", "deterministic replay divergence")?;
     if divergence != "none" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "deterministic replay verify divergence must be none, got {divergence}"
         )));
     }
@@ -207,7 +207,7 @@ fn validate_harness_replay_verify_value(
         || verify_actual_report != actual_report_ref
         || verify_final_state != final_state_hash
     {
-        return Err(MoltenError::invalid_harness("deterministic replay verify refs do not match gate replay refs"));
+        return Err(Failure::invalid_harness("deterministic replay verify refs do not match gate replay refs"));
     }
     Ok(())
 }
@@ -223,7 +223,7 @@ fn parse_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
         let name = required_string(&check[0], "gate check name")?;
         let status = required_string(&check[1], "gate check status")?;
         if status != "pass" {
-            return Err(MoltenError::invalid_harness(format!("gate check {name} status is {status}")));
+            return Err(Failure::invalid_harness(format!("gate check {name} status is {status}")));
         }
         checks.push(name);
     }
@@ -234,7 +234,7 @@ fn require_check(checks: &[String], expected: &str) -> Result<()> {
     if checks.iter().any(|check| check == expected) {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!("gate receipt missing {expected} check")))
+        Err(Failure::invalid_harness(format!("gate receipt missing {expected} check")))
     }
 }
 
@@ -250,13 +250,13 @@ fn require_core_refs(input: &CoreRefs<'_>) -> Result<()> {
         || input.report != input.replay.expected_report_ref
         || input.report != input.replay.actual_report_ref
     {
-        return Err(MoltenError::invalid_harness("gate receipt report refs are inconsistent"));
+        return Err(Failure::invalid_harness("gate receipt report refs are inconsistent"));
     }
     if input.suite != input.validation.suite_ref {
-        return Err(MoltenError::invalid_harness("gate receipt suite refs are inconsistent"));
+        return Err(Failure::invalid_harness("gate receipt suite refs are inconsistent"));
     }
     if input.final_state != input.validation.final_state_hash || input.final_state != input.replay.final_state_hash {
-        return Err(MoltenError::invalid_harness("gate receipt final state refs are inconsistent"));
+        return Err(Failure::invalid_harness("gate receipt final state refs are inconsistent"));
     }
     Ok(())
 }
@@ -268,21 +268,21 @@ fn require_link_context(
     final_state_hash: &str,
 ) -> Result<()> {
     if link.payload.artifact_ref != report_ref {
-        return Err(MoltenError::invalid_harness("gate chain evidence payload does not bind the gate report ref"));
+        return Err(Failure::invalid_harness("gate chain evidence payload does not bind the gate report ref"));
     }
     if !link
         .context_refs
         .iter()
         .any(|context| context.label == "suite" && context.artifact_ref == suite_ref)
     {
-        return Err(MoltenError::invalid_harness("gate chain evidence context does not bind the gate suite ref"));
+        return Err(Failure::invalid_harness("gate chain evidence context does not bind the gate suite ref"));
     }
     if !link
         .context_refs
         .iter()
         .any(|context| context.label == "final-state" && context.artifact_ref == final_state_hash)
     {
-        return Err(MoltenError::invalid_harness("gate chain evidence context does not bind the gate final state ref"));
+        return Err(Failure::invalid_harness("gate chain evidence context does not bind the gate final state ref"));
     }
     Ok(())
 }

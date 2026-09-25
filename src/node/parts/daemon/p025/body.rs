@@ -1,6 +1,6 @@
 
 async fn serve_node_control_live_listener_with_topic(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     input: &ControlLiveServeInput<'_>,
     receiver: &mut iroh_gossip::api::GossipTopic,
     node_id: &str,
@@ -59,28 +59,28 @@ async fn serve_node_control_live_listener_with_topic(
 }
 
 async fn receive_first_live_ingress_event(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     receiver: &mut iroh_gossip::api::GossipTopic,
     topic: &str,
     receiver_node: &str,
 ) -> Result<ControlLiveIngressReceive> {
     for _ in 0..MAX_CONTROL_LIVE_LISTENER_EVENTS {
         let Some(event) = receiver.next().await else {
-            return Err(MoltenError::invalid_harness("live Iroh receiver closed before node control envelope arrived"));
+            return Err(Failure::invalid_harness("live Iroh receiver closed before node control envelope arrived"));
         };
         let event =
-            event.map_err(|error| MoltenError::invalid_harness(format!("live Iroh receive failed: {error}")))?;
+            event.map_err(|error| Failure::invalid_harness(format!("live Iroh receive failed: {error}")))?;
         if let Some(received) = receive_control_live_ingress_event_with_root(state_root, &event, topic, receiver_node)? {
             return Ok(received);
         }
     }
-    Err(MoltenError::invalid_harness(
+    Err(Failure::invalid_harness(
         "live Iroh receiver exceeded bounded event scan before node control envelope arrived",
     ))
 }
 
 fn stable_live_endpoint_secret(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     identity: &crate::node_identity::Identity,
 ) -> Result<iroh::SecretKey> {
     let identity_namespace = state_root.identity()?;
@@ -101,7 +101,7 @@ fn live_ticket_address_refs(addr: &iroh::EndpointAddr) -> Vec<String> {
 }
 
 fn live_ticket_for_bound_endpoint(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     identity: &crate::node_identity::Identity,
     topic: &str,
     addr: &iroh::EndpointAddr,
@@ -148,7 +148,7 @@ fn live_send_ticket_diagnostics(input: &ControlLiveSendInput<'_>, ticket: &Contr
 }
 
 fn live_send_state_root_evidence_diagnostics(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     input: &ControlLiveSendInput<'_>,
     envelope: &ControlIngressEnvelope,
 ) -> Result<Vec<String>> {
@@ -189,7 +189,7 @@ fn live_send_state_root_evidence_diagnostics(
 }
 
 fn live_send_authority_grant_diagnostics(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     envelope: &ControlIngressEnvelope,
 ) -> Result<Vec<String>> {
     let mut diagnostics = Vec::with_capacity(envelope.authority_refs.len().saturating_add(2));
@@ -244,23 +244,23 @@ fn live_ticket_endpoint_addr(ticket: &ControlLiveTicket) -> Result<iroh::Endpoin
     let endpoint_id = ticket
         .live_endpoint_id
         .strip_prefix("iroh:")
-        .ok_or_else(|| MoltenError::invalid_harness("node control live ticket endpoint must use iroh: prefix"))?
+        .ok_or_else(|| Failure::invalid_harness("node control live ticket endpoint must use iroh: prefix"))?
         .parse::<iroh::EndpointId>()
         .map_err(|error| {
-            MoltenError::invalid_harness(format!("node control live ticket endpoint parse failed: {error}"))
+            Failure::invalid_harness(format!("node control live ticket endpoint parse failed: {error}"))
         })?;
     let mut addrs = Vec::with_capacity(ticket.address_refs.len());
     for address_ref in &ticket.address_refs {
         let addr = if let Some(ip_addr) = address_ref.strip_prefix("ip:") {
             iroh::TransportAddr::Ip(ip_addr.parse::<SocketAddr>().map_err(|error| {
-                MoltenError::invalid_harness(format!("node control live ticket ip address parse failed: {error}"))
+                Failure::invalid_harness(format!("node control live ticket ip address parse failed: {error}"))
             })?)
         } else if let Some(relay_url) = address_ref.strip_prefix("relay:") {
             iroh::TransportAddr::Relay(relay_url.parse::<iroh::RelayUrl>().map_err(|error| {
-                MoltenError::invalid_harness(format!("node control live ticket relay address parse failed: {error}"))
+                Failure::invalid_harness(format!("node control live ticket relay address parse failed: {error}"))
             })?)
         } else {
-            return Err(MoltenError::invalid_harness(format!(
+            return Err(Failure::invalid_harness(format!(
                 "node control live ticket unsupported transport address {address_ref}"
             )));
         };
@@ -279,14 +279,14 @@ async fn live_gossip_endpoint(
         .alpns(vec![iroh_gossip::ALPN.to_vec()])
         .clear_ip_transports()
         .bind_addr((Ipv4Addr::LOCALHOST, 0))
-        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh endpoint bind addr failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("live Iroh endpoint bind addr failed: {error}")))?;
     if let Some(secret_key) = secret_key {
         builder = builder.secret_key(secret_key);
     }
     builder
         .bind()
         .await
-        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh endpoint bind failed: {error}")))
+        .map_err(|error| Failure::invalid_harness(format!("live Iroh endpoint bind failed: {error}")))
 }
 
 fn control_live_topic_id(topic: &str) -> iroh_gossip::TopicId {
@@ -295,7 +295,7 @@ fn control_live_topic_id(topic: &str) -> iroh_gossip::TopicId {
 }
 
 fn denied_live_ingress_delivery(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::Root,
     envelope: &ControlIngressEnvelope,
     diagnostics: &[String],
 ) -> Result<ControlIngressDeliver> {

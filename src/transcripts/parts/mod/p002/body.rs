@@ -32,7 +32,7 @@ fn parse_markdown_stanzas(source: &str) -> Result<Vec<TranscriptStanza>> {
         }
     }
     if fence_info.is_some() {
-        return Err(MoltenError::invalid_harness("unterminated transcript fenced block"));
+        return Err(Failure::invalid_harness("unterminated transcript fenced block"));
     }
     flush_prose(FlushProseInput {
         prose: &mut prose,
@@ -182,7 +182,7 @@ fn execute_stanza(
             execute_molten_cli(state, &stanza.content, &admission)
         }
         KIND_EXPECT => execute_expectation(state, &stanza.content),
-        other => Err(MoltenError::invalid_harness(format!("unsupported transcript stanza kind {other}"))),
+        other => Err(Failure::invalid_harness(format!("unsupported transcript stanza kind {other}"))),
     }
 }
 
@@ -193,10 +193,10 @@ fn execute_molten_cli(
 ) -> Result<Option<IoValue>> {
     let args = content.split_whitespace().collect::<Vec<_>>();
     if args.is_empty() {
-        return Err(MoltenError::invalid_harness("empty molten-cli stanza"));
+        return Err(Failure::invalid_harness("empty molten-cli stanza"));
     }
     if args.first() != Some(&"test") {
-        return Err(MoltenError::invalid_harness("molten-cli stanzas must start with `test`"));
+        return Err(Failure::invalid_harness("molten-cli stanzas must start with `test`"));
     }
     match args.get(1).copied() {
         Some("artifact") => execute_artifact_cli(state, &args[2..], admission),
@@ -204,13 +204,13 @@ fn execute_molten_cli(
         Some("storage") => execute_storage_cli(state, &args[2..]),
         Some("cache") => execute_cache_cli(state, &args[2..]),
         Some("report") => execute_report_cli(state),
-        Some("nondeterministic") => Err(MoltenError::invalid_harness(
+        Some("nondeterministic") => Err(Failure::invalid_harness(
             "nondeterministic transcript output is denied unless canonicalized by an admitted handler",
         )),
         Some(other) => {
-            Err(MoltenError::invalid_harness(format!("unsupported transcript molten-cli test command {other}")))
+            Err(Failure::invalid_harness(format!("unsupported transcript molten-cli test command {other}")))
         }
-        None => Err(MoltenError::invalid_harness("missing molten-cli test subcommand")),
+        None => Err(Failure::invalid_harness("missing molten-cli test subcommand")),
     }
 }
 
@@ -223,7 +223,7 @@ fn execute_artifact_cli(
         Some("install") => {
             let kind = option_value(args, "--kind").unwrap_or("artifact");
             let payload = state.last_output.clone().ok_or_else(|| {
-                MoltenError::invalid_harness("artifact install requires prior preserves/artifact stanza output")
+                Failure::invalid_harness("artifact install requires prior preserves/artifact stanza output")
             })?;
             let install =
                 crate::artifacts::install_artifact(&state.registry, &crate::artifacts::ArtifactInstallInput {
@@ -252,12 +252,12 @@ fn execute_artifact_cli(
                 .get(1)
                 .map(|value| (*value).to_string())
                 .or_else(|| state.last_artifact_ref.clone())
-                .ok_or_else(|| MoltenError::invalid_harness("artifact closure requires an artifact ref"))?;
+                .ok_or_else(|| Failure::invalid_harness("artifact closure requires an artifact ref"))?;
             let closure = crate::artifacts::dependency_closure(&state.registry, &[artifact_ref])?;
             Ok(Some(closure.receipt_value))
         }
-        Some(other) => Err(MoltenError::invalid_harness(format!("unsupported transcript artifact command {other}"))),
-        None => Err(MoltenError::invalid_harness("missing transcript artifact command")),
+        Some(other) => Err(Failure::invalid_harness(format!("unsupported transcript artifact command {other}"))),
+        None => Err(Failure::invalid_harness("missing transcript artifact command")),
     }
 }
 
@@ -271,7 +271,7 @@ fn execute_schema_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<I
             let shape = state
                 .last_output
                 .clone()
-                .ok_or_else(|| MoltenError::invalid_harness("schema identity requires prior preserves shape output"))?;
+                .ok_or_else(|| Failure::invalid_harness("schema identity requires prior preserves shape output"))?;
             let value = crate::schema_identity::identity_value(&crate::schema_identity::IdentityInput {
                 mode,
                 schema_ref,
@@ -283,7 +283,7 @@ fn execute_schema_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<I
             })?;
             Ok(Some(value))
         }
-        Some(other) => Err(MoltenError::invalid_harness(format!("unsupported transcript schema command {other}"))),
-        None => Err(MoltenError::invalid_harness("missing transcript schema command")),
+        Some(other) => Err(Failure::invalid_harness(format!("unsupported transcript schema command {other}"))),
+        None => Err(Failure::invalid_harness("missing transcript schema command")),
     }
 }

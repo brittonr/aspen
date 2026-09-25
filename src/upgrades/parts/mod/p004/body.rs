@@ -2,7 +2,7 @@
 fn parse_task(value: &IoValue) -> Result<UpgradeTask> {
     let fields = value
         .collect_simple_record("upgrade-task-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <upgrade-task-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <upgrade-task-v1 ...>"))?;
     let reversible_value = value_to_iovalue(&fields[7]);
     let reversible = simple_record(&reversible_value, "reversible", 1)?;
     Ok(UpgradeTask {
@@ -20,7 +20,7 @@ fn parse_task(value: &IoValue) -> Result<UpgradeTask> {
 pub fn parse_upgrade_receipt(value: &IoValue) -> Result<UpgradeReceipt> {
     let fields = value
         .collect_simple_record("upgrade-receipt-v1", Some(8))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <upgrade-receipt-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <upgrade-receipt-v1 ...>"))?;
     require_schema(&fields[0], UPGRADE_RECEIPT_SCHEMA, "upgrade receipt")?;
     let session = value_to_iovalue(&fields[3]);
     let session_fields = simple_record(&session, "session", 2)?;
@@ -28,7 +28,7 @@ pub fn parse_upgrade_receipt(value: &IoValue) -> Result<UpgradeReceipt> {
     let task_fields = simple_record(&task, "task", 1)?;
     let checks = parse_checks(&fields[7])?;
     if checks.is_empty() {
-        return Err(MoltenError::invalid_harness("upgrade receipt missing checks"));
+        return Err(Failure::invalid_harness("upgrade receipt missing checks"));
     }
     Ok(UpgradeReceipt {
         receipt_ref: canonical_hash(value)?,
@@ -44,7 +44,7 @@ pub fn parse_upgrade_receipt(value: &IoValue) -> Result<UpgradeReceipt> {
 fn upgrade_receipt_value(input: &UpgradeReceiptValueInput<'_>) -> Result<IoValue> {
     validate_non_empty(input.operation, "upgrade receipt operation")?;
     if input.decision != "pass" && input.decision != "deny" {
-        return Err(MoltenError::invalid_harness(format!("unsupported upgrade receipt decision {}", input.decision)));
+        return Err(Failure::invalid_harness(format!("unsupported upgrade receipt decision {}", input.decision)));
     }
     validate_non_empty(input.session_id, "upgrade receipt session id")?;
     validate_ref(input.plan_ref, "upgrade receipt plan ref")?;
@@ -89,7 +89,7 @@ fn name_pointer_value(
 fn parse_name_pointer(value: &IoValue) -> Result<NamePointer> {
     let fields = value
         .collect_simple_record("upgrade-name-pointer-v1", Some(7))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <upgrade-name-pointer-v1 ...>"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected <upgrade-name-pointer-v1 ...>"))?;
     require_schema(&fields[0], UPGRADE_NAME_POINTER_SCHEMA, "upgrade name pointer")?;
     let checks = parse_checks(&fields[6])?;
     require_check(&checks, "names-are-metadata", "upgrade name pointer")?;
@@ -245,7 +245,7 @@ fn evaluate_upgrade_no_mutation_boundary(
     validate_ref(input.before_state_ref, "upgrade no-mutation before state ref")?;
     validate_ref(input.after_state_ref, "upgrade no-mutation after state ref")?;
     if input.decision != "pass" && input.decision != "deny" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported upgrade no-mutation decision {}",
             input.decision
         )));
@@ -298,10 +298,10 @@ fn collect_upgrade_state_snapshot_entries(
     }
     let mut pending_dirs = vec![snapshot_root];
     while let Some(current_dir) = pending_dirs.pop() {
-        for entry in fs::read_dir(&current_dir).map_err(MoltenError::from)? {
-            let entry = entry.map_err(MoltenError::from)?;
+        for entry in fs::read_dir(&current_dir).map_err(Failure::from)? {
+            let entry = entry.map_err(Failure::from)?;
             let path = entry.path();
-            if entry.file_type().map_err(MoltenError::from)?.is_dir() {
+            if entry.file_type().map_err(Failure::from)?.is_dir() {
                 push_bounded(
                     &mut pending_dirs,
                     path,
@@ -312,8 +312,8 @@ fn collect_upgrade_state_snapshot_entries(
             }
             let relative_path = path
                 .strip_prefix(root)
-                .map_err(|error| MoltenError::invalid_harness(format!("upgrade snapshot path escaped root: {error}")))?;
-            let text = fs::read_to_string(&path).map_err(MoltenError::from)?;
+                .map_err(|error| Failure::invalid_harness(format!("upgrade snapshot path escaped root: {error}")))?;
+            let text = fs::read_to_string(&path).map_err(Failure::from)?;
             let content_ref = canonical_hash(&record("upgrade-state-file-v1", vec![string(&text)]))?;
             push_bounded(
                 entries,
@@ -330,9 +330,9 @@ fn write_status(root: &Path, plan: &UpgradePlan, task: &UpgradeTask, receipt_ref
     validate_ref(receipt_ref, "upgrade task status receipt ref")?;
     let path = status_path(root, &plan.session_id, &task.task_id)?;
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(MoltenError::from)?;
+        fs::create_dir_all(parent).map_err(Failure::from)?;
     }
-    fs::write(path, receipt_ref).map_err(MoltenError::from)
+    fs::write(path, receipt_ref).map_err(Failure::from)
 }
 
 fn read_status_receipt_ref(root: &Path, plan: &UpgradePlan, task_id: &str) -> Result<Option<String>> {
@@ -340,7 +340,7 @@ fn read_status_receipt_ref(root: &Path, plan: &UpgradePlan, task_id: &str) -> Re
     if !path.exists() {
         return Ok(None);
     }
-    let receipt_ref = fs::read_to_string(path).map_err(MoltenError::from)?;
+    let receipt_ref = fs::read_to_string(path).map_err(Failure::from)?;
     validate_ref(&receipt_ref, "upgrade task status receipt ref")?;
     let Ok(receipt) = read_stored_receipt(root, &receipt_ref) else {
         return Ok(None);
@@ -358,7 +358,7 @@ fn read_stored_receipt(root: &Path, receipt_ref: &str) -> Result<UpgradeReceipt>
     if receipt.receipt_ref == receipt_ref {
         Ok(receipt)
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(Failure::invalid_harness(format!(
             "upgrade stored receipt hash mismatch: expected {receipt_ref}, got {}",
             receipt.receipt_ref
         )))
@@ -371,9 +371,9 @@ fn read_name_pointers(root: &Path) -> Result<Vec<NamePointer>> {
         return Ok(Vec::new());
     }
     let mut pointers = Vec::new();
-    for entry in fs::read_dir(names).map_err(MoltenError::from)? {
-        let entry = entry.map_err(MoltenError::from)?;
-        if entry.file_type().map_err(MoltenError::from)?.is_file() {
+    for entry in fs::read_dir(names).map_err(Failure::from)? {
+        let entry = entry.map_err(Failure::from)?;
+        if entry.file_type().map_err(Failure::from)?.is_file() {
             push_bounded(
                 &mut pointers,
                 parse_name_pointer(&read_preserves(&entry.path())?)?,
@@ -393,15 +393,15 @@ fn store_text_contains_ref(dir: &Path, target_ref: &str) -> Result<bool> {
     pending_dirs.push(dir.to_path_buf());
     let mut scanned_entries = 0usize;
     while let Some(current_dir) = pending_dirs.pop() {
-        for entry in fs::read_dir(current_dir).map_err(MoltenError::from)? {
+        for entry in fs::read_dir(current_dir).map_err(Failure::from)? {
             scanned_entries = scanned_entries
                 .checked_add(1)
-                .ok_or_else(|| MoltenError::invalid_harness("upgrade store scan count overflow"))?;
+                .ok_or_else(|| Failure::invalid_harness("upgrade store scan count overflow"))?;
             ensure_count_at_most(scanned_entries, MAX_UPGRADE_POINTERS, "upgrade store scan entries")?;
-            let entry = entry.map_err(MoltenError::from)?;
-            if entry.file_type().map_err(MoltenError::from)?.is_dir() {
+            let entry = entry.map_err(Failure::from)?;
+            if entry.file_type().map_err(Failure::from)?.is_dir() {
                 push_bounded(&mut pending_dirs, entry.path(), MAX_UPGRADE_POINTERS, "upgrade store scan dirs")?;
-            } else if fs::read_to_string(entry.path()).map_err(MoltenError::from)?.contains(target_ref) {
+            } else if fs::read_to_string(entry.path()).map_err(Failure::from)?.contains(target_ref) {
                 return Ok(true);
             }
         }
@@ -410,21 +410,21 @@ fn store_text_contains_ref(dir: &Path, target_ref: &str) -> Result<bool> {
 }
 
 fn ensure_dirs(root: &Path) -> Result<()> {
-    fs::create_dir_all(root.join("plans")).map_err(MoltenError::from)?;
-    fs::create_dir_all(root.join("receipts")).map_err(MoltenError::from)?;
-    fs::create_dir_all(root.join("names")).map_err(MoltenError::from)?;
-    fs::create_dir_all(root.join("status")).map_err(MoltenError::from)
+    fs::create_dir_all(root.join("plans")).map_err(Failure::from)?;
+    fs::create_dir_all(root.join("receipts")).map_err(Failure::from)?;
+    fs::create_dir_all(root.join("names")).map_err(Failure::from)?;
+    fs::create_dir_all(root.join("status")).map_err(Failure::from)
 }
 
 fn write_preserves(path: &Path, value: &IoValue) -> Result<()> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(MoltenError::from)?;
+        fs::create_dir_all(parent).map_err(Failure::from)?;
     }
-    fs::write(path, to_text(value)?).map_err(MoltenError::from)
+    fs::write(path, to_text(value)?).map_err(Failure::from)
 }
 
 fn read_preserves(path: &Path) -> Result<IoValue> {
-    parse_text(&fs::read_to_string(path).map_err(MoltenError::from)?)
+    parse_text(&fs::read_to_string(path).map_err(Failure::from)?)
 }
 
 fn store_receipt(root: &Path, receipt_value: &IoValue) -> Result<()> {
@@ -453,7 +453,7 @@ fn status_path(root: &Path, session_id: &str, task_id: &str) -> Result<PathBuf> 
 
 fn filename_for_ref(value_ref: &str) -> Result<String> {
     let hex = content_ref_hex(value_ref)
-        .map_err(|error| MoltenError::invalid_harness(format!("unsupported ref {value_ref}: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("unsupported ref {value_ref}: {error}")))?;
     Ok(format!("blake3_{hex}.preserves"))
 }
 

@@ -1,18 +1,18 @@
 
 pub fn validate_budget_gate_evidence(suite: &Suite, budget_gate: Option<&BudgetGateEvidence>) -> Result<()> {
     if !suite.budget_explicit {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "missing explicit budget fixture; default resource policy cannot satisfy evidence gates",
         ));
     }
     let budget_gate = budget_gate.ok_or_else(|| {
-        MoltenError::invalid_harness(
+        crate::error::Failure::invalid_harness(
             "missing budget gate evidence; resource policy must pass preflight before side effects",
         )
     })?;
     let expected_ref = canonical_hash(&budget_limits_value(&suite.budget))?;
     if budget_gate.budget_ref != expected_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "budget gate ref mismatch: gate has {}, embedded budget hashes to {expected_ref}",
             budget_gate.budget_ref
         )));
@@ -21,7 +21,7 @@ pub fn validate_budget_gate_evidence(suite: &Suite, budget_gate: Option<&BudgetG
     let expected_gate_ref = canonical_hash(&expected_gate)?;
     let actual_gate_ref = canonical_hash(&budget_gate.value)?;
     if actual_gate_ref != expected_gate_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "budget gate evidence does not match embedded resource preflight: gate hashes to {actual_gate_ref}, expected {expected_gate_ref}"
         )));
     }
@@ -77,7 +77,7 @@ fn budget_preflight_material(budget: &Budget) -> Result<BudgetPreflightMaterial>
     let envelope_ref = canonical_hash(&envelope_value)?;
     let receipt = basalt::validate_contract_envelope(&envelope);
     if !receipt.is_accepted() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "Basalt resource preflight denied budget contract envelope: {}",
             receipt.reason
         )));
@@ -127,7 +127,7 @@ fn parse_budget_nickel_source_evidence(value: &Value<IoValue>) -> Result<BudgetN
     let source = simple_record(&value, "budget-source", 6)?;
     let schema = required_string(&source[0], "Nickel resource policy schema")?;
     if schema != crate::preserves_rail::HARNESS_BUDGET_NICKEL_STATIC_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported Nickel resource policy schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_BUDGET_NICKEL_STATIC_SCHEMA
         )));
@@ -136,7 +136,7 @@ fn parse_budget_nickel_source_evidence(value: &Value<IoValue>) -> Result<BudgetN
     let source_ref = required_record_hash(&source[2], "source-ref", "Nickel resource policy source ref")?;
     let actual_source_ref = canonical_hash(&string(&source_text))?;
     if source_ref != actual_source_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "Nickel resource policy source ref mismatch: evidence has {source_ref}, source hashes to {actual_source_ref}"
         )));
     }
@@ -144,13 +144,13 @@ fn parse_budget_nickel_source_evidence(value: &Value<IoValue>) -> Result<BudgetN
     let export_ref = required_record_hash(&source[4], "export-ref", "Nickel resource policy export ref")?;
     let actual_export_ref = canonical_hash(&string(&export_json))?;
     if export_ref != actual_export_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "Nickel resource policy export ref mismatch: evidence has {export_ref}, export hashes to {actual_export_ref}"
         )));
     }
     let actual_export = nickel_export_json(&source_text)?;
     if actual_export != export_json {
-        return Err(MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "Nickel resource policy export JSON does not match source normalization",
         ));
     }
@@ -167,7 +167,7 @@ fn parse_resource_contract_evidence(value: &Value<IoValue>) -> Result<ResourceCo
     let contract = simple_record(&value, "resource-contract", 3)?;
     let schema = required_string(&contract[0], "resource contract schema")?;
     if schema != crate::preserves_rail::HARNESS_BUDGET_CONTRACT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported resource contract schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_BUDGET_CONTRACT_SCHEMA
         )));
@@ -177,13 +177,13 @@ fn parse_resource_contract_evidence(value: &Value<IoValue>) -> Result<ResourceCo
     let envelope_ref = required_record_hash(&contract[2], "envelope-ref", "resource contract envelope ref")?;
     let actual_envelope_ref = canonical_hash(&envelope_value)?;
     if envelope_ref != actual_envelope_ref {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "resource contract envelope ref mismatch: evidence has {envelope_ref}, envelope hashes to {actual_envelope_ref}"
         )));
     }
     let receipt = basalt::validate_contract_envelope(&envelope);
     if !receipt.is_accepted() {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "Basalt rejected resource contract envelope: {}",
             receipt.reason
         )));
@@ -198,38 +198,38 @@ fn parse_budget_contract_envelope(value: &IoValue) -> Result<basalt::ContractEnv
     let envelope = simple_record(value, "contract-envelope", 7)?;
     let backend = required_string(&envelope[0], "budget contract backend")?;
     if backend != "nickel" {
-        return Err(MoltenError::invalid_harness(format!("resource preflight requires Nickel backend, got {backend}")));
+        return Err(crate::error::Failure::invalid_harness(format!("resource preflight requires Nickel backend, got {backend}")));
     }
     let contract_id = required_string(&envelope[1], "budget contract id")?;
     if contract_id != BUDGET_CONTRACT_ID {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported budget contract id {contract_id}; expected {BUDGET_CONTRACT_ID}"
         )));
     }
     let contract_version = required_string(&envelope[2], "budget contract version")?;
     if contract_version != BUDGET_CONTRACT_VERSION {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported budget contract version {contract_version}; expected {BUDGET_CONTRACT_VERSION}"
         )));
     }
     let normalized_source_hash = required_hash(&envelope[3], "budget contract normalized source ref")?;
     let input_schema = required_string(&envelope[4], "budget contract input schema")?;
     if input_schema != crate::preserves_rail::HARNESS_BUDGET_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported budget contract input schema {input_schema}; expected {}",
             crate::preserves_rail::HARNESS_BUDGET_SCHEMA
         )));
     }
     let output_schema = required_string(&envelope[5], "budget contract output schema")?;
     if output_schema != crate::preserves_rail::HARNESS_BUDGET_USAGE_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported budget contract output schema {output_schema}; expected {}",
             crate::preserves_rail::HARNESS_BUDGET_USAGE_SCHEMA
         )));
     }
     let receipt_schema_version = required_string(&envelope[6], "budget contract receipt schema")?;
     if receipt_schema_version != crate::preserves_rail::HARNESS_BASALT_RESOURCE_PREFLIGHT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported budget contract receipt schema {receipt_schema_version}; expected {}",
             crate::preserves_rail::HARNESS_BASALT_RESOURCE_PREFLIGHT_SCHEMA
         )));
@@ -250,24 +250,24 @@ fn parse_basalt_resource_preflight_evidence(value: &Value<IoValue>) -> Result<Ba
     let receipt = simple_record(&value, "basalt-resource-preflight", 8)?;
     let schema = required_string(&receipt[0], "Basalt resource preflight schema")?;
     if schema != crate::preserves_rail::HARNESS_BASALT_RESOURCE_PREFLIGHT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported Basalt resource preflight schema {schema}; expected {}",
             crate::preserves_rail::HARNESS_BASALT_RESOURCE_PREFLIGHT_SCHEMA
         )));
     }
     let decision = required_record_string(&receipt[1], "decision", "Basalt resource preflight decision")?;
     if decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!("unsupported Basalt resource preflight decision {decision}")));
+        return Err(crate::error::Failure::invalid_harness(format!("unsupported Basalt resource preflight decision {decision}")));
     }
     let backend = required_record_string(&receipt[2], "backend", "Basalt resource preflight backend")?;
     if backend != "nickel" {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "Basalt resource preflight requires Nickel backend, got {backend}"
         )));
     }
     let contract_id = required_record_string(&receipt[3], "contract-id", "Basalt resource preflight contract id")?;
     if contract_id != BUDGET_CONTRACT_ID {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported Basalt resource preflight contract id {contract_id}; expected {BUDGET_CONTRACT_ID}"
         )));
     }
@@ -277,7 +277,7 @@ fn parse_basalt_resource_preflight_evidence(value: &Value<IoValue>) -> Result<Ba
         required_record_hash(&receipt[6], "normalized-source-ref", "Basalt resource preflight source ref")?;
     let reason = required_record_string(&receipt[7], "reason", "Basalt resource preflight reason")?;
     if reason != "accepted" {
-        return Err(MoltenError::invalid_harness(format!("unsupported Basalt resource preflight reason {reason}")));
+        return Err(crate::error::Failure::invalid_harness(format!("unsupported Basalt resource preflight reason {reason}")));
     }
     Ok(BasaltResourcePreflightEvidence {
         receipt_ref: canonical_hash(&value)?,

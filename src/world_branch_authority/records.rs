@@ -8,7 +8,7 @@ use molten_core::world_branch_authority::valid_content_ref;
 use preserves::IOValue;
 
 use super::ports::ActivationOutcome;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 mod vocabulary;
@@ -163,7 +163,7 @@ pub fn encode_receipt(receipt: &WorldBranchAuthorityReceipt) -> Result<(String, 
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     let mut hasher = blake3::Hasher::new_derive_key(RECEIPT_IDENTITY_DOMAIN);
     let length =
-        u64::try_from(bytes.len()).map_err(|_| MoltenError::invalid_harness("branch-authority receipt exceeds u64"))?;
+        u64::try_from(bytes.len()).map_err(|_| Failure::invalid_harness("branch-authority receipt exceeds u64"))?;
     hasher.update(&length.to_le_bytes());
     hasher.update(&bytes);
     Ok((format!("blake3:{}", hasher.finalize().to_hex()), bytes))
@@ -171,7 +171,7 @@ pub fn encode_receipt(receipt: &WorldBranchAuthorityReceipt) -> Result<(String, 
 
 fn validate_receipt(receipt: &WorldBranchAuthorityReceipt) -> Result<()> {
     if receipt.schema != RECEIPT_SCHEMA || !valid_content_ref(&receipt.plan_ref) {
-        return Err(MoltenError::invalid_harness("world branch authority receipt schema or plan ref is invalid"));
+        return Err(Failure::invalid_harness("world branch authority receipt schema or plan ref is invalid"));
     }
     for reference in [
         receipt.decision_ref.as_deref(),
@@ -185,13 +185,13 @@ fn validate_receipt(receipt: &WorldBranchAuthorityReceipt) -> Result<()> {
     .flatten()
     {
         if !valid_content_ref(reference) {
-            return Err(MoltenError::invalid_harness("world branch authority receipt contains an invalid reference"));
+            return Err(Failure::invalid_harness("world branch authority receipt contains an invalid reference"));
         }
     }
     if receipt.evidence_refs.len() > MAXIMUM_REALIZATION_EVIDENCE
         || receipt.evidence_refs.iter().any(|reference| !valid_content_ref(reference))
     {
-        return Err(MoltenError::invalid_harness("world branch authority receipt evidence is invalid"));
+        return Err(Failure::invalid_harness("world branch authority receipt evidence is invalid"));
     }
     if receipt.obligations.is_empty()
         || receipt.obligations.len() > MAXIMUM_REALIZATION_EVIDENCE
@@ -200,11 +200,11 @@ fn validate_receipt(receipt: &WorldBranchAuthorityReceipt) -> Result<()> {
         || !valid_diagnostic(&receipt.diagnostic)
         || !receipt.activation_outcome.as_deref().is_none_or(valid_activation_outcome)
     {
-        return Err(MoltenError::invalid_harness("world branch authority receipt contains non-closed vocabulary"));
+        return Err(Failure::invalid_harness("world branch authority receipt contains non-closed vocabulary"));
     }
     let expected = WORLD_BRANCH_AUTHORITY_NON_CLAIMS.iter().map(ToString::to_string).collect::<Vec<_>>();
     if receipt.non_claims != expected {
-        return Err(MoltenError::invalid_harness("world branch authority receipt non-claims are incomplete"));
+        return Err(Failure::invalid_harness("world branch authority receipt non-claims are incomplete"));
     }
     Ok(())
 }

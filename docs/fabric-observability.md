@@ -27,7 +27,7 @@ The generic sink boundary reports completion, drops, and typed failure. Availabi
 
 ## Read-only integrity
 
-Integrity plans enumerate canonical target refs and finite item/finding/byte limits. The durable-state adapter reads only through `NodeStateNamespace` capability roots. It never serializes host paths into observations. The content adapter accepts a read-only bounded source interface with no mutation methods. Both produce the same scan observations and pure result evaluation.
+Integrity plans enumerate canonical target refs and finite item/finding/byte limits. The durable-state adapter reads only through `node_state::DirectoryView` capability roots. It never serializes host paths into observations. The content adapter accepts a read-only bounded source interface with no mutation methods. Both produce the same scan observations and pure result evaluation.
 
 Missing, corrupt, mismatched, unexpected, over-bound, permission-denied, unsupported, cancelled, unavailable, and partial observations become bounded findings. A complete pass requires the declared inventory to be exhausted. Findings carry recommendations only and always set mutation authority to false. Repair, quarantine, retention, recovery, or deletion requires a separate operation-specific authority and policy ref that explicitly targets the finding.
 

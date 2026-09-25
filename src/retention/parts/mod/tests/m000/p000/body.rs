@@ -43,13 +43,13 @@
 
     fn write_store_value(path: &Path, value: &IoValue) -> Result<()> {
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(MoltenError::from)?;
+            fs::create_dir_all(parent).map_err(Failure::from)?;
         }
-        fs::write(path, crate::preserves_rail::to_text(value)?).map_err(MoltenError::from)
+        fs::write(path, crate::preserves_rail::to_text(value)?).map_err(Failure::from)
     }
 
     fn read_store_value(path: &Path) -> Result<IoValue> {
-        let text = fs::read_to_string(path).map_err(MoltenError::from)?;
+        let text = fs::read_to_string(path).map_err(Failure::from)?;
         crate::preserves_rail::parse_text(&text)
     }
 

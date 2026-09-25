@@ -18,7 +18,7 @@ use super::WallClockAnomalyDecision;
 use super::admit_time_profile;
 use super::validate_duration;
 use super::validate_time_value;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric::DeterminismClass;
 use crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA;
@@ -314,18 +314,18 @@ pub fn canonical_entropy_event(metadata: &EntropyEvidenceMetadata) -> Result<Can
         EntropyMode::ProductionCryptographic => super::EntropyReplayClass::SecretInputRequired,
     };
     if metadata.replay_class != expected_replay {
-        return Err(MoltenError::invalid_harness("entropy evidence mode and replay class mismatch"));
+        return Err(Failure::invalid_harness("entropy evidence mode and replay class mismatch"));
     }
     match metadata.mode {
         EntropyMode::DeterministicSimulation => {
             let input_ref = metadata
                 .deterministic_input_ref
                 .as_deref()
-                .ok_or_else(|| MoltenError::invalid_harness("deterministic entropy evidence requires an input ref"))?;
+                .ok_or_else(|| Failure::invalid_harness("deterministic entropy evidence requires an input ref"))?;
             crate::preserves_rail::validate_content_ref(input_ref)?;
         }
         EntropyMode::ProductionCryptographic if metadata.deterministic_input_ref.is_some() => {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "production entropy evidence must not contain a deterministic input ref",
             ));
         }
@@ -426,10 +426,10 @@ pub fn canonical_named_event(
 // r[impl molten.fabric_time.non_claims]
 pub fn canonical_fabric_time_run(report: FabricTimeRunReport) -> Result<CanonicalFabricTimeRun> {
     if report.generation == 0 {
-        return Err(MoltenError::invalid_harness("fabric time run generation must be non-zero"));
+        return Err(Failure::invalid_harness("fabric time run generation must be non-zero"));
     }
     if !matches!(report.profile_kind.as_str(), "live" | "deterministic-simulation" | "both") {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "unsupported fabric-time profile kind: {}",
             report.profile_kind
         )));
@@ -448,14 +448,14 @@ pub fn canonical_fabric_time_run(report: FabricTimeRunReport) -> Result<Canonica
         crate::preserves_rail::validate_content_ref(content_ref)?;
     }
     if report.evidence_refs.len() > MAX_RUN_EVIDENCE_REFS {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "fabric time run evidence count {} exceeds {}",
             report.evidence_refs.len(),
             MAX_RUN_EVIDENCE_REFS
         )));
     }
     if report.non_claims != super::REQUIRED_TIME_NON_CLAIMS {
-        return Err(MoltenError::invalid_harness("fabric time run must preserve the complete canonical non-claim set"));
+        return Err(Failure::invalid_harness("fabric time run must preserve the complete canonical non-claim set"));
     }
     let value = record(FABRIC_TIME_RUN_RECORD, vec![
         string(super::FABRIC_TIME_RUN_REPORT_SCHEMA),
@@ -534,10 +534,10 @@ pub fn parse_fabric_time_run_readback(value: &IOValue) -> Result<FabricTimeRunRe
     const CONFORMANCE_FIELD_INDEX: usize = 16;
     let fields = value
         .collect_simple_record(FABRIC_TIME_RUN_RECORD, Some(RUN_REPORT_FIELD_COUNT))
-        .ok_or_else(|| MoltenError::invalid_harness("expected canonical fabric-time run report"))?;
+        .ok_or_else(|| Failure::invalid_harness("expected canonical fabric-time run report"))?;
     let schema = required_string(&fields[0], "fabric-time report schema")?;
     if schema != super::FABRIC_TIME_RUN_REPORT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!("fabric-time report schema mismatch: {schema}")));
+        return Err(Failure::invalid_harness(format!("fabric-time report schema mismatch: {schema}")));
     }
     let profile_ref = record_string_field(&fields[1], "profile-ref")?;
     let profile_kind = record_string_field(&fields[PROFILE_KIND_FIELD_INDEX], "profile-kind")?;
@@ -557,7 +557,7 @@ pub fn parse_fabric_time_run_readback(value: &IOValue) -> Result<FabricTimeRunRe
         crate::preserves_rail::validate_content_ref(content_ref)?;
     }
     if !matches!(profile_kind.as_str(), "live" | "deterministic-simulation" | "both") {
-        return Err(MoltenError::invalid_harness(format!("unsupported fabric-time profile kind: {profile_kind}")));
+        return Err(Failure::invalid_harness(format!("unsupported fabric-time profile kind: {profile_kind}")));
     }
     Ok(FabricTimeRunReadback {
         profile_ref,
@@ -661,7 +661,7 @@ fn canonical_event(
     event_checks: &[&str],
 ) -> Result<CanonicalTimeEvent> {
     if generation == 0 {
-        return Err(MoltenError::invalid_harness("fabric time event generation must be non-zero"));
+        return Err(Failure::invalid_harness("fabric time event generation must be non-zero"));
     }
     let value = record(FABRIC_TIME_EVENT_RECORD, vec![
         string(super::FABRIC_TIME_OBSERVATION_SCHEMA),
@@ -776,24 +776,24 @@ fn record_u64_field(value: &preserves::Value<IOValue>, label: &str) -> Result<u6
     let field_value = named_field_value(value, label)?;
     field_value
         .as_u64()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {label}")))?
-        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected u64 for {label}")))?
+        .map_err(|error| Failure::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
 fn record_bool_field(value: &preserves::Value<IOValue>, label: &str) -> Result<bool> {
     named_field_value(value, label)?
         .as_boolean()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected bool for {label}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected bool for {label}")))
 }
 
 fn named_field_value(value: &preserves::Value<IOValue>, label: &str) -> Result<preserves::Value<IOValue>> {
     const NAMED_FIELD_ARITY: usize = 2;
     let fields = value
         .collect_simple_record("field", Some(NAMED_FIELD_ARITY))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected named field {label}")))?;
+        .ok_or_else(|| Failure::invalid_harness(format!("expected named field {label}")))?;
     let actual = required_string(&fields[0], "field-name")?;
     if actual != label {
-        return Err(MoltenError::invalid_harness(format!("expected field {label}, found {actual}")));
+        return Err(Failure::invalid_harness(format!("expected field {label}, found {actual}")));
     }
     Ok(fields[1].clone())
 }
@@ -802,9 +802,9 @@ fn required_string(value: &preserves::Value<IOValue>, label: &str) -> Result<Str
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {label}")))
+        .ok_or_else(|| Failure::invalid_harness(format!("expected string for {label}")))
 }
 
-fn validation_error<T: std::fmt::Debug>(label: &str, issues: &[T]) -> MoltenError {
-    MoltenError::invalid_harness(format!("{label} validation failed: {issues:?}"))
+fn validation_error<T: std::fmt::Debug>(label: &str, issues: &[T]) -> Failure {
+    Failure::invalid_harness(format!("{label} validation failed: {issues:?}"))
 }
