@@ -35,18 +35,18 @@ struct BoundaryViolation {
 }
 
 fn find_boundary_violations(files: &[SourceFile], forbidden_terms: &[&str]) -> Vec<BoundaryViolation> {
-    let mut violations = Vec::new();
-    for file in files {
-        for term in forbidden_terms {
-            if file.source.contains(term) {
-                violations.push(BoundaryViolation {
+    files
+        .iter()
+        .flat_map(|file| {
+            forbidden_terms
+                .iter()
+                .filter(|term| file.source.contains(**term))
+                .map(move |term| BoundaryViolation {
                     path: file.path.clone(),
                     term: (*term).to_string(),
-                });
-            }
-        }
-    }
-    violations
+                })
+        })
+        .collect()
 }
 
 fn read_bounded_rust_sources(root: &std::path::Path) -> BoundaryResult<Vec<SourceFile>> {

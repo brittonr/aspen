@@ -10,7 +10,7 @@ pub const ARTIFACT_FORMAT_TEXT: &str = "text";
 pub const BLAKE3_CONTENT_REF_PREFIX: &str = "blake3:";
 const BLAKE3_HEX_LENGTH: usize = 64;
 const BLAKE3_CONTENT_REF_LENGTH: usize = BLAKE3_CONTENT_REF_PREFIX.len() + BLAKE3_HEX_LENGTH;
-const MAX_RUN_ARTIFACTS: usize = 4_096;
+pub const MAX_RUN_ARTIFACTS: usize = 4_096;
 const _: () = assert!(MAX_RUN_ARTIFACTS > 0);
 
 pub const REQUIRED_CLUSTER_RUN_ARTIFACT_KINDS: &[&str] = &[

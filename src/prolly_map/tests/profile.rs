@@ -89,13 +89,13 @@ fn named_benchmark_thresholds_bind_measured_structural_facts() {
 }
 
 fn merged_facts(profile: &ProllyProfile, snapshots: &[&MapSnapshot]) -> Vec<GraphFact> {
-    let mut facts = BTreeMap::new();
-    for snapshot in snapshots {
-        for fact in facts_from_snapshot(profile, snapshot).expect("facts") {
-            facts.insert(fact.node_ref.as_str().to_string(), fact);
-        }
-    }
-    facts.into_values().collect()
+    snapshots
+        .iter()
+        .flat_map(|snapshot| facts_from_snapshot(profile, snapshot).expect("facts"))
+        .map(|fact| (fact.node_ref.as_str().to_string(), fact))
+        .collect::<BTreeMap<_, _>>()
+        .into_values()
+        .collect()
 }
 
 fn json_u64(value: &serde_json::Value, field: &str) -> u64 {

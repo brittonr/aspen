@@ -444,12 +444,13 @@ pub fn build_reference_simulated_world() -> crate::error::Result<CanonicalSimula
 pub fn reference_world_manifest() -> crate::error::Result<SimulatedWorldManifest> {
     let profiles = reference_port_profiles();
     let operations = default_reference_operations();
-    let mut nodes = Vec::new();
-    for kind in [
+    let kinds = [
         crate::fabric::ReferenceSystemKind::TransactionalKeyValue,
         crate::fabric::ReferenceSystemKind::ReplicatedLog,
         crate::fabric::ReferenceSystemKind::DistributedScheduler,
-    ] {
+    ];
+    let mut nodes = Vec::with_capacity(kinds.len());
+    for kind in kinds {
         let implementation_ref = blake3_ref(format!("reference-implementation:{}", kind.as_str()).as_bytes());
         let input = reference_manifest_input(kind, implementation_ref.clone(), &profiles)?;
         let node_id = reference_node_id(kind);
@@ -721,6 +722,11 @@ fn run_prepared_reference_world(
     let mut router = DeterministicSimulationPortRouter::new(&prepared.world);
     let mut observations = Vec::new();
     let mut choice_records = Vec::new();
+    // The admitted `max-choices` bound caps the recorded scheduler choices (the core scheduler enforces
+    // it too).
+    let max_choice_records = usize::try_from(prepared.world.admitted.manifest.bounds.max_choices).map_err(|_| {
+        crate::error::MoltenError::invalid_harness("reference world max-choices bound does not fit usize")
+    })?;
     let mut crash_recoveries = Vec::with_capacity(prepared.world.admitted.manifest.faults.len());
     let mut fired_recovery_faults = std::collections::BTreeSet::new();
     let mut history_material = FIRST_HISTORY_MATERIAL.to_string();
@@ -839,16 +845,21 @@ fn run_prepared_reference_world(
             }
         };
         transition.record.semantic_output_ref = semantic_output_ref;
+        if choice_records.len() >= max_choice_records {
+            return Err(crate::error::MoltenError::invalid_harness(
+                "reference world records at most max-choices scheduler choices",
+            ));
+        }
         choice_records.push(transition.record);
         scheduler = transition.next;
     }
     scheduler = finish_simulation_scheduler(&prepared.world.admitted, &scheduler).map_err(|error| {
         crate::error::MoltenError::invalid_harness(format!("reference scheduler finish denied: {error:?}"))
     })?;
-    let mut final_state_refs = Vec::new();
+    let host_count = prepared.hosts.len();
+    let mut final_state_refs = Vec::with_capacity(host_count);
     let mut host_evidence_refs = Vec::new();
     let mut service_states = std::collections::BTreeMap::new();
-    let host_count = prepared.hosts.len();
     for (node_id, host) in prepared.hosts.iter_mut() {
         host.drain(scheduler.virtual_tick)?;
         host.shutdown(scheduler.virtual_tick)?;
@@ -859,7 +870,9 @@ fn run_prepared_reference_world(
             ));
         }
         service_states.insert(node_id.clone(), host.executor().state().clone());
-        host_evidence_refs.extend(host.evidence().iter().map(|item| item.evidence_ref().to_string()));
+        let host_evidence = host.evidence();
+        host_evidence_refs.reserve(host_evidence.len());
+        host_evidence_refs.extend(host_evidence.iter().map(|item| item.evidence_ref().to_string()));
     }
     final_state_refs.sort();
     host_evidence_refs.sort();

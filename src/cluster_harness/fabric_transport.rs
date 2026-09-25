@@ -1156,13 +1156,11 @@ fn validate_run_membership(
     }
     let mut observed = std::collections::BTreeSet::new();
     collect_relative_files(run_directory, run_directory, &mut observed)?;
-    let mut diagnostics = Vec::new();
-    for missing in expected.difference(&observed) {
-        diagnostics.push(format!("missing-run-member:{missing}"));
-    }
-    for extra in observed.difference(&expected) {
-        diagnostics.push(format!("unexpected-run-member:{extra}"));
-    }
+    let mut diagnostics = expected
+        .difference(&observed)
+        .map(|missing| format!("missing-run-member:{missing}"))
+        .chain(observed.difference(&expected).map(|extra| format!("unexpected-run-member:{extra}")))
+        .collect::<Vec<_>>();
     for path in &expected {
         let absolute = run_directory.join(path);
         if absolute.exists() {

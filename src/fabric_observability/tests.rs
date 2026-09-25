@@ -220,13 +220,14 @@ fn observability_and_integrity_ports_are_versioned_exact_and_non_authoritative()
 fn prometheus_opentelemetry_and_tracing_shells_export_only_bounded_public_views() {
     let profile = profile();
     let snapshot = snapshot();
-    let mut canonical_refs = Vec::new();
-    let mut prometheus_payload = Vec::new();
-    for (class, format) in [
+    let exports = [
         (ObservationAdapterClass::Prometheus, ExportFormat::Prometheus),
         (ObservationAdapterClass::OpenTelemetry, ExportFormat::OpenTelemetryJson),
         (ObservationAdapterClass::Tracing, ExportFormat::TracingReference),
-    ] {
+    ];
+    let mut canonical_refs = Vec::with_capacity(exports.len());
+    let mut prometheus_payload = Vec::new();
+    for (class, format) in exports {
         let adapter = adapter(class);
         let request = export_request(&adapter, &snapshot, format);
         let mut sink = success_sink();

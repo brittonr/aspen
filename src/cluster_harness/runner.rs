@@ -4,11 +4,14 @@ pub const DEFAULT_CLUSTER_CHILD_TIMEOUT_MS: u64 = 30_000;
 pub const MAX_CLUSTER_CHILD_TIMEOUT_MS: u64 = 300_000;
 const CHILD_POLL_INTERVAL_MS: u64 = 10;
 const MAX_TICKET_FILES: usize = 1_024;
-const RUN_INDEX_HEADER: &str = "molten.cluster-run-index.v1";
+pub(super) const RUN_INDEX_HEADER: &str = "molten.cluster-run-index.v1";
 const RUN_INDEX_FIELD_COUNT: usize = 4;
 const RUN_INDEX_REF_FIELD: usize = 2;
 const RUN_INDEX_FORMAT_FIELD: usize = 3;
 const RUN_INDEX_ENTRY_LINE_OFFSET: usize = 2;
+// One past molten-core's run-artifact cap, so an oversized index still reaches the core
+// too-many-artifacts diagnostic.
+pub(super) const MAX_RUN_INDEX_ENTRIES: usize = molten_core::cluster_harness::MAX_RUN_ARTIFACTS + 1;
 const RUN_INDEX_FILE: &str = "artifact-index.tsv";
 const VERIFICATION_FILE: &str = "verification.preserves";
 const FAILURE_BUNDLE_FILE: &str = "failure-repro-bundle.preserves";
@@ -186,11 +189,12 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> crate::e
     };
 
     collect_child_diagnostics(&child_executions, &mut diagnostics);
-    let mut node_artifacts = Vec::new();
     let mut child_receipt_refs = Vec::new();
-    for node in &plan.nodes {
-        node_artifacts.push(capture_node_artifacts(node, &mut artifacts, &mut child_receipt_refs)?);
-    }
+    let node_artifacts = plan
+        .nodes
+        .iter()
+        .map(|node| capture_node_artifacts(node, &mut artifacts, &mut child_receipt_refs))
+        .collect::<crate::error::Result<Vec<_>>>()?;
 
     let cleanup_observation = cleanup_state_roots(&plan)?;
     let child_process_refs = child_executions.iter().map(|child| child.process_ref.clone()).collect::<Vec<_>>();
@@ -842,7 +846,7 @@ fn cleanup_state_roots(plan: &crate::cluster::ClusterPlan) -> crate::error::Resu
     for node in &plan.nodes {
         collect_ticket_paths(&node.state_root, &node.state_root, &mut ticket_paths)?;
     }
-    let mut removed_ticket_refs = Vec::new();
+    let mut removed_ticket_refs = Vec::with_capacity(ticket_paths.len());
     let mut is_succeeded = true;
     for path in &ticket_paths {
         let text = std::fs::read_to_string(path).unwrap_or_default();
@@ -986,7 +990,9 @@ fn render_run_index(entries: &[molten_core::cluster_harness::RunArtifactIndexEnt
     output
 }
 
-fn parse_run_index(source: &str) -> crate::error::Result<Vec<molten_core::cluster_harness::RunArtifactIndexEntry>> {
+pub(super) fn parse_run_index(
+    source: &str,
+) -> crate::error::Result<Vec<molten_core::cluster_harness::RunArtifactIndexEntry>> {
     let mut lines = source.lines();
     let header = lines
         .next()
@@ -1006,12 +1012,17 @@ fn parse_run_index(source: &str) -> crate::error::Result<Vec<molten_core::cluste
                 line_index.saturating_add(RUN_INDEX_ENTRY_LINE_OFFSET)
             )));
         }
-        entries.push(molten_core::cluster_harness::RunArtifactIndexEntry {
-            relative_path: fields[0].to_string(),
-            artifact_kind: fields[1].to_string(),
-            expected_ref: fields[RUN_INDEX_REF_FIELD].to_string(),
-            format: fields[RUN_INDEX_FORMAT_FIELD].to_string(),
-        });
+        crate::bounded::push_bounded(
+            &mut entries,
+            molten_core::cluster_harness::RunArtifactIndexEntry {
+                relative_path: fields[0].to_string(),
+                artifact_kind: fields[1].to_string(),
+                expected_ref: fields[RUN_INDEX_REF_FIELD].to_string(),
+                format: fields[RUN_INDEX_FORMAT_FIELD].to_string(),
+            },
+            MAX_RUN_INDEX_ENTRIES,
+            "cluster run index entry",
+        )?;
     }
     Ok(entries)
 }

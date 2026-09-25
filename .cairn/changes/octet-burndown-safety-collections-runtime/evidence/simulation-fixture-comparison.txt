@@ -1,0 +1,16 @@
+# Base binary 8cb948d92 vs candidate: molten fabric-simulation run / shrink, molten fabric-time run-fixture --profile deterministic-simulation
+## run
+identical: 100 files
+## shrink
+identical: 3 files
+## time
+differs (base vs candidate):
+  ./evidence/0000-conformance.preserves
+  ./evidence/0002-conformance.preserves
+  ./evidence/0004-clock-anomaly.preserves
+  ./evidence/0032-conformance.preserves
+differs (base vs base rerun, same files => live-clock nondeterminism, not this change):
+  ./evidence/0000-conformance.preserves
+  ./evidence/0002-conformance.preserves
+  ./evidence/0004-clock-anomaly.preserves
+  ./evidence/0032-conformance.preserves

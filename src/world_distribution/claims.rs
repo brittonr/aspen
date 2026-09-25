@@ -15,6 +15,10 @@ use super::canonical_world_claim_admission;
 use crate::error::MoltenError;
 use crate::error::Result;
 
+/// Peer, statement, authentication, authority, and authority-evidence refs recorded per admitted
+/// claim.
+const EVIDENCE_REFS_PER_CLAIM: usize = 5;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorldClaimCarrier {
     pub peer_ref: String,
@@ -85,7 +89,7 @@ where
     }
     carriers.sort_by(|left, right| left.claim_ref.cmp(&right.claim_ref));
     let mut claims = Vec::with_capacity(carriers.len());
-    let mut evidence_refs = Vec::new();
+    let mut evidence_refs = Vec::with_capacity(carriers.len().saturating_mul(EVIDENCE_REFS_PER_CLAIM));
     for carrier in carriers {
         let authentication = ports.authentication.authenticate_claim(&carrier)?;
         let authority = ports.authority.observe_claim_authority(&carrier)?;

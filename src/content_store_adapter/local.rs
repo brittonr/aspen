@@ -104,9 +104,9 @@ pub fn execute_local_stream_get(
     require_accepted("local content get", &preflight)?;
     let mut state = begin_partial_state(profile, &manifest, command, generation, retained)
         .map_err(|issues| validation_error("local partial state", &issues))?;
-    let mut verified_chunks = Vec::new();
-    let mut events = Vec::new();
     let resume_position = state.verified_chunk_refs.len();
+    let mut verified_chunks = Vec::with_capacity(source_manifest.chunks.len().saturating_sub(resume_position));
+    let mut events = Vec::with_capacity(verified_chunks.capacity());
     for (position, chunk) in source_manifest.chunks.iter().enumerate().skip(resume_position) {
         let manifest_chunk_size = usize::try_from(source_manifest.chunk_size).map_err(|_| {
             crate::error::MoltenError::invalid_harness("content manifest chunk size does not fit usize")

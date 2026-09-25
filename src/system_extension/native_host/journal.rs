@@ -142,14 +142,15 @@ impl NativeHostJournal for DurableNativeHostJournal {
     }
 
     fn history(&self, instance_id: &str) -> Result<Vec<NativeInstanceRecord>, NativeJournalError> {
-        let mut history = Vec::new();
-        for record in &self.adapter.state().durable_log {
-            let decoded = decode_native_instance_record(&record.value).map_err(journal_invalid)?;
-            if decoded.instance_id == instance_id {
-                history.push(decoded);
-            }
-        }
-        Ok(history)
+        self.adapter
+            .state()
+            .durable_log
+            .iter()
+            .filter_map(|record| match decode_native_instance_record(&record.value) {
+                Ok(decoded) if decoded.instance_id != instance_id => None,
+                decoded => Some(decoded.map_err(journal_invalid)),
+            })
+            .collect()
     }
 }
 

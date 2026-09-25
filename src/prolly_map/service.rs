@@ -34,11 +34,13 @@ pub fn load_prolly_snapshot(
     let mut pending = vec![root.top_node_ref.clone()];
     let mut seen = BTreeSet::new();
     let mut blocks = Vec::new();
+    let max_blocks = usize::try_from(profile.limits.max_graph_facts)
+        .map_err(|_| ProllyServiceError::Domain(vec![ProllyIssue::GraphLimitExceeded]))?;
     while let Some(node_ref) = pending.pop() {
         if !seen.insert(node_ref.as_str().to_string()) {
             continue;
         }
-        if exceeds_graph_bound(seen.len(), profile.limits.max_graph_facts) {
+        if blocks.len() >= max_blocks {
             return Err(ProllyServiceError::Domain(vec![ProllyIssue::GraphLimitExceeded]));
         }
         let bytes = port.read_block(&node_ref).map_err(ProllyServiceError::Port)?.ok_or_else(|| {
@@ -168,12 +170,5 @@ const fn observation_status(observation: ProllyPublicationObservation) -> Prolly
         ProllyPublicationObservation::AlreadyApplied => ProllyPublicationStatus::AlreadyApplied,
         ProllyPublicationObservation::Stale => ProllyPublicationStatus::Stale,
         ProllyPublicationObservation::Unknown => ProllyPublicationStatus::Unknown,
-    }
-}
-
-fn exceeds_graph_bound(length: usize, maximum: u32) -> bool {
-    match u32::try_from(length) {
-        Ok(length) => length > maximum,
-        Err(_) => true,
     }
 }

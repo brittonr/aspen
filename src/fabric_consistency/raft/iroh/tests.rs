@@ -239,9 +239,9 @@ async fn canonical_raft_envelope_crosses_admitted_iroh_listener() {
     let timeout = std::time::Duration::from_secs(crate::fabric_transport::cross_process::tests::TEST_TIMEOUT_SECONDS);
     let mut transport = IrohReplicaTransportPort::new(super::tests::test_ref("Raft-Iroh-protocol"), peers, timeout)
         .expect("Raft Iroh transport");
-    let mut request_refs = Vec::new();
-
-    for envelope in [first_envelope, second_envelope] {
+    let envelopes = [first_envelope, second_envelope];
+    let mut request_refs = Vec::with_capacity(envelopes.len());
+    for envelope in envelopes {
         let refs = replica_transport_refs(&envelope).expect("transport refs");
         let send = transport.send(&envelope);
         let receive = receive_replica_event(&mut listener, &session_ref, timeout);

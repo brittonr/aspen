@@ -200,6 +200,7 @@ pub fn verify_native_artifact_index(
     }
     let mut members = std::collections::BTreeSet::new();
     let mut refs = std::collections::BTreeSet::new();
+    issues.reserve(index.members.len());
     for member in &index.members {
         if !members.insert((member.role, member.artifact_ref.clone())) {
             issues.push(NativeArtifactIndexIssue::DuplicateMember(member.artifact_ref.clone()));
@@ -209,26 +210,28 @@ pub fn verify_native_artifact_index(
         validate_ref("parent-ref", &member.parent_ref, &mut issues);
     }
     validate_ref("manifest-ref", &index.manifest_ref, &mut issues);
-    for role in [NativeArtifactRole::Executable, NativeArtifactRole::InstanceState] {
-        if !index.members.iter().any(|member| member.role == role) {
-            issues.push(NativeArtifactIndexIssue::MissingRole(role));
-        }
-    }
-    for member in &index.members {
-        let is_parent_is_root = member.parent_ref == index.manifest_ref;
-        let is_parent_is_indexed = refs.contains(&member.parent_ref);
-        if !is_parent_is_root && !is_parent_is_indexed {
-            issues.push(NativeArtifactIndexIssue::ParentNotIndexed {
+    issues.extend(
+        [NativeArtifactRole::Executable, NativeArtifactRole::InstanceState]
+            .into_iter()
+            .filter(|role| !index.members.iter().any(|member| member.role == *role))
+            .map(NativeArtifactIndexIssue::MissingRole),
+    );
+    issues.extend(
+        index
+            .members
+            .iter()
+            .filter(|member| member.parent_ref != index.manifest_ref && !refs.contains(&member.parent_ref))
+            .map(|member| NativeArtifactIndexIssue::ParentNotIndexed {
                 artifact_ref: member.artifact_ref.clone(),
                 parent_ref: member.parent_ref.clone(),
-            });
-        }
-    }
-    for required in REQUIRED_NATIVE_HOST_NON_CLAIMS {
-        if !index.non_claims.contains(&required) {
-            issues.push(NativeArtifactIndexIssue::MissingNonClaim(required));
-        }
-    }
+            }),
+    );
+    issues.extend(
+        REQUIRED_NATIVE_HOST_NON_CLAIMS
+            .into_iter()
+            .filter(|required| !index.non_claims.contains(required))
+            .map(NativeArtifactIndexIssue::MissingNonClaim),
+    );
     let expected_value = artifact_index_value(&index.manifest_ref, &index.members, &index.non_claims);
     if crate::preserves_rail::canonical_hash(&expected_value).ok().as_deref() != Some(&index.index_ref)
         || expected_value != index.value

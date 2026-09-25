@@ -47,8 +47,7 @@ pub fn build_benchmark_run(
 }
 
 pub fn validate_benchmark_run(run: &super::model::BenchmarkRun) -> super::model::PerformanceResult<()> {
-    let mut blockers = Vec::new();
-    for (label, value) in [
+    let mut blockers = [
         ("suite", run.suite_ref.as_str()),
         ("benchmark", run.benchmark_ref.as_str()),
         ("source component", run.source_component_ref.as_str()),
@@ -61,11 +60,11 @@ pub fn validate_benchmark_run(run: &super::model::BenchmarkRun) -> super::model:
         ("runtime configuration", run.runtime_configuration_ref.as_str()),
         ("host class", run.host_class_ref.as_str()),
         ("resource envelope", run.resource_envelope_ref.as_str()),
-    ] {
-        if !super::model::valid_content_ref(value) {
-            blockers.push(format!("benchmark run {label} ref is malformed"));
-        }
-    }
+    ]
+    .into_iter()
+    .filter(|(_, value)| !super::model::valid_content_ref(value))
+    .map(|(label, _)| format!("benchmark run {label} ref is malformed"))
+    .collect::<Vec<_>>();
     if run.target.trim().is_empty() || run.measurement.trim().is_empty() {
         blockers.push("benchmark run target or measurement is empty".to_string());
     }
@@ -249,6 +248,9 @@ fn normalize_phase_groups(
     let mut blockers = Vec::new();
     validate_normalized_phases(&phases, &mut blockers);
     let expected_samples = suite.sampling.expected_samples_per_phase()?;
+    // Each phase adds at most a sample-count and a sample-value blocker.
+    const BLOCKERS_PER_PHASE: usize = 2;
+    blockers.reserve(phases.len().saturating_mul(BLOCKERS_PER_PHASE));
     for phase in &phases {
         let sample_count = u32::try_from(phase.samples.len()).map_err(|error| {
             super::model::PerformanceDenial::new(format!("benchmark phase sample count is unsupported: {error}"))
@@ -267,11 +269,12 @@ fn normalize_phase_groups(
             blockers.push(format!("benchmark {} phase contains a zero or over-bound sample", phase.phase.as_str()));
         }
     }
-    for required in super::model::PerformancePhase::ALL {
-        if !phases.iter().any(|phase| phase.phase == required) {
-            blockers.push(format!("benchmark run omits the {} phase", required.as_str()));
-        }
-    }
+    blockers.extend(
+        super::model::PerformancePhase::ALL
+            .into_iter()
+            .filter(|required| !phases.iter().any(|phase| phase.phase == *required))
+            .map(|required| format!("benchmark run omits the {} phase", required.as_str())),
+    );
     if blockers.is_empty() {
         Ok(phases)
     } else {
@@ -310,8 +313,7 @@ fn compatibility_blockers(
     baseline: &super::model::BenchmarkRun,
     candidate: &super::model::BenchmarkRun,
 ) -> Vec<String> {
-    let mut blockers = Vec::new();
-    for (label, left, right) in [
+    let mut blockers = [
         ("suite", baseline.suite_ref.as_str(), candidate.suite_ref.as_str()),
         ("benchmark", baseline.benchmark_ref.as_str(), candidate.benchmark_ref.as_str()),
         ("source component", baseline.source_component_ref.as_str(), candidate.source_component_ref.as_str()),
@@ -341,11 +343,11 @@ fn compatibility_blockers(
             baseline.resource_envelope_ref.as_str(),
             candidate.resource_envelope_ref.as_str(),
         ),
-    ] {
-        if left != right {
-            blockers.push(format!("benchmark runs have incompatible {label}"));
-        }
-    }
+    ]
+    .into_iter()
+    .filter(|(_, left, right)| left != right)
+    .map(|(label, ..)| format!("benchmark runs have incompatible {label}"))
+    .collect::<Vec<_>>();
     if baseline.consumer != candidate.consumer {
         blockers.push("benchmark runs have incompatible component consumers".to_string());
     }

@@ -59,9 +59,11 @@ pub fn execute_simulated_stream(
             return terminal_execution(profile, manifest, command, state);
         }
     }
-    let mut events = Vec::new();
-    let mut verified_chunks = Vec::new();
     let resume_position = state.verified_chunk_refs.len();
+    // Every remaining chunk adds at most one event and one verified chunk before the loop ends.
+    let remaining_chunks = manifest.chunks.len().saturating_sub(resume_position);
+    let mut events = Vec::with_capacity(remaining_chunks);
+    let mut verified_chunks = Vec::with_capacity(remaining_chunks);
     for descriptor in manifest.chunks.iter().skip(resume_position) {
         if fault == Some(SimulationFault::CancelAt(descriptor.position)) {
             state = cancel_content_operation(profile, &state).map_err(transition_error)?;

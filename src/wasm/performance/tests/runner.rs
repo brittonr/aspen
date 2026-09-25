@@ -11,24 +11,26 @@ fn raw_measurements(architecture: &str) -> Vec<u8> {
 }
 
 fn raw_measurements_with_sampling(architecture: &str, processes: u32, iterations: u32) -> Vec<u8> {
-    let mut values = Vec::new();
-    for phase in ["Compilation", "Instantiation", "Execution"] {
-        for process in 0..processes {
-            for iteration in 0..iterations {
-                values.push(serde_json::json!({
-                    "arch": architecture,
-                    "engine": "/diagnostic/path/libengine.so",
-                    "engine_flags": null,
-                    "wasm": "/diagnostic/path/benchmark.wasm",
-                    "process": process,
-                    "iteration": iteration,
-                    "phase": phase,
-                    "event": super::support::FIXTURE_EVENT,
-                    "count": RAW_SAMPLE_BASE_COUNT + u64::from(iteration),
-                }));
-            }
-        }
-    }
+    let values = ["Compilation", "Instantiation", "Execution"]
+        .into_iter()
+        .flat_map(|phase| {
+            (0..processes).flat_map(move |process| {
+                (0..iterations).map(move |iteration| {
+                    serde_json::json!({
+                        "arch": architecture,
+                        "engine": "/diagnostic/path/libengine.so",
+                        "engine_flags": null,
+                        "wasm": "/diagnostic/path/benchmark.wasm",
+                        "process": process,
+                        "iteration": iteration,
+                        "phase": phase,
+                        "event": super::support::FIXTURE_EVENT,
+                        "count": RAW_SAMPLE_BASE_COUNT + u64::from(iteration),
+                    })
+                })
+            })
+        })
+        .collect::<Vec<_>>();
     serde_json::to_vec(&values).expect("Sightglass JSON fixture")
 }
 

@@ -162,3 +162,17 @@ fn malformed_run_decision_and_missing_adapter_fail_closed() {
 }
 
 include!("tests/causal.rs");
+
+// r[verify molten.fabric_simulation.scheduler]
+#[test]
+fn reference_world_records_exactly_max_choices_and_denies_one_past() {
+    let mut manifest = reference_world_manifest().expect("reference manifest");
+    manifest.bounds.max_choices = u64::try_from(EXPECTED_CHOICE_RECORDS).expect("choice count fits u64");
+    let run = run_reference_world(&manifest, DEFAULT_REFERENCE_SEED).expect("exact max-choices bound admits the run");
+    assert_eq!(run.run.summary.choice_records.len(), EXPECTED_CHOICE_RECORDS);
+
+    manifest.bounds.max_choices -= 1;
+    let error = run_reference_world(&manifest, DEFAULT_REFERENCE_SEED)
+        .expect_err("one choice past the max-choices bound denies the run");
+    assert!(error.to_string().contains("ChoiceBoundExceeded"), "unexpected max-choices denial: {error}");
+}

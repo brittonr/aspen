@@ -798,6 +798,7 @@ fn validate_fixture_ports(
         let descriptors = fabric_time_port_descriptors(profile);
         crate::fabric::build_fabric_port_registry(&descriptors)
             .map_err(|issues| core_error("validate fixture time ports", issues))?;
+        refs.reserve(descriptors.len());
         for descriptor in &descriptors {
             let (descriptor_ref, _) = crate::fabric::canonical_fabric_port_descriptor(descriptor)?;
             refs.push(descriptor_ref);

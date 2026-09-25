@@ -277,7 +277,7 @@ impl ExtensionDurabilityContext {
         host: &crate::system_extension::SystemExtensionHost<E>,
         profile: &CanonicalDurableProfile,
     ) -> crate::error::Result<Self> {
-        let mut bound_ports = Vec::new();
+        let mut bound_ports = Vec::with_capacity(DURABILITY_PORT_COUNT);
         for port_id in durability_port_ids() {
             let key = crate::fabric::FabricPortKey {
                 port_id: port_id.to_string(),

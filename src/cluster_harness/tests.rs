@@ -110,3 +110,29 @@ fn failure_bundle_is_canonical_diagnostic_evidence_not_pass_evidence() {
     crate::preserves_rail::validate_content_ref(&bundle_ref).expect("valid bundle ref");
     assert!(crate::harness::repro_bundle_report_value(&bundle).is_err());
 }
+
+#[test]
+fn run_index_entry_count_is_bounded() {
+    let index_with = |count: usize| {
+        let mut index = format!("{}\n", super::runner::RUN_INDEX_HEADER);
+        for position in 0..count {
+            index.push_str(&format!("artifact-{position}.preserves\tkind\t{}\tpreserves\n", test_ref("index")));
+        }
+        index
+    };
+
+    let at_limit =
+        super::runner::parse_run_index(&index_with(super::runner::MAX_RUN_INDEX_ENTRIES)).expect("at-limit index");
+    assert_eq!(at_limit.len(), super::runner::MAX_RUN_INDEX_ENTRIES);
+    let last_path = format!("artifact-{}.preserves", super::runner::MAX_RUN_INDEX_ENTRIES - 1);
+    assert_eq!(at_limit.last().map(|entry| entry.relative_path.as_str()), Some(last_path.as_str()));
+
+    let past_limit = super::runner::parse_run_index(&index_with(super::runner::MAX_RUN_INDEX_ENTRIES + 1))
+        .expect_err("one-past-limit index denied");
+    let expected = format!(
+        "cluster run index entry count {} exceeds maximum {}",
+        super::runner::MAX_RUN_INDEX_ENTRIES + 1,
+        super::runner::MAX_RUN_INDEX_ENTRIES
+    );
+    assert!(past_limit.to_string().contains(&expected));
+}

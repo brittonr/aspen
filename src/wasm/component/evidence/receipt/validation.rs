@@ -4,8 +4,7 @@ const MAX_COMPONENT_RECEIPT_DIAGNOSTICS: usize = 64;
 pub(super) fn validate_input_bounds(
     input: &super::ComponentReceiptInput,
 ) -> super::super::super::model::ComponentResult<()> {
-    let mut blockers = Vec::new();
-    for (label, count) in [
+    let mut blockers = [
         ("imports", input.imports.len()),
         ("capabilities", input.capabilities.len()),
         ("Mantle evidence", input.mantle_evidence_refs.len()),
@@ -16,11 +15,11 @@ pub(super) fn validate_input_bounds(
         ("resource", input.resource_refs.len()),
         ("recorded effect", input.recorded_effect_refs.len()),
         ("parent", input.parent_refs.len()),
-    ] {
-        if count > MAX_COMPONENT_RECEIPT_REFS {
-            blockers.push(format!("component receipt {label} refs exceed the canonical bound"));
-        }
-    }
+    ]
+    .into_iter()
+    .filter(|(_, count)| *count > MAX_COMPONENT_RECEIPT_REFS)
+    .map(|(label, _)| format!("component receipt {label} refs exceed the canonical bound"))
+    .collect::<Vec<_>>();
     if input.diagnostics.len() > MAX_COMPONENT_RECEIPT_DIAGNOSTICS {
         blockers.push("component receipt diagnostics exceed the canonical bound".to_string());
     }
@@ -34,17 +33,16 @@ pub(super) fn validate_input_bounds(
 pub(super) fn validate_receipt_shape(
     receipt: &super::ComponentReceipt,
 ) -> super::super::super::model::ComponentResult<()> {
-    let mut blockers = Vec::new();
-    for (label, value) in [
+    let mut blockers = [
         ("component", receipt.input.component_ref.as_str()),
         ("WIT", receipt.input.wit_ref.as_str()),
         ("profile", receipt.input.profile_ref.as_str()),
         ("runtime configuration", receipt.input.runtime_configuration_ref.as_str()),
-    ] {
-        if !super::super::super::model::valid_content_ref(value) {
-            blockers.push(format!("component receipt {label} ref is malformed"));
-        }
-    }
+    ]
+    .into_iter()
+    .filter(|(_, value)| !super::super::super::model::valid_content_ref(value))
+    .map(|(label, _)| format!("component receipt {label} ref is malformed"))
+    .collect::<Vec<_>>();
     if receipt.input.evidence_scope == super::super::super::model::EvidenceScope::Production
         && receipt.input.decision == super::ComponentReceiptDecision::Pass
         && receipt
@@ -55,22 +53,24 @@ pub(super) fn validate_receipt_shape(
     {
         blockers.push("production component receipt is missing its Mantle bundle ref".to_string());
     }
-    for (label, refs) in [
-        ("Mantle evidence", &receipt.input.mantle_evidence_refs),
-        ("Valence evidence", &receipt.input.valence_evidence_refs),
-        ("Cairn evidence", &receipt.input.cairn_evidence_refs),
-        ("policy", &receipt.input.policy_refs),
-        ("authority", &receipt.input.authority_refs),
-        ("resource", &receipt.input.resource_refs),
-        ("recorded effect", &receipt.input.recorded_effect_refs),
-        ("parent", &receipt.input.parent_refs),
-    ] {
-        if refs.iter().any(|value| !super::super::super::model::valid_content_ref(value))
-            || super::super::super::model::sorted_unique(refs) != *refs
-        {
-            blockers.push(format!("component receipt {label} refs are malformed, duplicate, or unsorted"));
-        }
-    }
+    blockers.extend(
+        [
+            ("Mantle evidence", &receipt.input.mantle_evidence_refs),
+            ("Valence evidence", &receipt.input.valence_evidence_refs),
+            ("Cairn evidence", &receipt.input.cairn_evidence_refs),
+            ("policy", &receipt.input.policy_refs),
+            ("authority", &receipt.input.authority_refs),
+            ("resource", &receipt.input.resource_refs),
+            ("recorded effect", &receipt.input.recorded_effect_refs),
+            ("parent", &receipt.input.parent_refs),
+        ]
+        .into_iter()
+        .filter(|(_, refs)| {
+            refs.iter().any(|value| !super::super::super::model::valid_content_ref(value))
+                || super::super::super::model::sorted_unique(refs) != **refs
+        })
+        .map(|(label, _)| format!("component receipt {label} refs are malformed, duplicate, or unsorted")),
+    );
     if receipt.input.evidence_scope == super::super::super::model::EvidenceScope::Production
         && receipt.input.decision == super::ComponentReceiptDecision::Pass
         && (receipt.input.mantle_evidence_refs.is_empty()

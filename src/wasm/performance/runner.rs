@@ -110,6 +110,7 @@ pub fn run_sightglass_process(
                 "Sightglass suite diagnostic stderr exceeded its admitted bound",
             ));
         }
+        diagnostic_stderr_bytes.reserve(output.stderr.len());
         diagnostic_stderr_bytes.extend(output.stderr);
         let mut process_measurements: Vec<serde_json::Value> =
             serde_json::from_slice(&output.stdout).map_err(|error| {
@@ -121,6 +122,7 @@ pub fn run_sightglass_process(
             })?;
             *process = serde_json::Value::from(process_ordinal);
         }
+        raw_measurements.reserve(process_measurements.len());
         raw_measurements.extend(process_measurements);
     }
     let stdout = serde_json::to_vec(&raw_measurements).map_err(|error| {
@@ -267,7 +269,9 @@ pub fn parse_sightglass_measurements(
             })
         })
         .collect::<super::model::PerformanceResult<std::collections::BTreeMap<_, _>>>()?;
-    let mut phases = Vec::<super::model::PhaseSamples>::new();
+    // Selected groups share the suite event and an admitted phase, so each suite phase yields at most
+    // one group.
+    let mut phases = Vec::<super::model::PhaseSamples>::with_capacity(suite.phases.len());
     let mut diagnostic_identity = None;
     for measurement in measurements {
         if measurement.arch != expected_architecture {

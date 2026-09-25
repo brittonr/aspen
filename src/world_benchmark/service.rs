@@ -44,6 +44,7 @@ pub fn run_world_benchmark(
     }
     let mut results = Vec::new();
     for repetition in 0..plan.repetitions {
+        results.reserve(plan.operations.len());
         for operation in &plan.operations {
             let observation = ports.operations.observe(&plan, &dataset, *operation, repetition)?;
             let resources = ports.resources.observe_resources(*operation, repetition)?;

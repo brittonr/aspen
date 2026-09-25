@@ -435,15 +435,14 @@ fn validate_node_evidence(
     diagnostics: &mut Vec<String>,
 ) -> Result<()> {
     let topology_nodes = topology.nodes.iter().map(String::as_str).collect::<OrderedSet<_>>();
-    let mut evidence_nodes = OrderedMap::new();
+    let evidence_node_count = nodes.iter().map(|node| node.node.as_str()).collect::<OrderedSet<_>>().len();
     for node in nodes {
         push_if(diagnostics, !topology_nodes.contains(node.node.as_str()), "node-evidence-outside-topology")?;
         push_if(diagnostics, node.state_root.trim().is_empty(), "node-evidence-missing-state-root")?;
         push_if(diagnostics, node.log_refs.is_empty(), "node-evidence-missing-diagnostic-log-refs")?;
         push_if(diagnostics, node.startup_ref == node.health_ref, "node-evidence-reuses-startup-health-ref")?;
-        evidence_nodes.insert(node.node.as_str(), node);
     }
-    push_if(diagnostics, evidence_nodes.len() != topology.nodes.len(), "node-evidence-count-mismatch")?;
+    push_if(diagnostics, evidence_node_count != topology.nodes.len(), "node-evidence-count-mismatch")?;
     let node_ref_set = node_refs.iter().map(String::as_str).collect::<OrderedSet<_>>();
     for node_ref in &test_run.node_evidence_refs {
         push_if(diagnostics, !node_ref_set.contains(node_ref.as_str()), "test-run-node-ref-not-provided")?;
@@ -1048,7 +1047,7 @@ fn manifest_closure_diagnostics(
     validate_required_artifacts(required_artifacts)?;
     let mut diagnostics = Vec::new();
     let mut semantic_artifacts = OrderedSet::new();
-    let mut entries_by_ref = OrderedMap::new();
+    let entries_by_ref = entries.iter().map(|entry| (entry.content_ref.as_str(), entry)).collect::<OrderedMap<_, _>>();
     for entry in entries {
         if !semantic_artifacts.insert((entry.kind.as_str(), entry.content_ref.as_str())) {
             push_diagnostic(
@@ -1056,7 +1055,6 @@ fn manifest_closure_diagnostics(
                 format!("duplicate-semantic-artifact:{}:{}", entry.kind, entry.content_ref),
             )?;
         }
-        entries_by_ref.insert(entry.content_ref.as_str(), entry);
     }
     for required in required_artifacts {
         let Some(entry) = entries_by_ref.get(required.content_ref.as_str()) else {

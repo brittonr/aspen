@@ -467,6 +467,40 @@ fn competing_plans_are_stored_as_a_stable_conflict_set() {
     assert_eq!(repeated.0.conflict_ref, conflict.conflict_ref);
 }
 
+#[test]
+fn conflict_reads_accept_the_record_limit_and_deny_one_past() {
+    let temporary = cap_tempfile::tempdir(cap_std::ambient_authority()).expect("temporary state root");
+    let root = NodeStateRoot::from_dir(temporary.try_clone().expect("clone temporary root"));
+    root.create_layout().expect("node state layout");
+    let storage = root.namespace(NodeStateNamespaceKind::Storage).expect("storage namespace");
+    let mut store = LocalWorldHeadStore::open(&storage).expect("world-head store");
+    let plans = [
+        admitted_plan("left", "left-claim"),
+        admitted_plan("right", "right-claim"),
+    ];
+    let (conflict, canonical) = record_world_head_conflict(&mut store, &plans, MAX_WORLD_HEAD_CONFLICTS)
+        .expect("record conflict")
+        .expect("conflict");
+    let record_fabricated = |store: &mut LocalWorldHeadStore, index: usize| {
+        let mut fabricated = canonical.clone();
+        fabricated.conflict_ref = reference(&format!("fabricated-conflict-{index}"));
+        fabricated.bytes = fabricated.conflict_ref.clone().into_bytes();
+        store.record_conflict(&conflict, &fabricated).expect("record fabricated conflict");
+    };
+    for index in 1..MAX_WORLD_HEAD_CONFLICT_RECORDS {
+        record_fabricated(&mut store, index);
+    }
+    let at_limit = store.read_conflicts(&branch()).expect("conflicts at the record limit");
+    assert_eq!(at_limit.len(), MAX_WORLD_HEAD_CONFLICT_RECORDS);
+
+    record_fabricated(&mut store, MAX_WORLD_HEAD_CONFLICT_RECORDS);
+    assert_eq!(
+        store.read_conflicts(&branch()),
+        Err(WorldHeadPortError::new("conflict-record-limit", "branch conflict records exceed the read bound")),
+        "one-past reads deny without returning a partial conflict list"
+    );
+}
+
 fn admitted_plan(successor: &str, claim_label: &str) -> WorldHeadTransitionPlan {
     let claim = advance_claim(successor);
     let request = WorldHeadPlanRequest {

@@ -119,18 +119,19 @@ pub fn validate_optimization_conformance(
     if record.component_profile_ref != expected_component_profile_ref {
         blockers.push("optimization conformance targets a stale component runtime profile".to_string());
     }
-    for (label, value) in [
-        ("component profile", record.component_profile_ref.as_str()),
-        ("input", record.input_ref.as_str()),
-        ("baseline output", record.baseline_output_ref.as_str()),
-        ("optimized output", record.optimized_output_ref.as_str()),
-        ("baseline execution receipt", record.baseline_execution_receipt_ref.as_str()),
-        ("optimized execution receipt", record.optimized_execution_receipt_ref.as_str()),
-    ] {
-        if !super::model::valid_content_ref(value) {
-            blockers.push(format!("optimization conformance {label} ref is malformed"));
-        }
-    }
+    blockers.extend(
+        [
+            ("component profile", record.component_profile_ref.as_str()),
+            ("input", record.input_ref.as_str()),
+            ("baseline output", record.baseline_output_ref.as_str()),
+            ("optimized output", record.optimized_output_ref.as_str()),
+            ("baseline execution receipt", record.baseline_execution_receipt_ref.as_str()),
+            ("optimized execution receipt", record.optimized_execution_receipt_ref.as_str()),
+        ]
+        .into_iter()
+        .filter(|(_, value)| !super::model::valid_content_ref(value))
+        .map(|(label, _)| format!("optimization conformance {label} ref is malformed")),
+    );
     if !super::model::valid_ref_collection(&record.recorded_effect_refs) {
         blockers.push("optimization conformance recorded-effect refs are missing, duplicate, or malformed".to_string());
     }

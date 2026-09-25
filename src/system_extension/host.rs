@@ -874,15 +874,20 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
 fn collect_artifacts(
     evidence: &[HostEvidence],
 ) -> (Vec<super::CanonicalLifecycleReceipt>, Vec<super::CanonicalCallbackReceipt>) {
-    let mut lifecycle = Vec::new();
-    let mut callbacks = Vec::new();
-    for item in evidence {
-        match item {
-            HostEvidence::Lifecycle(receipt) => lifecycle.push(receipt.clone()),
-            HostEvidence::Callback(receipt) => callbacks.push(receipt.clone()),
-            HostEvidence::EffectCompletion(_) | HostEvidence::Migration(_) | HostEvidence::Readiness(_) => {}
-        }
-    }
+    let lifecycle = evidence
+        .iter()
+        .filter_map(|item| match item {
+            HostEvidence::Lifecycle(receipt) => Some(receipt.clone()),
+            _ => None,
+        })
+        .collect();
+    let callbacks = evidence
+        .iter()
+        .filter_map(|item| match item {
+            HostEvidence::Callback(receipt) => Some(receipt.clone()),
+            _ => None,
+        })
+        .collect();
     (lifecycle, callbacks)
 }
 

@@ -22,6 +22,8 @@ const CLUSTER_LIFECYCLE_NONE: &str = "none";
 const CLUSTER_LIFECYCLE_STOP_SEPARATOR: &str = ">";
 const MAX_CLUSTER_LIFECYCLE_ITEMS: usize = 512;
 const _: () = assert!(MAX_CLUSTER_LIFECYCLE_ITEMS > 0);
+// Lifecycle receipts encode at most this many node summaries; larger manifests cannot run.
+const MAX_CLUSTER_MANIFEST_NODES: usize = MAX_CLUSTER_LIFECYCLE_ITEMS;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClusterNodePlan {
@@ -82,7 +84,12 @@ pub fn parse_cluster_manifest(source: &str) -> crate::error::Result<Vec<String>>
     let mut nodes = Vec::new();
     for line in lines {
         if !line.is_empty() {
-            nodes.push(line.to_string());
+            crate::bounded::push_bounded(
+                &mut nodes,
+                line.to_string(),
+                MAX_CLUSTER_MANIFEST_NODES,
+                "cluster manifest node",
+            )?;
         }
     }
     if nodes.is_empty() {
@@ -959,5 +966,29 @@ mod tests {
 
         let no_nodes = parse_cluster_manifest("molten.cluster.nodes.v1\n").expect_err("empty nodes denied");
         assert!(no_nodes.to_string().contains("no nodes"));
+    }
+
+    #[test]
+    fn bounds_manifest_node_count() {
+        let manifest_with = |count: usize| {
+            let mut manifest = format!("{CLUSTER_MANIFEST_HEADER}\n");
+            for index in 0..count {
+                manifest.push_str(&format!("node:node-{index}\n"));
+            }
+            manifest
+        };
+
+        let at_limit = parse_cluster_manifest(&manifest_with(MAX_CLUSTER_MANIFEST_NODES)).expect("at-limit manifest");
+        assert_eq!(at_limit.len(), MAX_CLUSTER_MANIFEST_NODES);
+        let last_node = format!("node:node-{}", MAX_CLUSTER_MANIFEST_NODES - 1);
+        assert_eq!(at_limit.last(), Some(&last_node));
+
+        let past_limit = parse_cluster_manifest(&manifest_with(MAX_CLUSTER_MANIFEST_NODES + 1))
+            .expect_err("one-past-limit manifest denied");
+        let expected = format!(
+            "cluster manifest node count {} exceeds maximum {MAX_CLUSTER_MANIFEST_NODES}",
+            MAX_CLUSTER_MANIFEST_NODES + 1
+        );
+        assert!(past_limit.to_string().contains(&expected));
     }
 }

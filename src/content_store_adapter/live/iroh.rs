@@ -172,8 +172,10 @@ pub async fn execute_live_iroh_stream_get(
         .await
         .map_err(iroh_error)?;
     let resume_position = state.verified_chunk_refs.len();
-    let mut events = Vec::new();
-    let mut verified_chunks = Vec::new();
+    // Every remaining locator adds exactly one event and at most one verified chunk.
+    let remaining_locators = publication.locators.len().saturating_sub(resume_position);
+    let mut events = Vec::with_capacity(remaining_locators);
+    let mut verified_chunks = Vec::with_capacity(remaining_locators);
     for locator in publication.locators.iter().skip(resume_position) {
         let Some(descriptor) = publication.manifest.chunks.get(locator.position) else {
             state =

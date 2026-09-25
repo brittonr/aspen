@@ -37,8 +37,9 @@ pub fn simulate_actor_sequence(
         scripted: scripted_effects.iter().copied().collect(),
     };
     let mut statuses = SimulationStatusPort::default();
-    let mut receipt_refs = Vec::new();
-    let mut effect_observations = Vec::new();
+    let mut receipt_refs = Vec::with_capacity(steps.len());
+    // Each step consumes scripted outcomes plus at most one unscripted denial or failure.
+    let mut effect_observations = Vec::with_capacity(steps.len().saturating_add(scripted_effects.len()));
 
     for step in steps {
         let current = commit.state.as_ref().map_or_else(

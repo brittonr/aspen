@@ -63,6 +63,25 @@ fn local_catalog_binds_canonical_commit_and_root_bytes() {
 }
 
 // r[verify molten.world_distribution.closure]
+#[test]
+fn local_catalog_admits_the_closure_object_bound_and_denies_one_past() {
+    let (store, commit) = fixture_store();
+    let object_count = SnapshotProfileKind::Logical.required_roots().len() + 1;
+    let exact = WorldCommitBounds {
+        max_closure_objects: object_count,
+        ..world_bounds()
+    };
+    let projection = load_world_dag_projection(&store, &commit.commit_ref, &exact).expect("exact closure bound");
+    assert_eq!(projection.objects.len(), object_count);
+
+    let one_short = WorldCommitBounds {
+        max_closure_objects: object_count - 1,
+        ..world_bounds()
+    };
+    assert!(load_world_dag_projection(&store, &commit.commit_ref, &one_short).is_err());
+}
+
+// r[verify molten.world_distribution.closure]
 // r[verify molten.world_distribution.partial]
 #[test]
 fn content_replication_bridge_completes_sync_and_publishes_domain_receipt_last() {

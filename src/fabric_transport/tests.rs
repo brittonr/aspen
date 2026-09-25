@@ -248,7 +248,7 @@ fn shared_adapter_conformance_covers_flow_control_datagrams_cancellation_drain_a
                 cleanup_evidence_ref: REQUEST_REF.to_string(),
             },
         ];
-        let mut kinds = Vec::new();
+        let mut kinds = Vec::with_capacity(commands.len());
         let mut state = TransportState::default();
         for command in commands {
             let transition = adapter.execute_command(&command).expect("shared conformance command");

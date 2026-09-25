@@ -710,7 +710,12 @@ impl SourceDirectoryRoot {
                     directories.push(relative);
                 } else if file_type.is_file() {
                     let rendered = logical_path_from_relative_path(&relative)?;
-                    files.push(MaterializationPath::parse(&rendered, policy.max_path_bytes)?);
+                    crate::bounded::push_bounded(
+                        &mut files,
+                        MaterializationPath::parse(&rendered, policy.max_path_bytes)?,
+                        policy.max_members,
+                        "materialization source files",
+                    )?;
                 } else {
                     return Err(invalid("materialization source contains a link or special entry"));
                 }
@@ -1417,14 +1422,15 @@ fn validate_reserved_name(name: &str) -> crate::error::Result<()> {
 }
 
 fn logical_path_from_relative_path(path: &std::path::Path) -> crate::error::Result<String> {
-    let mut components = Vec::new();
-    for component in path.components() {
-        let std::path::Component::Normal(component) = component else {
-            return Err(invalid("materialization source path is not normalized"));
-        };
-        let component = component.to_str().ok_or_else(|| invalid("materialization source path must be UTF-8"))?;
-        components.push(component);
-    }
+    let components = path
+        .components()
+        .map(|component| {
+            let std::path::Component::Normal(component) = component else {
+                return Err(invalid("materialization source path is not normalized"));
+            };
+            component.to_str().ok_or_else(|| invalid("materialization source path must be UTF-8"))
+        })
+        .collect::<crate::error::Result<Vec<_>>>()?;
     if components.is_empty() {
         return Err(invalid("materialization source path cannot be empty"));
     }
@@ -1675,7 +1681,7 @@ fn rollback_created_directories(
     dir: &cap_std::fs::Dir,
     created_directories: &[std::path::PathBuf],
 ) -> crate::error::Result<()> {
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(created_directories.len());
     for directory in created_directories.iter().rev() {
         match dir.remove_dir(directory) {
             Ok(()) => {}
@@ -1691,7 +1697,9 @@ fn rollback_created_directories(
 }
 
 fn rollback_publication(dir: &cap_std::fs::Dir, states: &[PublicationState]) -> crate::error::Result<()> {
-    let mut diagnostics = Vec::new();
+    // Each publication state reports at most one remove and one restore failure.
+    const DIAGNOSTICS_PER_STATE: usize = 2;
+    let mut diagnostics = Vec::with_capacity(states.len().saturating_mul(DIAGNOSTICS_PER_STATE));
     for state in states.iter().rev() {
         if state.published {
             match dir.remove_file(&state.final_path) {
@@ -1954,6 +1962,21 @@ mod tests {
         assert!(source.read_payloads(&policy, &plan).is_err());
         std::fs::remove_file(source_path.join("nested/b.preserves")).expect("remove required source member");
         assert!(source.read_payloads(&policy, &plan).is_err());
+    }
+
+    #[test]
+    fn source_listing_admits_the_member_bound_and_denies_one_past() {
+        let source_path = crate::test_support::process_workspace("materialize_source_bound").expect("source root");
+        for index in 0..SMALL_MAX_MEMBERS {
+            std::fs::write(source_path.join(format!("member-{index}")), b"member").expect("source member");
+        }
+        let policy = policy(ReplacementPolicy::NoReplace);
+        let source = SourceDirectoryRoot::open_existing(&source_path).expect("source capability");
+        let listed = source.list_regular_files_recursive(&policy).expect("member bound admits the listing");
+        assert_eq!(listed.len(), SMALL_MAX_MEMBERS);
+
+        std::fs::write(source_path.join("member-past-bound"), b"member").expect("one-past source member");
+        assert!(source.list_regular_files_recursive(&policy).is_err());
     }
 
     #[cfg(unix)]

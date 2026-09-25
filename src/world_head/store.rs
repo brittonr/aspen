@@ -30,6 +30,9 @@ const WORLD_HEAD_CONFLICTS_TABLE: redb::TableDefinition<&str, &[u8]> =
 const WORLD_HEAD_UNCERTAIN_TABLE: redb::TableDefinition<&str, &[u8]> =
     redb::TableDefinition::new("world_head_uncertain_v1");
 const CONFLICT_KEY_SEPARATOR: &str = ":";
+/// Conflict sets retained for manual review per branch; reads deny rather than materialize an
+/// unbounded list.
+pub(super) const MAX_WORLD_HEAD_CONFLICT_RECORDS: usize = 256;
 
 pub struct LocalWorldHeadStore {
     database: redb::Database,
@@ -154,6 +157,12 @@ impl WorldHeadConflictPort for LocalWorldHeadStore {
         for entry in table.iter().map_err(port_store_error)? {
             let (key, value) = entry.map_err(port_store_error)?;
             if key.value().starts_with(&prefix) {
+                if records.len() >= MAX_WORLD_HEAD_CONFLICT_RECORDS {
+                    return Err(WorldHeadPortError::new(
+                        "conflict-record-limit",
+                        "branch conflict records exceed the read bound",
+                    ));
+                }
                 records.push(value.value().to_vec());
             }
         }

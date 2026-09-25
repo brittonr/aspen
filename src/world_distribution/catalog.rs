@@ -73,11 +73,16 @@ where
             }
         }
         pending.extend(canonical.core.parents.iter().cloned());
-        commits.push(WorldCommitObject {
-            commit_ref,
-            core: canonical.core,
-            canonical_bytes: bytes,
-        });
+        crate::bounded::push_bounded(
+            &mut commits,
+            WorldCommitObject {
+                commit_ref,
+                core: canonical.core,
+                canonical_bytes: bytes,
+            },
+            bounds.max_closure_objects,
+            "world distribution closure commits",
+        )?;
     }
     let input = WorldDagProjectionInput {
         requested: requested.clone(),
