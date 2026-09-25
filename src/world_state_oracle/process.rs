@@ -65,7 +65,6 @@ impl DoltLiteProcessOracle {
         })
     }
 
-    // r[impl molten.world_state_oracle.behavior]
     fn run_case(&self, request: &OracleCaseRequest) -> OraclePortResult<ParsedOracleOutput> {
         validate_request(request, self.source.bounds)?;
         let database = self.workspace.join(format!("{}.db", request.database_id));

@@ -55,3 +55,17 @@ Base: `origin/molten` `4e31cee55167a38978961faac5c46476aca6f5ac`.
 file, line, and justification is recorded in `evidence/marker-justifications.json`, which covers the
 dataspace-access-cache, dev-function-profiling, authority-identity-revocation, project, content-replication, dag-sync,
 nickel-toolchain, and world-commit specs.
+
+## Follow-up: identity-pinned file
+
+A combined probe of all four changes (`gate-blockers-integration`) found that the marker added to
+`src/world_state_oracle/process.rs` changed that file's BLAKE3. The `world-state-oracle-source` flake check pins
+`a4b36a1a46cff61a2c4efb5fa4bbd26778467d65b9cc511197470607ac3e393a`, so that marker is removed again. The requirement
+keeps its `crates/molten-core/src/world_state_oracle/model/observation.rs` impl marker and its
+`tests/doltlite_oracle.rs` verify marker. The file's BLAKE3 matches the pin again. No other file this change touched
+is identity-pinned by a flake check.
+
+With the guard's dangling exit bypassed through an `overrideAttrs` probe, every later step of the
+`inherited-tracey-debt` check passes: the classifier self-tests (4) and `verdict=pass`, the baseline and classification
+metadata diffs, BLAKE3 bindings, and all runtime-spine repair manifests (probe exit 0,
+`target/aspen-gate-blockers/b-tracey-rest-of-check.txt`). The dangling guard is the only remaining failure.

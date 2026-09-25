@@ -514,10 +514,10 @@
         "status": "impl+verify",
         "markers": [
           "crates/molten-core/src/world_state_oracle/model/observation.rs:6 (impl, enum OracleCaseKind)",
-          "src/world_state_oracle/process.rs:68 (impl, DoltLiteProcessOracle::run_case)",
           "tests/doltlite_oracle.rs:11 (verify, live_doltlite_oracle_covers_normalized_positive_and_negative_cases)"
         ],
-        "justification": "OracleCaseKind lists every required behavior case: history-independent, detached read, branch isolation, compare-and-advance, reader-safe GC, exact-format reopen, serialization, stale writer and wrong format. run_case runs them against DoltLite. The live test asserts that forward and reverse mutation histories give equal backend roots, and checks the outcome of every other case. Caveat: compare-and-advance, serialization, stale-writer and wrong-format are explicitly classified Unsupported ('case-requires-reviewed-external-evidence'), not exercised live. The live test is #[ignore]: it needs the Nix-built DoltLite binary."
+        "justification": "OracleCaseKind lists every required behavior case: history-independent, detached read, branch isolation, compare-and-advance, reader-safe GC, exact-format reopen, serialization, stale writer and wrong format. run_case runs them against DoltLite. The live test asserts that forward and reverse mutation histories give equal backend roots, and checks the outcome of every other case. Caveat: compare-and-advance, serialization, stale-writer and wrong-format are explicitly classified Unsupported ('case-requires-reviewed-external-evidence'), not exercised live. The live test is #[ignore]: it needs the Nix-built DoltLite binary.",
+        "note": "The src/world_state_oracle/process.rs marker was removed: that file is identity-pinned by BLAKE3 in the world-state-oracle-source flake check, and the requirement keeps its crates/molten-core observation.rs impl marker and tests/doltlite_oracle.rs verify marker."
       }
     ],
     "files_touched": [
