@@ -2,6 +2,8 @@ use super::*;
 
 const SINGLE_AFFECTED_ITEM: u64 = 1;
 const ADJACENT_PAIR_WIDTH: usize = 2;
+// Published collection counts must represent every possible in-memory length exactly.
+const _: () = assert!(usize::BITS <= u64::BITS);
 
 // r[impl molten.fabric_durability.durable_log]
 pub fn append_log(
@@ -507,24 +509,21 @@ pub fn evaluate_recovery(state: &DurableState, inventory: &RecoveryInventory) ->
         disposition,
         diagnostics,
         durable_log_tail: state.durable_log.last().map(|record| record.sequence),
-        snapshot_count: u64::try_from(state.snapshots.len()).unwrap_or(u64::MAX),
-        unresolved_effect_count: u64::try_from(
-            state
-                .effects
-                .values()
-                .filter(|effect| {
-                    matches!(effect.phase, EffectTransactionPhase::Reserved | EffectTransactionPhase::Uncertain)
-                })
-                .count(),
-        )
-        .unwrap_or(u64::MAX),
+        snapshot_count: state.snapshots.len() as u64,
+        unresolved_effect_count: state
+            .effects
+            .values()
+            .filter(|effect| {
+                matches!(effect.phase, EffectTransactionPhase::Reserved | EffectTransactionPhase::Uncertain)
+            })
+            .count() as u64,
     }
 }
 
 // r[impl molten.fabric_durability.live_sim_parity]
 pub fn simulate_process_crash(state: &DurableState) -> DurableTransition {
     let mut next = state.clone();
-    let affected_items = u64::try_from(next.buffered_log.len()).unwrap_or(u64::MAX);
+    let affected_items = next.buffered_log.len() as u64;
     let affected_bytes = next.buffered_bytes;
     next.buffered_log.clear();
     next.buffered_bytes = 0;

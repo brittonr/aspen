@@ -130,6 +130,7 @@ fn buffered_append_requires_flush_and_simulated_crash_loses_only_buffered_record
     let crashed = simulate_process_crash(&buffered.next);
     assert!(crashed.next.buffered_log.is_empty());
     assert!(crashed.next.durable_log.is_empty());
+    assert_eq!(crashed.affected_items, 1);
     assert!(crashed.reconciliation_required);
 
     let flushed =
@@ -137,6 +138,7 @@ fn buffered_append_requires_flush_and_simulated_crash_loses_only_buffered_record
     let after_crash = simulate_process_crash(&flushed.next);
     assert_eq!(after_crash.next.durable_log.len(), 1);
     assert_eq!(after_crash.next.durable_log[0].sequence, FIRST_SEQUENCE);
+    assert_eq!(after_crash.affected_items, 0);
 }
 
 // r[verify molten.fabric_durability.durable_log]
@@ -175,12 +177,9 @@ fn byte_accounting_overflow_denies_without_a_sentinel_quota() {
     let profile = profile(DurableAdapterKind::DeterministicSimulation);
     let mut inconsistent = state();
     inconsistent.durable_bytes = u64::MAX;
-    let issues = append_log(
-        &profile,
-        &inconsistent,
-        &append_request(FIRST_SEQUENCE, DurabilityLevel::ProcessLoss, VALUE_REF),
-    )
-    .expect_err("namespace byte accounting cannot wrap");
+    let issues =
+        append_log(&profile, &inconsistent, &append_request(FIRST_SEQUENCE, DurabilityLevel::ProcessLoss, VALUE_REF))
+            .expect_err("namespace byte accounting cannot wrap");
     assert!(issues.contains(&DurabilityIssue::CollectionLimitExceeded));
 }
 
@@ -198,10 +197,7 @@ fn scan_pages_reject_oversized_limits_and_preserve_continuations() {
     let page = scan_log(&populated, FIRST_SEQUENCE, 1).expect("first page");
     assert_eq!(page.records[0].sequence, FIRST_SEQUENCE);
     assert_eq!(page.continuation, Some(SECOND_SEQUENCE));
-    assert_eq!(
-        scan_log(&populated, FIRST_SEQUENCE, u64::MAX),
-        Err(DurabilityIssue::CollectionLimitExceeded)
-    );
+    assert_eq!(scan_log(&populated, FIRST_SEQUENCE, u64::MAX), Err(DurabilityIssue::CollectionLimitExceeded));
     assert_eq!(
         scan_ordered(&populated, &OrderedScanRequest {
             start_inclusive: None,
