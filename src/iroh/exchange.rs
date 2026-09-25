@@ -9,5 +9,6 @@ fn write_explicit_bundle_output(out: &std::path::Path, bundle: &preserves::IOVal
 
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/iroh/parts/exchange/p000/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/iroh/parts/exchange/p001/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/iroh/parts/exchange/p004/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/iroh/parts/exchange/p002/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/iroh/parts/exchange/p003/body.rs"));

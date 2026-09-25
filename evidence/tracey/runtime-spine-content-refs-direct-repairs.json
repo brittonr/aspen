@@ -38,7 +38,7 @@
       "implementation_path": "src/ledger/parts/mod/p001/body.rs",
       "requirement_id": "molten.runtime_spine.canonical_content_refs.filename_readback",
       "source_area": "runtime_spine",
-      "verification_path": "src/preserves/parts/rail/p001/body.rs"
+      "verification_path": "src/preserves/parts/rail/tests/m000/p002/body.rs"
     },
     {
       "evidence_scope": "local reads require materialization and recompute canonical identity before returning content",
@@ -49,7 +49,7 @@
     },
     {
       "evidence_scope": "listed artifact, catalog, coordination, protocol, service, transcript, provenance, redaction, secret, and job validators call the shared parser",
-      "implementation_path": "src/artifacts/parts/mod/p004/body.rs",
+      "implementation_path": "src/artifacts/parts/mod/p017/body.rs",
       "requirement_id": "molten.runtime_spine.canonical_content_refs.migration",
       "source_area": "runtime_spine",
       "verification_path": "flake.nix"
@@ -87,14 +87,14 @@
       "implementation_path": "src/octet/parts/gate/p009/body.rs",
       "requirement_id": "molten.runtime_spine.canonical_content_refs.scoped_aliases",
       "source_area": "runtime_spine",
-      "verification_path": "src/preserves/parts/rail/p001/body.rs"
+      "verification_path": "src/preserves/parts/rail/tests/m000/p002/body.rs"
     },
     {
       "evidence_scope": "the shared ContentRef parser accepts only blake3 followed by sixty-four lowercase hexadecimal characters",
       "implementation_path": "src/preserves/parts/rail/p001/body.rs",
       "requirement_id": "molten.runtime_spine.canonical_content_refs.shape",
       "source_area": "runtime_spine",
-      "verification_path": "src/preserves/parts/rail/p001/body.rs"
+      "verification_path": "src/preserves/parts/rail/tests/m000/p002/body.rs"
     }
   ],
   "runtime_spine_after": 396,

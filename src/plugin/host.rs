@@ -5,11 +5,21 @@
 //! executor evidence, and hostcalls are admitted only through declared refs.
 
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p000/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p010/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p011/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p001/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p012/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p002/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p013/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p014/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p003/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p015/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p004/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p016/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p017/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p005/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p018/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p019/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p007/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p008/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/plugin/parts/host/p009/body.rs"));

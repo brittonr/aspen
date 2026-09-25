@@ -9,18 +9,26 @@ metadata:
 files:
   - src/node/parts/daemon/p020/body.rs
   - src/node/parts/daemon/p025/body.rs
+  - src/node/parts/daemon/p051/body.rs
   - src/node/parts/daemon/p027/body.rs
+  - src/node/parts/daemon/p053/body.rs
   - src/node/parts/daemon/p028/body.rs
   - src/node/parts/daemon/p029/body.rs
   - src/node/parts/daemon/p030/body.rs
+  - src/node/parts/daemon/p054/body.rs
   - src/node/parts/daemon/p031/body.rs
   - src/node/parts/daemon/p032/body.rs
   - src/node/parts/daemon/p033/body.rs
   - src/node/parts/daemon/p034/body.rs
+  - src/node/parts/daemon/p055/body.rs
   - src/node/parts/daemon/p035/body.rs
+  - src/node/parts/daemon/p056/body.rs
   - src/node/parts/identity/p001/body.rs
+  - src/node/parts/identity/p004/body.rs
   - src/job/parts/dag/p009/body.rs
+  - src/job/parts/dag/p030/body.rs
   - src/job/parts/dag/p017/body.rs
+  - src/job/parts/dag/p033/body.rs
   - tools/ast-grep/runtime-authority/fixtures/positive/node_state_ambient_authority.rs
   - tools/ast-grep/runtime-authority/fixtures/negative/node_state_carried_authority.rs
 ignores:

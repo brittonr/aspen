@@ -1,4 +1,5 @@
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/p000/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/p010/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/p001/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/p002/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/p003/body.rs"));
@@ -6,5 +7,8 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/p004/b
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/p005/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/p006/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/p007/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/p011/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/p008/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/p009/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/p012/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/protocol/parts/session/p013/body.rs"));

@@ -69,7 +69,7 @@ let metadata | ClassificationMetadata = {
   resolved_links = [
     {
       requirement_id = "molten.choreography.chorus_design_reference",
-      implementation_path = "src/protocol/parts/session/p009/body.rs",
+      implementation_path = "src/protocol/parts/session/p012/body.rs",
       verification_path = "src/protocol/parts/session/tests/m000/p002/body.rs",
     },
     {

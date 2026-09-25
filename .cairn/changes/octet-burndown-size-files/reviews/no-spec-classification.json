@@ -1,0 +1,28 @@
+{
+  "schema_version": "cairn.semantic-review.review-receipt.v1",
+  "review_kind": "plan",
+  "decision": "approved",
+  "reviewed_inputs": [
+    {
+      "path": "proposal.md",
+      "hash": "2679f3e0da3a4b4654d6047a8b73fb6ad9301de6c9efee7c2247e90acf92fcde"
+    },
+    {
+      "path": "design.md",
+      "hash": "305442f34f355e1b517eb5732a692406b87643b10cfadc5c2d41cdb1a45cb6ec"
+    },
+    {
+      "path": "acceptance.md",
+      "hash": "255bfd79bddc8aa1b3a7deb3bda0060c04d87ca7fba213f9341820e2773b4b37"
+    },
+    {
+      "path": "tasks.md",
+      "hash": "05ae6c49b07c8909ae2b4dd0b91f7b9e6cc36f629245511bdf57652626e21ff1"
+    }
+  ],
+  "reviewer": {
+    "source": "manual",
+    "id": "agent:aspen-octet-safety (manual semantic review of plan and diff, anthropic/claude-opus-5-5)"
+  },
+  "findings": []
+}

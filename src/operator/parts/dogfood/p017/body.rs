@@ -179,5 +179,6 @@ fn usize_to_u64(value: usize, field: &str) -> Result<u64> {
 mod tests {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/tests/m000/p000/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/tests/m000/p001/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/tests/m000/p003/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/tests/m000/p002/body.rs"));
 }

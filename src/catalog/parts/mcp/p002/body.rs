@@ -286,5 +286,6 @@ fn sorted_unique(refs: &[String]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/catalog/parts/mcp/tests/m000/p000/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/catalog/parts/mcp/tests/m000/p002/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/catalog/parts/mcp/tests/m000/p001/body.rs"));
 }

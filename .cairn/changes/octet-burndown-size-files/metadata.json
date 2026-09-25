@@ -1,0 +1,9 @@
+{
+  "spec_effect": "none",
+  "spec_effect_rationale": "Over-long source files move verbatim into the existing include! parts layout and tooling references follow the moved code; module paths, items, outputs, and canonical encodings are unchanged, and accepted requirements are unchanged.",
+  "workflow_profile": {
+    "id": "no-spec-delta",
+    "source": "change_create",
+    "version": 1
+  }
+}

@@ -1,0 +1,8 @@
+# Base binary 52140a0bf vs candidate: molten test run / test gate check over examples/*.preserves
+same executor-conformance run=0 gate=0 
+same remote-service-ready run=1 gate=1 
+same request-response-protocol run=1 gate=1 
+same steel-hostcall run=0 gate=0 
+same two-actor run=0 gate=0 
+same wasm-hostcall run=0 gate=0 
+suites_same=6 suites_diff=0

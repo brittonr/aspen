@@ -1,0 +1,270 @@
+use preserves::ValueImpl;
+
+use super::*;
+use crate::fabric_transport::*;
+
+const PROFILE_REF: &str = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const FRAMING_REF: &str = "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const AUTHORITY_REF: &str = "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+const LISTENER_REF: &str = "blake3:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+const PEER_CONTEXT_REF: &str = "blake3:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+const LOCATOR_COHORT_REF: &str = "blake3:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+const VALIDITY_REF: &str = "blake3:1111111111111111111111111111111111111111111111111111111111111111";
+const LISTENER_CAPABILITY_REF: &str = "blake3:2222222222222222222222222222222222222222222222222222222222222222";
+const CLIENT_CAPABILITY_REF: &str = "blake3:3333333333333333333333333333333333333333333333333333333333333333";
+const SESSION_REF: &str = "blake3:4444444444444444444444444444444444444444444444444444444444444444";
+const REQUEST_REF: &str = "blake3:5555555555555555555555555555555555555555555555555555555555555555";
+const WRONG_REF: &str = "blake3:6666666666666666666666666666666666666666666666666666666666666666";
+const FAKE_ENDPOINT_ID: &str = "iroh:abcdefghijklmnopqrstuvwxyz234567";
+const FAKE_IP_LOCATOR: &str = "ip:127.0.0.1:49152";
+const PROFILE_LIMIT: u64 = 8;
+const FRAME_LIMIT: u64 = 4_096;
+const DATAGRAM_LIMIT: u64 = 1_024;
+const QUEUE_LIMIT: u64 = 16_384;
+const INFLIGHT_LIMIT: u64 = 8_192;
+const DEADLINE_WINDOW: u64 = 64;
+const LENGTH_PREFIX_BYTES: u64 = 8;
+const GENERATION: u64 = 1;
+const VALID_FROM_TICK: u64 = 1;
+const VALID_UNTIL_TICK: u64 = 100;
+const OBSERVED_TICK: u64 = 10;
+pub(crate) const TEST_TIMEOUT_SECONDS: u64 = 10;
+const ACCEPT_TIMEOUT_MILLISECONDS: u64 = 25;
+const LISTENER_SECRET_BYTE: u8 = 7;
+const CLIENT_SECRET_BYTE: u8 = 9;
+const PAYLOAD: &[u8] = b"bounded-cross-process-iroh-frame";
+const OUTER_BINDING_INDEX: usize = 2;
+const OUTER_CHECKS_INDEX: usize = 3;
+const OUTER_FIELD_COUNT: usize = 4;
+
+fn profile() -> CanonicalTransportProfile {
+    canonical_transport_profile(&TransportProfile {
+        schema: TRANSPORT_PROFILE_SCHEMA.to_string(),
+        profile_id: "iroh-cross-process-v1".to_string(),
+        profile_ref: PROFILE_REF.to_string(),
+        adapter_kind: TransportAdapterKind::IrohLive,
+        capabilities: vec![
+            TransportCapability::BidirectionalStreams,
+            TransportCapability::UnidirectionalStreams,
+        ],
+        limits: TransportLimits {
+            max_listeners: PROFILE_LIMIT,
+            max_sessions: PROFILE_LIMIT,
+            max_streams_per_session: PROFILE_LIMIT,
+            max_frame_bytes: FRAME_LIMIT,
+            max_datagram_bytes: DATAGRAM_LIMIT,
+            max_queued_events: PROFILE_LIMIT,
+            max_queued_bytes: QUEUE_LIMIT,
+            max_inflight_bytes: INFLIGHT_LIMIT,
+            operation_deadline_ticks: DEADLINE_WINDOW,
+        },
+        non_claims: REQUIRED_TRANSPORT_NON_CLAIMS.to_vec(),
+    })
+    .expect("canonical transport profile")
+}
+
+fn protocol() -> ProtocolDescriptor {
+    ProtocolDescriptor {
+        schema: TRANSPORT_PROTOCOL_SCHEMA.to_string(),
+        protocol_id: "cross-process-echo".to_string(),
+        version: "v1".to_string(),
+        alpn: "molten/cross-process-echo/1".to_string(),
+        extension_id: "cross-process-extension".to_string(),
+        service_id: "cross-process-service".to_string(),
+        generation: GENERATION,
+        listener_limit: 1,
+        requested_capabilities: vec![
+            TransportCapability::BidirectionalStreams,
+            TransportCapability::UnidirectionalStreams,
+        ],
+        framing: FramingProfile {
+            profile_id: "length-prefixed-blake3-v1".to_string(),
+            profile_ref: FRAMING_REF.to_string(),
+            max_frame_bytes: FRAME_LIMIT,
+            length_prefix_bytes: LENGTH_PREFIX_BYTES,
+            payload_hash_required: true,
+        },
+        cleanup_policy: ListenerCleanupPolicy::BoundedDrain {
+            grace_ticks: DEADLINE_WINDOW,
+        },
+        registration_authority_ref: AUTHORITY_REF.to_string(),
+        profile_ref: PROFILE_REF.to_string(),
+    }
+}
+
+fn validity() -> EndpointValidityCohort {
+    EndpointValidityCohort {
+        cohort_ref: VALIDITY_REF.to_string(),
+        not_before_tick: VALID_FROM_TICK,
+        expires_at_tick: VALID_UNTIL_TICK,
+    }
+}
+
+fn disclosure() -> EndpointDisclosurePolicy {
+    EndpointDisclosurePolicy {
+        explicit_handoff_classes: vec![EndpointLocatorClass::Ip],
+        default_readback_redacted: true,
+    }
+}
+
+fn fake_bindings() -> EndpointDescriptorBindings {
+    EndpointDescriptorBindings {
+        public_endpoint_identity: FAKE_ENDPOINT_ID.to_string(),
+        listener_identity_ref: LISTENER_REF.to_string(),
+        expected_peer_context_ref: PEER_CONTEXT_REF.to_string(),
+        locator_cohort_ref: LOCATOR_COHORT_REF.to_string(),
+        locators: vec![EndpointLocator {
+            class: EndpointLocatorClass::Ip,
+            value: FAKE_IP_LOCATOR.to_string(),
+        }],
+        disclosure: disclosure(),
+        resources: EndpointResourceBounds {
+            max_sessions: PROFILE_LIMIT,
+            max_frame_bytes: FRAME_LIMIT,
+            max_queued_bytes: QUEUE_LIMIT,
+            max_inflight_bytes: INFLIGHT_LIMIT,
+        },
+        validity: validity(),
+    }
+}
+
+fn capability(byte: u8, capability_ref: &str) -> IrohEndpointCapability {
+    IrohEndpointCapability::from_secret_bytes([byte; IROH_SECRET_KEY_BYTES], capability_ref.to_string())
+        .expect("endpoint capability")
+}
+
+fn bind_addr() -> std::net::SocketAddr {
+    std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0))
+}
+
+fn expected(endpoint: &CanonicalCrossProcessEndpoint) -> ExpectedEndpointBinding {
+    let descriptor = &endpoint.descriptor;
+    ExpectedEndpointBinding {
+        profile_id: descriptor.profile_id.clone(),
+        profile_ref: descriptor.profile_ref.clone(),
+        protocol_id: descriptor.protocol_id.clone(),
+        protocol_version: descriptor.protocol_version.clone(),
+        alpn: descriptor.alpn.clone(),
+        extension_id: descriptor.extension_id.clone(),
+        service_id: descriptor.service_id.clone(),
+        generation: descriptor.generation,
+        public_endpoint_identity: descriptor.public_endpoint_identity.clone(),
+        listener_identity_ref: descriptor.listener_identity_ref.clone(),
+        peer_context_ref: descriptor.expected_peer_context_ref.clone(),
+        observed_tick: OBSERVED_TICK,
+    }
+}
+
+pub(crate) async fn listener() -> IrohCrossProcessListener {
+    listener_with_secret(LISTENER_SECRET_BYTE).await
+}
+
+pub(crate) async fn listener_with_secret(secret_byte: u8) -> IrohCrossProcessListener {
+    IrohCrossProcessListener::bind(IrohCrossProcessListenerInput {
+        profile: profile(),
+        protocol: protocol(),
+        capability: capability(secret_byte, LISTENER_CAPABILITY_REF),
+        bind_addr: bind_addr(),
+        listener_identity_ref: LISTENER_REF.to_string(),
+        expected_peer_context_ref: PEER_CONTEXT_REF.to_string(),
+        locator_cohort_ref: LOCATOR_COHORT_REF.to_string(),
+        disclosure: disclosure(),
+        validity: validity(),
+        admission: EndpointAdmissionState::fully_active(),
+        observed_tick: OBSERVED_TICK,
+    })
+    .await
+    .expect("cross-process listener")
+}
+
+pub(crate) fn client_input(endpoint: CanonicalCrossProcessEndpoint) -> IrohCrossProcessClientInput {
+    IrohCrossProcessClientInput {
+        profile: profile(),
+        protocol: protocol(),
+        capability: capability(CLIENT_SECRET_BYTE, CLIENT_CAPABILITY_REF),
+        bind_addr: bind_addr(),
+        expected: expected(&endpoint),
+        endpoint,
+        admission: EndpointAdmissionState::fully_active(),
+        session_ref: SESSION_REF.to_string(),
+        request_ref: REQUEST_REF.to_string(),
+    }
+}
+
+fn effect_binding(profile: &CanonicalTransportProfile) -> crate::fabric::CanonicalFabricPortBinding {
+    let descriptor = fabric_transport_port_descriptor(profile);
+    crate::fabric::resolve_canonical_fabric_port_binding(
+        std::slice::from_ref(&descriptor),
+        &crate::fabric::FabricPortRequirement {
+            port_id: descriptor.port_id.clone(),
+            version: descriptor.version.clone(),
+            class: descriptor.class,
+            operation_classes: descriptor.operation_classes.clone(),
+            input_schema_refs: descriptor.input_schema_refs.clone(),
+            output_schema_refs: descriptor.output_schema_refs.clone(),
+            allowed_authorities: descriptor.authority_requirements.clone(),
+            available_resources: descriptor.resource_requirements.clone(),
+            expected_determinism: descriptor.determinism,
+            expected_replay: descriptor.replay,
+            expected_profile: descriptor.implementation_profile.clone(),
+        },
+    )
+    .expect("cross-process transport binding")
+}
+
+fn effect_request(
+    binding: &crate::fabric::CanonicalFabricPortBinding,
+    operation: &str,
+    request_ref: &str,
+    accounted_bytes: u64,
+) -> crate::system_extension::TypedEffectRequest {
+    crate::system_extension::TypedEffectRequest {
+        target: crate::system_extension::EffectTarget::FabricPort(binding.binding.key.clone()),
+        operation: operation.to_string(),
+        input_schema_ref: TRANSPORT_COMMAND_SCHEMA.to_string(),
+        output_schema_ref: TRANSPORT_EVENT_SCHEMA.to_string(),
+        request_ref: request_ref.to_string(),
+        generation: GENERATION,
+        accounted_bytes,
+    }
+}
+
+// r[verify molten.fabric_transport.cross_process_endpoint]
+// r[verify molten.fabric_transport.cross_process_validation]
+#[test]
+fn canonical_endpoint_roundtrips_and_default_status_redacts_raw_locators() {
+    let endpoint = canonical_cross_process_endpoint(&profile().profile, &protocol(), &fake_bindings())
+        .expect("canonical endpoint");
+    let parsed = parse_canonical_cross_process_endpoint(&endpoint.value).expect("parsed endpoint");
+    assert_eq!(parsed, endpoint);
+    let handoff_text = crate::preserves_rail::to_text(&endpoint.value).expect("handoff text");
+    assert!(handoff_text.contains(FAKE_IP_LOCATOR));
+
+    let status = canonical_endpoint_status(&endpoint.descriptor).expect("endpoint status");
+    let status_text = crate::preserves_rail::to_text(&status.value).expect("status text");
+    assert!(status_text.contains("locator-classes"));
+    assert!(!status_text.contains(FAKE_IP_LOCATOR));
+    assert!(!status_text.contains("private-key"));
+    assert!(!status_text.contains("iroh::Endpoint"));
+}
+
+// r[verify molten.fabric_transport.cross_process_endpoint]
+// r[verify molten.fabric_transport.cross_process_validation]
+#[test]
+fn canonical_endpoint_import_rejects_a_tampered_binding_reference() {
+    let endpoint = canonical_cross_process_endpoint(&profile().profile, &protocol(), &fake_bindings())
+        .expect("canonical endpoint");
+    let fields = endpoint
+        .value
+        .collect_simple_record("fabric-transport-endpoint-descriptor-v1", Some(OUTER_FIELD_COUNT))
+        .expect("endpoint outer record");
+    let values = fields.iter().collect::<Vec<_>>();
+    let tampered = crate::preserves_rail::record("fabric-transport-endpoint-descriptor-v1", vec![
+        crate::preserves_rail::string(CROSS_PROCESS_ENDPOINT_HANDOFF_SCHEMA),
+        crate::preserves_rail::string(WRONG_REF),
+        crate::preserves_rail::value_to_iovalue(&values[OUTER_BINDING_INDEX]),
+        crate::preserves_rail::value_to_iovalue(&values[OUTER_CHECKS_INDEX]),
+    ]);
+    let error = parse_canonical_cross_process_endpoint(&tampered).expect_err("tampered ref must deny");
+    assert!(error.to_string().contains("descriptor ref mismatch"));
+}

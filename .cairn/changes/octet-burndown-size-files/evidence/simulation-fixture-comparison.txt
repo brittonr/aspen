@@ -1,0 +1,6 @@
+# Base binary 52140a0bf vs candidate: molten fabric-simulation run / shrink
+run: identical, 100 files
+shrink: identical, 3 files
+
+# Recursive molten <subcommand...> --help pages
+help_pages_same=482 help_pages_diff=0

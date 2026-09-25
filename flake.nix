@@ -1123,15 +1123,21 @@
                     > "$TMPDIR/negative.json"
                   ast-grep scan --rule "$rule" --json=compact \
                     src/test/support.rs \
+                    src/test/parts/support/p000/body.rs \
+                    src/test/parts/support/p001/body.rs \
+                    src/test/parts/support/p002/body.rs \
                     src/main/tests/ops/helpers.rs \
                     src/local_store_tests.rs \
                     src/chunk/parts/store/tests/m000/p002/body.rs \
                     src/retention/parts/mod/tests/m000/p000/body.rs \
+                    src/retention/parts/mod/tests/m000/p009/body.rs \
                     src/remote/parts/dataspace/tests/m000/p001/body.rs \
                     src/iroh/parts/exchange/tests/m000/p001/body.rs \
                     src/evidence/parts/chain/tests/m000/p003/body.rs \
                     src/node/parts/daemon/tests/m000/p000/body.rs \
+                    src/node/parts/daemon/tests/m000/p015/body.rs \
                     src/node/parts/daemon/tests/m000/p010/body.rs \
+                    src/node/parts/daemon/tests/m000/p022/body.rs \
                     tests/parts/cliharness/p000/body.rs \
                     tests/parts/cliharness/p013/body.rs \
                     > "$TMPDIR/converted.json"
@@ -1166,14 +1172,20 @@
                   ast-grep scan --rule "$ambient_rule" --json=compact \
                     src/node/parts/daemon \
                     src/node/parts/identity/p001/body.rs \
+                    src/node/parts/identity/p004/body.rs \
                     src/job/parts/dag/p009/body.rs \
+                    src/job/parts/dag/p030/body.rs \
                     src/job/parts/dag/p017/body.rs \
+                    src/job/parts/dag/p033/body.rs \
                     > "$TMPDIR/ambient-converted.json"
                   ast-grep scan --rule "$reacquisition_rule" --json=compact \
                     src/node/parts/daemon \
                     src/node/parts/identity/p001/body.rs \
+                    src/node/parts/identity/p004/body.rs \
                     src/job/parts/dag/p009/body.rs \
+                    src/job/parts/dag/p030/body.rs \
                     src/job/parts/dag/p017/body.rs \
+                    src/job/parts/dag/p033/body.rs \
                     > "$TMPDIR/reacquisition-converted.json"
                   touch "$out"
                 '';
@@ -1199,9 +1211,11 @@
                     src/cli/runtime/repro/bundle.rs \
                     src/cli/runtime/repro/bundle/unpack.rs \
                     src/retention/parts/mod/p028/body.rs \
+                    src/retention/parts/mod/p041/body.rs \
                     src/cli/ops/dogfood/archive.rs \
                     src/cli/ops/dogfood/io.rs \
                     src/operator/parts/dogfood/p008/body.rs \
+                    src/operator/parts/dogfood/p021/body.rs \
                     > "$TMPDIR/converted.json"
                   touch "$out"
                 '';
@@ -1375,18 +1389,18 @@
                   type_path='(?:[A-Za-z_][A-Za-z0-9_]*::)*'
                   test "$(rg -l 'pub trait NativeCallbackValuePort' src/system_extension/native_host | wc -l)" -eq 1
                   require_literal 'NativeCallbackValuePort' src/system_extension/native_host/materialization.rs
-                  require_literal '.materialize(' src/system_extension/native_host/executor.rs
-                  require_literal '.publish(' src/system_extension/native_host/executor.rs
+                  require_literal '.materialize(' src/system_extension/native_host/executor.rs src/system_extension/native_host/parts/executor
+                  require_literal '.publish(' src/system_extension/native_host/executor.rs src/system_extension/native_host/parts/executor
                   # r[verify molten.system_extension.native_host.effect_completion_value]
                   if ! rg -Pq "\bmaterialized_output\s*:\s*Option\s*<\s*$type_path""NativeCallbackValue\s*>" \
-                    src/system_extension/canonical.rs; then
+                    src/system_extension/canonical.rs src/system_extension/parts/canonical; then
                     echo 'canonical effect completion no longer carries an optional materialized NativeCallbackValue' >&2
                     exit 1
                   fi
                   require_literal 'molten.system-extension.effect-completion.v2' crates/molten-core/src/system_extension/mod.rs
-                  require_literal 'admit_materialized_effect_output' src/system_extension/native_host/service.rs
-                  require_literal 'ExecutionFabricPort' src/system_extension/native_host/executor.rs
-                  require_literal 'NativeHostJournal' src/system_extension/native_host/journal.rs
+                  require_literal 'admit_materialized_effect_output' src/system_extension/native_host/service.rs src/system_extension/native_host/parts/service
+                  require_literal 'ExecutionFabricPort' src/system_extension/native_host/executor.rs src/system_extension/native_host/parts/executor
+                  require_literal 'NativeHostJournal' src/system_extension/native_host/journal.rs src/system_extension/native_host/parts/journal
                   require_literal 'molten-native-extension-fixture' Cargo.toml
                   touch "$out"
                 '';
@@ -2263,7 +2277,7 @@
                       exit 1
                     fi
                   done
-                  grep -Fq 'r[impl molten.choreography.chorus_design_reference]' src/protocol/parts/session/p009/body.rs
+                  grep -Fq 'r[impl molten.choreography.chorus_design_reference]' src/protocol/parts/session/p012/body.rs
                   grep -Fq 'r[verify molten.choreography.chorus_design_reference]' src/protocol/parts/session/tests/m000/p002/body.rs
                   grep -Fq 'r[impl molten.evidence.valence_stack_adapter.docs]' crates/molten-core/src/stack.rs
                   grep -Fq 'r[verify molten.evidence.valence_stack_adapter.docs]' crates/molten-core/src/stack.rs
@@ -3232,8 +3246,11 @@
                   adapters=(
                     src/fabric_membership/adapters.rs
                     src/fabric_time/adapters.rs
+                    src/fabric_time/parts/adapters
                     src/fabric_transport/adapters.rs
+                    src/fabric_transport/parts/adapters
                     src/fabric_durability/adapters.rs
+                    src/fabric_durability/parts/adapters
                   )
                   ports=(
                     src/fabric_membership/ports.rs

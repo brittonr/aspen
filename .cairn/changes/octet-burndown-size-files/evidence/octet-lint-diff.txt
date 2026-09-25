@@ -1,0 +1,33 @@
+# workspace (cargo octet check), base 52140a0bf -> candidate
+lint                                     findings          sites
+path_segment_repetition             1886 -> 1886     1042 -> 1038 
+excessive_file_length                548 -> 0         305 -> 0    
+underscore_in_module_filename         31 -> 28         15 -> 15   
+module_file_count                     20 -> 20         11 -> 11   
+ambient_env                           14 -> 14          5 -> 5    
+TOTAL                               2499 -> 1948     1378 -> 1069 
+
+# -p molten --lib
+lint                                     findings          sites
+path_segment_repetition              799 -> 799       799 -> 799  
+excessive_file_length                229 -> 0         229 -> 0    
+underscore_in_module_filename          7 -> 7           7 -> 7    
+ambient_env                            6 -> 6           4 -> 4    
+module_file_count                      5 -> 5           5 -> 5    
+TOTAL                               1046 -> 817      1044 -> 815  
+
+# path_segment_repetition (item, word, segment) multiset: base vs candidate
+root base 1886 candidate 1886 differing keys 0
+lib base 799 candidate 799 differing keys 0
+
+# path_segment_repetition sites only in base (symlinked alias of src/test/support.rs)
+path_segment_repetition	tests/src/test/support.rs:10
+path_segment_repetition	tests/src/test/support.rs:110
+path_segment_repetition	tests/src/test/support.rs:213
+path_segment_repetition	tests/src/test/support.rs:682
+
+# underscore_in_module_filename per-site finding counts (base vs candidate)
+8c8
+<       5 src/cluster_harness/fabric_transport.rs:1
+---
+>       2 src/cluster_harness/fabric_transport.rs:1

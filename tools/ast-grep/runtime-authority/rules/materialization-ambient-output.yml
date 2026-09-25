@@ -10,9 +10,11 @@ files:
   - src/cli/runtime/repro/bundle.rs
   - src/cli/runtime/repro/bundle/unpack.rs
   - src/retention/parts/mod/p028/body.rs
+  - src/retention/parts/mod/p041/body.rs
   - src/cli/ops/dogfood/archive.rs
   - src/cli/ops/dogfood/io.rs
   - src/operator/parts/dogfood/p008/body.rs
+  - src/operator/parts/dogfood/p021/body.rs
   - tools/ast-grep/runtime-authority/fixtures/positive/materialization_ambient_output.rs
   - tools/ast-grep/runtime-authority/fixtures/negative/materialization_capability_shell.rs
 rule:

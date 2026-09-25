@@ -1,0 +1,36 @@
+# nix build --no-link .#checks.x86_64-linux.<name>
+contract-export-drift-gate exit=0
+requirement-traceability-gate exit=0
+inherited-tracey-debt exit=1
+cap-std-store-authority exit=0
+cap-std-test-workspaces exit=0
+node-state-authority exit=0
+materialization-authority exit=0
+native-system-extension-host-profile exit=0
+native-system-extension-octet-deny-all exit=0
+fabric-port-boundaries exit=0
+fabric-execution-profile exit=0
+fabric-execution-octet-deny-all exit=0
+world-promotion-octet-deny-all exit=0
+world-promotion-dependency-identity exit=0
+world-state-oracle-source exit=0
+nominal-reference-domains exit=0
+production-profile-fixtures exit=0
+molten-node-host exit=0
+addressable-actor-profile exit=0
+content-store-adapter-profile exit=0
+coordination-delivery-profile exit=0
+fabric-cryptographic-identity-profile exit=0
+fabric-membership-placement-profile exit=0
+fabric-observability-profile exit=0
+wasm-component-profile exit=0
+wasm-component-performance-profile exit=0
+world-operator-profile exit=0
+world-faults-profile exit=0
+world-state-oracle-profile exit=0
+prolly-map-profile exit=0
+dev-function-profiling exit=0
+release-profile-validation exit=0
+
+# inherited-tracey-debt at base 52140a0bf (same worktree layout): exit=1 with identical builder output
+builder output identical (requirements=2791 referenced=866 uncovered=1925 dangling=18)

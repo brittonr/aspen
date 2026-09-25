@@ -167,5 +167,6 @@ fn string_values(label: &str, values: &[String]) -> Result<Vec<IoValue>> {
 #[cfg(test)]
 mod tests {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/prod/parts/readiness/tests/m000/p000/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/prod/parts/readiness/tests/m000/p002/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/prod/parts/readiness/tests/m000/p001/body.rs"));
 }

@@ -207,9 +207,11 @@
     #[test]
     fn facade_dependency_boundary_rejects_chorus_import_drift() {
         // r[verify molten.choreography.chorus_design_reference]
+        let cargo_lock =
+            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.lock")).expect("read Cargo.lock");
         let clean = protocol_facade_dependency_boundary_diagnostics(
             include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml")),
-            include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.lock")),
+            &cargo_lock,
         );
         assert!(clean.is_empty());
         let drift = protocol_facade_dependency_boundary_diagnostics("chorus_lib = \"0.1\"", "");

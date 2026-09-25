@@ -3,10 +3,15 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/resources/parts/mod/p001/body
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/resources/parts/mod/p002/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/resources/parts/mod/p003/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/resources/parts/mod/p004/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/resources/parts/mod/p012/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/resources/parts/mod/p005/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/resources/parts/mod/p013/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/resources/parts/mod/p006/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/resources/parts/mod/p014/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/resources/parts/mod/p007/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/resources/parts/mod/p015/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/resources/parts/mod/p008/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/resources/parts/mod/p016/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/resources/parts/mod/p009/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/resources/parts/mod/p010/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/resources/parts/mod/p011/body.rs"));

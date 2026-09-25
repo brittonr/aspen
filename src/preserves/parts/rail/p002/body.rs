@@ -1,0 +1,16 @@
+pub const RESOURCE_CONSUMPTION_SCHEMA: &str = "molten.resources.consumption.v1";
+pub const RESOURCE_RECEIPT_SCHEMA: &str = "molten.resources.receipt.v1";
+pub const RESOURCE_SCHEDULER_SCHEMA: &str = "molten.resources.scheduler.v1";
+pub const SERVICE_MANIFEST_SCHEMA: &str = "molten.service.manifest.v1";
+pub const SERVICE_DEMAND_SCHEMA: &str = "molten.service.demand.v1";
+pub const SERVICE_STATUS_SCHEMA: &str = "molten.service.status.v1";
+pub const SERVICE_SUPERVISOR_SCHEMA: &str = "molten.service.supervisor.v1";
+pub const SERVICE_LINK_SCHEMA: &str = "molten.service.link.v1";
+pub const SERVICE_MONITOR_SCHEMA: &str = "molten.service.monitor.v1";
+pub const SERVICE_RESTART_POLICY_SCHEMA: &str = "molten.service.restart-policy.v1";
+pub const SERVICE_RESTART_DECISION_SCHEMA: &str = "molten.service.restart-decision.v1";
+pub const SERVICE_LIFECYCLE_RECEIPT_SCHEMA: &str = "molten.service.lifecycle-receipt.v1";
+pub const SERVICE_CLEANUP_RECEIPT_SCHEMA: &str = "molten.service.cleanup-receipt.v1";
+pub const SERVICE_SUPERVISION_SUITE_SCHEMA: &str = "molten.service.supervision-suite.v1";
+pub const SERVICE_SUPERVISION_REPORT_SCHEMA: &str = "molten.service.supervision-report.v1";
+pub const SERVICE_SUPERVISION_GATE_RECEIPT_SCHEMA: &str = "molten.service.supervision-gate-receipt.v1";

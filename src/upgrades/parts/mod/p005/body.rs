@@ -212,5 +212,6 @@ fn validate_external_workflow_non_claims(reason: &str, summary: &str) -> Result<
 #[cfg(test)]
 mod tests {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/upgrades/parts/mod/tests/m000/p000/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/upgrades/parts/mod/tests/m000/p002/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/upgrades/parts/mod/tests/m000/p001/body.rs"));
 }

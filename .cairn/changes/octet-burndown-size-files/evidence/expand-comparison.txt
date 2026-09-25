@@ -1,0 +1,280 @@
+# expandparts.py: every module host with all include! parts inlined, base tree 52140a0bf vs candidate
+same crates/molten-node-host/src/local_store/mod.rs
+same src/addressable_actor/service.rs
+same src/artifacts/mod.rs
+same src/audit/ast_grep.rs
+same src/authority/mod.rs
+same src/capability/claim/authority.rs
+same src/capability/tokens.rs
+same src/catalog/mcp.rs
+same src/catalog/mod.rs
+same src/chunk/store.rs
+same src/cli/ops/cluster.rs
+same src/cli/ops/nixosvm/ops.rs
+same src/cli/ops/node/control/ingress.rs
+same src/cli/ops/node/lifecycle.rs
+same src/cli/ops/prodsoak/command.rs
+same src/cli/ops/prodsoak/readiness/operations.rs
+same src/cli/ops/traceability.rs
+same src/cli/runtime/fabric_simulation/ops.rs
+same src/cli/runtime/worldauthority.rs
+same src/cli/runtime/worldhead.rs
+same src/cli/runtime/worldmerge.rs
+same src/cluster.rs
+same src/cluster_harness/canonical.rs
+same src/cluster_harness/fabric_transport.rs
+same src/cluster_harness/runner.rs
+same src/content_store_adapter/canonical.rs
+same src/content_store_adapter/live/iroh.rs
+same src/content_store_adapter/tests.rs
+same src/coordination/mod.rs
+same src/dag_sync/conformance.rs
+DIFF src/dag_sync/tests.rs
+--- 
++++ 
+@@ -648,3 +648,6 @@
+ fn dag_conformance_uses_fabric_ports_without_backend_imports() {
+-    let source = include_str!("<crate>/src/dag_sync/conformance.rs");
++    let source = concat!(
++        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/dag_sync/parts/conformance/p000/body.rs")),
++        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/dag_sync/parts/conformance/p001/body.rs")),
++    );
+     assert!(!source.contains("iroh::"));
+same src/delivery/idempotency.rs
+same src/deterministic/replay.rs
+same src/effects/mod.rs
+same src/eval/cache.rs
+same src/evidence/chain.rs
+same src/evidence/mod.rs
+same src/fabric/mod.rs
+same src/fabric_consistency/chaoscontrol/tests.rs
+same src/fabric_consistency/raft/admission.rs
+same src/fabric_consistency/raft/canonical.rs
+same src/fabric_consistency/raft/evidence.rs
+same src/fabric_consistency/raft/live_process/child.rs
+same src/fabric_consistency/raft/model.rs
+same src/fabric_consistency/raft/recovery.rs
+same src/fabric_consistency/raft/tests.rs
+same src/fabric_consistency/raft/transition/validation.rs
+same src/fabric_consistency/tests/live_service.rs
+same src/fabric_crypto_identity/artifact_auth/operational.rs
+same src/fabric_crypto_identity/canonical.rs
+DIFF src/fabric_crypto_identity/file/adapter.rs
+--- 
++++ 
+@@ -362,3 +362,5 @@
+     }
+-
++}
++
++impl<'a> IrohEd25519FileAdapter<'a> {
+     pub fn rotate(&self, request: &KeyRotationRequest) -> crate::error::Result<CompletedProductionRotation> {
+same src/fabric_crypto_identity/tests.rs
+same src/fabric_durability/adapters.rs
+same src/fabric_durability/canonical.rs
+same src/fabric_durability/tests.rs
+same src/fabric_membership/canonical.rs
+same src/fabric_membership/tests.rs
+same src/fabric_observability/canonical.rs
+same src/fabric_observability/export.rs
+same src/fabric_observability/tests.rs
+same src/fabric_simulation/canonical.rs
+same src/fabric_simulation/composition.rs
+same src/fabric_simulation/reference.rs
+same src/fabric_time/adapters.rs
+same src/fabric_time/canonical.rs
+same src/fabric_time/fixture.rs
+same src/fabric_time/tests.rs
+same src/fabric_transport/adapters.rs
+same src/fabric_transport/canonical.rs
+same src/fabric_transport/cross_process/canonical.rs
+same src/fabric_transport/cross_process/effect/port.rs
+same src/fabric_transport/cross_process/iroh/shell.rs
+DIFF src/fabric_transport/cross_process/tests.rs
+--- 
++++ 
+@@ -368,3 +368,8 @@
+ fn public_shell_surface_contains_no_runtime_handle_accessor_or_ambient_fallback() {
+-    let source = include_str!("<crate>/src/fabric_transport/cross_process/iroh/shell.rs");
++    let source = concat!(
++        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_transport/cross_process/iroh/parts/shell/p000/body.rs")),
++        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_transport/cross_process/iroh/parts/shell/p001/body.rs")),
++        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_transport/cross_process/iroh/parts/shell/p002/body.rs")),
++        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_transport/cross_process/iroh/parts/shell/p003/body.rs")),
++    );
+     for forbidden in [
+same src/fabric_transport/tests.rs
+same src/federation/mod.rs
+same src/harness/gate.rs
+same src/harness/mod.rs
+same src/harness/runner.rs
+same src/harness/schema.rs
+same src/harness/wasm/executor.rs
+same src/iroh/exchange.rs
+same src/job/dag.rs
+same src/ledger/mod.rs
+DIFF src/lib.rs
+--- 
++++ 
+@@ -5,12 +5,7 @@
+ 
+-macro_rules! compat_module {
+-    ($name:ident, $target:ident) => {
+-        pub mod $name {
+-            pub use super::$target::*;
+-        }
+-    };
+-}
+-
+ pub mod addressable_actor;
+ 
++#[doc(hidden)]
++#[path = "effects/mod.rs"]
++pub mod actions;
+ #[doc(hidden)]
+@@ -18,19 +13,2 @@
+ pub mod ast_grep_runtime_authority_core;
+-compat_module!(ast_grep_runtime_authority_audits, ast_grep_runtime_authority_core);
+-#[doc(hidden)]
+-#[path = "artifacts/mod.rs"]
+-pub mod objects;
+-compat_module!(artifacts, objects);
+-#[doc(hidden)]
+-#[path = "authority/mod.rs"]
+-pub mod delegation;
+-compat_module!(authority, delegation);
+-#[doc(hidden)]
+same src/lifecycle/mod.rs
+same src/live_binding_adoption.rs
+same src/main/root/command.rs
+same src/materialization.rs
+same src/nixos/vm.rs
+same src/nixos/vm/validation.rs
+same src/node/daemon.rs
+same src/node/identity.rs
+same src/node/iroh.rs
+same src/node/profile/config.rs
+same src/node/runtime.rs
+same src/node/service/fsm.rs
+same src/octet/gate.rs
+same src/octet/remediation.rs
+same src/operator/context/profile.rs
+same src/operator/dogfood.rs
+same src/operator/gateway.rs
+same src/peer/bootstrap.rs
+same src/peer/session.rs
+same src/plugin/host.rs
+same src/preserves/rail.rs
+same src/prod/readiness.rs
+same src/prod/release/profile.rs
+same src/prod/soak.rs
+same src/project/config/portability.rs
+same src/project/effective/config.rs
+same src/protocol/sans/io.rs
+DIFF src/protocol/session.rs
+--- 
++++ 
+@@ -3675,5 +3675,7 @@
+         // r[verify molten.choreography.chorus_design_reference]
++        let cargo_lock =
++            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.lock")).expect("read Cargo.lock");
+         let clean = protocol_facade_dependency_boundary_diagnostics(
+             include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml")),
+-            include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.lock")),
++            &cargo_lock,
+         );
+same src/provenance/mod.rs
+same src/raft/control/plane.rs
+same src/remote/dataspace.rs
+same src/resources/mod.rs
+same src/retention/mod.rs
+same src/rewrites/mod.rs
+same src/runtime/dataspace/state.rs
+same src/runtime/dataspace/syndicate.rs
+same src/runtime/dataspace/tests.rs
+same src/runtime/predicates/mod.rs
+same src/runtime/spine/mod.rs
+same src/runtime/vat/mod.rs
+same src/schema/identity.rs
+same src/secrets/mod.rs
+same src/service/records.rs
+same src/service/runtime.rs
+same src/service/supervision.rs
+same src/system_extension/canonical.rs
+same src/system_extension/fixture.rs
+DIFF src/system_extension/host.rs
+--- 
++++ 
+@@ -411,3 +411,5 @@
+     }
+-
++}
++
++impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
+     // r[impl molten.system_extension.typed_effects]
+@@ -629,3 +631,5 @@
+     }
+-
++}
++
++impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
+     fn replace_generation(
+DIFF src/system_extension/native_host/executor.rs
+--- 
++++ 
+@@ -368,3 +368,9 @@
+     }
+-
++}
++
++impl<P, J> NativeProcessSystemExtensionExecutor<P, J>
++where
++    P: ExecutionFabricPort,
++    J: NativeHostJournal,
++{
+     fn accept_execution_receipt(
+same src/system_extension/native_host/journal.rs
+DIFF src/system_extension/native_host/service.rs
+--- 
++++ 
+@@ -356,3 +356,9 @@
+     }
+-
++}
++
++impl<P, J> NativeSystemExtensionService<P, J>
++where
++    P: crate::fabric_execution::ExecutionFabricPort,
++    J: NativeHostJournal,
++{
+     // r[impl molten.system_extension.native_host.operator]
+same src/system_extension/native_host/wire.rs
+same src/test/support.rs
+same src/testing/distributed.rs
+same src/testing/drift.rs
+same src/testing/hardening.rs
+same src/testing/multinode.rs
+same src/testing/prooftrace.rs
+same src/testing/traceability.rs
+same src/transcripts/mod.rs
+same src/typed/storage.rs
+same src/upgrades/mod.rs
+same src/wasm/component/model.rs
+same src/wasm/performance/comparison.rs
+same src/wasm/performance/evidence.rs
+same src/wasm/performance/materialization.rs
+same src/wasm/performance/model.rs
+same src/wasm/performance/runner.rs
+same src/world_branch_authority/tests.rs
+same src/world_distribution/tests.rs
+same src/world_head/records.rs
+same src/world_head/service.rs
+same src/world_head/tests.rs
+same src/world_merge/tests.rs
+same src/world_promotion/tests/service.rs
+same src/world_snapshot/records.rs
+same src/world_snapshot/service.rs
+same tests/cliharness.rs
+same tests/nativesystemextension.rs
+same tests/nativesystemextension/support.rs
+diff_files=8

@@ -5,14 +5,18 @@
 //! receipt graph emitted by this module.
 
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/p000/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/p018/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/p001/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/p002/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/p003/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/p004/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/p005/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/p006/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/p019/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/p020/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/p007/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/p008/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/p021/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/p009/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/p010/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/operator/parts/dogfood/p011/body.rs"));

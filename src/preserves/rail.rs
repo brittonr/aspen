@@ -1,2 +1,9 @@
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/p000/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/p002/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/p001/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/p003/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/p004/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/p005/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/p006/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/p007/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/preserves/parts/rail/p008/body.rs"));

@@ -1,6 +1,9 @@
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/transcripts/parts/mod/p000/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/transcripts/parts/mod/p006/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/transcripts/parts/mod/p001/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/transcripts/parts/mod/p002/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/transcripts/parts/mod/p003/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/transcripts/parts/mod/p007/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/transcripts/parts/mod/p004/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/transcripts/parts/mod/p008/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/transcripts/parts/mod/p005/body.rs"));

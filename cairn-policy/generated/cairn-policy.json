@@ -5911,6 +5911,13 @@
           },
           {
             "extensions": [
+              "rs"
+            ],
+            "root": "src/parts/live_binding_adoption",
+            "source_kind": "rust_source"
+          },
+          {
+            "extensions": [
               "md"
             ],
             "root": "docs/live-artifact-binding-and-semantic-effects.md",

@@ -1,7 +1,10 @@
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/secrets/parts/mod/p000/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/secrets/parts/mod/p008/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/secrets/parts/mod/p001/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/secrets/parts/mod/p009/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/secrets/parts/mod/p002/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/secrets/parts/mod/p003/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/secrets/parts/mod/p010/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/secrets/parts/mod/p004/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/secrets/parts/mod/p005/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/secrets/parts/mod/p006/body.rs"));

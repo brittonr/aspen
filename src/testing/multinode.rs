@@ -2,6 +2,7 @@ include!("multinode/parts/p000/body.rs");
 include!("multinode/parts/p001/body.rs");
 include!("multinode/parts/p002/body.rs");
 include!("multinode/parts/p003/body.rs");
+include!("multinode/parts/p008/body.rs");
 include!("multinode/parts/p004/body.rs");
 include!("multinode/parts/p005/body.rs");
 include!("multinode/parts/p006/body.rs");

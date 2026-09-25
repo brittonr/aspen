@@ -124,6 +124,9 @@ pub fn expected_turn_snapshot(before: &RuntimeSnapshot, turn: &PendingTurn, outc
 #[cfg(test)]
 mod tests {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/predicates/parts/mod/tests/m000/p000/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/predicates/parts/mod/tests/m000/p003/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/predicates/parts/mod/tests/m000/p001/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/predicates/parts/mod/tests/m000/p004/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/predicates/parts/mod/tests/m000/p002/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/predicates/parts/mod/tests/m000/p005/body.rs"));
 }

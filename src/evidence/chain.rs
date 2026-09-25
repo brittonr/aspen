@@ -9,9 +9,11 @@
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p000/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p001/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p002/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p009/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p003/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p004/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p005/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p010/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p006/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p007/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/evidence/parts/chain/p008/body.rs"));

@@ -49,7 +49,7 @@
   "observed_date": "2026-08-10",
   "resolved_links": [
     {
-      "implementation_path": "src/protocol/parts/session/p009/body.rs",
+      "implementation_path": "src/protocol/parts/session/p012/body.rs",
       "requirement_id": "molten.choreography.chorus_design_reference",
       "verification_path": "src/protocol/parts/session/tests/m000/p002/body.rs"
     },

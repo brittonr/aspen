@@ -1,0 +1,246 @@
+#[derive(Debug, clap::Parser)]
+#[command(name = "molten", version, about = "Molten runtime prototype")]
+pub(super) struct Cli {
+    #[command(subcommand)]
+    pub(super) command: Option<Top>,
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, clap::Subcommand)]
+pub(super) enum Top {
+    Cluster {
+        #[command(subcommand)]
+        command: crate::cli_cluster::ClusterCommand,
+    },
+    Test {
+        #[command(subcommand)]
+        command: Test,
+    },
+    Dogfood {
+        #[command(subcommand)]
+        command: crate::cli_dogfood::DogfoodCommand,
+    },
+    Receipts {
+        #[command(subcommand)]
+        command: crate::cli_receipts::ReceiptsCommand,
+    },
+    Node {
+        #[command(subcommand)]
+        command: crate::cli_node::Command,
+    },
+    Peer {
+        #[command(subcommand)]
+        command: crate::cli_peer::Command,
+    },
+    Runtime {
+        #[command(subcommand)]
+        command: Runtime,
+    },
+    FabricTime {
+        #[command(subcommand)]
+        command: crate::cli_fabric_time::command::FabricTimeCommand,
+    },
+    FabricSimulation {
+        #[command(subcommand)]
+        command: crate::cli_fabric_simulation::command::FabricSimulationCommand,
+    },
+    SystemExtension {
+        #[command(subcommand)]
+        command: crate::cli_system_extension::SystemExtensionCommand,
+    },
+    World {
+        #[command(subcommand)]
+        command: crate::cli_world_operator::WorldCommand,
+    },
+    WorldCommit {
+        #[command(subcommand)]
+        command: crate::cli_world_commit::WorldCommitCommand,
+    },
+    WorldSnapshot {
+        #[command(subcommand)]
+        command: crate::cli_world_snapshot::WorldSnapshotCommand,
+    },
+    WorldAuthority {
+        #[command(subcommand)]
+        command: crate::cli_world_authority::WorldAuthorityCommand,
+    },
+    WorldHead {
+        #[command(subcommand)]
+        command: crate::cli_world_head::WorldHeadCommand,
+    },
+    WorldDistribution {
+        #[command(subcommand)]
+        command: crate::cli_world_distribution::WorldDistributionCommand,
+    },
+    WorldMerge {
+        #[command(subcommand)]
+        command: crate::cli_world_merge::WorldMergeCommand,
+    },
+    WorldPromotion {
+        #[command(subcommand)]
+        command: crate::cli_world_promotion::WorldPromotionCommand,
+    },
+}
+
+#[derive(Debug, clap::Subcommand)]
+pub(crate) enum Runtime {
+    Config {
+        #[arg(long)]
+        config: std::path::PathBuf,
+    },
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, clap::Subcommand)]
+pub(crate) enum Test {
+    Run {
+        suite: std::path::PathBuf,
+        #[arg(long)]
+        report_out: Option<std::path::PathBuf>,
+    },
+    Replay {
+        report: std::path::PathBuf,
+        #[arg(long)]
+        failure_out: Option<std::path::PathBuf>,
+    },
+    ReplayFixture {
+        #[command(subcommand)]
+        command: crate::cli_replay_fixture::ReplayFixtureCommand,
+    },
+    Report {
+        #[command(subcommand)]
+        command: crate::cli_report::ReportCommand,
+    },
+    Gate {
+        #[command(subcommand)]
+        command: crate::cli_gate::GateCommand,
+    },
+    Drift {
+        #[command(subcommand)]
+        command: crate::cli_drift::DriftCommand,
+    },
+    Gateway {
+        #[command(subcommand)]
+        command: crate::cli_gateway::Command,
+    },
+    Receipt {
+        #[command(subcommand)]
+        command: crate::cli_receipts::ReceiptCommand,
+    },
+    Ledger {
+        #[command(subcommand)]
+        command: crate::cli_ledger::LedgerCommand,
+    },
+    Chain {
+        #[command(subcommand)]
+        command: crate::cli_ledger::ChainCommand,
+    },
+    Chunk {
+        #[command(subcommand)]
+        command: crate::cli_chunk::Top,
+    },
+    Storage {
+        #[command(subcommand)]
+        command: crate::cli_storage::Command,
+    },
+    Artifact {
+        #[command(subcommand)]
+        command: crate::cli_artifact::Command,
+    },
+    Schema {
+        #[command(subcommand)]
+        command: crate::cli_schema::Command,
+    },
+    Cache {
+        #[command(subcommand)]
+        command: crate::cli_cache::Command,
+    },
+    Upgrade {
+        #[command(subcommand)]
+        command: crate::cli_upgrade::UpgradeCommand,
+    },
+    Transcript {
+        #[command(subcommand)]
+        command: crate::cli_transcript::Command,
+    },
+    Rewrite {
+        #[command(subcommand)]
+        command: crate::cli_rewrite::RewriteCommand,
+    },
+    Catalog {
+        #[command(subcommand)]
+        command: crate::cli_catalog::Command,
+    },
+    Job {
+        #[command(subcommand)]
+        command: crate::cli_job::JobCommand,
+    },
+    Remote {
+        #[command(subcommand)]
+        command: crate::cli_remote::RemoteCommand,
+    },
+    Delivery {
+        #[command(subcommand)]
+        command: crate::cli_delivery::DeliveryCommand,
+    },
+    Retention {
+        #[command(subcommand)]
+        command: crate::cli_retention::RetentionCommand,
+    },
+    Provenance {
+        #[command(subcommand)]
+        command: crate::cli_provenance::ProvenanceCommand,
+    },
+    Protocol {
+        #[command(subcommand)]
+        command: crate::cli_protocol::ProtocolCommand,
+    },
+    Raft {
+        #[command(subcommand)]
+        command: crate::cli_raft::RaftCommand,
+    },
+    Plugin {
+        #[command(subcommand)]
+        command: crate::cli_plugin::PluginCommand,
+    },
+    Coordination {
+        #[command(subcommand)]
+        command: crate::cli_coordination::CoordinationCommand,
+    },
+    Secrets {
+        #[command(subcommand)]
+        command: crate::cli_secrets::SecretsCommand,
+    },
+    Service {
+        #[command(subcommand)]
+        command: crate::cli_service::ServiceCommand,
+    },
+    Vat {
+        #[command(subcommand)]
+        command: crate::cli_vat::VatCommand,
+    },
+    NixosVm {
+        #[command(subcommand)]
+        command: crate::cli_nixos_vm::NixosVmCommand,
+    },
+    Traceability {
+        #[command(subcommand)]
+        command: crate::cli_traceability::TraceabilityCommand,
+    },
+    ProdSoak {
+        #[command(subcommand)]
+        command: crate::cli_prod_soak::ProdSoakCommand,
+    },
+    Octet {
+        #[command(subcommand)]
+        command: crate::cli_octet::OctetCommand,
+    },
+    Node {
+        #[command(subcommand)]
+        command: crate::cli_node::Command,
+    },
+    Repro {
+        #[command(subcommand)]
+        command: crate::cli_repro::ReproCommand,
+    },
+}
