@@ -69,6 +69,7 @@ pub struct MembershipStatusReadback {
     pub value: preserves::IOValue,
 }
 
+// r[impl molten.modularity.fabric_boundary.compatibility]
 // r[impl molten.fabric_membership.membership_views]
 // r[impl molten.fabric_membership.evidence]
 pub fn canonical_membership_profile(
@@ -103,6 +104,7 @@ pub fn canonical_membership_profile(
     })
 }
 
+// r[impl molten.modularity.fabric_boundary.compatibility]
 // r[impl molten.fabric_membership.membership_views]
 // r[impl molten.fabric_membership.locality]
 // r[impl molten.fabric_membership.evidence]
@@ -366,6 +368,7 @@ pub fn canonical_placement_outcome(
     })
 }
 
+// r[impl molten.modularity.fabric_boundary.compatibility]
 // r[impl molten.fabric_membership.recruitment]
 // r[impl molten.fabric_membership.fencing]
 // r[impl molten.fabric_membership.evidence]

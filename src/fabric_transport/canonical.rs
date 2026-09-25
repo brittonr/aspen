@@ -53,6 +53,7 @@ pub struct TransportStatusReadback {
     pub value: preserves::IOValue,
 }
 
+// r[impl molten.modularity.fabric_boundary.compatibility]
 // r[impl molten.fabric_transport.port_contract]
 // r[impl molten.fabric_transport.live_sim_parity]
 // r[impl molten.fabric_transport.failure_semantics]
@@ -120,6 +121,7 @@ pub fn fabric_transport_port_descriptor(profile: &CanonicalTransportProfile) -> 
     }
 }
 
+// r[impl molten.modularity.fabric_boundary.compatibility]
 // r[impl molten.fabric_transport.evidence]
 // r[impl molten.fabric_transport.failure_semantics]
 pub fn canonical_transport_transition(

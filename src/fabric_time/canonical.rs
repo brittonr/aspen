@@ -95,6 +95,7 @@ pub struct CanonicalFabricTimeRun {
     pub value: preserves::IOValue,
 }
 
+// r[impl molten.modularity.fabric_boundary.compatibility]
 // r[impl molten.fabric_time.evidence]
 pub fn canonical_admit_time_profile(
     descriptor: &super::TimeProfileDescriptor,

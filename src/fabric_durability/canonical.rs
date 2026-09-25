@@ -55,6 +55,7 @@ pub struct DurableStatusReadback {
     pub value: preserves::IOValue,
 }
 
+// r[impl molten.modularity.fabric_boundary.compatibility]
 // r[impl molten.fabric_durability.port_contracts]
 // r[impl molten.fabric_durability.non_claims]
 pub fn canonical_durable_profile(profile: &DurableStateProfile) -> crate::error::Result<CanonicalDurableProfile> {
@@ -128,6 +129,7 @@ pub fn fabric_durability_port_descriptors(
     descriptors
 }
 
+// r[impl molten.modularity.fabric_boundary.compatibility]
 // r[impl molten.fabric_durability.evidence]
 // r[impl molten.fabric_durability.uncertain_outcomes]
 pub fn canonical_durable_transition(

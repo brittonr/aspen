@@ -1,0 +1,9 @@
+{
+  "spec_effect": "none",
+  "spec_effect_rationale": "The change implements the accepted requirement molten.modularity.fabric_boundary.compatibility and its scenario id .fixtures as written. It adds tests, pre-migration fixtures, and comment-only evidence markers. Accepted requirement text is unchanged.",
+  "workflow_profile": {
+    "id": "no-spec-delta",
+    "source": "change_create",
+    "version": 1
+  }
+}

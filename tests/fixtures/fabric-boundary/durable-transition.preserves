@@ -1,0 +1,5 @@
+´³fabric-durability-transition-v1±#molten.fabric.durability.outcome.v1´³field±profile-ref±Gblake3:224e7ff91b3dd7bdd67152faad19dcdcf3b7de0073e711fc76a51bfce15a2e65„´³field±namespace-id±namespace-a„´³field±
+generation°„´³field±	operation±
+append-log„´³field±outcome±durable„´³field±affected-items°„´³field±affected-bytes°„´³field±
+retry-safe€„´³field±reconciliation-required€„´³field±
+non-claimsµ±does-not-prove-replication±does-not-prove-consensus±'does-not-prove-distributed-transactions±does-not-prove-linearizability±!does-not-prove-remote-persistence±$does-not-prove-extension-correctness±#does-not-prove-recovery-correctness±!does-not-grant-deletion-authority„„´³field±checksµ±pure-transition-admitted±generation-fenced±outcome-explicit±backend-handles-excluded±local-durability-only„„„
