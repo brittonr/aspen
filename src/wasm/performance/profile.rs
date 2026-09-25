@@ -247,12 +247,16 @@ struct SuiteExpectation<'a> {
     max_samples: u32,
 }
 
-fn validate_suite(suite: &super::model::BenchmarkSuite, expected: SuiteExpectation<'_>, blockers: &mut Vec<String>) {
+fn validate_suite(
+    suite: &super::model::BenchmarkSuite,
+    expected: SuiteExpectation<'_>,
+    blockers: &mut impl crate::bounded::VecSink<String>,
+) {
     if suite.lane != expected.lane || suite.suite_id != expected.suite_id {
-        blockers.push(format!("{} performance suite identity is stale", expected.lane.as_str()));
+        blockers.push_item(format!("{} performance suite identity is stale", expected.lane.as_str()));
     }
     if suite.measurement != SIGHTGLASS_MEASUREMENT || !suite.pin_to_single_core {
-        blockers.push(format!("{} performance suite measurement posture is unsupported", expected.lane.as_str()));
+        blockers.push_item(format!("{} performance suite measurement posture is unsupported", expected.lane.as_str()));
     }
     let expected_bundles = expected.bundle_refs.iter().map(|value| (*value).to_string()).collect::<Vec<_>>();
     let expected_workloads = expected.workload_refs.iter().map(|value| (*value).to_string()).collect::<Vec<_>>();
@@ -261,8 +265,10 @@ fn validate_suite(suite: &super::model::BenchmarkSuite, expected: SuiteExpectati
         || suite.materialization_bundle_refs.iter().any(|value| !super::model::valid_content_ref(value))
         || suite.workload_refs.iter().any(|value| !super::model::valid_content_ref(value))
     {
-        blockers
-            .push(format!("{} performance suite fixture identities are stale or malformed", expected.lane.as_str()));
+        blockers.push_item(format!(
+            "{} performance suite fixture identities are stale or malformed",
+            expected.lane.as_str()
+        ));
     }
     if suite.host_class_ref != HOST_CLASS_REF
         || suite.resource_envelope_ref != RESOURCE_ENVELOPE_REF
@@ -270,10 +276,11 @@ fn validate_suite(suite: &super::model::BenchmarkSuite, expected: SuiteExpectati
         || suite.engine_artifact_ref != ENGINE_ARTIFACT_REF
         || suite.runner_artifact_ref != RUNNER_ARTIFACT_REF
     {
-        blockers.push(format!("{} performance suite environment identity is stale", expected.lane.as_str()));
+        blockers.push_item(format!("{} performance suite environment identity is stale", expected.lane.as_str()));
     }
     if suite.phases != super::model::PerformancePhase::ALL {
-        blockers.push(format!("{} performance suite collapses or changes required phases", expected.lane.as_str()));
+        blockers
+            .push_item(format!("{} performance suite collapses or changes required phases", expected.lane.as_str()));
     }
     let expected_samples = suite.sampling.expected_samples_per_phase();
     if suite.sampling.processes != expected.processes
@@ -282,12 +289,12 @@ fn validate_suite(suite: &super::model::BenchmarkSuite, expected: SuiteExpectati
         || suite.sampling.max_samples_per_phase != expected.max_samples
         || suite.sampling.max_samples_per_phase < suite.sampling.min_samples_per_phase
     {
-        blockers.push(format!("{} performance suite sampling plan is unsupported", expected.lane.as_str()));
+        blockers.push_item(format!("{} performance suite sampling plan is unsupported", expected.lane.as_str()));
     }
 }
 
-fn require_equal(blockers: &mut Vec<String>, label: &str, actual: &str, expected: &str) {
+fn require_equal(blockers: &mut impl crate::bounded::VecSink<String>, label: &str, actual: &str, expected: &str) {
     if actual != expected {
-        blockers.push(format!("performance profile {label} must equal {expected}"));
+        blockers.push_item(format!("performance profile {label} must equal {expected}"));
     }
 }

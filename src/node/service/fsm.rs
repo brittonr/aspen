@@ -197,23 +197,31 @@ fn transition_diagnostics(state: &ServiceFsmState, event: &ServiceFsmEvent) -> V
     diagnostics
 }
 
-fn require_startup(event: &ServiceFsmEvent, diagnostics: &mut Vec<String>) {
+fn require_startup(event: &ServiceFsmEvent, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if event.startup_ref.is_none() {
-        diagnostics.push("missing-startup-evidence".to_string());
+        diagnostics.push_item("missing-startup-evidence".to_string());
     }
 }
 
-fn require_startup_match(state: &ServiceFsmState, event: &ServiceFsmEvent, diagnostics: &mut Vec<String>) {
+fn require_startup_match(
+    state: &ServiceFsmState,
+    event: &ServiceFsmEvent,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) {
     require_startup(event, diagnostics);
     if state.startup_ref.as_ref() != event.startup_ref.as_ref() {
-        diagnostics.push("stale-startup-binding".to_string());
+        diagnostics.push_item("stale-startup-binding".to_string());
     }
 }
 
-fn require_lock_match(state: &ServiceFsmState, event: &ServiceFsmEvent, diagnostics: &mut Vec<String>) {
+fn require_lock_match(
+    state: &ServiceFsmState,
+    event: &ServiceFsmEvent,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) {
     require_startup_match(state, event, diagnostics);
     if state.service_lock_ref.as_ref() != event.service_lock_ref.as_ref() {
-        diagnostics.push("service-lock-binding-mismatch".to_string());
+        diagnostics.push_item("service-lock-binding-mismatch".to_string());
     }
 }
 

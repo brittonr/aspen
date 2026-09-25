@@ -412,7 +412,7 @@ fn validate_topology_expectations(
     topology: &ParsedTopology,
     expected_nodes: &[String],
     expected_package_ref: Option<&str>,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<()> {
     if !expected_nodes.is_empty() {
         let actual = topology.nodes.iter().map(String::as_str).collect::<OrderedSet<_>>();
@@ -432,7 +432,7 @@ fn validate_node_evidence(
     nodes: &[ParsedNodeEvidence],
     node_refs: &[String],
     test_run: &ParsedTestRun,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<()> {
     let topology_nodes = topology.nodes.iter().map(String::as_str).collect::<OrderedSet<_>>();
     let evidence_node_count = nodes.iter().map(|node| node.node.as_str()).collect::<OrderedSet<_>>().len();
@@ -460,7 +460,7 @@ fn validate_child_expectations(
     actual_child_refs: &[String],
     child_artifacts: &[ParsedChildReceipt],
     expected_child_receipts: &[NixosVmExpectedChildReceipt],
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<()> {
     let mut actual = OrderedSet::new();
     for child_ref in actual_child_refs {
@@ -536,7 +536,7 @@ fn validate_expected_child_receipt(expectation: &NixosVmExpectedChildReceipt) ->
 }
 
 fn validate_optional_child_binding(
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
     actual: &Option<String>,
     expected: Option<&str>,
     diagnostic: &'static str,
@@ -551,7 +551,7 @@ fn validate_prod_soak_runs(
     topology_ref: &str,
     node_refs: &[String],
     prod_soaks: &[ParsedProdSoakRun],
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<()> {
     let node_ref_set = node_refs.iter().map(String::as_str).collect::<OrderedSet<_>>();
     for run in prod_soaks {
@@ -642,7 +642,7 @@ fn validate_fault_expected_outcome(
     receipt: &ParsedFaultReceipt,
     descriptors: &[ParsedFaultDescriptor],
     descriptor_refs: &[String],
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<()> {
     let Some((descriptor, _)) = descriptors
         .iter()
@@ -1235,19 +1235,23 @@ fn validate_decision(decision: &str) -> Result<()> {
     }
 }
 
-fn push_if(diagnostics: &mut Vec<String>, condition: bool, diagnostic: &'static str) -> Result<()> {
+fn push_if(
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+    condition: bool,
+    diagnostic: &'static str,
+) -> Result<()> {
     if condition {
         push_diagnostic(diagnostics, diagnostic.to_string())?;
     }
     Ok(())
 }
 
-fn push_diagnostic(diagnostics: &mut Vec<String>, diagnostic: String) -> Result<()> {
+fn push_diagnostic(diagnostics: &mut impl crate::bounded::VecSink<String>, diagnostic: String) -> Result<()> {
     validate_text("diagnostic", &diagnostic)?;
-    if diagnostics.len() >= MAX_VM_VALIDATION_ITEMS {
+    if diagnostics.item_count() >= MAX_VM_VALIDATION_ITEMS {
         return Err(MoltenError::invalid_harness("VM validation diagnostics exceeded bound"));
     }
-    diagnostics.push(diagnostic);
+    diagnostics.push_item(diagnostic);
     Ok(())
 }
 

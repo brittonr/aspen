@@ -446,7 +446,7 @@ fn admission_freshness_diagnostics(input: CacheHitValidityInput<'_>) -> Vec<Stri
 }
 
 fn push_changed_ref_diagnostic(
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
     label: &str,
     cached_refs: &[String],
     current_refs: &[String],
@@ -455,7 +455,7 @@ fn push_changed_ref_diagnostic(
     if refs_match_or_compatible(cached_refs, current_refs, compatibility_refs) {
         return;
     }
-    diagnostics.push(label.to_string());
+    diagnostics.push_item(label.to_string());
 }
 
 fn refs_match_or_compatible(cached_refs: &[String], current_refs: &[String], compatibility_refs: &[String]) -> bool {

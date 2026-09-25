@@ -940,7 +940,7 @@ fn parse_junit_attribute_value(value: &str, name: &str) -> Outcome<u64> {
 fn collect_specs_under(
     path: &std::path::Path,
     changed: bool,
-    sources: &mut Vec<molten::requirement_traceability::SpecSource>,
+    sources: &mut impl Extend<molten::requirement_traceability::SpecSource>,
 ) -> Outcome<()> {
     let mut pending = vec![path.to_path_buf()];
     while let Some(next) = pending.pop() {
@@ -950,12 +950,12 @@ fn collect_specs_under(
         if next.is_file() {
             if next.file_name().is_some_and(|name| name == std::ffi::OsStr::new("spec.md")) {
                 let markdown = std::fs::read_to_string(&next).map_err(molten::error::MoltenError::from)?;
-                sources.push(molten::requirement_traceability::SpecSource {
+                sources.extend([molten::requirement_traceability::SpecSource {
                     source: next.display().to_string(),
                     markdown,
                     changed,
                     default_kind: "evidence".to_string(),
-                });
+                }]);
             }
             continue;
         }

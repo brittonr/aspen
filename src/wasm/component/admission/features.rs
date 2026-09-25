@@ -1,10 +1,10 @@
 pub(crate) fn validate_features(
     profile: &super::super::model::ComponentRuntimeProfile,
     facts: &super::ComponentArtifactFacts,
-    blockers: &mut Vec<String>,
+    blockers: &mut impl crate::bounded::VecSink<String>,
 ) {
     if super::super::model::sorted_unique(&facts.enabled_features) != facts.enabled_features {
-        blockers.push("component feature facts must be sorted and unique".to_string());
+        blockers.push_item("component feature facts must be sorted and unique".to_string());
         return;
     }
     let feature_posture = [
@@ -32,6 +32,6 @@ pub(crate) fn validate_features(
         .map(|(name, _)| (*name).to_string())
         .collect::<Vec<_>>();
     if facts.enabled_features != expected {
-        blockers.push("component artifact feature posture differs from the admitted profile".to_string());
+        blockers.push_item("component artifact feature posture differs from the admitted profile".to_string());
     }
 }

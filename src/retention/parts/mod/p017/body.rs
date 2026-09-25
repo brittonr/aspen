@@ -29,19 +29,19 @@ fn lifecycle_decision_checks(
     apply: &GcApply,
     execution: &GcExecutionGate,
     audit: &GcAudit,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) {
     if plan.decision != "pass" {
-        diagnostics.push("retention-gc-lifecycle-plan-not-pass".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-plan-not-pass".to_string());
     }
     if apply.decision != "pass" {
-        diagnostics.push("retention-gc-lifecycle-apply-not-pass".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-apply-not-pass".to_string());
     }
     if execution.decision != "pass" {
-        diagnostics.push("retention-gc-lifecycle-execution-not-pass".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-execution-not-pass".to_string());
     }
     if audit.decision != "pass" {
-        diagnostics.push("retention-gc-lifecycle-audit-not-pass".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-audit-not-pass".to_string());
     }
 }
 
@@ -50,55 +50,55 @@ fn lifecycle_link_checks(
     apply: &GcApply,
     execution: &GcExecutionGate,
     audit: &GcAudit,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) {
     if !same_lifecycle_scope_plan_apply(plan, apply) {
-        diagnostics.push("retention-gc-lifecycle-plan-apply-scope-mismatch".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-plan-apply-scope-mismatch".to_string());
     }
     if !same_lifecycle_scope_apply_execution(apply, execution) {
-        diagnostics.push("retention-gc-lifecycle-apply-execution-scope-mismatch".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-apply-execution-scope-mismatch".to_string());
     }
     if !same_lifecycle_scope_execution_audit(execution, audit) {
-        diagnostics.push("retention-gc-lifecycle-execution-audit-scope-mismatch".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-execution-audit-scope-mismatch".to_string());
     }
     if apply.plan_ref != plan.plan_ref {
-        diagnostics.push("retention-gc-lifecycle-apply-plan-mismatch".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-apply-plan-mismatch".to_string());
     }
     if apply.recomputed_plan_ref != plan.plan_ref {
-        diagnostics.push("retention-gc-lifecycle-recomputed-plan-mismatch".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-recomputed-plan-mismatch".to_string());
     }
     if execution.apply_ref.as_deref() != Some(apply.apply_ref.as_str()) {
-        diagnostics.push("retention-gc-lifecycle-execution-apply-mismatch".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-execution-apply-mismatch".to_string());
     }
     if execution.plan_ref.as_deref() != Some(plan.plan_ref.as_str()) {
-        diagnostics.push("retention-gc-lifecycle-execution-plan-mismatch".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-execution-plan-mismatch".to_string());
     }
     if execution.recomputed_plan_ref.as_deref() != Some(apply.recomputed_plan_ref.as_str()) {
-        diagnostics.push("retention-gc-lifecycle-execution-recomputed-plan-mismatch".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-execution-recomputed-plan-mismatch".to_string());
     }
     if execution.retention_receipt_ref != apply.retention_receipt_ref {
-        diagnostics.push("retention-gc-lifecycle-execution-receipt-mismatch".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-execution-receipt-mismatch".to_string());
     }
     if execution.tombstone_ref != apply.tombstone_ref {
-        diagnostics.push("retention-gc-lifecycle-execution-tombstone-mismatch".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-execution-tombstone-mismatch".to_string());
     }
     if audit.plan_ref.as_deref() != Some(plan.plan_ref.as_str()) {
-        diagnostics.push("retention-gc-lifecycle-audit-plan-mismatch".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-audit-plan-mismatch".to_string());
     }
     if audit.apply_ref.as_deref() != Some(apply.apply_ref.as_str()) {
-        diagnostics.push("retention-gc-lifecycle-audit-apply-mismatch".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-audit-apply-mismatch".to_string());
     }
     if audit.execution_ref != execution.execution_ref {
-        diagnostics.push("retention-gc-lifecycle-audit-execution-mismatch".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-audit-execution-mismatch".to_string());
     }
     if audit.retention_receipt_ref != apply.retention_receipt_ref {
-        diagnostics.push("retention-gc-lifecycle-audit-receipt-mismatch".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-audit-receipt-mismatch".to_string());
     }
     if audit.tombstone_ref != apply.tombstone_ref {
-        diagnostics.push("retention-gc-lifecycle-audit-tombstone-mismatch".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-audit-tombstone-mismatch".to_string());
     }
     if is_destructive_action(&plan.action) && apply.tombstone_ref.is_none() {
-        diagnostics.push("retention-gc-lifecycle-tombstone-missing".to_string());
+        diagnostics.push_item("retention-gc-lifecycle-tombstone-missing".to_string());
     }
 }
 

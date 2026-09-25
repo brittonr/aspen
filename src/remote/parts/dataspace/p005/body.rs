@@ -247,7 +247,7 @@ fn validate_traversal_descriptor(descriptor: &TraversalDescriptor) -> Result<()>
 
 fn collect_traversal_descriptor_diagnostics(
     descriptor: &TraversalDescriptor,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<()> {
     if !matches!(
         descriptor.traversal_kind.as_str(),
@@ -257,24 +257,24 @@ fn collect_traversal_descriptor_diagnostics(
             | TRAVERSAL_SEQUENCE
             | TRAVERSAL_POLICY_DEFINED
     ) {
-        diagnostics.push(format!("unsupported traversal kind {}", descriptor.traversal_kind));
+        diagnostics.push_item(format!("unsupported traversal kind {}", descriptor.traversal_kind));
     }
     if descriptor.root_refs.is_empty() {
-        diagnostics.push("traversal descriptor requires at least one root ref".to_string());
+        diagnostics.push_item("traversal descriptor requires at least one root ref".to_string());
     }
     validate_traversal_refs(&descriptor.root_refs, "traversal root ref")?;
     validate_traversal_refs(&descriptor.visited_refs, "traversal visited ref")?;
     if descriptor.order != TRAVERSAL_ORDER_LEXICOGRAPHIC {
-        diagnostics.push(format!("traversal order {} is not deterministic", descriptor.order));
+        diagnostics.push_item(format!("traversal order {} is not deterministic", descriptor.order));
     }
     if !matches!(
         descriptor.inline_policy.as_str(),
         INLINE_POLICY_METADATA_ONLY | INLINE_POLICY_NONE | INLINE_POLICY_ALL | INLINE_POLICY_STEM_ONLY
     ) {
-        diagnostics.push(format!("unsupported traversal inline policy {}", descriptor.inline_policy));
+        diagnostics.push_item(format!("unsupported traversal inline policy {}", descriptor.inline_policy));
     }
     if descriptor.resource_bound < MIN_TRAVERSAL_BOUND || descriptor.replay_bound < MIN_TRAVERSAL_BOUND {
-        diagnostics.push("traversal resource and replay bounds must be positive".to_string());
+        diagnostics.push_item("traversal resource and replay bounds must be positive".to_string());
     }
     validate_traversal_refs(&descriptor.policy_refs, "traversal policy ref")?;
     validate_traversal_refs(&descriptor.evidence_refs, "traversal evidence ref")?;

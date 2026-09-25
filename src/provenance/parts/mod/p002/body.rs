@@ -132,9 +132,9 @@ pub fn evaluate_evidence_only_boundary(input: &EvidenceOnlyBoundaryInput<'_>) ->
     Ok(EvidenceOnlyBoundaryDecision { decision, diagnostics })
 }
 
-fn push_missing_boundary_diagnostic(diagnostics: &mut Vec<String>, operation: &str, refs: &[String], gate: &str) {
+fn push_missing_boundary_diagnostic(diagnostics: &mut impl crate::bounded::VecSink<String>, operation: &str, refs: &[String], gate: &str) {
     if refs.is_empty() {
-        diagnostics.push(format!(
+        diagnostics.push_item(format!(
             "provenance receipts for operation {operation} remain evidence-only and do not grant {gate} trust"
         ));
     }

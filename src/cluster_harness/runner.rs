@@ -530,8 +530,8 @@ struct PhaseStep<'a> {
 
 fn execute_phase_for_nodes<F>(
     step: PhaseStep<'_>,
-    executions: &mut Vec<ChildExecution>,
-    artifacts: &mut Vec<PreparedArtifact>,
+    executions: &mut impl crate::bounded::VecSink<ChildExecution>,
+    artifacts: &mut impl crate::bounded::VecSink<PreparedArtifact>,
     arguments: F,
 ) -> crate::error::Result<bool>
 where
@@ -548,15 +548,15 @@ where
             CHILD_PROCESS_KIND,
             execution.value.clone(),
         )?;
-        executions.push(execution);
+        executions.push_item(execution);
     }
     Ok(is_passed)
 }
 
 fn execute_phase_for_nodes_reverse<F>(
     step: PhaseStep<'_>,
-    executions: &mut Vec<ChildExecution>,
-    artifacts: &mut Vec<PreparedArtifact>,
+    executions: &mut impl crate::bounded::VecSink<ChildExecution>,
+    artifacts: &mut impl crate::bounded::VecSink<PreparedArtifact>,
     arguments: F,
 ) -> crate::error::Result<bool>
 where
@@ -573,7 +573,7 @@ where
             CHILD_PROCESS_KIND,
             execution.value.clone(),
         )?;
-        executions.push(execution);
+        executions.push_item(execution);
     }
     Ok(is_passed)
 }
@@ -712,14 +712,14 @@ fn finalize_child_execution(
     })
 }
 
-fn collect_child_diagnostics(executions: &[ChildExecution], diagnostics: &mut Vec<String>) {
-    diagnostics.extend(executions.iter().filter_map(|child| child.diagnostic.clone()));
+fn collect_child_diagnostics(executions: &[ChildExecution], diagnostics: &mut impl crate::bounded::VecSink<String>) {
+    diagnostics.extend_items(executions.iter().filter_map(|child| child.diagnostic.clone()));
 }
 
 fn capture_node_artifacts(
     node: &crate::cluster::ClusterNodePlan,
-    artifacts: &mut Vec<PreparedArtifact>,
-    child_receipt_refs: &mut Vec<String>,
+    artifacts: &mut impl crate::bounded::VecSink<PreparedArtifact>,
+    child_receipt_refs: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<NodeArtifacts> {
     let mut observed = NodeArtifacts::default();
     for (file, assign) in [
@@ -742,7 +742,7 @@ fn capture_node_artifacts(
         let kind = crate::ledger::artifact_kind(&value);
         let relative = format!("children/receipts/{}/{file}", node.path_component);
         push_artifact(artifacts, &relative, kind, value)?;
-        child_receipt_refs.push(reference.clone());
+        child_receipt_refs.push_item(reference.clone());
         observed.assign(assign, reference);
     }
     Ok(observed)
@@ -930,14 +930,14 @@ fn cleanup_state_roots(plan: &crate::cluster::ClusterPlan) -> crate::error::Resu
 fn collect_ticket_paths(
     root: &std::path::Path,
     current: &std::path::Path,
-    paths: &mut Vec<std::path::PathBuf>,
+    paths: &mut impl crate::bounded::VecSink<std::path::PathBuf>,
 ) -> crate::error::Result<()> {
     if !current.exists() {
         return Ok(());
     }
     let mut pending = vec![current.to_path_buf()];
     while let Some(next) = pending.pop() {
-        if paths.len() >= MAX_TICKET_FILES {
+        if paths.item_count() >= MAX_TICKET_FILES {
             return Err(crate::error::MoltenError::invalid_harness(format!(
                 "cluster harness ticket file count exceeds bound {MAX_TICKET_FILES} under {}",
                 root.display()
@@ -956,20 +956,20 @@ fn collect_ticket_paths(
         } else if next.is_file()
             && next.file_name().is_some_and(|name| name.to_string_lossy().to_ascii_lowercase().contains("ticket"))
         {
-            paths.push(next);
+            paths.push_item(next);
         }
     }
     Ok(())
 }
 
 fn push_artifact(
-    artifacts: &mut Vec<PreparedArtifact>,
+    artifacts: &mut impl crate::bounded::VecSink<PreparedArtifact>,
     relative_path: &str,
     kind: &str,
     value: IoValue,
 ) -> crate::error::Result<()> {
     let expected_ref = crate::preserves_rail::canonical_hash(&value)?;
-    artifacts.push(PreparedArtifact {
+    artifacts.push_item(PreparedArtifact {
         entry: molten_core::cluster_harness::RunArtifactIndexEntry {
             relative_path: relative_path.to_string(),
             artifact_kind: kind.to_string(),
@@ -1226,7 +1226,7 @@ fn collect_run_files(root: &std::path::Path) -> crate::error::Result<Vec<String>
 fn collect_run_files_from(
     root: &std::path::Path,
     current: &std::path::Path,
-    files: &mut Vec<String>,
+    files: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<()> {
     let mut pending = vec![current.to_path_buf()];
     while let Some(next) = pending.pop() {
@@ -1243,7 +1243,7 @@ fn collect_run_files_from(
                         .map_err(|_| crate::error::MoltenError::invalid_harness("cluster run file escaped root"))?
                         .to_string_lossy()
                         .replace(std::path::MAIN_SEPARATOR, "/");
-                    files.push(relative);
+                    files.push_item(relative);
                 }
             }
         }

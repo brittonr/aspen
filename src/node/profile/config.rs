@@ -205,29 +205,38 @@ fn validate_source_kind(kind: &str) -> Result<()> {
     }
 }
 
-fn collect_source_kind_diagnostics(profile: &CheckedNodeProfile, diagnostics: &mut Vec<String>) {
+fn collect_source_kind_diagnostics(
+    profile: &CheckedNodeProfile,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) {
     if profile.source_kind == SOURCE_KIND_NICKEL_SOURCE {
-        diagnostics.push("runtime-nickel-evaluation-denied:startup-consumes-checked-exports".to_string());
+        diagnostics.push_item("runtime-nickel-evaluation-denied:startup-consumes-checked-exports".to_string());
     }
 }
 
-fn collect_profile_ref_diagnostics(profile: &CheckedNodeProfile, diagnostics: &mut Vec<String>) {
+fn collect_profile_ref_diagnostics(
+    profile: &CheckedNodeProfile,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) {
     if let Some(actual) = profile.actual_profile_ref.as_ref()
         && actual != &profile.profile_ref
     {
-        diagnostics.push(format!("profile-ref-mismatch:expected={}:actual={actual}", profile.profile_ref));
+        diagnostics.push_item(format!("profile-ref-mismatch:expected={}:actual={actual}", profile.profile_ref));
     }
 }
 
-fn collect_adapter_diagnostics(adapters: &[NodeAdapterBinding], diagnostics: &mut Vec<String>) {
+fn collect_adapter_diagnostics(
+    adapters: &[NodeAdapterBinding],
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) {
     for adapter in adapters {
         if !is_required_runtime_adapter(&adapter.name) {
-            diagnostics.push(format!("unsupported-node-adapter-profile:{}", adapter.name));
+            diagnostics.push_item(format!("unsupported-node-adapter-profile:{}", adapter.name));
         }
     }
     for required in crate::node_runtime::REQUIRED_RUNTIME_ADAPTERS {
         if !adapters.iter().any(|adapter| adapter.name == *required) {
-            diagnostics.push(format!("missing-required-node-adapter:{required}"));
+            diagnostics.push_item(format!("missing-required-node-adapter:{required}"));
         }
     }
 }
@@ -243,7 +252,7 @@ fn validate_adapter_diagnostics_or_error(adapters: &[NodeAdapterBinding]) -> Res
 fn collect_override_diagnostics(
     profile: &CheckedNodeProfile,
     overrides: &NodeProfileOverrides,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Vec<String> {
     let mut accepted = Vec::new();
     if let Some(state_root_ref) = overrides.state_root_ref.as_ref() {
@@ -264,7 +273,7 @@ fn collect_override_diagnostics(
         let value = policy_refs.join(",");
         collect_override_diagnostic(profile, OVERRIDE_POLICY_REFS, &value, diagnostics, &mut accepted);
         if profile.tier == TIER_RELEASE && policy_refs.is_empty() {
-            diagnostics.push("denied-release-invariant-override:policy-refs-empty".to_string());
+            diagnostics.push_item("denied-release-invariant-override:policy-refs-empty".to_string());
         }
     }
     accepted
@@ -274,13 +283,13 @@ fn collect_override_diagnostic(
     profile: &CheckedNodeProfile,
     field: &str,
     value: &str,
-    diagnostics: &mut Vec<String>,
-    accepted: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+    accepted: &mut impl crate::bounded::VecSink<String>,
 ) {
     if profile.overrideable_fields.iter().any(|allowed| allowed == field) && profile.tier != TIER_RELEASE {
-        accepted.push(format!("accepted-override:{field}={value}"));
+        accepted.push_item(format!("accepted-override:{field}={value}"));
     } else {
-        diagnostics.push(format!("denied-profile-override:{field}"));
+        diagnostics.push_item(format!("denied-profile-override:{field}"));
     }
 }
 

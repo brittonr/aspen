@@ -336,7 +336,10 @@ pub fn admit_wizer_artifact(
     }
 }
 
-fn validate_bundle_identity_fields(bundle: &PerformanceMaterializationBundle, blockers: &mut Vec<String>) {
+fn validate_bundle_identity_fields(
+    bundle: &PerformanceMaterializationBundle,
+    blockers: &mut impl crate::bounded::VecSink<String>,
+) {
     for (label, value) in [
         ("source component", bundle.source_component_ref.as_str()),
         ("artifact", bundle.artifact_ref.as_str()),
@@ -344,31 +347,35 @@ fn validate_bundle_identity_fields(bundle: &PerformanceMaterializationBundle, bl
         ("runtime configuration", bundle.runtime_configuration_ref.as_str()),
     ] {
         if !super::model::valid_content_ref(value) {
-            blockers.push(format!("performance Mantle bundle {label} ref is malformed"));
+            blockers.push_item(format!("performance Mantle bundle {label} ref is malformed"));
         }
     }
     if bundle.wasmtime_revision != super::profile::WASMTIME_COMPONENT_COHORT
         || bundle.target.trim().is_empty()
         || super::model::sorted_unique(&bundle.cpu_features) != bundle.cpu_features
     {
-        blockers.push("performance Mantle bundle Wasmtime, target, or CPU features are malformed".to_string());
+        blockers.push_item("performance Mantle bundle Wasmtime, target, or CPU features are malformed".to_string());
     }
     validate_ref_set("Mantle stage", &bundle.mantle_stage_receipt_refs, blockers);
     validate_ref_set("Valence sidecar", &bundle.valence_sidecar_refs, blockers);
     validate_ref_set("build input", &bundle.build_input_refs, blockers);
 }
 
-fn validate_artifact_kind(bundle: &PerformanceMaterializationBundle, blockers: &mut Vec<String>) {
+fn validate_artifact_kind(
+    bundle: &PerformanceMaterializationBundle,
+    blockers: &mut impl crate::bounded::VecSink<String>,
+) {
     match bundle.kind {
         super::model::PerformanceArtifactKind::PortableComponent => {
             if bundle.source_component_ref != bundle.artifact_ref {
-                blockers.push("portable performance artifact must retain its source component identity".to_string());
+                blockers
+                    .push_item("portable performance artifact must retain its source component identity".to_string());
             }
         }
         super::model::PerformanceArtifactKind::WizerComponent
         | super::model::PerformanceArtifactKind::PrecompiledComponent => {
             if bundle.source_component_ref == bundle.artifact_ref {
-                blockers.push(
+                blockers.push_item(
                     "transformed performance artifact must retain distinct source and output identities".to_string(),
                 );
             }
@@ -376,18 +383,18 @@ fn validate_artifact_kind(bundle: &PerformanceMaterializationBundle, blockers: &
     }
 }
 
-fn validate_ref_set(label: &str, refs: &[String], blockers: &mut Vec<String>) {
+fn validate_ref_set(label: &str, refs: &[String], blockers: &mut impl crate::bounded::VecSink<String>) {
     if refs.len() > MAX_PERFORMANCE_EVIDENCE_REFS || !super::model::valid_ref_collection(refs) {
-        blockers.push(format!("performance {label} refs are missing, malformed, duplicate, or unsorted"));
+        blockers.push_item(format!("performance {label} refs are missing, malformed, duplicate, or unsorted"));
     }
 }
 
-fn validate_wizer_imports(manifest: &WizerTransformManifest, blockers: &mut Vec<String>) {
+fn validate_wizer_imports(manifest: &WizerTransformManifest, blockers: &mut impl crate::bounded::VecSink<String>) {
     if manifest.declared_imports.len() > MAX_PERFORMANCE_EVIDENCE_REFS
         || super::model::sorted_unique(&manifest.declared_imports) != manifest.declared_imports
         || super::model::sorted_unique(&manifest.denied_imports) != manifest.denied_imports
     {
-        blockers.push("Wizer declared and denied imports must be bounded, sorted, and unique".to_string());
+        blockers.push_item("Wizer declared and denied imports must be bounded, sorted, and unique".to_string());
     }
     let virtual_names = manifest.virtual_imports.iter().map(|binding| binding.import.clone()).collect::<Vec<_>>();
     if manifest.virtual_imports.len() > MAX_PERFORMANCE_EVIDENCE_REFS
@@ -397,19 +404,20 @@ fn validate_wizer_imports(manifest: &WizerTransformManifest, blockers: &mut Vec<
             .iter()
             .any(|binding| binding.import.trim().is_empty() || !super::model::valid_content_ref(&binding.input_ref))
     {
-        blockers.push("Wizer virtual imports must bind sorted interfaces to exact deterministic inputs".to_string());
+        blockers
+            .push_item("Wizer virtual imports must bind sorted interfaces to exact deterministic inputs".to_string());
     }
     if manifest
         .denied_imports
         .iter()
         .any(|denied| virtual_names.iter().any(|virtual_name| virtual_name == denied))
     {
-        blockers.push("Wizer import cannot be both denied and virtualized".to_string());
+        blockers.push_item("Wizer import cannot be both denied and virtualized".to_string());
     }
     let mut admitted_imports = manifest.denied_imports.clone();
     admitted_imports.extend(virtual_names);
     admitted_imports = super::model::sorted_unique(&admitted_imports);
     if admitted_imports != manifest.declared_imports {
-        blockers.push("Wizer imports are not completely denied or deterministically virtualized".to_string());
+        blockers.push_item("Wizer imports are not completely denied or deterministically virtualized".to_string());
     }
 }

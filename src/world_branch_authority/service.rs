@@ -225,11 +225,11 @@ fn linear_operation_ref(plan: &WorldBranchAuthorityPlan, generation: u64) -> Res
 fn publish<R: BranchAuthorityReceiptPort>(
     runtime: &mut R,
     receipt: &WorldBranchAuthorityReceipt,
-    receipt_refs: &mut Vec<String>,
+    receipt_refs: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<()> {
     let (receipt_ref, bytes) = encode_receipt(receipt)?;
     runtime.publish_receipt(receipt_ref.as_str(), &bytes)?;
-    receipt_refs.push(receipt_ref);
+    receipt_refs.push_item(receipt_ref);
     Ok(())
 }
 

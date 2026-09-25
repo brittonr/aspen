@@ -100,9 +100,9 @@ pub fn demote_peer(input: &PeerPromotionRequest, retained_roles: Vec<String>) ->
     })
 }
 
-fn require_approval(diagnostics: &mut Vec<String>, required: &str, approvals: &[String]) {
+fn require_approval(diagnostics: &mut impl crate::bounded::VecSink<String>, required: &str, approvals: &[String]) {
     if !approvals.iter().any(|approval| approval == required) {
-        diagnostics.push(format!("missing approval {required}"));
+        diagnostics.push_item(format!("missing approval {required}"));
     }
 }
 

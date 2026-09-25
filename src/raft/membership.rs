@@ -81,9 +81,9 @@ pub fn commit_raft_membership(
     })
 }
 
-fn require_non_empty(diagnostics: &mut Vec<String>, label: &str, refs: &[String]) {
+fn require_non_empty(diagnostics: &mut impl crate::bounded::VecSink<String>, label: &str, refs: &[String]) {
     if refs.is_empty() {
-        diagnostics.push(format!("missing {label} evidence"));
+        diagnostics.push_item(format!("missing {label} evidence"));
     }
 }
 

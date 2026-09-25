@@ -317,13 +317,13 @@ fn required_chunks_for_remote_range(
     manifest: &ChunkManifest,
     offset: u64,
     length: u64,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<Vec<String>> {
     let end = offset
         .checked_add(length)
         .ok_or_else(|| MoltenError::invalid_harness("remote byte-source range end overflow"))?;
     if end > manifest.total_len {
-        diagnostics.push("remote byte-source range exceeds manifest length".to_string());
+        diagnostics.push_item("remote byte-source range exceeds manifest length".to_string());
     }
     let mut refs = Vec::with_capacity(manifest.chunks.len());
     let mut chunk_start = 0_u64;

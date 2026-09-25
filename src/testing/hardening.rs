@@ -743,12 +743,15 @@ pub fn build_cli_receipt_first_gate(input: &CliReceiptFirstInput) -> Result<CliR
     })
 }
 
-fn validate_boundary_observation(item: &BoundaryObservationInput, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_boundary_observation(
+    item: &BoundaryObservationInput,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> Result<()> {
     validate_boundary_class(&item.class, diagnostics);
     validate_boundary_polarity(&item.polarity)?;
     validate_text("boundary requirement id", &item.requirement_id)?;
     if let Err(error) = validate_ref(&item.evidence_ref, "boundary evidence") {
-        diagnostics.push(format!("stale-evidence-ref:{}:{error}", item.class));
+        diagnostics.push_item(format!("stale-evidence-ref:{}:{error}", item.class));
     }
     Ok(())
 }
@@ -763,23 +766,26 @@ fn validate_boundary_requirement(item: &BoundaryRequirementInput) -> Result<()> 
     validate_text("boundary requirement id", &item.requirement_id)
 }
 
-fn validate_boundary_exemption(item: &BoundaryCoverageExemptionInput, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_boundary_exemption(
+    item: &BoundaryCoverageExemptionInput,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> Result<()> {
     validate_boundary_class(&item.class, diagnostics);
     validate_text("boundary exemption reason", &item.reason)?;
     validate_text("boundary exemption scope", &item.scope)?;
     validate_text("boundary exemption caveat", &item.caveat)?;
     if item.caveat != "diagnostic-only" {
-        diagnostics.push(format!("exemption-caveat-not-diagnostic-only:{}", item.class));
+        diagnostics.push_item(format!("exemption-caveat-not-diagnostic-only:{}", item.class));
     }
     if let Err(error) = validate_ref(&item.evidence_ref, "boundary exemption evidence") {
-        diagnostics.push(format!("exemption-without-evidence:{}:{error}", item.class));
+        diagnostics.push_item(format!("exemption-without-evidence:{}:{error}", item.class));
     }
     Ok(())
 }
 
-fn validate_boundary_class(class: &str, diagnostics: &mut Vec<String>) {
+fn validate_boundary_class(class: &str, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if !allowed_boundary_classes().contains(&class) {
-        diagnostics.push(format!("unsupported-boundary-class:{class}"));
+        diagnostics.push_item(format!("unsupported-boundary-class:{class}"));
     }
 }
 
@@ -797,18 +803,18 @@ fn boundary_key(class: &str, polarity: &str) -> String {
 fn validate_matrix_entry(
     entry: &EvidenceMatrixEntryInput,
     requirements: &OrderedMap<String, crate::requirement_traceability::RequirementInput>,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<()> {
     validate_text("matrix requirement id", &entry.requirement_id)?;
     if !requirements.contains_key(&entry.requirement_id) {
-        diagnostics.push(format!("stale-requirement-id:{}", entry.requirement_id));
+        diagnostics.push_item(format!("stale-requirement-id:{}", entry.requirement_id));
     }
     validate_matrix_coverage_kind(&entry.coverage_kind, diagnostics)?;
     validate_evidence_scope(&entry.evidence_scope, diagnostics)?;
     validate_text("matrix target", &entry.target)?;
     validate_text("matrix command", &entry.command)?;
     if entry.artifact_refs.is_empty() {
-        diagnostics.push(format!("missing-artifact-ref:{}", entry.requirement_id));
+        diagnostics.push_item(format!("missing-artifact-ref:{}", entry.requirement_id));
     }
     validate_ref_list_with_diagnostics("matrix artifact", &entry.artifact_refs, diagnostics)?;
     if let Some(reference) = entry.receipt_ref.as_ref() {
@@ -823,11 +829,11 @@ fn validate_matrix_entry(
 fn validate_matrix_exemption(
     exemption: &EvidenceMatrixExemptionInput,
     requirements: &OrderedMap<String, crate::requirement_traceability::RequirementInput>,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<()> {
     validate_text("matrix exemption requirement", &exemption.requirement_id)?;
     if !requirements.contains_key(&exemption.requirement_id) {
-        diagnostics.push(format!("stale-exemption-requirement:{}", exemption.requirement_id));
+        diagnostics.push_item(format!("stale-exemption-requirement:{}", exemption.requirement_id));
     }
     validate_text("matrix exemption reason", &exemption.reason)?;
     validate_ref_with_diagnostics(&exemption.evidence_ref, "matrix exemption evidence", diagnostics);
@@ -835,21 +841,21 @@ fn validate_matrix_exemption(
     validate_text("matrix exemption review note", &exemption.review_note)
 }
 
-fn validate_matrix_coverage_kind(kind: &str, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_matrix_coverage_kind(kind: &str, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
     match kind {
         "positive" | "negative" => Ok(()),
         other => {
-            diagnostics.push(format!("unsupported-coverage-kind:{other}"));
+            diagnostics.push_item(format!("unsupported-coverage-kind:{other}"));
             Ok(())
         }
     }
 }
 
-fn validate_evidence_scope(scope: &str, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_evidence_scope(scope: &str, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
     match scope {
         "unit" | "property" | "cli" | "integration" | "vm" | "dogfood" | "exemption" => Ok(()),
         other => {
-            diagnostics.push(format!("unsupported-evidence-scope:{other}"));
+            diagnostics.push_item(format!("unsupported-evidence-scope:{other}"));
             Ok(())
         }
     }
@@ -877,7 +883,7 @@ fn validate_ci_input(input: &CiTestRunInput) -> Result<()> {
     Ok(())
 }
 
-fn ci_diagnostics(input: &CiTestRunInput, diagnostics: &mut Vec<String>) -> Result<()> {
+fn ci_diagnostics(input: &CiTestRunInput, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
     let observed = input
         .counts
         .passed
@@ -885,23 +891,23 @@ fn ci_diagnostics(input: &CiTestRunInput, diagnostics: &mut Vec<String>) -> Resu
         .and_then(|count| count.checked_add(input.counts.skipped))
         .ok_or_else(|| MoltenError::invalid_harness("ci counts overflow"))?;
     if observed > input.counts.total {
-        diagnostics.push("mismatched-counts".to_string());
+        diagnostics.push_item("mismatched-counts".to_string());
     }
     if input.decision == DECISION_PASS && input.counts.total < MINIMUM_CI_TOTAL_FOR_PASS {
-        diagnostics.push("missing-test-counts".to_string());
+        diagnostics.push_item("missing-test-counts".to_string());
     }
     if input.decision == DECISION_PASS && input.counts.failed > ZERO_COUNT {
-        diagnostics.push("failed-tests-with-pass-decision".to_string());
+        diagnostics.push_item("failed-tests-with-pass-decision".to_string());
     }
     if input.profile_id == "exploratory" && input.decision == DECISION_PASS {
-        diagnostics.push("exploratory-pass-is-diagnostic-only".to_string());
+        diagnostics.push_item("exploratory-pass-is-diagnostic-only".to_string());
     }
     Ok(())
 }
 
 fn family_map(
     families: &[TamperFamilyInput],
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<OrderedMap<String, TamperFamilyInput>> {
     let mut output = OrderedMap::new();
     for family in families {
@@ -910,7 +916,7 @@ fn family_map(
         validate_text("tamper parser", &family.parser)?;
         validate_text("tamper gate", &family.gate)?;
         if output.insert(family.family.clone(), family.clone()).is_some() {
-            diagnostics.push(format!("duplicate-family:{}", family.family));
+            diagnostics.push_item(format!("duplicate-family:{}", family.family));
         }
     }
     Ok(output)
@@ -919,42 +925,45 @@ fn family_map(
 fn validate_tamper_case(
     case: &TamperCaseInput,
     families: &OrderedMap<String, TamperFamilyInput>,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<()> {
     validate_text("tamper case family", &case.family)?;
     if !families.contains_key(&case.family) {
-        diagnostics.push(format!("unknown-family:{}", case.family));
+        diagnostics.push_item(format!("unknown-family:{}", case.family));
     }
     validate_tamper_mutation(&case.mutation, diagnostics);
     validate_ref(&case.fixture_ref, "tamper fixture")?;
     validate_text("tamper expected diagnostic", &case.expected_diagnostic)?;
     validate_decision(&case.decision)?;
     if case.decision != DECISION_DENY {
-        diagnostics.push(format!("tamper-case-not-deny:{}:{}", case.family, case.mutation));
+        diagnostics.push_item(format!("tamper-case-not-deny:{}:{}", case.family, case.mutation));
     }
     if case.pass_evidence_ref.is_some() {
-        diagnostics.push(format!("tamper-case-emits-pass-evidence:{}:{}", case.family, case.mutation));
+        diagnostics.push_item(format!("tamper-case-emits-pass-evidence:{}:{}", case.family, case.mutation));
     }
     Ok(())
 }
 
-fn validate_tamper_mutation(mutation: &str, diagnostics: &mut Vec<String>) {
+fn validate_tamper_mutation(mutation: &str, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if !required_tamper_mutations().contains(&mutation) {
-        diagnostics.push(format!("unsupported-mutation:{mutation}"));
+        diagnostics.push_item(format!("unsupported-mutation:{mutation}"));
     }
 }
 
-fn replay_deterministic_diagnostics(input: &ReplaySmokeInput, diagnostics: &mut Vec<String>) -> Result<()> {
+fn replay_deterministic_diagnostics(
+    input: &ReplaySmokeInput,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> Result<()> {
     let mut roles = OrderedMap::new();
     for run in &input.runs {
         validate_replay_run(run)?;
         if roles.insert(run.role.clone(), run).is_some() {
-            diagnostics.push(format!("duplicate-replay-role:{}", run.role));
+            diagnostics.push_item(format!("duplicate-replay-role:{}", run.role));
         }
     }
     for role in ["fresh", "replay", "fresh-rerun"] {
         if !roles.contains_key(role) {
-            diagnostics.push(format!("missing-replay-role:{role}"));
+            diagnostics.push_item(format!("missing-replay-role:{role}"));
         }
     }
     let Some(fresh) = roles.get("fresh") else {
@@ -963,24 +972,24 @@ fn replay_deterministic_diagnostics(input: &ReplaySmokeInput, diagnostics: &mut 
     for role in ["replay", "fresh-rerun"] {
         if let Some(run) = roles.get(role) {
             if run.report_ref != fresh.report_ref {
-                diagnostics.push(format!("report-ref-mismatch:{role}"));
+                diagnostics.push_item(format!("report-ref-mismatch:{role}"));
             }
             if run.final_state_ref != fresh.final_state_ref {
-                diagnostics.push(format!("final-state-ref-mismatch:{role}"));
+                diagnostics.push_item(format!("final-state-ref-mismatch:{role}"));
             }
             if run.effect_log_ref != fresh.effect_log_ref {
-                diagnostics.push(format!("effect-log-ref-mismatch:{role}"));
+                diagnostics.push_item(format!("effect-log-ref-mismatch:{role}"));
             }
             if run.trace_ref != fresh.trace_ref && !input.variance.iter().any(|item| item == "trace-ref") {
-                diagnostics.push(format!("trace-ref-mismatch:{role}"));
+                diagnostics.push_item(format!("trace-ref-mismatch:{role}"));
             }
             for diagnostic in &run.diagnostics {
-                diagnostics.push(format!("run-diagnostic:{role}:{diagnostic}"));
+                diagnostics.push_item(format!("run-diagnostic:{role}:{diagnostic}"));
             }
         }
     }
     if fresh.effect_log_ref == placeholder_ref()? {
-        diagnostics.push("missing-effect-log".to_string());
+        diagnostics.push_item("missing-effect-log".to_string());
     }
     Ok(())
 }
@@ -1014,7 +1023,10 @@ fn validate_variance(value: &str) -> Result<()> {
     }
 }
 
-fn validate_profile(profile: &SemanticProfileInput, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_profile(
+    profile: &SemanticProfileInput,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> Result<()> {
     validate_semantic_profile_id(&profile.profile_id)?;
     validate_evidence_scope(&profile.evidence_scope, diagnostics)?;
     validate_text("profile command surface", &profile.command_surface)?;
@@ -1029,36 +1041,39 @@ fn validate_profile(profile: &SemanticProfileInput, diagnostics: &mut Vec<String
     validate_excluded_partitions(profile, diagnostics)?;
     validate_deterministic_profile_exclusions(profile, diagnostics);
     if profile.platform_required && !profile.platform_available {
-        diagnostics.push(format!("required-platform-unavailable:{}", profile.profile_id));
+        diagnostics.push_item(format!("required-platform-unavailable:{}", profile.profile_id));
     }
     if profile.profile_id == "exploratory" && profile.retry_policy == "retry-pass" {
         return Ok(());
     }
     if profile.retry_policy == "retry-pass" {
-        diagnostics.push(format!("retry-pass-not-deterministic:{}", profile.profile_id));
+        diagnostics.push_item(format!("retry-pass-not-deterministic:{}", profile.profile_id));
     }
     Ok(())
 }
 
-fn validate_profile_filter(profile: &SemanticProfileInput, diagnostics: &mut Vec<String>) {
+fn validate_profile_filter(profile: &SemanticProfileInput, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     let filter = profile.filter_expression.trim();
     if filter.is_empty() {
-        diagnostics.push(format!("missing-filter:{}", profile.profile_id));
+        diagnostics.push_item(format!("missing-filter:{}", profile.profile_id));
         return;
     }
     if required_semantic_profiles().contains(&profile.profile_id.as_str()) && filter == NEXTEST_ALL_FILTER {
-        diagnostics.push(format!("unpartitioned-filter:{}", profile.profile_id));
+        diagnostics.push_item(format!("unpartitioned-filter:{}", profile.profile_id));
     }
     if required_semantic_profiles().contains(&profile.profile_id.as_str())
         && !filter.contains(NEXTEST_PARTITION_SELECTOR)
     {
-        diagnostics.push(format!("missing-metadata-selector:{}", profile.profile_id));
+        diagnostics.push_item(format!("missing-metadata-selector:{}", profile.profile_id));
     }
 }
 
-fn validate_expected_profile_artifacts(profile: &SemanticProfileInput, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_expected_profile_artifacts(
+    profile: &SemanticProfileInput,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> Result<()> {
     if profile.expected_artifacts.is_empty() {
-        diagnostics.push(format!("missing-expected-artifacts:{}", profile.profile_id));
+        diagnostics.push_item(format!("missing-expected-artifacts:{}", profile.profile_id));
     }
     for artifact in &profile.expected_artifacts {
         validate_text("profile expected artifact", artifact)?;
@@ -1066,45 +1081,51 @@ fn validate_expected_profile_artifacts(profile: &SemanticProfileInput, diagnosti
     if artifact_present(&profile.expected_artifacts, JUNIT_ARTIFACT)
         && !artifact_present(&profile.expected_artifacts, CANONICAL_TEST_RUN_ARTIFACT)
     {
-        diagnostics.push(format!("junit-without-canonical-test-run:{}", profile.profile_id));
+        diagnostics.push_item(format!("junit-without-canonical-test-run:{}", profile.profile_id));
     }
     if !artifact_present(&profile.expected_artifacts, PROFILE_METADATA_ARTIFACT) {
-        diagnostics.push(format!("missing-profile-metadata-artifact:{}", profile.profile_id));
+        diagnostics.push_item(format!("missing-profile-metadata-artifact:{}", profile.profile_id));
     }
     if !artifact_present(&profile.expected_artifacts, FILTER_READBACK_ARTIFACT) {
-        diagnostics.push(format!("missing-filter-readback-artifact:{}", profile.profile_id));
+        diagnostics.push_item(format!("missing-filter-readback-artifact:{}", profile.profile_id));
     }
     Ok(())
 }
 
-fn validate_profile_junit_path(profile: &SemanticProfileInput, diagnostics: &mut Vec<String>) {
+fn validate_profile_junit_path(profile: &SemanticProfileInput, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     let path = profile.expected_junit_path.trim();
     if path.is_empty() {
-        diagnostics.push(format!("missing-junit-path:{}", profile.profile_id));
+        diagnostics.push_item(format!("missing-junit-path:{}", profile.profile_id));
         return;
     }
     if !path.ends_with(NEXTEST_JUNIT_RELATIVE_PATH) {
-        diagnostics.push(format!("unsupported-junit-path:{}", profile.profile_id));
+        diagnostics.push_item(format!("unsupported-junit-path:{}", profile.profile_id));
     }
 }
 
-fn validate_excluded_partitions(profile: &SemanticProfileInput, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_excluded_partitions(
+    profile: &SemanticProfileInput,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> Result<()> {
     for partition in &profile.excluded_partitions {
         validate_text("profile excluded partition", partition)?;
         if !allowed_excluded_partitions().contains(&partition.as_str()) {
-            diagnostics.push(format!("unsupported-excluded-partition:{}:{partition}", profile.profile_id));
+            diagnostics.push_item(format!("unsupported-excluded-partition:{}:{partition}", profile.profile_id));
         }
     }
     Ok(())
 }
 
-fn validate_deterministic_profile_exclusions(profile: &SemanticProfileInput, diagnostics: &mut Vec<String>) {
+fn validate_deterministic_profile_exclusions(
+    profile: &SemanticProfileInput,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) {
     if !deterministic_profile_requires_exclusions(&profile.profile_id) {
         return;
     }
     for required in required_deterministic_exclusions() {
         if !profile.excluded_partitions.iter().any(|partition| partition == required) {
-            diagnostics.push(format!("missing-deterministic-exclusion:{}:{required}", profile.profile_id));
+            diagnostics.push_item(format!("missing-deterministic-exclusion:{}:{required}", profile.profile_id));
         }
     }
 }
@@ -1136,21 +1157,21 @@ fn validate_semantic_profile_id(profile_id: &str) -> Result<()> {
     }
 }
 
-fn validate_retry_policy(policy: &str, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_retry_policy(policy: &str, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
     match policy {
         "zero-retry" | "retry-diagnostic" | "retry-pass" => Ok(()),
         other => {
-            diagnostics.push(format!("unsupported-retry-policy:{other}"));
+            diagnostics.push_item(format!("unsupported-retry-policy:{other}"));
             Ok(())
         }
     }
 }
 
-fn validate_cost_class(class: &str, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_cost_class(class: &str, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
     match class {
         "fast" | "moderate" | "expensive" | "platform" | "soak" => Ok(()),
         other => {
-            diagnostics.push(format!("unsupported-cost-class:{other}"));
+            diagnostics.push_item(format!("unsupported-cost-class:{other}"));
             Ok(())
         }
     }
@@ -1602,7 +1623,11 @@ fn validate_ref_list(label: &str, refs: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn validate_ref_list_with_diagnostics(label: &str, refs: &[String], diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_ref_list_with_diagnostics(
+    label: &str,
+    refs: &[String],
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> Result<()> {
     ensure_ref_bound(refs.len(), label)?;
     for reference in refs {
         validate_ref_with_diagnostics(reference, label, diagnostics);
@@ -1610,9 +1635,9 @@ fn validate_ref_list_with_diagnostics(label: &str, refs: &[String], diagnostics:
     Ok(())
 }
 
-fn validate_ref_with_diagnostics(reference: &str, label: &str, diagnostics: &mut Vec<String>) {
+fn validate_ref_with_diagnostics(reference: &str, label: &str, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if let Err(error) = validate_ref(reference, label) {
-        diagnostics.push(format!("stale-ref:{reference}:{error}"));
+        diagnostics.push_item(format!("stale-ref:{reference}:{error}"));
     }
 }
 

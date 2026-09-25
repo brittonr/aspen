@@ -1518,7 +1518,7 @@ fn create_directory_tree(dir: &cap_std::fs::Dir, path: Option<&std::path::Path>)
 fn create_directory_tree_recording(
     dir: &cap_std::fs::Dir,
     path: Option<&std::path::Path>,
-    created: &mut Vec<std::path::PathBuf>,
+    created: &mut impl crate::bounded::VecSink<std::path::PathBuf>,
 ) -> crate::error::Result<()> {
     let Some(path) = path else {
         return Ok(());
@@ -1532,7 +1532,7 @@ fn create_directory_tree_recording(
         match entry_kind(dir, &current)? {
             None => {
                 dir.create_dir(&current).map_err(crate::error::MoltenError::from)?;
-                created.push(current.clone());
+                created.push_item(current.clone());
             }
             Some(MaterializationMemberKind::Directory) => {}
             Some(_) => return Err(invalid("materialization parent is a symlink or non-directory entry")),

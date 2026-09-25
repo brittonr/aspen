@@ -799,7 +799,7 @@ struct DependencyTargetInput<'a> {
     evidence_refs: &'a [String],
 }
 
-fn push_dependency_edge(edges: &mut Vec<ArtifactDependencyEdge>, artifact: &ArtifactRecord, input: DependencyTargetInput<'_>) -> Result<()> {
+fn push_dependency_edge(edges: &mut impl crate::bounded::VecSink<ArtifactDependencyEdge>, artifact: &ArtifactRecord, input: DependencyTargetInput<'_>) -> Result<()> {
     let DependencyTargetInput { target_ref, target_kind, relation, required, evidence_refs } = input;
     let edge = dependency_edge(DependencyEdgeInput {
         source_ref: &artifact.artifact_ref,

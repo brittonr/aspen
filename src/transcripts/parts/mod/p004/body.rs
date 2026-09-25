@@ -287,7 +287,7 @@ fn transcript_cache_dependency_refs(transcript: &TranscriptArtifact) -> Result<V
     Ok(sorted_unique(&refs))
 }
 
-fn extend_transcript_parse_refs(input: &TranscriptParseInput, refs: &mut Vec<String>) -> Result<()> {
+fn extend_transcript_parse_refs(input: &TranscriptParseInput, refs: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
     extend_cloned_refs(refs, &input.dependency_refs, "transcript dependency ref")?;
     extend_cloned_refs(refs, &input.artifact_refs, "transcript artifact ref")?;
     extend_cloned_refs(refs, &input.schema_refs, "transcript schema ref")?;
@@ -310,14 +310,14 @@ fn extend_transcript_parse_refs(input: &TranscriptParseInput, refs: &mut Vec<Str
     Ok(())
 }
 
-fn extend_cloned_refs(refs: &mut Vec<String>, values: &[String], field: &str) -> Result<()> {
+fn extend_cloned_refs(refs: &mut impl crate::bounded::VecSink<String>, values: &[String], field: &str) -> Result<()> {
     for value in values {
         push_ref(refs, value.clone(), field)?;
     }
     Ok(())
 }
 
-fn push_ref(refs: &mut Vec<String>, value_ref: String, field: &str) -> Result<()> {
+fn push_ref(refs: &mut impl crate::bounded::VecSink<String>, value_ref: String, field: &str) -> Result<()> {
     validate_ref(&value_ref, field)?;
     push_bounded(refs, value_ref, MAX_TRANSCRIPT_SEQUENCE_ITEMS, field)
 }

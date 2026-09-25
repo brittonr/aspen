@@ -4,6 +4,7 @@ pub(crate) trait VecSink<T> {
     fn push_item(&mut self, value: T);
     fn extend_cloned_items(&mut self, incoming: &[T])
     where T: Clone;
+    fn extend_items(&mut self, incoming: impl IntoIterator<Item = T>);
 }
 
 impl<T> VecSink<T> for Vec<T> {
@@ -22,6 +23,10 @@ impl<T> VecSink<T> for Vec<T> {
     fn extend_cloned_items(&mut self, incoming: &[T])
     where T: Clone {
         self.extend(incoming.iter().cloned());
+    }
+
+    fn extend_items(&mut self, incoming: impl IntoIterator<Item = T>) {
+        self.extend(incoming);
     }
 }
 

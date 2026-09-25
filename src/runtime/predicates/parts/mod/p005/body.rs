@@ -96,31 +96,31 @@ fn validate_promise_use(state: &RuntimePromiseUseState) -> Vec<String> {
     diagnostics
 }
 
-fn validate_resolved_promise_use(state: &RuntimePromiseUseState, diagnostics: &mut Vec<String>) {
+fn validate_resolved_promise_use(state: &RuntimePromiseUseState, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if state.source.status != RuntimePromiseStatus::Resolved {
-        diagnostics.push("promise-use-requires-resolved-source".to_string());
+        diagnostics.push_item("promise-use-requires-resolved-source".to_string());
     }
     match (state.source.value_ref.as_deref(), state.admitted_resolution_ref.as_deref()) {
         (Some(value_ref), Some(admitted_ref)) if value_ref == admitted_ref => {}
-        (Some(_), Some(_)) => diagnostics.push("promise-use-resolution-ref-mismatch".to_string()),
-        (Some(_), None) => diagnostics.push("promise-use-resolution-proof-missing".to_string()),
-        (None, Some(_)) => diagnostics.push("promise-use-resolution-without-value".to_string()),
-        (None, None) => diagnostics.push("promise-use-resolution-proof-missing".to_string()),
+        (Some(_), Some(_)) => diagnostics.push_item("promise-use-resolution-ref-mismatch".to_string()),
+        (Some(_), None) => diagnostics.push_item("promise-use-resolution-proof-missing".to_string()),
+        (None, Some(_)) => diagnostics.push_item("promise-use-resolution-without-value".to_string()),
+        (None, None) => diagnostics.push_item("promise-use-resolution-proof-missing".to_string()),
     }
     if state.admitted_pipeline_ref.is_some() {
-        diagnostics.push("promise-use-resolution-has-pipeline-proof".to_string());
+        diagnostics.push_item("promise-use-resolution-has-pipeline-proof".to_string());
     }
 }
 
-fn validate_pipeline_promise_use(state: &RuntimePromiseUseState, diagnostics: &mut Vec<String>) {
+fn validate_pipeline_promise_use(state: &RuntimePromiseUseState, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if state.source.status != RuntimePromiseStatus::Pending {
-        diagnostics.push("promise-pipeline-forward-requires-pending-source".to_string());
+        diagnostics.push_item("promise-pipeline-forward-requires-pending-source".to_string());
     }
     if state.admitted_resolution_ref.is_some() {
-        diagnostics.push("promise-pipeline-forward-has-resolution-proof".to_string());
+        diagnostics.push_item("promise-pipeline-forward-has-resolution-proof".to_string());
     }
     if state.admitted_pipeline_ref.is_none() {
-        diagnostics.push("promise-use-pipeline-proof-missing".to_string());
+        diagnostics.push_item("promise-use-pipeline-proof-missing".to_string());
     }
 }
 

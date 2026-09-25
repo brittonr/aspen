@@ -267,9 +267,9 @@ fn artifact_index_value(
     ])
 }
 
-fn validate_ref(field: &'static str, value: &str, issues: &mut Vec<NativeArtifactIndexIssue>) {
+fn validate_ref(field: &'static str, value: &str, issues: &mut impl crate::bounded::VecSink<NativeArtifactIndexIssue>) {
     if crate::preserves_rail::ContentRef::parse(value).is_err() {
-        issues.push(NativeArtifactIndexIssue::MalformedRef {
+        issues.push_item(NativeArtifactIndexIssue::MalformedRef {
             field,
             value: value.to_string(),
         });

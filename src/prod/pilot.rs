@@ -84,9 +84,9 @@ pub fn pilot_evidence_bundle_members() -> &'static [&'static str] {
     ]
 }
 
-fn require_non_empty(diagnostics: &mut Vec<String>, label: &str, values: &[String]) {
+fn require_non_empty(diagnostics: &mut impl crate::bounded::VecSink<String>, label: &str, values: &[String]) {
     if values.is_empty() {
-        diagnostics.push(format!("missing {label}"));
+        diagnostics.push_item(format!("missing {label}"));
     }
 }
 

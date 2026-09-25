@@ -822,24 +822,24 @@ fn decode_phase(value: u8) -> crate::error::Result<EffectTransactionPhase> {
     }
 }
 
-fn push_byte(bytes: &mut Vec<u8>, value: u8) {
-    bytes.push(value);
+fn push_byte(bytes: &mut impl crate::bounded::VecSink<u8>, value: u8) {
+    bytes.push_item(value);
 }
 
-fn push_u64(bytes: &mut Vec<u8>, value: u64) {
-    bytes.extend_from_slice(&value.to_be_bytes());
+fn push_u64(bytes: &mut impl crate::bounded::VecSink<u8>, value: u64) {
+    bytes.extend_cloned_items(&value.to_be_bytes());
 }
 
-fn push_optional_u64(bytes: &mut Vec<u8>, value: Option<u64>) {
+fn push_optional_u64(bytes: &mut impl crate::bounded::VecSink<u8>, value: Option<u64>) {
     push_byte(bytes, u8::from(value.is_some()));
     if let Some(value) = value {
         push_u64(bytes, value);
     }
 }
 
-fn push_blob(bytes: &mut Vec<u8>, value: &[u8]) -> crate::error::Result<()> {
+fn push_blob(bytes: &mut impl crate::bounded::VecSink<u8>, value: &[u8]) -> crate::error::Result<()> {
     push_u64(bytes, byte_count(value.len())?);
-    bytes.extend_from_slice(value);
+    bytes.extend_cloned_items(value);
     Ok(())
 }
 

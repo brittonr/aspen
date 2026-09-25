@@ -282,27 +282,32 @@ fn normalize_phase_groups(
     }
 }
 
-fn validate_normalized_phases(phases: &[super::model::PhaseSamples], blockers: &mut Vec<String>) {
+fn validate_normalized_phases(
+    phases: &[super::model::PhaseSamples],
+    blockers: &mut impl crate::bounded::VecSink<String>,
+) {
     if phases.is_empty() {
-        blockers.push("benchmark run has no phase samples".to_string());
+        blockers.push_item("benchmark run has no phase samples".to_string());
         return;
     }
     let mut previous_key = None;
     for phase in phases {
         if phase.event.trim().is_empty() || phase.samples.len() < MIN_STATISTICAL_SAMPLES {
-            blockers.push(format!("benchmark {} phase has no event or too few samples", phase.phase.as_str()));
+            blockers.push_item(format!("benchmark {} phase has no event or too few samples", phase.phase.as_str()));
         }
         let key = (phase.phase, phase.event.as_str());
         if previous_key.is_some_and(|previous| previous >= key) {
-            blockers.push("benchmark phase/event groups must be sorted and unique".to_string());
+            blockers.push_item("benchmark phase/event groups must be sorted and unique".to_string());
         }
         previous_key = Some(key);
         let mut previous_sample = None;
         for sample in &phase.samples {
             let sample_key = (sample.process, sample.iteration);
             if previous_sample.is_some_and(|previous| previous >= sample_key) {
-                blockers
-                    .push(format!("benchmark {} samples must be sorted with unique coordinates", phase.phase.as_str()));
+                blockers.push_item(format!(
+                    "benchmark {} samples must be sorted with unique coordinates",
+                    phase.phase.as_str()
+                ));
             }
             previous_sample = Some(sample_key);
         }

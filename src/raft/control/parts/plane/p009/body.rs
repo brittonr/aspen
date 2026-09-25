@@ -545,40 +545,40 @@ fn matching_engine_descriptor<'a>(
 fn collect_engine_admission_diagnostics(
     descriptor: &ConsensusEngineDescriptor,
     input: &ConsensusEngineAdmissionInput,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<()> {
     if !descriptor.enabled {
-        diagnostics.push(format!("consensus engine {} is disabled", descriptor.profile_id));
+        diagnostics.push_item(format!("consensus engine {} is disabled", descriptor.profile_id));
     }
     // r[impl molten.consensus.algorithm_profile_manifest]
     // r[impl molten.fabric_consistency.production_admission]
     if input.requested_environment == CONSENSUS_ENVIRONMENT_PRODUCTION
         && descriptor.production_admission_status != PRODUCTION_STATUS_ADMITTED
     {
-        diagnostics.push(format!(
+        diagnostics.push_item(format!(
             "consensus engine {} is not admitted for production runtime; status {}",
             descriptor.profile_id, descriptor.production_admission_status
         ));
     }
     if descriptor.required_evidence_refs.is_empty() {
-        diagnostics.push(format!("consensus engine {} missing proof/model evidence", descriptor.profile_id));
+        diagnostics.push_item(format!("consensus engine {} missing proof/model evidence", descriptor.profile_id));
     }
     if descriptor.conformance_receipt_refs.is_empty() {
-        diagnostics.push(format!("consensus engine {} missing conformance refs", descriptor.profile_id));
+        diagnostics.push_item(format!("consensus engine {} missing conformance refs", descriptor.profile_id));
     }
     if !descriptor
         .supported_read_consistency_modes
         .iter()
         .any(|mode| mode == &input.requested_read_consistency)
     {
-        diagnostics.push(format!(
+        diagnostics.push_item(format!(
             "unsupported read consistency mode {} for consensus engine {}",
             input.requested_read_consistency, descriptor.profile_id
         ));
     }
     for capability in &input.required_capabilities {
         if !descriptor.capabilities.iter().any(|value| value == capability) {
-            diagnostics.push(format!(
+            diagnostics.push_item(format!(
                 "unsupported consensus engine capability {capability} for {}",
                 descriptor.profile_id
             ));

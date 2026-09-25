@@ -256,11 +256,14 @@ impl LocalStoreRoot {
             let name = entry.file_name().to_string_lossy().into_owned();
             let entry_path = path.join(&name)?;
             let kind = local_store_entry_kind(&entry.file_type().map_err(MoltenError::from)?);
-            push_bounded_entry(&mut entries, LocalStoreEntry {
+            if entries.len() >= MAX_LOCAL_STORE_ENTRIES {
+                return Err(entry_limit_error());
+            }
+            entries.push(LocalStoreEntry {
                 name,
                 path: entry_path,
                 kind,
-            })?;
+            });
         }
         entries.sort_by(|left, right| left.name.cmp(&right.name));
         Ok(entries)
@@ -271,7 +274,10 @@ impl LocalStoreRoot {
         let mut names = Vec::new();
         for entry in entries {
             if entry.kind == LocalStoreEntryKind::File {
-                push_bounded_name(&mut names, entry.name)?;
+                if names.len() >= MAX_LOCAL_STORE_ENTRIES {
+                    return Err(entry_limit_error());
+                }
+                names.push(entry.name);
             }
         }
         Ok(names)
@@ -474,26 +480,11 @@ fn local_store_entry_kind(file_type: &cap_std::fs::FileType) -> LocalStoreEntryK
     }
 }
 
-fn push_bounded_entry(entries: &mut Vec<LocalStoreEntry>, entry: LocalStoreEntry) -> Result<()> {
-    ensure_entry_capacity(entries.len())?;
-    entries.push(entry);
-    Ok(())
-}
-
-fn push_bounded_name(names: &mut Vec<String>, name: String) -> Result<()> {
-    ensure_entry_capacity(names.len())?;
-    names.push(name);
-    Ok(())
-}
-
-fn ensure_entry_capacity(current: usize) -> Result<()> {
-    let next = current
-        .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness("local store entry count overflow"))?;
-    if next > MAX_LOCAL_STORE_ENTRIES {
-        return Err(MoltenError::invalid_harness(format!(
-            "local store entry count {next} exceeds maximum {MAX_LOCAL_STORE_ENTRIES}"
-        )));
-    }
-    Ok(())
+/// The error for one entry past the bound. Listing loops deny the next push once the collection
+/// holds `MAX_LOCAL_STORE_ENTRIES`, so the denied count is always one past the maximum.
+fn entry_limit_error() -> MoltenError {
+    MoltenError::invalid_harness(format!(
+        "local store entry count {} exceeds maximum {MAX_LOCAL_STORE_ENTRIES}",
+        MAX_LOCAL_STORE_ENTRIES + 1
+    ))
 }

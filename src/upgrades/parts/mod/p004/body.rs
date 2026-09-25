@@ -226,7 +226,7 @@ fn task_kind_completed(root: &Path, plan: &UpgradePlan, kind: &str) -> Result<bo
     Ok(true)
 }
 
-fn push_cutover_diagnostic(diagnostics: &mut Vec<String>, condition: bool, diagnostic: &str) -> Result<()> {
+fn push_cutover_diagnostic(diagnostics: &mut impl crate::bounded::VecSink<String>, condition: bool, diagnostic: &str) -> Result<()> {
     if !condition {
         push_bounded(
             diagnostics,
@@ -290,7 +290,7 @@ fn upgrade_state_snapshot_ref(root: &Path) -> Result<String> {
 fn collect_upgrade_state_snapshot_entries(
     root: &Path,
     dir_name: &str,
-    entries: &mut Vec<(String, String)>,
+    entries: &mut impl crate::bounded::VecSink<(String, String)>,
 ) -> Result<()> {
     let snapshot_root = root.join(dir_name);
     if !snapshot_root.exists() {

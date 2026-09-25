@@ -1,0 +1,21 @@
+# workspace (cargo octet check): base 105c68f24 -> candidate
+lint                                     findings          sites
+path_segment_repetition             1877 -> 1877     1038 -> 1038 
+excessive_file_length                548 -> 548       305 -> 305  
+borrowed_argument_types              360 -> 0         180 -> 0    
+function_length                      202 -> 202       127 -> 127  
+underscore_in_module_filename         31 -> 31         15 -> 15   
+module_file_count                     20 -> 20         11 -> 11   
+ambient_env                           14 -> 14          5 -> 5    
+TOTAL                               3052 -> 2692     1681 -> 1501 
+
+# -p molten --lib
+lint                                     findings          sites
+path_segment_repetition              794 -> 794       794 -> 794  
+excessive_file_length                229 -> 229       229 -> 229  
+borrowed_argument_types              176 -> 0         176 -> 0    
+function_length                       70 -> 70         70 -> 70   
+underscore_in_module_filename          7 -> 7           7 -> 7    
+ambient_env                            6 -> 6           4 -> 4    
+module_file_count                      5 -> 5           5 -> 5    
+TOTAL                               1287 -> 1111     1285 -> 1109 

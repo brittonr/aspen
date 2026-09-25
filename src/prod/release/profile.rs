@@ -94,17 +94,17 @@ pub fn validate_release_profile(input: &ReleaseProfileInput) -> Result<ReleasePr
     })
 }
 
-fn validate_tier(tier: &str, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_tier(tier: &str, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
     match tier {
         "development" | "pilot" | "release" => Ok(()),
         other => {
-            diagnostics.push(format!("unsupported-release-profile-tier:{other}"));
+            diagnostics.push_item(format!("unsupported-release-profile-tier:{other}"));
             Ok(())
         }
     }
 }
 
-fn validate_candidate_ref(input: &ReleaseProfileInput, diagnostics: &mut Vec<String>) {
+fn validate_candidate_ref(input: &ReleaseProfileInput, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if input.tier != "release" {
         return;
     }
@@ -112,42 +112,42 @@ fn validate_candidate_ref(input: &ReleaseProfileInput, diagnostics: &mut Vec<Str
         Some(candidate_ref) => {
             validate_ref_with_diagnostics("candidate", candidate_ref, diagnostics);
             if is_placeholder_ref(candidate_ref) {
-                diagnostics.push("placeholder-release-candidate-ref".to_string());
+                diagnostics.push_item("placeholder-release-candidate-ref".to_string());
             }
         }
-        None => diagnostics.push("missing-release-candidate-ref".to_string()),
+        None => diagnostics.push_item("missing-release-candidate-ref".to_string()),
     }
 }
 
-fn validate_refs(input: &ReleaseProfileInput, diagnostics: &mut Vec<String>) {
+fn validate_refs(input: &ReleaseProfileInput, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     let is_release = input.tier == "release";
     for (field, reference) in evidence_ref_pairs(&input.evidence_refs) {
         match reference {
             Some(reference) => {
                 validate_ref_with_diagnostics(field, reference, diagnostics);
                 if is_release && is_placeholder_ref(reference) {
-                    diagnostics.push(format!("placeholder-release-ref:{field}"));
+                    diagnostics.push_item(format!("placeholder-release-ref:{field}"));
                 }
             }
-            None if is_release => diagnostics.push(format!("missing-release-ref:{field}")),
+            None if is_release => diagnostics.push_item(format!("missing-release-ref:{field}")),
             None => {}
         }
     }
 }
 
-fn validate_stack_provenance(input: &ReleaseProfileInput, diagnostics: &mut Vec<String>) {
+fn validate_stack_provenance(input: &ReleaseProfileInput, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if input.tier != "release" {
         return;
     }
     if !input.stack_provenance_required {
-        diagnostics.push("release-stack-provenance-optional".to_string());
+        diagnostics.push_item("release-stack-provenance-optional".to_string());
     }
     if input.evidence_refs.stack_provenance_ref.is_none() {
-        diagnostics.push("missing-release-stack-provenance".to_string());
+        diagnostics.push_item("missing-release-stack-provenance".to_string());
     }
 }
 
-fn validate_freshness(input: &ReleaseProfileInput, diagnostics: &mut Vec<String>) {
+fn validate_freshness(input: &ReleaseProfileInput, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if input.tier != "release" {
         return;
     }
@@ -159,29 +159,32 @@ fn validate_freshness(input: &ReleaseProfileInput, diagnostics: &mut Vec<String>
             validate_ref_with_diagnostics("expected-generated-export", expected, diagnostics);
             validate_ref_with_diagnostics("actual-generated-export", actual, diagnostics);
             if expected != actual {
-                diagnostics.push(format!("stale-generated-profile:expected={expected}:actual={actual}"));
+                diagnostics.push_item(format!("stale-generated-profile:expected={expected}:actual={actual}"));
             }
             if is_placeholder_ref(expected) || is_placeholder_ref(actual) {
-                diagnostics.push("placeholder-generated-profile-ref".to_string());
+                diagnostics.push_item("placeholder-generated-profile-ref".to_string());
             }
         }
-        (None, _) => diagnostics.push("missing-expected-generated-export-ref".to_string()),
-        (_, None) => diagnostics.push("missing-actual-generated-export-ref".to_string()),
+        (None, _) => diagnostics.push_item("missing-expected-generated-export-ref".to_string()),
+        (_, None) => diagnostics.push_item("missing-actual-generated-export-ref".to_string()),
     }
 }
 
-fn validate_valence_policy_hashes(input: &ReleaseProfileInput, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_valence_policy_hashes(
+    input: &ReleaseProfileInput,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> Result<()> {
     let mut seen = OrderedSet::new();
     if input.tier == "release" && input.accepted_valence_policy_hashes.is_empty() {
-        diagnostics.push("missing-valence-policy-hash".to_string());
+        diagnostics.push_item("missing-valence-policy-hash".to_string());
     }
     for hash in &input.accepted_valence_policy_hashes {
         validate_text("valence policy hash", hash)?;
         if !seen.insert(hash.clone()) {
-            diagnostics.push(format!("duplicate-valence-policy-hash:{hash}"));
+            diagnostics.push_item(format!("duplicate-valence-policy-hash:{hash}"));
         }
         if is_placeholder_hash(hash) {
-            diagnostics.push(format!("placeholder-valence-policy-hash:{hash}"));
+            diagnostics.push_item(format!("placeholder-valence-policy-hash:{hash}"));
         }
     }
     Ok(())
@@ -234,9 +237,9 @@ fn contains_placeholder_marker(value: &str) -> bool {
     lower.contains(FIXTURE_MARKER) || lower.contains(PLACEHOLDER_MARKER)
 }
 
-fn validate_ref_with_diagnostics(label: &str, reference: &str, diagnostics: &mut Vec<String>) {
+fn validate_ref_with_diagnostics(label: &str, reference: &str, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if let Err(error) = validate_ref(reference, label) {
-        diagnostics.push(format!("stale-release-ref:{label}:{reference}:{error}"));
+        diagnostics.push_item(format!("stale-release-ref:{label}:{reference}:{error}"));
     }
 }
 

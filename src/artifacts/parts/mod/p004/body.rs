@@ -151,7 +151,7 @@ fn set_difference(left: &[String], right: &[String]) -> Result<Vec<String>> {
 fn release_snapshot_caveats_rendered(
     snapshot: &ReleaseSnapshot,
     required_caveats: &[String],
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<bool> {
     let mut is_rendered = true;
     if snapshot.caveats.is_empty() {
@@ -177,7 +177,7 @@ fn release_snapshot_caveats_rendered(
     Ok(is_rendered)
 }
 
-fn release_snapshot_fresh_evidence(snapshot: &ReleaseSnapshot, diagnostics: &mut Vec<String>) -> Result<bool> {
+fn release_snapshot_fresh_evidence(snapshot: &ReleaseSnapshot, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<bool> {
     for stale_ref in &snapshot.stale_evidence_refs {
         push_bounded(
             diagnostics,
@@ -189,7 +189,7 @@ fn release_snapshot_fresh_evidence(snapshot: &ReleaseSnapshot, diagnostics: &mut
     Ok(snapshot.stale_evidence_refs.is_empty())
 }
 
-fn release_snapshot_redaction_bound(snapshot: &ReleaseSnapshot, diagnostics: &mut Vec<String>) -> Result<bool> {
+fn release_snapshot_redaction_bound(snapshot: &ReleaseSnapshot, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<bool> {
     if snapshot.redaction_profile_ref.is_some()
         && !snapshot.caveats.iter().any(|caveat| caveat.contains("redaction") || caveat.contains("redacted"))
     {
@@ -206,7 +206,7 @@ fn release_snapshot_redaction_bound(snapshot: &ReleaseSnapshot, diagnostics: &mu
 
 fn release_snapshot_required_evidence_bound(
     snapshot: &ReleaseSnapshot,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<bool> {
     let mut is_bound = true;
     is_bound &= require_non_empty_refs(&snapshot.doc_refs, "release snapshot docs", diagnostics)?;
@@ -221,7 +221,7 @@ fn release_snapshot_required_evidence_bound(
     Ok(is_bound)
 }
 
-fn require_non_empty_refs(refs: &[String], label: &str, diagnostics: &mut Vec<String>) -> Result<bool> {
+fn require_non_empty_refs(refs: &[String], label: &str, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<bool> {
     if refs.is_empty() {
         push_bounded(
             diagnostics,
@@ -290,7 +290,7 @@ fn release_channel_admission_diagnostics(input: &ReleaseChannelAdmissionInput) -
     Ok(diagnostics)
 }
 
-fn push_missing_ref_diagnostic(diagnostics: &mut Vec<String>, refs: &[String], label: &str) -> Result<()> {
+fn push_missing_ref_diagnostic(diagnostics: &mut impl crate::bounded::VecSink<String>, refs: &[String], label: &str) -> Result<()> {
     if refs.is_empty() {
         push_bounded(
             diagnostics,

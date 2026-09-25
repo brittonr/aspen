@@ -213,7 +213,7 @@ pub fn evaluate_readback_authorization_use(
 
 fn group_sources(
     input: &EffectiveConfigInput,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<OrderedMap<String, Vec<ConfigSourceInput>>> {
     let mut grouped = OrderedMap::<String, Vec<ConfigSourceInput>>::new();
     for source in &input.sources {
@@ -223,14 +223,14 @@ fn group_sources(
     Ok(grouped)
 }
 
-fn validate_source(source: &ConfigSourceInput, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_source(source: &ConfigSourceInput, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
     validate_text("effective config field", &source.field)?;
     validate_text("effective config value", &source.value)?;
     validate_source_class(&source.source_class, diagnostics)?;
     if let Some(source_ref) = source.source_ref.as_ref() {
         validate_ref_with_diagnostics(source_ref, &source.source_class, diagnostics);
     } else if source.source_class != "default" {
-        diagnostics.push(format!("missing-source-ref:{}:{}", source.field, source.source_class));
+        diagnostics.push_item(format!("missing-source-ref:{}:{}", source.field, source.source_class));
     }
     ensure_caveat_bound(source.caveats.len(), "effective config source caveats")?;
     for caveat in &source.caveats {
@@ -242,14 +242,14 @@ fn validate_source(source: &ConfigSourceInput, diagnostics: &mut Vec<String>) ->
 fn select_effective_fields(
     grouped: &OrderedMap<String, Vec<ConfigSourceInput>>,
     release_mode: bool,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<Vec<EffectiveConfigField>> {
     ensure_field_bound(grouped.len(), "effective config fields")?;
     let mut fields = Vec::with_capacity(grouped.len());
     for (field, sources) in grouped {
         let selected = select_source(field, sources, diagnostics)?;
         if release_mode && selected.source_class == "default" {
-            diagnostics.push(format!("fixture-default-in-release:{field}"));
+            diagnostics.push_item(format!("fixture-default-in-release:{field}"));
         }
         let caveats = merged_caveats(sources)?;
         fields.push(EffectiveConfigField {
@@ -267,7 +267,7 @@ fn select_effective_fields(
 fn select_source<'a>(
     field: &str,
     sources: &'a [ConfigSourceInput],
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<&'a ConfigSourceInput> {
     let mut selected = sources
         .first()
@@ -280,11 +280,12 @@ fn select_source<'a>(
             continue;
         }
         if source_precedence == selected_precedence && source.value != selected.value {
-            diagnostics.push(format!("conflicting-sources:{field}:{}:{}", selected.source_class, source.source_class));
+            diagnostics
+                .push_item(format!("conflicting-sources:{field}:{}:{}", selected.source_class, source.source_class));
         }
     }
     if selected.source_class == "cli-override" && !selected.admitted_override {
-        diagnostics.push(format!("unadmitted-cli-override:{field}"));
+        diagnostics.push_item(format!("unadmitted-cli-override:{field}"));
     }
     Ok(selected)
 }
@@ -311,11 +312,11 @@ fn source_precedence(source_class: &str) -> u8 {
     }
 }
 
-fn validate_source_class(source_class: &str, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_source_class(source_class: &str, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
     match source_class {
         "profile" | "cli-override" | "default" | "environment" | "ledger" => Ok(()),
         other => {
-            diagnostics.push(format!("unsupported-source-class:{other}"));
+            diagnostics.push_item(format!("unsupported-source-class:{other}"));
             Ok(())
         }
     }
@@ -426,9 +427,9 @@ fn validate_ref(reference: &str, label: &str) -> Result<()> {
         .map_err(|error| MoltenError::invalid_harness(format!("invalid {label} ref {reference}: {error}")))
 }
 
-fn validate_ref_with_diagnostics(reference: &str, label: &str, diagnostics: &mut Vec<String>) {
+fn validate_ref_with_diagnostics(reference: &str, label: &str, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if let Err(error) = validate_ref(reference, label) {
-        diagnostics.push(format!("stale-ref:{label}:{reference}:{error}"));
+        diagnostics.push_item(format!("stale-ref:{label}:{reference}:{error}"));
     }
 }
 

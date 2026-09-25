@@ -122,7 +122,10 @@ fn validate_export(exported: &super::model::ComponentProfileExport) -> super::mo
     validate_component_profile(&exported.profile)
 }
 
-fn validate_toolchain(profile: &super::model::ComponentRuntimeProfile, blockers: &mut Vec<String>) {
+fn validate_toolchain(
+    profile: &super::model::ComponentRuntimeProfile,
+    blockers: &mut impl crate::bounded::VecSink<String>,
+) {
     for (label, actual, expected) in [
         ("wasmtime", profile.toolchain.wasmtime.as_str(), COMPONENT_WASMTIME_VERSION),
         ("wasm-tools", profile.toolchain.wasm_tools.as_str(), COMPONENT_WASM_TOOLS_VERSION),
@@ -135,13 +138,16 @@ fn validate_toolchain(profile: &super::model::ComponentRuntimeProfile, blockers:
     }
 }
 
-fn validate_wit(profile: &super::model::ComponentRuntimeProfile, blockers: &mut Vec<String>) {
+fn validate_wit(profile: &super::model::ComponentRuntimeProfile, blockers: &mut impl crate::bounded::VecSink<String>) {
     require_equal(blockers, "WIT package", &profile.wit.package, COMPONENT_WIT_PACKAGE);
     require_equal(blockers, "WIT world", &profile.wit.world, COMPONENT_WIT_WORLD);
     require_equal(blockers, "WIT source ref", &profile.wit.source_ref, COMPONENT_WIT_SOURCE_REF);
 }
 
-fn validate_features(profile: &super::model::ComponentRuntimeProfile, blockers: &mut Vec<String>) {
+fn validate_features(
+    profile: &super::model::ComponentRuntimeProfile,
+    blockers: &mut impl crate::bounded::VecSink<String>,
+) {
     let features = &profile.features;
     if !(features.component_model
         && features.multi_value
@@ -149,7 +155,7 @@ fn validate_features(profile: &super::model::ComponentRuntimeProfile, blockers: 
         && features.reference_types
         && features.simd)
     {
-        blockers.push("component profile omits a required Wasm feature".to_string());
+        blockers.push_item("component profile omits a required Wasm feature".to_string());
     }
     let unsupported = [
         features.relaxed_simd,
@@ -166,21 +172,27 @@ fn validate_features(profile: &super::model::ComponentRuntimeProfile, blockers: 
         features.component_async,
     ];
     if unsupported.into_iter().any(|enabled| enabled) {
-        blockers.push("component profile enables an unsupported Wasm feature".to_string());
+        blockers.push_item("component profile enables an unsupported Wasm feature".to_string());
     }
 }
 
-fn validate_determinism(profile: &super::model::ComponentRuntimeProfile, blockers: &mut Vec<String>) {
+fn validate_determinism(
+    profile: &super::model::ComponentRuntimeProfile,
+    blockers: &mut impl crate::bounded::VecSink<String>,
+) {
     let determinism = &profile.determinism;
     if !(determinism.fuel_interruption && determinism.nan_canonicalization && determinism.relaxed_simd_deterministic) {
-        blockers.push("component deterministic runtime controls are incomplete".to_string());
+        blockers.push_item("component deterministic runtime controls are incomplete".to_string());
     }
     require_equal(blockers, "memory growth", &determinism.memory_growth, COMPONENT_FIXED_GROWTH);
     require_equal(blockers, "table growth", &determinism.table_growth, COMPONENT_FIXED_GROWTH);
     require_equal(blockers, "host inputs", &determinism.host_inputs, COMPONENT_RECORDED_HOST_INPUTS);
 }
 
-fn validate_resources(profile: &super::model::ComponentRuntimeProfile, blockers: &mut Vec<String>) {
+fn validate_resources(
+    profile: &super::model::ComponentRuntimeProfile,
+    blockers: &mut impl crate::bounded::VecSink<String>,
+) {
     let actual = &profile.resources;
     let expected = [
         ("fuel", actual.fuel, COMPONENT_FUEL_LIMIT),
@@ -200,13 +212,13 @@ fn validate_resources(profile: &super::model::ComponentRuntimeProfile, blockers:
     ];
     for (label, actual, expected) in expected {
         if actual != expected {
-            blockers.push(format!("component profile {label} limit is unsupported"));
+            blockers.push_item(format!("component profile {label} limit is unsupported"));
         }
     }
 }
 
-fn require_equal(blockers: &mut Vec<String>, label: &str, actual: &str, expected: &str) {
+fn require_equal(blockers: &mut impl crate::bounded::VecSink<String>, label: &str, actual: &str, expected: &str) {
     if actual != expected {
-        blockers.push(format!("component profile {label} must be {expected}, got {actual}"));
+        blockers.push_item(format!("component profile {label} must be {expected}, got {actual}"));
     }
 }

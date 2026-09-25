@@ -358,24 +358,24 @@ fn simulation_diagnostics(input: &ConsensusSimulationInput) -> Result<Vec<String
     Ok(diagnostics)
 }
 
-fn stale_read_diagnostics(input: &ConsensusSimulationInput, diagnostics: &mut Vec<String>) {
+fn stale_read_diagnostics(input: &ConsensusSimulationInput, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if input.requested_read_consistency == READ_CONSISTENCY_LINEARIZABLE && !input.local_state_fresh {
-        diagnostics.push("linearizable read denied without freshness evidence".to_string());
+        diagnostics.push_item("linearizable read denied without freshness evidence".to_string());
     }
 }
 
-fn require_leaderless_experimental(input: &ConsensusSimulationInput, diagnostics: &mut Vec<String>) {
+fn require_leaderless_experimental(input: &ConsensusSimulationInput, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if input.algorithm_profile != CONSENSUS_PROFILE_LEADERLESS_EXPERIMENTAL {
-        diagnostics.push("scenario requires leaderless experimental profile".to_string());
+        diagnostics.push_item("scenario requires leaderless experimental profile".to_string());
     }
     if !has_experimental_evidence(input) {
-        diagnostics.push("leaderless experimental profile missing required evidence".to_string());
+        diagnostics.push_item("leaderless experimental profile missing required evidence".to_string());
     }
 }
 
-fn require_quorum(has_quorum: bool, quorum: usize, diagnostics: &mut Vec<String>) {
+fn require_quorum(has_quorum: bool, quorum: usize, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if !has_quorum {
-        diagnostics.push(format!("missing majority quorum of {quorum} replicas"));
+        diagnostics.push_item(format!("missing majority quorum of {quorum} replicas"));
     }
 }
 

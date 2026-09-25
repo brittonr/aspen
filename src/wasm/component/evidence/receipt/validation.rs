@@ -94,12 +94,12 @@ pub(super) fn validate_receipt_shape(
     }
 }
 
-fn validate_stage_fields(receipt: &super::ComponentReceipt, blockers: &mut Vec<String>) {
+fn validate_stage_fields(receipt: &super::ComponentReceipt, blockers: &mut impl crate::bounded::VecSink<String>) {
     match receipt.input.decision {
         super::ComponentReceiptDecision::Deny => validate_denial_fields(receipt, blockers),
         super::ComponentReceiptDecision::Pass => {
             if receipt.input.trap_class.is_some() || !receipt.input.diagnostics.is_empty() {
-                blockers.push("passing component receipt cannot carry denial class or diagnostics".to_string());
+                blockers.push_item("passing component receipt cannot carry denial class or diagnostics".to_string());
             }
         }
     }
@@ -112,7 +112,7 @@ fn validate_stage_fields(receipt: &super::ComponentReceipt, blockers: &mut Vec<S
         )
         && receipt.input.parent_refs.len() != 1
     {
-        blockers.push("passing component stage receipt requires exactly one parent stage ref".to_string());
+        blockers.push_item("passing component stage receipt requires exactly one parent stage ref".to_string());
     }
     if receipt.input.stage == super::ComponentReceiptStage::Execution
         && receipt.input.decision == super::ComponentReceiptDecision::Pass
@@ -129,7 +129,8 @@ fn validate_stage_fields(receipt: &super::ComponentReceipt, blockers: &mut Vec<S
             || receipt.input.fuel_limit.is_none()
             || receipt.input.fuel_remaining.is_none())
     {
-        blockers.push("passing component execution receipt is missing input, output, or fuel evidence".to_string());
+        blockers
+            .push_item("passing component execution receipt is missing input, output, or fuel evidence".to_string());
     }
     if receipt.input.stage == super::ComponentReceiptStage::Hostcall
         && receipt.input.decision == super::ComponentReceiptDecision::Pass
@@ -150,29 +151,29 @@ fn validate_stage_fields(receipt: &super::ComponentReceipt, blockers: &mut Vec<S
                 .as_deref()
                 .is_none_or(|value| !super::super::super::model::valid_content_ref(value)))
     {
-        blockers.push(
+        blockers.push_item(
             "passing component hostcall receipt is missing import, authority, effect, or outcome evidence".to_string(),
         );
     }
     if let (Some(limit), Some(remaining)) = (receipt.input.fuel_limit, receipt.input.fuel_remaining)
         && remaining > limit
     {
-        blockers.push("component receipt fuel remaining exceeds its admitted limit".to_string());
+        blockers.push_item("component receipt fuel remaining exceeds its admitted limit".to_string());
     }
 }
 
-fn validate_denial_fields(receipt: &super::ComponentReceipt, blockers: &mut Vec<String>) {
+fn validate_denial_fields(receipt: &super::ComponentReceipt, blockers: &mut impl crate::bounded::VecSink<String>) {
     if receipt.input.stage != super::ComponentReceiptStage::Denial {
-        blockers.push("denied component receipt must use the denial stage".to_string());
+        blockers.push_item("denied component receipt must use the denial stage".to_string());
     }
     let Some(trap_class) = receipt.input.trap_class.as_deref() else {
-        blockers.push("component denial receipt requires a canonical denial class".to_string());
+        blockers.push_item("component denial receipt requires a canonical denial class".to_string());
         return;
     };
     if super::super::super::model::ComponentDenialClass::parse(trap_class).is_none() {
-        blockers.push("component denial receipt class is not recognized".to_string());
+        blockers.push_item("component denial receipt class is not recognized".to_string());
     }
     if !matches!(receipt.input.diagnostics.as_slice(), [diagnostic] if diagnostic == trap_class) {
-        blockers.push("component denial receipt diagnostics must contain only its canonical class".to_string());
+        blockers.push_item("component denial receipt diagnostics must contain only its canonical class".to_string());
     }
 }

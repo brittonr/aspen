@@ -112,14 +112,17 @@ fn materialization_payload(
 }
 
 fn push_optional_payload(
-    payloads: &mut Vec<molten::materialization::MaterializationPayload>,
+    payloads: &mut impl Extend<molten::materialization::MaterializationPayload>,
     logical_path: &str,
     value: Option<&preserves::IOValue>,
 ) -> molten::error::Result<()> {
     let Some(value) = value else {
         return Ok(());
     };
-    payloads.push(materialization_payload(logical_path, molten::preserves_rail::to_text(value)?));
+    payloads.extend([materialization_payload(
+        logical_path,
+        molten::preserves_rail::to_text(value)?,
+    )]);
     Ok(())
 }
 

@@ -255,27 +255,28 @@ fn mantle_evidence_refs(bundle: &MantleComponentBundle) -> Vec<String> {
     super::super::model::sorted_unique(&refs)
 }
 
-fn validate_bundle_refs(bundle: &MantleComponentBundle, blockers: &mut Vec<String>) {
+fn validate_bundle_refs(bundle: &MantleComponentBundle, blockers: &mut impl crate::bounded::VecSink<String>) {
     if !super::super::model::valid_content_ref(&bundle.build_cohort_ref)
         || !super::super::model::valid_content_ref(&bundle.octet_report_ref)
         || bundle.stage_receipt_refs.len() > MAX_COMPONENT_EVIDENCE_REFS
         || !super::super::model::valid_ref_collection(&bundle.stage_receipt_refs)
     {
-        blockers
-            .push("Mantle component bundle has missing, malformed, duplicate, or unsorted build evidence".to_string());
+        blockers.push_item(
+            "Mantle component bundle has missing, malformed, duplicate, or unsorted build evidence".to_string(),
+        );
     }
     if !bundle.embedded_admission_refs.is_empty() {
-        blockers.push("Mantle component bundle embeds circular Valence or Cairn admission evidence".to_string());
+        blockers.push_item("Mantle component bundle embeds circular Valence or Cairn admission evidence".to_string());
     }
 }
 
 fn validate_envelope(
     bundle: &MantleComponentBundle,
     envelope: &ComponentAdmissionEnvelope,
-    blockers: &mut Vec<String>,
+    blockers: &mut impl crate::bounded::VecSink<String>,
 ) {
     if envelope.schema_id != COMPONENT_ADMISSION_ENVELOPE_SCHEMA || envelope.bundle_ref != bundle.bundle_ref {
-        blockers.push("component admission envelope is stale or bound to another bundle".to_string());
+        blockers.push_item("component admission envelope is stale or bound to another bundle".to_string());
     }
     for (label, refs) in [
         ("Valence sidecar", &envelope.valence_sidecar_refs),
@@ -285,7 +286,7 @@ fn validate_envelope(
         ("resource", &envelope.resource_refs),
     ] {
         if refs.len() > MAX_COMPONENT_EVIDENCE_REFS || !super::super::model::valid_ref_collection(refs) {
-            blockers.push(format!(
+            blockers.push_item(format!(
                 "component admission envelope {label} refs are missing, malformed, duplicate, or unsorted"
             ));
         }

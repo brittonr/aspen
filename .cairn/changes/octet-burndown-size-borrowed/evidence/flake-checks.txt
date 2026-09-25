@@ -1,0 +1,13 @@
+# nix build --no-link .#checks.x86_64-linux.<name> (candidate tree, touched surfaces); exit codes
+molten-node-host=0
+cap-std-store-authority=0
+materialization-authority=0
+node-state-authority=0
+native-system-extension-octet-deny-all=0
+world-distribution-octet-deny-all=0
+world-authority-octet-deny-all=0
+wasm-component-profile=0
+wasm-component-performance-profile=0
+release-profile-validation=0
+fabric-port-boundaries=0
+requirement-traceability-gate=0

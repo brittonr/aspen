@@ -382,19 +382,19 @@ pub fn capability_taxonomy() -> &'static [&'static str] {
 fn proofset_boundary_diagnostics(
     proofset: &CapabilityProofset,
     request: &CapabilityRequest,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) {
     push_mismatch(diagnostics, "proofset holder", &proofset.holder_ref, &request.holder_ref);
     push_mismatch(diagnostics, "proofset session", &proofset.session_ref, &request.session_ref);
     push_mismatch(diagnostics, "proofset context", &proofset.context_ref, &request.context_ref);
     for required in &request.required_policy_refs {
         if !proofset.policy_refs.iter().any(|reference| reference == required) {
-            diagnostics.push(format!("missing policy ref {required}"));
+            diagnostics.push_item(format!("missing policy ref {required}"));
         }
     }
     for required in &request.required_resource_refs {
         if !proofset.resource_refs.iter().any(|reference| reference == required) {
-            diagnostics.push(format!("missing resource ref {required}"));
+            diagnostics.push_item(format!("missing resource ref {required}"));
         }
     }
 }
@@ -614,9 +614,9 @@ fn validate_refs<'a>(refs: impl IntoIterator<Item = &'a str>) -> Result<()> {
     Ok(())
 }
 
-fn push_mismatch(diagnostics: &mut Vec<String>, label: &str, actual: &str, expected: &str) {
+fn push_mismatch(diagnostics: &mut impl crate::bounded::VecSink<String>, label: &str, actual: &str, expected: &str) {
     if actual != expected {
-        diagnostics.push(format!("{label} mismatch expected {expected} actual {actual}"));
+        diagnostics.push_item(format!("{label} mismatch expected {expected} actual {actual}"));
     }
 }
 

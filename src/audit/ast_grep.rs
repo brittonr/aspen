@@ -449,12 +449,12 @@ fn require_items<'a>(
     label: &str,
     required: &[&str],
     actual: impl Iterator<Item = &'a str>,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) {
     let actual = actual.collect::<std::collections::BTreeSet<_>>();
     for required_item in required {
         if !actual.contains(required_item) {
-            diagnostics.push(format!("missing ast-grep audit {label}: {required_item}"));
+            diagnostics.push_item(format!("missing ast-grep audit {label}: {required_item}"));
         }
     }
 }

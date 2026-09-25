@@ -26,7 +26,7 @@ pub(super) fn execute_actions<'a>(
     manifest: &Manifest,
     plan: &Plan,
     history: &[PriorOperation],
-    evidence_refs: &mut Vec<String>,
+    evidence_refs: &mut impl crate::bounded::VecSink<String>,
     ports: ReconcilePorts<'a>,
 ) -> crate::error::Result<ExecutionResult<'a>> {
     let execution_ports = ExecutionPorts {
@@ -45,7 +45,7 @@ pub(super) fn execute_actions<'a>(
                 .find(|prior| prior.operation_id == action.operation_id)
                 .and_then(|prior| prior.result_ref.clone())
             {
-                evidence_refs.push(result_ref);
+                evidence_refs.push_item(result_ref);
             }
             continue;
         }
@@ -59,8 +59,8 @@ pub(super) fn execute_actions<'a>(
             let durable_ref = execution_ports.durable.store_operation(&operation)?;
             validate_ref(&durable_ref, "replication durable operation")?;
             execution_ports.observations.publish_operation(&canonical)?;
-            evidence_refs.push(durable_ref);
-            evidence_refs.push(canonical.record_ref);
+            evidence_refs.push_item(durable_ref);
+            evidence_refs.push_item(canonical.record_ref);
             operations.push(operation);
         }
     }
@@ -76,7 +76,7 @@ fn execute_action(
     manifest: &Manifest,
     action: &Action,
     history: &[PriorOperation],
-    evidence_refs: &mut Vec<String>,
+    evidence_refs: &mut impl crate::bounded::VecSink<String>,
     ports: &mut ActionPorts<'_>,
 ) -> crate::error::Result<Option<PriorOperation>> {
     match action.kind {
@@ -98,7 +98,7 @@ fn execute_transfer(
     manifest: &Manifest,
     action: &Action,
     ports: &mut ActionPorts<'_>,
-    evidence_refs: &mut Vec<String>,
+    evidence_refs: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<PriorOperation> {
     let ActionPorts {
         content,
@@ -107,16 +107,16 @@ fn execute_transfer(
     } = ports;
     let pin = retention.acquire_pin(action)?;
     validate_pin(manifest, action, &pin)?;
-    evidence_refs.push(pin.pin_ref);
+    evidence_refs.push_item(pin.pin_ref);
     let outcome = transport.fetch(action)?;
     let (outcome, result_ref) = match outcome {
         TransferOutcome::Received(envelope) => {
             validate_envelope(manifest, action, &envelope)?;
-            evidence_refs.push(envelope.transfer_ref.clone());
-            evidence_refs.push(envelope.transport_verification_ref.clone());
+            evidence_refs.push_item(envelope.transfer_ref.clone());
+            evidence_refs.push_item(envelope.transport_verification_ref.clone());
             let verification = content.verify(action, &envelope)?;
             validate_verification(manifest, action, &verification)?;
-            evidence_refs.push(verification.verification_ref.clone());
+            evidence_refs.push_item(verification.verification_ref.clone());
             (OperationOutcome::Verified, Some(verification.verification_ref))
         }
         TransferOutcome::Cancelled(reference) => (OperationOutcome::Cancelled, Some(reference)),
@@ -134,14 +134,14 @@ fn execute_cleanup(
     action: &Action,
     content: &mut dyn ContentPort,
     retention: &mut dyn RetentionPort,
-    evidence_refs: &mut Vec<String>,
+    evidence_refs: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<PriorOperation> {
     let admission = retention.authorize_cleanup(action)?;
     validate_cleanup(manifest, action, &admission)?;
     let cleanup_ref = content.cleanup(action, &admission)?;
     validate_ref(&cleanup_ref, "replication cleanup observation")?;
-    evidence_refs.push(admission.cleanup_ref);
-    evidence_refs.push(cleanup_ref.clone());
+    evidence_refs.push_item(admission.cleanup_ref);
+    evidence_refs.push_item(cleanup_ref.clone());
     operation_from_action(manifest, action, OperationOutcome::Verified, Some(cleanup_ref))
 }
 

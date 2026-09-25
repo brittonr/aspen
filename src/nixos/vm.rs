@@ -391,7 +391,10 @@ pub fn evaluate_vm_aggregate(input: &NixosVmAggregateInput<'_>) -> Result<NixosV
     })
 }
 
-fn collect_vm_shard_diagnostics(input: &NixosVmShardRunInput<'_>, diagnostics: &mut Vec<String>) -> Result<()> {
+fn collect_vm_shard_diagnostics(
+    input: &NixosVmShardRunInput<'_>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> Result<()> {
     // r[impl molten.testing.vm_shard_scope.synthetic_metadata_boundary]
     // r[impl molten.testing.vm_shard_scope.aggregate_scope_denial]
     validate_text_field("VM shard", input.shard_id)?;
@@ -404,27 +407,30 @@ fn collect_vm_shard_diagnostics(input: &NixosVmShardRunInput<'_>, diagnostics: &
     validate_ref_slice("VM shard child receipt", input.child_receipt_refs)?;
     validate_ref_slice("VM shard diagnostic log", input.diagnostic_log_refs)?;
     if input.claimed_decision == "pass" && input.evidence_scope != NIXOS_VM_SCOPE_EXECUTABLE_VM {
-        diagnostics.push(format!("vm-shard-non-executable-pass:{}:{}", input.shard_id, input.evidence_scope));
+        diagnostics.push_item(format!("vm-shard-non-executable-pass:{}:{}", input.shard_id, input.evidence_scope));
     }
     if input.claimed_decision == "pass" && input.unavailable {
-        diagnostics.push(format!("vm-shard-unavailable-as-pass:{}", input.shard_id));
+        diagnostics.push_item(format!("vm-shard-unavailable-as-pass:{}", input.shard_id));
     }
     if input.claimed_decision == "pass" && input.child_receipt_refs.is_empty() {
-        diagnostics.push(format!("vm-shard-log-only-pass:{}", input.shard_id));
+        diagnostics.push_item(format!("vm-shard-log-only-pass:{}", input.shard_id));
     }
     if input.node_evidence_refs.is_empty() {
-        diagnostics.push(format!("vm-shard-missing-node-evidence:{}", input.shard_id));
+        diagnostics.push_item(format!("vm-shard-missing-node-evidence:{}", input.shard_id));
     }
     if input.diagnostic_log_refs.is_empty() {
-        diagnostics.push(format!("vm-shard-missing-diagnostic-log:{}", input.shard_id));
+        diagnostics.push_item(format!("vm-shard-missing-diagnostic-log:{}", input.shard_id));
     }
     if input.caveats.is_empty() {
-        diagnostics.push(format!("vm-shard-missing-caveat:{}", input.shard_id));
+        diagnostics.push_item(format!("vm-shard-missing-caveat:{}", input.shard_id));
     }
     Ok(())
 }
 
-fn collect_vm_aggregate_diagnostics(input: &NixosVmAggregateInput<'_>, diagnostics: &mut Vec<String>) -> Result<()> {
+fn collect_vm_aggregate_diagnostics(
+    input: &NixosVmAggregateInput<'_>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> Result<()> {
     // r[impl molten.testing.vm_shard_scope.aggregate_scope_denial]
     validate_content_ref(input.topology_ref)?;
     validate_content_ref(input.package_ref)?;
@@ -444,33 +450,33 @@ fn collect_vm_aggregate_diagnostics(input: &NixosVmAggregateInput<'_>, diagnosti
     validate_ref_slice("VM aggregate stale child", input.stale_child_refs)?;
     validate_ref_slice("VM aggregate log-only child", input.log_only_child_refs)?;
     if input.required_shard_ids.is_empty() {
-        diagnostics.push("vm-aggregate-missing-required-shards".to_string());
+        diagnostics.push_item("vm-aggregate-missing-required-shards".to_string());
     }
     if input.shard_refs.len() < input.required_shard_ids.len() {
-        diagnostics.push("vm-aggregate-missing-shard-ref".to_string());
+        diagnostics.push_item("vm-aggregate-missing-shard-ref".to_string());
     }
     if input.shard_scopes.len() != input.shard_refs.len() {
-        diagnostics.push("vm-aggregate-shard-scope-count-mismatch".to_string());
+        diagnostics.push_item("vm-aggregate-shard-scope-count-mismatch".to_string());
     }
     for scope in input.shard_scopes {
         if scope != NIXOS_VM_SCOPE_EXECUTABLE_VM {
-            diagnostics.push(format!("vm-aggregate-non-executable-platform-scope:{scope}"));
+            diagnostics.push_item(format!("vm-aggregate-non-executable-platform-scope:{scope}"));
         }
     }
     for shard_id in input.denied_shard_ids {
-        diagnostics.push(format!("vm-aggregate-denied-shard:{shard_id}"));
+        diagnostics.push_item(format!("vm-aggregate-denied-shard:{shard_id}"));
     }
     for shard_id in input.unavailable_as_pass_shard_ids {
-        diagnostics.push(format!("vm-aggregate-unavailable-as-pass:{shard_id}"));
+        diagnostics.push_item(format!("vm-aggregate-unavailable-as-pass:{shard_id}"));
     }
     for stale_ref in input.stale_child_refs {
-        diagnostics.push(format!("vm-aggregate-stale-child:{stale_ref}"));
+        diagnostics.push_item(format!("vm-aggregate-stale-child:{stale_ref}"));
     }
     for log_only_ref in input.log_only_child_refs {
-        diagnostics.push(format!("vm-aggregate-log-only-child:{log_only_ref}"));
+        diagnostics.push_item(format!("vm-aggregate-log-only-child:{log_only_ref}"));
     }
     if input.caveats.is_empty() {
-        diagnostics.push("vm-aggregate-missing-caveat".to_string());
+        diagnostics.push_item("vm-aggregate-missing-caveat".to_string());
     }
     Ok(())
 }

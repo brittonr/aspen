@@ -469,7 +469,7 @@ fn note_protocol_drain_gate(gate: &ProtocolDrainGateEvidence, expected_refs: &[S
     Ok(())
 }
 
-fn note_affected_ref_binding(input: &UpgradeDrainReadinessInput<'_>, diagnostics: &mut Vec<String>) -> Result<bool> {
+fn note_affected_ref_binding(input: &UpgradeDrainReadinessInput<'_>, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<bool> {
     let mut is_bound = true;
     if let Some(from_ref) = input.from_ref
         && !input.affected_refs.iter().any(|affected_ref| affected_ref == from_ref)
@@ -494,7 +494,7 @@ fn note_affected_ref_binding(input: &UpgradeDrainReadinessInput<'_>, diagnostics
 
 fn note_compatibility_ref_binding(
     input: &UpgradeDrainReadinessInput<'_>,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<bool> {
     let mut is_bound = true;
     if let Some(from_ref) = input.from_ref
@@ -524,7 +524,7 @@ fn note_compatibility_ref_binding(
     Ok(is_bound)
 }
 
-fn push_upgrade_drain_diagnostic(diagnostics: &mut Vec<String>, diagnostic: String) -> Result<()> {
+fn push_upgrade_drain_diagnostic(diagnostics: &mut impl crate::bounded::VecSink<String>, diagnostic: String) -> Result<()> {
     push_bounded(
         diagnostics,
         diagnostic,

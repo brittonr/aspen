@@ -139,36 +139,36 @@ fn validate_identity(
     profile: &super::model::ComponentRuntimeProfile,
     materialization: &super::evidence::materialization::MaterializationAdmission,
     facts: &ComponentArtifactFacts,
-    blockers: &mut Vec<String>,
+    blockers: &mut impl crate::bounded::VecSink<String>,
 ) {
     if facts.artifact_kind != super::model::WasmArtifactKind::Component {
-        blockers.push("component execution plan received a core module".to_string());
+        blockers.push_item("component execution plan received a core module".to_string());
     }
     if facts.declared_profile_id != super::profile::COMPONENT_PROFILE_ID
         || facts.declared_profile_id != profile.profile_id
     {
-        blockers.push("component artifact declared profile is stale or mismatched".to_string());
+        blockers.push_item("component artifact declared profile is stale or mismatched".to_string());
     }
     if facts.declared_cohort_ref != super::profile::component_profile_ref(profile)
         || materialization.profile_ref != super::profile::component_profile_ref(profile)
     {
-        blockers.push("component artifact or materialization cohort identity is stale".to_string());
+        blockers.push_item("component artifact or materialization cohort identity is stale".to_string());
     }
     if facts.declared_world != super::profile::COMPONENT_WIT_WORLD || facts.declared_world != profile.wit.world {
-        blockers.push("component artifact WIT world does not match the admitted world".to_string());
+        blockers.push_item("component artifact WIT world does not match the admitted world".to_string());
     }
     if !facts.exports.iter().any(|value| value == COMPONENT_INVOKE_EXPORT) {
-        blockers.push("component artifact does not export the admitted invoke function".to_string());
+        blockers.push_item("component artifact does not export the admitted invoke function".to_string());
     }
     if super::model::sorted_unique(&facts.exports) != facts.exports {
-        blockers.push("component export facts must be sorted and unique".to_string());
+        blockers.push_item("component export facts must be sorted and unique".to_string());
     }
 }
 
 fn validate_resources(
     profile: &super::model::ComponentRuntimeProfile,
     facts: &ComponentArtifactFacts,
-    blockers: &mut Vec<String>,
+    blockers: &mut impl crate::bounded::VecSink<String>,
 ) {
     validate_fixed_growth("memory", &facts.memory, profile.resources.max_memory_bytes, blockers);
     validate_fixed_growth("table", &facts.table, profile.resources.max_table_elements, blockers);
@@ -178,27 +178,37 @@ fn validate_resources(
         ("tables", facts.tables, profile.resources.max_tables),
     ] {
         if actual > maximum {
-            blockers.push(format!("component artifact {label} exceed the admitted resource bound"));
+            blockers.push_item(format!("component artifact {label} exceed the admitted resource bound"));
         }
     }
     validate_collection_bound("imports", facts.imports.len(), profile.resources.max_imports, blockers);
     validate_collection_bound("exports", facts.exports.len(), profile.resources.max_exports, blockers);
 }
 
-fn validate_collection_bound(label: &str, actual: usize, maximum: u64, blockers: &mut Vec<String>) {
+fn validate_collection_bound(
+    label: &str,
+    actual: usize,
+    maximum: u64,
+    blockers: &mut impl crate::bounded::VecSink<String>,
+) {
     match u64::try_from(actual) {
         Ok(actual) if actual <= maximum => {}
-        Ok(_) => blockers.push(format!("component artifact {label} exceed the admitted resource bound")),
-        Err(error) => blockers.push(format!("component artifact {label} count is unsupported: {error}")),
+        Ok(_) => blockers.push_item(format!("component artifact {label} exceed the admitted resource bound")),
+        Err(error) => blockers.push_item(format!("component artifact {label} count is unsupported: {error}")),
     }
 }
 
-fn validate_fixed_growth(label: &str, facts: &ComponentGrowthFacts, maximum: u64, blockers: &mut Vec<String>) {
+fn validate_fixed_growth(
+    label: &str,
+    facts: &ComponentGrowthFacts,
+    maximum: u64,
+    blockers: &mut impl crate::bounded::VecSink<String>,
+) {
     if facts.strategy != super::model::GrowthStrategy::Fixed || facts.maximum != Some(facts.initial) {
-        blockers.push(format!("component {label} growth is not fixed up front"));
+        blockers.push_item(format!("component {label} growth is not fixed up front"));
     }
     if facts.initial > maximum {
-        blockers.push(format!("component {label} declaration exceeds the admitted resource bound"));
+        blockers.push_item(format!("component {label} declaration exceeds the admitted resource bound"));
     }
 }
 
@@ -206,25 +216,25 @@ fn validate_imports(
     profile: &super::model::ComponentRuntimeProfile,
     facts: &ComponentArtifactFacts,
     grants: &[ComponentImportGrant],
-    blockers: &mut Vec<String>,
+    blockers: &mut impl crate::bounded::VecSink<String>,
 ) -> GrantPlan {
     let mut plan = GrantPlan::with_capacity(facts.imports.len());
     if super::model::sorted_unique(&facts.imports) != facts.imports {
-        blockers.push("component import facts must be sorted and unique".to_string());
+        blockers.push_item("component import facts must be sorted and unique".to_string());
     }
     let mut used_grants = Vec::with_capacity(facts.imports.len());
     for import in &facts.imports {
         if !profile.allowed_imports.iter().any(|allowed| allowed == import) {
-            blockers.push(format!("component import {import} is not declared by the profile"));
+            blockers.push_item(format!("component import {import} is not declared by the profile"));
         }
         if import.starts_with(WASI_IMPORT_PREFIX)
             && !profile.allowed_wasi_interfaces.iter().any(|allowed| allowed == import)
         {
-            blockers.push(format!("ambient WASI import {import} is denied"));
+            blockers.push_item(format!("ambient WASI import {import} is denied"));
         }
         let matching = grants.iter().filter(|grant| &grant.import == import).collect::<Vec<_>>();
         if matching.len() != 1 {
-            blockers.push(format!("component import {import} requires exactly one authority grant"));
+            blockers.push_item(format!("component import {import} requires exactly one authority grant"));
             continue;
         }
         let grant = matching[0];
@@ -235,7 +245,7 @@ fn validate_imports(
             || !super::model::valid_content_ref(&grant.resource_ref)
             || !super::model::valid_content_ref(&grant.recorded_effect_ref)
         {
-            blockers.push(format!("component import {import} has incomplete capability or evidence bindings"));
+            blockers.push_item(format!("component import {import} has incomplete capability or evidence bindings"));
             continue;
         }
         plan.bindings.push(format!(
@@ -256,7 +266,7 @@ fn validate_imports(
     if super::model::sorted_unique(&used_grants)
         != super::model::sorted_unique(&grants.iter().map(|grant| grant.import.clone()).collect::<Vec<_>>())
     {
-        blockers.push("component import grants include unused authority".to_string());
+        blockers.push_item("component import grants include unused authority".to_string());
     }
     plan.bindings = super::model::sorted_unique(&plan.bindings);
     plan.capabilities = super::model::sorted_unique(&plan.capabilities);

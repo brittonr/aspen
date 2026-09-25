@@ -284,7 +284,7 @@ struct ScenarioCounters {
 fn run_simulation_scenarios(
     profile: &CanonicalTimeProfile,
     clock: &mut VirtualClockAdapter,
-    events: &mut Vec<CanonicalTimeEvent>,
+    events: &mut impl crate::bounded::VecSink<CanonicalTimeEvent>,
 ) -> crate::error::Result<ScenarioCounters> {
     let mut counters = ScenarioCounters::default();
     let periodic = schedule_timer(
@@ -304,7 +304,7 @@ fn run_simulation_scenarios(
     clock.await_ticks(TIMER_OBSERVATION)?;
     let periodic_transition = poll_timer(&periodic, FIXTURE_GENERATION, clock.now_ticks()?, 1)
         .map_err(|error| core_error("poll periodic fixture timer", error))?;
-    events.push(canonical_timer_event(&profile.profile_ref, &periodic_transition)?);
+    events.push_item(canonical_timer_event(&profile.profile_ref, &periodic_transition)?);
     counters.timer_events = checked_increment(counters.timer_events, "timer event count")?;
 
     let delayed = schedule_timer(
@@ -325,8 +325,8 @@ fn run_simulation_scenarios(
     };
     let delayed_transition =
         poll_timer_with_fault(&delayed, FIXTURE_GENERATION, delayed.next_deadline_ticks, 1, Some(&delay_fault))?;
-    events.push(canonical_timer_event(&profile.profile_ref, &delayed_transition)?);
-    events.push(canonical_named_event(EventHeader {
+    events.push_item(canonical_timer_event(&profile.profile_ref, &delayed_transition)?);
+    events.push_item(canonical_named_event(EventHeader {
         profile_ref: &profile.profile_ref,
         kind: CanonicalTimeEventKind::Fault,
         generation: FIXTURE_GENERATION,
@@ -349,8 +349,8 @@ fn run_simulation_scenarios(
     };
     let dropped_transition =
         poll_timer_with_fault(&dropped, FIXTURE_GENERATION, dropped.next_deadline_ticks, 1, Some(&drop_fault))?;
-    events.push(canonical_timer_event(&profile.profile_ref, &dropped_transition)?);
-    events.push(canonical_named_event(EventHeader {
+    events.push_item(canonical_timer_event(&profile.profile_ref, &dropped_transition)?);
+    events.push_item(canonical_named_event(EventHeader {
         profile_ref: &profile.profile_ref,
         kind: CanonicalTimeEventKind::Fault,
         generation: FIXTURE_GENERATION,
@@ -383,8 +383,8 @@ fn run_simulation_scenarios(
         1,
         Some(&cancellation_fault),
     )?;
-    events.push(canonical_timer_event(&profile.profile_ref, &cancelled)?);
-    events.push(canonical_named_event(EventHeader {
+    events.push_item(canonical_timer_event(&profile.profile_ref, &cancelled)?);
+    events.push_item(canonical_named_event(EventHeader {
         profile_ref: &profile.profile_ref,
         kind: CanonicalTimeEventKind::Fault,
         generation: FIXTURE_GENERATION,
@@ -399,7 +399,7 @@ fn run_simulation_scenarios(
     if cleaned.iter().any(|timer| timer.phase != TimerPhase::Cancelled) {
         return Err(crate::error::MoltenError::invalid_harness("fixture generation cleanup leaked an active timer"));
     }
-    events.push(canonical_named_event(EventHeader {
+    events.push_item(canonical_named_event(EventHeader {
         profile_ref: &profile.profile_ref,
         kind: CanonicalTimeEventKind::Timer,
         generation: FIXTURE_GENERATION,
@@ -418,7 +418,7 @@ fn run_simulation_scenarios(
 
 fn run_scheduler_scenario(
     profile: &CanonicalTimeProfile,
-    events: &mut Vec<CanonicalTimeEvent>,
+    events: &mut impl crate::bounded::VecSink<CanonicalTimeEvent>,
     counters: &mut ScenarioCounters,
 ) -> crate::error::Result<()> {
     let policy = SchedulerPolicy {
@@ -436,7 +436,7 @@ fn run_scheduler_scenario(
                 priority,
             })
             .map_err(|error| core_error("wake fixture runnable", error))?;
-        events.push(canonical_scheduler_transition(&profile.profile_ref, &transition)?);
+        events.push_item(canonical_scheduler_transition(&profile.profile_ref, &transition)?);
         state = transition.next;
         counters.scheduler_events = checked_increment(counters.scheduler_events, "scheduler event count")?;
     }
@@ -455,7 +455,7 @@ fn run_scheduler_scenario(
     ) {
         return Err(crate::error::MoltenError::invalid_harness("fixture scheduler accepted a divergent replay choice"));
     }
-    events.push(canonical_named_event(EventHeader {
+    events.push_item(canonical_named_event(EventHeader {
         profile_ref: &profile.profile_ref,
         kind: CanonicalTimeEventKind::Scheduler,
         generation: FIXTURE_GENERATION,
@@ -464,7 +464,7 @@ fn run_scheduler_scenario(
         ticks: state.choice_sequence,
     })?);
     counters.scheduler_events = checked_increment(counters.scheduler_events, "scheduler event count")?;
-    events.push(canonical_scheduler_selection(&profile.profile_ref, &selection)?);
+    events.push_item(canonical_scheduler_selection(&profile.profile_ref, &selection)?);
     counters.scheduler_events = checked_increment(counters.scheduler_events, "scheduler event count")?;
 
     let yielded = apply_scheduler_command(
@@ -477,7 +477,7 @@ fn run_scheduler_scenario(
         },
     )
     .map_err(|error| core_error("yield fixture runnable", error))?;
-    events.push(canonical_scheduler_transition(&profile.profile_ref, &yielded)?);
+    events.push_item(canonical_scheduler_transition(&profile.profile_ref, &yielded)?);
     counters.scheduler_events = checked_increment(counters.scheduler_events, "scheduler event count")?;
 
     let saturation_fault = FabricTimeFault::SaturateSchedulerQueue;
@@ -503,8 +503,8 @@ fn run_scheduler_scenario(
         })
         .map_err(|error| core_error("probe saturated fixture scheduler", error))?;
     validate_scheduler_fault_outcome(&saturation_fault, &overload)?;
-    events.push(canonical_scheduler_transition(&profile.profile_ref, &overload)?);
-    events.push(canonical_named_event(EventHeader {
+    events.push_item(canonical_scheduler_transition(&profile.profile_ref, &overload)?);
+    events.push_item(canonical_named_event(EventHeader {
         profile_ref: &profile.profile_ref,
         kind: CanonicalTimeEventKind::Fault,
         generation: FIXTURE_GENERATION,
@@ -519,7 +519,7 @@ fn run_scheduler_scenario(
 
 fn run_deterministic_entropy_scenario(
     profile: &CanonicalTimeProfile,
-    events: &mut Vec<CanonicalTimeEvent>,
+    events: &mut impl crate::bounded::VecSink<CanonicalTimeEvent>,
     counters: &mut ScenarioCounters,
 ) -> crate::error::Result<()> {
     let mut stream = open_entropy_stream(
@@ -545,7 +545,7 @@ fn run_deterministic_entropy_scenario(
         let transition = draw_deterministic_entropy(&profile.profile, FIXTURE_GENERATION, &stream, request)
             .map_err(|error| core_error("draw deterministic entropy", error))?;
         let metadata = entropy_evidence_metadata(&stream, &transition);
-        events.push(canonical_entropy_event(&metadata)?);
+        events.push_item(canonical_entropy_event(&metadata)?);
         stream = transition.next;
         counters.entropy_events = checked_increment(counters.entropy_events, "entropy event count")?;
     }
@@ -554,7 +554,7 @@ fn run_deterministic_entropy_scenario(
 
 fn run_production_entropy_scenario(
     profile: &CanonicalTimeProfile,
-    events: &mut Vec<CanonicalTimeEvent>,
+    events: &mut impl crate::bounded::VecSink<CanonicalTimeEvent>,
 ) -> crate::error::Result<String> {
     let stream = open_entropy_stream(
         &profile.profile,
@@ -572,13 +572,13 @@ fn run_production_entropy_scenario(
     let (_, metadata) = adapter.draw(&profile.profile, FIXTURE_GENERATION, &stream, EntropyRequest::Bytes {
         count: ENTROPY_BYTE_COUNT,
     })?;
-    events.push(canonical_entropy_event(&metadata)?);
+    events.push_item(canonical_entropy_event(&metadata)?);
     Ok(adapter.source_id().to_string())
 }
 
 fn run_deadline_lease_scenario(
     profile: &CanonicalTimeProfile,
-    events: &mut Vec<CanonicalTimeEvent>,
+    events: &mut impl crate::bounded::VecSink<CanonicalTimeEvent>,
     counters: &mut ScenarioCounters,
 ) -> crate::error::Result<()> {
     let target = virtual_value(&profile.profile, DEADLINE_TARGET);
@@ -596,10 +596,10 @@ fn run_deadline_lease_scenario(
         &virtual_value(&profile.profile, DEADLINE_OBSERVATION),
     )
     .map_err(|error| core_error("evaluate fixture deadline", error))?;
-    events.push(canonical_deadline_event(&profile.profile_ref, &decision)?);
+    events.push_item(canonical_deadline_event(&profile.profile_ref, &decision)?);
     counters.deadline_lease_events = checked_increment(counters.deadline_lease_events, "deadline/lease event count")?;
 
-    events.extend(retry_events(
+    events.extend_items(retry_events(
         profile,
         &virtual_value(&profile.profile, DEADLINE_OBSERVATION),
         1,
@@ -630,7 +630,7 @@ fn run_deadline_lease_scenario(
         previous_fencing_token: Some(PREVIOUS_FENCING_TOKEN),
     })
     .map_err(|error| core_error("evaluate fixture lease", error))?;
-    events.push(canonical_lease_event(&profile.profile_ref, &lease)?);
+    events.push_item(canonical_lease_event(&profile.profile_ref, &lease)?);
     counters.deadline_lease_events = checked_increment(counters.deadline_lease_events, "deadline/lease event count")?;
     Ok(())
 }
@@ -679,7 +679,7 @@ pub(super) fn retry_events(
 fn run_clock_partition_faults(
     profile: &CanonicalTimeProfile,
     clock: &mut VirtualClockAdapter,
-    events: &mut Vec<CanonicalTimeEvent>,
+    events: &mut impl crate::bounded::VecSink<CanonicalTimeEvent>,
     counters: &mut ScenarioCounters,
 ) -> crate::error::Result<()> {
     let previous = clock.observe_wall()?;
@@ -694,8 +694,8 @@ fn run_clock_partition_faults(
         max_uncertainty_nanos: PROFILE_MAX_TICKS,
     })
     .map_err(|error| core_error("classify injected wall jump", error))?;
-    events.push(canonical_clock_anomaly_event(&profile.profile_ref, FIXTURE_GENERATION, &anomaly)?);
-    events.push(canonical_named_event(EventHeader {
+    events.push_item(canonical_clock_anomaly_event(&profile.profile_ref, FIXTURE_GENERATION, &anomaly)?);
+    events.push_item(canonical_named_event(EventHeader {
         profile_ref: &profile.profile_ref,
         kind: CanonicalTimeEventKind::Fault,
         generation: FIXTURE_GENERATION,
@@ -733,7 +733,7 @@ fn run_clock_partition_faults(
             "partition fault did not make the coupled deadline indeterminate",
         ));
     }
-    events.push(canonical_named_event(EventHeader {
+    events.push_item(canonical_named_event(EventHeader {
         profile_ref: &profile.profile_ref,
         kind: CanonicalTimeEventKind::Fault,
         generation: FIXTURE_GENERATION,
@@ -741,7 +741,7 @@ fn run_clock_partition_faults(
         action: "deadline-indeterminate",
         ticks: partition_until,
     })?);
-    events.push(canonical_named_event(EventHeader {
+    events.push_item(canonical_named_event(EventHeader {
         profile_ref: &profile.profile_ref,
         kind: CanonicalTimeEventKind::Deadline,
         generation: FIXTURE_GENERATION,

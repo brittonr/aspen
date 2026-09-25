@@ -673,9 +673,9 @@ pub fn evaluate_release_evidence_only_boundary(
     Ok(ReleaseEvidenceBoundaryDecision { decision, diagnostics })
 }
 
-fn push_release_boundary_diagnostic(diagnostics: &mut Vec<String>, operation: &str, refs: &[String], gate: &str) {
+fn push_release_boundary_diagnostic(diagnostics: &mut impl crate::bounded::VecSink<String>, operation: &str, refs: &[String], gate: &str) {
     if refs.is_empty() {
-        diagnostics.push(format!(
+        diagnostics.push_item(format!(
             "release evidence for operation {operation} remains evidence-only and does not grant {gate} trust"
         ));
     }

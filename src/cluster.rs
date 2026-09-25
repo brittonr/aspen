@@ -307,7 +307,7 @@ fn cluster_lifecycle_run_diagnostics(input: &ClusterLifecycleRunInput) -> crate:
 
 fn collect_ordered_lifecycle_nodes(
     node_ids: &[String],
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<std::collections::BTreeSet<String>> {
     let mut seen = std::collections::BTreeSet::new();
     for node_id in node_ids {
@@ -322,7 +322,7 @@ fn collect_ordered_lifecycle_nodes(
 fn collect_summary_node_diagnostics(
     input: &ClusterLifecycleRunInput,
     ordered_nodes: &std::collections::BTreeSet<String>,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<std::collections::BTreeSet<String>> {
     let mut seen = std::collections::BTreeSet::new();
     let has_init = cluster_lifecycle_has_phase(input, CLUSTER_LIFECYCLE_PHASE_INIT);
@@ -375,7 +375,7 @@ fn collect_summary_node_diagnostics(
 
 fn collect_summary_optional_ref_diagnostics(
     summary: &ClusterLifecycleNodeSummary,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<()> {
     for (label, reference) in [
         ("identity", summary.identity_ref.as_deref()),
@@ -397,7 +397,7 @@ fn collect_required_optional_summary_ref(
     summary: &ClusterLifecycleNodeSummary,
     label: &str,
     reference: Option<&str>,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<()> {
     if reference.is_none() {
         push_lifecycle_diagnostic(diagnostics, format!("cluster-lifecycle-missing-{label}:{}", summary.node_id))?;
@@ -407,7 +407,7 @@ fn collect_required_optional_summary_ref(
 
 fn collect_phase_diagnostics(
     phase: &ClusterLifecyclePhaseObservation,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<()> {
     collect_lifecycle_text_diagnostic("phase", &phase.phase, diagnostics)?;
     collect_lifecycle_decision_diagnostic(&phase.phase, &phase.decision, diagnostics)?;
@@ -420,7 +420,7 @@ fn collect_phase_diagnostics(
 
 fn collect_stop_order_diagnostics(
     input: &ClusterLifecycleRunInput,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<()> {
     let has_stop = cluster_lifecycle_has_phase(input, CLUSTER_LIFECYCLE_PHASE_STOP);
     for node_id in &input.stop_order {
@@ -468,7 +468,7 @@ fn cluster_lifecycle_has_phase(input: &ClusterLifecycleRunInput, phase_name: &st
 fn collect_lifecycle_decision_diagnostic(
     phase: &str,
     decision: &str,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<()> {
     match decision {
         CLUSTER_LIFECYCLE_PASS
@@ -485,7 +485,7 @@ fn collect_lifecycle_decision_diagnostic(
 fn collect_lifecycle_text_diagnostic(
     label: &str,
     value: &str,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<()> {
     if value.trim().is_empty() {
         push_lifecycle_diagnostic(diagnostics, format!("cluster-lifecycle-missing-{label}"))?;
@@ -496,7 +496,7 @@ fn collect_lifecycle_text_diagnostic(
 fn collect_lifecycle_ref_diagnostics(
     label: &str,
     refs: &[String],
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<()> {
     if refs.len() > MAX_CLUSTER_LIFECYCLE_ITEMS {
         return Err(crate::error::MoltenError::invalid_harness(format!(
@@ -513,7 +513,7 @@ fn collect_lifecycle_ref_diagnostics(
 fn collect_lifecycle_optional_ref_diagnostic(
     label: &str,
     reference: Option<&str>,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<()> {
     if let Some(reference) = reference {
         collect_lifecycle_ref_diagnostic(label, reference, diagnostics)?;
@@ -524,7 +524,7 @@ fn collect_lifecycle_optional_ref_diagnostic(
 fn collect_lifecycle_ref_diagnostic(
     label: &str,
     reference: &str,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<()> {
     if crate::preserves_rail::validate_content_ref(reference).is_err() {
         push_lifecycle_diagnostic(diagnostics, format!("cluster-lifecycle-invalid-{label}-ref"))?;
@@ -533,7 +533,7 @@ fn collect_lifecycle_ref_diagnostic(
 }
 
 fn push_lifecycle_if(
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
     condition: bool,
     diagnostic: &'static str,
 ) -> crate::error::Result<()> {
@@ -543,13 +543,16 @@ fn push_lifecycle_if(
     Ok(())
 }
 
-fn push_lifecycle_diagnostic(diagnostics: &mut Vec<String>, diagnostic: impl Into<String>) -> crate::error::Result<()> {
-    if diagnostics.len() >= MAX_CLUSTER_LIFECYCLE_ITEMS {
+fn push_lifecycle_diagnostic(
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+    diagnostic: impl Into<String>,
+) -> crate::error::Result<()> {
+    if diagnostics.item_count() >= MAX_CLUSTER_LIFECYCLE_ITEMS {
         return Err(crate::error::MoltenError::invalid_harness(format!(
             "cluster lifecycle diagnostic count exceeds bound {MAX_CLUSTER_LIFECYCLE_ITEMS}"
         )));
     }
-    diagnostics.push(diagnostic.into());
+    diagnostics.push_item(diagnostic.into());
     Ok(())
 }
 
@@ -663,7 +666,7 @@ fn optional_ref_value(reference: Option<&str>) -> IoValue {
 }
 
 fn push_lifecycle_optional_ref_field(
-    fields: &mut Vec<crate::drift_core::EvidenceField>,
+    fields: &mut impl crate::bounded::VecSink<crate::drift_core::EvidenceField>,
     node_id: &str,
     label: &str,
     reference: Option<&str>,
@@ -676,7 +679,7 @@ fn push_lifecycle_optional_ref_field(
 }
 
 fn push_lifecycle_ref_fields(
-    fields: &mut Vec<crate::drift_core::EvidenceField>,
+    fields: &mut impl crate::bounded::VecSink<crate::drift_core::EvidenceField>,
     prefix: &str,
     refs: &[String],
 ) -> crate::error::Result<()> {
@@ -691,17 +694,17 @@ fn push_lifecycle_ref_fields(
 }
 
 fn push_lifecycle_summary_field(
-    fields: &mut Vec<crate::drift_core::EvidenceField>,
+    fields: &mut impl crate::bounded::VecSink<crate::drift_core::EvidenceField>,
     path: &str,
     value: &str,
     is_ref: bool,
 ) -> crate::error::Result<()> {
-    if fields.len() >= MAX_CLUSTER_LIFECYCLE_ITEMS {
+    if fields.item_count() >= MAX_CLUSTER_LIFECYCLE_ITEMS {
         return Err(crate::error::MoltenError::invalid_harness(format!(
             "cluster lifecycle drift field count exceeds bound {MAX_CLUSTER_LIFECYCLE_ITEMS}"
         )));
     }
-    fields.push(crate::drift_core::EvidenceField {
+    fields.push_item(crate::drift_core::EvidenceField {
         path: path.to_string(),
         value: value.to_string(),
         is_ref,

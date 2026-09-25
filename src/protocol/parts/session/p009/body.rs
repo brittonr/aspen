@@ -370,18 +370,18 @@ fn protocol_facade_transition_value(input: &ProtocolFacadeTransitionValueInput<'
 fn evaluate_facade_send_transition(
     input: &ProtocolFacadeTransitionInput,
     state: &ProtocolSessionState,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<(Option<ProtocolMessage>, Option<ProtocolSessionState>)> {
     let Some(peer) = input.peer.as_deref() else {
-        diagnostics.push("protocol facade send requires a peer".to_string());
+        diagnostics.push_item("protocol facade send requires a peer".to_string());
         return Ok((None, None));
     };
     let Some(payload_tag) = input.payload_tag.as_deref() else {
-        diagnostics.push("protocol facade send requires a payload tag".to_string());
+        diagnostics.push_item("protocol facade send requires a payload tag".to_string());
         return Ok((None, None));
     };
     let Some(body_or_ref) = input.body_or_ref.clone() else {
-        diagnostics.push("protocol facade send requires a body or content ref".to_string());
+        diagnostics.push_item("protocol facade send requires a body or content ref".to_string());
         return Ok((None, None));
     };
     let evidence_refs = protocol_facade_message_evidence_refs(input)?;
@@ -407,7 +407,7 @@ fn evaluate_facade_send_transition(
         next: None,
     })?;
     if transition.decision != "pass" {
-        diagnostics.extend(transition.diagnostics);
+        diagnostics.extend_items(transition.diagnostics);
         return Ok((None, None));
     }
     let next_state = next_facade_state(state, transition)?;
@@ -417,10 +417,10 @@ fn evaluate_facade_send_transition(
 fn evaluate_facade_receive_transition(
     input: &ProtocolFacadeTransitionInput,
     state: &ProtocolSessionState,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<(Option<ProtocolMessage>, Option<ProtocolSessionState>)> {
     let Some(message_value) = input.message.as_ref() else {
-        diagnostics.push(PROTOCOL_TRANSITION_MESSAGE_MISSING.to_string());
+        diagnostics.push_item(PROTOCOL_TRANSITION_MESSAGE_MISSING.to_string());
         return Ok((None, None));
     };
     let candidate = parse_protocol_message(message_value)?;
@@ -434,7 +434,7 @@ fn evaluate_facade_receive_transition(
         next: None,
     })?;
     if transition.decision != "pass" {
-        diagnostics.extend(transition.diagnostics);
+        diagnostics.extend_items(transition.diagnostics);
         return Ok((None, None));
     }
     let next_state = next_facade_state(state, transition)?;
@@ -444,7 +444,7 @@ fn evaluate_facade_receive_transition(
 fn evaluate_facade_branch_transition(
     input: &ProtocolFacadeTransitionInput,
     state: &ProtocolSessionState,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<Option<ProtocolSessionState>> {
     let transition = evaluate_protocol_endpoint_transition(ProtocolEndpointTransitionInput {
         operation: &input.operation,
@@ -456,7 +456,7 @@ fn evaluate_facade_branch_transition(
         next: None,
     })?;
     if transition.decision != "pass" {
-        diagnostics.extend(transition.diagnostics);
+        diagnostics.extend_items(transition.diagnostics);
         return Ok(None);
     }
     Ok(Some(next_facade_state(state, transition)?))

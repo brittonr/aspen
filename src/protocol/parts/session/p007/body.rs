@@ -162,20 +162,20 @@ pub fn evaluate_protocol_endpoint_transition(
 
 fn transition_send(
     input: ProtocolEndpointTransitionInput<'_>,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<(Option<ProtocolLocalState>, Vec<String>)> {
     let Some(action) = input.prior.local_state.actions.first() else {
-        diagnostics.push(PROTOCOL_TRANSITION_SEND_EXPECTED.to_string());
+        diagnostics.push_item(PROTOCOL_TRANSITION_SEND_EXPECTED.to_string());
         return Ok((None, input.prior.seen_message_refs.clone()));
     };
     let peer = input.peer.unwrap_or_default();
     let payload_tag = input.payload_tag.unwrap_or_default();
     if action.direction != "send" || action.peer != peer || action.label != input.label || action.payload_tag != payload_tag {
-        diagnostics.push(format!("{PROTOCOL_TRANSITION_SEND_MISMATCH} label={}", action.label));
+        diagnostics.push_item(format!("{PROTOCOL_TRANSITION_SEND_MISMATCH} label={}", action.label));
         return Ok((None, input.prior.seen_message_refs.clone()));
     }
     if let Some(message) = input.message {
-        validate_send_message(SendMessageInput { prior: input.prior, message, peer, label: input.label, payload_tag, diagnostics });
+        validate_send_message(SendMessageInput { prior: input.prior, message, peer, label: input.label, payload_tag }, diagnostics);
     }
     Ok((
         Some(consume_first_action(&input.prior.local_state)?),
@@ -185,18 +185,18 @@ fn transition_send(
 
 fn transition_receive(
     input: ProtocolEndpointTransitionInput<'_>,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<(Option<ProtocolLocalState>, Vec<String>)> {
     let Some(message) = input.message else {
-        diagnostics.push(PROTOCOL_TRANSITION_MESSAGE_MISSING.to_string());
+        diagnostics.push_item(PROTOCOL_TRANSITION_MESSAGE_MISSING.to_string());
         return Ok((None, input.prior.seen_message_refs.clone()));
     };
     if input.prior.seen_message_refs.iter().any(|reference| reference == &message.message_ref) {
-        diagnostics.push("duplicate protocol message replay".to_string());
+        diagnostics.push_item("duplicate protocol message replay".to_string());
         return Ok((None, input.prior.seen_message_refs.clone()));
     }
     let Some(action) = input.prior.local_state.actions.first() else {
-        diagnostics.push(PROTOCOL_TRANSITION_RECEIVE_EXPECTED.to_string());
+        diagnostics.push_item(PROTOCOL_TRANSITION_RECEIVE_EXPECTED.to_string());
         return Ok((None, input.prior.seen_message_refs.clone()));
     };
     let expected = ExpectedReceive {
@@ -205,7 +205,7 @@ fn transition_receive(
         payload_tag: &action.payload_tag,
     };
     if action.direction != "recv" || !message_matches(message, input.prior, expected) {
-        diagnostics.push(PROTOCOL_TRANSITION_RECEIVE_MISMATCH.to_string());
+        diagnostics.push_item(PROTOCOL_TRANSITION_RECEIVE_MISMATCH.to_string());
         return Ok((None, input.prior.seen_message_refs.clone()));
     }
     let mut seen = Vec::with_capacity(input.prior.seen_message_refs.len().saturating_add(1));
@@ -216,14 +216,14 @@ fn transition_receive(
 
 fn transition_branch(
     input: ProtocolEndpointTransitionInput<'_>,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<(Option<ProtocolLocalState>, Vec<String>)> {
     let ProtocolLocalTerminal::InternalChoice(branches) = &input.prior.local_state.terminal else {
-        diagnostics.push(PROTOCOL_TRANSITION_BRANCH_EXPECTED.to_string());
+        diagnostics.push_item(PROTOCOL_TRANSITION_BRANCH_EXPECTED.to_string());
         return Ok((None, input.prior.seen_message_refs.clone()));
     };
     let Some(branch) = branch_for_label(branches, input.label) else {
-        diagnostics.push(PROTOCOL_TRANSITION_BRANCH_MISSING.to_string());
+        diagnostics.push_item(PROTOCOL_TRANSITION_BRANCH_MISSING.to_string());
         return Ok((None, input.prior.seen_message_refs.clone()));
     };
     Ok((
@@ -237,20 +237,20 @@ fn transition_branch(
 
 fn transition_offer(
     input: ProtocolEndpointTransitionInput<'_>,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<(Option<ProtocolLocalState>, Vec<String>)> {
     let ProtocolLocalTerminal::Offer { from_role, branches } = &input.prior.local_state.terminal else {
-        diagnostics.push(PROTOCOL_TRANSITION_OFFER_EXPECTED.to_string());
+        diagnostics.push_item(PROTOCOL_TRANSITION_OFFER_EXPECTED.to_string());
         return Ok((None, input.prior.seen_message_refs.clone()));
     };
     if let Some(peer) = input.peer
         && peer != from_role
     {
-        diagnostics.push(PROTOCOL_TRANSITION_OFFER_EXPECTED.to_string());
+        diagnostics.push_item(PROTOCOL_TRANSITION_OFFER_EXPECTED.to_string());
         return Ok((None, input.prior.seen_message_refs.clone()));
     }
     let Some(branch) = branch_for_label(branches, input.label) else {
-        diagnostics.push(PROTOCOL_TRANSITION_OFFER_MISSING.to_string());
+        diagnostics.push_item(PROTOCOL_TRANSITION_OFFER_MISSING.to_string());
         return Ok((None, input.prior.seen_message_refs.clone()));
     };
     Ok((
@@ -268,11 +268,10 @@ struct SendMessageInput<'a> {
     peer: &'a str,
     label: &'a str,
     payload_tag: &'a str,
-    diagnostics: &'a mut Vec<String>,
 }
 
-fn validate_send_message(input: SendMessageInput<'_>) {
-    let SendMessageInput { prior, message, peer, label, payload_tag, diagnostics } = input;
+fn validate_send_message(input: SendMessageInput<'_>, diagnostics: &mut impl crate::bounded::VecSink<String>) {
+    let SendMessageInput { prior, message, peer, label, payload_tag } = input;
     if message.protocol_ref != prior.protocol_ref
         || message.session_id != prior.session_id
         || message.from_role != prior.role
@@ -281,7 +280,7 @@ fn validate_send_message(input: SendMessageInput<'_>) {
         || message.payload_tag != payload_tag
         || message.sequence != prior.sequence
     {
-        diagnostics.push(PROTOCOL_TRANSITION_SEND_MISMATCH.to_string());
+        diagnostics.push_item(PROTOCOL_TRANSITION_SEND_MISMATCH.to_string());
     }
 }
 
@@ -290,19 +289,19 @@ fn validate_transition_next_state(
     next: &ProtocolSessionState,
     expected_local_state: &ProtocolLocalState,
     seen_message_refs: &[String],
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) {
     if next.protocol_ref != prior.protocol_ref || next.session_id != prior.session_id || next.role != prior.role {
-        diagnostics.push(PROTOCOL_TRANSITION_NEXT_BINDING.to_string());
+        diagnostics.push_item(PROTOCOL_TRANSITION_NEXT_BINDING.to_string());
     }
     if next.sequence != prior.sequence.saturating_add(1) {
-        diagnostics.push(PROTOCOL_TRANSITION_NEXT_SEQUENCE.to_string());
+        diagnostics.push_item(PROTOCOL_TRANSITION_NEXT_SEQUENCE.to_string());
     }
     if &next.local_state != expected_local_state {
-        diagnostics.push(PROTOCOL_TRANSITION_NEXT_STATE.to_string());
+        diagnostics.push_item(PROTOCOL_TRANSITION_NEXT_STATE.to_string());
     }
     if next.seen_message_refs != seen_message_refs {
-        diagnostics.push(PROTOCOL_TRANSITION_SEEN_MESSAGES.to_string());
+        diagnostics.push_item(PROTOCOL_TRANSITION_SEEN_MESSAGES.to_string());
     }
 }
 

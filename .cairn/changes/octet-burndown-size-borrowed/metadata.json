@@ -1,0 +1,9 @@
+{
+  "spec_effect": "none",
+  "spec_effect_rationale": "Private helpers accept a generic push sink instead of an exact `&mut Vec`; pushes, messages, ordering, and canonical encodings are unchanged, and accepted requirements are unchanged.",
+  "workflow_profile": {
+    "id": "no-spec-delta",
+    "source": "change_create",
+    "version": 1
+  }
+}

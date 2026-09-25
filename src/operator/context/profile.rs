@@ -172,7 +172,7 @@ pub fn evaluate_context_profile_authorization_use(
     })
 }
 
-fn validate_profile(input: &ContextProfileInput, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_profile(input: &ContextProfileInput, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
     validate_text("context profile id", &input.profile_id)?;
     validate_profile_tier(&input.profile_tier, diagnostics)?;
     validate_ref_set(&input.refs, diagnostics)?;
@@ -181,7 +181,7 @@ fn validate_profile(input: &ContextProfileInput, diagnostics: &mut Vec<String>) 
     for operation in &input.allowed_operations {
         validate_text("allowed operation", operation)?;
         if !seen.insert(operation.clone()) {
-            diagnostics.push(format!("duplicate-operation-scope:{operation}"));
+            diagnostics.push_item(format!("duplicate-operation-scope:{operation}"));
         }
     }
     ensure_caveat_bound(input.caveats.len(), "context caveats")?;
@@ -191,17 +191,17 @@ fn validate_profile(input: &ContextProfileInput, diagnostics: &mut Vec<String>) 
     Ok(())
 }
 
-fn validate_profile_tier(tier: &str, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_profile_tier(tier: &str, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
     match tier {
         "local" | "pilot" | "release" => Ok(()),
         other => {
-            diagnostics.push(format!("unsupported-profile-tier:{other}"));
+            diagnostics.push_item(format!("unsupported-profile-tier:{other}"));
             Ok(())
         }
     }
 }
 
-fn validate_ref_set(refs: &ContextRefSet, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_ref_set(refs: &ContextRefSet, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
     validate_ref_list_with_diagnostics("policy", &refs.policy_refs, diagnostics)?;
     validate_ref_list_with_diagnostics("capability", &refs.capability_refs, diagnostics)?;
     validate_ref_list_with_diagnostics("authority", &refs.authority_refs, diagnostics)?;
@@ -215,7 +215,10 @@ fn validate_requirements(requirements: &OperationRequirements) -> Result<()> {
     validate_text("operation", &requirements.operation)
 }
 
-fn validate_overrides(overrides: &ContextOverrideInput, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_overrides(
+    overrides: &ContextOverrideInput,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> Result<()> {
     validate_ref_list_with_diagnostics("override policy", &overrides.policy_refs, diagnostics)?;
     validate_ref_list_with_diagnostics("override authority", &overrides.authority_refs, diagnostics)?;
     validate_ref_list_with_diagnostics("override resource", &overrides.resource_refs, diagnostics)?;
@@ -226,16 +229,16 @@ fn validate_overrides(overrides: &ContextOverrideInput, diagnostics: &mut Vec<St
 fn merge_refs(
     profile: &ContextProfileInput,
     overrides: &ContextOverrideInput,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<ContextRefSet> {
     if !overrides.policy_refs.is_empty() && !same_ref_set(&profile.refs.policy_refs, &overrides.policy_refs) {
-        diagnostics.push("conflicting-policy-override".to_string());
+        diagnostics.push_item("conflicting-policy-override".to_string());
     }
     if !overrides.authority_refs.is_empty() && !same_ref_set(&profile.refs.authority_refs, &overrides.authority_refs) {
-        diagnostics.push("conflicting-authority-override".to_string());
+        diagnostics.push_item("conflicting-authority-override".to_string());
     }
     if !overrides.resource_refs.is_empty() && !same_ref_set(&profile.refs.resource_refs, &overrides.resource_refs) {
-        diagnostics.push("conflicting-resource-override".to_string());
+        diagnostics.push_item("conflicting-resource-override".to_string());
     }
     Ok(ContextRefSet {
         policy_refs: merge_same_or_profile(&profile.refs.policy_refs, &overrides.policy_refs),
@@ -266,21 +269,25 @@ fn same_ref_set(left: &[String], right: &[String]) -> bool {
     left.iter().collect::<OrderedSet<_>>() == right.iter().collect::<OrderedSet<_>>()
 }
 
-fn validate_required_refs(requirements: &OperationRequirements, refs: &ContextRefSet, diagnostics: &mut Vec<String>) {
+fn validate_required_refs(
+    requirements: &OperationRequirements,
+    refs: &ContextRefSet,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) {
     if requirements.require_policy && refs.policy_refs.is_empty() {
-        diagnostics.push(format!("missing-required-policy:{}", requirements.operation));
+        diagnostics.push_item(format!("missing-required-policy:{}", requirements.operation));
     }
     if requirements.require_authority && refs.authority_refs.is_empty() {
-        diagnostics.push(format!("missing-required-authority:{}", requirements.operation));
+        diagnostics.push_item(format!("missing-required-authority:{}", requirements.operation));
     }
     if requirements.require_resource && refs.resource_refs.is_empty() {
-        diagnostics.push(format!("missing-required-resource:{}", requirements.operation));
+        diagnostics.push_item(format!("missing-required-resource:{}", requirements.operation));
     }
     if requirements.require_evidence && refs.evidence_refs.is_empty() {
-        diagnostics.push(format!("missing-required-evidence:{}", requirements.operation));
+        diagnostics.push_item(format!("missing-required-evidence:{}", requirements.operation));
     }
     if requirements.require_retention && refs.retention_refs.is_empty() {
-        diagnostics.push(format!("missing-required-retention:{}", requirements.operation));
+        diagnostics.push_item(format!("missing-required-retention:{}", requirements.operation));
     }
 }
 
@@ -406,11 +413,15 @@ fn validate_ref_list(label: &str, refs: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn validate_ref_list_with_diagnostics(label: &str, refs: &[String], diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_ref_list_with_diagnostics(
+    label: &str,
+    refs: &[String],
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> Result<()> {
     ensure_ref_bound(refs.len(), label)?;
     for reference in refs {
         if let Err(error) = validate_ref(reference, label) {
-            diagnostics.push(format!("stale-ref:{label}:{reference}:{error}"));
+            diagnostics.push_item(format!("stale-ref:{label}:{reference}:{error}"));
         }
     }
     Ok(())

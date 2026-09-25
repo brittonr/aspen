@@ -101,9 +101,14 @@ pub fn validate_subscription_projection(
     })
 }
 
-fn require_member(diagnostics: &mut Vec<String>, label: &str, required: &str, available: &[String]) {
+fn require_member(
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+    label: &str,
+    required: &str,
+    available: &[String],
+) {
     if !available.iter().any(|value| value == required) {
-        diagnostics.push(format!("missing {label} {required}"));
+        diagnostics.push_item(format!("missing {label} {required}"));
     }
 }
 

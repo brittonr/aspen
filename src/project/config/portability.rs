@@ -87,17 +87,17 @@ fn validate_file_record(file: &ConfigFileRecord) -> Result<()> {
     validate_text("config file contents", &file.contents)
 }
 
-fn lint_config_file(file: &ConfigFileRecord, diagnostics: &mut Vec<String>) {
+fn lint_config_file(file: &ConfigFileRecord, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     for (line_index, line) in file.contents.lines().enumerate() {
         let line_number = line_index + 1;
         if has_user_home_path(line) {
-            diagnostics.push(format!("user-home-path:{}:{line_number}", file.path));
+            diagnostics.push_item(format!("user-home-path:{}:{line_number}", file.path));
         }
         if line.contains(FLOATING_NIGHTLY_DOUBLE_QUOTED) || line.contains(FLOATING_NIGHTLY_SINGLE_QUOTED) {
-            diagnostics.push(format!("floating-release-toolchain:{}:{line_number}", file.path));
+            diagnostics.push_item(format!("floating-release-toolchain:{}:{line_number}", file.path));
         }
         if file.release_scoped && has_placeholder_release_ref(line) {
-            diagnostics.push(format!("placeholder-release-ref:{}:{line_number}", file.path));
+            diagnostics.push_item(format!("placeholder-release-ref:{}:{line_number}", file.path));
         }
     }
 }
@@ -113,13 +113,16 @@ fn has_placeholder_release_ref(line: &str) -> bool {
         || (line.contains(RELEASE_SCOPE_MARKER) && line.contains(TODO_MARKER))
 }
 
-fn lint_source_pins(pins: &[SourcePinRecord], diagnostics: &mut Vec<String>) -> Result<Vec<String>> {
+fn lint_source_pins(
+    pins: &[SourcePinRecord],
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> Result<Vec<String>> {
     let mut compared = OrderedSet::new();
     let mut seen = OrderedMap::new();
     for pin in pins {
         validate_source_pin(pin)?;
         if pin.cargo_revision != pin.nix_revision {
-            diagnostics.push(format!(
+            diagnostics.push_item(format!(
                 "source-pin-drift:{}:cargo={}:nix={}",
                 pin.dependency, pin.cargo_revision, pin.nix_revision
             ));
@@ -128,8 +131,10 @@ fn lint_source_pins(pins: &[SourcePinRecord], diagnostics: &mut Vec<String>) -> 
         if let Some(previous) = seen.insert(pin.dependency.clone(), pin.cargo_revision.clone())
             && previous != pin.cargo_revision
         {
-            diagnostics
-                .push(format!("conflicting-cargo-source-pin:{}:{}:{}", pin.dependency, previous, pin.cargo_revision));
+            diagnostics.push_item(format!(
+                "conflicting-cargo-source-pin:{}:{}:{}",
+                pin.dependency, previous, pin.cargo_revision
+            ));
         }
     }
     Ok(compared.into_iter().collect())

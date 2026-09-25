@@ -1743,8 +1743,7 @@ where
         visited_nodes: 0,
         limits,
     };
-    let mut path = vec!["$".to_string()];
-    visit_structural_value(value, scope, &mut predicate, &mut state, &mut path)
+    visit_structural_value(value, scope, &mut predicate, &mut state)
 }
 
 pub fn find_named_structural_marker(value: &IoValue, markers: &[&str]) -> Result<Option<StructuralMatch>> {
@@ -1783,13 +1782,13 @@ fn visit_structural_value<F>(
     scope: StructuralInspectionScope,
     predicate: &mut F,
     state: &mut StructuralScanState,
-    path: &mut Vec<String>,
 ) -> Result<Option<StructuralMatch>>
 where
     F: FnMut(StructuralTokenKind, &str) -> bool,
 {
+    let mut path = vec!["$".to_string()];
     let mut frames = Vec::new();
-    match inspect_structural_node(value, scope, predicate, state, path)? {
+    match inspect_structural_node(value, scope, predicate, state, &path)? {
         StructuralNodeOutcome::Matched(found) => return Ok(Some(found)),
         StructuralNodeOutcome::Children(children) => open_structural_frame(&mut frames, children, state)?,
     }
@@ -1800,7 +1799,7 @@ where
             continue;
         };
         path.push(segment);
-        match inspect_structural_node(&child, scope, predicate, state, path)? {
+        match inspect_structural_node(&child, scope, predicate, state, &path)? {
             StructuralNodeOutcome::Matched(found) => return Ok(Some(found)),
             StructuralNodeOutcome::Children(children) if children.is_empty() => {
                 path.pop();

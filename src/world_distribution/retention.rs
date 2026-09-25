@@ -41,11 +41,11 @@ pub fn handoff_world_retention(input: WorldRetentionHandoffInput<'_>) -> Result<
     evidence.remote_gc_refs.extend(input.report.unresolved_remote.iter().cloned());
     evidence.is_reference_index_complete =
         evidence.is_reference_index_complete && input.report.reference_index_complete;
-    normalize_refs(&mut evidence.retained_refs);
-    normalize_refs(&mut evidence.remote_refs);
-    normalize_refs(&mut evidence.evidence_refs);
-    normalize_refs(&mut evidence.reference_index_refs);
-    normalize_refs(&mut evidence.remote_gc_refs);
+    evidence.retained_refs = normalize_refs(std::mem::take(&mut evidence.retained_refs));
+    evidence.remote_refs = normalize_refs(std::mem::take(&mut evidence.remote_refs));
+    evidence.evidence_refs = normalize_refs(std::mem::take(&mut evidence.evidence_refs));
+    evidence.reference_index_refs = normalize_refs(std::mem::take(&mut evidence.reference_index_refs));
+    evidence.remote_gc_refs = normalize_refs(std::mem::take(&mut evidence.remote_gc_refs));
     let plan = store_gc_plan(GcPlanInput {
         root: input.retention_root,
         subsystem: WORLD_DISTRIBUTION_SUBSYSTEM,
@@ -62,7 +62,8 @@ pub fn handoff_world_retention(input: WorldRetentionHandoffInput<'_>) -> Result<
     })
 }
 
-fn normalize_refs(references: &mut Vec<String>) {
+fn normalize_refs(mut references: Vec<String>) -> Vec<String> {
     references.sort();
     references.dedup();
+    references
 }
