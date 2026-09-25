@@ -50,6 +50,25 @@ const MAX_TIMERS: u64 = 1;
 const MAX_EFFECT_REQUESTS: u64 = 8;
 const SUCCESS_EXIT_CODE: i32 = 0;
 
+pub type TestResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+/// Turns a failed fixture step into a test error that keeps its label and `Debug` form.
+pub trait OrFail<T> {
+    fn or_fail(self, label: &str) -> TestResult<T>;
+}
+
+impl<T, E: std::fmt::Debug> OrFail<T> for std::result::Result<T, E> {
+    fn or_fail(self, label: &str) -> TestResult<T> {
+        self.map_err(|error| format!("{label}: {error:?}").into())
+    }
+}
+
+impl<T> OrFail<T> for Option<T> {
+    fn or_fail(self, label: &str) -> TestResult<T> {
+        self.ok_or_else(|| format!("{label}: value is absent").into())
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Publisher {
     pub published: Vec<String>,
@@ -122,20 +141,20 @@ pub struct Cohort {
 }
 
 impl Cohort {
-    pub fn new() -> Self {
+    pub fn new() -> TestResult<Self> {
         let executable_path = std::path::PathBuf::from(env!("CARGO_BIN_EXE_molten-native-extension-fixture"));
-        let executable_bytes = std::fs::read(&executable_path).expect("read native fixture executable");
+        let executable_bytes = std::fs::read(&executable_path).or_fail("read native fixture executable")?;
         let executable_bytes_ref = molten::preserves_rail::content_ref_from_bytes(&executable_bytes);
         let execution_profile =
-            canonical_admit_execution_profile(&execution_profile_descriptor()).expect("execution profile");
+            canonical_admit_execution_profile(&execution_profile_descriptor()).or_fail("execution profile")?;
         let native_profile =
-            admit_native_host_profile(&native_profile(&execution_profile)).expect("native host profile");
-        let admitted = admitted_manifest();
+            admit_native_host_profile(&native_profile(&execution_profile)).or_fail("native host profile")?;
+        let admitted = admitted_manifest()?;
         let executable = admit_native_executable(
             &native_profile,
             &executable_evidence(&admitted, &execution_profile, &executable_bytes_ref),
         )
-        .expect("native executable evidence");
+        .or_fail("native executable evidence")?;
         let instance_id = native_identity_ref(&[
             "native-instance-v2",
             &admitted.manifest().extension_id,
@@ -150,7 +169,7 @@ impl Cohort {
             instance_id,
             &admitted,
         );
-        Self {
+        Ok(Self {
             native_profile,
             executable,
             admitted,
@@ -158,7 +177,7 @@ impl Cohort {
             template,
             journal: std::sync::Arc::new(std::sync::Mutex::new(Journal::empty())),
             values: shared_native_callback_value_port(InMemoryNativeCallbackValuePort::empty()),
-        }
+        })
     }
 
     pub fn replace_program(
@@ -183,9 +202,9 @@ impl Cohort {
         self.template.resolved.executable_identity_ref = executable_bytes_ref;
     }
 
-    pub fn install(&self) -> Service {
+    pub fn install(&self) -> TestResult<Service> {
         let port = LiveExecutionAdapter::new(self.execution_profile.clone(), Publisher::default())
-            .expect("live execution adapter");
+            .or_fail("live execution adapter")?;
         NativeSystemExtensionService::install(
             self.native_profile.clone(),
             self.executable.clone(),
@@ -195,13 +214,13 @@ impl Cohort {
             self.values.clone(),
             self.template.clone(),
         )
-        .expect("install native service")
+        .or_fail("install native service")
     }
 
-    pub fn recovered(&self, instance: NativeInstanceRecord) -> Service {
+    pub fn recovered(&self, instance: NativeInstanceRecord) -> TestResult<Service> {
         let instance = std::sync::Arc::new(std::sync::Mutex::new(instance));
         let port = LiveExecutionAdapter::new(self.execution_profile.clone(), Publisher::default())
-            .expect("live execution adapter");
+            .or_fail("live execution adapter")?;
         let executor = NativeProcessSystemExtensionExecutor::new(
             port,
             self.journal.clone(),
@@ -209,7 +228,7 @@ impl Cohort {
             instance.clone(),
             self.template.clone(),
         )
-        .expect("recovered native executor");
+        .or_fail("recovered native executor")?;
         NativeSystemExtensionService::from_recovered(
             self.native_profile.clone(),
             self.executable.clone(),
@@ -218,14 +237,14 @@ impl Cohort {
             self.journal.clone(),
             instance,
         )
-        .expect("recover native service")
+        .or_fail("recover native service")
     }
 }
 
-pub fn ingress(generation: u64, manifest_ref: &str) -> NativeIngressEnvelope {
+pub fn ingress(generation: u64, manifest_ref: &str) -> TestResult<NativeIngressEnvelope> {
     let payload = REQUEST_PAYLOAD.to_vec();
-    let accounted_bytes = u64::try_from(payload.len()).expect("fixture ingress length");
-    NativeIngressEnvelope {
+    let accounted_bytes = u64::try_from(payload.len()).or_fail("fixture ingress length")?;
+    Ok(NativeIngressEnvelope {
         schema: NATIVE_INGRESS_SCHEMA.to_string(),
         request_ref: HASH_A.to_string(),
         endpoint_ref: HASH_B.to_string(),
@@ -244,7 +263,7 @@ pub fn ingress(generation: u64, manifest_ref: &str) -> NativeIngressEnvelope {
             bytes: payload,
         },
         accounted_bytes,
-    }
+    })
 }
 
 fn execution_profile_descriptor() -> ExecutionProfileDescriptor {
@@ -425,7 +444,7 @@ fn execution_template(
     }
 }
 
-fn admitted_manifest() -> CanonicalAdmittedSystemExtensionManifest {
+fn admitted_manifest() -> TestResult<CanonicalAdmittedSystemExtensionManifest> {
     let tier = canonical_extension_tier_admission(&ExtensionTierRequest {
         tier: ExtensionTier::SystemExtension,
         requested_authorities: vec![
@@ -436,7 +455,7 @@ fn admitted_manifest() -> CanonicalAdmittedSystemExtensionManifest {
         ],
         admission_evidence: REQUIRED_SYSTEM_EXTENSION_EVIDENCE.to_vec(),
     })
-    .expect("native extension tier");
+    .or_fail("native extension tier")?;
     canonical_admit_system_extension_manifest(
         &SystemExtensionManifestInput {
             schema: SYSTEM_EXTENSION_MANIFEST_SCHEMA.to_string(),
@@ -482,7 +501,7 @@ fn admitted_manifest() -> CanonicalAdmittedSystemExtensionManifest {
         &tier,
         &[ExecutionProfile::NativeProcess],
     )
-    .expect("native manifest")
+    .or_fail("native manifest")
 }
 
 fn effect_descriptor() -> FabricPortDescriptor {

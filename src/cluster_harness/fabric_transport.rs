@@ -329,7 +329,7 @@ pub fn run_distinct_process_listener_child(run_directory: &std::path::Path) -> c
     })?;
     runtime.block_on(async {
         let mut listener = IrohCrossProcessListener::bind(IrohCrossProcessListenerInput {
-            profile: fixture_profile(),
+            profile: fixture_profile()?,
             protocol: fixture_protocol(),
             capability: fixture_capability(LISTENER_SECRET_BYTE, LISTENER_CAPABILITY_REF)?,
             bind_addr: std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0)),
@@ -358,7 +358,7 @@ pub fn run_distinct_process_listener_child(run_directory: &std::path::Path) -> c
             &frame,
             &endpoint_cleanup.cleanup_evidence_ref,
             Some(endpoint_cleanup.drain_reason),
-            &fixture_profile().profile,
+            &fixture_profile()?.profile,
             &fixture_protocol(),
             &crate::preserves_rail::canonical_hash(&read_endpoint_handoff(&run_directory.join(HANDOFF_FILE))?.value)?,
         )?;
@@ -378,7 +378,7 @@ pub fn run_distinct_process_client_child(run_directory: &std::path::Path) -> cra
     runtime.block_on(async {
         let frame = exchange_cross_process_frame(
             IrohCrossProcessClientInput {
-                profile: fixture_profile(),
+                profile: fixture_profile()?,
                 protocol: fixture_protocol(),
                 capability: fixture_capability(CLIENT_SECRET_BYTE, CLIENT_CAPABILITY_REF)?,
                 bind_addr: std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0)),
@@ -398,7 +398,7 @@ pub fn run_distinct_process_client_child(run_directory: &std::path::Path) -> cra
             &frame,
             &frame.cleanup_evidence_ref,
             None,
-            &fixture_profile().profile,
+            &fixture_profile()?.profile,
             &fixture_protocol(),
             &handoff.handoff_ref,
         )?;
@@ -579,7 +579,7 @@ fn wait_for_handoff(
     }
 }
 
-fn fixture_profile() -> CanonicalTransportProfile {
+fn fixture_profile() -> crate::error::Result<CanonicalTransportProfile> {
     canonical_transport_profile(&TransportProfile {
         schema: TRANSPORT_PROFILE_SCHEMA.to_string(),
         profile_id: "iroh-distinct-process-v1".to_string(),
@@ -602,7 +602,6 @@ fn fixture_profile() -> CanonicalTransportProfile {
         },
         non_claims: REQUIRED_TRANSPORT_NON_CLAIMS.to_vec(),
     })
-    .expect("static distinct-process profile must be valid")
 }
 
 fn fixture_protocol() -> ProtocolDescriptor {
@@ -672,7 +671,7 @@ fn expected_binding(endpoint: &CanonicalCrossProcessEndpoint) -> ExpectedEndpoin
 }
 
 fn validate_fixture_endpoint(endpoint: &CanonicalCrossProcessEndpoint) -> crate::error::Result<()> {
-    validate_cross_process_endpoint(&fixture_profile().profile, &fixture_protocol(), &endpoint.descriptor)
+    validate_cross_process_endpoint(&fixture_profile()?.profile, &fixture_protocol(), &endpoint.descriptor)
         .map_err(|issues| crate::error::MoltenError::invalid_harness(format!("fixture endpoint denied: {issues:?}")))
 }
 

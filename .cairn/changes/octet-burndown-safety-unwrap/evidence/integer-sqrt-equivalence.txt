@@ -1,0 +1,14 @@
+# Throwaway differential check: old checked_div(2) search vs new >> 1 search (rustc -O, nix dev shell)
+# Output: integer_sqrt old==new over 0..200000 and u128 edges
+
+fn old(value: u128) -> u128 { if value <= 1 { return value; } let (mut low, mut high) = (1_u128, value);
+ while low < high { let half = (high - low).checked_div(2).expect("x"); let mid = low + half;
+  let Some(q) = value.checked_div(mid) else { high = mid; continue; };
+  if mid > q { high = mid; } else { let next = mid + 1; let Some(nq) = value.checked_div(next) else { return mid; }; if next > nq { return mid; } low = next; } } low }
+fn new(value: u128) -> u128 { if value <= 1 { return value; } let (mut low, mut high) = (1_u128, value);
+ while low < high { let half = (high - low) >> 1u32; let mid = low + half;
+  let Some(q) = value.checked_div(mid) else { high = mid; continue; };
+  if mid > q { high = mid; } else { let next = mid + 1; let Some(nq) = value.checked_div(next) else { return mid; }; if next > nq { return mid; } low = next; } } low }
+fn main() { for v in 0..200_000u128 { assert_eq!(old(v), new(v)); }
+ for v in [u128::MAX, u128::MAX-1, 1u128<<127, (1u128<<64)-1, 1u128<<64] { assert_eq!(old(v), new(v)); }
+ println!("integer_sqrt old==new over 0..200000 and u128 edges"); }

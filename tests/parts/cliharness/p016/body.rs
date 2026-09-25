@@ -151,8 +151,8 @@ fn cli_cluster_two_node_lifecycle_roundtrip_writes_canonical_receipts() -> CliRe
     assert_cluster_file_is_canonical(&root, CLUSTER_TEST_NODE_B, CLUSTER_SHUTDOWN_FILE)?;
     assert_cluster_file_is_canonical(&root, CLUSTER_TEST_NODE_B, CLUSTER_STOP_CONTROL_FILE)?;
     let stop_stdout = stdout(&stop);
-    let node_b_index = stop_stdout.find("node=node:node-b").expect("node-b stop output");
-    let node_a_index = stop_stdout.find("node=node:node-a").expect("node-a stop output");
+    let node_b_index = stop_stdout.find("node=node:node-b").ok_or("node-b stop output is missing")?;
+    let node_a_index = stop_stdout.find("node=node:node-a").ok_or("node-a stop output is missing")?;
     assert!(node_b_index < node_a_index, "cluster stop should visit nodes in reverse manifest order");
     Ok(())
 }

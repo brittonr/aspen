@@ -98,9 +98,9 @@ const OCTET_WARNING_STATUS: &str = r#"{
 
 const OCTET_WARNING_SUMMARY: &str = "--- octet summary ---\nStatus: warning-only\nFindings: 1\nWarnings: 1\nErrors: 0\n\nBy lint:\n  no_unwrap 1\n\nIndex:\n";
 
-fn octet_noncritical_status(total: u64) -> String {
-    let (config_hash, profile_hash) = current_octet_hashes();
-    format!(
+fn octet_noncritical_status(total: u64) -> CliResult<String> {
+    let (config_hash, profile_hash) = current_octet_hashes()?;
+    Ok(format!(
         r#"{{
   "status": "warning-only",
   "exit_code": 0,
@@ -120,7 +120,7 @@ fn octet_noncritical_status(total: u64) -> String {
   "autofixable_findings": 0,
   "cargo_process_exit": {{"classification": "success", "code": 0}}
 }}"#
-    )
+    ))
 }
 
 #[derive(serde::Serialize)]
@@ -144,7 +144,7 @@ struct CliOctetProfilePayload<'a> {
     scope_args: &'a [&'a str],
 }
 
-fn current_octet_hashes() -> (String, String) {
+fn current_octet_hashes() -> CliResult<(String, String)> {
     let cargo_check_args = ["--all-targets"];
     let scope_args = ["-p", "molten", "-p", "molten-node-host"];
     let files = [
@@ -161,18 +161,16 @@ fn current_octet_hashes() -> (String, String) {
         effective_cargo_check_args: &cargo_check_args,
         effective_scope_args: &scope_args,
         files: &files,
-    })
-    .expect("serialize CLI Octet configuration fixture");
+    })?;
     let config_hash = b3_full_hash(&config_payload);
     let profile_payload = serde_json::to_string(&CliOctetProfilePayload {
         cargo_check_args: &cargo_check_args,
         config_hash: &config_hash,
         output_format: "human",
         scope_args: &scope_args,
-    })
-    .expect("serialize CLI Octet profile fixture");
+    })?;
     let profile_hash = b3_full_hash(&profile_payload);
-    (config_hash, profile_hash)
+    Ok((config_hash, profile_hash))
 }
 
 fn file_hash(path: &std::path::Path) -> Option<String> {

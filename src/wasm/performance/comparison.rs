@@ -1,8 +1,7 @@
 const MIN_STATISTICAL_SAMPLES: usize = 2;
 const NORMAL_95_MULTIPLIER_MILLI: u128 = 1_960;
 const MILLI_SCALE: u128 = 1_000;
-const BINARY_SEARCH_DIVISOR: u128 = 2;
-const _: () = assert!(BINARY_SEARCH_DIVISOR > 0);
+const BINARY_SEARCH_HALVING_SHIFT: u32 = 1;
 const MAX_RECORDED_EFFECT_REFS: usize = 128;
 
 #[derive(Debug, Clone)]
@@ -492,9 +491,7 @@ fn integer_sqrt(value: u128) -> u128 {
     let mut low = 1_u128;
     let mut high = value;
     while low < high {
-        let half_range = (high - low)
-            .checked_div(BINARY_SEARCH_DIVISOR)
-            .expect("binary-search divisor is a nonzero constant");
+        let half_range = (high - low) >> BINARY_SEARCH_HALVING_SHIFT;
         let midpoint = low + half_range;
         let Some(midpoint_quotient) = value.checked_div(midpoint) else {
             high = midpoint;

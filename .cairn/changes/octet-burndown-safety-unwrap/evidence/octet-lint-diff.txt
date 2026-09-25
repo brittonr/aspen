@@ -1,0 +1,35 @@
+# workspace (cargo octet check)
+lint                                     findings          sites
+path_segment_repetition             1877 -> 1877     1038 -> 1038 
+excessive_file_length                550 -> 550       306 -> 306  
+borrowed_argument_types              368 -> 368       184 -> 184  
+unbounded_collection_growth          214 -> 214       111 -> 111  
+function_length                      204 -> 204       128 -> 128  
+too_many_parameters                  143 -> 143        72 -> 72   
+no_unwrap                             80 -> 0          70 -> 0    
+usize_in_public_api                   32 -> 32         16 -> 16   
+underscore_in_module_filename         31 -> 31         15 -> 15   
+module_file_count                     20 -> 20         11 -> 11   
+ambient_clock                         17 -> 17          9 -> 9    
+ambient_env                           14 -> 14          5 -> 5    
+unbounded_channel                      9 -> 9           9 -> 9    
+no_recursion                           2 -> 2           1 -> 1    
+no_panic                               1 -> 0           1 -> 0    
+TOTAL                               3562 -> 3481     1976 -> 1905 
+
+# -p molten --lib
+lint                                     findings          sites
+path_segment_repetition              794 -> 794       794 -> 794  
+excessive_file_length                230 -> 230       230 -> 230  
+borrowed_argument_types              180 -> 180       180 -> 180  
+unbounded_collection_growth          102 -> 102       102 -> 102  
+function_length                       71 -> 71         71 -> 71   
+too_many_parameters                   70 -> 70         70 -> 70   
+usize_in_public_api                   16 -> 16         16 -> 16   
+ambient_clock                          8 -> 8           8 -> 8    
+underscore_in_module_filename          7 -> 7           7 -> 7    
+ambient_env                            6 -> 6           4 -> 4    
+module_file_count                      5 -> 5           5 -> 5    
+no_unwrap                              3 -> 0           3 -> 0    
+no_recursion                           1 -> 1           1 -> 1    
+TOTAL                               1493 -> 1490     1491 -> 1488 

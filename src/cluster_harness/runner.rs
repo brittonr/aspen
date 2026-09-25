@@ -777,21 +777,26 @@ fn build_lifecycle_artifacts(
             node_summaries: node_ids
                 .iter()
                 .zip(nodes)
-                .map(|(node_id, node)| crate::cluster::ClusterLifecycleNodeSummary {
-                    node_id: node_id.clone(),
-                    manifest_ref: fixture_ref.to_string(),
-                    config_ref: node.config_ref.clone().expect("complete config"),
-                    identity_ref: node.identity_ref.clone(),
-                    startup_ref: node.startup_ref.clone(),
-                    health_ref: node.health_ref.clone(),
-                    queue_ref: None,
-                    control_ref: node.control_ref.clone(),
-                    heartbeat_ref: node.heartbeat_ref.clone(),
-                    shutdown_ref: node.shutdown_ref.clone(),
-                    stop_control_ref: node.stop_control_ref.clone(),
-                    already_running_ref: None,
+                .map(|(node_id, node)| {
+                    let config_ref = node.config_ref.clone().ok_or_else(|| {
+                        crate::error::MoltenError::invalid_harness("complete cluster node has no config ref")
+                    })?;
+                    Ok(crate::cluster::ClusterLifecycleNodeSummary {
+                        node_id: node_id.clone(),
+                        manifest_ref: fixture_ref.to_string(),
+                        config_ref,
+                        identity_ref: node.identity_ref.clone(),
+                        startup_ref: node.startup_ref.clone(),
+                        health_ref: node.health_ref.clone(),
+                        queue_ref: None,
+                        control_ref: node.control_ref.clone(),
+                        heartbeat_ref: node.heartbeat_ref.clone(),
+                        shutdown_ref: node.shutdown_ref.clone(),
+                        stop_control_ref: node.stop_control_ref.clone(),
+                        already_running_ref: None,
+                    })
                 })
-                .collect(),
+                .collect::<crate::error::Result<Vec<_>>>()?,
             already_running_refs: Vec::new(),
             stop_order: node_ids.iter().rev().cloned().collect(),
             diagnostics: diagnostics.to_vec(),

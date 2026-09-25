@@ -16,13 +16,32 @@ const TIMER_LIMIT: usize = 4;
 const DIAGNOSTIC_LIMIT: usize = 16;
 const PAYLOAD: &[u8] = b"bounded-multiprocess-replica";
 
+type TestResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+/// Turns a failed fixture step into a test error that keeps its label and `Debug` form.
+trait OrFail<T> {
+    fn or_fail(self, label: &str) -> TestResult<T>;
+}
+
+impl<T, E: std::fmt::Debug> OrFail<T> for std::result::Result<T, E> {
+    fn or_fail(self, label: &str) -> TestResult<T> {
+        self.map_err(|error| format!("{label}: {error:?}").into())
+    }
+}
+
+impl<T> OrFail<T> for Option<T> {
+    fn or_fail(self, label: &str) -> TestResult<T> {
+        self.ok_or_else(|| format!("{label}: value is absent").into())
+    }
+}
+
 fn digest(byte: char) -> String {
     format!("blake3:{}", byte.to_string().repeat(DIGEST_HEX_LENGTH))
 }
 
-fn manifest() -> Manifest {
+fn manifest() -> TestResult<Manifest> {
     let content_ref = molten::preserves_rail::content_ref_from_bytes(PAYLOAD);
-    Manifest {
+    Ok(Manifest {
         service_id: "content-replication-multiprocess".to_string(),
         generation: GENERATION,
         membership_epoch: MEMBERSHIP_EPOCH,
@@ -54,13 +73,13 @@ fn manifest() -> Manifest {
         contents: vec![ReplicaRule {
             content_ref,
             manifest_ref: digest('7'),
-            encoded_bytes: u64::try_from(PAYLOAD.len()).expect("payload length"),
+            encoded_bytes: u64::try_from(PAYLOAD.len()).or_fail("payload length")?,
             protected: true,
             transform_ref: Some(digest('8')),
             cleanup_authority_ref: Some(digest('9')),
         }],
         non_claims: NON_CLAIMS.iter().map(ToString::to_string).collect(),
-    }
+    })
 }
 
 fn peer(id: &str, domain: &str) -> Peer {
@@ -91,7 +110,7 @@ fn replica(manifest: &Manifest, peer_id: &str, domain: &str, verified: bool) -> 
     }
 }
 
-fn action(manifest: &Manifest, corrupt_target: bool) -> Action {
+fn action(manifest: &Manifest, corrupt_target: bool) -> TestResult<Action> {
     let mut replicas = vec![replica(manifest, "peer-a", "zone-a", true)];
     if corrupt_target {
         replicas.push(replica(manifest, "peer-b", "zone-b", false));
@@ -103,15 +122,15 @@ fn action(manifest: &Manifest, corrupt_target: bool) -> Action {
         history: Vec::new(),
         observed_tick: 1,
     })
-    .expect("multiprocess plan");
+    .or_fail("multiprocess plan")?;
     plan.actions
         .into_iter()
         .find(|action| matches!(action.kind, ActionKind::Transfer | ActionKind::Repair))
-        .expect("multiprocess action")
+        .or_fail("multiprocess action")
 }
 
-fn run_action(label: &str, manifest: &Manifest, action: &Action) -> TransferEnvelope {
-    let workspace = test_support::process_workspace(label).expect("process workspace");
+fn run_action(label: &str, manifest: &Manifest, action: &Action) -> TestResult<TransferEnvelope> {
+    let workspace = test_support::process_workspace(label).or_fail("process workspace")?;
     let run_root = workspace.join("run");
     let mut adapter = DistinctProcessTransferAdapter::open(
         manifest,
@@ -120,51 +139,54 @@ fn run_action(label: &str, manifest: &Manifest, action: &Action) -> TransferEnve
         molten::cluster_harness::DEFAULT_DISTINCT_PROCESS_TIMEOUT_MS,
         std::collections::BTreeMap::from([(manifest.contents[0].content_ref.clone(), PAYLOAD.to_vec())]),
     )
-    .expect("multiprocess adapter");
-    let envelope = match adapter.fetch(action).expect("multiprocess transfer") {
+    .or_fail("multiprocess adapter")?;
+    let envelope = match adapter.fetch(action).or_fail("multiprocess transfer")? {
         TransferOutcome::Received(envelope) => envelope,
-        other => panic!("unexpected transfer outcome: {other:?}"),
+        other => return Err(format!("unexpected transfer outcome: {other:?}").into()),
     };
     let verification = molten::cluster_harness::verify_distinct_process_transport_run(
-        &run_root.join(action.operation_id.strip_prefix("blake3:").expect("operation prefix")),
+        &run_root.join(action.operation_id.strip_prefix("blake3:").or_fail("operation prefix")?),
     )
-    .expect("offline multiprocess verification");
+    .or_fail("offline multiprocess verification")?;
     assert_eq!(verification.decision, "pass");
     assert_eq!(verification.parent_ref, envelope.transfer_ref);
     assert_eq!(verification.verification_ref, envelope.transport_verification_ref);
     assert_eq!(adapter.call_count(), 1);
-    envelope
+    Ok(envelope)
 }
 
 // r[verify molten.content_replication.final_validation]
 #[test]
-fn multiprocess_replication_moves_exact_content_under_operation_identity() {
-    let manifest = manifest();
-    let action = action(&manifest, false);
+fn multiprocess_replication_moves_exact_content_under_operation_identity() -> TestResult<()> {
+    let manifest = manifest()?;
+    let action = action(&manifest, false)?;
     assert_eq!(action.kind, ActionKind::Transfer);
-    let envelope = run_action("content_replication_transfer", &manifest, &action);
+    let envelope = run_action("content_replication_transfer", &manifest, &action)?;
     assert_eq!(envelope.operation_id, action.operation_id);
     assert_eq!(envelope.content_ref, manifest.contents[0].content_ref);
     assert_eq!(envelope.encoded_bytes, manifest.contents[0].encoded_bytes);
+    Ok(())
 }
 
 // r[verify molten.content_replication.same_core]
 // r[verify molten.content_replication.final_validation]
 #[test]
-fn multiprocess_repair_uses_the_same_receiver_plan_and_transport_contract() {
-    let manifest = manifest();
-    let action = action(&manifest, true);
+fn multiprocess_repair_uses_the_same_receiver_plan_and_transport_contract() -> TestResult<()> {
+    let manifest = manifest()?;
+    let action = action(&manifest, true)?;
     assert_eq!(action.kind, ActionKind::Repair);
-    let envelope = run_action("content_replication_repair", &manifest, &action);
+    let envelope = run_action("content_replication_repair", &manifest, &action)?;
     assert_eq!(envelope.target_peer, "peer-b");
     assert!(envelope.protected);
+    Ok(())
 }
 
 // r[verify molten.content_replication.final_validation]
 #[test]
-fn multiprocess_adapter_rejects_wrong_payload_before_child_processes() {
-    let manifest = manifest();
-    let workspace = test_support::process_workspace("content_replication_wrong_payload").expect("process workspace");
+fn multiprocess_adapter_rejects_wrong_payload_before_child_processes() -> TestResult<()> {
+    let manifest = manifest()?;
+    let workspace =
+        test_support::process_workspace("content_replication_wrong_payload").or_fail("process workspace")?;
     let result = DistinctProcessTransferAdapter::open(
         &manifest,
         workspace.join("run"),
@@ -174,4 +196,5 @@ fn multiprocess_adapter_rejects_wrong_payload_before_child_processes() {
     );
     assert!(result.is_err());
     assert!(!workspace.join("run").exists());
+    Ok(())
 }

@@ -150,7 +150,7 @@ fn cli_octet_baseline_allows_identical_noncritical_warning_and_denies_new_warnin
     let baseline = dir.join("baseline.preserves");
     let pass_receipt = dir.join("baseline-pass.preserves");
     let deny_receipt = dir.join("baseline-deny.preserves");
-    write_octet_artifacts_with(&dir, octet_noncritical_status(1), OCTET_NONCRITICAL_SUMMARY_ONE)?;
+    write_octet_artifacts_with(&dir, octet_noncritical_status(1)?, OCTET_NONCRITICAL_SUMMARY_ONE)?;
 
     let write = molten_cmd()
         .args(["test", "octet", "baseline", "write", "--artifacts"])
@@ -178,7 +178,7 @@ fn cli_octet_baseline_allows_identical_noncritical_warning_and_denies_new_warnin
     assert_success(&pass, "octet baseline check pass");
     assert_eq!(molten::ledger::artifact_kind(&read_preserves(&pass_receipt)?), "octet-baseline-receipt");
 
-    write_octet_artifacts_with(&dir, octet_noncritical_status(2), OCTET_NONCRITICAL_SUMMARY_TWO)?;
+    write_octet_artifacts_with(&dir, octet_noncritical_status(2)?, OCTET_NONCRITICAL_SUMMARY_TWO)?;
     let deny = molten_cmd()
         .args(["test", "octet", "baseline", "check", "--artifacts"])
         .arg(&dir)
@@ -202,8 +202,8 @@ fn cli_octet_remediation_plan_writes_baseline_receipt() -> CliResult<()> {
     let receipt = dir.join("remediation-plan.preserves");
     std::fs::create_dir_all(&workspace)?;
     std::fs::create_dir_all(&lib)?;
-    write_octet_artifacts_with(&workspace, octet_noncritical_status(1), OCTET_NONCRITICAL_SUMMARY_ONE)?;
-    write_octet_artifacts_with(&lib, octet_noncritical_status(1), OCTET_NONCRITICAL_SUMMARY_ONE)?;
+    write_octet_artifacts_with(&workspace, octet_noncritical_status(1)?, OCTET_NONCRITICAL_SUMMARY_ONE)?;
+    write_octet_artifacts_with(&lib, octet_noncritical_status(1)?, OCTET_NONCRITICAL_SUMMARY_ONE)?;
 
     let plan = molten_cmd()
         .args(["test", "octet", "remediation", "plan", "--artifacts"])
