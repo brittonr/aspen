@@ -32,6 +32,9 @@ const EXPECTED_STDOUT: &[u8] = b"bounded:input";
 const INPUT_BYTES: &[u8] = b"input\n";
 const FLOOD_OUTPUT: &str = "overflow";
 const NON_TERMINATING_SCRIPT: &str = "while :; do :; done";
+/// Exceeds the default Linux pipe capacity (64 KiB), so a writer to a child that
+/// exits without reading must observe a closed pipe instead of buffering.
+const PIPE_OVERFLOW_INPUT_BYTES: u64 = 262_144;
 
 #[derive(Debug, Clone, Default)]
 struct MemoryPublisher {
@@ -177,11 +180,33 @@ fn canonical_request(
     canonicalize_request(kind, request(arguments))
 }
 
+/// Admits a request whose child never reads stdin, so no input is supplied.
+fn canonical_request_without_input(
+    kind: ExecutionProfileKind,
+    arguments: Vec<String>,
+) -> (CanonicalExecutionProfile, CanonicalExecutionRequest) {
+    canonicalize_request(kind, request_without_input(arguments))
+}
+
+fn request_without_input(arguments: Vec<String>) -> ExecutionRequest {
+    ExecutionRequest {
+        stdin_ref: None,
+        ..request(arguments)
+    }
+}
+
 fn canonicalize_request(
     kind: ExecutionProfileKind,
     request: ExecutionRequest,
 ) -> (CanonicalExecutionProfile, CanonicalExecutionRequest) {
-    let profile = canonical_admit_execution_profile(&descriptor(kind)).expect("canonical profile");
+    canonicalize_request_with_descriptor(&descriptor(kind), request)
+}
+
+fn canonicalize_request_with_descriptor(
+    descriptor: &ExecutionProfileDescriptor,
+    request: ExecutionRequest,
+) -> (CanonicalExecutionProfile, CanonicalExecutionRequest) {
+    let profile = canonical_admit_execution_profile(descriptor).expect("canonical profile");
     let authority = authority(&request);
     let request = canonical_admit_execution_request(&profile, &request, &authority, resources(), GENERATION)
         .expect("canonical request");

@@ -1,0 +1,5 @@
+      Adding bounded-exec v0.1.0 (/home/brittonr/git/bounded-exec-worktrees/stdin-closed-by-child/crates/bounded-exec)
+      Adding bounded-exec-core v0.1.0 (/home/brittonr/git/bounded-exec-worktrees/stdin-closed-by-child/crates/bounded-exec-core)
+test fabric_execution::tests::live::live_adapter_keeps_unconsumed_oversized_input_unknown_without_completion_claim ... FAILED
+thread 'fabric_execution::tests::live::live_adapter_keeps_unconsumed_oversized_input_unknown_without_completion_claim' (3346924) panicked at src/fabric_execution/tests/live.rs:88:10:
+test result: FAILED. 9 passed; 1 failed; 0 ignored; 0 measured; 1485 filtered out; finished in 0.07s
