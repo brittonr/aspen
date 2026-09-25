@@ -1,6 +1,4 @@
 use super::*;
-use crate::fabric::valid_blake3_ref;
-use crate::fabric::valid_fabric_token;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RotationOverlapPolicy {
@@ -68,7 +66,8 @@ pub fn plan_key_rotation(
     request: &KeyRotationRequest,
 ) -> Result<KeyRotationPlan, Vec<CryptoIdentityIssue>> {
     let mut issues = validate_crypto_profile(profile);
-    validate_token("rotation-operation-id", &request.operation_id, &mut issues);
+    super::admission::validate_handle(profile, current, &mut issues);
+    super::admission::validate_token("rotation-operation-id", &request.operation_id, &mut issues);
     for (field, value) in [
         ("rotation-profile-ref", request.profile_ref.as_str()),
         ("rotation-backend-ref", request.backend_ref.as_str()),
@@ -77,7 +76,7 @@ pub fn plan_key_rotation(
         ("rotation-policy-ref", request.policy_ref.as_str()),
         ("activation-boundary-ref", request.activation_boundary_ref.as_str()),
     ] {
-        validate_ref(field, value, &mut issues);
+        super::admission::validate_ref(field, value, &mut issues);
     }
     if request.profile_ref != profile.profile_ref || current.profile_ref != profile.profile_ref {
         issues.push(CryptoIdentityIssue::ProfileMismatch);
@@ -107,7 +106,7 @@ pub fn plan_key_rotation(
         issues.push(CryptoIdentityIssue::RevocationEvidenceRequired);
     }
     if let Some(revocation_ref) = request.revocation_evidence_ref.as_deref() {
-        validate_ref("revocation-evidence-ref", revocation_ref, &mut issues);
+        super::admission::validate_ref("revocation-evidence-ref", revocation_ref, &mut issues);
     }
     if !issues.is_empty() {
         return Err(issues);
@@ -130,6 +129,27 @@ pub fn complete_key_rotation(
     new_handle: &OpaqueKeyHandle,
 ) -> Result<KeyRotationOutcome, Vec<CryptoIdentityIssue>> {
     let mut issues = Vec::new();
+    if new_handle.schema != OPAQUE_KEY_HANDLE_SCHEMA {
+        issues.push(CryptoIdentityIssue::SchemaMismatch("opaque-key-handle"));
+    }
+    for (field, value) in [
+        ("new-handle-ref", new_handle.handle_ref.as_str()),
+        ("new-profile-ref", new_handle.profile_ref.as_str()),
+        ("new-public-key-ref", new_handle.public_key_ref.as_str()),
+        ("new-backend-ref", new_handle.backend_ref.as_str()),
+        ("new-currentness-evidence-ref", new_handle.currentness_evidence_ref.as_str()),
+    ] {
+        super::admission::validate_ref(field, value, &mut issues);
+    }
+    if new_handle.generation == 0 {
+        issues.push(CryptoIdentityIssue::ZeroGeneration);
+    }
+    if new_handle.handle_ref == plan.request.old_handle_ref {
+        issues.push(CryptoIdentityIssue::HandleRefStale);
+    }
+    if new_handle.public_key_ref == plan.request.old_public_key_ref {
+        issues.push(CryptoIdentityIssue::SignerPublicRefMismatch);
+    }
     if new_handle.profile_ref != plan.request.profile_ref {
         issues.push(CryptoIdentityIssue::ProfileMismatch);
     }
@@ -169,18 +189,4 @@ pub fn complete_key_rotation(
         policy_ref: plan.request.policy_ref.clone(),
         revocation_evidence_ref: plan.request.revocation_evidence_ref.clone(),
     })
-}
-
-fn validate_token(field: &'static str, value: &str, issues: &mut Vec<CryptoIdentityIssue>) {
-    if value.is_empty() {
-        issues.push(CryptoIdentityIssue::EmptyField(field));
-    } else if value.len() > MAX_CRYPTO_TEXT_BYTES || !valid_fabric_token(value) {
-        issues.push(CryptoIdentityIssue::MalformedToken(field));
-    }
-}
-
-fn validate_ref(field: &'static str, value: &str, issues: &mut Vec<CryptoIdentityIssue>) {
-    if !valid_blake3_ref(value) {
-        issues.push(CryptoIdentityIssue::MalformedRef(field));
-    }
 }

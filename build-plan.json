@@ -6,6 +6,7 @@
     "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service#molten@0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service#molten@0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-core#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-node-core#0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-node-host#0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-node-runtime#0.1.0",
     "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-node-runtime#0.1.0",
@@ -15,12 +16,13 @@
   "workspaceMembers": {
     "molten": "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service#molten@0.1.0",
     "molten-core": "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-core#0.1.0",
+    "molten-node-core": "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-node-core#0.1.0",
     "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-node-host#0.1.0",
     "molten-node-runtime": "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-node-runtime#0.1.0",
     "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "19ab61559d1855e6f608e99470924c80936d20f94979b405cc55c96498ed54d0",
-  "inputsHash": "7bcc2ce569782d32e1c33e7050eaccea44a26a4b087e63d8c0417a7b7af081f2",
+  "cargoLockHash": "0b8d7a0dab775d0637067f0b8e656a3460ea6aaffa99e3f198ccde2f0c810860",
+  "inputsHash": "18352797e80df6f5e151cec5716b518f9ac932c6e5c50cfba24203ef84a12f16",
   "crates": {
     "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec-core@0.1.0": {
       "crateName": "bounded-exec-core",
@@ -1498,6 +1500,43 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
+    "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-node-core#0.1.0": {
+      "crateName": "molten-node-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "local",
+        "path": "crates/molten-node-core"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#artifact-auth-core@0.1.0",
+          "externCrateName": "artifact_auth_core"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Pure normal-node decision cores for Molten",
+      "license": "AGPL-3.0-or-later"
+    },
     "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-node-host#0.1.0": {
       "crateName": "molten-node-host",
       "version": "0.1.0",
@@ -1520,19 +1559,9 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-tempfile@3.4.5",
           "externCrateName": "cap_tempfile"
-        },
-        {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-core#0.1.0",
-          "externCrateName": "molten_core"
         }
       ],
       "buildDependencies": [],
-      "devDependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml@0.9.12+spec-1.1.0",
-          "externCrateName": "toml"
-        }
-      ],
       "procMacro": false,
       "build": null,
       "libPath": null,
@@ -1613,7 +1642,7 @@
           "externCrateName": "kamacite_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-node-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {

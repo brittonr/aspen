@@ -285,6 +285,50 @@ fn rotation_advances_generation_and_requires_explicit_overlap_or_revocation() {
     assert!(issues.contains(&CryptoIdentityIssue::GenerationNotAdvanced));
 }
 
+#[test]
+fn rotation_rejects_leaked_current_key_and_reused_or_malformed_new_identity() {
+    let profile = production_profile();
+    let current = handle(KeyPurpose::TransportEndpoint, GENERATION_ONE, KeyCurrentness::Current);
+    let request = KeyRotationRequest {
+        operation_id: "rotate-transport".to_string(),
+        profile_ref: profile.profile_ref.clone(),
+        purpose: current.purpose,
+        backend_class: current.backend_class,
+        backend_ref: current.backend_ref.clone(),
+        old_handle_ref: current.handle_ref.clone(),
+        old_public_key_ref: current.public_key_ref.clone(),
+        old_generation: GENERATION_ONE,
+        new_generation: GENERATION_TWO,
+        policy_ref: test_ref("rotation-policy"),
+        activation_boundary_ref: test_ref("rotation-activation"),
+        overlap: RotationOverlapPolicy::VerifyOnly,
+        revocation_evidence_ref: None,
+    };
+    let mut leaked = current.clone();
+    leaked.secret_material_exposed = true;
+    assert!(
+        plan_key_rotation(&profile, &leaked, &request)
+            .expect_err("leaked current handle cannot rotate")
+            .contains(&CryptoIdentityIssue::SecretMaterialExposed)
+    );
+
+    let plan = plan_key_rotation(&profile, &current, &request).expect("valid rotation");
+    let mut reused = handle(KeyPurpose::TransportEndpoint, GENERATION_TWO, KeyCurrentness::Current);
+    reused.handle_ref = current.handle_ref.clone();
+    reused.public_key_ref = current.public_key_ref.clone();
+    let issues = complete_key_rotation(&plan, &reused).expect_err("rotation must produce a new key identity");
+    assert!(issues.contains(&CryptoIdentityIssue::HandleRefStale));
+    assert!(issues.contains(&CryptoIdentityIssue::SignerPublicRefMismatch));
+
+    let mut malformed = handle(KeyPurpose::TransportEndpoint, GENERATION_TWO, KeyCurrentness::Current);
+    malformed.currentness_evidence_ref = "unverifiable".to_string();
+    assert!(
+        complete_key_rotation(&plan, &malformed)
+            .expect_err("new currentness evidence needs a valid ref")
+            .contains(&CryptoIdentityIssue::MalformedRef("new-currentness-evidence-ref"))
+    );
+}
+
 // r[verify molten.crypto_identity.redaction]
 #[test]
 fn redaction_keeps_public_status_and_denies_private_material() {
@@ -314,6 +358,34 @@ fn redaction_keeps_public_status_and_denies_private_material() {
     leaking.private_material_present = true;
     let issues = redact_adapter_status(&leaking).expect_err("private material denied");
     assert!(issues.contains(&CryptoIdentityIssue::DiagnosticSecretLeak));
+}
+
+#[test]
+fn oversized_crypto_collections_fail_before_unbounded_validation() {
+    let mut profile = production_profile();
+    profile.non_claims = vec![CryptoNonClaim::NoProvenance; MAX_CRYPTO_COLLECTION_ITEMS + 1];
+    let issues = validate_crypto_profile(&profile);
+    assert!(issues.contains(&CryptoIdentityIssue::CollectionLimitExceeded("crypto-non-claims")));
+
+    let input = AdapterDiagnosticInput {
+        profile_ref: test_ref("production-profile"),
+        purpose: KeyPurpose::Authority,
+        generation: None,
+        currentness: None,
+        permission_status: AdapterPermissionStatus::Restricted,
+        backend_class: KeyBackendClass::ManagedSecret,
+        public_key_ref: None,
+        receipt_refs: vec![test_ref("receipt"); MAX_CRYPTO_COLLECTION_ITEMS + 1],
+        backend_locator: None,
+        raw_error: None,
+        bearer_token: None,
+        private_material_present: false,
+    };
+    assert!(
+        redact_adapter_status(&input)
+            .expect_err("oversized receipt list denied")
+            .contains(&CryptoIdentityIssue::CollectionLimitExceeded("status-receipt-refs"))
+    );
 }
 
 // r[verify molten.artifact_auth_adoption.authority]
@@ -436,6 +508,31 @@ fn artifact_auth_rejects_lossy_key_mapping_and_keeps_overlap_verification_bounde
     assert!(overlap.compatibility.case_explained);
     assert!(!overlap.compatibility.standalone_authority_admitted);
     assert!(overlap.authority_boundary.contains("signing"));
+}
+
+#[test]
+fn artifact_auth_rejects_malformed_digests_before_mapping_identity() {
+    let profile = production_profile();
+    let current = handle(KeyPurpose::EvidenceSigning, GENERATION_ONE, KeyCurrentness::Current);
+    for malformed in ["blake3:abc", "blake3:gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg"] {
+        let mut request = verification_request(&profile, &current);
+        request.observed.signer_public_ref = malformed.to_string();
+        let result = map_artifact_auth_statement(&MoltenArtifactAuthStatementInput {
+            profile: &profile,
+            request: &request,
+            producer_id: "molten-evidence-producer",
+            key_id: "evidence-signing-key",
+            currentness_ref: &current.currentness_evidence_ref,
+        });
+        assert_eq!(
+            result.expect_err("malformed key digest must not become an authentication statement"),
+            vec!["observed.signer_public_ref:malformed-blake3-ref".to_string()]
+        );
+        assert_eq!(
+            standalone_observation(malformed, true).expect_err("malformed key digest cannot be observed"),
+            "key_ref:malformed-blake3-ref"
+        );
+    }
 }
 
 // r[verify molten.artifact_auth_adoption.authority]

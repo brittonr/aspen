@@ -124,8 +124,8 @@ fn source_fixture(plan: &EvidencePlan) -> Vec<SourceFile> {
         })
         .collect();
     for name in [
-        "crates/molten-core/Cargo.toml",
-        "crates/molten-core/src/lib.rs",
+        "crates/molten-node-core/Cargo.toml",
+        "crates/molten-node-core/src/lib.rs",
         "crates/molten-node-host/Cargo.toml",
         "crates/molten-node-host/src/lib.rs",
         "crates/molten-node-runtime/Cargo.toml",
@@ -166,6 +166,9 @@ fn source_context_and_raw_inventory_are_bound() {
     changed.pop();
     assert_eq!(validate_source_inventory(&plan, &changed), Err(Rejection::SourceContext));
     let mut changed = files.clone();
+    changed.retain(|file| file.name != "crates/molten-node-core/src/lib.rs");
+    assert_eq!(validate_source_inventory(&plan, &changed), Err(Rejection::SourceContext));
+    let mut changed = files.clone();
     changed.insert(0, changed[0].clone());
     assert_eq!(validate_source_inventory(&plan, &changed), Err(Rejection::SourceInventory));
     for name in ["/absolute", "../outside", "a/../b", "a//b", "a\\b", "a b"] {
@@ -194,14 +197,17 @@ fn build_input_fixture(files: &[SourceFile]) -> BuildInputs {
         .map(|file| file.name.clone())
         .collect();
     runtime_paths.sort();
+    let mut core_paths: Vec<String> = paths_for("crates/molten-core/");
+    core_paths.extend(paths_for("crates/molten-node-core/src/"));
+    core_paths.sort();
     BuildInputs {
         schema: BUILD_INPUTS_SCHEMA.into(),
         executable_target: "molten-node".into(),
         units: vec![
             BuildUnit {
-                package: "molten-core".into(),
+                package: "molten-node-core".into(),
                 target: "lib".into(),
-                source_paths: paths_for("crates/molten-core/"),
+                source_paths: core_paths,
             },
             BuildUnit {
                 package: "molten-node-host".into(),
@@ -251,6 +257,14 @@ fn compiler_input_union_binds_every_inventoried_rust_source() {
     let mut mislabeled_library = inputs.clone();
     mislabeled_library.units[0].target = "bin/core".into();
     assert_eq!(validate_build_inputs(&files, &mislabeled_library), Err(Rejection::SourceContext));
+
+    let mut broad_core = inputs.clone();
+    broad_core.units[0].package = "molten-core".into();
+    assert_eq!(validate_build_inputs(&files, &broad_core), Err(Rejection::SourceContext));
+
+    let mut missing_core_input = inputs.clone();
+    missing_core_input.units[0].source_paths.retain(|path| !path.ends_with("/node_startup.rs"));
+    assert_eq!(validate_build_inputs(&files, &missing_core_input), Err(Rejection::SourceContext));
 
     let mut root_binary = inputs;
     root_binary.units[2].package = "molten".into();

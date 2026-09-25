@@ -678,7 +678,9 @@
           };
         moltenPkg = ws.workspaceMembers."molten".build;
         moltenNodePkg = ws.workspaceMembers."molten-node-runtime".build;
+        moltenNodeCorePkg = ws.workspaceMembers."molten-node-core".build;
         moltenNodeHostPkg = ws.workspaceMembers."molten-node-host".build;
+        moltenNodeCoreTests = ws.test.workspaceMembers."molten-node-core".build;
         moltenNodeHostTests = ws.test.workspaceMembers."molten-node-host".build;
         moltenNodeRuntimeTests = ws.test.workspaceMembers."molten-node-runtime".build;
         releasePolicyPkg = releasePolicyWs.rootCrate.build;
@@ -1023,6 +1025,7 @@
           default = moltenPkg;
           molten = moltenPkg;
           molten-node = moltenNodePkg;
+          molten-node-core = moltenNodeCorePkg;
           molten-node-host = moltenNodeHostPkg;
           molten-release-policy = releasePolicyPkg;
           doltlite-oracle = doltliteOracle;
@@ -2262,6 +2265,7 @@
             # The hermetic nextest check supplies binary metadata for CLI tests
             # using CARGO_BIN_EXE_molten; the raw unit2nix libtest runner does not.
             molten = nextest;
+            molten-node-core = moltenNodeCoreTests;
             molten-node-host = moltenNodeHostTests;
             molten-node-runtime = moltenNodeRuntimeTests;
             clippy = ws.clippy.allWorkspaceMembers;

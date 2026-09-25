@@ -104,6 +104,17 @@ fn profile_and_namespace_require_complete_bounded_contracts() {
     assert!(issues.contains(&DurabilityIssue::ZeroLimit("max-batch-operations")));
 }
 
+#[test]
+fn oversized_durability_collections_fail_before_sorting() {
+    let mut profile = profile(DurableAdapterKind::DeterministicSimulation);
+    profile.supported_levels = vec![DurabilityLevel::ProcessLoss; MAX_DURABILITY_COLLECTION_ITEMS + 1];
+    assert!(
+        validate_durable_profile(&profile)
+            .expect_err("oversized levels denied")
+            .contains(&DurabilityIssue::CollectionLimitExceeded)
+    );
+}
+
 // r[verify molten.fabric_durability.durable_log]
 // r[verify molten.fabric_durability.live_sim_parity]
 #[test]
@@ -142,6 +153,84 @@ fn log_rejects_stale_generation_sequence_drift_and_unauthorized_truncation() {
     assert!(issues.iter().any(|issue| matches!(issue, DurabilityIssue::SequenceMismatch { .. })));
     assert!(truncate_log(&profile, &first.next, GENERATION, SECOND_SEQUENCE, None).is_err());
     assert!(truncate_log(&profile, &first.next, GENERATION, SECOND_SEQUENCE, Some(AUTHORITY_REF)).is_ok());
+}
+
+#[test]
+fn sequence_overflow_cannot_be_masked_by_supplied_expected_sequence() {
+    let profile = profile(DurableAdapterKind::DeterministicSimulation);
+    let mut full = state();
+    full.durable_log.push(LogRecord {
+        sequence: u64::MAX,
+        value: b"last-record".to_vec(),
+        value_ref: VALUE_REF.to_string(),
+        durability: DurabilityLevel::ProcessLoss,
+    });
+    let issues = append_log(&profile, &full, &append_request(u64::MAX, DurabilityLevel::ProcessLoss, VALUE_REF))
+        .expect_err("no sequence follows the maximum");
+    assert!(issues.contains(&DurabilityIssue::SequenceOverflow));
+}
+
+#[test]
+fn byte_accounting_overflow_denies_without_a_sentinel_quota() {
+    let profile = profile(DurableAdapterKind::DeterministicSimulation);
+    let mut inconsistent = state();
+    inconsistent.durable_bytes = u64::MAX;
+    let issues = append_log(
+        &profile,
+        &inconsistent,
+        &append_request(FIRST_SEQUENCE, DurabilityLevel::ProcessLoss, VALUE_REF),
+    )
+    .expect_err("namespace byte accounting cannot wrap");
+    assert!(issues.contains(&DurabilityIssue::CollectionLimitExceeded));
+}
+
+#[test]
+fn scan_pages_reject_oversized_limits_and_preserve_continuations() {
+    let mut populated = state();
+    for sequence in [FIRST_SEQUENCE, SECOND_SEQUENCE] {
+        populated.durable_log.push(LogRecord {
+            sequence,
+            value: b"record".to_vec(),
+            value_ref: VALUE_REF.to_string(),
+            durability: DurabilityLevel::ProcessLoss,
+        });
+    }
+    let page = scan_log(&populated, FIRST_SEQUENCE, 1).expect("first page");
+    assert_eq!(page.records[0].sequence, FIRST_SEQUENCE);
+    assert_eq!(page.continuation, Some(SECOND_SEQUENCE));
+    assert_eq!(
+        scan_log(&populated, FIRST_SEQUENCE, u64::MAX),
+        Err(DurabilityIssue::CollectionLimitExceeded)
+    );
+    assert_eq!(
+        scan_ordered(&populated, &OrderedScanRequest {
+            start_inclusive: None,
+            end_exclusive: None,
+            limit: u64::MAX,
+        }),
+        Err(DurabilityIssue::CollectionLimitExceeded)
+    );
+}
+
+#[test]
+fn recovery_quarantines_unrepresentable_log_successor() {
+    let mut populated = state();
+    for sequence in [u64::MAX, FIRST_SEQUENCE] {
+        populated.durable_log.push(LogRecord {
+            sequence,
+            value: b"record".to_vec(),
+            value_ref: VALUE_REF.to_string(),
+            durability: DurabilityLevel::ProcessLoss,
+        });
+    }
+    let decision = evaluate_recovery(&populated, &RecoveryInventory {
+        active_generation: GENERATION,
+        expected_schema_ref: VALUE_SCHEMA_REF.to_string(),
+        permit_repair: false,
+        permit_quarantine: true,
+    });
+    assert_eq!(decision.disposition, RecoveryDisposition::QuarantineRequired);
+    assert!(decision.diagnostics.contains(&DurabilityIssue::SequenceOverflow));
 }
 
 // r[verify molten.fabric_durability.ordered_store]

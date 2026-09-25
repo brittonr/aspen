@@ -1,17 +1,16 @@
 //! Exact portable input plans. These values grant no startup or execution authority.
-use serde::{Deserialize, Serialize};
 
 pub const POLICY_SCHEMA: &str = "molten.node-startup-cohort.v2";
 pub const BUNDLE_SCHEMA: &str = "molten.node-startup-bundle.v2";
 pub const BUILD_INPUTS_SCHEMA: &str = "molten.node-build-inputs.v1";
 pub const OCTET_REVISION: &str = "c9b06bcf565c51d4a77d210e61b69ae51db9df25";
-pub const MAX_DESCRIPTOR_BYTES: usize = 32 * 1024;
-pub const MAX_MEMBER_BYTES: u64 = 8 * 1024 * 1024;
-pub const MAX_BUNDLE_BYTES: u64 = 32 * 1024 * 1024;
+pub const MAX_DESCRIPTOR_BYTES: usize = 32_768; // 32 KiB
+pub const MAX_MEMBER_BYTES: u64 = 8_388_608; // 8 MiB
+pub const MAX_BUNDLE_BYTES: u64 = 33_554_432; // 32 MiB
 pub const MAX_SOURCE_FILES: usize = 32_768;
 pub const MAX_BUILD_UNITS: usize = 2_048;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Cohort {
     pub source_revision: String,
@@ -27,7 +26,7 @@ pub struct Cohort {
     pub octet_toolchain: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TrustedCohort {
     pub schema: String,
@@ -35,7 +34,7 @@ pub struct TrustedCohort {
     pub cohort: Cohort,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum MemberRole {
     CargoManifest,
@@ -83,7 +82,7 @@ impl MemberRole {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Member {
     pub role: MemberRole,
@@ -91,7 +90,7 @@ pub struct Member {
     pub bytes: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Descriptor {
     pub schema: String,
@@ -220,7 +219,7 @@ impl EvidencePlan {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SourceFile {
     pub name: String,
@@ -230,7 +229,7 @@ pub struct SourceFile {
 
 /// Normalized first-party and dependency compiler inputs from an independently
 /// retained build. This record binds claimed coverage, not compiler execution.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BuildInputs {
     pub schema: String,
@@ -238,7 +237,7 @@ pub struct BuildInputs {
     pub units: Vec<BuildUnit>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BuildUnit {
     pub package: String,
@@ -260,13 +259,13 @@ pub fn validate_build_inputs(files: &[SourceFile], inputs: &BuildInputs) -> Resu
     let mut source_paths = Vec::new();
     for unit in &inputs.units {
         let package_index = match unit.package.as_str() {
-            "molten-core" => Some(0),
+            "molten-node-core" => Some(0),
             "molten-node-host" => Some(1),
             "molten-node-runtime" => Some(2),
             _ => None,
         };
         if prior.is_some_and(|prev| prev >= (unit.package.as_str(), unit.target.as_str()))
-            || unit.package == "molten"
+            || matches!(unit.package.as_str(), "molten" | "molten-core")
             || unit.package.is_empty()
             || unit.package.len() > 256
             || !unit.package.bytes().all(|byte| byte.is_ascii_graphic())
@@ -281,7 +280,7 @@ pub fn validate_build_inputs(files: &[SourceFile], inputs: &BuildInputs) -> Resu
         prior = Some((&unit.package, &unit.target));
         if let Some(index) = package_index {
             let library_root = match index {
-                0 => "crates/molten-core/src/lib.rs",
+                0 => "crates/molten-node-core/src/lib.rs",
                 1 => "crates/molten-node-host/src/lib.rs",
                 _ => "crates/molten-node-runtime/src/lib.rs",
             };
@@ -304,6 +303,9 @@ pub fn validate_build_inputs(files: &[SourceFile], inputs: &BuildInputs) -> Resu
                 return Err(Rejection::SourceContext);
             }
             previous_path = Some(path);
+            if source_paths.len() >= MAX_SOURCE_FILES {
+                return Err(Rejection::SourceContext);
+            }
             source_paths.push(path.as_str());
         }
     }
@@ -348,8 +350,8 @@ pub fn validate_source_inventory(plan: &EvidencePlan, files: &[SourceFile]) -> R
     // These anchors are necessary, not sufficient: the complete compiled closure
     // must also be independently reviewed against build inputs before approval.
     for required in [
-        "crates/molten-core/Cargo.toml",
-        "crates/molten-core/src/lib.rs",
+        "crates/molten-node-core/Cargo.toml",
+        "crates/molten-node-core/src/lib.rs",
         "crates/molten-node-host/Cargo.toml",
         "crates/molten-node-host/src/lib.rs",
         "crates/molten-node-runtime/Cargo.toml",
@@ -375,4 +377,5 @@ pub fn validate_source_inventory(plan: &EvidencePlan, files: &[SourceFile]) -> R
 }
 
 #[cfg(test)]
+#[path = "node_startup/tests.rs"]
 mod tests;

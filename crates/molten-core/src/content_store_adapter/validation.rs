@@ -1,5 +1,4 @@
 use super::*;
-use crate::fabric::valid_blake3_ref;
 
 // r[impl molten.content_store_adapter.port_contract]
 // r[impl molten.content_store_adapter.streaming_bounds]
@@ -281,7 +280,7 @@ pub(crate) fn validate_ref_list(field: &'static str, values: &[String], issues: 
 }
 
 fn validate_ref(field: &'static str, value: &str, issues: &mut Vec<ContentIssue>) {
-    if !valid_blake3_ref(value) {
+    if !crate::fabric::valid_blake3_ref(value) {
         issues.push(ContentIssue::MalformedRef(field));
     }
 }

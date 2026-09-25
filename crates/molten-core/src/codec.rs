@@ -1,5 +1,3 @@
-use std::fmt;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DomainArtifactInput<'a> {
     pub domain: &'a str,
@@ -27,7 +25,8 @@ pub enum CodecIssue {
 
 const BLAKE3_REF_PREFIX: &str = "blake3:";
 const BLAKE3_HEX_CHAR_COUNT: usize = 64;
-const BLAKE3_REF_CHAR_COUNT: usize = BLAKE3_REF_PREFIX.len() + BLAKE3_HEX_CHAR_COUNT;
+const BLAKE3_REF_CHAR_COUNT: usize =
+    BLAKE3_REF_PREFIX.len().checked_add(BLAKE3_HEX_CHAR_COUNT).expect("bounded BLAKE3 reference length");
 
 pub fn validate_domain_artifact(input: &DomainArtifactInput<'_>) -> Result<DomainArtifactSummary, CodecIssue> {
     if input.domain.is_empty() {
@@ -59,8 +58,8 @@ fn valid_blake3_ref(value: &str) -> bool {
     value.len() == BLAKE3_REF_CHAR_COUNT && hex.chars().all(|character| character.is_ascii_hexdigit())
 }
 
-impl fmt::Display for CodecIssue {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for CodecIssue {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::EmptyDomain => write!(formatter, "domain must not be empty"),
             Self::UnsupportedLabel(label) => write!(formatter, "unsupported domain artifact label {label}"),

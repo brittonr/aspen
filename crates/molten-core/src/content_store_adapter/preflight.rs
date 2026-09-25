@@ -37,18 +37,18 @@ pub fn required_chunks_for_range(
     if range.length == 0 {
         return Err(ContentIssue::RangeExceeded);
     }
-    let end = range.offset.checked_add(range.length).ok_or(ContentIssue::ArithmeticOverflow)?;
-    if end > manifest.total_length {
+    let end_bytes = range.offset.checked_add(range.length).ok_or(ContentIssue::ArithmeticOverflow)?;
+    if end_bytes > manifest.total_length {
         return Err(ContentIssue::RangeExceeded);
     }
-    let mut offset = 0_u64;
+    let mut offset_bytes = 0_u64;
     let mut required = Vec::new();
     for chunk in &manifest.chunks {
-        let chunk_end = offset.checked_add(chunk.length).ok_or(ContentIssue::ArithmeticOverflow)?;
-        if ranges_overlap(range.offset, end, offset, chunk_end) {
+        let chunk_end_bytes = offset_bytes.checked_add(chunk.length).ok_or(ContentIssue::ArithmeticOverflow)?;
+        if range.offset < chunk_end_bytes && offset_bytes < end_bytes {
             required.push(chunk.chunk_ref.clone());
         }
-        offset = chunk_end;
+        offset_bytes = chunk_end_bytes;
     }
     Ok(required)
 }
@@ -138,8 +138,4 @@ fn required_chunks(
         },
         None => manifest.chunks.iter().map(|chunk| chunk.chunk_ref.clone()).collect(),
     }
-}
-
-const fn ranges_overlap(left_start: u64, left_end: u64, right_start: u64, right_end: u64) -> bool {
-    left_start < right_end && right_start < left_end
 }

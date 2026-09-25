@@ -9,8 +9,8 @@
     "molten-core": "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-core#0.1.0",
     "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/molten-worktrees/node-content-service/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "19ab61559d1855e6f608e99470924c80936d20f94979b405cc55c96498ed54d0",
-  "inputsHash": "83f01af713425ea77999805fac08babd5b0f9a71144b1877e9411e3d126fa5fa",
+  "cargoLockHash": "0b8d7a0dab775d0637067f0b8e656a3460ea6aaffa99e3f198ccde2f0c810860",
+  "inputsHash": "a8dca839a965b89140bb1cb0af8d9f0719a357dd57bc971c85531b0160058237",
   "crates": {
     "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#schema-migration-core@0.1.0": {
       "crateName": "schema-migration-core",
@@ -895,12 +895,7 @@
       "libCrateTypes": [
         "lib"
       ],
-      "crateBin": [
-        {
-          "name": "molten-release-policy",
-          "path": "src/main.rs"
-        }
-      ],
+      "crateBin": [],
       "links": null,
       "license": "AGPL-3.0-or-later"
     },

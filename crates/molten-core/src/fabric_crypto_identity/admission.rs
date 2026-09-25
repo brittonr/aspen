@@ -1,6 +1,4 @@
 use super::*;
-use crate::fabric::valid_blake3_ref;
-use crate::fabric::valid_fabric_token;
 
 // r[impl molten.crypto_identity.adapter_contract]
 // r[impl molten.crypto_identity.fixture_profile_boundary]
@@ -170,7 +168,11 @@ pub fn plan_sign(profile: &CryptoAdapterProfile, request: &SignRequest) -> Resul
     })
 }
 
-fn validate_handle(profile: &CryptoAdapterProfile, handle: &OpaqueKeyHandle, issues: &mut Vec<CryptoIdentityIssue>) {
+pub(super) fn validate_handle(
+    profile: &CryptoAdapterProfile,
+    handle: &OpaqueKeyHandle,
+    issues: &mut Vec<CryptoIdentityIssue>,
+) {
     if handle.schema != OPAQUE_KEY_HANDLE_SCHEMA {
         issues.push(CryptoIdentityIssue::SchemaMismatch("opaque-key-handle"));
     }
@@ -279,11 +281,14 @@ pub fn redact_adapter_status(
     if input.receipt_refs.len() > MAX_CRYPTO_COLLECTION_ITEMS {
         issues.push(CryptoIdentityIssue::CollectionLimitExceeded("status-receipt-refs"));
     }
-    for receipt_ref in &input.receipt_refs {
-        validate_ref("status-receipt-ref", receipt_ref, &mut issues);
-    }
     if input.private_material_present {
         issues.push(CryptoIdentityIssue::DiagnosticSecretLeak);
+    }
+    if input.receipt_refs.len() > MAX_CRYPTO_COLLECTION_ITEMS || input.private_material_present {
+        return Err(issues);
+    }
+    for receipt_ref in &input.receipt_refs {
+        validate_ref("status-receipt-ref", receipt_ref, &mut issues);
     }
     if !issues.is_empty() {
         return Err(issues);
@@ -307,22 +312,23 @@ pub fn redact_adapter_status(
 fn validate_sorted_unique<T: Ord + Copy>(field: &'static str, values: &[T], issues: &mut Vec<CryptoIdentityIssue>) {
     if values.len() > MAX_CRYPTO_COLLECTION_ITEMS {
         issues.push(CryptoIdentityIssue::CollectionLimitExceeded(field));
+        return;
     }
     if values.windows(ADJACENT_PAIR_WIDTH).any(|pair| pair[0] >= pair[1]) {
         issues.push(CryptoIdentityIssue::DuplicateValue(field));
     }
 }
 
-fn validate_token(field: &'static str, value: &str, issues: &mut Vec<CryptoIdentityIssue>) {
+pub(super) fn validate_token(field: &'static str, value: &str, issues: &mut Vec<CryptoIdentityIssue>) {
     if value.is_empty() {
         issues.push(CryptoIdentityIssue::EmptyField(field));
-    } else if value.len() > MAX_CRYPTO_TEXT_BYTES || !valid_fabric_token(value) {
+    } else if value.len() > MAX_CRYPTO_TEXT_BYTES || !crate::fabric::valid_fabric_token(value) {
         issues.push(CryptoIdentityIssue::MalformedToken(field));
     }
 }
 
-fn validate_ref(field: &'static str, value: &str, issues: &mut Vec<CryptoIdentityIssue>) {
-    if !valid_blake3_ref(value) {
+pub(super) fn validate_ref(field: &'static str, value: &str, issues: &mut Vec<CryptoIdentityIssue>) {
+    if !crate::fabric::valid_blake3_ref(value) {
         issues.push(CryptoIdentityIssue::MalformedRef(field));
     }
 }

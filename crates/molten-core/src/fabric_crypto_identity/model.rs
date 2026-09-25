@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 pub const CRYPTO_ADAPTER_PROFILE_SCHEMA: &str = "molten.crypto-identity.adapter-profile.v1";
 pub const OPAQUE_KEY_HANDLE_SCHEMA: &str = "molten.crypto-identity.opaque-key-handle.v1";
 pub const SIGNATURE_DOMAIN_SCHEMA: &str = "molten.crypto-identity.signature-domain.v1";
@@ -372,8 +370,9 @@ pub(crate) fn required_non_claim_issues(claims: &[CryptoNonClaim]) -> Vec<Crypto
     let mut issues = Vec::new();
     if claims.len() > MAX_CRYPTO_COLLECTION_ITEMS {
         issues.push(CryptoIdentityIssue::CollectionLimitExceeded("crypto-non-claims"));
+        return issues;
     }
-    let supplied = claims.iter().copied().collect::<BTreeSet<_>>();
+    let supplied = claims.iter().copied().collect::<std::collections::BTreeSet<_>>();
     if supplied.len() != claims.len() {
         issues.push(CryptoIdentityIssue::DuplicateValue("crypto-non-claim"));
     }

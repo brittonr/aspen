@@ -7,8 +7,6 @@
 //! r[impl molten.authority.nominal_references.compile_time]
 //! r[impl molten.authority.nominal_references.authority_tests]
 
-use core::marker::PhantomData;
-
 const MAX_ENTITY_REF_BYTES: usize = 256;
 const BLAKE3_PREFIX: &str = "blake3:";
 const BLAKE3_HEX_BYTES: usize = 64;
@@ -46,14 +44,14 @@ pub enum ReferenceError {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EntityRef<D: ReferenceDomain> {
     value: String,
-    marker: PhantomData<D>,
+    marker: core::marker::PhantomData<D>,
 }
 
 impl<D: ReferenceDomain> Clone for EntityRef<D> {
     fn clone(&self) -> Self {
         Self {
             value: self.value.clone(),
-            marker: PhantomData,
+            marker: core::marker::PhantomData,
         }
     }
 }
@@ -64,7 +62,7 @@ impl<D: ReferenceDomain> EntityRef<D> {
         validate_entity::<D>(&value)?;
         Ok(Self {
             value,
-            marker: PhantomData,
+            marker: core::marker::PhantomData,
         })
     }
 
@@ -84,14 +82,14 @@ impl<D: ReferenceDomain> EntityRef<D> {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CanonicalRef<D: ReferenceDomain> {
     value: String,
-    marker: PhantomData<D>,
+    marker: core::marker::PhantomData<D>,
 }
 
 impl<D: ReferenceDomain> Clone for CanonicalRef<D> {
     fn clone(&self) -> Self {
         Self {
             value: self.value.clone(),
-            marker: PhantomData,
+            marker: core::marker::PhantomData,
         }
     }
 }
@@ -102,7 +100,7 @@ impl<D: ReferenceDomain> CanonicalRef<D> {
         validate_canonical::<D>(&value)?;
         Ok(Self {
             value,
-            marker: PhantomData,
+            marker: core::marker::PhantomData,
         })
     }
 
@@ -294,7 +292,7 @@ pub fn decide_authority(
     }
 }
 
-pub fn historical_replay_is_evidence_only(references: &HistoricalReferenceSet) -> bool {
+pub const fn historical_replay_is_evidence_only(references: &HistoricalReferenceSet) -> bool {
     !references.current_authority
 }
 

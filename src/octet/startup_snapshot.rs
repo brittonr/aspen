@@ -138,7 +138,7 @@ fn explicit_metadata(manifest: &str, dylint: &[u8], command: &str) -> std::resul
         "-p",
         "molten-node-runtime",
         "-p",
-        "molten-core",
+        "molten-node-core",
         "-p",
         "molten-node-host",
     ]

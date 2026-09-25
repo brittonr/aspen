@@ -13,10 +13,6 @@ mod locator;
 #[path = "node/state.rs"]
 pub mod node_state;
 
-pub mod core_api {
-    pub use molten_core::*;
-}
-
 pub mod prelude {
     pub use crate::error::Failure;
     pub use crate::error::Result;

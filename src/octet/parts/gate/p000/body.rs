@@ -89,6 +89,7 @@ const SOURCE_GATE_SOURCE_SCOPE_PATHS: &[&str] = &[
     "src/upgrades/mod.rs",
 ];
 const NODE_SOURCE_GATE_SCOPE_PATHS: &[&str] = &[
+    "crates/molten-node-core/src/lib.rs",
     "crates/molten-node-runtime/src/bin/molten-node.rs",
     "crates/molten-node-runtime/src/node/daemon.rs",
     "crates/molten-node-runtime/src/node/runtime.rs",

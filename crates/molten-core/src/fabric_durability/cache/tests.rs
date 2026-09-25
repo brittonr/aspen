@@ -122,3 +122,36 @@ fn malformed_projection_and_eviction_order_are_denied() {
         Err(Issue::DuplicateEvictionKey)
     );
 }
+
+#[test]
+fn insertion_rejects_policy_bypassing_constructor_before_count_arithmetic() {
+    let invalid = Policy {
+        capacity: 1,
+        high_watermark: 1,
+        low_watermark: u32::MAX,
+        promotion_threshold: STRICT_LRU_THRESHOLD,
+    };
+    assert_eq!(
+        plan_insertion(&InsertionInput {
+            policy: invalid,
+            active_count: 1,
+            eviction_order: &["only".to_string()],
+        }),
+        Err(Issue::InvalidWatermarks)
+    );
+
+    let invalid = Policy {
+        capacity: u32::MAX,
+        high_watermark: 1,
+        low_watermark: 0,
+        promotion_threshold: STRICT_LRU_THRESHOLD,
+    };
+    assert_eq!(
+        plan_insertion(&InsertionInput {
+            policy: invalid,
+            active_count: 0,
+            eviction_order: &[],
+        }),
+        Err(Issue::CapacityTooLarge)
+    );
+}

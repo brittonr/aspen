@@ -1,6 +1,3 @@
-use super::MAX_FABRIC_COLLECTION_ITEMS;
-use super::has_duplicates;
-
 const REQUIRED_MECHANISM_COUNT: usize = 11;
 const REQUIRED_NON_CLAIM_COUNT: usize = 9;
 
@@ -206,13 +203,13 @@ fn validate_identity(descriptor: &FabricBoundaryDescriptor, issues: &mut Vec<Fab
 }
 
 fn validate_mechanisms(descriptor: &FabricBoundaryDescriptor, issues: &mut Vec<FabricBoundaryIssue>) {
-    if descriptor.mechanisms.len() > MAX_FABRIC_COLLECTION_ITEMS {
+    if descriptor.mechanisms.len() > super::MAX_FABRIC_COLLECTION_ITEMS {
         issues.push(FabricBoundaryIssue::TooManyMechanisms {
             actual: descriptor.mechanisms.len(),
-            maximum: MAX_FABRIC_COLLECTION_ITEMS,
+            maximum: super::MAX_FABRIC_COLLECTION_ITEMS,
         });
     }
-    if has_duplicates(&descriptor.mechanisms) {
+    if super::has_duplicates(&descriptor.mechanisms) {
         issues.push(FabricBoundaryIssue::DuplicateMechanism);
     }
     for required in REQUIRED_FABRIC_MECHANISMS {
@@ -223,10 +220,10 @@ fn validate_mechanisms(descriptor: &FabricBoundaryDescriptor, issues: &mut Vec<F
 }
 
 fn validate_semantic_ownership(descriptor: &FabricBoundaryDescriptor, issues: &mut Vec<FabricBoundaryIssue>) {
-    if descriptor.core_owned_semantics.len() > MAX_FABRIC_COLLECTION_ITEMS {
+    if descriptor.core_owned_semantics.len() > super::MAX_FABRIC_COLLECTION_ITEMS {
         issues.push(FabricBoundaryIssue::TooManyCoreSemantics {
             actual: descriptor.core_owned_semantics.len(),
-            maximum: MAX_FABRIC_COLLECTION_ITEMS,
+            maximum: super::MAX_FABRIC_COLLECTION_ITEMS,
         });
     }
     for semantic in &descriptor.core_owned_semantics {
@@ -238,24 +235,24 @@ pub(crate) fn validate_required_non_claims(
     non_claims: &[FabricNonClaim],
     mut missing: impl FnMut(FabricNonClaim),
 ) -> bool {
-    let mut complete = true;
+    let mut is_complete = true;
     for required in REQUIRED_FABRIC_NON_CLAIMS {
         if !non_claims.contains(&required) {
-            complete = false;
+            is_complete = false;
             missing(required);
         }
     }
-    complete
+    is_complete
 }
 
 fn validate_non_claims(descriptor: &FabricBoundaryDescriptor, issues: &mut Vec<FabricBoundaryIssue>) {
-    if descriptor.non_claims.len() > MAX_FABRIC_COLLECTION_ITEMS {
+    if descriptor.non_claims.len() > super::MAX_FABRIC_COLLECTION_ITEMS {
         issues.push(FabricBoundaryIssue::TooManyNonClaims {
             actual: descriptor.non_claims.len(),
-            maximum: MAX_FABRIC_COLLECTION_ITEMS,
+            maximum: super::MAX_FABRIC_COLLECTION_ITEMS,
         });
     }
-    if has_duplicates(&descriptor.non_claims) {
+    if super::has_duplicates(&descriptor.non_claims) {
         issues.push(FabricBoundaryIssue::DuplicateNonClaim);
     }
     validate_required_non_claims(&descriptor.non_claims, |missing| {

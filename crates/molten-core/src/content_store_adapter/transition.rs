@@ -174,29 +174,36 @@ pub fn content_is_available(manifest: &ContentManifestDescriptor, state: &Conten
 
 // r[impl molten.content_store_adapter.retention_boundary]
 pub fn admit_content_read(authority: Option<&ContentProtectionAuthority>) -> ContentAuthorityDecision {
-    match authority {
-        Some(authority)
-            if authority.schema == CONTENT_PROTECTION_AUTHORITY_SCHEMA
-                && authority.read_authority_ref.as_deref().is_some_and(crate::fabric::valid_blake3_ref) =>
-        {
-            ContentAuthorityDecision::Admit
-        }
-        _ => ContentAuthorityDecision::Deny,
+    let Some(authority) = authority else {
+        return ContentAuthorityDecision::Deny;
+    };
+    if authority.schema != CONTENT_PROTECTION_AUTHORITY_SCHEMA {
+        return ContentAuthorityDecision::Deny;
+    }
+    if authority.read_authority_ref.as_deref().is_some_and(crate::fabric::valid_blake3_ref) {
+        ContentAuthorityDecision::Admit
+    } else {
+        ContentAuthorityDecision::Deny
     }
 }
 
 // r[impl molten.content_store_adapter.retention_boundary]
 pub fn admit_content_deletion(authority: Option<&ContentProtectionAuthority>) -> ContentAuthorityDecision {
-    match authority {
-        Some(authority)
-            if authority.schema == CONTENT_PROTECTION_AUTHORITY_SCHEMA
-                && crate::fabric::valid_blake3_ref(&authority.retention_policy_ref)
-                && authority.canonical_pin_ref.is_none()
-                && authority.deletion_gate_ref.as_deref().is_some_and(crate::fabric::valid_blake3_ref) =>
-        {
-            ContentAuthorityDecision::Admit
-        }
-        _ => ContentAuthorityDecision::Deny,
+    let Some(authority) = authority else {
+        return ContentAuthorityDecision::Deny;
+    };
+    if authority.schema != CONTENT_PROTECTION_AUTHORITY_SCHEMA
+        || !crate::fabric::valid_blake3_ref(&authority.retention_policy_ref)
+    {
+        return ContentAuthorityDecision::Deny;
+    }
+    if authority.canonical_pin_ref.is_some() {
+        return ContentAuthorityDecision::Deny;
+    }
+    if authority.deletion_gate_ref.as_deref().is_some_and(crate::fabric::valid_blake3_ref) {
+        ContentAuthorityDecision::Admit
+    } else {
+        ContentAuthorityDecision::Deny
     }
 }
 

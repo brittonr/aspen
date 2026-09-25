@@ -1,27 +1,26 @@
 //! Bounded node content intent. No filesystem, network, identity discovery, or clocks.
 use super::*;
-use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
 
 pub const NODE_CONTENT_SCHEMA: &str = "molten.node-content.v1";
 pub const NODE_CONTENT_MAX_BYTES: u64 = 1_048_576;
 pub const NODE_CONTENT_CHUNK_BYTES: u64 = 65_536;
 pub const NODE_CONTENT_READ_SECONDS: u64 = 10;
+const NODE_CONTENT_MAX_DURATION_MS: u64 = 300_000;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct NodeContentConfig {
     pub schema: String,
     pub manifest_ref: String,
     pub readers: Vec<String>,
-    pub bind_addr: SocketAddr,
+    pub bind_addr: std::net::SocketAddr,
     pub tick_ms: u64,
 }
 
 #[derive(Debug, Clone)]
 pub struct NodeContentPlan {
     grant: ContentReadGrant,
-    bind_addr: SocketAddr,
+    bind_addr: std::net::SocketAddr,
     tick_ms: u64,
 }
 
@@ -31,17 +30,14 @@ impl NodeContentPlan {
         if config.schema != NODE_CONTENT_SCHEMA {
             return Err("node content schema denied");
         }
-        if config.bind_addr.ip().is_unspecified()
-            || config.bind_addr.ip().is_multicast()
-            || config.bind_addr.port() == 0
-        {
+        let bind_ip = config.bind_addr.ip();
+        if bind_ip.is_unspecified() || bind_ip.is_multicast() || config.bind_addr.port() == 0 {
             return Err("node content address denied");
         }
-        if !(100..=1000).contains(&config.tick_ms)
-            || ticks == 0
-            || ticks > 4096
-            || ticks.saturating_mul(config.tick_ms) > 300_000
-        {
+        if !(100..=1_000).contains(&config.tick_ms) || !(1..=4_096).contains(&ticks) {
+            return Err("node content duration denied");
+        }
+        if ticks.checked_mul(config.tick_ms).is_none_or(|duration_ms| duration_ms > NODE_CONTENT_MAX_DURATION_MS) {
             return Err("node content duration denied");
         }
         let grant = ContentReadGrant::from_operator_policy(policy_ref, config.manifest_ref, config.readers)
@@ -55,7 +51,7 @@ impl NodeContentPlan {
     pub fn grant(&self) -> &ContentReadGrant {
         &self.grant
     }
-    pub fn bind_addr(&self) -> SocketAddr {
+    pub fn bind_addr(&self) -> std::net::SocketAddr {
         self.bind_addr
     }
     pub fn tick_ms(&self) -> u64 {
@@ -71,7 +67,7 @@ pub fn node_content_bounds() -> ContentResourceBounds {
         max_range_bytes: NODE_CONTENT_MAX_BYTES,
         max_concurrent_operations: 2,
         max_queued_bytes: NODE_CONTENT_MAX_BYTES,
-        max_memory_bytes: NODE_CONTENT_MAX_BYTES * 2,
+        max_memory_bytes: NODE_CONTENT_MAX_BYTES.saturating_mul(2),
         max_deadline_ticks: 60,
         max_retries: 1,
         max_events: 64,
@@ -80,11 +76,13 @@ pub fn node_content_bounds() -> ContentResourceBounds {
 }
 
 pub fn admit_node_archive(bytes: &[u8], expected: &str) -> Result<(), &'static str> {
-    if bytes.is_empty()
-        || bytes.len() as u64 > NODE_CONTENT_MAX_BYTES
-        || !valid_reader_key(expected)
-        || blake3::hash(bytes).to_hex().as_str() != expected
-    {
+    if bytes.is_empty() || u64::try_from(bytes.len()).map_or(true, |length_bytes| length_bytes > NODE_CONTENT_MAX_BYTES) {
+        return Err("node content archive digest or bounds denied");
+    }
+    if !valid_reader_key(expected) {
+        return Err("node content archive digest or bounds denied");
+    }
+    if blake3::hash(bytes).to_hex().as_str() != expected {
         return Err("node content archive digest or bounds denied");
     }
     Ok(())
@@ -141,5 +139,10 @@ mod tests {
         assert!(admit_node_archive(bytes, blake3::hash(bytes).to_hex().as_str()).is_ok());
         assert!(admit_node_archive(bytes, &"a".repeat(64)).is_err());
         assert!(admit_node_archive(&[], &"a".repeat(64)).is_err());
+
+        let maximum = vec![b'a'; NODE_CONTENT_MAX_BYTES as usize];
+        assert!(admit_node_archive(&maximum, blake3::hash(&maximum).to_hex().as_str()).is_ok());
+        let too_large = vec![b'a'; NODE_CONTENT_MAX_BYTES.saturating_add(1) as usize];
+        assert!(admit_node_archive(&too_large, blake3::hash(&too_large).to_hex().as_str()).is_err());
     }
 }

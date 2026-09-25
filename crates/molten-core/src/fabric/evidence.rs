@@ -1,15 +1,8 @@
-use super::FabricNonClaim;
-use super::MAX_FABRIC_COLLECTION_ITEMS;
-use super::has_duplicates;
-use super::valid_blake3_ref;
-use super::valid_fabric_token;
-use super::validate_required_non_claims;
-
 pub const FABRIC_EVIDENCE_PROFILE_SCHEMA: &str = "molten.fabric.evidence-profile.v1";
 
 const REQUIRED_SEMANTIC_BOUNDARY_COUNT: usize = 6;
 const INTERNAL_BOUNDARY_COUNT: usize = 4;
-const ALL_EVIDENCE_BOUNDARY_COUNT: usize = REQUIRED_SEMANTIC_BOUNDARY_COUNT + INTERNAL_BOUNDARY_COUNT;
+const ALL_EVIDENCE_BOUNDARY_COUNT: usize = REQUIRED_SEMANTIC_BOUNDARY_COUNT.saturating_add(INTERNAL_BOUNDARY_COUNT);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FabricProfileClass {
@@ -123,7 +116,7 @@ pub struct FabricEvidenceProfile {
     pub class: FabricProfileClass,
     pub rules: Vec<EvidenceRule>,
     pub aggregate_limit_ref: Option<String>,
-    pub non_claims: Vec<FabricNonClaim>,
+    pub non_claims: Vec<super::FabricNonClaim>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,7 +125,7 @@ pub struct FabricEvidenceProfileSummary {
     pub class: FabricProfileClass,
     pub rules: Vec<EvidenceRule>,
     pub aggregate_limit_ref: Option<String>,
-    pub non_claims: Vec<FabricNonClaim>,
+    pub non_claims: Vec<super::FabricNonClaim>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,7 +141,7 @@ pub enum FabricEvidenceIssue {
     MalformedAggregateLimitRef(String),
     TooManyNonClaims { actual: usize, maximum: usize },
     DuplicateNonClaim,
-    MissingNonClaim(FabricNonClaim),
+    MissingNonClaim(super::FabricNonClaim),
 }
 
 pub fn default_production_evidence_profile(aggregate_limit_ref: impl Into<String>) -> FabricEvidenceProfile {
@@ -207,28 +200,25 @@ fn validate_evidence_identity(profile: &FabricEvidenceProfile, issues: &mut Vec<
             expected: FABRIC_EVIDENCE_PROFILE_SCHEMA.to_string(),
         });
     }
-    if !valid_fabric_token(&profile.profile_id) {
+    if !super::valid_fabric_token(&profile.profile_id) {
         issues.push(FabricEvidenceIssue::MalformedProfileId(profile.profile_id.clone()));
     }
 }
 
 fn validate_evidence_rules(profile: &FabricEvidenceProfile, issues: &mut Vec<FabricEvidenceIssue>) {
-    if profile.rules.len() > MAX_FABRIC_COLLECTION_ITEMS {
+    if profile.rules.len() > super::MAX_FABRIC_COLLECTION_ITEMS {
         issues.push(FabricEvidenceIssue::TooManyRules {
             actual: profile.rules.len(),
-            maximum: MAX_FABRIC_COLLECTION_ITEMS,
+            maximum: super::MAX_FABRIC_COLLECTION_ITEMS,
         });
     }
-    let boundaries = profile.rules.iter().map(|rule| rule.boundary).collect::<Vec<_>>();
-    if has_duplicates(&boundaries) {
-        for boundary in ALL_EVIDENCE_BOUNDARIES {
-            if boundaries.iter().filter(|candidate| **candidate == boundary).count() > 1 {
-                issues.push(FabricEvidenceIssue::DuplicateBoundary(boundary));
-            }
+    for boundary in ALL_EVIDENCE_BOUNDARIES {
+        if profile.rules.iter().filter(|rule| rule.boundary == boundary).count() > 1 {
+            issues.push(FabricEvidenceIssue::DuplicateBoundary(boundary));
         }
     }
     for boundary in ALL_EVIDENCE_BOUNDARIES {
-        if !boundaries.contains(&boundary) {
+        if !profile.rules.iter().any(|rule| rule.boundary == boundary) {
             issues.push(FabricEvidenceIssue::MissingBoundary(boundary));
         }
     }
@@ -248,30 +238,30 @@ fn validate_evidence_rules(profile: &FabricEvidenceProfile, issues: &mut Vec<Fab
 }
 
 fn validate_aggregate_limit(profile: &FabricEvidenceProfile, issues: &mut Vec<FabricEvidenceIssue>) {
-    let uses_aggregate = profile.rules.iter().any(|rule| rule.emission == EvidenceEmission::BoundedAggregate);
-    if !uses_aggregate {
+    let has_aggregate = profile.rules.iter().any(|rule| rule.emission == EvidenceEmission::BoundedAggregate);
+    if !has_aggregate {
         return;
     }
     let Some(reference) = profile.aggregate_limit_ref.as_deref() else {
         issues.push(FabricEvidenceIssue::MissingAggregateLimitRef);
         return;
     };
-    if !valid_blake3_ref(reference) {
+    if !super::valid_blake3_ref(reference) {
         issues.push(FabricEvidenceIssue::MalformedAggregateLimitRef(reference.to_string()));
     }
 }
 
 fn validate_evidence_non_claims(profile: &FabricEvidenceProfile, issues: &mut Vec<FabricEvidenceIssue>) {
-    if profile.non_claims.len() > MAX_FABRIC_COLLECTION_ITEMS {
+    if profile.non_claims.len() > super::MAX_FABRIC_COLLECTION_ITEMS {
         issues.push(FabricEvidenceIssue::TooManyNonClaims {
             actual: profile.non_claims.len(),
-            maximum: MAX_FABRIC_COLLECTION_ITEMS,
+            maximum: super::MAX_FABRIC_COLLECTION_ITEMS,
         });
     }
-    if has_duplicates(&profile.non_claims) {
+    if super::has_duplicates(&profile.non_claims) {
         issues.push(FabricEvidenceIssue::DuplicateNonClaim);
     }
-    validate_required_non_claims(&profile.non_claims, |missing| {
+    super::validate_required_non_claims(&profile.non_claims, |missing| {
         issues.push(FabricEvidenceIssue::MissingNonClaim(missing));
     });
 }

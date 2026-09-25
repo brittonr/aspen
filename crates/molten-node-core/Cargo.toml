@@ -1,0 +1,14 @@
+[package]
+name = "molten-node-core"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Pure normal-node decision cores for Molten"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+artifact-auth-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
+blake3 = "1"
+serde = { version = "1", features = ["derive"] }

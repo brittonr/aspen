@@ -95,7 +95,7 @@ fn validate_projection(input: &AccessProjection<'_>) -> Result<(), Issue> {
     Ok(())
 }
 
-fn validate_text(value: &str) -> Result<(), Issue> {
+const fn validate_text(value: &str) -> Result<(), Issue> {
     if value.len() > MAX_PROJECTION_TEXT_BYTES {
         Err(Issue::ProjectionTextTooLarge)
     } else {
@@ -137,6 +137,13 @@ pub struct InsertionPlan {
 // r[impl aspen.dataspace_access_cache.decision]
 // r[impl aspen.dataspace_access_cache.deferral]
 pub fn plan_insertion(input: &InsertionInput<'_>) -> Result<InsertionPlan, Issue> {
+    // Policy is public, so callers can construct it without going through `new`.
+    Policy::new(
+        input.policy.capacity,
+        input.policy.high_watermark,
+        input.policy.low_watermark,
+        input.policy.promotion_threshold,
+    )?;
     if input.active_count > input.policy.capacity {
         return Err(Issue::ActiveCountExceedsCapacity);
     }
@@ -147,7 +154,10 @@ pub fn plan_insertion(input: &InsertionInput<'_>) -> Result<InsertionPlan, Issue
     validate_unique_order(input.eviction_order)?;
 
     let retained_before_insert = retained_count(input.policy, input.active_count);
-    let eviction_count = input.active_count - retained_before_insert;
+    let eviction_count = input
+        .active_count
+        .checked_sub(retained_before_insert)
+        .ok_or(Issue::InvalidWatermarks)?;
     let eviction_count = usize::try_from(eviction_count).map_err(|_| Issue::CountRepresentation)?;
     let mut evict_keys = Vec::with_capacity(eviction_count);
     for key in input.eviction_order {
@@ -162,15 +172,13 @@ pub fn plan_insertion(input: &InsertionInput<'_>) -> Result<InsertionPlan, Issue
 
     Ok(InsertionPlan {
         evict_keys,
-        active_after_insert: retained_before_insert + 1,
+        active_after_insert: retained_before_insert.checked_add(1).ok_or(Issue::InvalidWatermarks)?,
     })
 }
 
-fn retained_count(policy: Policy, active_count: u32) -> u32 {
+const fn retained_count(policy: Policy, active_count: u32) -> u32 {
     if active_count >= policy.high_watermark {
         policy.low_watermark
-    } else if active_count >= policy.capacity {
-        policy.capacity - 1
     } else {
         active_count
     }

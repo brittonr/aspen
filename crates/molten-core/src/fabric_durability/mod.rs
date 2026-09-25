@@ -8,12 +8,7 @@ pub mod ownership;
 
 mod transition;
 
-use std::collections::BTreeMap;
-
 pub use transition::*;
-
-use crate::fabric::valid_blake3_ref;
-use crate::fabric::valid_fabric_token;
 
 pub const DURABLE_STATE_PROFILE_SCHEMA: &str = "molten.fabric.durability.profile.v1";
 pub const DURABLE_STATE_NAMESPACE_SCHEMA: &str = "molten.fabric.durability.namespace.v1";
@@ -296,9 +291,9 @@ pub struct DurableState {
     pub descriptor: DurableNamespaceDescriptor,
     pub buffered_log: Vec<LogRecord>,
     pub durable_log: Vec<LogRecord>,
-    pub ordered: BTreeMap<Vec<u8>, VersionedValue>,
-    pub snapshots: BTreeMap<String, SnapshotRecord>,
-    pub effects: BTreeMap<String, EffectTransactionState>,
+    pub ordered: std::collections::BTreeMap<Vec<u8>, VersionedValue>,
+    pub snapshots: std::collections::BTreeMap<String, SnapshotRecord>,
+    pub effects: std::collections::BTreeMap<String, EffectTransactionState>,
     pub buffered_bytes: u64,
     pub durable_bytes: u64,
 }
@@ -309,9 +304,9 @@ impl DurableState {
             descriptor,
             buffered_log: Vec::new(),
             durable_log: Vec::new(),
-            ordered: BTreeMap::new(),
-            snapshots: BTreeMap::new(),
-            effects: BTreeMap::new(),
+            ordered: std::collections::BTreeMap::new(),
+            snapshots: std::collections::BTreeMap::new(),
+            effects: std::collections::BTreeMap::new(),
             buffered_bytes: 0,
             durable_bytes: 0,
         }
@@ -534,7 +529,7 @@ pub fn validate_durable_profile(profile: &DurableStateProfile) -> Result<(), Vec
         issues.push(DurabilityIssue::ProfileSchemaMismatch);
     }
     validate_token("profile-id", &profile.profile_id, &mut issues);
-    if !valid_blake3_ref(&profile.profile_ref) {
+    if !crate::fabric::valid_blake3_ref(&profile.profile_ref) {
         issues.push(DurabilityIssue::MalformedContentRef("profile-ref"));
     }
     validate_positive_limit("max-namespaces", profile.max_namespaces, &mut issues);
@@ -571,11 +566,11 @@ pub fn validate_namespace_descriptor(
     if descriptor.generation == 0 {
         issues.push(DurabilityIssue::ZeroLimit("generation"));
     }
-    if !valid_blake3_ref(&descriptor.value_schema_ref) {
+    if !crate::fabric::valid_blake3_ref(&descriptor.value_schema_ref) {
         issues.push(DurabilityIssue::MalformedContentRef("value-schema-ref"));
     }
     if let Some(authority_ref) = &descriptor.retention_authority_ref
-        && !valid_blake3_ref(authority_ref)
+        && !crate::fabric::valid_blake3_ref(authority_ref)
     {
         issues.push(DurabilityIssue::MalformedContentRef("retention-authority-ref"));
     }
@@ -632,7 +627,7 @@ fn validate_atomicity_domain(
 fn validate_token(field: &'static str, value: &str, issues: &mut Vec<DurabilityIssue>) {
     if value.is_empty() {
         issues.push(DurabilityIssue::EmptyField(field));
-    } else if value.len() > MAX_DURABILITY_TEXT_BYTES || !valid_fabric_token(value) {
+    } else if value.len() > MAX_DURABILITY_TEXT_BYTES || !crate::fabric::valid_fabric_token(value) {
         issues.push(DurabilityIssue::MalformedField(field));
     }
 }
@@ -644,13 +639,14 @@ fn validate_positive_limit(field: &'static str, value: u64, issues: &mut Vec<Dur
 }
 
 fn validate_unique<T: Ord>(field: &'static str, values: &[T], issues: &mut Vec<DurabilityIssue>) {
+    if values.len() > MAX_DURABILITY_COLLECTION_ITEMS {
+        issues.push(DurabilityIssue::CollectionLimitExceeded);
+        return;
+    }
     let mut sorted = values.iter().collect::<Vec<_>>();
     sorted.sort();
     if sorted.windows(ADJACENT_PAIR_WIDTH).any(|pair| pair[0] == pair[1]) {
         issues.push(DurabilityIssue::DuplicateValue(field));
-    }
-    if values.len() > MAX_DURABILITY_COLLECTION_ITEMS {
-        issues.push(DurabilityIssue::CollectionLimitExceeded);
     }
 }
 

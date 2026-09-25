@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/molten-core", "crates/molten-node-host", "crates/molten-node-runtime", "crates/molten-release-policy"]
+members = [".", "crates/molten-core", "crates/molten-node-core", "crates/molten-node-host", "crates/molten-node-runtime", "crates/molten-release-policy"]
 resolver = "3"
 
 [workspace.package]
@@ -7,7 +7,7 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 
 [workspace.metadata.octet]
-default_scope = ["-p", "molten-node-runtime", "-p", "molten-core", "-p", "molten-node-host"]
+default_scope = ["-p", "molten-node-runtime", "-p", "molten-node-core", "-p", "molten-node-host"]
 cargo_check_args = ["--all-targets"]
 
 [package]

@@ -1,14 +1,3 @@
-use std::collections::BTreeSet;
-
-use super::FabricAuthority;
-use super::FabricNonClaim;
-use super::MAX_FABRIC_COLLECTION_ITEMS;
-use super::MAX_FABRIC_PORTS;
-use super::has_duplicates;
-use super::valid_blake3_ref;
-use super::valid_fabric_token;
-use super::validate_required_non_claims;
-
 pub const FABRIC_PORT_DESCRIPTOR_SCHEMA: &str = "molten.fabric.port-descriptor.v1";
 pub const FABRIC_PORT_REGISTRY_SCHEMA: &str = "molten.fabric.port-registry.v1";
 pub const FABRIC_PORT_BINDING_SCHEMA: &str = "molten.fabric.port-binding.v1";
@@ -134,13 +123,13 @@ pub struct FabricPortDescriptor {
     pub operation_classes: Vec<String>,
     pub input_schema_refs: Vec<String>,
     pub output_schema_refs: Vec<String>,
-    pub authority_requirements: Vec<FabricAuthority>,
+    pub authority_requirements: Vec<super::FabricAuthority>,
     pub resource_requirements: Vec<FabricResource>,
     pub determinism: DeterminismClass,
     pub replay: ReplayClass,
     pub implementation_profile: String,
     pub conformance_refs: Vec<String>,
-    pub non_claims: Vec<FabricNonClaim>,
+    pub non_claims: Vec<super::FabricNonClaim>,
     pub enabled: bool,
 }
 
@@ -161,7 +150,7 @@ pub struct FabricPortRequirement {
     pub operation_classes: Vec<String>,
     pub input_schema_refs: Vec<String>,
     pub output_schema_refs: Vec<String>,
-    pub allowed_authorities: Vec<FabricAuthority>,
+    pub allowed_authorities: Vec<super::FabricAuthority>,
     pub available_resources: Vec<FabricResource>,
     pub expected_determinism: DeterminismClass,
     pub expected_replay: ReplayClass,
@@ -174,7 +163,7 @@ pub struct FabricPortBinding {
     pub class: FabricPortClass,
     pub implementation_profile: String,
     pub conformance_refs: Vec<String>,
-    pub non_claims: Vec<FabricNonClaim>,
+    pub non_claims: Vec<super::FabricNonClaim>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -211,7 +200,7 @@ pub enum FabricPortIssue {
     },
     DuplicateFieldValue(&'static str),
     MalformedConformanceRef(String),
-    MissingNonClaim(FabricNonClaim),
+    MissingNonClaim(super::FabricNonClaim),
     DuplicatePort(FabricPortKey),
     UnknownPort(String),
     UnsupportedVersion {
@@ -226,7 +215,7 @@ pub enum FabricPortIssue {
     },
     MissingOperation(String),
     SchemaSetMismatch(&'static str),
-    OverAuthorizingPort(FabricAuthority),
+    OverAuthorizingPort(super::FabricAuthority),
     ResourceUnavailable(FabricResource),
     DeterminismMismatch {
         expected: DeterminismClass,
@@ -250,19 +239,18 @@ pub fn build_fabric_port_registry(
     if descriptors.is_empty() {
         issues.push(FabricPortIssue::EmptyRegistry);
     }
-    if descriptors.len() > MAX_FABRIC_PORTS {
+    if descriptors.len() > super::MAX_FABRIC_PORTS {
         issues.push(FabricPortIssue::TooManyPorts {
             actual: descriptors.len(),
-            maximum: MAX_FABRIC_PORTS,
+            maximum: super::MAX_FABRIC_PORTS,
         });
     }
 
-    let mut keys = BTreeSet::new();
+    let mut keys = std::collections::BTreeSet::new();
     for descriptor in descriptors {
         validate_descriptor(descriptor, &mut issues);
-        let key = descriptor.key();
-        if !keys.insert(key.clone()) {
-            issues.push(FabricPortIssue::DuplicatePort(key));
+        if !keys.insert((descriptor.port_id.as_str(), descriptor.version.as_str())) {
+            issues.push(FabricPortIssue::DuplicatePort(descriptor.key()));
         }
     }
     if !issues.is_empty() {
@@ -287,18 +275,21 @@ pub fn resolve_fabric_port_binding(
         return Err(issues);
     }
 
-    let matching_id = registry
-        .descriptors
-        .iter()
-        .filter(|descriptor| descriptor.port_id == requirement.port_id)
-        .collect::<Vec<_>>();
-    if matching_id.is_empty() {
+    if !registry.descriptors.iter().any(|descriptor| descriptor.port_id == requirement.port_id) {
         return Err(vec![FabricPortIssue::UnknownPort(requirement.port_id.clone())]);
     }
 
-    let Some(descriptor) = matching_id.iter().copied().find(|descriptor| descriptor.version == requirement.version)
+    let Some(descriptor) = registry
+        .descriptors
+        .iter()
+        .find(|descriptor| descriptor.port_id == requirement.port_id && descriptor.version == requirement.version)
     else {
-        let mut available = matching_id.iter().map(|descriptor| descriptor.version.clone()).collect::<Vec<_>>();
+        let mut available = registry
+            .descriptors
+            .iter()
+            .filter(|descriptor| descriptor.port_id == requirement.port_id)
+            .map(|descriptor| descriptor.version.clone())
+            .collect::<Vec<_>>();
         available.sort();
         available.dedup();
         return Err(vec![FabricPortIssue::UnsupportedVersion {
@@ -371,10 +362,10 @@ fn validate_binding_compatibility(
             issues.push(FabricPortIssue::MissingOperation(operation.clone()));
         }
     }
-    if sorted_strings(&descriptor.input_schema_refs) != sorted_strings(&requirement.input_schema_refs) {
+    if !same_string_set(&descriptor.input_schema_refs, &requirement.input_schema_refs) {
         issues.push(FabricPortIssue::SchemaSetMismatch("input-schema-refs"));
     }
-    if sorted_strings(&descriptor.output_schema_refs) != sorted_strings(&requirement.output_schema_refs) {
+    if !same_string_set(&descriptor.output_schema_refs, &requirement.output_schema_refs) {
         issues.push(FabricPortIssue::SchemaSetMismatch("output-schema-refs"));
     }
     for authority in &descriptor.authority_requirements {
@@ -412,7 +403,7 @@ fn validate_token_field(field: &'static str, value: &str, issues: &mut Vec<Fabri
         issues.push(FabricPortIssue::EmptyField(field));
         return;
     }
-    if !valid_fabric_token(value) {
+    if !super::valid_fabric_token(value) {
         issues.push(FabricPortIssue::MalformedField {
             field,
             value: value.to_string(),
@@ -424,18 +415,18 @@ fn validate_token_list(field: &'static str, values: &[String], nonempty: bool, i
     if nonempty && values.is_empty() {
         issues.push(FabricPortIssue::EmptyField(field));
     }
-    if values.len() > MAX_FABRIC_COLLECTION_ITEMS {
+    if values.len() > super::MAX_FABRIC_COLLECTION_ITEMS {
         issues.push(FabricPortIssue::TooManyFieldValues {
             field,
             actual: values.len(),
-            maximum: MAX_FABRIC_COLLECTION_ITEMS,
+            maximum: super::MAX_FABRIC_COLLECTION_ITEMS,
         });
     }
-    if has_duplicates(values) {
+    if super::has_duplicates(values) {
         issues.push(FabricPortIssue::DuplicateFieldValue(field));
     }
     for value in values {
-        if !valid_fabric_token(value) {
+        if !super::valid_fabric_token(value) {
             issues.push(FabricPortIssue::MalformedField {
                 field,
                 value: value.clone(),
@@ -445,14 +436,14 @@ fn validate_token_list(field: &'static str, values: &[String], nonempty: bool, i
 }
 
 fn validate_enum_list<T: Ord>(field: &'static str, values: &[T], issues: &mut Vec<FabricPortIssue>) {
-    if values.len() > MAX_FABRIC_COLLECTION_ITEMS {
+    if values.len() > super::MAX_FABRIC_COLLECTION_ITEMS {
         issues.push(FabricPortIssue::TooManyFieldValues {
             field,
             actual: values.len(),
-            maximum: MAX_FABRIC_COLLECTION_ITEMS,
+            maximum: super::MAX_FABRIC_COLLECTION_ITEMS,
         });
     }
-    if has_duplicates(values) {
+    if super::has_duplicates(values) {
         issues.push(FabricPortIssue::DuplicateFieldValue(field));
     }
 }
@@ -461,26 +452,26 @@ fn validate_conformance_refs(refs: &[String], issues: &mut Vec<FabricPortIssue>)
     if refs.is_empty() {
         issues.push(FabricPortIssue::EmptyField("conformance-refs"));
     }
-    if refs.len() > MAX_FABRIC_COLLECTION_ITEMS {
+    if refs.len() > super::MAX_FABRIC_COLLECTION_ITEMS {
         issues.push(FabricPortIssue::TooManyFieldValues {
             field: "conformance-refs",
             actual: refs.len(),
-            maximum: MAX_FABRIC_COLLECTION_ITEMS,
+            maximum: super::MAX_FABRIC_COLLECTION_ITEMS,
         });
     }
-    if has_duplicates(refs) {
+    if super::has_duplicates(refs) {
         issues.push(FabricPortIssue::DuplicateFieldValue("conformance-refs"));
     }
     for reference in refs {
-        if !valid_blake3_ref(reference) {
+        if !super::valid_blake3_ref(reference) {
             issues.push(FabricPortIssue::MalformedConformanceRef(reference.clone()));
         }
     }
 }
 
-fn validate_descriptor_non_claims(non_claims: &[FabricNonClaim], issues: &mut Vec<FabricPortIssue>) {
+fn validate_descriptor_non_claims(non_claims: &[super::FabricNonClaim], issues: &mut Vec<FabricPortIssue>) {
     validate_enum_list("non-claims", non_claims, issues);
-    validate_required_non_claims(non_claims, |missing| {
+    super::validate_required_non_claims(non_claims, |missing| {
         issues.push(FabricPortIssue::MissingNonClaim(missing));
     });
 }
@@ -496,10 +487,8 @@ fn normalize_descriptor(mut descriptor: FabricPortDescriptor) -> FabricPortDescr
     descriptor
 }
 
-fn sorted_strings(values: &[String]) -> Vec<String> {
-    let mut sorted = values.to_vec();
-    sorted.sort();
-    sorted
+fn same_string_set(left: &[String], right: &[String]) -> bool {
+    left.len() == right.len() && left.iter().all(|value| right.contains(value))
 }
 
 #[cfg(test)]
@@ -525,7 +514,7 @@ mod tests {
             operation_classes: vec![SEND_OPERATION.to_string()],
             input_schema_refs: vec![INPUT_SCHEMA.to_string()],
             output_schema_refs: vec![OUTPUT_SCHEMA.to_string()],
-            authority_requirements: vec![FabricAuthority::Transport],
+            authority_requirements: vec![crate::fabric::FabricAuthority::Transport],
             resource_requirements: vec![FabricResource::NetworkBytes, FabricResource::Concurrency],
             determinism: DeterminismClass::ExternalEffect,
             replay: ReplayClass::RecordedEffectRequired,
@@ -544,7 +533,7 @@ mod tests {
             operation_classes: vec![SEND_OPERATION.to_string()],
             input_schema_refs: vec![INPUT_SCHEMA.to_string()],
             output_schema_refs: vec![OUTPUT_SCHEMA.to_string()],
-            allowed_authorities: vec![FabricAuthority::Transport],
+            allowed_authorities: vec![crate::fabric::FabricAuthority::Transport],
             available_resources: vec![FabricResource::Concurrency, FabricResource::NetworkBytes],
             expected_determinism: DeterminismClass::ExternalEffect,
             expected_replay: ReplayClass::RecordedEffectRequired,
@@ -564,6 +553,21 @@ mod tests {
         assert_eq!(binding.implementation_profile, LIVE_PROFILE);
         assert_eq!(binding.conformance_refs, vec![CONFORMANCE_REF.to_string()]);
         assert_eq!(binding.non_claims, REQUIRED_FABRIC_NON_CLAIMS);
+    }
+
+    #[test]
+    fn schema_sets_match_in_any_order_but_never_accept_substitution() {
+        let mut descriptor = valid_descriptor();
+        descriptor.input_schema_refs.push("molten.fabric.transport-header.v1".to_string());
+        let registry = build_fabric_port_registry(&[descriptor]).expect("well-formed registry");
+
+        let mut requirement = valid_requirement();
+        requirement.input_schema_refs.insert(0, "molten.fabric.transport-header.v1".to_string());
+        assert!(resolve_fabric_port_binding(&registry, &requirement).is_ok());
+
+        requirement.input_schema_refs[0] = "molten.fabric.unreviewed-header.v1".to_string();
+        let issues = resolve_fabric_port_binding(&registry, &requirement).expect_err("schema substitution must deny");
+        assert!(issues.contains(&FabricPortIssue::SchemaSetMismatch("input-schema-refs")));
     }
 
     // r[verify molten.fabric_boundary.port_registry]
@@ -608,7 +612,7 @@ mod tests {
     #[test]
     fn resolution_rejects_profile_substitution_over_authority_and_disabled_port() {
         let mut descriptor = valid_descriptor();
-        descriptor.authority_requirements.push(FabricAuthority::ProtocolOwnership);
+        descriptor.authority_requirements.push(crate::fabric::FabricAuthority::ProtocolOwnership);
         descriptor.enabled = false;
         let registry = build_fabric_port_registry(&[descriptor]).expect("well-formed disabled descriptor");
         let mut requirement = valid_requirement();
@@ -620,7 +624,9 @@ mod tests {
             port_id: TRANSPORT_PORT_ID.to_string(),
             version: TRANSPORT_VERSION.to_string(),
         })));
-        assert!(issues.contains(&FabricPortIssue::OverAuthorizingPort(FabricAuthority::ProtocolOwnership)));
+        assert!(issues.contains(&FabricPortIssue::OverAuthorizingPort(
+            crate::fabric::FabricAuthority::ProtocolOwnership
+        )));
         assert!(issues.contains(&FabricPortIssue::SilentProfileSubstitution {
             expected: OTHER_PROFILE.to_string(),
             actual: LIVE_PROFILE.to_string(),
@@ -632,11 +638,13 @@ mod tests {
     fn registry_rejects_malformed_conformance_refs_and_missing_non_claims() {
         let mut descriptor = valid_descriptor();
         descriptor.conformance_refs = vec!["sha256:not-canonical".to_string()];
-        descriptor.non_claims.retain(|claim| *claim != FabricNonClaim::ProtocolCompatibility);
+        descriptor.non_claims.retain(|claim| *claim != crate::fabric::FabricNonClaim::ProtocolCompatibility);
 
         let issues = build_fabric_port_registry(&[descriptor]).expect_err("malformed descriptor must deny");
 
         assert!(issues.contains(&FabricPortIssue::MalformedConformanceRef("sha256:not-canonical".to_string())));
-        assert!(issues.contains(&FabricPortIssue::MissingNonClaim(FabricNonClaim::ProtocolCompatibility)));
+        assert!(issues.contains(&FabricPortIssue::MissingNonClaim(
+            crate::fabric::FabricNonClaim::ProtocolCompatibility
+        )));
     }
 }

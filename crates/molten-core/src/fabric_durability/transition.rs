@@ -1,7 +1,4 @@
-use std::ops::Bound;
-
 use super::*;
-use crate::fabric::valid_blake3_ref;
 
 const SINGLE_AFFECTED_ITEM: u64 = 1;
 const ADJACENT_PAIR_WIDTH: usize = 2;
@@ -16,18 +13,25 @@ pub fn append_log(
     validate_request_scope(state, &request.adapter_id, &request.namespace_id, request.generation, &mut issues);
     validate_level(profile, &state.descriptor.atomicity_domain, request.durability, &mut issues);
     validate_payload(profile, state, &request.value, &request.value_ref, &mut issues);
-    let expected_sequence = state.next_log_sequence().unwrap_or_else(|issue| {
-        issues.push(issue);
-        request.expected_sequence
-    });
-    if request.expected_sequence != expected_sequence {
-        issues.push(DurabilityIssue::SequenceMismatch {
-            expected: expected_sequence,
-            actual: request.expected_sequence,
-        });
+    match state.next_log_sequence() {
+        Ok(expected_sequence) if request.expected_sequence != expected_sequence => {
+            issues.push(DurabilityIssue::SequenceMismatch {
+                expected: expected_sequence,
+                actual: request.expected_sequence,
+            });
+        }
+        Err(issue) => issues.push(issue),
+        Ok(_) => {}
     }
-    let current_records = state.buffered_log.len().saturating_add(state.durable_log.len());
-    let actual_records = u64::try_from(current_records).unwrap_or(u64::MAX).saturating_add(SINGLE_AFFECTED_ITEM);
+    let current_records = state
+        .buffered_log
+        .len()
+        .checked_add(state.durable_log.len())
+        .ok_or_else(|| vec![DurabilityIssue::CollectionLimitExceeded])?;
+    let actual_records = u64::try_from(current_records)
+        .ok()
+        .and_then(|count| count.checked_add(SINGLE_AFFECTED_ITEM))
+        .ok_or_else(|| vec![DurabilityIssue::CollectionLimitExceeded])?;
     if actual_records > profile.max_log_records {
         issues.push(DurabilityIssue::OperationLimitExceeded {
             actual: actual_records,
@@ -167,7 +171,11 @@ pub fn scan_log(state: &DurableState, start_sequence: u64, limit: u64) -> Result
         return Err(DurabilityIssue::ZeroLimit("log-scan-limit"));
     }
     let limit = usize::try_from(limit).map_err(|_| DurabilityIssue::CollectionLimitExceeded)?;
-    let mut records = Vec::new();
+    if limit > MAX_DURABILITY_COLLECTION_ITEMS {
+        return Err(DurabilityIssue::CollectionLimitExceeded);
+    }
+    let mut records =
+        Vec::with_capacity(limit.min(state.durable_log.len().saturating_add(state.buffered_log.len())));
     let mut continuation = None;
     for record in state
         .durable_log
@@ -203,7 +211,8 @@ pub fn apply_atomic_batch(
     let mut issues = state_issues(profile, state);
     validate_batch_domain(state, request, &mut issues);
     validate_level(profile, &request.domain, request.durability, &mut issues);
-    let operation_count = u64::try_from(request.mutations.len()).unwrap_or(u64::MAX);
+    let operation_count =
+        u64::try_from(request.mutations.len()).map_err(|_| vec![DurabilityIssue::CollectionLimitExceeded])?;
     if operation_count == 0 {
         issues.push(DurabilityIssue::EmptyField("batch-mutations"));
     }
@@ -214,7 +223,13 @@ pub fn apply_atomic_batch(
             maximum: maximum_operations,
         });
     }
-    let batch_bytes = validate_mutations(profile, state, &request.mutations, &mut issues);
+    let batch_bytes = match validate_mutations(profile, state, &request.mutations, &mut issues) {
+        Ok(bytes) => bytes,
+        Err(issue) => {
+            issues.push(issue);
+            return Err(issues);
+        }
+    };
     let maximum_bytes = request.domain.max_bytes.min(profile.max_operation_bytes);
     if batch_bytes > maximum_bytes {
         issues.push(DurabilityIssue::ByteLimitExceeded {
@@ -231,7 +246,8 @@ pub fn apply_atomic_batch(
     for mutation in &request.mutations {
         apply_ordered_mutation(&mut next, mutation)?;
     }
-    let ordered_entry_count = u64::try_from(next.ordered.len()).unwrap_or(u64::MAX);
+    let ordered_entry_count =
+        u64::try_from(next.ordered.len()).map_err(|_| vec![DurabilityIssue::CollectionLimitExceeded])?;
     if ordered_entry_count > profile.max_ordered_entries {
         return Err(vec![DurabilityIssue::OperationLimitExceeded {
             actual: ordered_entry_count,
@@ -269,9 +285,12 @@ pub fn scan_ordered(state: &DurableState, request: &OrderedScanRequest) -> Resul
         return Err(DurabilityIssue::KeyRangeInvalid);
     }
     let limit = usize::try_from(request.limit).map_err(|_| DurabilityIssue::CollectionLimitExceeded)?;
-    let start = request.start_inclusive.as_ref().map_or(Bound::Unbounded, Bound::Included);
-    let end = request.end_exclusive.as_ref().map_or(Bound::Unbounded, Bound::Excluded);
-    let mut entries = Vec::new();
+    if limit > MAX_DURABILITY_COLLECTION_ITEMS {
+        return Err(DurabilityIssue::CollectionLimitExceeded);
+    }
+    let start = request.start_inclusive.as_ref().map_or(std::ops::Bound::Unbounded, std::ops::Bound::Included);
+    let end = request.end_exclusive.as_ref().map_or(std::ops::Bound::Unbounded, std::ops::Bound::Excluded);
+    let mut entries = Vec::with_capacity(limit.min(state.ordered.len()));
     let mut continuation = None;
     for (key, value) in state.ordered.range::<Vec<u8>, _>((start, end)) {
         if entries.len() == limit {
@@ -297,12 +316,15 @@ pub fn create_snapshot(
         ("snapshot-content-ref", request.content_ref.as_str()),
         ("ordered-state-ref", request.ordered_state_ref.as_str()),
     ] {
-        if !valid_blake3_ref(content_ref) {
+        if !crate::fabric::valid_blake3_ref(content_ref) {
             issues.push(DurabilityIssue::MalformedContentRef(label));
         }
     }
-    let next_snapshot_count = state.snapshots.len().saturating_add(1);
-    if u64::try_from(next_snapshot_count).unwrap_or(u64::MAX) > profile.max_snapshots {
+    let next_snapshot_count = u64::try_from(state.snapshots.len())
+        .ok()
+        .and_then(|count| count.checked_add(SINGLE_AFFECTED_ITEM))
+        .ok_or_else(|| vec![DurabilityIssue::CollectionLimitExceeded])?;
+    if next_snapshot_count > profile.max_snapshots {
         issues.push(DurabilityIssue::SnapshotLimitExceeded);
     }
     if state.snapshots.contains_key(&request.snapshot_ref) {
@@ -555,10 +577,13 @@ fn validate_payload(
     if value.is_empty() {
         issues.push(DurabilityIssue::EmptyValue);
     }
-    if !valid_blake3_ref(value_ref) {
+    if !crate::fabric::valid_blake3_ref(value_ref) {
         issues.push(DurabilityIssue::MalformedContentRef("value-ref"));
     }
-    let value_bytes = u64::try_from(value.len()).unwrap_or(u64::MAX);
+    let Ok(value_bytes) = u64::try_from(value.len()) else {
+        issues.push(DurabilityIssue::CollectionLimitExceeded);
+        return;
+    };
     if value_bytes > profile.max_operation_bytes {
         issues.push(DurabilityIssue::ByteLimitExceeded {
             actual: value_bytes,
@@ -568,14 +593,17 @@ fn validate_payload(
     let projected = state
         .buffered_bytes
         .checked_add(state.durable_bytes)
-        .and_then(|total| total.checked_add(value_bytes))
-        .unwrap_or(u64::MAX);
-    let maximum = state.descriptor.quota_bytes.min(profile.max_namespace_bytes);
-    if projected > maximum {
-        issues.push(DurabilityIssue::NamespaceQuotaExceeded {
-            actual: projected,
-            maximum,
-        });
+        .and_then(|total| total.checked_add(value_bytes));
+    if let Some(projected) = projected {
+        let maximum = state.descriptor.quota_bytes.min(profile.max_namespace_bytes);
+        if projected > maximum {
+            issues.push(DurabilityIssue::NamespaceQuotaExceeded {
+                actual: projected,
+                maximum,
+            });
+        }
+    } else {
+        issues.push(DurabilityIssue::CollectionLimitExceeded);
     }
 }
 
@@ -600,31 +628,33 @@ fn validate_mutations(
     state: &DurableState,
     mutations: &[OrderedMutation],
     issues: &mut Vec<DurabilityIssue>,
-) -> u64 {
+) -> Result<u64, DurabilityIssue> {
     let mut bytes = 0u64;
     for mutation in mutations {
-        let (key, value, value_ref, precondition) = match mutation {
+        let (key, put, precondition) = match mutation {
             OrderedMutation::Put {
                 key,
                 value,
                 value_ref,
                 precondition,
-            } => (key, Some(value.as_slice()), Some(value_ref.as_str()), precondition),
-            OrderedMutation::Delete { key, precondition } => (key, None, None, precondition),
+            } => (key, Some((value.as_slice(), value_ref.as_str())), precondition),
+            OrderedMutation::Delete { key, precondition } => (key, None, precondition),
         };
         if key.is_empty() {
             issues.push(DurabilityIssue::EmptyKey);
         }
-        bytes = bytes.saturating_add(u64::try_from(key.len()).unwrap_or(u64::MAX));
-        if let Some(value) = value {
-            validate_payload(profile, state, value, value_ref.unwrap_or_default(), issues);
-            bytes = bytes.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+        let key_bytes = u64::try_from(key.len()).map_err(|_| DurabilityIssue::CollectionLimitExceeded)?;
+        bytes = bytes.checked_add(key_bytes).ok_or(DurabilityIssue::CollectionLimitExceeded)?;
+        if let Some((value, value_ref)) = put {
+            validate_payload(profile, state, value, value_ref, issues);
+            let value_bytes = u64::try_from(value.len()).map_err(|_| DurabilityIssue::CollectionLimitExceeded)?;
+            bytes = bytes.checked_add(value_bytes).ok_or(DurabilityIssue::CollectionLimitExceeded)?;
         }
         if !precondition_matches(state.ordered.get(key), precondition) {
             issues.push(DurabilityIssue::PreconditionFailed);
         }
     }
-    bytes
+    Ok(bytes)
 }
 
 fn precondition_matches(current: Option<&VersionedValue>, precondition: &ValuePrecondition) -> bool {
@@ -674,13 +704,16 @@ fn reserve_effect(
     if transaction_id.is_empty() {
         issues.push(DurabilityIssue::EmptyField("effect-transaction-id"));
     }
-    if !valid_blake3_ref(operation_ref) {
+    if !crate::fabric::valid_blake3_ref(operation_ref) {
         issues.push(DurabilityIssue::MalformedContentRef("effect-operation-ref"));
     }
     if state.effects.contains_key(transaction_id) {
         issues.push(DurabilityIssue::EffectAlreadyExists);
     }
-    let projected = u64::try_from(state.effects.len()).unwrap_or(u64::MAX).saturating_add(SINGLE_AFFECTED_ITEM);
+    let projected = u64::try_from(state.effects.len())
+        .ok()
+        .and_then(|count| count.checked_add(SINGLE_AFFECTED_ITEM))
+        .ok_or_else(|| vec![DurabilityIssue::CollectionLimitExceeded])?;
     if projected > profile.max_effect_transactions {
         issues.push(DurabilityIssue::EffectLimitExceeded);
     }
@@ -803,7 +836,7 @@ fn effect_transition(
     }
 }
 
-fn effect_generation(command: &EffectTransactionCommand) -> u64 {
+const fn effect_generation(command: &EffectTransactionCommand) -> u64 {
     match command {
         EffectTransactionCommand::Reserve { generation, .. }
         | EffectTransactionCommand::Commit { generation, .. }
@@ -816,7 +849,10 @@ fn effect_generation(command: &EffectTransactionCommand) -> u64 {
 
 fn collect_log_gap_diagnostics(log: &[LogRecord], diagnostics: &mut Vec<DurabilityIssue>) {
     for pair in log.windows(ADJACENT_PAIR_WIDTH) {
-        let expected = pair[0].sequence.saturating_add(SINGLE_AFFECTED_ITEM);
+        let Some(expected) = pair[0].sequence.checked_add(SINGLE_AFFECTED_ITEM) else {
+            diagnostics.push(DurabilityIssue::SequenceOverflow);
+            continue;
+        };
         if pair[1].sequence != expected {
             diagnostics.push(DurabilityIssue::LogGap {
                 expected,
@@ -832,7 +868,9 @@ fn recovery_disposition(diagnostics: &[DurabilityIssue], inventory: &RecoveryInv
     }
     let has_corruption = diagnostics
         .iter()
-        .any(|issue| matches!(issue, DurabilityIssue::SnapshotCorrupt | DurabilityIssue::LogGap { .. }));
+        .any(|issue| {
+            matches!(issue, DurabilityIssue::SnapshotCorrupt | DurabilityIssue::LogGap { .. } | DurabilityIssue::SequenceOverflow)
+        });
     let has_uncertain = diagnostics.iter().any(|issue| matches!(issue, DurabilityIssue::UnresolvedEffect(_)));
     if has_corruption && inventory.permit_quarantine {
         RecoveryDisposition::QuarantineRequired

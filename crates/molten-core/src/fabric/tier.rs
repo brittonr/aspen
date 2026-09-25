@@ -1,6 +1,3 @@
-use super::MAX_FABRIC_COLLECTION_ITEMS;
-use super::has_duplicates;
-
 const REQUIRED_SYSTEM_EXTENSION_EVIDENCE_COUNT: usize = 6;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -148,32 +145,32 @@ pub fn validate_extension_tier(
 
     let mut admitted_authorities = request.requested_authorities.clone();
     admitted_authorities.sort();
-    let mut supporting_evidence = request.admission_evidence.clone();
-    supporting_evidence.sort();
+    let mut evidence = request.admission_evidence.clone();
+    evidence.sort();
     Ok(ExtensionTierAdmission {
         tier: request.tier,
         admitted_authorities,
-        supporting_evidence,
+        supporting_evidence: evidence,
     })
 }
 
 fn validate_tier_bounds(request: &ExtensionTierRequest, issues: &mut Vec<ExtensionTierIssue>) {
-    if request.requested_authorities.len() > MAX_FABRIC_COLLECTION_ITEMS {
+    if request.requested_authorities.len() > super::MAX_FABRIC_COLLECTION_ITEMS {
         issues.push(ExtensionTierIssue::TooManyAuthorities {
             actual: request.requested_authorities.len(),
-            maximum: MAX_FABRIC_COLLECTION_ITEMS,
+            maximum: super::MAX_FABRIC_COLLECTION_ITEMS,
         });
     }
-    if has_duplicates(&request.requested_authorities) {
+    if super::has_duplicates(&request.requested_authorities) {
         issues.push(ExtensionTierIssue::DuplicateAuthority);
     }
-    if request.admission_evidence.len() > MAX_FABRIC_COLLECTION_ITEMS {
+    if request.admission_evidence.len() > super::MAX_FABRIC_COLLECTION_ITEMS {
         issues.push(ExtensionTierIssue::TooManyEvidenceEntries {
             actual: request.admission_evidence.len(),
-            maximum: MAX_FABRIC_COLLECTION_ITEMS,
+            maximum: super::MAX_FABRIC_COLLECTION_ITEMS,
         });
     }
-    if has_duplicates(&request.admission_evidence) {
+    if super::has_duplicates(&request.admission_evidence) {
         issues.push(ExtensionTierIssue::DuplicateEvidence);
     }
 }

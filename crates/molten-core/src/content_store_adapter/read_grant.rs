@@ -1,6 +1,5 @@
-use crate::fabric::valid_blake3_ref;
-
 pub const MAX_CONTENT_READERS: usize = 16;
+const READER_KEY_HEX_CHAR_COUNT: usize = 64;
 
 /// A local operator-configured read grant, not a verified UCAN credential.
 /// Possession of a manifest, pin, locator, or transport identity cannot create it.
@@ -26,7 +25,7 @@ impl ContentReadGrant {
         manifest_ref: String,
         mut reader_keys: Vec<String>,
     ) -> Result<Self, ContentReadGrantRejection> {
-        if !valid_blake3_ref(&policy_ref) || !valid_blake3_ref(&manifest_ref) {
+        if !crate::fabric::valid_blake3_ref(&policy_ref) || !crate::fabric::valid_blake3_ref(&manifest_ref) {
             return Err(ContentReadGrantRejection::InvalidRef);
         }
         if reader_keys.is_empty() || reader_keys.len() > MAX_CONTENT_READERS {
@@ -60,7 +59,8 @@ impl ContentReadGrant {
 }
 
 pub fn valid_reader_key(key: &str) -> bool {
-    key.len() == 64 && key.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    key.len() == READER_KEY_HEX_CHAR_COUNT
+        && key.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 #[cfg(test)]

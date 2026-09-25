@@ -3,7 +3,7 @@ use molten_core::node_startup::{BUNDLE_SCHEMA, Cohort, Descriptor, Member, POLIC
 
 // In-memory test data only. No fixture exporter, startup token, or runtime activation path.
 pub(crate) fn fixture() -> (TrustedCohort, Descriptor, Vec<Vec<u8>>) {
-    let manifest = b"[workspace.metadata.octet]\ndefault_scope = [\"-p\", \"molten-node-runtime\", \"-p\", \"molten-core\", \"-p\", \"molten-node-host\"]\ncargo_check_args = [\"--all-targets\"]\n";
+    let manifest = b"[workspace.metadata.octet]\ndefault_scope = [\"-p\", \"molten-node-runtime\", \"-p\", \"molten-node-core\", \"-p\", \"molten-node-host\"]\ncargo_check_args = [\"--all-targets\"]\n";
     let dylint = b"[octet]\ndisabled_lints = []\n";
     let expected = explicit_metadata(std::str::from_utf8(manifest).unwrap(), dylint, DEFAULT_GATE_COMMAND).unwrap();
     let mut members = vec![
@@ -14,8 +14,8 @@ pub(crate) fn fixture() -> (TrustedCohort, Descriptor, Vec<Vec<u8>>) {
         b"[toolchain]\nchannel = \"nightly-2026-05-26\"\n".to_vec(),
     ];
     let paths = [
-        "crates/molten-core/Cargo.toml",
-        "crates/molten-core/src/lib.rs",
+        "crates/molten-node-core/Cargo.toml",
+        "crates/molten-node-core/src/lib.rs",
         "crates/molten-node-host/Cargo.toml",
         "crates/molten-node-host/src/lib.rs",
         "crates/molten-node-runtime/Cargo.toml",
@@ -81,11 +81,14 @@ pub(crate) fn fixture() -> (TrustedCohort, Descriptor, Vec<Vec<u8>>) {
         })
         .collect();
     runtime_paths.sort_unstable();
+    let mut core_paths = package_paths("crates/molten-core/");
+    core_paths.extend(package_paths("crates/molten-node-core/src/"));
+    core_paths.sort_unstable();
     members.push(serde_json::to_vec(&serde_json::json!({
         "schema": "molten.node-build-inputs.v1",
         "executable_target": "molten-node",
         "units": [
-            {"package": "molten-core", "target": "lib", "source_paths": package_paths("crates/molten-core/")},
+            {"package": "molten-node-core", "target": "lib", "source_paths": core_paths},
             {"package": "molten-node-host", "target": "lib", "source_paths": package_paths("crates/molten-node-host/")},
             {"package": "molten-node-runtime", "target": "bin/molten-node",
                 "source_paths": ["crates/molten-node-runtime/src/bin/molten-node.rs"]},
@@ -225,6 +228,11 @@ fn narrowed_scope_baselines_and_suppression_are_rejected() {
     ] {
         assert!(explicit_metadata(manifest, config.as_bytes(), DEFAULT_GATE_COMMAND).is_err());
     }
+    let broad_core_scope = manifest.replace("\"molten-node-core\"", "\"molten-core\"");
+    assert_eq!(
+        explicit_metadata(&broad_core_scope, include_bytes!("../../../dylint.toml"), DEFAULT_GATE_COMMAND).unwrap_err(),
+        "startup-evidence-workspace-scope"
+    );
     let (mut p, mut d, mut m) = fixture();
     m[6] = b"cargo octet check -p molten --artifact-dir target/octet --baseline baseline.json".to_vec();
     repin_test_data(&mut p, &mut d, &m);

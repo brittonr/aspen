@@ -1,9 +1,3 @@
-use super::FabricNonClaim;
-use super::FabricPortClass;
-use super::MAX_FABRIC_COLLECTION_ITEMS;
-use super::has_duplicates;
-use super::validate_required_non_claims;
-
 pub const FABRIC_REFERENCE_MATRIX_SCHEMA: &str = "molten.fabric.reference-matrix.v1";
 
 const REFERENCE_SYSTEM_COUNT: usize = 3;
@@ -32,13 +26,13 @@ pub const REQUIRED_REFERENCE_SYSTEMS: [ReferenceSystemKind; REFERENCE_SYSTEM_COU
     ReferenceSystemKind::DistributedScheduler,
 ];
 
-pub const BASE_REFERENCE_CAPABILITIES: [FabricPortClass; BASE_CAPABILITY_COUNT] = [
-    FabricPortClass::Authority,
-    FabricPortClass::Resources,
-    FabricPortClass::DurableState,
-    FabricPortClass::Transport,
-    FabricPortClass::Scheduling,
-    FabricPortClass::Simulation,
+pub const BASE_REFERENCE_CAPABILITIES: [super::FabricPortClass; BASE_CAPABILITY_COUNT] = [
+    super::FabricPortClass::Authority,
+    super::FabricPortClass::Resources,
+    super::FabricPortClass::DurableState,
+    super::FabricPortClass::Transport,
+    super::FabricPortClass::Scheduling,
+    super::FabricPortClass::Simulation,
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -89,10 +83,10 @@ pub struct SemanticOwnership {
 pub struct ReferenceSystemMatrix {
     pub schema: String,
     pub system: ReferenceSystemKind,
-    pub capabilities: Vec<FabricPortClass>,
+    pub capabilities: Vec<super::FabricPortClass>,
     pub semantics: Vec<SemanticOwnership>,
     pub ambient_accesses: Vec<String>,
-    pub non_claims: Vec<FabricNonClaim>,
+    pub non_claims: Vec<super::FabricNonClaim>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -121,7 +115,7 @@ pub enum ReferenceMatrixIssue {
     DuplicateCapability(ReferenceSystemKind),
     MissingCapability {
         system: ReferenceSystemKind,
-        capability: FabricPortClass,
+        capability: super::FabricPortClass,
     },
     TooManySemantics {
         system: ReferenceSystemKind,
@@ -152,7 +146,7 @@ pub enum ReferenceMatrixIssue {
     DuplicateNonClaim(ReferenceSystemKind),
     MissingNonClaim {
         system: ReferenceSystemKind,
-        non_claim: FabricNonClaim,
+        non_claim: super::FabricNonClaim,
     },
 }
 
@@ -198,19 +192,19 @@ fn reference_matrix(system: ReferenceSystemKind, semantics: &[ReferenceSemantic]
         schema: FABRIC_REFERENCE_MATRIX_SCHEMA.to_string(),
         system,
         capabilities: vec![
-            FabricPortClass::Authority,
-            FabricPortClass::Transport,
-            FabricPortClass::DurableState,
-            FabricPortClass::Time,
-            FabricPortClass::Scheduling,
-            FabricPortClass::Membership,
-            FabricPortClass::Placement,
-            FabricPortClass::Consistency,
-            FabricPortClass::Supervision,
-            FabricPortClass::Policy,
-            FabricPortClass::Resources,
-            FabricPortClass::Simulation,
-            FabricPortClass::Evidence,
+            super::FabricPortClass::Authority,
+            super::FabricPortClass::Transport,
+            super::FabricPortClass::DurableState,
+            super::FabricPortClass::Time,
+            super::FabricPortClass::Scheduling,
+            super::FabricPortClass::Membership,
+            super::FabricPortClass::Placement,
+            super::FabricPortClass::Consistency,
+            super::FabricPortClass::Supervision,
+            super::FabricPortClass::Policy,
+            super::FabricPortClass::Resources,
+            super::FabricPortClass::Simulation,
+            super::FabricPortClass::Evidence,
         ],
         semantics: semantics
             .iter()
@@ -225,15 +219,14 @@ fn reference_matrix(system: ReferenceSystemKind, semantics: &[ReferenceSemantic]
 }
 
 fn validate_matrix_set(matrices: &[ReferenceSystemMatrix], issues: &mut Vec<ReferenceMatrixIssue>) {
-    if matrices.len() > MAX_FABRIC_COLLECTION_ITEMS {
+    if matrices.len() > super::MAX_FABRIC_COLLECTION_ITEMS {
         issues.push(ReferenceMatrixIssue::TooManyMatrices {
             actual: matrices.len(),
-            maximum: MAX_FABRIC_COLLECTION_ITEMS,
+            maximum: super::MAX_FABRIC_COLLECTION_ITEMS,
         });
     }
-    let systems = matrices.iter().map(|matrix| matrix.system).collect::<Vec<_>>();
     for system in REQUIRED_REFERENCE_SYSTEMS {
-        let count = systems.iter().filter(|candidate| **candidate == system).count();
+        let count = matrices.iter().filter(|matrix| matrix.system == system).count();
         if count == 0 {
             issues.push(ReferenceMatrixIssue::MissingSystem(system));
         }
@@ -258,14 +251,14 @@ fn validate_matrix(matrix: &ReferenceSystemMatrix, issues: &mut Vec<ReferenceMat
 }
 
 fn validate_capabilities(matrix: &ReferenceSystemMatrix, issues: &mut Vec<ReferenceMatrixIssue>) {
-    if matrix.capabilities.len() > MAX_FABRIC_COLLECTION_ITEMS {
+    if matrix.capabilities.len() > super::MAX_FABRIC_COLLECTION_ITEMS {
         issues.push(ReferenceMatrixIssue::TooManyCapabilities {
             system: matrix.system,
             actual: matrix.capabilities.len(),
-            maximum: MAX_FABRIC_COLLECTION_ITEMS,
+            maximum: super::MAX_FABRIC_COLLECTION_ITEMS,
         });
     }
-    if has_duplicates(&matrix.capabilities) {
+    if super::has_duplicates(&matrix.capabilities) {
         issues.push(ReferenceMatrixIssue::DuplicateCapability(matrix.system));
     }
     for capability in BASE_REFERENCE_CAPABILITIES {
@@ -279,19 +272,19 @@ fn validate_capabilities(matrix: &ReferenceSystemMatrix, issues: &mut Vec<Refere
 }
 
 fn validate_semantics(matrix: &ReferenceSystemMatrix, issues: &mut Vec<ReferenceMatrixIssue>) {
-    if matrix.semantics.len() > MAX_FABRIC_COLLECTION_ITEMS {
+    if matrix.semantics.len() > super::MAX_FABRIC_COLLECTION_ITEMS {
         issues.push(ReferenceMatrixIssue::TooManySemantics {
             system: matrix.system,
             actual: matrix.semantics.len(),
-            maximum: MAX_FABRIC_COLLECTION_ITEMS,
+            maximum: super::MAX_FABRIC_COLLECTION_ITEMS,
         });
     }
-    let semantics = matrix.semantics.iter().map(|ownership| ownership.semantic).collect::<Vec<_>>();
-    for semantic in &semantics {
-        if semantics.iter().filter(|candidate| *candidate == semantic).count() > 1 {
+    for ownership in &matrix.semantics {
+        let semantic = ownership.semantic;
+        if matrix.semantics.iter().filter(|candidate| candidate.semantic == semantic).count() > 1 {
             let issue = ReferenceMatrixIssue::DuplicateSemantic {
                 system: matrix.system,
-                semantic: *semantic,
+                semantic,
             };
             if !issues.contains(&issue) {
                 issues.push(issue);
@@ -320,11 +313,11 @@ fn validate_semantics(matrix: &ReferenceSystemMatrix, issues: &mut Vec<Reference
 }
 
 fn validate_ambient_access(matrix: &ReferenceSystemMatrix, issues: &mut Vec<ReferenceMatrixIssue>) {
-    if matrix.ambient_accesses.len() > MAX_FABRIC_COLLECTION_ITEMS {
+    if matrix.ambient_accesses.len() > super::MAX_FABRIC_COLLECTION_ITEMS {
         issues.push(ReferenceMatrixIssue::TooManyAmbientAccesses {
             system: matrix.system,
             actual: matrix.ambient_accesses.len(),
-            maximum: MAX_FABRIC_COLLECTION_ITEMS,
+            maximum: super::MAX_FABRIC_COLLECTION_ITEMS,
         });
     }
     for access in &matrix.ambient_accesses {
@@ -336,10 +329,10 @@ fn validate_ambient_access(matrix: &ReferenceSystemMatrix, issues: &mut Vec<Refe
 }
 
 fn validate_matrix_non_claims(matrix: &ReferenceSystemMatrix, issues: &mut Vec<ReferenceMatrixIssue>) {
-    if has_duplicates(&matrix.non_claims) {
+    if super::has_duplicates(&matrix.non_claims) {
         issues.push(ReferenceMatrixIssue::DuplicateNonClaim(matrix.system));
     }
-    validate_required_non_claims(&matrix.non_claims, |missing| {
+    super::validate_required_non_claims(&matrix.non_claims, |missing| {
         issues.push(ReferenceMatrixIssue::MissingNonClaim {
             system: matrix.system,
             non_claim: missing,
@@ -391,7 +384,7 @@ mod tests {
     fn reference_matrix_reports_missing_port_ambient_bypass_and_semantic_leakage() {
         let mut matrices = default_reference_system_matrices();
         let matrix = matrices.first_mut().expect("transactional matrix");
-        matrix.capabilities.retain(|capability| *capability != FabricPortClass::Simulation);
+        matrix.capabilities.retain(|capability| *capability != crate::fabric::FabricPortClass::Simulation);
         matrix.ambient_accesses.push("std.fs.direct".to_string());
         let semantic = matrix.semantics.first_mut().expect("transaction semantic");
         semantic.owner = SemanticOwner::FabricCore;
@@ -400,7 +393,7 @@ mod tests {
 
         assert!(issues.contains(&ReferenceMatrixIssue::MissingCapability {
             system: ReferenceSystemKind::TransactionalKeyValue,
-            capability: FabricPortClass::Simulation,
+            capability: crate::fabric::FabricPortClass::Simulation,
         }));
         assert!(issues.contains(&ReferenceMatrixIssue::AmbientAccessBypass {
             system: ReferenceSystemKind::TransactionalKeyValue,

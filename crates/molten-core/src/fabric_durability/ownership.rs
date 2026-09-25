@@ -38,7 +38,7 @@ pub enum CasLeaseDisposition {
 }
 
 impl CasLeaseDisposition {
-    fn identity(self) -> &'static str {
+    const fn identity(self) -> &'static str {
         match self {
             Self::Acquire => "acquire",
             Self::Reject => "reject",
@@ -56,7 +56,7 @@ pub enum CasLeaseRejection {
 }
 
 impl CasLeaseRejection {
-    fn identity(self) -> &'static str {
+    const fn identity(self) -> &'static str {
         match self {
             Self::InvalidOwner => "invalid-owner",
             Self::FixedMembership => "fixed-membership",
@@ -154,7 +154,7 @@ fn decision_identity(
     format!("blake3:{}", hasher.finalize().to_hex())
 }
 
-fn membership_identity(posture: MembershipPosture) -> &'static str {
+const fn membership_identity(posture: MembershipPosture) -> &'static str {
     match posture {
         MembershipPosture::ReplaceableNodes => "replaceable-nodes",
         MembershipPosture::FixedMembership => "fixed-membership",

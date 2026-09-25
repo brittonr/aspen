@@ -4474,14 +4474,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "molten-node-core"
+version = "0.1.0"
+dependencies = [
+ "artifact-auth-core",
+ "blake3",
+ "serde",
+]
+
+[[package]]
 name = "molten-node-host"
 version = "0.1.0"
 dependencies = [
  "cap-fs-ext",
  "cap-std",
  "cap-tempfile",
- "molten-core",
- "toml",
 ]
 
 [[package]]
@@ -4504,7 +4511,7 @@ dependencies = [
  "iroh-docs",
  "iroh-gossip",
  "kamacite-core",
- "molten-core",
+ "molten-node-core",
  "molten-node-host",
  "n0-future",
  "preserves 5.0.0-rc.7",
