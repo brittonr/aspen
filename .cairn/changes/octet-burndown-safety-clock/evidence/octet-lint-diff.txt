@@ -1,0 +1,30 @@
+# workspace (cargo octet check), base = octet-burndown-safety-collections-runtime
+lint                                     findings          sites
+path_segment_repetition             1877 -> 1877     1038 -> 1038 
+excessive_file_length                550 -> 550       306 -> 306  
+borrowed_argument_types              368 -> 368       184 -> 184  
+function_length                      204 -> 204       128 -> 128  
+too_many_parameters                  143 -> 143        72 -> 72   
+usize_in_public_api                   32 -> 32         16 -> 16   
+underscore_in_module_filename         31 -> 31         15 -> 15   
+module_file_count                     20 -> 20         11 -> 11   
+ambient_clock                         17 -> 0           9 -> 0    
+ambient_env                           14 -> 14          5 -> 5    
+unbounded_channel                      9 -> 9           9 -> 9    
+no_recursion                           2 -> 0           1 -> 0    
+TOTAL                               3267 -> 3248     1794 -> 1784 
+
+# -p molten --lib
+lint                                     findings          sites
+path_segment_repetition              794 -> 794       794 -> 794  
+excessive_file_length                230 -> 230       230 -> 230  
+borrowed_argument_types              180 -> 180       180 -> 180  
+function_length                       71 -> 71         71 -> 71   
+too_many_parameters                   70 -> 70         70 -> 70   
+usize_in_public_api                   16 -> 16         16 -> 16   
+ambient_clock                          8 -> 0           8 -> 0    
+underscore_in_module_filename          7 -> 7           7 -> 7    
+ambient_env                            6 -> 6           4 -> 4    
+module_file_count                      5 -> 5           5 -> 5    
+no_recursion                           1 -> 0           1 -> 0    
+TOTAL                               1388 -> 1379     1386 -> 1377 

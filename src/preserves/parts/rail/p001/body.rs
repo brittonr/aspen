@@ -1771,6 +1771,9 @@ pub fn contains_structural_content_ref(value: &IoValue, target_ref: &str) -> Res
     Ok(find_structural_content_ref(value, target_ref)?.is_some())
 }
 
+// The scan keeps an explicit stack of open containers instead of recursing. Each frame holds the not yet visited
+// children of one container on the current path, so the walk keeps the preorder, the first match, and the first
+// bound failure of a recursive walk. The stack never exceeds the admitted depth.
 fn visit_structural_value<F>(
     value: &IoValue,
     scope: StructuralInspectionScope,
@@ -1778,6 +1781,62 @@ fn visit_structural_value<F>(
     state: &mut StructuralScanState,
     path: &mut Vec<String>,
 ) -> Result<Option<StructuralMatch>>
+where
+    F: FnMut(StructuralTokenKind, &str) -> bool,
+{
+    let mut frames = Vec::new();
+    match inspect_structural_node(value, scope, predicate, state, path)? {
+        StructuralNodeOutcome::Matched(found) => return Ok(Some(found)),
+        StructuralNodeOutcome::Children(children) => open_structural_frame(&mut frames, children, state)?,
+    }
+    while let Some(frame) = frames.last_mut() {
+        let Some((segment, child)) = frame.next() else {
+            frames.pop();
+            path.pop();
+            continue;
+        };
+        path.push(segment);
+        match inspect_structural_node(&child, scope, predicate, state, path)? {
+            StructuralNodeOutcome::Matched(found) => return Ok(Some(found)),
+            StructuralNodeOutcome::Children(children) if children.is_empty() => {
+                path.pop();
+            }
+            StructuralNodeOutcome::Children(children) => open_structural_frame(&mut frames, children, state)?,
+        }
+    }
+    Ok(None)
+}
+
+enum StructuralNodeOutcome {
+    Matched(StructuralMatch),
+    Children(Vec<(String, IoValue)>),
+}
+
+fn open_structural_frame(
+    frames: &mut impl crate::bounded::VecSink<std::vec::IntoIter<(String, IoValue)>>,
+    children: Vec<(String, IoValue)>,
+    state: &StructuralScanState,
+) -> Result<()> {
+    if children.is_empty() {
+        return Ok(());
+    }
+    crate::bounded::push_bounded(
+        frames,
+        children.into_iter(),
+        state.limits.max_depth,
+        "structural Preserves scan open containers",
+    )
+}
+
+// Counts and bounds one node, applies the scope predicates, and returns its children in preorder. Children past the
+// remaining node budget are not materialized, because reaching any of them would first exceed `max_nodes`.
+fn inspect_structural_node<F>(
+    value: &IoValue,
+    scope: StructuralInspectionScope,
+    predicate: &mut F,
+    state: &mut StructuralScanState,
+    path: &[String],
+) -> Result<StructuralNodeOutcome>
 where
     F: FnMut(StructuralTokenKind, &str) -> bool,
 {
@@ -1797,6 +1856,8 @@ where
             state.limits.max_depth
         )));
     }
+    let child_budget = state.limits.max_nodes.saturating_sub(state.visited_nodes).saturating_add(1);
+    let matched = |kind, token: &str| Ok(StructuralNodeOutcome::Matched(structural_match(kind, token, path)));
 
     if value.is_record() {
         let label = value.label();
@@ -1804,37 +1865,28 @@ where
             && scope.record_labels
             && predicate(StructuralTokenKind::RecordLabel, name.as_ref())
         {
-            return Ok(Some(structural_match(StructuralTokenKind::RecordLabel, name.as_ref(), path)));
+            return matched(StructuralTokenKind::RecordLabel, name.as_ref());
         }
-        path.push("label".to_string());
-        if let Some(found) = visit_structural_value(&value_to_iovalue(&label), scope, predicate, state, path)? {
-            return Ok(Some(found));
-        }
-        path.pop();
-        for (index, child) in value.iter().enumerate() {
-            path.push(format!("field[{index}]"));
-            if let Some(found) = visit_structural_value(&value_to_iovalue(&child), scope, predicate, state, path)? {
-                return Ok(Some(found));
-            }
-            path.pop();
-        }
-        return Ok(None);
+        let fields =
+            value.iter().enumerate().map(|(index, child)| (format!("field[{index}]"), value_to_iovalue(&child)));
+        let children = std::iter::once(("label".to_string(), value_to_iovalue(&label))).chain(fields);
+        return Ok(StructuralNodeOutcome::Children(children.take(child_budget).collect()));
     }
 
     if let Some(symbol) = value.as_symbol()
         && scope.symbols
         && predicate(StructuralTokenKind::Symbol, symbol.as_ref())
     {
-        return Ok(Some(structural_match(StructuralTokenKind::Symbol, symbol.as_ref(), path)));
+        return matched(StructuralTokenKind::Symbol, symbol.as_ref());
     }
     if let Some(text) = value.as_string() {
         if scope.strings && predicate(StructuralTokenKind::String, text.as_ref()) {
-            return Ok(Some(structural_match(StructuralTokenKind::String, text.as_ref(), path)));
+            return matched(StructuralTokenKind::String, text.as_ref());
         }
         if scope.content_refs && ContentRef::parse(text.as_ref()).is_ok()
             && predicate(StructuralTokenKind::ContentRef, text.as_ref())
         {
-            return Ok(Some(structural_match(StructuralTokenKind::ContentRef, text.as_ref(), path)));
+            return matched(StructuralTokenKind::ContentRef, text.as_ref());
         }
     }
     if let Some(bytes) = value.as_bytestring()
@@ -1842,37 +1894,33 @@ where
     {
         let token = content_ref_from_bytes(bytes.as_ref());
         if predicate(StructuralTokenKind::ByteString, &token) {
-            return Ok(Some(structural_match(StructuralTokenKind::ByteString, &token, path)));
+            return matched(StructuralTokenKind::ByteString, &token);
         }
     }
 
-    if value.is_sequence() || value.is_set() {
-        for (index, child) in value.iter().enumerate() {
-            path.push(format!("item[{index}]"));
-            if let Some(found) = visit_structural_value(&value_to_iovalue(&child), scope, predicate, state, path)? {
-                return Ok(Some(found));
-            }
-            path.pop();
-        }
-        return Ok(None);
-    }
-
-    if value.is_dictionary() {
-        for (index, (key, child)) in value.entries().enumerate() {
-            path.push(format!("entry[{index}].key"));
-            if let Some(found) = visit_structural_value(&value_to_iovalue(&key), scope, predicate, state, path)? {
-                return Ok(Some(found));
-            }
-            path.pop();
-            path.push(format!("entry[{index}].value"));
-            if let Some(found) = visit_structural_value(&value_to_iovalue(&child), scope, predicate, state, path)? {
-                return Ok(Some(found));
-            }
-            path.pop();
-        }
-    }
-
-    Ok(None)
+    let children = if value.is_sequence() || value.is_set() {
+        value
+            .iter()
+            .enumerate()
+            .map(|(index, child)| (format!("item[{index}]"), value_to_iovalue(&child)))
+            .take(child_budget)
+            .collect()
+    } else if value.is_dictionary() {
+        value
+            .entries()
+            .enumerate()
+            .flat_map(|(index, (key, child))| {
+                [
+                    (format!("entry[{index}].key"), value_to_iovalue(&key)),
+                    (format!("entry[{index}].value"), value_to_iovalue(&child)),
+                ]
+            })
+            .take(child_budget)
+            .collect()
+    } else {
+        Vec::new()
+    };
+    Ok(StructuralNodeOutcome::Children(children))
 }
 
 fn structural_match(kind: StructuralTokenKind, token: &str, path: &[String]) -> StructuralMatch {
@@ -2394,6 +2442,65 @@ mod tests {
         )
         .expect_err("bounded scan should fail");
         assert!(error.to_string().contains("structural Preserves scan exceeded"));
+    }
+
+    fn scan_nested_symbol(
+        text: &str,
+        limits: super::StructuralInspectionLimits,
+    ) -> super::Result<Option<super::StructuralMatch>> {
+        let value = super::parse_text(text)?;
+        super::find_structural_match_with_limits(&value, super::StructuralInspectionScope::all(), limits, |kind, token| {
+            kind == super::StructuralTokenKind::Symbol && token == "needle"
+        })
+    }
+
+    #[test]
+    fn structural_scan_reports_the_first_preorder_match_path() {
+        // r[verify molten.preserves_value_inspection.structural_scan]
+        let limits = super::StructuralInspectionLimits::default();
+        let nested = scan_nested_symbol("<outer [\"a\" <m needle>] {k: needle}>", limits).expect("scan nested value");
+        assert_eq!(nested.expect("record field match").path, vec!["$", "field[0]", "item[1]", "field[0]"]);
+        let value = scan_nested_symbol("[{k: needle}]", limits).expect("scan dictionary value");
+        assert_eq!(value.expect("dictionary value match").path, vec!["$", "item[0]", "entry[0].value"]);
+        let key = scan_nested_symbol("[{needle: 1}]", limits).expect("scan dictionary key");
+        assert_eq!(key.expect("dictionary key match").path, vec!["$", "item[0]", "entry[0].key"]);
+    }
+
+    #[test]
+    fn structural_scan_admits_the_exact_depth_and_node_bounds_and_denies_one_past() {
+        const NESTED: &str = "[[[other]]]";
+        const NESTED_DEPTH: usize = 4;
+        const NESTED_NODES: usize = 4;
+        let exact = super::StructuralInspectionLimits {
+            max_nodes: NESTED_NODES,
+            max_depth: NESTED_DEPTH,
+        };
+        assert!(scan_nested_symbol(NESTED, exact).expect("exact bounds admit the scan").is_none());
+        let shallow = super::StructuralInspectionLimits {
+            max_depth: NESTED_DEPTH - 1,
+            ..exact
+        };
+        let depth_error = scan_nested_symbol(NESTED, shallow).expect_err("one level past the depth bound denies");
+        assert!(depth_error.to_string().contains("exceeded depth 3"));
+        let small = super::StructuralInspectionLimits {
+            max_nodes: NESTED_NODES - 1,
+            ..exact
+        };
+        let node_error = scan_nested_symbol(NESTED, small).expect_err("one node past the node bound denies");
+        assert!(node_error.to_string().contains("exceeded 3 nodes"));
+    }
+
+    #[test]
+    fn structural_scan_bounds_wide_containers_by_the_node_budget() {
+        const WIDE_BUDGET: usize = 3;
+        let limits = super::StructuralInspectionLimits {
+            max_nodes: WIDE_BUDGET,
+            max_depth: super::DEFAULT_STRUCTURAL_SCAN_MAX_DEPTH,
+        };
+        let early = scan_nested_symbol("[other needle other other other]", limits).expect("match inside the budget");
+        assert_eq!(early.expect("early match").path, vec!["$", "item[1]"]);
+        let late = scan_nested_symbol("[other other other needle]", limits).expect_err("match past the budget denies");
+        assert!(late.to_string().contains("exceeded 3 nodes"));
     }
 
     #[test]

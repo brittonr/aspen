@@ -41,8 +41,8 @@ impl ChildGuard {
     }
 
     pub(super) fn wait_success(&mut self, timeout: std::time::Duration) -> crate::error::Result<()> {
-        let started = std::time::Instant::now();
-        while started.elapsed() < timeout {
+        let mut deadline = crate::fabric_time::SupervisionDeadline::after(timeout)?;
+        while !deadline.is_expired()? {
             if let Some(status) = self.child.try_wait().map_err(crate::error::MoltenError::from)? {
                 self.finished = true;
                 if status.success() {

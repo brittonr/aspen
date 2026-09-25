@@ -77,13 +77,15 @@ pub fn run_sightglass_process(
         super::model::PerformanceDenial::new(format!("Sightglass output bound is unsupported: {error}"))
     })?;
     let total_timeout = std::time::Duration::from_secs(invocation.profile.comparison.max_sightglass_run_seconds);
-    let started = std::time::Instant::now();
+    let mut suite_deadline =
+        crate::fabric_time::SupervisionDeadline::after(total_timeout).map_err(supervision_denial)?;
     let mut total_stdout_bytes = 0_usize;
     let mut diagnostic_stderr_bytes = Vec::new();
     let mut raw_measurements = Vec::<serde_json::Value>::new();
     for process_ordinal in 0..invocation.suite.sampling.processes {
-        let remaining_timeout =
-            total_timeout.checked_sub(started.elapsed()).filter(|duration| !duration.is_zero()).ok_or_else(|| {
+        let remaining_timeout = Some(suite_deadline.remaining().map_err(supervision_denial)?)
+            .filter(|duration| !duration.is_zero())
+            .ok_or_else(|| {
                 super::model::PerformanceDenial::new("Sightglass suite exceeded its admitted total runtime")
             })?;
         let remaining_stdout =
@@ -166,6 +168,10 @@ struct SightglassSubprocessOutput {
     stderr: Vec<u8>,
 }
 
+fn supervision_denial(error: crate::error::MoltenError) -> super::model::PerformanceDenial {
+    super::model::PerformanceDenial::new(format!("Sightglass supervision clock denied: {error}"))
+}
+
 fn run_sightglass_subprocess(
     runner: &std::path::Path,
     engine: &std::path::Path,
@@ -197,13 +203,13 @@ fn run_sightglass_subprocess(
         .ok_or_else(|| super::model::PerformanceDenial::new("Sightglass process stderr pipe is unavailable"))?;
     let stdout_reader = std::thread::spawn(move || read_bounded(stdout, stdout_limit));
     let stderr_reader = std::thread::spawn(move || read_bounded(stderr, MAX_DIAGNOSTIC_STDERR_BYTES));
-    let started = std::time::Instant::now();
+    let mut deadline = crate::fabric_time::SupervisionDeadline::after(timeout).map_err(supervision_denial)?;
     let status = loop {
         match child.try_wait().map_err(|error| {
             super::model::PerformanceDenial::new(format!("Sightglass process status failed: {error}"))
         })? {
             Some(status) => break status,
-            None if started.elapsed() >= timeout => {
+            None if deadline.is_expired().map_err(supervision_denial)? => {
                 let kill_diagnostic = child.kill().err().map_or_else(String::new, |error| format!(": {error}"));
                 let wait_diagnostic = child.wait().err().map_or_else(String::new, |error| format!(": {error}"));
                 let stdout_diagnostic = join_bounded_reader(stdout_reader, "stdout")

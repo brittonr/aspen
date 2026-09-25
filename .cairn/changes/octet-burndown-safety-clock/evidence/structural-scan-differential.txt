@@ -1,0 +1,163 @@
+mod throwaway_differential {
+    #![allow(clippy::all)]
+fn old_visit<F>(
+    value: &super::super::IoValue,
+    scope: super::super::StructuralInspectionScope,
+    predicate: &mut F,
+    state: &mut super::super::StructuralScanState,
+    path: &mut Vec<String>,
+) -> super::super::Result<Option<super::super::StructuralMatch>>
+where
+    F: FnMut(super::super::StructuralTokenKind, &str) -> bool,
+{
+    state.visited_nodes = state
+        .visited_nodes
+        .checked_add(1)
+        .ok_or_else(|| super::super::MoltenError::invalid_harness("structural Preserves scan node count overflow"))?;
+    if state.visited_nodes > state.limits.max_nodes {
+        return Err(super::super::MoltenError::invalid_harness(format!(
+            "structural Preserves scan exceeded {} nodes",
+            state.limits.max_nodes
+        )));
+    }
+    if path.len() > state.limits.max_depth {
+        return Err(super::super::MoltenError::invalid_harness(format!(
+            "structural Preserves scan exceeded depth {}",
+            state.limits.max_depth
+        )));
+    }
+
+    if value.is_record() {
+        let label = value.label();
+        if let Some(name) = label.as_symbol()
+            && scope.record_labels
+            && predicate(super::super::StructuralTokenKind::RecordLabel, name.as_ref())
+        {
+            return Ok(Some(super::super::structural_match(super::super::StructuralTokenKind::RecordLabel, name.as_ref(), path)));
+        }
+        path.push("label".to_string());
+        if let Some(found) = old_visit(&super::super::value_to_iovalue(&label), scope, predicate, state, path)? {
+            return Ok(Some(found));
+        }
+        path.pop();
+        for (index, child) in value.iter().enumerate() {
+            path.push(format!("field[{index}]"));
+            if let Some(found) = old_visit(&super::super::value_to_iovalue(&child), scope, predicate, state, path)? {
+                return Ok(Some(found));
+            }
+            path.pop();
+        }
+        return Ok(None);
+    }
+
+    if let Some(symbol) = value.as_symbol()
+        && scope.symbols
+        && predicate(super::super::StructuralTokenKind::Symbol, symbol.as_ref())
+    {
+        return Ok(Some(super::super::structural_match(super::super::StructuralTokenKind::Symbol, symbol.as_ref(), path)));
+    }
+    if let Some(text) = value.as_string() {
+        if scope.strings && predicate(super::super::StructuralTokenKind::String, text.as_ref()) {
+            return Ok(Some(super::super::structural_match(super::super::StructuralTokenKind::String, text.as_ref(), path)));
+        }
+        if scope.content_refs && super::super::ContentRef::parse(text.as_ref()).is_ok()
+            && predicate(super::super::StructuralTokenKind::ContentRef, text.as_ref())
+        {
+            return Ok(Some(super::super::structural_match(super::super::StructuralTokenKind::ContentRef, text.as_ref(), path)));
+        }
+    }
+    if let Some(bytes) = value.as_bytestring()
+        && scope.byte_strings
+    {
+        let token = super::super::content_ref_from_bytes(bytes.as_ref());
+        if predicate(super::super::StructuralTokenKind::ByteString, &token) {
+            return Ok(Some(super::super::structural_match(super::super::StructuralTokenKind::ByteString, &token, path)));
+        }
+    }
+
+    if value.is_sequence() || value.is_set() {
+        for (index, child) in value.iter().enumerate() {
+            path.push(format!("item[{index}]"));
+            if let Some(found) = old_visit(&super::super::value_to_iovalue(&child), scope, predicate, state, path)? {
+                return Ok(Some(found));
+            }
+            path.pop();
+        }
+        return Ok(None);
+    }
+
+    if value.is_dictionary() {
+        for (index, (key, child)) in value.entries().enumerate() {
+            path.push(format!("entry[{index}].key"));
+            if let Some(found) = old_visit(&super::super::value_to_iovalue(&key), scope, predicate, state, path)? {
+                return Ok(Some(found));
+            }
+            path.pop();
+            path.push(format!("entry[{index}].value"));
+            if let Some(found) = old_visit(&super::super::value_to_iovalue(&child), scope, predicate, state, path)? {
+                return Ok(Some(found));
+            }
+            path.pop();
+        }
+    }
+
+    Ok(None)
+}
+
+
+    fn gen_value(seed: &mut u64, depth: u32, out: &mut String, cref: &str) {
+        *seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        let r = (*seed >> 33) % 9;
+        let n = ((*seed >> 20) % 4) as usize;
+        if depth == 0 || r < 3 {
+            let atoms = ["needle", "other", "\"a\"", "m", "1", &format!("\"{cref}\""), "#t"];
+            out.push_str(&atoms[((*seed >> 40) % atoms.len() as u64) as usize].to_string());
+            return;
+        }
+        match r {
+            3 | 4 => { out.push('['); for _ in 0..n { gen_value(seed, depth - 1, out, cref); out.push(' '); } out.push(']'); }
+            5 | 6 => { out.push_str(if r == 5 { "<m " } else { "<outer " }); for _ in 0..n { gen_value(seed, depth - 1, out, cref); out.push(' '); } out.push('>'); }
+            _ => { out.push('{'); for i in 0..n { out.push_str(&format!("k{i}: ")); gen_value(seed, depth - 1, out, cref); out.push(' '); } out.push('}'); }
+        }
+    }
+
+    #[test]
+    fn iterative_scan_matches_recursive_scan() {
+        let cref = super::super::content_ref_from_bytes(b"diff");
+        let mut seed = 7_u64;
+        let mut compared = 0;
+        for case in 0..20000 {
+            let mut text = String::new();
+            gen_value(&mut seed, 6, &mut text, &cref);
+            let value = super::super::parse_text(&text).expect("generated text parses");
+            for (max_nodes, max_depth) in [(8192, 128), (5, 128), (1, 128), (12, 3), (30, 4), (3, 2), (0, 0)] {
+                let limits = super::super::StructuralInspectionLimits { max_nodes, max_depth };
+                for which in 0..4 {
+                    let pred = |kind: super::super::StructuralTokenKind, token: &str| match which {
+                        0 => kind == super::super::StructuralTokenKind::Symbol && token == "needle",
+                        1 => kind == super::super::StructuralTokenKind::RecordLabel && token == "m",
+                        2 => kind == super::super::StructuralTokenKind::ContentRef,
+                        _ => kind == super::super::StructuralTokenKind::String && token == "a",
+                    };
+                    let scopes = [super::super::StructuralInspectionScope::all(), super::super::StructuralInspectionScope::structural_markers(), super::super::StructuralInspectionScope::content_refs()];
+                    for scope in scopes {
+                        let new = super::super::find_structural_match_with_limits(&value, scope, limits, pred);
+                        let mut state = super::super::StructuralScanState { visited_nodes: 0, limits };
+                        let mut path = vec!["$".to_string()];
+                        let mut p2 = pred;
+                        let old = old_visit(&value, scope, &mut p2, &mut state, &mut path);
+                        match (new, old) {
+                            (Ok(a), Ok(b)) => assert_eq!(a, b, "case {case} {text}"),
+                            (Err(a), Err(b)) => assert_eq!(a.to_string(), b.to_string(), "case {case} {text}"),
+                            (a, b) => panic!("divergence case {case} {text}: {a:?} vs {b:?}"),
+                        }
+                        compared += 1;
+                    }
+                }
+            }
+        }
+        eprintln!("DIFFERENTIAL compared {compared} scans");
+    }
+}
+}
+DIFFERENTIAL compared 1680000 scans; iterative_scan_matches_recursive_scan ok (20000 generated values x 7 limit pairs x 4 predicates x 3 scopes)

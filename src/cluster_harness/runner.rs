@@ -550,8 +550,8 @@ fn execute_child(
             });
         }
     };
-    let started = std::time::Instant::now();
-    let timeout = std::time::Duration::from_millis(input.child_timeout_ms);
+    let mut deadline =
+        crate::fabric_time::SupervisionDeadline::after(std::time::Duration::from_millis(input.child_timeout_ms))?;
     let mut is_timed_out = false;
     let mut is_orphaned = false;
     let mut process_error = None;
@@ -567,7 +567,7 @@ fn execute_child(
                 break;
             }
         }
-        if started.elapsed() >= timeout {
+        if deadline.is_expired()? {
             is_timed_out = true;
             if child.kill().is_err() {
                 is_orphaned = true;

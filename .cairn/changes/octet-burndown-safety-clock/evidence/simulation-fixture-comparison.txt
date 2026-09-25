@@ -1,0 +1,3 @@
+# Base binary 8cb948d92 vs candidate: molten fabric-simulation run / shrink
+run: identical, 100 files
+shrink: identical, 3 files

@@ -195,13 +195,13 @@ impl ReapingChild {
         timeout: std::time::Duration,
         label: &str,
     ) -> crate::error::Result<std::process::ExitStatus> {
-        let started = std::time::Instant::now();
+        let mut deadline = crate::fabric_time::SupervisionDeadline::after(timeout)?;
         loop {
             if let Some(status) = self.try_wait()? {
                 self.finished = true;
                 return Ok(status);
             }
-            if started.elapsed() >= timeout {
+            if deadline.is_expired()? {
                 let _kill = self.child.kill();
                 let _wait = self.child.wait();
                 self.finished = true;
@@ -559,7 +559,7 @@ fn wait_for_handoff(
     handoff_path: &std::path::Path,
     timeout: std::time::Duration,
 ) -> crate::error::Result<()> {
-    let started = std::time::Instant::now();
+    let mut deadline = crate::fabric_time::SupervisionDeadline::after(timeout)?;
     loop {
         if handoff_path.is_file() {
             return Ok(());
@@ -570,7 +570,7 @@ fn wait_for_handoff(
                 "listener exited before endpoint handoff with {status}"
             )));
         }
-        if started.elapsed() >= timeout {
+        if deadline.is_expired()? {
             return Err(crate::error::MoltenError::invalid_harness(
                 "listener did not publish endpoint handoff before timeout",
             ));
