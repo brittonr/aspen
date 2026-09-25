@@ -1,0 +1,10 @@
+# README cargo run spot-runs (no --bin), Cargo.lock unchanged
+## spot1
+     Running `/home/brittonr/git/aspen-worktrees/octet-safety-target/debug/molten test run examples/two-actor.preserves --report-out target/molten-reports/two-actor.report.preserves`
+report blake3:a65df018e7c2b04c1db6024d60179fc01cbfa9375741181b718f87ff2db2ce75 written to target/molten-reports/two-actor.report.preserves
+## spot2
+     Running `/home/brittonr/git/aspen-worktrees/octet-safety-target/debug/molten test report validate target/molten-reports/two-actor.report.preserves`
+report validate ok report=blake3:a65df018e7c2b04c1db6024d60179fc01cbfa9375741181b718f87ff2db2ce75 suite=blake3:08f762295c0698bbc8441d192a131abed4abf98dc83698b5ee42d3dd48793638 observations=6 final_state=blake3:fa39a79d527d40404a7446586738c9a1271beb985ef53840c3e8ed814a0167da replay_actual=blake3:a65df018e7c2b04c1db6024d60179fc01cbfa9375741181b718f87ff2db2ce75
+## spot3
+octet gate receipt blake3:eb26136b3026850c4fcbde9f425d6154f5f72db66db3ba49de8bc459780c1199 written to target/readme-gate-receipt.preserves
+error: invalid harness artifact: octet gate denied receipt=blake3:eb26136b3026850c4fcbde9f425d6154f5f72db66db3ba49de8bc459780c1199 artifacts=../octet-safety-evidence/strict/octet-artifacts
