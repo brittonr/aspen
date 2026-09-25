@@ -270,3 +270,17 @@ fn compiler_input_union_binds_every_inventoried_rust_source() {
     root_binary.units[2].package = "molten".into();
     assert_eq!(validate_build_inputs(&files, &root_binary), Err(Rejection::SourceContext));
 }
+
+#[test]
+fn library_root_must_belong_to_its_package_and_target() {
+    let (policy, descriptor) = fixture();
+    let plan = EvidencePlan::admit(&policy, descriptor, &policy.cohort.executable_blake3).unwrap();
+    let files = source_fixture(&plan);
+    let mut inputs = build_input_fixture(&files);
+    let core_root = "crates/molten-node-core/src/lib.rs";
+
+    inputs.units[0].source_paths.retain(|path| path.as_str() != core_root);
+    inputs.units[1].source_paths.push(core_root.into());
+    inputs.units[1].source_paths.sort();
+    assert_eq!(validate_build_inputs(&files, &inputs), Err(Rejection::SourceContext));
+}

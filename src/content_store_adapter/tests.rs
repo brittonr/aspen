@@ -95,6 +95,44 @@ fn fixture_chunks(manifest: &ContentManifestDescriptor) -> BTreeMap<String, Vec<
         .collect()
 }
 
+#[test]
+fn content_command_rejects_manifest_exceeding_profile_for_full_and_range_reads() {
+    let (workspace, _root, manifest) = fixture_store("content-adapter-overbound-command");
+    let mut profile = profile(ContentAdapterClass::CapabilityLocal);
+    let build = |profile: &ContentAdapterProfile, range| {
+        content_command(profile, ContentCommandInput {
+            operation_ref: test_ref("overbound-operation"),
+            operation: ContentOperation::Get,
+            manifest: &manifest,
+            range,
+            submitted_tick: SUBMITTED_TICK,
+            deadline_tick: DEADLINE_TICK,
+            retry_count: 0,
+            cancelled: false,
+            policy_refs: vec![],
+        })
+    };
+    let cases = [
+        (None, manifest.chunks.len()),
+        (
+            Some(ContentRange {
+                offset: 0,
+                length: FIXTURE_CHUNK_BYTES,
+            }),
+            1,
+        ),
+    ];
+    profile.bounds.max_chunk_count = manifest.chunks.len();
+    for (range, expected_chunks) in cases {
+        assert_eq!(build(&profile, range).expect("accepted boundary").expected_chunks, expected_chunks);
+    }
+    profile.bounds.max_chunk_count -= 1;
+    for (range, _) in cases {
+        assert!(build(&profile, range).is_err());
+    }
+    std::fs::remove_dir_all(workspace).expect("remove overbound fixture");
+}
+
 // r[verify molten.content_store_adapter.port_contract]
 #[test]
 fn content_store_and_exchange_ports_are_exact_versioned_and_backend_neutral() {
@@ -312,7 +350,9 @@ async fn live_iroh_blobs_stream_preserves_molten_identity_and_uses_opaque_admitt
         )
         .expect("transport identity");
     let key_path = crate::fabric_crypto_identity::transport_key_path().expect("transport key path");
-    let key_record = namespace.read(&key_path, molten_node_host::node_state::MAX_NODE_SECRET_BYTES).expect("transport key record");
+    let key_record = namespace
+        .read(&key_path, molten_node_host::node_state::MAX_NODE_SECRET_BYTES)
+        .expect("transport key record");
     let material = crate::fabric_crypto_identity::transport_endpoint_material(&key_record, &backend_ref)
         .expect("transport endpoint material");
     let endpoint_id = material.endpoint_id.clone();

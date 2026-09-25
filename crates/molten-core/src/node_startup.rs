@@ -257,69 +257,119 @@ pub struct BuildUnit {
     pub source_paths: Vec<String>,
 }
 
-pub fn validate_build_inputs(files: &[SourceFile], inputs: &BuildInputs) -> Result<(), Rejection> {
-    if inputs.schema != BUILD_INPUTS_SCHEMA
-        || inputs.executable_target != "molten-node"
-        || inputs.units.is_empty()
-        || inputs.units.len() > MAX_BUILD_UNITS
-    {
+fn validate_build_input_header(inputs: &BuildInputs) -> Result<(), Rejection> {
+    if inputs.schema != BUILD_INPUTS_SCHEMA {
         return Err(Rejection::SourceContext);
     }
-    let mut prior: Option<(&str, &str)> = None;
-    let mut has_binary = false;
-    let mut libraries = [false; 3];
-    let mut source_paths = Vec::new();
-    for unit in &inputs.units {
-        let package_index = match unit.package.as_str() {
-            "molten-node-core" => Some(0),
-            "molten-node-host" => Some(1),
-            "molten-node-runtime" => Some(2),
-            _ => None,
-        };
-        if prior.is_some_and(|prev| prev >= (unit.package.as_str(), unit.target.as_str()))
-            || matches!(unit.package.as_str(), "molten" | "molten-core")
-            || unit.package.is_empty()
-            || unit.package.len() > 256
-            || !unit.package.bytes().all(|byte| byte.is_ascii_graphic())
-            || unit.target.is_empty()
-            || unit.target.len() > 256
-            || !unit.target.bytes().all(|byte| byte.is_ascii_graphic())
-            || unit.source_paths.is_empty()
-            || unit.source_paths.len() > MAX_SOURCE_FILES
-        {
+    if inputs.executable_target != "molten-node" {
+        return Err(Rejection::SourceContext);
+    }
+    if inputs.units.is_empty() {
+        return Err(Rejection::SourceContext);
+    }
+    if inputs.units.len() > MAX_BUILD_UNITS {
+        return Err(Rejection::SourceContext);
+    }
+    Ok(())
+}
+
+fn valid_build_unit_label(label: &str) -> bool {
+    if label.is_empty() {
+        return false;
+    }
+    if label.len() > 256 {
+        return false;
+    }
+    label.bytes().all(|byte| byte.is_ascii_graphic())
+}
+
+fn validate_build_unit_metadata(unit: &BuildUnit, previous: Option<(&str, &str)>) -> Result<(), Rejection> {
+    if previous.is_some_and(|prior| prior >= (unit.package.as_str(), unit.target.as_str())) {
+        return Err(Rejection::SourceContext);
+    }
+    if matches!(unit.package.as_str(), "molten" | "molten-core") {
+        return Err(Rejection::SourceContext);
+    }
+    if !valid_build_unit_label(&unit.package) {
+        return Err(Rejection::SourceContext);
+    }
+    if !valid_build_unit_label(&unit.target) {
+        return Err(Rejection::SourceContext);
+    }
+    if unit.source_paths.is_empty() {
+        return Err(Rejection::SourceContext);
+    }
+    if unit.source_paths.len() > MAX_SOURCE_FILES {
+        return Err(Rejection::SourceContext);
+    }
+    Ok(())
+}
+
+#[derive(Default)]
+struct RequiredBuildRoots {
+    libraries: [bool; 3],
+    binary: bool,
+}
+
+fn record_required_build_roots(unit: &BuildUnit, roots: &mut RequiredBuildRoots) {
+    let paths = &unit.source_paths;
+    match (unit.package.as_str(), unit.target.as_str()) {
+        ("molten-node-core", "lib") => {
+            roots.libraries[0] = paths.iter().any(|path| path == "crates/molten-node-core/src/lib.rs");
+        }
+        ("molten-node-host", "lib") => {
+            roots.libraries[1] = paths.iter().any(|path| path == "crates/molten-node-host/src/lib.rs");
+        }
+        ("molten-node-runtime", "lib") => {
+            roots.libraries[2] = paths.iter().any(|path| path == "crates/molten-node-runtime/src/lib.rs");
+        }
+        ("molten-node-runtime", "bin/molten-node") => {
+            roots.binary = paths.iter().any(|path| path == "crates/molten-node-runtime/src/bin/molten-node.rs");
+        }
+        _ => {}
+    }
+}
+
+fn validate_build_unit_paths<'a>(
+    unit: &'a BuildUnit,
+    files: &[SourceFile],
+    source_paths: &mut Vec<&'a str>,
+) -> Result<(), Rejection> {
+    let mut previous_path: Option<&str> = None;
+    for path in &unit.source_paths {
+        if !path.ends_with(".rs") {
             return Err(Rejection::SourceContext);
         }
-        prior = Some((&unit.package, &unit.target));
-        if let Some(index) = package_index {
-            let library_root = match index {
-                0 => "crates/molten-node-core/src/lib.rs",
-                1 => "crates/molten-node-host/src/lib.rs",
-                _ => "crates/molten-node-runtime/src/lib.rs",
-            };
-            if unit.target == "lib" && unit.source_paths.iter().any(|path| path == library_root) {
-                libraries[index] = true;
-            }
+        if previous_path.is_some_and(|previous| previous >= path.as_str()) {
+            return Err(Rejection::SourceContext);
         }
-        if unit.package == "molten-node-runtime" && unit.target == "bin/molten-node" {
-            has_binary =
-                unit.source_paths.iter().any(|path| path == "crates/molten-node-runtime/src/bin/molten-node.rs");
+        if files.binary_search_by(|file| file.name.cmp(path)).is_err() {
+            return Err(Rejection::SourceContext);
         }
-        let mut previous_path: Option<&str> = None;
-        for path in &unit.source_paths {
-            if !path.ends_with(".rs")
-                || previous_path.is_some_and(|previous| previous >= path.as_str())
-                || files.binary_search_by(|file| file.name.cmp(path)).is_err()
-            {
-                return Err(Rejection::SourceContext);
-            }
-            previous_path = Some(path);
-            if source_paths.len() >= MAX_SOURCE_FILES {
-                return Err(Rejection::SourceContext);
-            }
-            source_paths.push(path.as_str());
+        previous_path = Some(path);
+        if source_paths.len() >= MAX_SOURCE_FILES {
+            return Err(Rejection::SourceContext);
         }
+        source_paths.push(path.as_str());
     }
-    if !has_binary || libraries.contains(&false) || source_paths.len() > MAX_SOURCE_FILES {
+    Ok(())
+}
+
+pub fn validate_build_inputs(files: &[SourceFile], inputs: &BuildInputs) -> Result<(), Rejection> {
+    validate_build_input_header(inputs)?;
+    let mut previous = None;
+    let mut roots = RequiredBuildRoots::default();
+    let mut source_paths = Vec::new();
+    for unit in &inputs.units {
+        validate_build_unit_metadata(unit, previous)?;
+        previous = Some((unit.package.as_str(), unit.target.as_str()));
+        record_required_build_roots(unit, &mut roots);
+        validate_build_unit_paths(unit, files, &mut source_paths)?;
+    }
+    if !roots.binary {
+        return Err(Rejection::SourceContext);
+    }
+    if roots.libraries.contains(&false) {
         return Err(Rejection::SourceContext);
     }
     source_paths.sort_unstable();

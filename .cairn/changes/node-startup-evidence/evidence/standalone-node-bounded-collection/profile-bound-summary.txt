@@ -1,0 +1,295 @@
+--- octet summary ---
+Status: integration-failure
+Findings: 261
+Warnings: 0
+Errors: 261
+Autofixable: 0
+Tool: cargo-octet 0.1.0
+Toolchain: nightly-2026-03-21-x86_64-unknown-linux-gnu
+Profile: workspace-metadata
+Config hash: b3:58fad8b399c183822f3511c810b20ef9c8f2e8ae7f1f72710cb94f9297be0abc
+Profile hash: b3:3cfa1bc99d6ed29271c6f9fd2cc5cc00465c56268a65d22ca6a0a7b2c3cd814a
+
+By crate:
+  molten_node_core        260
+  locators                1
+
+By effect:
+  unknown         116
+  failure         114
+  resource        31
+
+By lint:
+  path_segment_repetition              98
+  assertion_density                    63
+  fragile_exhaustive_enum_match        51
+  ambiguous_params                     14
+  excessive_file_length                13
+  numeric_units                        13
+  underscore_in_module_filename        4
+  usize_in_public_api                  4
+  missing_const_fn                     1
+
+Index:
+  F1    path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/codec.rs:19
+  F2    assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/codec.rs:30
+  F3    excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:1
+  F4    path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:22
+  F5    fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:34
+  F6    path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:47
+  F7    fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:56
+  F8    path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:66
+  F9    fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:79
+  F10   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:93
+  F11   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:108
+  F12   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:121
+  F13   numeric_units                 molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:123
+  F14   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:129
+  F15   numeric_units                 molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:131
+  F16   numeric_units                 molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:133
+  F17   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:141
+  F18   fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:155
+  F19   fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:169
+  F20   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:183
+  F21   numeric_units                 molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:184
+  F22   numeric_units                 molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:185
+  F23   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:189
+  F24   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:206
+  F25   fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:220
+  F26   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:248
+  F27   fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:265
+  F28   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:283
+  F29   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:299
+  F30   numeric_units                 molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:306
+  F31   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:310
+  F32   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:324
+  F33   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:331
+  F34   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:345
+  F35   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:356
+  F36   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:362
+  F37   underscore_in_module_filename molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/node_service.rs:1
+  F38   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/node_service.rs:12
+  F39   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/node_service.rs:21
+  F40   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/node_service.rs:62
+  F41   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/node_service.rs:78
+  F42   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/preflight.rs:5
+  F43   usize_in_public_api           molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/preflight.rs:5
+  F44   assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/preflight.rs:11
+  F45   usize_in_public_api           molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/preflight.rs:66
+  F46   assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/preflight.rs:81
+  F47   assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/preflight.rs:144
+  F48   underscore_in_module_filename molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/read_grant.rs:1
+  F49   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/read_grant.rs:7
+  F50   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/read_grant.rs:14
+  F51   ambiguous_params              molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/read_grant.rs:23
+  F52   ambiguous_params              molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/read_grant.rs:56
+  F53   assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/transition.rs:10
+  F54   assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/transition.rs:62
+  F55   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/transition.rs:130
+  F56   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/transition.rs:145
+  F57   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/transition.rs:152
+  F58   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/transition.rs:167
+  F59   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/transition.rs:176
+  F60   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/transition.rs:191
+  F61   excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/validation.rs:1
+  F62   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/validation.rs:5
+  F63   assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/validation.rs:5
+  F64   assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/validation.rs:28
+  F65   assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/validation.rs:80
+  F66   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/validation.rs:126
+  F67   assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/validation.rs:126
+  F68   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/validation.rs:159
+  F69   assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/validation.rs:159
+  F70   assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/validation.rs:198
+  F71   assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/validation.rs:239
+  F72   ambiguous_params              molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/validation.rs:288
+  F73   ambiguous_params              molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/validation.rs:294
+  F74   ambiguous_params              molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/validation.rs:298
+  F75   ambiguous_params              molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/validation.rs:304
+  F76   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/boundary.rs:5
+  F77   fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/boundary.rs:13
+  F78   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/boundary.rs:22
+  F79   fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/boundary.rs:38
+  F80   fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/boundary.rs:68
+  F81   fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/boundary.rs:96
+  F82   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/boundary.rs:137
+  F83   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/boundary.rs:145
+  F84   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/boundary.rs:152
+  F85   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/boundary.rs:164
+  F86   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/boundary.rs:176
+  F87   excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:1
+  F88   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:8
+  F89   fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:15
+  F90   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:23
+  F91   fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:38
+  F92   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:61
+  F93   fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:69
+  F94   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:107
+  F95   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:113
+  F96   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:123
+  F97   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:132
+  F98   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:147
+  F99   assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:147
+  F100  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:171
+  F101  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:173
+  F102  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:208
+  F103  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/mod.rs:32
+  F104  excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:1
+  F105  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:6
+  F106  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:25
+  F107  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:53
+  F108  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:71
+  F109  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:81
+  F110  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:96
+  F111  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:112
+  F112  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:118
+  F113  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:146
+  F114  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:161
+  F115  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:170
+  F116  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:181
+  F117  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:235
+  F118  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:237
+  F119  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:272
+  F120  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:351
+  F121  ambiguous_params              molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:402
+  F122  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:415
+  F123  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:454
+  F124  excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:1
+  F125  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:7
+  F126  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:15
+  F127  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:39
+  F128  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:50
+  F129  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:69
+  F130  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:83
+  F131  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:93
+  F132  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:98
+  F133  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:153
+  F134  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:173
+  F135  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:253
+  F136  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:274
+  F137  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:344
+  F138  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/tier.rs:4
+  F139  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/tier.rs:12
+  F140  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/tier.rs:21
+  F141  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/tier.rs:42
+  F142  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/tier.rs:68
+  F143  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/tier.rs:79
+  F144  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/tier.rs:100
+  F145  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/tier.rs:107
+  F146  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/tier.rs:114
+  F147  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/tier.rs:135
+  F148  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/tier.rs:157
+  F149  excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/admission.rs:1
+  F150  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/admission.rs:5
+  F151  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/admission.rs:5
+  F152  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/admission.rs:27
+  F153  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/admission.rs:65
+  F154  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/admission.rs:128
+  F155  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/admission.rs:175
+  F156  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/admission.rs:203
+  F157  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/admission.rs:275
+  F158  ambiguous_params              molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/admission.rs:322
+  F159  ambiguous_params              molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/admission.rs:330
+  F160  excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/artifact_auth.rs:1
+  F161  underscore_in_module_filename molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/artifact_auth.rs:1
+  F162  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/artifact_auth.rs:12
+  F163  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/artifact_auth.rs:21
+  F164  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/artifact_auth.rs:85
+  F165  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/artifact_auth.rs:127
+  F166  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/artifact_auth.rs:205
+  F167  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/artifact_auth.rs:218
+  F168  excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:1
+  F169  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:25
+  F170  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:36
+  F171  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:48
+  F172  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:55
+  F173  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:63
+  F174  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:70
+  F175  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:86
+  F176  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:109
+  F177  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:120
+  F178  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:146
+  F179  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:168
+  F180  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:281
+  F181  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:331
+  F182  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/rotation.rs:4
+  F183  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/rotation.rs:12
+  F184  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/rotation.rs:21
+  F185  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/rotation.rs:38
+  F186  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/rotation.rs:46
+  F187  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/rotation.rs:63
+  F188  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/rotation.rs:67
+  F189  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/rotation.rs:114
+  F190  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/rotation.rs:127
+  F191  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/rotation.rs:130
+  F192  numeric_units                 molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/cache/mod.rs:27
+  F193  ambiguous_params              molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/cache/mod.rs:36
+  F194  numeric_units                 molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/cache/mod.rs:36
+  F195  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/cache/mod.rs:66
+  F196  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/cache/mod.rs:148
+  F197  excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:1
+  F198  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:37
+  F199  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:50
+  F200  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:71
+  F201  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:79
+  F202  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:87
+  F203  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:115
+  F204  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:171
+  F205  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:217
+  F206  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:251
+  F207  numeric_units                 molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:424
+  F208  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:456
+  F209  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:483
+  F210  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:526
+  F211  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:562
+  F212  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:604
+  F213  excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/ownership.rs:1
+  F214  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/ownership.rs:42
+  F215  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/ownership.rs:60
+  F216  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/ownership.rs:85
+  F217  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/ownership.rs:143
+  F218  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/ownership.rs:176
+  F219  excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:1
+  F220  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:13
+  F221  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:86
+  F222  ambiguous_params              molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:119
+  F223  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:125
+  F224  ambiguous_params              molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:171
+  F225  numeric_units                 molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:171
+  F226  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:171
+  F227  numeric_units                 molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:175
+  F228  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:211
+  F229  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:279
+  F230  numeric_units                 molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:288
+  F231  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:311
+  F232  ambiguous_params              molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:375
+  F233  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:380
+  F234  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:421
+  F235  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:470
+  F236  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:588
+  F237  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:643
+  F238  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:681
+  F239  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:718
+  F240  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:763
+  F241  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:768
+  F242  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:822
+  F243  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:838
+  F244  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:892
+  F245  ambiguous_params              molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:915
+  F246  excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/node_startup.rs:1
+  F247  underscore_in_module_filename molten_node_core  crates/molten-node-core/src/../../molten-core/src/node_startup.rs:1
+  F248  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/node_startup.rs:69
+  F249  usize_in_public_api           molten_node_core  crates/molten-node-core/src/../../molten-core/src/node_startup.rs:123
+  F250  numeric_units                 molten_node_core  crates/molten-node-core/src/../../molten-core/src/node_startup.rs:123
+  F251  usize_in_public_api           molten_node_core  crates/molten-node-core/src/../../molten-core/src/node_startup.rs:222
+  F252  missing_const_fn              molten_node_core  crates/molten-node-core/src/../../molten-core/src/node_startup.rs:260
+  F253  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/node_startup.rs:286
+  F254  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/node_startup.rs:337
+  F255  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/node_startup.rs:358
+  F256  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/node_startup.rs:388
+  F257  excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/nominal.rs:1
+  F258  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/nominal.rs:214
+  F259  fragile_exhaustive_enum_match molten_node_core  crates/molten-node-core/src/../../molten-core/src/nominal.rs:215
+  F260  assertion_density             molten_node_core  crates/molten-node-core/src/../../molten-core/src/nominal.rs:359
+  F261  path_segment_repetition       locators          crates/molten-node-host/tests/locators.rs:3
+---

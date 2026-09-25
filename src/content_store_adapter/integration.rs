@@ -75,7 +75,7 @@ pub struct ContentCommandInput<'a> {
 }
 
 pub fn content_command(profile: &ContentAdapterProfile, input: ContentCommandInput<'_>) -> Result<ContentCommand> {
-    let (expected_bytes, expected_chunks) = expected_shape(input.manifest, input.range)?;
+    let (expected_bytes, expected_chunks) = expected_shape(profile, input.manifest, input.range)?;
     let mut policy_refs = input.policy_refs;
     policy_refs.sort();
     policy_refs.dedup();
@@ -152,12 +152,19 @@ pub fn backend_protection_status(
     canonical_content_event(profile, &event)
 }
 
-fn expected_shape(manifest: &ContentManifestDescriptor, range: Option<ContentRange>) -> Result<(u64, usize)> {
+fn expected_shape(
+    profile: &ContentAdapterProfile,
+    manifest: &ContentManifestDescriptor,
+    range: Option<ContentRange>,
+) -> Result<(u64, usize)> {
+    if manifest.chunks.len() > profile.bounds.max_chunk_count {
+        return Err(Failure::invalid_harness("content command denied: ChunkCountExceeded"));
+    }
     match range {
         Some(range) => {
-            let refs = required_chunks_for_range(manifest, range)
+            let chunk_count = required_chunk_count_for_range(profile, manifest, range)
                 .map_err(|issue| Failure::invalid_harness(format!("content range denied: {issue:?}")))?;
-            Ok((range.length, refs.len()))
+            Ok((range.length, chunk_count))
         }
         None => Ok((manifest.total_length, manifest.chunks.len())),
     }

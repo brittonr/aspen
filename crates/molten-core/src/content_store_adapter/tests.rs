@@ -171,13 +171,57 @@ fn direct_manifest_helpers_reject_impossible_counts_and_stop_at_first_bad_chunk(
     oversized.chunks = vec![oversized.chunks[0].clone(); TOTAL_LENGTH as usize + 1];
     let range = ContentRange { offset: 0, length: 1 };
     assert_eq!(validate_manifest_descriptor(&oversized), vec![ContentIssue::ChunkCountExceeded]);
-    assert_eq!(required_chunks_for_range(&oversized, range), Err(ContentIssue::ChunkCountExceeded));
+    assert_eq!(required_chunks_for_range(&profile(), &oversized, range), Err(ContentIssue::ChunkCountExceeded));
 
     let mut zero_length = manifest();
     zero_length.chunks[0].length = 0;
     zero_length.chunks[1].length = 0;
     assert_eq!(validate_manifest_descriptor(&zero_length), vec![ContentIssue::ZeroBound("content-chunk-length")]);
-    assert_eq!(required_chunks_for_range(&zero_length, range), Err(ContentIssue::ZeroBound("content-chunk-length")));
+    assert_eq!(
+        required_chunks_for_range(&profile(), &zero_length, range),
+        Err(ContentIssue::ZeroBound("content-chunk-length"))
+    );
+}
+
+#[test]
+fn direct_range_selection_rejects_profile_excess_before_materializing_chunk_refs() {
+    let mut oversized = manifest();
+    let first = oversized.chunks[0].clone();
+    oversized.chunks = (0..=MAX_CHUNK_COUNT)
+        .map(|position| ContentChunkDescriptor {
+            length: 1,
+            position,
+            ..first.clone()
+        })
+        .collect();
+    oversized.total_length = oversized.chunks.len() as u64;
+    oversized.chunk_size = 1;
+
+    assert_eq!(
+        required_chunks_for_range(&profile(), &oversized, ContentRange { offset: 0, length: 1 }),
+        Err(ContentIssue::ChunkCountExceeded)
+    );
+}
+
+#[test]
+fn manifest_validation_keeps_header_and_first_invalid_chunk_issue_order() {
+    let mut manifest = manifest();
+    manifest.chunker.clear();
+    manifest.policy_refs = vec!["invalid".to_string()];
+    manifest.chunks[0].chunk_ref = "invalid".to_string();
+    manifest.chunks[0].transform.clear();
+    manifest.chunks[0].length = 0;
+    manifest.chunks[0].position = 1;
+    manifest.chunks[1].transform = "invalid?".to_string();
+
+    assert_eq!(validate_manifest_descriptor(&manifest), vec![
+        ContentIssue::EmptyField("content-chunker"),
+        ContentIssue::MalformedRef("content-policy-ref"),
+        ContentIssue::MalformedRef("content-chunk-ref"),
+        ContentIssue::EmptyField("content-chunk-transform"),
+        ContentIssue::ZeroBound("content-chunk-length"),
+        ContentIssue::ReorderedChunk("invalid".to_string()),
+    ]);
 }
 
 // r[verify molten.content_store_adapter.streaming_bounds]

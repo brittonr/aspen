@@ -46,23 +46,26 @@ pub fn validate_manifest_descriptor(manifest: &ContentManifestDescriptor) -> Vec
         return issues;
     }
     let mut total = 0_u64;
-    for (expected_position, chunk) in manifest.chunks.iter().enumerate() {
-        let prior_issue_count = issues.len();
-        validate_ref("content-chunk-ref", &chunk.chunk_ref, &mut issues);
-        validate_token("content-chunk-transform", &chunk.transform, &mut issues);
-        if chunk.length == 0 {
-            issues.push(ContentIssue::ZeroBound("content-chunk-length"));
+    let first_invalid_chunk = manifest.chunks.iter().enumerate().find_map(|(expected_position, chunk)| {
+        let next_total = total.checked_add(chunk.length);
+        let chunk_issues = [
+            ref_issue("content-chunk-ref", &chunk.chunk_ref),
+            token_issue("content-chunk-transform", &chunk.transform),
+            (chunk.length == 0).then_some(ContentIssue::ZeroBound("content-chunk-length")),
+            (chunk.position != expected_position).then(|| ContentIssue::ReorderedChunk(chunk.chunk_ref.clone())),
+            next_total.is_none().then_some(ContentIssue::ArithmeticOverflow),
+        ];
+        match next_total {
+            Some(next_total) if chunk_issues.iter().all(Option::is_none) => {
+                total = next_total;
+                None
+            }
+            Some(_) | None => Some(chunk_issues),
         }
-        if chunk.position != expected_position {
-            issues.push(ContentIssue::ReorderedChunk(chunk.chunk_ref.clone()));
-        }
-        match total.checked_add(chunk.length) {
-            Some(next) => total = next,
-            None => issues.push(ContentIssue::ArithmeticOverflow),
-        }
-        if issues.len() != prior_issue_count {
-            return issues;
-        }
+    });
+    if let Some(chunk_issues) = first_invalid_chunk {
+        issues.extend(chunk_issues.into_iter().flatten());
+        return issues;
     }
     if total != manifest.total_length {
         issues.push(ContentIssue::ManifestMismatch);
@@ -283,20 +286,27 @@ pub(crate) fn validate_ref_list(field: &'static str, values: &[String], issues: 
 }
 
 fn validate_ref(field: &'static str, value: &str, issues: &mut Vec<ContentIssue>) {
-    if !crate::fabric::valid_blake3_ref(value) {
-        issues.push(ContentIssue::MalformedRef(field));
+    if let Some(issue) = ref_issue(field, value) {
+        issues.push(issue);
     }
 }
 
+fn ref_issue(field: &'static str, value: &str) -> Option<ContentIssue> {
+    (!crate::fabric::valid_blake3_ref(value)).then_some(ContentIssue::MalformedRef(field))
+}
+
 fn validate_token(field: &'static str, value: &str, issues: &mut Vec<ContentIssue>) {
+    if let Some(issue) = token_issue(field, value) {
+        issues.push(issue);
+    }
+}
+
+fn token_issue(field: &'static str, value: &str) -> Option<ContentIssue> {
     if value.is_empty() {
-        issues.push(ContentIssue::EmptyField(field));
-        return;
+        return Some(ContentIssue::EmptyField(field));
     }
-    if !value
+    (!value
         .bytes()
-        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':' | b'/'))
-    {
-        issues.push(ContentIssue::MalformedToken(field));
-    }
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':' | b'/')))
+    .then_some(ContentIssue::MalformedToken(field))
 }

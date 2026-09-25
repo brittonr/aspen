@@ -37,7 +37,7 @@ pub fn preflight_content_operation(
         },
         &mut issues,
     );
-    let required_chunk_refs = required_chunks(manifest, command, &mut issues);
+    let required_chunk_refs = required_chunks(profile, manifest, command, &mut issues);
     let terminal = if command.cancelled || command.operation == ContentOperation::Cancel {
         issues.push(ContentIssue::Cancelled);
         ContentTerminal::Cancelled
@@ -54,9 +54,34 @@ pub fn preflight_content_operation(
 }
 
 pub fn required_chunks_for_range(
+    profile: &ContentAdapterProfile,
     manifest: &ContentManifestDescriptor,
     range: ContentRange,
 ) -> Result<Vec<String>, ContentIssue> {
+    let mut required = Vec::new();
+    visit_required_chunks(profile, manifest, range, |chunk| required.push(chunk.chunk_ref.clone()))?;
+    Ok(required)
+}
+
+pub fn required_chunk_count_for_range(
+    profile: &ContentAdapterProfile,
+    manifest: &ContentManifestDescriptor,
+    range: ContentRange,
+) -> Result<usize, ContentIssue> {
+    let mut count = 0;
+    visit_required_chunks(profile, manifest, range, |_| count += 1)?;
+    Ok(count)
+}
+
+fn visit_required_chunks(
+    profile: &ContentAdapterProfile,
+    manifest: &ContentManifestDescriptor,
+    range: ContentRange,
+    mut visit: impl FnMut(&ContentChunkDescriptor),
+) -> Result<(), ContentIssue> {
+    if manifest.chunks.len() > profile.bounds.max_chunk_count {
+        return Err(ContentIssue::ChunkCountExceeded);
+    }
     if range.length == 0 {
         return Err(ContentIssue::RangeExceeded);
     }
@@ -68,18 +93,17 @@ pub fn required_chunks_for_range(
         return Err(ContentIssue::ChunkCountExceeded);
     }
     let mut offset_bytes = 0_u64;
-    let mut required = Vec::new();
     for chunk in &manifest.chunks {
         if chunk.length == 0 {
             return Err(ContentIssue::ZeroBound("content-chunk-length"));
         }
         let chunk_end_bytes = offset_bytes.checked_add(chunk.length).ok_or(ContentIssue::ArithmeticOverflow)?;
         if range.offset < chunk_end_bytes && offset_bytes < end_bytes {
-            required.push(chunk.chunk_ref.clone());
+            visit(chunk);
         }
         offset_bytes = chunk_end_bytes;
     }
-    Ok(required)
+    Ok(())
 }
 
 fn validate_binding(
@@ -157,12 +181,13 @@ fn validate_resources(
 }
 
 fn required_chunks(
+    profile: &ContentAdapterProfile,
     manifest: &ContentManifestDescriptor,
     command: &ContentCommand,
     issues: &mut Vec<ContentIssue>,
 ) -> Vec<String> {
     match command.range {
-        Some(range) => match required_chunks_for_range(manifest, range) {
+        Some(range) => match required_chunks_for_range(profile, manifest, range) {
             Ok(required) => required,
             Err(issue) => {
                 issues.push(issue);
