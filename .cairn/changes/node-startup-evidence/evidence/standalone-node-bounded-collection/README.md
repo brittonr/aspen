@@ -31,4 +31,47 @@ The installed Cairn binary `/nix/store/n4di6l534s5ic3q17miwqj1imx6faws6-cairn-0.
 
 `cargo fmt --all -- --check` failed on many pre-existing files outside this slice (including `content_store_adapter/node_service.rs`, `fabric/port.rs`, and `molten-node-runtime` sources). The two edited durability Rust files independently passed pinned `rustfmt --edition 2024 --check`, and `git diff --check` passed. No unrelated formatting churn was applied.
 
-Two exploratory invocations are **not** comparable gate evidence: the per-user `cargo-octet` wrapper overrode the supplied lint library and falsely stopped at four host const-function reports; a fresh high-parallel direct CLI run emitted duplicate and test-target findings (589). The retained run uses the unwrapped exact CLI and prior two-job concurrency. After explicit operator approval, Octet `08f7784bc314620511c466ca948565429c6aba6c` was published without force to `git@github.com:OnixResearch/octet.git` branch `review/molten-octet-cohort-20260925`; `git ls-remote` returned that exact OID. Publication does **not** approve lint policy, change Molten's pinned Octet input, or admit a normal-node cohort. The producer commit remains a local review candidate. The strict gate is denied; no source-to-executable receipt, normal-node start, or VM lifecycle evidence exists. The Molten Cairn remains open.
+The producer commit remains a local review candidate. The strict gate is denied; no source-to-executable receipt, normal-node start, or VM lifecycle evidence exists. The Molten Cairn remains open.
+
+## Mutable borrowed-container classifier correction (2026-09-25)
+
+The original classifier suggested immutable views for four `&mut Vec<...>`
+parameters in selected Molten source. A forwarding helper can grow a mutable
+container without a direct `push` in the current function, and `&mut String` or
+`&mut PathBuf` cannot generally be replaced with `&str` or `&Path`. The Octet
+owner's `borrowed_argument_types` rule now considers only immutable references
+and removes the dead direct-vector-push inspection. The UI fixture reproduced
+three incorrect suggestions before the change; with the reviewed local library,
+it retained exactly four immutable-reference warnings and no mutable warnings.
+The local owner commit is `e096774749fbba05bbdeaccdb2021ae143cbd601`;
+the published review branch still points to `08f7784bc314620511c466ca948565429c6aba6c`.
+The 155 owner library tests and `cargo clippy -p octet --lib -- -D warnings`
+passed. The exact owner Nix `ui`, `fmt`, and `nextest` checks also passed;
+`nextest` ran 263 tests across six binaries, with 263 passed and five skipped.
+The separate workspace-wide Nix `clippy` check remains red on 23 untouched
+`octet-architecture-ir` `missing_errors_doc` diagnostics. The scoped offline
+Nix library build was preflighted as one Octet derivation without compiler or
+Stage0 work. Final library:
+`/home/brittonr/git/octet-worktrees/molten-reviewed-20260925/target/borrowed-cutover-result/lib/liboctet.so`,
+BLAKE3 `4fb05f09fad3ac857b1a314d38df7ed15dc9cbce6b43ca90407d1d31cd3abc28`.
+
+Using that final library with the **same unmodified hook, CLI, driver, Rust
+toolchain, workspace-metadata profile and config hashes** listed above,
+`TIGERSTYLE_LINT_LIB` pointed at
+`target/borrowed-cutover-lib/liboctet@nightly-2026-03-21-x86_64-unknown-linux-gnu.so`
+and the producer's `CARGO_TARGET_DIR` was `target/gate-borrowed-review`. The
+hook wrote `target/octet-borrowed-final` and exited **2** (Cargo **101**):
+**259 errors, zero warnings, zero autofixes**, all in `molten_node_core`.
+Compared with 263, the four mutable-borrow false positives disappeared;
+the two dynamic manifest growth warnings remain. This is **not** a successful
+strict node gate or startup approval. The runner outputs are retained as:
+
+- `borrowed-types-command.txt` — BLAKE3 `8352b73ad516dcfebcd8984b624db4fb9de2cc5b682f349ca686baac2383bf37`
+- `borrowed-types-status.json` — BLAKE3 `ff487a9e004b06e9c994d4905a70072ef2dcf61cfd241ee70f03c7c1e50fcc8a`
+- `borrowed-types-summary.txt` — BLAKE3 `045f101234f035105a5a4e88aa5ccac217dec3a5d12e9a1a980450d35ba461a1`
+- `borrowed-types-provenance.jsonl` — BLAKE3 `c259d871283712b009ff2c1b1509a22ed8b250bd2bfc62dcdc86e09cbe521eef`
+
+The producer source still matches its `95b8e4ae` review candidate. The
+strict gate is denied before runtime compilation, so no `build-inputs.json`
+from an independent compiler trace, executable-bound source receipt, or
+normal-node VM startup exists. No consumer policy or Cairn checkbox changed.
