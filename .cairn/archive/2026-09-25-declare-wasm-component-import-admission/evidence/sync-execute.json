@@ -1,0 +1,164 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/declare-wasm-component-import-admission/specs/wasm-import-admission/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/declare-wasm-component-import-admission/specs/wasm-import-admission/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "declare-wasm-component-import-admission",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/declare-wasm-component-import-admission/specs/wasm-import-admission/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "0c1ad5e023bc2a67150ce747743a197471173f530a7702550d822fe616015060",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": false,
+        "accepted_before_hash": "ab8dd2b09fc5b4207e0139e6cff821070037197a29bf4fe397d4bdd9a30ff8e8",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "109837c054022d685ff9890f8764f0e2859b9b530c996c35b42e3bb9d2380b73",
+        "destination": ".cairn/specs/wasm-import-admission/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "04c77aa1a5ab1e8f2c5b90ea9d950c5da734e8f92f6a79b08c8421d1891ab4fd",
+        "operations": [
+          {
+            "block_hash": "63d96177f72e96a44d2352edf28d3d460e08b21c609ebcf87e56043a0ee57d5e",
+            "heading": "### Requirement: The import manifest is complete and declared",
+            "kind": "added",
+            "requirement_id": "aspen.wasm_import_admission.manifest"
+          },
+          {
+            "block_hash": "7147907aae568cdd2ed927d77ac3c7c8f20aac8e30faa8ca694b0da372adab6c",
+            "heading": "### Requirement: Imports match the declared WIT world",
+            "kind": "added",
+            "requirement_id": "aspen.wasm_import_admission.surface"
+          },
+          {
+            "block_hash": "1bdd2873ad7f7adde9f14cdd5081e1fbe81611eb766d135cc456db931c4cc1ee",
+            "heading": "### Requirement: Admission is a pure core decision",
+            "kind": "added",
+            "requirement_id": "aspen.wasm_import_admission.admission"
+          },
+          {
+            "block_hash": "a1efa28cd2948e97744a1e910b66c68222dddcd231bb80dc8f0b2929df613574",
+            "heading": "### Requirement: Receipts bind import and tool identities",
+            "kind": "added",
+            "requirement_id": "aspen.wasm_import_admission.evidence"
+          },
+          {
+            "block_hash": "c8c552a31f04a0524d5466704e3c8f0489a7957e8d6a6daeaebd01c72f7efb37",
+            "heading": "### Requirement: Non-claims are preserved",
+            "kind": "added",
+            "requirement_id": "aspen.wasm_import_admission.nonclaims"
+          },
+          {
+            "block_hash": "50c577161ad5adab8f2aa6434019b6ec02050502d8890e1f7cae3e2877394b99",
+            "heading": "### Requirement: The rail has positive and negative fixtures",
+            "kind": "added",
+            "requirement_id": "aspen.wasm_import_admission.fixtures"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "aspen.wasm_import_admission.manifest",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "aspen.wasm_import_admission.surface",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "aspen.wasm_import_admission.admission",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "aspen.wasm_import_admission.evidence",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "aspen.wasm_import_admission.nonclaims",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "aspen.wasm_import_admission.fixtures",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/declare-wasm-component-import-admission/specs/wasm-import-admission/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "04c77aa1a5ab1e8f2c5b90ea9d950c5da734e8f92f6a79b08c8421d1891ab4fd",
+          "exists": true,
+          "path": "./.cairn/specs/wasm-import-admission/spec.md"
+        }
+      ],
+      "manifest_hash": "afd0fd6e4383f9ad75dd9d73520c3c050cd6e5ff8258488f156afecf15bdc088"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/specs/wasm-import-admission/spec.md"
+        }
+      ],
+      "manifest_hash": "3b7d719cf13433c87e56a0208e4e894e384a7904d6774265920af6c8f536c5eb"
+    },
+    "kind": "sync",
+    "manifest_hash": "429d74b3f1e4b1443c3e2b0fe8ba043b68629cc90dd36797580e9c865421e27f"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "d4eb4648f1eb103a48a2e7d803b9d565dd7353f3a99f0ba3f9c3973abb92ba54",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "fcd09637debdfb85fca20ffe56d3c9e87eaaf25bfac941a6a9fe60de6a59b8b0",
+  "reasons": [],
+  "receipt_hash": "94b2a903251ff8ad7d2a24565284848308a855731a285df73c8e078e2eb64726",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

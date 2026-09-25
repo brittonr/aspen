@@ -1,0 +1,171 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: declare-wasm-component-import-admission",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-09-25-declare-wasm-component-import-admission"
+    }
+  ],
+  "blocked": false,
+  "change": "declare-wasm-component-import-admission",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "a50e6dce616197ae225704f5f44a8fa1092e859b111f2ebf458f0bed6754de6e",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "9770b0aa0f8c1d35bdc2ab00265eddec35d696082079c045b030a24bf1a0ad04",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-declare-wasm-component-import-admission/design.md"
+        },
+        {
+          "content_hash": "1746fdd335e6a913f70f7f1d2c5445cd5d217ac8983b0d41ad38d6d987d87cd1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-declare-wasm-component-import-admission/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "c40fb3757ea1816b84b1afcf914ce9a505d0a5abbee20806fa336fa184577a3b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-declare-wasm-component-import-admission/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "fd2042c9b682c41a3cee674f555b69a6e5227826de90d96296fb1a8969838978",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-declare-wasm-component-import-admission/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "ba9f75e776fd31060c94a8a661dd0a1d1ebadea5d83a649d309f2893296a9eb6",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-declare-wasm-component-import-admission/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "33c4f9a476fc9f100734e7cbe55883823269fb9d080e3c284bcddca88005893d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-declare-wasm-component-import-admission/evidence/verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-declare-wasm-component-import-admission/metadata.json"
+        },
+        {
+          "content_hash": "8e7950518239a06033ef38ef8ac344959fbb155422844023a0aaf58618ae9685",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-declare-wasm-component-import-admission/proposal.md"
+        },
+        {
+          "content_hash": "109837c054022d685ff9890f8764f0e2859b9b530c996c35b42e3bb9d2380b73",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-declare-wasm-component-import-admission/specs/wasm-import-admission/spec.md"
+        },
+        {
+          "content_hash": "f4cba2708fb0466d24aaaa003c612ca7e418c41df4c0b0e7679ce00a78951431",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-declare-wasm-component-import-admission/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/declare-wasm-component-import-admission"
+        }
+      ],
+      "manifest_hash": "f6dcd064627ed08e095ac0f70dcd81feb0661c5f9e32b56eadc239af596cd423"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "9770b0aa0f8c1d35bdc2ab00265eddec35d696082079c045b030a24bf1a0ad04",
+          "exists": true,
+          "path": "./.cairn/changes/declare-wasm-component-import-admission/design.md"
+        },
+        {
+          "content_hash": "1746fdd335e6a913f70f7f1d2c5445cd5d217ac8983b0d41ad38d6d987d87cd1",
+          "exists": true,
+          "path": "./.cairn/changes/declare-wasm-component-import-admission/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "c40fb3757ea1816b84b1afcf914ce9a505d0a5abbee20806fa336fa184577a3b",
+          "exists": true,
+          "path": "./.cairn/changes/declare-wasm-component-import-admission/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "fd2042c9b682c41a3cee674f555b69a6e5227826de90d96296fb1a8969838978",
+          "exists": true,
+          "path": "./.cairn/changes/declare-wasm-component-import-admission/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "ba9f75e776fd31060c94a8a661dd0a1d1ebadea5d83a649d309f2893296a9eb6",
+          "exists": true,
+          "path": "./.cairn/changes/declare-wasm-component-import-admission/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "33c4f9a476fc9f100734e7cbe55883823269fb9d080e3c284bcddca88005893d",
+          "exists": true,
+          "path": "./.cairn/changes/declare-wasm-component-import-admission/evidence/verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/declare-wasm-component-import-admission/metadata.json"
+        },
+        {
+          "content_hash": "8e7950518239a06033ef38ef8ac344959fbb155422844023a0aaf58618ae9685",
+          "exists": true,
+          "path": "./.cairn/changes/declare-wasm-component-import-admission/proposal.md"
+        },
+        {
+          "content_hash": "109837c054022d685ff9890f8764f0e2859b9b530c996c35b42e3bb9d2380b73",
+          "exists": true,
+          "path": "./.cairn/changes/declare-wasm-component-import-admission/specs/wasm-import-admission/spec.md"
+        },
+        {
+          "content_hash": "f4cba2708fb0466d24aaaa003c612ca7e418c41df4c0b0e7679ce00a78951431",
+          "exists": true,
+          "path": "./.cairn/changes/declare-wasm-component-import-admission/tasks.md"
+        }
+      ],
+      "manifest_hash": "e06f696d8c0956ad987551c7b1b0c5b619cdae4c8c17ca8b710903dcfa04d29f"
+    },
+    "kind": "archive",
+    "manifest_hash": "bbb0d14787d54f8b5fc4dfb08d367e709f62dd1040243469cc4110a0806341b9"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "171b2229880385f76ac78943fc0a42d320f5c1c32481df24d55c6ac38fe2f39d",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "fcd09637debdfb85fca20ffe56d3c9e87eaaf25bfac941a6a9fe60de6a59b8b0",
+  "reasons": [],
+  "receipt_hash": "2305b6cc32050200f7f81ca938505d6058a4c409b48d19b5beda2c7d18c8e974",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
