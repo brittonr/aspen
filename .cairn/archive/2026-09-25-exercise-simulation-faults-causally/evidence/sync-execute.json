@@ -1,0 +1,131 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/exercise-simulation-faults-causally/specs/fabric-simulation/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/exercise-simulation-faults-causally/specs/fabric-simulation/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "exercise-simulation-faults-causally",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/exercise-simulation-faults-causally/specs/fabric-simulation/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "464cf5a158f777f47a3742493eda1253c7017f00ebc65e8ef1f3cc50b2c108fa",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "e81292a7d40dd35881d05bf67540c2b966bb94c51e74c3dbb07e6a2afdae78d9",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "fef76ece3774121fac0be18934864ed132beebbf55816ffa290f89cc57ac6304",
+        "destination": ".cairn/specs/fabric-simulation/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "3cf0f670687de7f700f3194ca3fe65bb762cf276062e1a41e0867748bd7a8ae0",
+        "operations": [
+          {
+            "block_hash": "63a70a9d6e99273c669636dc63ad5278aeb736a3fa23b209521b528515cbba57",
+            "heading": "### Requirement: Simulated transport state changes delivery",
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.stateful_transport"
+          },
+          {
+            "block_hash": "df044d487ba6216a99f72a8583a34979c020d5151a660c4a07e71bfe172e147c",
+            "heading": "### Requirement: Simulated storage state defines what survives",
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.stateful_storage"
+          },
+          {
+            "block_hash": "969d8e605032d6dc841ac5ded6f2c3a91108d58e84944012cbcb9ad3a2113ec8",
+            "heading": "### Requirement: Schedules explore, replay, and minimize over real execution",
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.causal_exploration"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.stateful_transport",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.stateful_storage",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.causal_exploration",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/exercise-simulation-faults-causally/specs/fabric-simulation/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "3cf0f670687de7f700f3194ca3fe65bb762cf276062e1a41e0867748bd7a8ae0",
+          "exists": true,
+          "path": "./.cairn/specs/fabric-simulation/spec.md"
+        }
+      ],
+      "manifest_hash": "62312b5b05e3a86211d025d8dc4ed346e1edea0ded49b42ad5e03f56bdc86ddc"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "e81292a7d40dd35881d05bf67540c2b966bb94c51e74c3dbb07e6a2afdae78d9",
+          "exists": true,
+          "path": "./.cairn/specs/fabric-simulation/spec.md"
+        }
+      ],
+      "manifest_hash": "f625ae4efdbb9eea9c7e82a1d1a4f19d48a8711d16c28187abf1121f35c65ddf"
+    },
+    "kind": "sync",
+    "manifest_hash": "5181dbc34ec863360b26e31b43356052d7f342a96df92992faa10d1c28dc6809"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "37e0819b6478e2689cf3e5fd8037a27a3ec89ad2dbb82202f567047256a3d044",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "b0598897c1071972acb9985ee8bdab76a177e1c8ce2dd8a0f5ca880624698c87",
+  "reasons": [],
+  "receipt_hash": "f66509d1aa2334024d274ad0f9bc39989ff2c77597f89e740f7b826cf4c4665c",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

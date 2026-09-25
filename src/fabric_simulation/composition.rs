@@ -538,7 +538,7 @@ pub fn reference_world_manifest() -> crate::error::Result<SimulatedWorldManifest
     })
 }
 
-// r[impl molten.fabric_simulation.causal_acknowledgment]
+// r[impl molten.fabric_simulation.stateful_storage]
 pub fn causal_acknowledgment_manifest(is_completion_delayed: bool) -> crate::error::Result<SimulatedWorldManifest> {
     let mut manifest = reference_world_manifest()?;
     let kv_node = reference_node_id(crate::fabric::ReferenceSystemKind::TransactionalKeyValue);

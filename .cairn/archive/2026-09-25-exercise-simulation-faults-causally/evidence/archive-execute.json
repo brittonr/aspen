@@ -1,0 +1,171 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: exercise-simulation-faults-causally",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-09-25-exercise-simulation-faults-causally"
+    }
+  ],
+  "blocked": false,
+  "change": "exercise-simulation-faults-causally",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "1dbf81a6d835deeccc1307aba171f61b76cd25d35caf0d7b3a741b2ca88f3504",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "630cc36562cfc780fd70230d7980efd9cfaffa0c69c42e176774e5a04d5e0cc1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-exercise-simulation-faults-causally/design.md"
+        },
+        {
+          "content_hash": "a992d8b842fcfa92fe9f09cf50a0c43f09d47793c2f1ef1f916eb7b983391516",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-exercise-simulation-faults-causally/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "36a397992f8c70832ed14a55e737404b33c32640482905b399b99de794cfb861",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-exercise-simulation-faults-causally/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "b2d6d1eaa0c8f56979b2faa044ff07d23ec2f43988302822f6c2fbfdb6428611",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-exercise-simulation-faults-causally/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "a17543df3666ae8a55fdb8dcea5c88cdde693827e900308cae90d7afd7665e9b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-exercise-simulation-faults-causally/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "7535eb27006b874118d13f54eb12c020f75cc1e4d7fb5f3e8e31540269783a8f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-exercise-simulation-faults-causally/evidence/verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-exercise-simulation-faults-causally/metadata.json"
+        },
+        {
+          "content_hash": "dc826bcfc1c323e32ada343257cde89683bdc16eb53384007267a7f488de1608",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-exercise-simulation-faults-causally/proposal.md"
+        },
+        {
+          "content_hash": "fef76ece3774121fac0be18934864ed132beebbf55816ffa290f89cc57ac6304",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-exercise-simulation-faults-causally/specs/fabric-simulation/spec.md"
+        },
+        {
+          "content_hash": "55f21f608de3aa3662b9a38d85a78418136f21061c4ad5a49525b315c1a98c47",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-25-exercise-simulation-faults-causally/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/exercise-simulation-faults-causally"
+        }
+      ],
+      "manifest_hash": "f65956e80d591580c1cf2201f6891259783760d50a1f4bcd9ff79524e7d4a28c"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "630cc36562cfc780fd70230d7980efd9cfaffa0c69c42e176774e5a04d5e0cc1",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-simulation-faults-causally/design.md"
+        },
+        {
+          "content_hash": "a992d8b842fcfa92fe9f09cf50a0c43f09d47793c2f1ef1f916eb7b983391516",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-simulation-faults-causally/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "36a397992f8c70832ed14a55e737404b33c32640482905b399b99de794cfb861",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-simulation-faults-causally/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "b2d6d1eaa0c8f56979b2faa044ff07d23ec2f43988302822f6c2fbfdb6428611",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-simulation-faults-causally/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "a17543df3666ae8a55fdb8dcea5c88cdde693827e900308cae90d7afd7665e9b",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-simulation-faults-causally/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "7535eb27006b874118d13f54eb12c020f75cc1e4d7fb5f3e8e31540269783a8f",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-simulation-faults-causally/evidence/verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-simulation-faults-causally/metadata.json"
+        },
+        {
+          "content_hash": "dc826bcfc1c323e32ada343257cde89683bdc16eb53384007267a7f488de1608",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-simulation-faults-causally/proposal.md"
+        },
+        {
+          "content_hash": "fef76ece3774121fac0be18934864ed132beebbf55816ffa290f89cc57ac6304",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-simulation-faults-causally/specs/fabric-simulation/spec.md"
+        },
+        {
+          "content_hash": "55f21f608de3aa3662b9a38d85a78418136f21061c4ad5a49525b315c1a98c47",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-simulation-faults-causally/tasks.md"
+        }
+      ],
+      "manifest_hash": "e3ed65b2661d4d7fb227d73ce4300a454979fa9d895a85685f52f0c062a36c3b"
+    },
+    "kind": "archive",
+    "manifest_hash": "b5852ca7c5df674839fff0f24ad2a08831285b3bee1271199faa4a901b86f25e"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "01ad2218557f7329b3e52f665385805c3cfbf1d3f3d9d1bd6ac3446c21bfcb7a",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "b0598897c1071972acb9985ee8bdab76a177e1c8ce2dd8a0f5ca880624698c87",
+  "reasons": [],
+  "receipt_hash": "ef6324ab6d5d6d49522b34902b0fe980aee07e070f09985e7b8d2719b8b40af0",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
