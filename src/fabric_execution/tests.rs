@@ -2,6 +2,7 @@ use super::*;
 
 mod live;
 mod simulation;
+mod stdin;
 
 const HASH_A: &str = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const HASH_B: &str = "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -32,9 +33,6 @@ const EXPECTED_STDOUT: &[u8] = b"bounded:input";
 const INPUT_BYTES: &[u8] = b"input\n";
 const FLOOD_OUTPUT: &str = "overflow";
 const NON_TERMINATING_SCRIPT: &str = "while :; do :; done";
-/// Exceeds the default Linux pipe capacity (64 KiB), so a writer to a child that
-/// exits without reading must observe a closed pipe instead of buffering.
-const PIPE_OVERFLOW_INPUT_BYTES: u64 = 262_144;
 
 #[derive(Debug, Clone, Default)]
 struct MemoryPublisher {
@@ -178,21 +176,6 @@ fn canonical_request(
     arguments: Vec<String>,
 ) -> (CanonicalExecutionProfile, CanonicalExecutionRequest) {
     canonicalize_request(kind, request(arguments))
-}
-
-/// Admits a request whose child never reads stdin, so no input is supplied.
-fn canonical_request_without_input(
-    kind: ExecutionProfileKind,
-    arguments: Vec<String>,
-) -> (CanonicalExecutionProfile, CanonicalExecutionRequest) {
-    canonicalize_request(kind, request_without_input(arguments))
-}
-
-fn request_without_input(arguments: Vec<String>) -> ExecutionRequest {
-    ExecutionRequest {
-        stdin_ref: None,
-        ..request(arguments)
-    }
 }
 
 fn canonicalize_request(

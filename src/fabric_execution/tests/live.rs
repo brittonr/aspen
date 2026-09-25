@@ -23,7 +23,7 @@ fn live_adapter_clears_environment_round_trips_input_and_publishes_bounded_outpu
 // r[verify molten.fabric_execution.output]
 #[test]
 fn live_adapter_bounds_output_and_preserves_publication_failure_receipt() {
-    let mut bounded_request = request_without_input(script_arguments(&format!("printf '{FLOOD_OUTPUT}'")));
+    let mut bounded_request = stdin::request_without_input(script_arguments(&format!("printf '{FLOOD_OUTPUT}'")));
     bounded_request.limits.stdout_max_bytes = SMALL_STREAM_BYTES;
     let (profile, request) = canonicalize_request(ExecutionProfileKind::LiveBoundedProcess, bounded_request);
     let mut adapter = LiveExecutionAdapter::new(profile, MemoryPublisher {
@@ -44,8 +44,10 @@ fn live_adapter_bounds_output_and_preserves_publication_failure_receipt() {
 #[test]
 fn live_adapter_preserves_rejected_exit_and_descendant_teardown() {
     let rejected_script = format!("exit {REJECTED_EXIT_CODE}");
-    let (rejected_profile, rejected_request) =
-        canonical_request_without_input(ExecutionProfileKind::LiveBoundedProcess, script_arguments(&rejected_script));
+    let (rejected_profile, rejected_request) = stdin::canonical_request_without_input(
+        ExecutionProfileKind::LiveBoundedProcess,
+        script_arguments(&rejected_script),
+    );
     let mut rejected_adapter =
         LiveExecutionAdapter::new(rejected_profile, MemoryPublisher::default()).expect("rejected exit adapter");
     let rejected = rejected_adapter
@@ -55,8 +57,10 @@ fn live_adapter_preserves_rejected_exit_and_descendant_teardown() {
     assert_eq!(rejected.process.disposition, ExecutionObservedDisposition::ExitPolicyRejected);
 
     let descendant_script = format!("({NON_TERMINATING_SCRIPT}) & printf 'bounded'");
-    let (teardown_profile, teardown_request) =
-        canonical_request_without_input(ExecutionProfileKind::LiveBoundedProcess, script_arguments(&descendant_script));
+    let (teardown_profile, teardown_request) = stdin::canonical_request_without_input(
+        ExecutionProfileKind::LiveBoundedProcess,
+        script_arguments(&descendant_script),
+    );
     let mut teardown_adapter =
         LiveExecutionAdapter::new(teardown_profile, MemoryPublisher::default()).expect("teardown adapter");
     let teardown = teardown_adapter
@@ -66,35 +70,10 @@ fn live_adapter_preserves_rejected_exit_and_descendant_teardown() {
     assert!(teardown.process.teardown_observed);
 }
 
-// r[verify molten.fabric_execution.uncertainty]
-// Pins today's conservative mapping: the pinned bounded-exec revision reports a
-// normally exited child that closed stdin before consuming its input as a
-// `WriteStdin` error, and the adapter keeps that post-start failure unknown.
-// The follow-up that adopts bounded-exec's input-delivery observation revises
-// this test to expect the normal publication path instead.
-#[test]
-fn live_adapter_keeps_unconsumed_oversized_input_unknown_without_completion_claim() {
-    let mut oversized_request = request(script_arguments("exit 0"));
-    oversized_request.limits.stdin_max_bytes = PIPE_OVERFLOW_INPUT_BYTES;
-    let mut oversized_descriptor = descriptor(ExecutionProfileKind::LiveBoundedProcess);
-    oversized_descriptor.max_stdin_bytes = PIPE_OVERFLOW_INPUT_BYTES;
-    let (profile, request) = canonicalize_request_with_descriptor(&oversized_descriptor, oversized_request);
-    let mut adapter = LiveExecutionAdapter::new(profile, MemoryPublisher::default()).expect("live adapter");
-    let input = vec![0_u8; usize::try_from(PIPE_OVERFLOW_INPUT_BYTES).expect("fixture input fits the host")];
-    let failure = adapter
-        .execute(&request, &resolved(Some(input)), None)
-        .expect_err("unconsumed oversized input is not a completion");
-    assert_eq!(failure.kind, ExecutionPortFailureKind::UnknownAfterStart);
-    assert!(failure.process_observation.is_none());
-    assert!(failure.receipt.is_none());
-    assert!(adapter.publisher().published.is_empty());
-    assert_eq!(adapter.reconcile(HASH_B, GENERATION), ExecutionReconciliationStatus::UnknownRequiresReconciliation);
-}
-
 // r[verify molten.fabric_execution.lifecycle]
 #[test]
 fn live_adapter_reports_timeout_cancellation_and_definite_spawn_failure() {
-    let mut bounded_timeout_request = request_without_input(script_arguments(NON_TERMINATING_SCRIPT));
+    let mut bounded_timeout_request = stdin::request_without_input(script_arguments(NON_TERMINATING_SCRIPT));
     bounded_timeout_request.limits.timeout_ms = SHORT_TIMEOUT_MS;
     let (timeout_profile, timeout_request) =
         canonicalize_request(ExecutionProfileKind::LiveBoundedProcess, bounded_timeout_request);
@@ -104,7 +83,7 @@ fn live_adapter_reports_timeout_cancellation_and_definite_spawn_failure() {
         timeout_adapter.execute(&timeout_request, &resolved(None), None).expect("timeout is an observation");
     assert_eq!(timed_out.process.lifecycle, ExecutionLifecycleState::TimedOut);
 
-    let (cancel_profile, cancel_request) = canonical_request_without_input(
+    let (cancel_profile, cancel_request) = stdin::canonical_request_without_input(
         ExecutionProfileKind::LiveBoundedProcess,
         script_arguments(NON_TERMINATING_SCRIPT),
     );
