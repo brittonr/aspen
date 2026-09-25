@@ -1,0 +1,3 @@
+requirement-traceability-gate on the staged split-runtime-spine-blob-ref-requirement-ids tree (parent 66a8c9ddb):
+molten-requirement-traceability-gate> traceability ref=blake3:a76a5ea645a566c6d4d6b89e23a96cc1290f07e61a3805efea327d949f919b35 decision=pass covered=1 missing-negative=0 stale=0 compatibility-only=1
+(same ref and decision as the integration head dca8f7135)
