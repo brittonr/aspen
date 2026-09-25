@@ -156,14 +156,17 @@ impl FabricTransferAdapter {
             }
             Mechanism::IrohLive { adapter, runtime } => {
                 runtime
-                    .block_on(adapter.live_loopback_frame(
-                        &self.session_id,
-                        &self.stream_id,
-                        OPERATION_REF,
-                        ALPN,
-                        &payload,
-                        observed_tick(crate::bounded::usize_from_u64(self.call_count, "replication call count")?)?,
-                    ))?
+                    .block_on(adapter.live_loopback_frame(LoopbackFrameInput {
+                        session_id: &self.session_id,
+                        stream_id: &self.stream_id,
+                        operation_id: OPERATION_REF,
+                        alpn: ALPN,
+                        payload: &payload,
+                        observed_tick: observed_tick(crate::bounded::usize_from_u64(
+                            self.call_count,
+                            "replication call count",
+                        )?)?,
+                    }))?
                     .acknowledged
                     .transition_ref
             }

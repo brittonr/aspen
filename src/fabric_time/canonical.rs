@@ -171,66 +171,66 @@ pub fn fabric_time_port_descriptors(profile: &CanonicalTimeProfile) -> Vec<crate
         ),
     };
     vec![
-        port_descriptor(
-            FABRIC_CLOCK_PORT_ID,
-            crate::fabric::FabricPortClass::Time,
-            &[
+        port_descriptor(PortDescriptorInput {
+            port_id: FABRIC_CLOCK_PORT_ID,
+            class: crate::fabric::FabricPortClass::Time,
+            operations: &[
                 "observe-wall",
                 "observe-monotonic",
                 "advance-logical",
                 "advance-virtual",
                 "convert-explicit",
             ],
-            &[super::FABRIC_TIME_PROFILE_SCHEMA],
-            &[super::FABRIC_TIME_OBSERVATION_SCHEMA],
-            &[crate::fabric::FabricAuthority::Time],
-            &[crate::fabric::FabricResource::LogicalTime],
+            input_schemas: &[super::FABRIC_TIME_PROFILE_SCHEMA],
+            output_schemas: &[super::FABRIC_TIME_OBSERVATION_SCHEMA],
+            authorities: &[crate::fabric::FabricAuthority::Time],
+            resources: &[crate::fabric::FabricResource::LogicalTime],
             determinism,
             replay,
             profile,
-        ),
-        port_descriptor(
-            FABRIC_TIMER_PORT_ID,
-            crate::fabric::FabricPortClass::Time,
-            &["schedule", "poll", "cancel", "cleanup-generation"],
-            &[super::FABRIC_TIME_PROFILE_SCHEMA],
-            &[super::FABRIC_TIMER_EVENT_SCHEMA],
-            &[crate::fabric::FabricAuthority::Time],
-            &[
+        }),
+        port_descriptor(PortDescriptorInput {
+            port_id: FABRIC_TIMER_PORT_ID,
+            class: crate::fabric::FabricPortClass::Time,
+            operations: &["schedule", "poll", "cancel", "cleanup-generation"],
+            input_schemas: &[super::FABRIC_TIME_PROFILE_SCHEMA],
+            output_schemas: &[super::FABRIC_TIMER_EVENT_SCHEMA],
+            authorities: &[crate::fabric::FabricAuthority::Time],
+            resources: &[
                 crate::fabric::FabricResource::LogicalTime,
                 crate::fabric::FabricResource::QueueDepth,
             ],
             determinism,
             replay,
             profile,
-        ),
-        port_descriptor(
-            FABRIC_SCHEDULER_PORT_ID,
-            crate::fabric::FabricPortClass::Scheduling,
-            &["wake", "choose", "yield", "block", "cancel", "cleanup-generation"],
-            &[super::FABRIC_TIME_PROFILE_SCHEMA],
-            &[super::FABRIC_SCHEDULER_EVENT_SCHEMA],
-            &[crate::fabric::FabricAuthority::Scheduling],
-            &[
+        }),
+        port_descriptor(PortDescriptorInput {
+            port_id: FABRIC_SCHEDULER_PORT_ID,
+            class: crate::fabric::FabricPortClass::Scheduling,
+            operations: &["wake", "choose", "yield", "block", "cancel", "cleanup-generation"],
+            input_schemas: &[super::FABRIC_TIME_PROFILE_SCHEMA],
+            output_schemas: &[super::FABRIC_SCHEDULER_EVENT_SCHEMA],
+            authorities: &[crate::fabric::FabricAuthority::Scheduling],
+            resources: &[
                 crate::fabric::FabricResource::Concurrency,
                 crate::fabric::FabricResource::QueueDepth,
             ],
             determinism,
             replay,
             profile,
-        ),
-        port_descriptor(
-            FABRIC_ENTROPY_PORT_ID,
-            crate::fabric::FabricPortClass::Time,
-            &["open-purpose-stream", "draw-bytes", "draw-choice"],
-            &[super::FABRIC_TIME_PROFILE_SCHEMA],
-            &[super::FABRIC_ENTROPY_EVENT_SCHEMA],
-            &[crate::fabric::FabricAuthority::Time],
-            &[crate::fabric::FabricResource::Memory],
+        }),
+        port_descriptor(PortDescriptorInput {
+            port_id: FABRIC_ENTROPY_PORT_ID,
+            class: crate::fabric::FabricPortClass::Time,
+            operations: &["open-purpose-stream", "draw-bytes", "draw-choice"],
+            input_schemas: &[super::FABRIC_TIME_PROFILE_SCHEMA],
+            output_schemas: &[super::FABRIC_ENTROPY_EVENT_SCHEMA],
+            authorities: &[crate::fabric::FabricAuthority::Time],
+            resources: &[crate::fabric::FabricResource::Memory],
             determinism,
             replay,
             profile,
-        ),
+        }),
     ]
 }
 
@@ -240,12 +240,14 @@ pub fn canonical_timer_event(
     transition: &super::TimerTransition,
 ) -> crate::error::Result<CanonicalTimeEvent> {
     canonical_event(
-        profile_ref,
-        CanonicalTimeEventKind::Timer,
-        transition.next.key.generation,
-        &transition.next.key.service_id,
-        timer_action(transition.action),
-        transition.next.next_deadline_ticks,
+        EventHeader {
+            profile_ref,
+            kind: CanonicalTimeEventKind::Timer,
+            generation: transition.next.key.generation,
+            subject: &transition.next.key.service_id,
+            action: timer_action(transition.action),
+            ticks: transition.next.next_deadline_ticks,
+        },
         vec![
             field("timer-sequence", crate::preserves_rail::u64_value(transition.next.key.sequence)),
             field("delivery-count", crate::preserves_rail::u64_value(transition.delivery_count)),
@@ -268,12 +270,14 @@ pub fn canonical_scheduler_transition(
     transition: &super::SchedulerTransition,
 ) -> crate::error::Result<CanonicalTimeEvent> {
     canonical_event(
-        profile_ref,
-        CanonicalTimeEventKind::Scheduler,
-        transition.runnable.generation,
-        &transition.runnable.runnable_id,
-        scheduler_action(transition.action),
-        0,
+        EventHeader {
+            profile_ref,
+            kind: CanonicalTimeEventKind::Scheduler,
+            generation: transition.runnable.generation,
+            subject: &transition.runnable.runnable_id,
+            action: scheduler_action(transition.action),
+            ticks: 0,
+        },
         vec![field(
             "service-id",
             crate::preserves_rail::string(&transition.runnable.service_id),
@@ -287,12 +291,14 @@ pub fn canonical_scheduler_selection(
     selection: &super::SchedulerSelection,
 ) -> crate::error::Result<CanonicalTimeEvent> {
     canonical_event(
-        profile_ref,
-        CanonicalTimeEventKind::Scheduler,
-        selection.selected.generation,
-        &selection.selected.runnable_id,
-        "selected",
-        selection.choice_sequence,
+        EventHeader {
+            profile_ref,
+            kind: CanonicalTimeEventKind::Scheduler,
+            generation: selection.selected.generation,
+            subject: &selection.selected.runnable_id,
+            action: "selected",
+            ticks: selection.choice_sequence,
+        },
         vec![
             field("service-id", crate::preserves_rail::string(&selection.selected.service_id)),
             field("eligible-count", crate::preserves_rail::u64_value(selection.eligible_count)),
@@ -327,12 +333,14 @@ pub fn canonical_entropy_event(metadata: &super::EntropyEvidenceMetadata) -> cra
         super::EntropyMode::ProductionCryptographic => {}
     }
     canonical_event(
-        &metadata.profile_ref,
-        CanonicalTimeEventKind::Entropy,
-        metadata.generation,
-        &metadata.stream_id,
-        metadata.mode.as_str(),
-        metadata.end_position_bytes,
+        EventHeader {
+            profile_ref: &metadata.profile_ref,
+            kind: CanonicalTimeEventKind::Entropy,
+            generation: metadata.generation,
+            subject: &metadata.stream_id,
+            action: metadata.mode.as_str(),
+            ticks: metadata.end_position_bytes,
+        },
         vec![
             field("purpose", crate::preserves_rail::string(&metadata.purpose)),
             field("start-position-bytes", crate::preserves_rail::u64_value(metadata.start_position_bytes)),
@@ -350,12 +358,14 @@ pub fn canonical_deadline_event(
     decision: &super::DeadlineDecision,
 ) -> crate::error::Result<CanonicalTimeEvent> {
     canonical_event(
-        profile_ref,
-        CanonicalTimeEventKind::Deadline,
-        decision.generation,
-        &decision.subject_id,
-        deadline_status(decision.status),
-        decision.observed_ticks,
+        EventHeader {
+            profile_ref,
+            kind: CanonicalTimeEventKind::Deadline,
+            generation: decision.generation,
+            subject: &decision.subject_id,
+            action: deadline_status(decision.status),
+            ticks: decision.observed_ticks,
+        },
         vec![
             field("domain", crate::preserves_rail::string(decision.domain.as_str())),
             field("target-ticks", crate::preserves_rail::u64_value(decision.target_ticks)),
@@ -370,12 +380,14 @@ pub fn canonical_lease_event(
     decision: &super::LeaseDecision,
 ) -> crate::error::Result<CanonicalTimeEvent> {
     canonical_event(
-        profile_ref,
-        CanonicalTimeEventKind::Lease,
-        decision.generation,
-        &decision.lease_id,
-        lease_decision(decision.kind),
-        0,
+        EventHeader {
+            profile_ref,
+            kind: CanonicalTimeEventKind::Lease,
+            generation: decision.generation,
+            subject: &decision.lease_id,
+            action: lease_decision(decision.kind),
+            ticks: 0,
+        },
         vec![
             field("owner-id", crate::preserves_rail::string(&decision.owner_id)),
             field("fencing-token", optional_u64(decision.fencing_token)),
@@ -394,12 +406,14 @@ pub fn canonical_clock_anomaly_event(
     decision: &super::WallClockAnomalyDecision,
 ) -> crate::error::Result<CanonicalTimeEvent> {
     canonical_event(
-        profile_ref,
-        CanonicalTimeEventKind::ClockAnomaly,
-        generation,
-        "wall-clock",
-        clock_anomaly(decision.kind),
-        decision.observed_unix_nanos,
+        EventHeader {
+            profile_ref,
+            kind: CanonicalTimeEventKind::ClockAnomaly,
+            generation,
+            subject: "wall-clock",
+            action: clock_anomaly(decision.kind),
+            ticks: decision.observed_unix_nanos,
+        },
         vec![
             field("previous-unix-nanos", crate::preserves_rail::u64_value(decision.previous_unix_nanos)),
             field("delta-nanos", crate::preserves_rail::u64_value(decision.delta_nanos)),
@@ -408,19 +422,20 @@ pub fn canonical_clock_anomaly_event(
     )
 }
 
-pub fn canonical_named_event(
-    profile_ref: &str,
-    kind: CanonicalTimeEventKind,
-    generation: u64,
-    subject: &str,
-    action: &str,
-    ticks: u64,
-) -> crate::error::Result<CanonicalTimeEvent> {
-    canonical_event(profile_ref, kind, generation, subject, action, ticks, Vec::new(), &[
-        "explicit-input",
-        "generation-bound",
-        "bounded-evidence",
-    ])
+/// The identity of one canonical fabric-time event: profile, kind, generation, subject, action, and
+/// tick.
+#[derive(Clone, Copy)]
+pub struct EventHeader<'a> {
+    pub profile_ref: &'a str,
+    pub kind: CanonicalTimeEventKind,
+    pub generation: u64,
+    pub subject: &'a str,
+    pub action: &'a str,
+    pub ticks: u64,
+}
+
+pub fn canonical_named_event(header: EventHeader<'_>) -> crate::error::Result<CanonicalTimeEvent> {
+    canonical_event(header, Vec::new(), &["explicit-input", "generation-bound", "bounded-evidence"])
 }
 
 // r[impl molten.fabric_time.evidence]
@@ -626,18 +641,32 @@ fn time_profile_value(profile: &super::AdmittedTimeProfile) -> preserves::IOValu
     ])
 }
 
-fn port_descriptor(
-    port_id: &str,
+struct PortDescriptorInput<'a> {
+    port_id: &'a str,
     class: crate::fabric::FabricPortClass,
-    operations: &[&str],
-    input_schemas: &[&str],
-    output_schemas: &[&str],
-    authorities: &[crate::fabric::FabricAuthority],
-    resources: &[crate::fabric::FabricResource],
+    operations: &'a [&'a str],
+    input_schemas: &'a [&'a str],
+    output_schemas: &'a [&'a str],
+    authorities: &'a [crate::fabric::FabricAuthority],
+    resources: &'a [crate::fabric::FabricResource],
     determinism: crate::fabric::DeterminismClass,
     replay: crate::fabric::ReplayClass,
-    profile: &CanonicalTimeProfile,
-) -> crate::fabric::FabricPortDescriptor {
+    profile: &'a CanonicalTimeProfile,
+}
+
+fn port_descriptor(input: PortDescriptorInput<'_>) -> crate::fabric::FabricPortDescriptor {
+    let PortDescriptorInput {
+        port_id,
+        class,
+        operations,
+        input_schemas,
+        output_schemas,
+        authorities,
+        resources,
+        determinism,
+        replay,
+        profile,
+    } = input;
     crate::fabric::FabricPortDescriptor {
         schema: crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
         port_id: port_id.to_string(),
@@ -658,15 +687,18 @@ fn port_descriptor(
 }
 
 fn canonical_event(
-    profile_ref: &str,
-    kind: CanonicalTimeEventKind,
-    generation: u64,
-    subject: &str,
-    action: &str,
-    ticks: u64,
+    header: EventHeader<'_>,
     details: Vec<preserves::IOValue>,
     event_checks: &[&str],
 ) -> crate::error::Result<CanonicalTimeEvent> {
+    let EventHeader {
+        profile_ref,
+        kind,
+        generation,
+        subject,
+        action,
+        ticks,
+    } = header;
     if generation == 0 {
         return Err(crate::error::MoltenError::invalid_harness("fabric time event generation must be non-zero"));
     }

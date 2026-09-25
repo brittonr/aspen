@@ -226,15 +226,7 @@ pub fn execute_task(root: &Path, ledger_root: &Path, plan_ref: &str, task_id: &s
     let before_state_ref = upgrade_state_snapshot_ref(root)?;
     let (decision, mut diagnostics, mut checks) = task_result(root, ledger_root, &plan, &task)?;
     let mut refs = task_refs(&task);
-    append_no_mutation_boundary(
-        root,
-        &task.kind,
-        decision,
-        &before_state_ref,
-        &mut refs,
-        &mut diagnostics,
-        &mut checks,
-    )?;
+    append_no_mutation_boundary(root, &task.kind, decision, &before_state_ref, BoundarySinks { refs: &mut refs, diagnostics: &mut diagnostics, checks: &mut checks })?;
     let receipt_value = upgrade_receipt_value(&UpgradeReceiptValueInput {
         operation: if task.kind == "cutover" {
             "cutover"
@@ -279,15 +271,7 @@ fn cutover_denied_for_incomplete_prior(
         ("metadata-cutover", "fail"),
         ("transcript-gate-before-cutover", "fail"),
     ];
-    append_no_mutation_boundary(
-        root,
-        "cutover",
-        "deny",
-        &before_state_ref,
-        &mut refs,
-        &mut diagnostics,
-        &mut checks,
-    )?;
+    append_no_mutation_boundary(root, "cutover", "deny", &before_state_ref, BoundarySinks { refs: &mut refs, diagnostics: &mut diagnostics, checks: &mut checks })?;
     let receipt_value = upgrade_receipt_value(&UpgradeReceiptValueInput {
         operation: "cutover",
         decision: "deny",
@@ -308,15 +292,14 @@ fn cutover_denied_for_incomplete_prior(
     })
 }
 
-fn append_no_mutation_boundary(
-    root: &Path,
-    operation: &str,
-    decision: &str,
-    before_state_ref: &str,
-    refs: &mut Vec<String>,
-    diagnostics: &mut Vec<String>,
-    checks: &mut Vec<UpgradeCheckPair>,
-) -> Result<()> {
+struct BoundarySinks<'a> {
+    refs: &'a mut Vec<String>,
+    diagnostics: &'a mut Vec<String>,
+    checks: &'a mut Vec<UpgradeCheckPair>,
+}
+
+fn append_no_mutation_boundary(root: &Path, operation: &str, decision: &str, before_state_ref: &str, input: BoundarySinks<'_>) -> Result<()> {
+    let BoundarySinks { refs, diagnostics, checks } = input;
     if decision != "deny" {
         return Ok(());
     }

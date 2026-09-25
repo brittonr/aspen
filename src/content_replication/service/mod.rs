@@ -106,14 +106,13 @@ pub fn operator_status(outcome: &ReconcileOutcome) -> OperatorStatusView {
 
 pub fn reconcile(mut instance: ServiceInstance, ports: ReconcilePorts<'_>) -> crate::error::Result<ReconcileOutcome> {
     require_active(&instance)?;
-    let facts = observe_current_facts(
-        &instance.manifest,
-        &mut *ports.authority,
-        &mut *ports.identity,
-        &mut *ports.membership,
-        &mut *ports.placement,
-        &mut *ports.time,
-    )?;
+    let facts = observe_current_facts(&instance.manifest, FactPorts {
+        authority_port: &mut *ports.authority,
+        identity_port: &mut *ports.identity,
+        membership_port: &mut *ports.membership,
+        placement_port: &mut *ports.placement,
+        time_port: &mut *ports.time,
+    })?;
     let inventory = ports.content.inventory(&instance.manifest)?;
     let history = ports.durable.load_history(&instance.manifest)?;
     let input = ReconcileInput {
@@ -147,7 +146,14 @@ pub fn reconcile(mut instance: ServiceInstance, ports: ReconcilePorts<'_>) -> cr
     evidence_refs.push(canonical_status.record_ref.clone());
     evidence_refs.sort();
     evidence_refs.dedup();
-    let receipt = execution_receipt(&instance, &plan, &status, &canonical_status, execution.operations, evidence_refs);
+    let receipt = execution_receipt(ReceiptInput {
+        instance: &instance,
+        plan: &plan,
+        status: &status,
+        canonical_status: &canonical_status,
+        operations: execution.operations,
+        evidence_refs,
+    });
     let canonical_receipt = canonical_receipt(&receipt)?;
     execution.receipts.publish_receipt(&canonical_receipt)?;
     instance.last_plan_ref = Some(plan.plan_ref.clone());
@@ -183,14 +189,22 @@ impl CurrentFacts {
     }
 }
 
-fn observe_current_facts(
-    manifest: &Manifest,
-    authority_port: &mut dyn AuthorityPort,
-    identity_port: &mut dyn IdentityPort,
-    membership_port: &mut dyn MembershipPort,
-    placement_port: &mut dyn PlacementPort,
-    time_port: &mut dyn TimePort,
-) -> crate::error::Result<CurrentFacts> {
+struct FactPorts<'a> {
+    authority_port: &'a mut dyn AuthorityPort,
+    identity_port: &'a mut dyn IdentityPort,
+    membership_port: &'a mut dyn MembershipPort,
+    placement_port: &'a mut dyn PlacementPort,
+    time_port: &'a mut dyn TimePort,
+}
+
+fn observe_current_facts(manifest: &Manifest, input: FactPorts<'_>) -> crate::error::Result<CurrentFacts> {
+    let FactPorts {
+        authority_port,
+        identity_port,
+        membership_port,
+        placement_port,
+        time_port,
+    } = input;
     let authority = authority_port.observe(manifest)?;
     validate_authority(manifest, &authority)?;
     let identity = identity_port.observe(manifest)?;

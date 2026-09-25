@@ -178,9 +178,15 @@ async fn concrete_port_assembly_denies_substitution_then_executes_bound_startup(
 
     let mut mismatched = identity.clone();
     mismatched.protocol_ref = super::tests::test_ref("substituted-assembled-protocol");
-    let error =
-        validate_concrete_replica_port_identity(&mismatched, &durability, &transport, &time, &application, &control)
-            .expect_err("concrete protocol substitution must deny");
+    let adapters = ReplicaAdapterSet {
+        durability,
+        transport,
+        time,
+        application,
+        control,
+    };
+    let error = validate_concrete_replica_port_identity(&mismatched, &adapters)
+        .expect_err("concrete protocol substitution must deny");
     assert!(error.to_string().contains("concrete adapter identity"));
 
     let startup_timer_ref = replica_state.active_election_timer_ref.clone();
@@ -200,8 +206,7 @@ async fn concrete_port_assembly_denies_substitution_then_executes_bound_startup(
         port_binding_refs: fabric_binding_refs,
         production_admitted: false,
     };
-    let bundle = assemble_scoped_concrete_replica_ports(identity, durability, transport, time, application, control)
-        .expect("concrete port assembly");
+    let bundle = assemble_scoped_concrete_replica_ports(identity, adapters).expect("concrete port assembly");
     let service = ScopedLiveReplicaService::start(plan, bundle, event_receiver)
         .await
         .expect("concrete scoped service startup");

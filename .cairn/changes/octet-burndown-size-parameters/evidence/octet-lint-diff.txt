@@ -1,0 +1,23 @@
+# workspace (cargo octet check): base cec959753 -> candidate
+lint                                     findings          sites
+path_segment_repetition             1877 -> 1877     1038 -> 1038 
+excessive_file_length                550 -> 548       306 -> 305  
+borrowed_argument_types              368 -> 360       184 -> 180  
+function_length                      204 -> 202       128 -> 127  
+too_many_parameters                  143 -> 0          72 -> 0    
+underscore_in_module_filename         31 -> 31         15 -> 15   
+module_file_count                     20 -> 20         11 -> 11   
+ambient_env                           14 -> 14          5 -> 5    
+TOTAL                               3207 -> 3052     1759 -> 1681 
+
+# -p molten --lib
+lint                                     findings          sites
+path_segment_repetition              794 -> 794       794 -> 794  
+excessive_file_length                230 -> 229       230 -> 229  
+borrowed_argument_types              180 -> 176       180 -> 176  
+function_length                       71 -> 70         71 -> 70   
+too_many_parameters                   70 -> 0          70 -> 0    
+underscore_in_module_filename          7 -> 7           7 -> 7    
+ambient_env                            6 -> 6           4 -> 4    
+module_file_count                      5 -> 5           5 -> 5    
+TOTAL                               1363 -> 1287     1361 -> 1285 

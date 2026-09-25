@@ -165,15 +165,28 @@ pub struct CanonicalLifecycleReceipt {
     pub value: preserves::IOValue,
 }
 
+pub(crate) struct LifecycleReceiptInput<'a> {
+    pub(crate) manifest_ref: &'a str,
+    pub(crate) extension_id: &'a str,
+    pub(crate) service_id: &'a str,
+    pub(crate) previous: &'a super::LifecycleState,
+    pub(crate) next: &'a super::LifecycleState,
+    pub(crate) event: &'a super::LifecycleEvent,
+    pub(crate) usage: super::ResourceUsage,
+}
+
 pub(crate) fn canonical_lifecycle_receipt(
-    manifest_ref: &str,
-    extension_id: &str,
-    service_id: &str,
-    previous: &super::LifecycleState,
-    next: &super::LifecycleState,
-    event: &super::LifecycleEvent,
-    usage: super::ResourceUsage,
+    input: LifecycleReceiptInput<'_>,
 ) -> crate::error::Result<CanonicalLifecycleReceipt> {
+    let LifecycleReceiptInput {
+        manifest_ref,
+        extension_id,
+        service_id,
+        previous,
+        next,
+        event,
+        usage,
+    } = input;
     let value = crate::preserves_rail::record("system-extension-lifecycle-v1", vec![
         crate::preserves_rail::string(super::SYSTEM_EXTENSION_LIFECYCLE_SCHEMA),
         field("manifest-ref", crate::preserves_rail::string(manifest_ref)),
@@ -811,14 +824,24 @@ fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> crate::error:
     crate::error::MoltenError::invalid_harness(format!("{label} validation denied: {issues:?}"))
 }
 
-pub(crate) fn callback_event_value(
-    callback: super::CallbackKind,
-    generation: u64,
-    sequence: u64,
-    payload_ref: Option<&str>,
-    logical_tick: u64,
-    deadline_tick: u64,
-) -> preserves::IOValue {
+pub(crate) struct CallbackEventInput<'a> {
+    pub(crate) callback: super::CallbackKind,
+    pub(crate) generation: u64,
+    pub(crate) sequence: u64,
+    pub(crate) payload_ref: Option<&'a str>,
+    pub(crate) logical_tick: u64,
+    pub(crate) deadline_tick: u64,
+}
+
+pub(crate) fn callback_event_value(input: CallbackEventInput<'_>) -> preserves::IOValue {
+    let CallbackEventInput {
+        callback,
+        generation,
+        sequence,
+        payload_ref,
+        logical_tick,
+        deadline_tick,
+    } = input;
     crate::preserves_rail::record("system-extension-callback-event-v1", vec![
         crate::preserves_rail::string(super::SYSTEM_EXTENSION_CALLBACK_SCHEMA),
         field("callback", crate::preserves_rail::string(callback.as_str())),

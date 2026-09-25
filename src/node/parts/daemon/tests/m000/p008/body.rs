@@ -266,14 +266,7 @@
             let duplicate = send_control_live_ingress(&send_input).await.expect("duplicate live send");
             assert_duplicate(&sent, &duplicate);
             let listener_input = build_listener_input(&root);
-            let listener = serve_node_control_live_listener_with_topic(
-                &state_root,
-                &listener_input,
-                &mut receiver_topic,
-                &identity.node_id,
-                &identity.endpoint_id,
-                &live_ticket.live_endpoint_id,
-            )
+            let listener = serve_node_control_live_listener_with_topic(&state_root, &listener_input, &mut receiver_topic, EndpointIdentityInput { node_id: &identity.node_id, logical_endpoint_id: &identity.endpoint_id, bound_endpoint_id: &live_ticket.live_endpoint_id })
             .await
             .expect("listener drain");
             receiver_router.shutdown().await.expect("receiver shutdown");

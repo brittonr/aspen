@@ -292,15 +292,15 @@ impl IrohCrossProcessListener {
             run_server_exchange(&connection, &mut session, derive_request_ref, self.protocol.generation, timeout).await;
         let received = match exchange {
             Ok(exchange) => {
-                let evidence = finalize_successful_session(
+                let evidence = finalize_successful_session(SessionCloseInput {
                     session,
-                    EndpointParticipantRole::Listener,
-                    &self.endpoint_artifact.descriptor_ref,
+                    role: EndpointParticipantRole::Listener,
+                    descriptor_ref: &self.endpoint_artifact.descriptor_ref,
                     session_ref,
-                    &exchange.request_ref,
-                    &remote_transport_identity_ref,
-                    exchange.frame,
-                )?;
+                    request_ref: &exchange.request_ref,
+                    remote_transport_identity_ref: &remote_transport_identity_ref,
+                    frame: exchange.frame,
+                })?;
                 CrossProcessReceivedFrame {
                     payload: exchange.payload,
                     evidence,
@@ -402,16 +402,16 @@ pub async fn exchange_cross_process_frame(
     let alpn = input.protocol.alpn.as_bytes().to_vec();
     let endpoint = bind_explicit_endpoint(input.bind_addr, input.capability, &alpn).await?;
     let endpoint_addr = iroh_endpoint_addr(&dial_plan)?;
-    let network = run_client_exchange(
-        &endpoint,
+    let network = run_client_exchange(ClientExchangeInput {
+        endpoint: &endpoint,
         endpoint_addr,
-        &alpn,
-        &mut session,
-        &input.request_ref,
+        alpn: &alpn,
+        session: &mut session,
+        request_ref: &input.request_ref,
         payload,
-        input.protocol.generation,
+        generation: input.protocol.generation,
         timeout,
-    )
+    })
     .await;
     endpoint.close().await;
     let exchange = match network {
@@ -421,15 +421,15 @@ pub async fn exchange_cross_process_frame(
             return Err(error);
         }
     };
-    let mut evidence = finalize_successful_session(
+    let mut evidence = finalize_successful_session(SessionCloseInput {
         session,
-        EndpointParticipantRole::Client,
-        &input.endpoint.descriptor_ref,
-        &input.session_ref,
-        &input.request_ref,
-        &exchange.remote_transport_identity_ref,
-        exchange.frame,
-    )?;
+        role: EndpointParticipantRole::Client,
+        descriptor_ref: &input.endpoint.descriptor_ref,
+        session_ref: &input.session_ref,
+        request_ref: &input.request_ref,
+        remote_transport_identity_ref: &exchange.remote_transport_identity_ref,
+        frame: exchange.frame,
+    })?;
     evidence.cleanup_evidence_ref =
         cleanup_ref(&evidence.cleanup_evidence_ref, &input.endpoint.descriptor_ref, input.protocol.generation);
     Ok(evidence)
@@ -493,16 +493,28 @@ where
     })
 }
 
-async fn run_client_exchange(
-    endpoint: &iroh::Endpoint,
+struct ClientExchangeInput<'a> {
+    endpoint: &'a iroh::Endpoint,
     endpoint_addr: iroh::EndpointAddr,
-    alpn: &[u8],
-    session: &mut CrossProcessSessionState,
-    request_ref: &str,
-    payload: &[u8],
+    alpn: &'a [u8],
+    session: &'a mut CrossProcessSessionState,
+    request_ref: &'a str,
+    payload: &'a [u8],
     generation: u64,
     timeout: std::time::Duration,
-) -> crate::error::Result<ClientNetworkFrame> {
+}
+
+async fn run_client_exchange(input: ClientExchangeInput<'_>) -> crate::error::Result<ClientNetworkFrame> {
+    let ClientExchangeInput {
+        endpoint,
+        endpoint_addr,
+        alpn,
+        session,
+        request_ref,
+        payload,
+        generation,
+        timeout,
+    } = input;
     let connection = tokio::time::timeout(timeout, endpoint.connect(endpoint_addr, alpn))
         .await
         .map_err(|_| crate::error::MoltenError::invalid_harness("cross-process connect timed out"))?
@@ -627,15 +639,26 @@ async fn read_bounded_frame(
     Ok(payload)
 }
 
-fn finalize_successful_session(
-    mut session: CrossProcessSessionState,
+struct SessionCloseInput<'a> {
+    session: CrossProcessSessionState,
     role: EndpointParticipantRole,
-    descriptor_ref: &str,
-    session_ref: &str,
-    request_ref: &str,
-    remote_transport_identity_ref: &str,
+    descriptor_ref: &'a str,
+    session_ref: &'a str,
+    request_ref: &'a str,
+    remote_transport_identity_ref: &'a str,
     frame: NetworkFrame,
-) -> crate::error::Result<CrossProcessFrameEvidence> {
+}
+
+fn finalize_successful_session(input: SessionCloseInput<'_>) -> crate::error::Result<CrossProcessFrameEvidence> {
+    let SessionCloseInput {
+        mut session,
+        role,
+        descriptor_ref,
+        session_ref,
+        request_ref,
+        remote_transport_identity_ref,
+        frame,
+    } = input;
     session = apply_cross_process_session_command(&session, &CrossProcessSessionCommand::Close)
         .map_err(|issues| shell_validation_error("cross-process session close", &issues))?
         .next;

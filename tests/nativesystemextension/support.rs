@@ -161,14 +161,14 @@ impl Cohort {
             &admitted.manifest().service_id,
             admitted.manifest_ref(),
         ]);
-        let template = execution_template(
-            &native_profile,
-            &executable,
-            &execution_profile,
+        let template = execution_template(ExecutionTemplateInput {
+            native_profile: &native_profile,
+            executable: &executable,
+            execution: &execution_profile,
             executable_path,
             instance_id,
-            &admitted,
-        );
+            admitted: &admitted,
+        });
         Ok(Self {
             native_profile,
             executable,
@@ -202,13 +202,19 @@ impl Cohort {
         self.template.resolved.executable_identity_ref = executable_bytes_ref;
     }
 
+    fn admission(&self) -> AdmissionSet {
+        AdmissionSet {
+            profile: self.native_profile.clone(),
+            executable: self.executable.clone(),
+            admitted: self.admitted.clone(),
+        }
+    }
+
     pub fn install(&self) -> TestResult<Service> {
         let port = LiveExecutionAdapter::new(self.execution_profile.clone(), Publisher::default())
             .or_fail("live execution adapter")?;
         NativeSystemExtensionService::install(
-            self.native_profile.clone(),
-            self.executable.clone(),
-            self.admitted.clone(),
+            self.admission(),
             port,
             self.journal.clone(),
             self.values.clone(),
@@ -229,15 +235,8 @@ impl Cohort {
             self.template.clone(),
         )
         .or_fail("recovered native executor")?;
-        NativeSystemExtensionService::from_recovered(
-            self.native_profile.clone(),
-            self.executable.clone(),
-            self.admitted.clone(),
-            executor,
-            self.journal.clone(),
-            instance,
-        )
-        .or_fail("recover native service")
+        NativeSystemExtensionService::from_recovered(self.admission(), executor, self.journal.clone(), instance)
+            .or_fail("recover native service")
     }
 }
 
@@ -346,14 +345,24 @@ fn executable_evidence(
     }
 }
 
-fn execution_template(
-    native_profile: &AdmittedNativeHostProfile,
-    executable: &AdmittedNativeExecutable,
-    execution: &CanonicalExecutionProfile,
+struct ExecutionTemplateInput<'a> {
+    native_profile: &'a AdmittedNativeHostProfile,
+    executable: &'a AdmittedNativeExecutable,
+    execution: &'a CanonicalExecutionProfile,
     executable_path: std::path::PathBuf,
     instance_id: String,
-    admitted: &CanonicalAdmittedSystemExtensionManifest,
-) -> NativeExecutionTemplate {
+    admitted: &'a CanonicalAdmittedSystemExtensionManifest,
+}
+
+fn execution_template(input: ExecutionTemplateInput<'_>) -> NativeExecutionTemplate {
+    let ExecutionTemplateInput {
+        native_profile,
+        executable,
+        execution,
+        executable_path,
+        instance_id,
+        admitted,
+    } = input;
     NativeExecutionTemplate {
         host_profile: native_profile.clone(),
         executable: executable.clone(),

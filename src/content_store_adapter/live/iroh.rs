@@ -144,14 +144,24 @@ pub async fn publish_live_iroh_chunks(
     any(feature = "profiler", feature = "profiler-disabled"),
     flux_profiler::timed("molten_iroh_stream_get")
 )]
-pub async fn execute_live_iroh_stream_get(
-    profile: &ContentAdapterProfile,
-    publication: &LiveIrohPublication,
-    command: &ContentCommand,
-    generation: u64,
-    retained: Option<&ContentPartialState>,
-    timeout: std::time::Duration,
-) -> crate::error::Result<LiveIrohContentExecution> {
+pub struct StreamGetInput<'a> {
+    pub profile: &'a ContentAdapterProfile,
+    pub publication: &'a LiveIrohPublication,
+    pub command: &'a ContentCommand,
+    pub generation: u64,
+    pub retained: Option<&'a ContentPartialState>,
+    pub timeout: std::time::Duration,
+}
+
+pub async fn execute_live_iroh_stream_get(input: StreamGetInput<'_>) -> crate::error::Result<LiveIrohContentExecution> {
+    let StreamGetInput {
+        profile,
+        publication,
+        command,
+        generation,
+        retained,
+        timeout,
+    } = input;
     if profile.class != ContentAdapterClass::IrohBlobs {
         return Err(crate::error::MoltenError::invalid_harness("live Iroh get requires iroh-blobs adapter profile"));
     }
@@ -284,15 +294,15 @@ pub async fn execute_live_iroh_stream_get(
         }
         events.push(canonical_content_event(
             profile,
-            &content_event(
+            &content_event(EventInput {
                 command,
                 sequence,
-                state.terminal,
-                Some(descriptor.chunk_ref.clone()),
-                observation.observed_length,
-                None,
-                &publication.manifest.evidence_refs,
-            ),
+                terminal: state.terminal,
+                chunk_ref: Some(descriptor.chunk_ref.clone()),
+                observed_bytes: observation.observed_length,
+                failure: None,
+                evidence_refs: &publication.manifest.evidence_refs,
+            }),
         )?);
         verified_chunks.push(VerifiedChunkPayload {
             chunk_ref: descriptor.chunk_ref.clone(),
@@ -334,7 +344,15 @@ fn terminal_event(
         .ok_or_else(|| crate::error::MoltenError::invalid_harness("terminal live Iroh state lacks event sequence"))?;
     canonical_content_event(
         profile,
-        &content_event(command, sequence, state.terminal, chunk_ref, 0, state.failure, &manifest.evidence_refs),
+        &content_event(EventInput {
+            command,
+            sequence,
+            terminal: state.terminal,
+            chunk_ref,
+            observed_bytes: 0,
+            failure: state.failure,
+            evidence_refs: &manifest.evidence_refs,
+        }),
     )
 }
 

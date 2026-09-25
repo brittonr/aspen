@@ -186,14 +186,14 @@ pub fn apply_actor_request(
     }
 
     let status_observation = publish_status(status_port, &final_state, &effect_observations)?;
-    let receipt = build_receipt(
-        &transition,
-        &final_state,
+    let receipt = build_receipt(ReceiptInput {
+        transition: &transition,
+        final_state: &final_state,
         status,
-        &commit_observation,
-        &effect_observations,
-        &status_observation,
-    )?;
+        commit: &commit_observation,
+        effects: &effect_observations,
+        status_observation: &status_observation,
+    })?;
     Ok(ActorServiceOutcome {
         transition,
         receipt,
@@ -384,7 +384,14 @@ fn no_commit_outcome(
         engine_epoch: service.requested_engine_epoch,
         observed_state_ref: Some(final_state.state_ref.clone()),
     };
-    let receipt = build_receipt(&transition, &final_state, status, &commit, &effect_observations, &status_observation)?;
+    let receipt = build_receipt(ReceiptInput {
+        transition: &transition,
+        final_state: &final_state,
+        status,
+        commit: &commit,
+        effects: &effect_observations,
+        status_observation: &status_observation,
+    })?;
     Ok(ActorServiceOutcome {
         transition,
         receipt,
@@ -395,14 +402,24 @@ fn no_commit_outcome(
     })
 }
 
-fn build_receipt(
-    transition: &ActorTransition,
-    final_state: &PublishedActorState,
+struct ReceiptInput<'a> {
+    transition: &'a ActorTransition,
+    final_state: &'a PublishedActorState,
     status: ActorServiceStatus,
-    commit: &ActorCommitObservation,
-    effects: &[ActorEffectObservation],
-    status_observation: &ActorStatusObservation,
-) -> ActorServiceResult<CanonicalActorCommitReceipt> {
+    commit: &'a ActorCommitObservation,
+    effects: &'a [ActorEffectObservation],
+    status_observation: &'a ActorStatusObservation,
+}
+
+fn build_receipt(input: ReceiptInput<'_>) -> ActorServiceResult<CanonicalActorCommitReceipt> {
+    let ReceiptInput {
+        transition,
+        final_state,
+        status,
+        commit,
+        effects,
+        status_observation,
+    } = input;
     canonical_actor_commit_receipt(&ActorCommitReceipt {
         actor_key_ref: transition.next_state.actor_key_ref.clone(),
         request_ref: transition.request_ref.clone(),

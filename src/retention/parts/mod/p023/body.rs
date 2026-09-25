@@ -131,19 +131,26 @@ impl CandidateFilter<'_> {
     }
 }
 
+/// The store directory scanned for matching refs and the label its bound errors name.
+#[derive(Clone, Copy)]
+struct RefListing<'a> {
+    directory: &'a str,
+    label: &'a str,
+}
+
 fn collect_matching_refs<T, Parse, Matches, Reference>(
     root: &CapabilityRetentionRoot,
-    directory: &str,
+    listing: RefListing<'_>,
     parse: Parse,
     matches: Matches,
     reference: Reference,
-    label: &str,
 ) -> Result<Vec<String>>
 where
     Parse: Fn(&IoValue) -> Result<T>,
     Matches: Fn(&T) -> bool,
     Reference: Fn(&T) -> String,
 {
+    let RefListing { directory, label } = listing;
     let mut refs = Vec::new();
     let directory = capability_store_path(directory)?;
     if !root.root().try_exists(&directory)? {

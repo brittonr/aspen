@@ -122,50 +122,50 @@ pub(crate) fn run_world_authority_command(command: WorldAuthorityCommand) -> Res
             request,
             policy,
             receipt_out,
-        } => denied_runtime_command(
-            &request,
-            &policy,
-            &receipt_out,
-            None,
-            WorldBranchAuthorityDiagnostic::MissingObligationEvidence,
-            "activation",
-        ),
+        } => denied_runtime_command(DeniedCommandInput {
+            request_path: &request,
+            policy_path: &policy,
+            receipt_out: &receipt_out,
+            expected_mode: None,
+            missing_runtime_diagnostic: WorldBranchAuthorityDiagnostic::MissingObligationEvidence,
+            operation: "activation",
+        }),
         WorldAuthorityCommand::Transfer {
             request,
             policy,
             receipt_out,
-        } => denied_runtime_command(
-            &request,
-            &policy,
-            &receipt_out,
-            Some(WorldBranchMode::Linear),
-            WorldBranchAuthorityDiagnostic::LinearOwnershipAmbiguous,
-            "transfer",
-        ),
+        } => denied_runtime_command(DeniedCommandInput {
+            request_path: &request,
+            policy_path: &policy,
+            receipt_out: &receipt_out,
+            expected_mode: Some(WorldBranchMode::Linear),
+            missing_runtime_diagnostic: WorldBranchAuthorityDiagnostic::LinearOwnershipAmbiguous,
+            operation: "transfer",
+        }),
         WorldAuthorityCommand::Simulate {
             request,
             policy,
             receipt_out,
-        } => denied_runtime_command(
-            &request,
-            &policy,
-            &receipt_out,
-            Some(WorldBranchMode::SimulationOnly),
-            WorldBranchAuthorityDiagnostic::SimulationAdapterMissing,
-            "simulation",
-        ),
+        } => denied_runtime_command(DeniedCommandInput {
+            request_path: &request,
+            policy_path: &policy,
+            receipt_out: &receipt_out,
+            expected_mode: Some(WorldBranchMode::SimulationOnly),
+            missing_runtime_diagnostic: WorldBranchAuthorityDiagnostic::SimulationAdapterMissing,
+            operation: "simulation",
+        }),
         WorldAuthorityCommand::Recover {
             request,
             policy,
             receipt_out,
-        } => denied_runtime_command(
-            &request,
-            &policy,
-            &receipt_out,
-            None,
-            WorldBranchAuthorityDiagnostic::ActivationOutcomeUnknown,
-            "recovery",
-        ),
+        } => denied_runtime_command(DeniedCommandInput {
+            request_path: &request,
+            policy_path: &policy,
+            receipt_out: &receipt_out,
+            expected_mode: None,
+            missing_runtime_diagnostic: WorldBranchAuthorityDiagnostic::ActivationOutcomeUnknown,
+            operation: "recovery",
+        }),
     }
 }
 
@@ -195,14 +195,24 @@ fn inspect_authority(request_path: &Path, policy_path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn denied_runtime_command(
-    request_path: &Path,
-    policy_path: &Path,
-    receipt_out: &Path,
+struct DeniedCommandInput<'a> {
+    request_path: &'a Path,
+    policy_path: &'a Path,
+    receipt_out: &'a Path,
     expected_mode: Option<WorldBranchMode>,
     missing_runtime_diagnostic: WorldBranchAuthorityDiagnostic,
-    operation: &str,
-) -> Result<()> {
+    operation: &'a str,
+}
+
+fn denied_runtime_command(input: DeniedCommandInput<'_>) -> Result<()> {
+    let DeniedCommandInput {
+        request_path,
+        policy_path,
+        receipt_out,
+        expected_mode,
+        missing_runtime_diagnostic,
+        operation,
+    } = input;
     let planned = load_plan(request_path, policy_path)?;
     let diagnostic = if planned.allowed && expected_mode.is_some_and(|expected| planned.mode != Some(expected)) {
         WorldBranchAuthorityDiagnostic::ActionModeMismatch

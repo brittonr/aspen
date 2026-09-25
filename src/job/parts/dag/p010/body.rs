@@ -51,14 +51,21 @@ fn check_target_selection(
     Ok(())
 }
 
+/// The registry, request, admission, and DAG a target selection is checked against.
+#[derive(Clone, Copy)]
+struct TargetSelectionInput<'a> {
+    target_registry: &'a crate::artifacts::CapabilityArtifactRoot,
+    request: &'a JobExecutionRequest,
+    admission: &'a JobAdmissionReceipt,
+    dag: &'a JobDag,
+}
+
 fn check_target_selection_with_root(
-    target_registry: &crate::artifacts::CapabilityArtifactRoot,
-    request: &JobExecutionRequest,
-    admission: &JobAdmissionReceipt,
-    dag: &JobDag,
+    selection: TargetSelectionInput<'_>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
     checks: &mut impl crate::bounded::VecSink<(&'static str, &'static str)>,
 ) -> Result<()> {
+    let TargetSelectionInput { target_registry, request, admission, dag } = selection;
     let stage_order = if request.stage_ids.is_empty() {
         admission.stage_order.clone()
     } else {

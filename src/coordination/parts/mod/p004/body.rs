@@ -32,14 +32,17 @@ fn propose_change(input: ChangeInput<'_>) -> Result<Proposal> {
     crate::raft_control_plane::propose_control_registry_command(&mut runtime.raft, &envelope)
 }
 
-fn fact_for(
-    transition: &PrimitiveTransitionResult,
-    manifest: &CoordinationServiceManifest,
-    engine_manifest: &crate::raft_control_plane::RaftGroupManifest,
+struct FactInput<'a> {
+    transition: &'a PrimitiveTransitionResult,
+    manifest: &'a CoordinationServiceManifest,
+    engine_manifest: &'a crate::raft_control_plane::RaftGroupManifest,
     engine_epoch: u64,
-    request: &CoordinationRequest,
-    token: Option<&FencingToken>,
-) -> Result<IoValue> {
+    request: &'a CoordinationRequest,
+    token: Option<&'a FencingToken>,
+}
+
+fn fact_for(input: FactInput<'_>) -> Result<IoValue> {
+    let FactInput { transition, manifest, engine_manifest, engine_epoch, request, token } = input;
     let base = if let Some(token) = token {
         status_fact_for_token(&transition.after_state, manifest, &request.service, &request.key, token)?
     } else {
@@ -121,14 +124,7 @@ fn pass_receipt(input: PassReceiptInput<'_>) -> Result<CoordinationReceipt> {
 fn success_parts(input: PartsInput<'_>) -> Result<SuccessParts> {
     let token = materialize_token(input.transition.token.clone(), input.proposal_ref)?;
     let token_ref = token.as_ref().map(|item| item.token_ref.clone());
-    let fact = fact_for(
-        input.transition,
-        input.manifest,
-        input.engine_manifest,
-        input.engine_epoch,
-        input.request,
-        token.as_ref(),
-    )?;
+    let fact = fact_for(FactInput { transition: input.transition, manifest: input.manifest, engine_manifest: input.engine_manifest, engine_epoch: input.engine_epoch, request: input.request, token: token.as_ref() })?;
     let placeholder_receipt_ref = fixture_ref("coordination-mutation-placeholder");
     let assertion = status_assertion_for(input.request, &fact, &input.snapshot.state_ref, &placeholder_receipt_ref)?;
     let assertion_refs = vec![assertion.assertion_ref.clone()];
@@ -280,18 +276,20 @@ fn deny_transition_result(
     transition: PrimitiveTransitionResult,
     extra_check: &[&'static str; 2],
 ) -> Result<CoordinationApplyResult> {
-    finish_denial_transition(runtime, request, snapshot, transition, extra_check, true)
+    finish_denial_transition(runtime, DenialTransitionInput { request, snapshot, transition, extra_check, record_operation: true })
 }
 
-// r[impl molten.coordination_state_machine_proof.transition_receipt_binding]
-fn finish_denial_transition(
-    runtime: &mut CoordinationRuntime,
+struct DenialTransitionInput<'a> {
     request: CoordinationRequest,
     snapshot: CoordinationStateSnapshot,
     transition: PrimitiveTransitionResult,
-    extra_check: &[&'static str; 2],
+    extra_check: &'a [&'static str; 2],
     record_operation: bool,
-) -> Result<CoordinationApplyResult> {
+}
+
+// r[impl molten.coordination_state_machine_proof.transition_receipt_binding]
+fn finish_denial_transition(runtime: &mut CoordinationRuntime, input: DenialTransitionInput<'_>) -> Result<CoordinationApplyResult> {
+    let DenialTransitionInput { request, snapshot, transition, extra_check, record_operation } = input;
     let mut checks = vec![
         ("coordination-request-bound", "pass"),
         ("control-plane-command", "pass"),
@@ -376,14 +374,7 @@ fn replay_or_conflicting_duplicate(
         checks: vec![("duplicate-conflict-denied", "pass")],
         shell_intents: vec![SHELL_INTENT_EMIT_RECEIPT.to_string()],
     };
-    finish_denial_transition(
-        runtime,
-        request,
-        snapshot,
-        transition,
-        &["conflicting-duplicate-operation", "fail"],
-        false,
-    )
+    finish_denial_transition(runtime, DenialTransitionInput { request, snapshot, transition, extra_check: &["conflicting-duplicate-operation", "fail"], record_operation: false })
 }
 
 // r[impl molten.coordination_state_machine_proof.replay_transition_kind]

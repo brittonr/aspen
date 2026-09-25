@@ -113,7 +113,7 @@ fn check_request(root: &crate::local_store::DeliveryStoreRoot, input: CheckReque
             let entry = existing_entry.ok_or_else(|| {
                 MoltenError::invalid_harness("delivery idempotency invariant violated: duplicate/conflict without entry")
             })?;
-            duplicate_or_conflict_decision(input, &db, operation, current_window, entry, &law)?
+            duplicate_or_conflict_decision(&db, operation, current_window, entry, &law)?
         }
         IdempotencyDecisionKind::Stale | IdempotencyDecisionKind::Gap | IdempotencyDecisionKind::Retry => {
             suppressed_decision_from_law(&db, operation, current_window, &law)?
@@ -316,7 +316,6 @@ fn first_decision(
 }
 
 fn duplicate_or_conflict_decision(
-    _input: CheckRequest<'_>,
     db: &redb::Database,
     operation: OperationId,
     window: Window,

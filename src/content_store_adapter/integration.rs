@@ -173,3 +173,61 @@ fn expected_shape(
         None => Ok((manifest.total_length, manifest.chunks.len())),
     }
 }
+
+pub fn redb_index_content_status(
+    profile: &ContentAdapterProfile,
+    root: &crate::chunk_store::CapabilityChunkRoot,
+    generation: u64,
+) -> crate::error::Result<CanonicalContentArtifact<ContentAdapterStatus>> {
+    let index = crate::chunk_store::index_status_with_root(root)?;
+    bounded_content_status(StatusInput {
+        profile,
+        generation,
+        active_operations: 0,
+        queued_bytes: 0,
+        terminal_counts: vec![
+            (ContentTerminal::Verified, index.available_chunks),
+            (ContentTerminal::Retryable, index.missing_chunks),
+        ],
+        backend_label: "redb-index-v1",
+        issues: Vec::new(),
+    })
+}
+
+pub struct StatusInput<'a> {
+    pub profile: &'a ContentAdapterProfile,
+    pub generation: u64,
+    pub active_operations: u64,
+    pub queued_bytes: u64,
+    pub terminal_counts: Vec<(ContentTerminal, u64)>,
+    pub backend_label: &'a str,
+    pub issues: Vec<ContentIssue>,
+}
+
+pub fn bounded_content_status(
+    input: StatusInput<'_>,
+) -> crate::error::Result<CanonicalContentArtifact<ContentAdapterStatus>> {
+    let StatusInput {
+        profile,
+        generation,
+        active_operations,
+        queued_bytes,
+        mut terminal_counts,
+        backend_label,
+        issues,
+    } = input;
+    terminal_counts.sort_by_key(|(terminal, _count)| *terminal);
+    let status = ContentAdapterStatus {
+        schema: CONTENT_STATUS_SCHEMA.to_string(),
+        profile_ref: profile.profile_ref.clone(),
+        class: profile.class,
+        generation,
+        active_operations: crate::bounded::usize_from_u64(active_operations, "content active operations")?,
+        queued_bytes,
+        terminal_counts,
+        backend_hint_ref: Some(backend_hint_ref(profile.class, backend_label)),
+        issues,
+        non_claims: REQUIRED_CONTENT_NON_CLAIMS.to_vec(),
+    };
+    canonical_content_status(profile, &status)
+}

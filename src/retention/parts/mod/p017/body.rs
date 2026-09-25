@@ -368,82 +368,43 @@ impl MatchRefs {
 }
 
 fn pins_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
-    collect_matching_refs(
-        root,
-        PIN_DIR,
-        parse_pin,
-        |pin| filter.matches_object(&pin.object_ref, &pin.object_kind, &pin.retention_class),
-        |pin| pin.pin_ref.clone(),
-        "retention candidate pins",
-    )
+    collect_matching_refs(root, RefListing { directory: PIN_DIR, label: "retention candidate pins" }, parse_pin, |pin| filter.matches_object(&pin.object_ref, &pin.object_kind, &pin.retention_class), |pin| pin.pin_ref.clone())
 }
 
 fn admissions_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
-    collect_matching_refs(
-        root,
-        ADMISSION_DIR,
-        parse_evidence_admission,
-        |admission| {
+    collect_matching_refs(root, RefListing { directory: ADMISSION_DIR, label: "retention candidate admissions" }, parse_evidence_admission, |admission| {
             filter.matches_retention(
                 &admission.object_ref,
                 &admission.object_kind,
                 &admission.retention_class,
                 &admission.action,
             )
-        },
-        |admission| admission.admission_ref.clone(),
-        "retention candidate admissions",
-    )
+        }, |admission| admission.admission_ref.clone())
 }
 
 fn clearances_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
-    collect_matching_refs(
-        root,
-        REMOTE_CLEARANCE_DIR,
-        parse_remote_gc_clearance,
-        |clearance| {
+    collect_matching_refs(root, RefListing { directory: REMOTE_CLEARANCE_DIR, label: "retention candidate remote clearances" }, parse_remote_gc_clearance, |clearance| {
             filter.matches_retention(
                 &clearance.object_ref,
                 &clearance.object_kind,
                 &clearance.retention_class,
                 &clearance.action,
             )
-        },
-        |clearance| clearance.clearance_ref.clone(),
-        "retention candidate remote clearances",
-    )
+        }, |clearance| clearance.clearance_ref.clone())
 }
 
 fn imports_for(root: &CapabilityRetentionRoot, remote_clearance_refs: &[String]) -> Result<Vec<String>> {
-    collect_matching_refs(
-        root,
-        REMOTE_CLEARANCE_IMPORT_DIR,
-        parse_remote_gc_clearance_import,
-        |import| import.clearance_ref.as_ref().is_some_and(|reference| remote_clearance_refs.contains(reference)),
-        |import| import.import_ref.clone(),
-        "retention candidate remote clearance imports",
-    )
+    collect_matching_refs(root, RefListing { directory: REMOTE_CLEARANCE_IMPORT_DIR, label: "retention candidate remote clearance imports" }, parse_remote_gc_clearance_import, |import| import.clearance_ref.as_ref().is_some_and(|reference| remote_clearance_refs.contains(reference)), |import| import.import_ref.clone())
 }
 
 fn plans_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
-    collect_matching_refs(
-        root,
-        GC_PLAN_DIR,
-        parse_gc_plan,
-        |plan| {
+    collect_matching_refs(root, RefListing { directory: GC_PLAN_DIR, label: "retention candidate GC plans" }, parse_gc_plan, |plan| {
             filter.matches_gc(&plan.subsystem, &plan.object_ref, &plan.object_kind, &plan.retention_class, &plan.action)
-        },
-        |plan| plan.plan_ref.clone(),
-        "retention candidate GC plans",
-    )
+        }, |plan| plan.plan_ref.clone())
 }
 
 fn applies_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
-    collect_matching_refs(
-        root,
-        GC_APPLY_DIR,
-        parse_gc_apply,
-        |apply| {
+    collect_matching_refs(root, RefListing { directory: GC_APPLY_DIR, label: "retention candidate GC applies" }, parse_gc_apply, |apply| {
             filter.matches_gc(
                 &apply.subsystem,
                 &apply.object_ref,
@@ -451,8 +412,5 @@ fn applies_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> 
                 &apply.retention_class,
                 &apply.action,
             )
-        },
-        |apply| apply.apply_ref.clone(),
-        "retention candidate GC applies",
-    )
+        }, |apply| apply.apply_ref.clone())
 }

@@ -505,35 +505,35 @@ fn retry_observations_replay_exactly_and_differ_from_wrapped_history() {
         jitter: RetryJitter::None,
     };
     let events = super::fixture::retry_events(&profile, &now, AUDIT_ATTEMPT, policy, None).expect("retry evidence");
-    let expected_deadline = canonical_named_event(
-        &profile.profile_ref,
-        CanonicalTimeEventKind::Deadline,
-        GENERATION,
-        "fixture-retry",
-        "retry-planned",
-        TIMER_DEADLINE + PROFILE_LIMIT,
-    )
+    let expected_deadline = canonical_named_event(EventHeader {
+        profile_ref: &profile.profile_ref,
+        kind: CanonicalTimeEventKind::Deadline,
+        generation: GENERATION,
+        subject: "fixture-retry",
+        action: "retry-planned",
+        ticks: TIMER_DEADLINE + PROFILE_LIMIT,
+    })
     .expect("deadline");
-    let expected_delay = canonical_named_event(
-        &profile.profile_ref,
-        CanonicalTimeEventKind::Deadline,
-        GENERATION,
-        "fixture-retry",
-        "retry-delay",
-        PROFILE_LIMIT,
-    )
+    let expected_delay = canonical_named_event(EventHeader {
+        profile_ref: &profile.profile_ref,
+        kind: CanonicalTimeEventKind::Deadline,
+        generation: GENERATION,
+        subject: "fixture-retry",
+        action: "retry-delay",
+        ticks: PROFILE_LIMIT,
+    })
     .expect("delay");
     assert_eq!(events, [expected_deadline.clone(), expected_delay]);
     let replay = super::fixture::retry_events(&profile, &now, AUDIT_ATTEMPT, policy, None).expect("retry replay");
     assert_eq!(events, replay);
-    let legacy = canonical_named_event(
-        &profile.profile_ref,
-        CanonicalTimeEventKind::Deadline,
-        GENERATION,
-        "fixture-retry",
-        "retry-planned",
-        TIMER_DEADLINE,
-    )
+    let legacy = canonical_named_event(EventHeader {
+        profile_ref: &profile.profile_ref,
+        kind: CanonicalTimeEventKind::Deadline,
+        generation: GENERATION,
+        subject: "fixture-retry",
+        action: "retry-planned",
+        ticks: TIMER_DEADLINE,
+    })
     .expect("legacy wrapped deadline");
     assert_ne!(expected_deadline.value, legacy.value);
     assert_ne!(expected_deadline.evidence_ref, legacy.evidence_ref);

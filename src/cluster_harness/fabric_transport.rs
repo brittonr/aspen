@@ -289,24 +289,16 @@ fn execute_prepared_distinct_process_transport_run(
     let client_terminal = read_participant(&input.run_directory.join(CLIENT_TERMINAL_FILE))?;
     let cleanup = cleanup_artifact(&listener_terminal, &client_terminal, true, true, true)?;
     write_preserves(&input.run_directory.join(CLEANUP_FILE), &cleanup.value)?;
-    let assessment_input = assessment_input(
-        &listener_start,
-        &client_start,
-        &listener_terminal,
-        &client_terminal,
-        &cleanup,
-        is_child_handles_distinct,
-    );
+    let run_artifacts = RunArtifacts {
+        listener_start: &listener_start,
+        client_start: &client_start,
+        listener: &listener_terminal,
+        client: &client_terminal,
+        cleanup: &cleanup,
+    };
+    let assessment_input = assessment_input(run_artifacts, is_child_handles_distinct);
     let assessment = assess_distinct_process_transport_evidence(&assessment_input);
-    let parent_value = parent_run_value(
-        &listener_start,
-        &client_start,
-        &listener_terminal,
-        &client_terminal,
-        &cleanup,
-        &assessment_input,
-        &assessment,
-    )?;
+    let parent_value = parent_run_value(run_artifacts, &assessment_input, &assessment)?;
     let parent_ref = crate::preserves_rail::canonical_hash(&parent_value)?;
     write_preserves(&input.run_directory.join(PARENT_RUN_FILE), &parent_value)?;
     write_index(&input.run_directory)?;
@@ -352,16 +344,18 @@ pub fn run_distinct_process_listener_child(run_directory: &std::path::Path) -> c
             )
             .await?;
         let endpoint_cleanup = listener.drain_and_close(ListenerDrainReason::OperatorRequest).await?;
-        let participant = participant_artifact(
-            EndpointParticipantRole::Listener,
-            &invocation_ref(LISTENER_ROLE),
-            &frame,
-            &endpoint_cleanup.cleanup_evidence_ref,
-            Some(endpoint_cleanup.drain_reason),
-            &fixture_profile()?.profile,
-            &fixture_protocol(),
-            &crate::preserves_rail::canonical_hash(&read_endpoint_handoff(&run_directory.join(HANDOFF_FILE))?.value)?,
-        )?;
+        let participant = participant_artifact(ParticipantInput {
+            role: EndpointParticipantRole::Listener,
+            invocation_ref: &invocation_ref(LISTENER_ROLE),
+            frame: &frame,
+            endpoint_cleanup_ref: &endpoint_cleanup.cleanup_evidence_ref,
+            drain_reason: Some(endpoint_cleanup.drain_reason),
+            profile: &fixture_profile()?.profile,
+            protocol: &fixture_protocol(),
+            handoff_ref: &crate::preserves_rail::canonical_hash(
+                &read_endpoint_handoff(&run_directory.join(HANDOFF_FILE))?.value,
+            )?,
+        })?;
         write_preserves(&run_directory.join(LISTENER_TERMINAL_FILE), &participant.value)
     })
 }
@@ -392,16 +386,16 @@ pub fn run_distinct_process_client_child(run_directory: &std::path::Path) -> cra
             std::time::Duration::from_millis(DEFAULT_DISTINCT_PROCESS_TIMEOUT_MS),
         )
         .await?;
-        let participant = participant_artifact(
-            EndpointParticipantRole::Client,
-            &invocation_ref(CLIENT_ROLE),
-            &frame,
-            &frame.cleanup_evidence_ref,
-            None,
-            &fixture_profile()?.profile,
-            &fixture_protocol(),
-            &handoff.handoff_ref,
-        )?;
+        let participant = participant_artifact(ParticipantInput {
+            role: EndpointParticipantRole::Client,
+            invocation_ref: &invocation_ref(CLIENT_ROLE),
+            frame: &frame,
+            endpoint_cleanup_ref: &frame.cleanup_evidence_ref,
+            drain_reason: None,
+            profile: &fixture_profile()?.profile,
+            protocol: &fixture_protocol(),
+            handoff_ref: &handoff.handoff_ref,
+        })?;
         write_preserves(&run_directory.join(CLIENT_TERMINAL_FILE), &participant.value)
     })
 }
@@ -427,19 +421,17 @@ fn verify_distinct_process_run_directory_inner(
     if actual_cleanup.value != expected_cleanup.value {
         diagnostics.push("cleanup-artifact-mismatch".to_string());
     }
-    let assessment_input =
-        assessment_input(&listener_start, &client_start, &listener_terminal, &client_terminal, &actual_cleanup, true);
+    let run_artifacts = RunArtifacts {
+        listener_start: &listener_start,
+        client_start: &client_start,
+        listener: &listener_terminal,
+        client: &client_terminal,
+        cleanup: &actual_cleanup,
+    };
+    let assessment_input = assessment_input(run_artifacts, true);
     let assessment = assess_distinct_process_transport_evidence(&assessment_input);
     diagnostics.extend(assessment.issues.iter().map(|issue| issue.code().to_string()));
-    let expected_parent = parent_run_value(
-        &listener_start,
-        &client_start,
-        &listener_terminal,
-        &client_terminal,
-        &actual_cleanup,
-        &assessment_input,
-        &assessment,
-    )?;
+    let expected_parent = parent_run_value(run_artifacts, &assessment_input, &assessment)?;
     let actual_parent = read_preserves(&run_directory.join(PARENT_RUN_FILE))?;
     if actual_parent != expected_parent {
         diagnostics.push("parent-run-artifact-mismatch".to_string());
@@ -675,16 +667,28 @@ fn validate_fixture_endpoint(endpoint: &CanonicalCrossProcessEndpoint) -> crate:
         .map_err(|issues| crate::error::MoltenError::invalid_harness(format!("fixture endpoint denied: {issues:?}")))
 }
 
-fn participant_artifact(
+struct ParticipantInput<'a> {
     role: EndpointParticipantRole,
-    invocation_ref: &str,
-    frame: &CrossProcessFrameEvidence,
-    endpoint_cleanup_ref: &str,
+    invocation_ref: &'a str,
+    frame: &'a CrossProcessFrameEvidence,
+    endpoint_cleanup_ref: &'a str,
     drain_reason: Option<ListenerDrainReason>,
-    profile: &TransportProfile,
-    protocol: &ProtocolDescriptor,
-    handoff_ref: &str,
-) -> crate::error::Result<ParticipantArtifact> {
+    profile: &'a TransportProfile,
+    protocol: &'a ProtocolDescriptor,
+    handoff_ref: &'a str,
+}
+
+fn participant_artifact(input: ParticipantInput<'_>) -> crate::error::Result<ParticipantArtifact> {
+    let ParticipantInput {
+        role,
+        invocation_ref,
+        frame,
+        endpoint_cleanup_ref,
+        drain_reason,
+        profile,
+        protocol,
+        handoff_ref,
+    } = input;
     for reference in [invocation_ref, endpoint_cleanup_ref, handoff_ref] {
         crate::preserves_rail::validate_content_ref(reference)?;
     }
@@ -805,14 +809,26 @@ fn cleanup_artifact(
     })
 }
 
+#[derive(Clone, Copy)]
+struct RunArtifacts<'a> {
+    listener_start: &'a StartArtifact,
+    client_start: &'a StartArtifact,
+    listener: &'a ParticipantArtifact,
+    client: &'a ParticipantArtifact,
+    cleanup: &'a CleanupArtifact,
+}
+
 fn assessment_input(
-    listener_start: &StartArtifact,
-    client_start: &StartArtifact,
-    listener: &ParticipantArtifact,
-    client: &ParticipantArtifact,
-    cleanup: &CleanupArtifact,
+    artifacts: RunArtifacts<'_>,
     child_handles_distinct: bool,
 ) -> DistinctProcessTransportEvidenceInput {
+    let RunArtifacts {
+        listener_start,
+        client_start,
+        listener,
+        client,
+        cleanup,
+    } = artifacts;
     DistinctProcessTransportEvidenceInput {
         listener: participant_evidence(listener_start, listener, cleanup.listener_exited),
         client: participant_evidence(client_start, client, cleanup.client_exited),
@@ -864,14 +880,17 @@ fn participant_evidence(
 }
 
 fn parent_run_value(
-    listener_start: &StartArtifact,
-    client_start: &StartArtifact,
-    listener: &ParticipantArtifact,
-    client: &ParticipantArtifact,
-    cleanup: &CleanupArtifact,
+    artifacts: RunArtifacts<'_>,
     input: &DistinctProcessTransportEvidenceInput,
     assessment: &DistinctProcessTransportAssessment,
 ) -> crate::error::Result<preserves::IOValue> {
+    let RunArtifacts {
+        listener_start,
+        client_start,
+        listener,
+        client,
+        cleanup,
+    } = artifacts;
     if listener.handoff_ref != client.handoff_ref {
         return Err(crate::error::MoltenError::invalid_harness("participant handoff refs do not match"));
     }

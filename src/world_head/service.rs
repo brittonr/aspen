@@ -190,14 +190,14 @@ where
     let decision = plan_world_head_transition(&plan_request);
     let WorldHeadDecision::Admitted(plan) = decision else {
         let issues = decision_issues(decision);
-        let receipt = transition_receipt(
-            DECISION_DENIED,
-            None,
-            &canonical,
-            &authentication,
-            authority_observation.authority_ref.as_str(),
-            &issues,
-        )?;
+        let receipt = transition_receipt(TransitionReceiptInput {
+            decision: DECISION_DENIED,
+            plan: None,
+            claim: &canonical,
+            authentication: &authentication,
+            authority_ref: authority_observation.authority_ref.as_str(),
+            issues: &issues,
+        })?;
         return Ok(WorldHeadExecutionResult {
             status: WorldHeadExecutionStatus::Denied,
             plan: None,
@@ -205,14 +205,14 @@ where
             receipt,
         });
     };
-    let admitted_receipt = transition_receipt(
-        DECISION_ADMITTED,
-        Some(&plan),
-        &canonical,
-        &authentication,
-        authority_observation.authority_ref.as_str(),
-        &[],
-    )?;
+    let admitted_receipt = transition_receipt(TransitionReceiptInput {
+        decision: DECISION_ADMITTED,
+        plan: Some(&plan),
+        claim: &canonical,
+        authentication: &authentication,
+        authority_ref: authority_observation.authority_ref.as_str(),
+        issues: &[],
+    })?;
     let fresh_authentication_policy = &request.authentication_policy;
     let fresh_signatures = &request.signatures;
     let fresh_canonical = &canonical;
@@ -304,14 +304,24 @@ fn statement_set_ref(
         .map_err(|error| MoltenError::invalid_harness(format!("statement set identity failed: {error}")))
 }
 
-fn transition_receipt(
-    decision: &str,
-    plan: Option<&WorldHeadTransitionPlan>,
-    claim: &CanonicalWorldHeadClaim,
-    authentication: &WorldHeadAuthenticationResult,
-    authority_ref: &str,
-    issues: &[WorldHeadIssue],
-) -> Result<CanonicalWorldHeadTransitionReceipt> {
+struct TransitionReceiptInput<'a> {
+    decision: &'a str,
+    plan: Option<&'a WorldHeadTransitionPlan>,
+    claim: &'a CanonicalWorldHeadClaim,
+    authentication: &'a WorldHeadAuthenticationResult,
+    authority_ref: &'a str,
+    issues: &'a [WorldHeadIssue],
+}
+
+fn transition_receipt(input: TransitionReceiptInput<'_>) -> Result<CanonicalWorldHeadTransitionReceipt> {
+    let TransitionReceiptInput {
+        decision,
+        plan,
+        claim,
+        authentication,
+        authority_ref,
+        issues,
+    } = input;
     let issue_codes = issues.iter().map(|issue| format!("{issue:?}")).collect::<Vec<_>>();
     canonical_world_head_transition_receipt(&WorldHeadTransitionReceiptInput {
         decision,

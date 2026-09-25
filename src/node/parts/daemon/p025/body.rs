@@ -1,12 +1,12 @@
 
-async fn serve_node_control_live_listener_with_topic(
-    state_root: &crate::node_state::NodeStateRoot,
-    input: &ControlLiveServeInput<'_>,
-    receiver: &mut iroh_gossip::api::GossipTopic,
-    node_id: &str,
-    logical_endpoint_id: &str,
-    bound_endpoint_id: &str,
-) -> Result<ControlLiveServe> {
+struct EndpointIdentityInput<'a> {
+    node_id: &'a str,
+    logical_endpoint_id: &'a str,
+    bound_endpoint_id: &'a str,
+}
+
+async fn serve_node_control_live_listener_with_topic(state_root: &crate::node_state::NodeStateRoot, input: &ControlLiveServeInput<'_>, receiver: &mut iroh_gossip::api::GossipTopic, endpoint: EndpointIdentityInput<'_>) -> Result<ControlLiveServe> {
+    let EndpointIdentityInput { node_id, logical_endpoint_id, bound_endpoint_id } = endpoint;
     validate_listener_event_limit(input.max_events)?;
     validate_loop_request_limit(input.max_requests_per_tick)?;
     let startup = current_startup_receipt(state_root)?;

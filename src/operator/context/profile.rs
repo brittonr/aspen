@@ -125,14 +125,14 @@ pub fn expand_context_profile(
     } else {
         DECISION_DENY
     };
-    let value = context_expansion_value(
-        &profile_artifact.profile_ref,
+    let value = context_expansion_value(ExpansionValueInput {
+        profile_ref: &profile_artifact.profile_ref,
         requirements,
         overrides,
-        &expanded_refs,
+        expanded_refs: &expanded_refs,
         decision,
-        &diagnostics,
-    )?;
+        diagnostics: &diagnostics,
+    })?;
     let expansion_ref = crate::preserves_rail::canonical_hash(&value)?;
     Ok(ContextExpansion {
         decision: decision.to_string(),
@@ -297,14 +297,24 @@ fn context_profile_value(input: &ContextProfileInput, decision: &str, diagnostic
     ]))
 }
 
-fn context_expansion_value(
-    profile_ref: &str,
-    requirements: &OperationRequirements,
-    overrides: &ContextOverrideInput,
-    expanded_refs: &ContextRefSet,
-    decision: &str,
-    diagnostics: &[String],
-) -> Result<IoValue> {
+struct ExpansionValueInput<'a> {
+    profile_ref: &'a str,
+    requirements: &'a OperationRequirements,
+    overrides: &'a ContextOverrideInput,
+    expanded_refs: &'a ContextRefSet,
+    decision: &'a str,
+    diagnostics: &'a [String],
+}
+
+fn context_expansion_value(input: ExpansionValueInput<'_>) -> Result<IoValue> {
+    let ExpansionValueInput {
+        profile_ref,
+        requirements,
+        overrides,
+        expanded_refs,
+        decision,
+        diagnostics,
+    } = input;
     Ok(record("context-profile-expansion-v1", vec![
         string(CONTEXT_EXPANSION_SCHEMA),
         field_string("decision", decision),

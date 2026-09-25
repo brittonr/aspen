@@ -236,14 +236,13 @@ fn sign(input: SignInput) -> Result<()> {
     let role = WorldHeadSignerRole::parse(&input.role).map_err(head_reference_error)?;
     let root = NodeStateRoot::open_existing(&input.state_root)?;
     let secrets = root.namespace(NodeStateNamespaceKind::Secrets)?;
-    let mut signer = LocalWorldHeadSigningAdapter::new(
-        &secrets,
-        input.profile_ref,
-        input.entropy_profile_ref,
-        input.backend_ref,
-        input.producer_id,
-        input.allow_key_generation,
-    )?;
+    let mut signer = LocalWorldHeadSigningAdapter::new(&secrets, molten::world_head::SignerIdentity {
+        profile_ref: input.profile_ref,
+        entropy_profile_ref: input.entropy_profile_ref,
+        backend_ref: input.backend_ref,
+        producer_id: input.producer_id,
+        allow_generation: input.allow_key_generation,
+    })?;
     let (_, carrier, statement_ref) = sign_world_head_claim(&mut signer, &claim.claim, role)?;
     let document = SignatureDocument {
         producer_id: carrier.producer_id,

@@ -82,16 +82,15 @@ fn execute_admitted_component(
     input_bytes: &[u8],
     input_ref: String,
 ) -> super::super::model::ComponentResult<ComponentExecutionOutcome> {
-    let inspection = plan_receipt(
-        request,
+    let inspection = plan_receipt(request, PlanReceiptInput {
         plan,
-        super::super::evidence::receipt::ComponentReceiptStage::Inspection,
-        None,
-        None,
-        None,
-        None,
-        Vec::new(),
-    )?;
+        stage: super::super::evidence::receipt::ComponentReceiptStage::Inspection,
+        input_ref: None,
+        output_ref: None,
+        fuel_limit: None,
+        fuel_remaining: None,
+        parent_refs: Vec::new(),
+    })?;
     let mut session =
         match super::instantiate_component(request.profile, request.source.component_bytes(), request.facts) {
             Ok(session) => session,
@@ -99,16 +98,15 @@ fn execute_admitted_component(
                 return super::denial::plan_denied_outcome(request, plan, denial, vec![inspection], Some(input_ref));
             }
         };
-    let instantiation = plan_receipt(
-        request,
+    let instantiation = plan_receipt(request, PlanReceiptInput {
         plan,
-        super::super::evidence::receipt::ComponentReceiptStage::Instantiation,
-        None,
-        None,
-        None,
-        None,
-        vec![inspection.receipt_ref.clone()],
-    )?;
+        stage: super::super::evidence::receipt::ComponentReceiptStage::Instantiation,
+        input_ref: None,
+        output_ref: None,
+        fuel_limit: None,
+        fuel_remaining: None,
+        parent_refs: vec![inspection.receipt_ref.clone()],
+    })?;
     let runtime = match super::invoke_component(&mut session, input_bytes) {
         Ok(runtime) => runtime,
         Err(denial) => {
@@ -133,16 +131,15 @@ fn execute_admitted_component(
             );
         }
     };
-    let execution = plan_receipt(
-        request,
+    let execution = plan_receipt(request, PlanReceiptInput {
         plan,
-        super::super::evidence::receipt::ComponentReceiptStage::Execution,
-        Some(input_ref),
-        Some(output_ref),
-        Some(request.profile.resources.fuel),
-        Some(runtime.fuel_remaining),
-        vec![instantiation.receipt_ref.clone()],
-    )?;
+        stage: super::super::evidence::receipt::ComponentReceiptStage::Execution,
+        input_ref: Some(input_ref),
+        output_ref: Some(output_ref),
+        fuel_limit: Some(request.profile.resources.fuel),
+        fuel_remaining: Some(runtime.fuel_remaining),
+        parent_refs: vec![instantiation.receipt_ref.clone()],
+    })?;
     Ok(ComponentExecutionOutcome {
         decision: super::super::evidence::receipt::ComponentReceiptDecision::Pass,
         output: Some(output),
@@ -179,16 +176,29 @@ fn decode_component_output(
     Ok((output, output_ref))
 }
 
-fn plan_receipt(
-    request: &ComponentExecutionRequest<'_>,
-    plan: &super::super::admission::ComponentExecutionPlan,
+struct PlanReceiptInput<'a> {
+    plan: &'a super::super::admission::ComponentExecutionPlan,
     stage: super::super::evidence::receipt::ComponentReceiptStage,
     input_ref: Option<String>,
     output_ref: Option<String>,
     fuel_limit: Option<u64>,
     fuel_remaining: Option<u64>,
     parent_refs: Vec<String>,
+}
+
+fn plan_receipt(
+    request: &ComponentExecutionRequest<'_>,
+    input: PlanReceiptInput<'_>,
 ) -> super::super::model::ComponentResult<super::super::evidence::receipt::ComponentReceipt> {
+    let PlanReceiptInput {
+        plan,
+        stage,
+        input_ref,
+        output_ref,
+        fuel_limit,
+        fuel_remaining,
+        parent_refs,
+    } = input;
     super::super::evidence::receipt::build_component_receipt(super::super::evidence::receipt::ComponentReceiptInput {
         stage,
         decision: super::super::evidence::receipt::ComponentReceiptDecision::Pass,

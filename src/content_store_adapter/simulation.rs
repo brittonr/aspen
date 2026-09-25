@@ -19,17 +19,28 @@ pub struct SimulationContentExecution {
     pub verified_chunks: Vec<VerifiedChunkPayload>,
 }
 
+pub struct SimulatedStreamInput<'a> {
+    pub profile: &'a ContentAdapterProfile,
+    pub manifest: &'a ContentManifestDescriptor,
+    pub command: &'a ContentCommand,
+    pub generation: u64,
+    pub retained: Option<&'a ContentPartialState>,
+    pub chunks: &'a std::collections::BTreeMap<String, Vec<u8>>,
+    pub fault: Option<SimulationFault>,
+}
+
 // r[impl molten.content_store_adapter.partial_state]
 // r[impl molten.content_store_adapter.live_sim_conformance]
-pub fn execute_simulated_stream(
-    profile: &ContentAdapterProfile,
-    manifest: &ContentManifestDescriptor,
-    command: &ContentCommand,
-    generation: u64,
-    retained: Option<&ContentPartialState>,
-    chunks: &std::collections::BTreeMap<String, Vec<u8>>,
-    fault: Option<SimulationFault>,
-) -> crate::error::Result<SimulationContentExecution> {
+pub fn execute_simulated_stream(input: SimulatedStreamInput<'_>) -> crate::error::Result<SimulationContentExecution> {
+    let SimulatedStreamInput {
+        profile,
+        manifest,
+        command,
+        generation,
+        retained,
+        chunks,
+        fault,
+    } = input;
     if profile.class != ContentAdapterClass::DeterministicSimulation {
         return Err(crate::error::MoltenError::invalid_harness(
             "simulation execution requires deterministic simulation profile",
@@ -69,15 +80,15 @@ pub fn execute_simulated_stream(
             state = cancel_content_operation(profile, &state).map_err(transition_error)?;
             events.push(canonical_content_event(
                 profile,
-                &content_event(
+                &content_event(EventInput {
                     command,
-                    terminal_sequence(&state)?,
-                    state.terminal,
-                    None,
-                    0,
-                    None,
-                    &manifest.evidence_refs,
-                ),
+                    sequence: terminal_sequence(&state)?,
+                    terminal: state.terminal,
+                    chunk_ref: None,
+                    observed_bytes: 0,
+                    failure: None,
+                    evidence_refs: &manifest.evidence_refs,
+                }),
             )?);
             break;
         }
@@ -86,15 +97,15 @@ pub fn execute_simulated_stream(
                 .map_err(transition_error)?;
             events.push(canonical_content_event(
                 profile,
-                &content_event(
+                &content_event(EventInput {
                     command,
-                    terminal_sequence(&state)?,
-                    state.terminal,
-                    None,
-                    0,
-                    state.failure,
-                    &manifest.evidence_refs,
-                ),
+                    sequence: terminal_sequence(&state)?,
+                    terminal: state.terminal,
+                    chunk_ref: None,
+                    observed_bytes: 0,
+                    failure: state.failure,
+                    evidence_refs: &manifest.evidence_refs,
+                }),
             )?);
             break;
         }
@@ -132,15 +143,15 @@ pub fn execute_simulated_stream(
                 });
                 events.push(canonical_content_event(
                     profile,
-                    &content_event(
+                    &content_event(EventInput {
                         command,
                         sequence,
-                        state.terminal,
-                        Some(descriptor.chunk_ref.clone()),
-                        observed_length,
-                        None,
-                        &manifest.evidence_refs,
-                    ),
+                        terminal: state.terminal,
+                        chunk_ref: Some(descriptor.chunk_ref.clone()),
+                        observed_bytes: observed_length,
+                        failure: None,
+                        evidence_refs: &manifest.evidence_refs,
+                    }),
                 )?);
             }
             Err(issues) => {
@@ -148,15 +159,15 @@ pub fn execute_simulated_stream(
                 state = classify_content_failure(profile, &state, failure).map_err(transition_error)?;
                 events.push(canonical_content_event(
                     profile,
-                    &content_event(
+                    &content_event(EventInput {
                         command,
-                        terminal_sequence(&state)?,
-                        state.terminal,
-                        Some(descriptor.chunk_ref.clone()),
-                        0,
-                        Some(failure),
-                        &manifest.evidence_refs,
-                    ),
+                        sequence: terminal_sequence(&state)?,
+                        terminal: state.terminal,
+                        chunk_ref: Some(descriptor.chunk_ref.clone()),
+                        observed_bytes: 0,
+                        failure: Some(failure),
+                        evidence_refs: &manifest.evidence_refs,
+                    }),
                 )?);
                 break;
             }
@@ -178,15 +189,15 @@ fn terminal_execution(
 ) -> crate::error::Result<SimulationContentExecution> {
     let event = canonical_content_event(
         profile,
-        &content_event(
+        &content_event(EventInput {
             command,
-            terminal_sequence(&state)?,
-            state.terminal,
-            None,
-            0,
-            state.failure,
-            &manifest.evidence_refs,
-        ),
+            sequence: terminal_sequence(&state)?,
+            terminal: state.terminal,
+            chunk_ref: None,
+            observed_bytes: 0,
+            failure: state.failure,
+            evidence_refs: &manifest.evidence_refs,
+        }),
     )?;
     Ok(SimulationContentExecution {
         state: canonical_partial_state(profile, manifest, &state)?,

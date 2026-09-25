@@ -104,7 +104,14 @@ pub fn evaluate_service_transition(state: &ServiceFsmState, event: &ServiceFsmEv
     } else {
         Vec::new()
     };
-    let value = transition_value(state, event, &next_state, decision, &shell_intents, &diagnostics)?;
+    let value = transition_value(TransitionValueInput {
+        state,
+        event,
+        next: &next_state,
+        decision,
+        shell_intents: &shell_intents,
+        diagnostics: &diagnostics,
+    })?;
     let transition_ref = crate::preserves_rail::canonical_hash(&value)?;
     Ok(ServiceFsmTransition {
         decision: decision.to_string(),
@@ -271,14 +278,24 @@ fn shell_intents(event: &ServiceFsmEvent) -> Vec<String> {
     }
 }
 
-fn transition_value(
-    state: &ServiceFsmState,
-    event: &ServiceFsmEvent,
-    next: &ServiceFsmState,
-    decision: &str,
-    shell_intents: &[String],
-    diagnostics: &[String],
-) -> Result<IoValue> {
+struct TransitionValueInput<'a> {
+    state: &'a ServiceFsmState,
+    event: &'a ServiceFsmEvent,
+    next: &'a ServiceFsmState,
+    decision: &'a str,
+    shell_intents: &'a [String],
+    diagnostics: &'a [String],
+}
+
+fn transition_value(input: TransitionValueInput<'_>) -> Result<IoValue> {
+    let TransitionValueInput {
+        state,
+        event,
+        next,
+        decision,
+        shell_intents,
+        diagnostics,
+    } = input;
     Ok(record("node-control-service-fsm-transition-v1", vec![
         string(SERVICE_FSM_SCHEMA),
         field_string("decision", decision),

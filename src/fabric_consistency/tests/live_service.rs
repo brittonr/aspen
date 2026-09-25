@@ -464,14 +464,13 @@ async fn scoped_service_executes_startup_and_current_timer_through_separate_port
         control_sender,
     )
     .expect("control port");
-    let ports = ReplicaPortBundle::new(
-        runtime_identity,
-        ServiceDurabilityPort::default(),
-        ServiceTransportPort::default(),
-        ServiceTimePort::default(),
+    let ports = ReplicaPortBundle::new(runtime_identity, ReplicaAdapterSet {
+        durability: ServiceDurabilityPort::default(),
+        transport: ServiceTransportPort::default(),
+        time: ServiceTimePort::default(),
         application,
         control,
-    )
+    })
     .expect("bound runtime port bundle");
     let mut service = ScopedLiveReplicaService::start(plan, ports, event_receiver).await.expect("scoped live service");
 

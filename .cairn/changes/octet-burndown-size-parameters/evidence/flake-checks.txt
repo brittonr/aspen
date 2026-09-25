@@ -1,0 +1,16 @@
+# nix build --no-link .#checks.x86_64-linux.<name> (candidate tree, touched surfaces); exit codes
+addressable-actor-octet-deny-all=0
+coordination-delivery-octet-deny-all=0
+fabric-execution-octet-deny-all=0
+native-system-extension-octet-deny-all=0
+world-head-octet-deny-all=0
+addressable-actor-profile=0
+coordination-delivery-profile=0
+fabric-execution-profile=0
+content-store-adapter-profile=0
+fabric-observability-profile=0
+wasm-component-profile=0
+native-system-extension-host-profile=0
+fabric-cryptographic-identity-profile=0
+fabric-port-boundaries=0
+requirement-traceability-gate=0

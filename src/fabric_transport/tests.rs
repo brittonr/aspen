@@ -275,14 +275,14 @@ async fn live_iroh_loopback_exchanges_a_bounded_frame_without_leaking_adapter_ha
     let mut adapter = IrohTransportAdapter::new(profile(TransportAdapterKind::IrohLive)).expect("Iroh adapter");
     let _events = apply_setup(&mut adapter);
     let result = adapter
-        .live_loopback_frame(
-            &id(SESSION_REF, GENERATION),
-            &id(STREAM_REF, GENERATION),
-            OPERATION_REF,
-            &descriptor().alpn,
-            PAYLOAD,
-            INITIAL_TICK,
-        )
+        .live_loopback_frame(LoopbackFrameInput {
+            session_id: &id(SESSION_REF, GENERATION),
+            stream_id: &id(STREAM_REF, GENERATION),
+            operation_id: OPERATION_REF,
+            alpn: &descriptor().alpn,
+            payload: PAYLOAD,
+            observed_tick: INITIAL_TICK,
+        })
         .await
         .expect("live Iroh loopback");
     let expected_ref = format!("blake3:{}", blake3::hash(PAYLOAD).to_hex());

@@ -165,17 +165,29 @@ pub fn authority_claim_value(claim: &AuthorityClaim) -> Result<IoValue> {
     ]))
 }
 
+pub struct RequestInput<'a> {
+    pub holder_ref: &'a str,
+    pub session_ref: &'a str,
+    pub context_ref: &'a str,
+    pub selector_ref: &'a str,
+    pub claim_kind: &'a str,
+    pub at_tick: u64,
+    pub policy_refs: &'a [String],
+    pub resource_refs: &'a [String],
+}
+
 // r[impl molten.claim_authority.capability_profile]
-pub fn claim_capability_request(
-    holder_ref: &str,
-    session_ref: &str,
-    context_ref: &str,
-    selector_ref: &str,
-    claim_kind: &str,
-    at_tick: u64,
-    policy_refs: &[String],
-    resource_refs: &[String],
-) -> Result<crate::capability_tokens::CapabilityRequest> {
+pub fn claim_capability_request(input: RequestInput<'_>) -> Result<crate::capability_tokens::CapabilityRequest> {
+    let RequestInput {
+        holder_ref,
+        session_ref,
+        context_ref,
+        selector_ref,
+        claim_kind,
+        at_tick,
+        policy_refs,
+        resource_refs,
+    } = input;
     validate_ref(holder_ref, "claim holder ref")?;
     validate_ref(session_ref, "claim session ref")?;
     validate_ref(context_ref, "claim context ref")?;
@@ -362,16 +374,16 @@ fn admission_diagnostics(input: &ClaimAdmissionInput, selector_ref: &str) -> Res
     if is_broad_selector(&input.selector) && input.selector.caveats.is_empty() {
         diagnostics.push("broad-selector-without-visible-attenuation".to_string());
     }
-    let request = claim_capability_request(
-        &input.claim.holder_ref,
-        &input.claim.session_ref,
-        &input.claim.context_ref,
+    let request = claim_capability_request(RequestInput {
+        holder_ref: &input.claim.holder_ref,
+        session_ref: &input.claim.session_ref,
+        context_ref: &input.claim.context_ref,
         selector_ref,
-        &input.claim.claim_kind,
-        input.at_tick,
-        &input.local_policy_refs,
-        &input.local_resource_refs,
-    )?;
+        claim_kind: &input.claim.claim_kind,
+        at_tick: input.at_tick,
+        policy_refs: &input.local_policy_refs,
+        resource_refs: &input.local_resource_refs,
+    })?;
     match input.capability_admission.as_ref() {
         Some(admission) if admission.decision == DECISION_PASS => {
             if admission.admitted_token_refs.is_empty() {
@@ -691,16 +703,16 @@ mod tests {
             revocation_refs: Vec::new(),
             evidence_refs: refs("proofset-evidence"),
         };
-        let request = claim_capability_request(
-            &local_ref("holder"),
-            &local_ref("session"),
-            &local_ref("context"),
+        let request = claim_capability_request(RequestInput {
+            holder_ref: &local_ref("holder"),
+            session_ref: &local_ref("session"),
+            context_ref: &local_ref("context"),
             selector_ref,
-            "class-membership",
-            1,
-            &refs("local-policy"),
-            &refs("local-resource"),
-        )
+            claim_kind: "class-membership",
+            at_tick: 1,
+            policy_refs: &refs("local-policy"),
+            resource_refs: &refs("local-resource"),
+        })
         .expect("request");
         crate::capability_tokens::admit_capability(&proofset, &request).expect("capability admission")
     }

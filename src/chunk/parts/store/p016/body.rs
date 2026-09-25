@@ -119,17 +119,7 @@ pub fn plan_chunk_traversal_sync(input: &ChunkTraversalSyncInput<'_>) -> Result<
         .collect::<Vec<_>>();
     let fetch_effects = partition_chunk_fetches(&missing_refs, input.candidate_peers, input.strategy);
     let diagnostics = Vec::with_capacity(CHUNK_SYNC_DIAGNOSTIC_CAPACITY);
-    let receipt_value = chunk_sync_plan_receipt_value(
-        "pass",
-        &input.manifest.manifest_ref,
-        input.strategy,
-        &stem_refs,
-        &leaf_refs,
-        &already_present_refs,
-        &missing_refs,
-        &fetch_effects,
-        &diagnostics,
-    );
+    let receipt_value = chunk_sync_plan_receipt_value(SyncPlanReceiptInput { decision: "pass", manifest_ref: &input.manifest.manifest_ref, strategy: input.strategy, stem_refs: &stem_refs, leaf_refs: &leaf_refs, already_present_refs: &already_present_refs, missing_refs: &missing_refs, fetch_effects: &fetch_effects, diagnostics: &diagnostics });
     Ok(ChunkTraversalSyncPlan {
         decision: "pass".to_string(),
         manifest_ref: input.manifest.manifest_ref.clone(),
@@ -353,17 +343,20 @@ fn ranges_overlap(left_start: u64, left_end: u64, right_start: u64, right_end: u
     left_start < right_end && right_start < left_end
 }
 
-fn chunk_sync_plan_receipt_value(
-    decision: &str,
-    manifest_ref: &str,
-    strategy: &str,
-    stem_refs: &[String],
-    leaf_refs: &[String],
-    already_present_refs: &[String],
-    missing_refs: &[String],
-    fetch_effects: &[ChunkFetchEffect],
-    diagnostics: &[String],
-) -> IoValue {
+struct SyncPlanReceiptInput<'a> {
+    decision: &'a str,
+    manifest_ref: &'a str,
+    strategy: &'a str,
+    stem_refs: &'a [String],
+    leaf_refs: &'a [String],
+    already_present_refs: &'a [String],
+    missing_refs: &'a [String],
+    fetch_effects: &'a [ChunkFetchEffect],
+    diagnostics: &'a [String],
+}
+
+fn chunk_sync_plan_receipt_value(input: SyncPlanReceiptInput<'_>) -> IoValue {
+    let SyncPlanReceiptInput { decision, manifest_ref, strategy, stem_refs, leaf_refs, already_present_refs, missing_refs, fetch_effects, diagnostics } = input;
     record("chunk-traversal-sync-plan-v1", vec![
         string(CHUNK_TRAVERSAL_SYNC_PLAN_SCHEMA),
         record("decision", vec![string(decision)]),

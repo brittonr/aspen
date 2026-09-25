@@ -43,15 +43,11 @@ pub fn run_delivery_simulation(
     for action in actions {
         match action {
             DeliverySimulationAction::Request(request) => {
-                apply_simulated_request(
-                    manifest,
-                    policy,
-                    time_profile,
-                    request,
-                    &mut state,
-                    &mut transitions,
-                    &mut state_refs,
-                );
+                apply_simulated_request(manifest, policy, time_profile, request, RequestProgress {
+                    state: &mut state,
+                    transitions: &mut transitions,
+                    state_refs: &mut state_refs,
+                });
             }
             DeliverySimulationAction::FaultedRequest { fault, request } => {
                 let mut faulted = request.clone();
@@ -71,25 +67,17 @@ pub fn run_delivery_simulation(
                         return Err(DeliverySimulationError::UnsupportedFault(*other));
                     }
                 }
-                apply_simulated_request(
-                    manifest,
-                    policy,
-                    time_profile,
-                    &faulted,
-                    &mut state,
-                    &mut transitions,
-                    &mut state_refs,
-                );
+                apply_simulated_request(manifest, policy, time_profile, &faulted, RequestProgress {
+                    state: &mut state,
+                    transitions: &mut transitions,
+                    state_refs: &mut state_refs,
+                });
                 if *fault == molten_core::fabric_simulation::SimulationFaultKind::Duplicate {
-                    apply_simulated_request(
-                        manifest,
-                        policy,
-                        time_profile,
-                        &faulted,
-                        &mut state,
-                        &mut transitions,
-                        &mut state_refs,
-                    );
+                    apply_simulated_request(manifest, policy, time_profile, &faulted, RequestProgress {
+                        state: &mut state,
+                        transitions: &mut transitions,
+                        state_refs: &mut state_refs,
+                    });
                 }
                 fault_classes.push(fault.as_str().to_string());
             }
@@ -110,15 +98,24 @@ pub fn run_delivery_simulation(
     })
 }
 
+struct RequestProgress<'a> {
+    state: &'a mut DeliveryState,
+    transitions: &'a mut Vec<DeliveryTransition>,
+    state_refs: &'a mut Vec<String>,
+}
+
 fn apply_simulated_request(
     manifest: &DeliveryManifest,
     policy: &DeliveryPolicy,
     time_profile: &molten_core::fabric_time::AdmittedTimeProfile,
     request: &DeliveryRequest,
-    state: &mut DeliveryState,
-    transitions: &mut Vec<DeliveryTransition>,
-    state_refs: &mut Vec<String>,
+    input: RequestProgress<'_>,
 ) {
+    let RequestProgress {
+        state,
+        transitions,
+        state_refs,
+    } = input;
     let transition = plan_delivery_transition(&DeliveryTransitionInput {
         manifest,
         policy,

@@ -163,6 +163,15 @@ pub struct LiveIrohLoopbackResult {
     pub remote_transport_identity_ref: String,
 }
 
+pub struct LoopbackFrameInput<'a> {
+    pub session_id: &'a ScopedTransportId,
+    pub stream_id: &'a ScopedTransportId,
+    pub operation_id: &'a str,
+    pub alpn: &'a str,
+    pub payload: &'a [u8],
+    pub observed_tick: u64,
+}
+
 impl IrohTransportAdapter {
     // r[impl molten.fabric_transport.live_sim_parity]
     pub fn new(profile: CanonicalTransportProfile) -> crate::error::Result<Self> {
@@ -211,13 +220,16 @@ impl IrohTransportAdapter {
     // r[impl molten.fabric_transport.flow_control]
     pub async fn live_loopback_frame(
         &mut self,
-        session_id: &ScopedTransportId,
-        stream_id: &ScopedTransportId,
-        operation_id: &str,
-        alpn: &str,
-        payload: &[u8],
-        observed_tick: u64,
+        input: LoopbackFrameInput<'_>,
     ) -> crate::error::Result<LiveIrohLoopbackResult> {
+        let LoopbackFrameInput {
+            session_id,
+            stream_id,
+            operation_id,
+            alpn,
+            payload,
+            observed_tick,
+        } = input;
         let payload_bytes = u64::try_from(payload.len())
             .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh payload size does not fit u64"))?;
         let payload_ref = blake3_ref(payload);

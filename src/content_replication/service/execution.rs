@@ -9,6 +9,12 @@ struct ExecutionPorts<'a> {
     receipts: &'a mut dyn ReceiptPort,
 }
 
+struct ActionPorts<'a> {
+    content: &'a mut dyn ContentPort,
+    transport: &'a mut dyn TransportPort,
+    retention: &'a mut dyn RetentionPort,
+}
+
 pub(super) struct ExecutionResult<'a> {
     pub(super) operations: Vec<PriorOperation>,
     pub(super) durable: &'a mut dyn DurablePort,
@@ -43,15 +49,12 @@ pub(super) fn execute_actions<'a>(
             }
             continue;
         }
-        if let Some(operation) = execute_action(
-            manifest,
-            action,
-            history,
-            evidence_refs,
-            &mut *execution_ports.content,
-            &mut *execution_ports.transport,
-            &mut *execution_ports.retention,
-        )? {
+        let mut action_ports = ActionPorts {
+            content: &mut *execution_ports.content,
+            transport: &mut *execution_ports.transport,
+            retention: &mut *execution_ports.retention,
+        };
+        if let Some(operation) = execute_action(manifest, action, history, evidence_refs, &mut action_ports)? {
             let canonical = canonical_operation(&operation)?;
             let durable_ref = execution_ports.durable.store_operation(&operation)?;
             validate_ref(&durable_ref, "replication durable operation")?;
@@ -74,16 +77,16 @@ fn execute_action(
     action: &Action,
     history: &[PriorOperation],
     evidence_refs: &mut Vec<String>,
-    content: &mut dyn ContentPort,
-    transport: &mut dyn TransportPort,
-    retention: &mut dyn RetentionPort,
+    ports: &mut ActionPorts<'_>,
 ) -> crate::error::Result<Option<PriorOperation>> {
     match action.kind {
         ActionKind::Defer => Ok(None),
         ActionKind::Reuse => Ok(history.iter().find(|prior| prior.operation_id == action.operation_id).cloned()),
-        ActionKind::Cleanup => execute_cleanup(manifest, action, content, retention, evidence_refs).map(Some),
+        ActionKind::Cleanup => {
+            execute_cleanup(manifest, action, &mut *ports.content, &mut *ports.retention, evidence_refs).map(Some)
+        }
         ActionKind::Transfer | ActionKind::Repair | ActionKind::Handoff => {
-            execute_transfer(manifest, action, content, transport, retention, evidence_refs).map(Some)
+            execute_transfer(manifest, action, ports, evidence_refs).map(Some)
         }
     }
 }
@@ -94,11 +97,14 @@ fn execute_action(
 fn execute_transfer(
     manifest: &Manifest,
     action: &Action,
-    content: &mut dyn ContentPort,
-    transport: &mut dyn TransportPort,
-    retention: &mut dyn RetentionPort,
+    ports: &mut ActionPorts<'_>,
     evidence_refs: &mut Vec<String>,
 ) -> crate::error::Result<PriorOperation> {
+    let ActionPorts {
+        content,
+        transport,
+        retention,
+    } = ports;
     let pin = retention.acquire_pin(action)?;
     validate_pin(manifest, action, &pin)?;
     evidence_refs.push(pin.pin_ref);
@@ -159,14 +165,24 @@ fn operation_from_action(
     })
 }
 
-pub(super) fn execution_receipt(
-    instance: &ServiceInstance,
-    plan: &Plan,
-    status: &Status,
-    canonical_status: &CanonicalReplicationRecord,
-    operations: Vec<PriorOperation>,
-    evidence_refs: Vec<String>,
-) -> ExecutionReceipt {
+pub(super) struct ReceiptInput<'a> {
+    pub(super) instance: &'a ServiceInstance,
+    pub(super) plan: &'a Plan,
+    pub(super) status: &'a Status,
+    pub(super) canonical_status: &'a CanonicalReplicationRecord,
+    pub(super) operations: Vec<PriorOperation>,
+    pub(super) evidence_refs: Vec<String>,
+}
+
+pub(super) fn execution_receipt(input: ReceiptInput<'_>) -> ExecutionReceipt {
+    let ReceiptInput {
+        instance,
+        plan,
+        status,
+        canonical_status,
+        operations,
+        evidence_refs,
+    } = input;
     let decision = if plan.decision == Decision::Denied {
         ReceiptDecision::Denied
     } else if status.under_replicated.is_empty() && status.active_operations.is_empty() && status.failures.is_empty() {

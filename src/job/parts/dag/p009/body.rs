@@ -222,14 +222,7 @@ pub fn execution_loopback_with_node_state(
     };
     push_check(&mut checks, "target-job-present", true);
 
-    check_target_selection_with_root(
-        &target_registry,
-        &request,
-        &admission,
-        &dag,
-        &mut diagnostics,
-        &mut checks,
-    )?;
+    check_target_selection_with_root(TargetSelectionInput { target_registry: &target_registry, request: &request, admission: &admission, dag: &dag }, &mut diagnostics, &mut checks)?;
 
     if checks.iter().any(|(_, status)| *status != "pass") {
         return deny_result(DenyInput {

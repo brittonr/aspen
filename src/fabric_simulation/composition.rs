@@ -1068,14 +1068,14 @@ fn reference_contract_differential(
             )
         })
         .collect::<Vec<_>>();
-    canonical_simulation_differential(
-        &simulation_profile_ref,
-        &live_profile_ref,
-        &shared_contract_ref,
-        &trace_refs,
-        &trace_refs,
-        Vec::new(),
-    )
+    canonical_simulation_differential(DifferentialInput {
+        simulation_profile_ref: &simulation_profile_ref,
+        live_profile_ref: &live_profile_ref,
+        shared_contract_ref: &shared_contract_ref,
+        simulation_trace_refs: &trace_refs,
+        live_trace_refs: &trace_refs,
+        normalized_difference_refs: Vec::new(),
+    })
 }
 
 fn workload_choice(step: &SimulationWorkloadStep) -> EligibleChoice {

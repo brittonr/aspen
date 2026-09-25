@@ -28,14 +28,7 @@ fn serve_control_with_root(
     if let Some(policy) = supervisor_policy.as_ref() {
         let prior_runs = count_prior_supervised_service_runs(state_root, &policy.policy_ref)?;
         if prior_runs > policy.max_restarts {
-            return denied_restart_attempt(
-                state_root,
-                input,
-                &startup,
-                policy,
-                prior_runs,
-                &existing_lock.supervisor_receipt_refs,
-            );
+            return denied_restart_attempt(state_root, input, RestartDenialInput { startup: &startup, policy, prior_runs, inherited_supervisor_receipt_refs: &existing_lock.supervisor_receipt_refs });
         }
     }
 
@@ -186,14 +179,15 @@ fn handle_existing_service_lock(
     })
 }
 
-fn denied_restart_attempt(
-    state_root: &crate::node_state::NodeStateRoot,
-    input: &ControlServeInput<'_>,
-    startup: &crate::node_runtime::NodeStartupReceipt,
-    policy: &ControlSupervisorPolicy,
+struct RestartDenialInput<'a> {
+    startup: &'a crate::node_runtime::NodeStartupReceipt,
+    policy: &'a ControlSupervisorPolicy,
     prior_runs: u64,
-    inherited_supervisor_receipt_refs: &[String],
-) -> Result<ControlServe> {
+    inherited_supervisor_receipt_refs: &'a [String],
+}
+
+fn denied_restart_attempt(state_root: &crate::node_state::NodeStateRoot, input: &ControlServeInput<'_>, restart: RestartDenialInput<'_>) -> Result<ControlServe> {
+    let RestartDenialInput { startup, policy, prior_runs, inherited_supervisor_receipt_refs } = restart;
     let diagnostics = vec![format!(
         "node control supervisor restart attempts {prior_runs} exceeded bound {}",
         policy.max_restarts

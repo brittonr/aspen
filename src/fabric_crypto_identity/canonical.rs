@@ -129,17 +129,29 @@ pub fn canonical_signature_domain(
     })
 }
 
+pub struct KeyHandleInput<'a> {
+    pub profile: &'a CanonicalCryptoProfile,
+    pub purpose: KeyPurpose,
+    pub generation: u64,
+    pub public_key_ref: &'a str,
+    pub backend_class: KeyBackendClass,
+    pub backend_ref: &'a str,
+    pub currentness: KeyCurrentness,
+    pub currentness_evidence_ref: &'a str,
+}
+
 // r[impl molten.crypto_identity.adapter_contract]
-pub fn canonical_key_handle(
-    profile: &CanonicalCryptoProfile,
-    purpose: KeyPurpose,
-    generation: u64,
-    public_key_ref: &str,
-    backend_class: KeyBackendClass,
-    backend_ref: &str,
-    currentness: KeyCurrentness,
-    currentness_evidence_ref: &str,
-) -> crate::error::Result<CanonicalKeyHandle> {
+pub fn canonical_key_handle(input: KeyHandleInput<'_>) -> crate::error::Result<CanonicalKeyHandle> {
+    let KeyHandleInput {
+        profile,
+        purpose,
+        generation,
+        public_key_ref,
+        backend_class,
+        backend_ref,
+        currentness,
+        currentness_evidence_ref,
+    } = input;
     let value = crate::preserves_rail::record(CRYPTO_HANDLE_RECORD, vec![
         crate::preserves_rail::string(OPAQUE_KEY_HANDLE_SCHEMA),
         field("profile-ref", crate::preserves_rail::string(&profile.profile.profile_ref)),

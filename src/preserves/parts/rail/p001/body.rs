@@ -1115,7 +1115,7 @@ fn validate_boundary_field(
             schema_ref,
         ),
         BoundaryFieldKind::NonEmptyRefSequenceRecord => {
-            validate_ref_sequence_record_with_contract(value, field_spec.label, spec, schema_ref, true, false)
+            validate_ref_sequence_record_with_contract(RefSequenceContractInput { value, label: field_spec.label, spec, schema_ref, require_non_empty: true, require_unique: false })
         }
         BoundaryFieldKind::NonEmptyStringRecord => validate_non_empty_string_record(value, field_spec.label, spec, schema_ref),
         BoundaryFieldKind::ObjectRecord => validate_object_boundary_record(value, field_spec, spec, schema_ref),
@@ -1128,7 +1128,7 @@ fn validate_boundary_field(
         BoundaryFieldKind::StringRecord => validate_string_record(value, field_spec.label, spec, schema_ref),
         BoundaryFieldKind::StringSequenceRecord => validate_string_sequence_record(value, field_spec.label, spec, schema_ref),
         BoundaryFieldKind::UniqueRefSequenceRecord => {
-            validate_ref_sequence_record_with_contract(value, field_spec.label, spec, schema_ref, false, true)
+            validate_ref_sequence_record_with_contract(RefSequenceContractInput { value, label: field_spec.label, spec, schema_ref, require_non_empty: false, require_unique: true })
         }
         BoundaryFieldKind::UniqueStringSequenceRecord => validate_unique_string_sequence_record(value, field_spec.label, spec, schema_ref),
         BoundaryFieldKind::TwoRefsRecord => validate_two_refs_boundary_record(value, field_spec, spec, schema_ref),
@@ -1272,17 +1272,20 @@ fn validate_ref_sequence_record(
     spec: &BoundarySchemaSpec,
     schema_ref: &ContentRef,
 ) -> Result<()> {
-    validate_ref_sequence_record_with_contract(value, label, spec, schema_ref, false, false)
+    validate_ref_sequence_record_with_contract(RefSequenceContractInput { value, label, spec, schema_ref, require_non_empty: false, require_unique: false })
 }
 
-fn validate_ref_sequence_record_with_contract(
-    value: &Value<IoValue>,
-    label: &str,
-    spec: &BoundarySchemaSpec,
-    schema_ref: &ContentRef,
+struct RefSequenceContractInput<'a> {
+    value: &'a Value<IoValue>,
+    label: &'a str,
+    spec: &'a BoundarySchemaSpec,
+    schema_ref: &'a ContentRef,
     require_non_empty: bool,
     require_unique: bool,
-) -> Result<()> {
+}
+
+fn validate_ref_sequence_record_with_contract(input: RefSequenceContractInput<'_>) -> Result<()> {
+    let RefSequenceContractInput { value, label, spec, schema_ref, require_non_empty, require_unique } = input;
     let record = boundary_record(value, label, FIELD_ARITY_ONE, spec, schema_ref)?;
     let sequence = ensure_sequence(&record[0], label, spec, schema_ref)?;
     if require_non_empty && sequence.is_empty() {
@@ -1533,9 +1536,9 @@ fn validate_hostcall_descriptor_boundary_record(
     let descriptor_ref = ensure_content_ref_string(&descriptor_record[0], "descriptor", spec, schema_ref)?;
     validate_ref_record(&fields[HOSTCALL_DESCRIPTOR_INPUT_SCHEMA_INDEX], "input-schema", spec, schema_ref)?;
     validate_ref_record(&fields[HOSTCALL_DESCRIPTOR_OUTPUT_SCHEMA_INDEX], "output-schema", spec, schema_ref)?;
-    validate_ref_sequence_record_with_contract(&fields[HOSTCALL_DESCRIPTOR_AUTHORITY_INDEX], "authority", spec, schema_ref, true, true)?;
-    validate_ref_sequence_record_with_contract(&fields[HOSTCALL_DESCRIPTOR_RESOURCE_INDEX], "resource", spec, schema_ref, true, true)?;
-    validate_ref_sequence_record_with_contract(&fields[HOSTCALL_DESCRIPTOR_EFFECTS_INDEX], "effects", spec, schema_ref, true, true)?;
+    validate_ref_sequence_record_with_contract(RefSequenceContractInput { value: &fields[HOSTCALL_DESCRIPTOR_AUTHORITY_INDEX], label: "authority", spec, schema_ref, require_non_empty: true, require_unique: true })?;
+    validate_ref_sequence_record_with_contract(RefSequenceContractInput { value: &fields[HOSTCALL_DESCRIPTOR_RESOURCE_INDEX], label: "resource", spec, schema_ref, require_non_empty: true, require_unique: true })?;
+    validate_ref_sequence_record_with_contract(RefSequenceContractInput { value: &fields[HOSTCALL_DESCRIPTOR_EFFECTS_INDEX], label: "effects", spec, schema_ref, require_non_empty: true, require_unique: true })?;
     let replay_record = boundary_record(&fields[HOSTCALL_DESCRIPTOR_REPLAY_INDEX], "replay", FIELD_ARITY_ONE, spec, schema_ref)?;
     let replay = ensure_string(&replay_record[0], "replay", spec, schema_ref)?;
     ReplayClass::parse(replay.as_ref()).map_err(|error| {
@@ -1544,7 +1547,7 @@ fn validate_hostcall_descriptor_boundary_record(
             spec.family, schema_ref
         ))
     })?;
-    validate_ref_sequence_record_with_contract(&fields[HOSTCALL_DESCRIPTOR_ERRORS_INDEX], "errors", spec, schema_ref, true, true)?;
+    validate_ref_sequence_record_with_contract(RefSequenceContractInput { value: &fields[HOSTCALL_DESCRIPTOR_ERRORS_INDEX], label: "errors", spec, schema_ref, require_non_empty: true, require_unique: true })?;
     Ok(format!("{}:{}", operation.as_ref(), descriptor_ref))
 }
 

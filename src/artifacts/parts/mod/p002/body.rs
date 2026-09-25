@@ -97,51 +97,19 @@ pub fn rebuild_index_with_root(root: &CapabilityArtifactRoot) -> Result<Artifact
 pub fn dependency_edges_for_artifact(artifact: &ArtifactRecord) -> Result<Vec<ArtifactDependencyEdge>> {
     let mut edges = Vec::new();
     for dependency_ref in &artifact.dependency_refs {
-        push_dependency_edge(
-            &mut edges,
-            artifact,
-            dependency_ref,
-            "artifact",
-            "imports",
-            true,
-            artifact.evidence_refs.as_slice(),
-        )?;
+        push_dependency_edge(&mut edges, artifact, DependencyTargetInput { target_ref: dependency_ref, target_kind: "artifact", relation: "imports", required: true, evidence_refs: artifact.evidence_refs.as_slice() })?;
     }
     for schema_ref in &artifact.schema_refs {
-        push_dependency_edge(
-            &mut edges,
-            artifact,
-            schema_ref,
-            "schema",
-            "validates-with",
-            true,
-            artifact.evidence_refs.as_slice(),
-        )?;
+        push_dependency_edge(&mut edges, artifact, DependencyTargetInput { target_ref: schema_ref, target_kind: "schema", relation: "validates-with", required: true, evidence_refs: artifact.evidence_refs.as_slice() })?;
     }
     if let Some(effect_manifest_ref) = artifact.effect_manifest_ref.as_ref() {
-        push_dependency_edge(
-            &mut edges,
-            artifact,
-            effect_manifest_ref,
-            "effect",
-            "invokes",
-            true,
-            artifact.evidence_refs.as_slice(),
-        )?;
+        push_dependency_edge(&mut edges, artifact, DependencyTargetInput { target_ref: effect_manifest_ref, target_kind: "effect", relation: "invokes", required: true, evidence_refs: artifact.evidence_refs.as_slice() })?;
     }
     for policy_ref in &artifact.policy_refs {
-        push_dependency_edge(
-            &mut edges,
-            artifact,
-            policy_ref,
-            "policy",
-            "validates-with",
-            true,
-            artifact.evidence_refs.as_slice(),
-        )?;
+        push_dependency_edge(&mut edges, artifact, DependencyTargetInput { target_ref: policy_ref, target_kind: "policy", relation: "validates-with", required: true, evidence_refs: artifact.evidence_refs.as_slice() })?;
     }
     for evidence_ref in &artifact.evidence_refs {
-        push_dependency_edge(&mut edges, artifact, evidence_ref, "evidence", "documents", false, &[])?;
+        push_dependency_edge(&mut edges, artifact, DependencyTargetInput { target_ref: evidence_ref, target_kind: "evidence", relation: "documents", required: false, evidence_refs: &[] })?;
     }
     Ok(edges)
 }
@@ -823,37 +791,31 @@ struct NormalizedDependencyEdges {
     duplicate_refs: Vec<String>,
 }
 
-fn push_dependency_edge(
-    edges: &mut Vec<ArtifactDependencyEdge>,
-    artifact: &ArtifactRecord,
-    target_ref: &str,
-    target_kind: &str,
-    relation: &str,
+struct DependencyTargetInput<'a> {
+    target_ref: &'a str,
+    target_kind: &'a str,
+    relation: &'a str,
     required: bool,
-    evidence_refs: &[String],
-) -> Result<()> {
-    let edge = dependency_edge(
-        &artifact.artifact_ref,
+    evidence_refs: &'a [String],
+}
+
+fn push_dependency_edge(edges: &mut Vec<ArtifactDependencyEdge>, artifact: &ArtifactRecord, input: DependencyTargetInput<'_>) -> Result<()> {
+    let DependencyTargetInput { target_ref, target_kind, relation, required, evidence_refs } = input;
+    let edge = dependency_edge(DependencyEdgeInput {
+        source_ref: &artifact.artifact_ref,
         target_ref,
         target_kind,
         relation,
         required,
-        &artifact.kind,
+        scope: &artifact.kind,
         evidence_refs,
-    )?;
+    })?;
     push_bounded(edges, edge, MAX_ARTIFACT_RECORDS, "artifact dependency edges")
 }
 
-fn dependency_edge(
-    source_ref: &str,
-    target_ref: &str,
-    target_kind: &str,
-    relation: &str,
-    required: bool,
-    scope: &str,
-    evidence_refs: &[String],
-) -> Result<ArtifactDependencyEdge> {
-    let value = dependency_edge_value(source_ref, target_ref, target_kind, relation, required, scope, evidence_refs)?;
+fn dependency_edge(input: DependencyEdgeInput<'_>) -> Result<ArtifactDependencyEdge> {
+    let DependencyEdgeInput { source_ref, target_ref, target_kind, relation, required, scope, evidence_refs } = input;
+    let value = dependency_edge_value(input)?;
     let edge_ref = canonical_hash(&value)?;
     Ok(ArtifactDependencyEdge {
         edge_ref,
@@ -868,15 +830,19 @@ fn dependency_edge(
     })
 }
 
-fn dependency_edge_value(
-    source_ref: &str,
-    target_ref: &str,
-    target_kind: &str,
-    relation: &str,
+#[derive(Clone, Copy)]
+struct DependencyEdgeInput<'a> {
+    source_ref: &'a str,
+    target_ref: &'a str,
+    target_kind: &'a str,
+    relation: &'a str,
     required: bool,
-    scope: &str,
-    evidence_refs: &[String],
-) -> Result<IoValue> {
+    scope: &'a str,
+    evidence_refs: &'a [String],
+}
+
+fn dependency_edge_value(input: DependencyEdgeInput<'_>) -> Result<IoValue> {
+    let DependencyEdgeInput { source_ref, target_ref, target_kind, relation, required, scope, evidence_refs } = input;
     validate_ref(source_ref, "artifact dependency edge source ref")?;
     validate_ref(target_ref, "artifact dependency edge target ref")?;
     validate_dependency_label(target_kind, "artifact dependency edge target kind")?;

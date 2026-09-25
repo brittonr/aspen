@@ -21,15 +21,25 @@ pub struct ActorSimulationReport {
     pub authorizes_production: bool,
 }
 
+pub struct SequenceRunInput<'a> {
+    pub profile: &'a AddressableActorProfile,
+    pub actor_key: &'a ActorKey,
+    pub system_extension_manifest_ref: &'a str,
+    pub placement_ref: &'a str,
+    pub steps: &'a [ActorSimulationStep],
+    pub scripted_effects: &'a [ActorEffectDisposition],
+}
+
 // r[impl molten.addressable_actor.verification]
-pub fn simulate_actor_sequence(
-    profile: &AddressableActorProfile,
-    actor_key: &ActorKey,
-    system_extension_manifest_ref: &str,
-    placement_ref: &str,
-    steps: &[ActorSimulationStep],
-    scripted_effects: &[ActorEffectDisposition],
-) -> ActorServiceResult<ActorSimulationReport> {
+pub fn simulate_actor_sequence(input: SequenceRunInput<'_>) -> ActorServiceResult<ActorSimulationReport> {
+    let SequenceRunInput {
+        profile,
+        actor_key,
+        system_extension_manifest_ref,
+        placement_ref,
+        steps,
+        scripted_effects,
+    } = input;
     let actor_key_ref = identify_actor_key(actor_key);
     let profile_ref = identify_addressable_actor_profile(profile);
     let mut commit = SimulationCommitPort::default();

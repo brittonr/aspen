@@ -70,6 +70,17 @@ where
     observations: Vec<NativeInvocationObservation>,
 }
 
+struct CallbackCompletionInput<'a> {
+    operation_ref: &'a str,
+    envelope_ref: &'a str,
+    invocation: &'a CallbackInvocation,
+    state: NativeOperationState,
+    terminal_ref: Option<String>,
+    execution_receipt_ref: Option<String>,
+    lifecycle: ExecutionLifecycleState,
+    diagnostic_code: Option<&'static str>,
+}
+
 impl<P, J> NativeProcessSystemExtensionExecutor<P, J>
 where
     P: ExecutionFabricPort,
@@ -139,16 +150,19 @@ where
         let inputs = match self.materialize_inputs(&context, invocation) {
             Ok(inputs) => inputs,
             Err(error) => {
-                self.complete_callback(
-                    &operation_ref,
-                    &operation_ref,
+                self.complete_callback(CallbackCompletionInput {
+                    operation_ref: &operation_ref,
+                    envelope_ref: &operation_ref,
                     invocation,
-                    NativeOperationState::Terminal,
-                    Some(native_identity_ref(&["native-callback-materialization-failure-v2", &operation_ref])),
-                    None,
-                    ExecutionLifecycleState::FailedBeforeStart,
-                    Some(CALLBACK_VALUE_CODE),
-                )?;
+                    state: NativeOperationState::Terminal,
+                    terminal_ref: Some(native_identity_ref(&[
+                        "native-callback-materialization-failure-v2",
+                        &operation_ref,
+                    ])),
+                    execution_receipt_ref: None,
+                    lifecycle: ExecutionLifecycleState::FailedBeforeStart,
+                    diagnostic_code: Some(CALLBACK_VALUE_CODE),
+                })?;
                 return Err(error);
             }
         };
@@ -161,16 +175,16 @@ where
             self.template.host_profile.profile.max_materialized_value_bytes,
             maximum_values,
         ) {
-            self.complete_callback(
-                &operation_ref,
-                &envelope.envelope_ref,
+            self.complete_callback(CallbackCompletionInput {
+                operation_ref: &operation_ref,
+                envelope_ref: &envelope.envelope_ref,
                 invocation,
-                NativeOperationState::Terminal,
-                Some(native_identity_ref(&["native-callback-envelope-denial-v2", &operation_ref])),
-                None,
-                ExecutionLifecycleState::FailedBeforeStart,
-                Some(CALLBACK_WIRE_CODE),
-            )?;
+                state: NativeOperationState::Terminal,
+                terminal_ref: Some(native_identity_ref(&["native-callback-envelope-denial-v2", &operation_ref])),
+                execution_receipt_ref: None,
+                lifecycle: ExecutionLifecycleState::FailedBeforeStart,
+                diagnostic_code: Some(CALLBACK_WIRE_CODE),
+            })?;
             return Err(NativeExecutorError::Wire(error.to_string()));
         }
         let request = self.execution_request(&operation_ref, &envelope)?;
@@ -363,16 +377,16 @@ where
             && receipt.process.disposition == ExecutionObservedDisposition::ExitPolicyAccepted
             && !receipt.process.stdout.truncated;
         if !is_accepted {
-            self.complete_callback(
+            self.complete_callback(CallbackCompletionInput {
                 operation_ref,
-                &envelope.envelope_ref,
-                &envelope.invocation,
-                NativeOperationState::Terminal,
-                Some(receipt.receipt_ref.clone()),
-                Some(receipt.receipt_ref.clone()),
-                receipt.process.lifecycle,
-                Some(CALLBACK_DIAGNOSTIC_CODE),
-            )?;
+                envelope_ref: &envelope.envelope_ref,
+                invocation: &envelope.invocation,
+                state: NativeOperationState::Terminal,
+                terminal_ref: Some(receipt.receipt_ref.clone()),
+                execution_receipt_ref: Some(receipt.receipt_ref.clone()),
+                lifecycle: receipt.process.lifecycle,
+                diagnostic_code: Some(CALLBACK_DIAGNOSTIC_CODE),
+            })?;
             return Err(NativeExecutorError::ProcessObservation(CALLBACK_DIAGNOSTIC_CODE));
         }
         let maximum_values = self.maximum_materialized_values()?;
@@ -384,32 +398,32 @@ where
         ) {
             Ok(outcome) => outcome,
             Err(error) => {
-                self.complete_callback(
+                self.complete_callback(CallbackCompletionInput {
                     operation_ref,
-                    &envelope.envelope_ref,
-                    &envelope.invocation,
-                    NativeOperationState::Terminal,
-                    Some(receipt.receipt_ref.clone()),
-                    Some(receipt.receipt_ref),
-                    ExecutionLifecycleState::Exited,
-                    Some(CALLBACK_WIRE_CODE),
-                )?;
+                    envelope_ref: &envelope.envelope_ref,
+                    invocation: &envelope.invocation,
+                    state: NativeOperationState::Terminal,
+                    terminal_ref: Some(receipt.receipt_ref.clone()),
+                    execution_receipt_ref: Some(receipt.receipt_ref),
+                    lifecycle: ExecutionLifecycleState::Exited,
+                    diagnostic_code: Some(CALLBACK_WIRE_CODE),
+                })?;
                 return Err(NativeExecutorError::Wire(error.to_string()));
             }
         };
         let outcome = materialized.project();
         let issues = validate_callback_outcome(self.template.admitted.manifest(), &envelope.invocation, &outcome);
         if !issues.is_empty() {
-            self.complete_callback(
+            self.complete_callback(CallbackCompletionInput {
                 operation_ref,
-                &envelope.envelope_ref,
-                &envelope.invocation,
-                NativeOperationState::Terminal,
-                Some(receipt.receipt_ref.clone()),
-                Some(receipt.receipt_ref),
-                ExecutionLifecycleState::Exited,
-                Some(CALLBACK_WIRE_CODE),
-            )?;
+                envelope_ref: &envelope.envelope_ref,
+                invocation: &envelope.invocation,
+                state: NativeOperationState::Terminal,
+                terminal_ref: Some(receipt.receipt_ref.clone()),
+                execution_receipt_ref: Some(receipt.receipt_ref),
+                lifecycle: ExecutionLifecycleState::Exited,
+                diagnostic_code: Some(CALLBACK_WIRE_CODE),
+            })?;
             return Err(NativeExecutorError::Admission(format!("callback outcome denied: {issues:?}")));
         }
         if let Err(error) = self.publish_outcome_values(operation_ref, &materialized) {
@@ -417,28 +431,28 @@ where
                 NativeExecutorError::Value(failure) if failure.may_have_published() => NativeOperationState::Unknown,
                 _ => NativeOperationState::Terminal,
             };
-            self.complete_callback(
+            self.complete_callback(CallbackCompletionInput {
                 operation_ref,
-                &envelope.envelope_ref,
-                &envelope.invocation,
+                envelope_ref: &envelope.envelope_ref,
+                invocation: &envelope.invocation,
                 state,
-                (state == NativeOperationState::Terminal).then(|| receipt.receipt_ref.clone()),
-                Some(receipt.receipt_ref),
-                ExecutionLifecycleState::Exited,
-                Some(CALLBACK_VALUE_CODE),
-            )?;
+                terminal_ref: (state == NativeOperationState::Terminal).then(|| receipt.receipt_ref.clone()),
+                execution_receipt_ref: Some(receipt.receipt_ref),
+                lifecycle: ExecutionLifecycleState::Exited,
+                diagnostic_code: Some(CALLBACK_VALUE_CODE),
+            })?;
             return Err(error);
         }
-        self.complete_callback(
+        self.complete_callback(CallbackCompletionInput {
             operation_ref,
-            &envelope.envelope_ref,
-            &envelope.invocation,
-            NativeOperationState::Terminal,
-            Some(receipt.receipt_ref.clone()),
-            Some(receipt.receipt_ref),
-            ExecutionLifecycleState::Exited,
-            None,
-        )?;
+            envelope_ref: &envelope.envelope_ref,
+            invocation: &envelope.invocation,
+            state: NativeOperationState::Terminal,
+            terminal_ref: Some(receipt.receipt_ref.clone()),
+            execution_receipt_ref: Some(receipt.receipt_ref),
+            lifecycle: ExecutionLifecycleState::Exited,
+            diagnostic_code: None,
+        })?;
         Ok(outcome)
     }
 
@@ -487,30 +501,30 @@ where
             .process_observation
             .as_ref()
             .map_or(ExecutionLifecycleState::FailedBeforeStart, |process| process.lifecycle);
-        self.complete_callback(
+        self.complete_callback(CallbackCompletionInput {
             operation_ref,
-            &envelope.envelope_ref,
-            &envelope.invocation,
-            next_state,
-            terminal_ref.clone(),
-            terminal_ref,
+            envelope_ref: &envelope.envelope_ref,
+            invocation: &envelope.invocation,
+            state: next_state,
+            terminal_ref: terminal_ref.clone(),
+            execution_receipt_ref: terminal_ref,
             lifecycle,
-            Some(failure.diagnostic_code),
-        )?;
+            diagnostic_code: Some(failure.diagnostic_code),
+        })?;
         Err(NativeExecutorError::Execution(failure))
     }
 
-    fn complete_callback(
-        &mut self,
-        operation_ref: &str,
-        envelope_ref: &str,
-        invocation: &CallbackInvocation,
-        state: NativeOperationState,
-        terminal_ref: Option<String>,
-        execution_receipt_ref: Option<String>,
-        lifecycle: ExecutionLifecycleState,
-        diagnostic_code: Option<&'static str>,
-    ) -> Result<(), NativeExecutorError> {
+    fn complete_callback(&mut self, input: CallbackCompletionInput<'_>) -> Result<(), NativeExecutorError> {
+        let CallbackCompletionInput {
+            operation_ref,
+            envelope_ref,
+            invocation,
+            state,
+            terminal_ref,
+            execution_receipt_ref,
+            lifecycle,
+            diagnostic_code,
+        } = input;
         self.observe_operation(operation_ref, state, terminal_ref)?;
         self.observations.push(NativeInvocationObservation {
             envelope_ref: envelope_ref.to_string(),

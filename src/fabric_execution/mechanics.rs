@@ -146,3 +146,16 @@ pub(super) fn publish_stream<P: ExecutionOutputPublisher>(
         },
     }
 }
+
+/// Process and receipt evidence attached to an execution port failure, when the run got that far.
+pub(super) struct FailureEvidence {
+    pub(super) process_observation: Option<ExecutionProcessObservation>,
+    pub(super) receipt: Option<CanonicalExecutionReceipt>,
+}
+
+impl FailureEvidence {
+    pub(super) const NONE: Self = Self {
+        process_observation: None,
+        receipt: None,
+    };
+}

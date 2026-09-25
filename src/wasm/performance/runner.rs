@@ -92,14 +92,14 @@ pub fn run_sightglass_process(
             stdout_limit.checked_sub(total_stdout_bytes).filter(|remaining| *remaining > 0).ok_or_else(|| {
                 super::model::PerformanceDenial::new("Sightglass suite exceeded its admitted total output")
             })?;
-        let output = run_sightglass_subprocess(
-            &runner_file.process_path,
-            &engine_file.process_path,
-            &benchmark_file.process_path,
-            invocation.suite,
-            remaining_stdout,
-            remaining_timeout,
-        )?;
+        let output = run_sightglass_subprocess(SubprocessInput {
+            runner: &runner_file.process_path,
+            engine: &engine_file.process_path,
+            benchmark: &benchmark_file.process_path,
+            suite: invocation.suite,
+            stdout_limit: remaining_stdout,
+            timeout: remaining_timeout,
+        })?;
         total_stdout_bytes = total_stdout_bytes
             .checked_add(output.stdout.len())
             .ok_or_else(|| super::model::PerformanceDenial::new("Sightglass suite output accounting overflowed"))?;
@@ -172,14 +172,26 @@ fn supervision_denial(error: crate::error::MoltenError) -> super::model::Perform
     super::model::PerformanceDenial::new(format!("Sightglass supervision clock denied: {error}"))
 }
 
-fn run_sightglass_subprocess(
-    runner: &std::path::Path,
-    engine: &std::path::Path,
-    benchmark: &std::path::Path,
-    suite: &super::model::BenchmarkSuite,
+struct SubprocessInput<'a> {
+    runner: &'a std::path::Path,
+    engine: &'a std::path::Path,
+    benchmark: &'a std::path::Path,
+    suite: &'a super::model::BenchmarkSuite,
     stdout_limit: usize,
     timeout: std::time::Duration,
+}
+
+fn run_sightglass_subprocess(
+    input: SubprocessInput<'_>,
 ) -> super::model::PerformanceResult<SightglassSubprocessOutput> {
+    let SubprocessInput {
+        runner,
+        engine,
+        benchmark,
+        suite,
+        stdout_limit,
+        timeout,
+    } = input;
     let mut command = std::process::Command::new(runner);
     command
         .stdin(std::process::Stdio::null())

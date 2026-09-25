@@ -361,27 +361,41 @@ pub fn run_timer_adapter_conformance<A: TimerClockAdapter>(
     let deadline = start
         .checked_add(delay)
         .ok_or_else(|| crate::error::MoltenError::invalid_harness("conformance deadline overflow"))?;
-    let request = conformance_timer_request(profile, service_id, generation, adapter.timer_domain(), deadline, 0);
+    let request = conformance_timer_request(TimerRequestInput {
+        profile,
+        service_id,
+        generation,
+        domain: adapter.timer_domain(),
+        deadline_ticks: deadline,
+        sequence: 0,
+    });
     let timer = super::schedule_timer(profile, generation, 0, &request)
         .map_err(|error| core_error("schedule conformance timer", error))?;
     let observed = adapter.await_ticks(deadline)?;
     let fired = super::poll_timer(&timer, generation, observed, 1)
         .map_err(|error| core_error("poll conformance timer", error))?;
 
-    let stale_request = conformance_timer_request(profile, service_id, generation, adapter.timer_domain(), deadline, 1);
+    let stale_request = conformance_timer_request(TimerRequestInput {
+        profile,
+        service_id,
+        generation,
+        domain: adapter.timer_domain(),
+        deadline_ticks: deadline,
+        sequence: 1,
+    });
     let stale_timer = super::schedule_timer(profile, generation, 0, &stale_request)
         .map_err(|error| core_error("schedule stale probe", error))?;
     let stale = super::poll_timer(&stale_timer, generation.saturating_add(1), observed, 1)
         .map_err(|error| core_error("poll stale probe", error))?;
 
-    let cancel_request = conformance_timer_request(
+    let cancel_request = conformance_timer_request(TimerRequestInput {
         profile,
         service_id,
         generation,
-        adapter.timer_domain(),
-        deadline,
-        CANCELLATION_TIMER_SEQUENCE,
-    );
+        domain: adapter.timer_domain(),
+        deadline_ticks: deadline,
+        sequence: CANCELLATION_TIMER_SEQUENCE,
+    });
     let cancel_timer_state = super::schedule_timer(profile, generation, 0, &cancel_request)
         .map_err(|error| core_error("schedule cancellation probe", error))?;
     let cancelled =
@@ -684,14 +698,24 @@ pub fn evaluate_deadline_with_fault(
         .map_err(|error| core_error("evaluate faulted deadline", error))
 }
 
-fn conformance_timer_request(
-    profile: &super::AdmittedTimeProfile,
-    service_id: &str,
+struct TimerRequestInput<'a> {
+    profile: &'a super::AdmittedTimeProfile,
+    service_id: &'a str,
     generation: u64,
     domain: super::TimeDomain,
     deadline_ticks: u64,
     sequence: u64,
-) -> super::TimerScheduleRequest {
+}
+
+fn conformance_timer_request(input: TimerRequestInput<'_>) -> super::TimerScheduleRequest {
+    let TimerRequestInput {
+        profile,
+        service_id,
+        generation,
+        domain,
+        deadline_ticks,
+        sequence,
+    } = input;
     super::TimerScheduleRequest {
         profile_ref: profile.profile_ref.clone(),
         key: super::TimerKey {

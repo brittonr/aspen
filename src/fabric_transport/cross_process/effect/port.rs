@@ -123,14 +123,14 @@ impl RegisteredCrossProcessTransportEffectPort {
             return Ok(effect_output(effect, submitted.transition_ref));
         }
         let payload = self.remove_payload(&effect.request_ref)?;
-        let exchange = run_effect_exchange(
-            &self.profile,
-            &self.protocol,
-            &self.client,
-            &session_id,
-            &effect.request_ref,
-            &payload,
-        );
+        let exchange = run_effect_exchange(ExchangeInput {
+            profile: &self.profile,
+            protocol: &self.protocol,
+            client: &self.client,
+            session_id: &session_id,
+            request_ref: &effect.request_ref,
+            payload: &payload,
+        });
         let evidence = match exchange {
             Ok(evidence) => evidence,
             Err(_error) => {
@@ -257,14 +257,24 @@ fn admit_registered_payload(
     }
 }
 
-fn run_effect_exchange(
-    profile: &CanonicalTransportProfile,
-    protocol: &ProtocolDescriptor,
-    client: &IrohCrossProcessEffectClientConfig,
-    session_id: &ScopedTransportId,
-    request_ref: &str,
-    payload: &[u8],
-) -> crate::error::Result<CrossProcessFrameEvidence> {
+struct ExchangeInput<'a> {
+    profile: &'a CanonicalTransportProfile,
+    protocol: &'a ProtocolDescriptor,
+    client: &'a IrohCrossProcessEffectClientConfig,
+    session_id: &'a ScopedTransportId,
+    request_ref: &'a str,
+    payload: &'a [u8],
+}
+
+fn run_effect_exchange(input: ExchangeInput<'_>) -> crate::error::Result<CrossProcessFrameEvidence> {
+    let ExchangeInput {
+        profile,
+        protocol,
+        client,
+        session_id,
+        request_ref,
+        payload,
+    } = input;
     let input = IrohCrossProcessClientInput {
         profile: profile.clone(),
         protocol: protocol.clone(),

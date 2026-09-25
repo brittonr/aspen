@@ -175,7 +175,7 @@ fn transition_send(
         return Ok((None, input.prior.seen_message_refs.clone()));
     }
     if let Some(message) = input.message {
-        validate_send_message(input.prior, message, peer, input.label, payload_tag, diagnostics);
+        validate_send_message(SendMessageInput { prior: input.prior, message, peer, label: input.label, payload_tag, diagnostics });
     }
     Ok((
         Some(consume_first_action(&input.prior.local_state)?),
@@ -262,14 +262,17 @@ fn transition_offer(
     ))
 }
 
-fn validate_send_message(
-    prior: &ProtocolSessionState,
-    message: &ProtocolMessage,
-    peer: &str,
-    label: &str,
-    payload_tag: &str,
-    diagnostics: &mut Vec<String>,
-) {
+struct SendMessageInput<'a> {
+    prior: &'a ProtocolSessionState,
+    message: &'a ProtocolMessage,
+    peer: &'a str,
+    label: &'a str,
+    payload_tag: &'a str,
+    diagnostics: &'a mut Vec<String>,
+}
+
+fn validate_send_message(input: SendMessageInput<'_>) {
+    let SendMessageInput { prior, message, peer, label, payload_tag, diagnostics } = input;
     if message.protocol_ref != prior.protocol_ref
         || message.session_id != prior.session_id
         || message.from_role != prior.role

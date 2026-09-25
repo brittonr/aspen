@@ -136,7 +136,14 @@ pub fn verify_materialization(
             envelope,
             component_bytes: _,
             wit_bytes: _,
-        } => verify_bundle(profile, requested_scope, bundle, envelope, &component, &wit),
+        } => verify_bundle(BundleVerificationInput {
+            profile,
+            requested_scope,
+            bundle,
+            envelope,
+            measured_component: &component,
+            measured_wit: &wit,
+        }),
         ComponentArtifactSource::TestOnlyLoose {
             component_bytes: _,
             wit_bytes: _,
@@ -183,41 +190,43 @@ fn validate_byte_bounds(
     }
 }
 
-fn verify_bundle(
-    profile: &super::super::model::ComponentRuntimeProfile,
+struct BundleVerificationInput<'a> {
+    profile: &'a super::super::model::ComponentRuntimeProfile,
     requested_scope: super::super::model::EvidenceScope,
-    bundle: &MantleComponentBundle,
-    envelope: &ComponentAdmissionEnvelope,
-    measured_component: &MaterializedObjectIdentity,
-    measured_wit: &MaterializedObjectIdentity,
-) -> super::super::model::ComponentResult<MaterializationAdmission> {
+    bundle: &'a MantleComponentBundle,
+    envelope: &'a ComponentAdmissionEnvelope,
+    measured_component: &'a MaterializedObjectIdentity,
+    measured_wit: &'a MaterializedObjectIdentity,
+}
+
+fn verify_bundle(input: BundleVerificationInput<'_>) -> super::super::model::ComponentResult<MaterializationAdmission> {
     let mut blockers = Vec::new();
-    if requested_scope != super::super::model::EvidenceScope::Production {
+    if input.requested_scope != super::super::model::EvidenceScope::Production {
         blockers.push("Mantle production bundle must execute in production evidence scope".to_string());
     }
-    if bundle.schema_id != MANTLE_COMPONENT_BUNDLE_SCHEMA {
+    if input.bundle.schema_id != MANTLE_COMPONENT_BUNDLE_SCHEMA {
         blockers.push("unsupported Mantle component bundle schema".to_string());
     }
-    if bundle.bundle_ref != mantle_bundle_ref(bundle) {
+    if input.bundle.bundle_ref != mantle_bundle_ref(input.bundle) {
         blockers.push("Mantle component bundle identity mismatch".to_string());
     }
-    if &bundle.component != measured_component || &bundle.wit != measured_wit {
+    if &input.bundle.component != input.measured_component || &input.bundle.wit != input.measured_wit {
         blockers.push("Mantle component bundle object identity differs from remeasured bytes".to_string());
     }
-    if bundle.artifact_kind != super::super::model::WasmArtifactKind::Component {
+    if input.bundle.artifact_kind != super::super::model::WasmArtifactKind::Component {
         blockers.push("Mantle component bundle is not classified as a component".to_string());
     }
-    if bundle.expected_profile_id != profile.profile_id
-        || bundle.expected_cohort_ref != super::super::profile::component_profile_ref(profile)
+    if input.bundle.expected_profile_id != input.profile.profile_id
+        || input.bundle.expected_cohort_ref != super::super::profile::component_profile_ref(input.profile)
     {
         blockers.push("Mantle component bundle expected profile is stale or mismatched".to_string());
     }
-    if bundle.wit.content_ref != profile.wit.source_ref {
+    if input.bundle.wit.content_ref != input.profile.wit.source_ref {
         blockers.push("Mantle component bundle WIT identity does not match the admitted profile".to_string());
     }
-    validate_bundle_refs(bundle, &mut blockers);
-    validate_envelope(bundle, envelope, &mut blockers);
-    if !bundle.has_portable_bytes || bundle.has_precompiled_bytes {
+    validate_bundle_refs(input.bundle, &mut blockers);
+    validate_envelope(input.bundle, input.envelope, &mut blockers);
+    if !input.bundle.has_portable_bytes || input.bundle.has_precompiled_bytes {
         blockers
             .push("initial component cohort admits portable bytes and rejects precompiled deserialization".to_string());
     }
@@ -226,17 +235,17 @@ fn verify_bundle(
     }
     Ok(MaterializationAdmission {
         evidence_scope: super::super::model::EvidenceScope::Production,
-        component_ref: measured_component.content_ref.clone(),
-        wit_ref: measured_wit.content_ref.clone(),
-        bundle_ref: Some(bundle.bundle_ref.clone()),
-        consumer: bundle.consumer,
-        profile_ref: super::super::profile::component_profile_ref(profile),
-        mantle_evidence_refs: mantle_evidence_refs(bundle),
-        valence_evidence_refs: envelope.valence_sidecar_refs.clone(),
-        cairn_evidence_refs: envelope.cairn_acceptance_refs.clone(),
-        policy_refs: envelope.policy_refs.clone(),
-        authority_refs: envelope.authority_refs.clone(),
-        resource_refs: envelope.resource_refs.clone(),
+        component_ref: input.measured_component.content_ref.clone(),
+        wit_ref: input.measured_wit.content_ref.clone(),
+        bundle_ref: Some(input.bundle.bundle_ref.clone()),
+        consumer: input.bundle.consumer,
+        profile_ref: super::super::profile::component_profile_ref(input.profile),
+        mantle_evidence_refs: mantle_evidence_refs(input.bundle),
+        valence_evidence_refs: input.envelope.valence_sidecar_refs.clone(),
+        cairn_evidence_refs: input.envelope.cairn_acceptance_refs.clone(),
+        policy_refs: input.envelope.policy_refs.clone(),
+        authority_refs: input.envelope.authority_refs.clone(),
+        resource_refs: input.envelope.resource_refs.clone(),
     })
 }
 

@@ -32,15 +32,27 @@ pub struct ReplicaPortBundle<D, N, T, A, C> {
     pub control: C,
 }
 
+/// The five effect adapters a replica binds, before they are checked against its runtime identity.
+pub struct ReplicaAdapterSet<D, N, T, A, C> {
+    pub durability: D,
+    pub transport: N,
+    pub time: T,
+    pub application: A,
+    pub control: C,
+}
+
 impl<D, N, T, A, C> ReplicaPortBundle<D, N, T, A, C> {
     pub fn new(
         identity: ReplicaRuntimePortIdentity,
-        durability: D,
-        transport: N,
-        time: T,
-        application: A,
-        control: C,
+        adapters: ReplicaAdapterSet<D, N, T, A, C>,
     ) -> crate::error::Result<Self> {
+        let ReplicaAdapterSet {
+            durability,
+            transport,
+            time,
+            application,
+            control,
+        } = adapters;
         validate_runtime_identity(&identity)?;
         Ok(Self {
             identity,
@@ -142,34 +154,42 @@ pub type ConcreteReplicaPortBundle<S, H> = ReplicaPortBundle<
     ChannelReplicaControlPort,
 >;
 
+/// The concrete live adapter set bound by a scoped replica.
+pub type ConcreteReplicaAdapterSet<S, H> = ReplicaAdapterSet<
+    RedbReplicaDurabilityPort,
+    IrohReplicaTransportPort,
+    TokioReplicaTimePort<S>,
+    AdmittedReplicaApplicationPort<H>,
+    ChannelReplicaControlPort,
+>;
+
 pub fn assemble_scoped_concrete_replica_ports<S, H>(
     identity: ReplicaRuntimePortIdentity,
-    durability: RedbReplicaDurabilityPort,
-    transport: IrohReplicaTransportPort,
-    time: TokioReplicaTimePort<S>,
-    application: AdmittedReplicaApplicationPort<H>,
-    control: ChannelReplicaControlPort,
+    adapters: ConcreteReplicaAdapterSet<S, H>,
 ) -> crate::error::Result<ConcreteReplicaPortBundle<S, H>>
 where
     S: crate::fabric_time::CryptographicEntropySource,
     H: CommittedBatchHandler,
 {
-    validate_concrete_replica_port_identity(&identity, &durability, &transport, &time, &application, &control)?;
-    ReplicaPortBundle::new(identity, durability, transport, time, application, control)
+    validate_concrete_replica_port_identity(&identity, &adapters)?;
+    ReplicaPortBundle::new(identity, adapters)
 }
 
 pub fn validate_concrete_replica_port_identity<S, H>(
     identity: &ReplicaRuntimePortIdentity,
-    durability: &RedbReplicaDurabilityPort,
-    transport: &IrohReplicaTransportPort,
-    time: &TokioReplicaTimePort<S>,
-    application: &AdmittedReplicaApplicationPort<H>,
-    control: &ChannelReplicaControlPort,
+    adapters: &ConcreteReplicaAdapterSet<S, H>,
 ) -> crate::error::Result<()>
 where
     S: crate::fabric_time::CryptographicEntropySource,
     H: CommittedBatchHandler,
 {
+    let ReplicaAdapterSet {
+        durability,
+        transport,
+        time,
+        application,
+        control,
+    } = adapters;
     let is_exact = identity.durable_log_ref == durability.durable_log_ref()
         && identity.snapshot_store_ref == durability.snapshot_store_ref()
         && identity.protocol_ref == transport.protocol_ref()

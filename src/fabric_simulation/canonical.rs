@@ -278,15 +278,27 @@ pub fn canonical_simulation_run(
     })
 }
 
+pub struct DifferentialInput<'a> {
+    pub simulation_profile_ref: &'a str,
+    pub live_profile_ref: &'a str,
+    pub shared_contract_ref: &'a str,
+    pub simulation_trace_refs: &'a [String],
+    pub live_trace_refs: &'a [String],
+    pub normalized_difference_refs: Vec<String>,
+}
+
 // r[impl molten.fabric_simulation.live_sim_differential]
 pub fn canonical_simulation_differential(
-    simulation_profile_ref: &str,
-    live_profile_ref: &str,
-    shared_contract_ref: &str,
-    simulation_trace_refs: &[String],
-    live_trace_refs: &[String],
-    normalized_difference_refs: Vec<String>,
+    input: DifferentialInput<'_>,
 ) -> crate::error::Result<CanonicalSimulationDifferential> {
+    let DifferentialInput {
+        simulation_profile_ref,
+        live_profile_ref,
+        shared_contract_ref,
+        simulation_trace_refs,
+        live_trace_refs,
+        normalized_difference_refs,
+    } = input;
     for reference in [simulation_profile_ref, live_profile_ref, shared_contract_ref] {
         crate::preserves_rail::validate_content_ref(reference)?;
     }

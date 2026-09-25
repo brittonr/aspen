@@ -148,13 +148,26 @@ fn capability_local_stream_and_range_expose_only_verified_bounded_bytes() {
     let destination = temp_dir("content-adapter-local-put");
     let destination_root = crate::chunk_store::open_capability_chunk_root(&destination).expect("destination root");
     let put_command = command(&profile, &manifest, ContentOperation::Put, None);
-    let put =
-        execute_local_stream_put(&profile, &destination_root, &put_command, &manifest, "artifact", b"aaaabbbbcccc")
-            .expect("local stream put");
+    let put = execute_local_stream_put(StreamPutInput {
+        profile: &profile,
+        root: &destination_root,
+        command: &put_command,
+        expected_manifest: &manifest,
+        object_kind: "artifact",
+        bytes: b"aaaabbbbcccc",
+    })
+    .expect("local stream put");
     assert_eq!(put.manifest.manifest_ref, manifest.manifest_ref);
     assert!(
-        execute_local_stream_put(&profile, &destination_root, &put_command, &manifest, "artifact", b"corrupt",)
-            .is_err()
+        execute_local_stream_put(StreamPutInput {
+            profile: &profile,
+            root: &destination_root,
+            command: &put_command,
+            expected_manifest: &manifest,
+            object_kind: "artifact",
+            bytes: b"corrupt"
+        })
+        .is_err()
     );
     std::fs::remove_dir_all(workspace).expect("remove local fixture");
     std::fs::remove_dir_all(repeated_workspace).expect("remove repeated fixture");
@@ -173,15 +186,15 @@ fn deterministic_simulation_matches_verified_trace_and_models_failure_without_ex
     let simulation_profile = profile(ContentAdapterClass::DeterministicSimulation);
     let simulation_command = command(&simulation_profile, &manifest, ContentOperation::Get, None);
     let chunks = fixture_chunks(&manifest);
-    let simulated = execute_simulated_stream(
-        &simulation_profile,
-        &manifest,
-        &simulation_command,
-        GENERATION_ONE,
-        None,
-        &chunks,
-        None,
-    )
+    let simulated = execute_simulated_stream(SimulatedStreamInput {
+        profile: &simulation_profile,
+        manifest: &manifest,
+        command: &simulation_command,
+        generation: GENERATION_ONE,
+        retained: None,
+        chunks: &chunks,
+        fault: None,
+    })
     .expect("simulation");
     assert_eq!(simulated.state.artifact.verified_chunk_refs, local.state.artifact.verified_chunk_refs);
     assert_eq!(
@@ -189,52 +202,52 @@ fn deterministic_simulation_matches_verified_trace_and_models_failure_without_ex
         b"aaaabbbbcccc"
     );
 
-    let corrupt = execute_simulated_stream(
-        &simulation_profile,
-        &manifest,
-        &simulation_command,
-        GENERATION_ONE,
-        None,
-        &chunks,
-        Some(SimulationFault::CorruptAt(1)),
-    )
+    let corrupt = execute_simulated_stream(SimulatedStreamInput {
+        profile: &simulation_profile,
+        manifest: &manifest,
+        command: &simulation_command,
+        generation: GENERATION_ONE,
+        retained: None,
+        chunks: &chunks,
+        fault: Some(SimulationFault::CorruptAt(1)),
+    })
     .expect("corrupt simulation outcome");
     assert_eq!(corrupt.state.artifact.terminal, ContentTerminal::Failed);
     assert_eq!(corrupt.verified_chunks.len(), 1);
     assert!(assemble_verified_content(&manifest, &corrupt.state.artifact, &corrupt.verified_chunks).is_err());
 
-    let capacity = execute_simulated_stream(
-        &simulation_profile,
-        &manifest,
-        &simulation_command,
-        GENERATION_ONE,
-        None,
-        &chunks,
-        Some(SimulationFault::CapacityExceeded),
-    )
+    let capacity = execute_simulated_stream(SimulatedStreamInput {
+        profile: &simulation_profile,
+        manifest: &manifest,
+        command: &simulation_command,
+        generation: GENERATION_ONE,
+        retained: None,
+        chunks: &chunks,
+        fault: Some(SimulationFault::CapacityExceeded),
+    })
     .expect("capacity outcome");
     assert_eq!(capacity.state.artifact.terminal, ContentTerminal::Retryable);
-    let delayed = execute_simulated_stream(
-        &simulation_profile,
-        &manifest,
-        &simulation_command,
-        GENERATION_ONE,
-        None,
-        &chunks,
-        Some(SimulationFault::LatencyTicks(SIMULATION_TIMEOUT_LATENCY)),
-    )
+    let delayed = execute_simulated_stream(SimulatedStreamInput {
+        profile: &simulation_profile,
+        manifest: &manifest,
+        command: &simulation_command,
+        generation: GENERATION_ONE,
+        retained: None,
+        chunks: &chunks,
+        fault: Some(SimulationFault::LatencyTicks(SIMULATION_TIMEOUT_LATENCY)),
+    })
     .expect("latency outcome");
     assert_eq!(delayed.state.artifact.terminal, ContentTerminal::Uncertain);
 
-    let cancelled = execute_simulated_stream(
-        &simulation_profile,
-        &manifest,
-        &simulation_command,
-        GENERATION_ONE,
-        None,
-        &chunks,
-        Some(SimulationFault::CancelAt(1)),
-    )
+    let cancelled = execute_simulated_stream(SimulatedStreamInput {
+        profile: &simulation_profile,
+        manifest: &manifest,
+        command: &simulation_command,
+        generation: GENERATION_ONE,
+        retained: None,
+        chunks: &chunks,
+        fault: Some(SimulationFault::CancelAt(1)),
+    })
     .expect("cancelled outcome");
     assert_eq!(cancelled.state.artifact.terminal, ContentTerminal::Cancelled);
     let partial_workspace = temp_dir("content-adapter-partial-state");
@@ -253,15 +266,15 @@ fn deterministic_simulation_matches_verified_trace_and_models_failure_without_ex
     let mut invalid_state = loaded.clone();
     invalid_state.manifest_ref = test_ref("wrong-manifest");
     assert!(persist_partial_state(&partial_namespace, &simulation_profile, &manifest, &invalid_state).is_err());
-    let resumed = execute_simulated_stream(
-        &simulation_profile,
-        &manifest,
-        &simulation_command,
-        GENERATION_ONE,
-        Some(&loaded),
-        &chunks,
-        None,
-    )
+    let resumed = execute_simulated_stream(SimulatedStreamInput {
+        profile: &simulation_profile,
+        manifest: &manifest,
+        command: &simulation_command,
+        generation: GENERATION_ONE,
+        retained: Some(&loaded),
+        chunks: &chunks,
+        fault: None,
+    })
     .expect("resumed outcome");
     let mut resumed_chunks = cancelled.verified_chunks;
     resumed_chunks.extend(resumed.verified_chunks.clone());
@@ -334,14 +347,14 @@ async fn live_iroh_blobs_stream_preserves_molten_identity_and_uses_opaque_admitt
     .expect("live publication");
     assert_eq!(publication.manifest().manifest_ref, manifest.manifest_ref);
     let get = command(&profile, publication.manifest(), ContentOperation::Get, None);
-    let execution = execute_live_iroh_stream_get(
-        &profile,
-        &publication,
-        &get,
-        GENERATION_ONE,
-        None,
-        std::time::Duration::from_secs(LIVE_TIMEOUT_SECONDS),
-    )
+    let execution = execute_live_iroh_stream_get(StreamGetInput {
+        profile: &profile,
+        publication: &publication,
+        command: &get,
+        generation: GENERATION_ONE,
+        retained: None,
+        timeout: std::time::Duration::from_secs(LIVE_TIMEOUT_SECONDS),
+    })
     .await
     .expect("live Iroh stream");
     assert_eq!(execution.state.artifact.terminal, ContentTerminal::Verified);
@@ -353,14 +366,14 @@ async fn live_iroh_blobs_stream_preserves_molten_identity_and_uses_opaque_admitt
     assert!(!execution.backend_hint_ref.contains(&endpoint_id));
 
     publication.invalidate_first_locator();
-    let stale = execute_live_iroh_stream_get(
-        &profile,
-        &publication,
-        &get,
-        GENERATION_ONE,
-        None,
-        std::time::Duration::from_secs(LIVE_TIMEOUT_SECONDS),
-    )
+    let stale = execute_live_iroh_stream_get(StreamGetInput {
+        profile: &profile,
+        publication: &publication,
+        command: &get,
+        generation: GENERATION_ONE,
+        retained: None,
+        timeout: std::time::Duration::from_secs(LIVE_TIMEOUT_SECONDS),
+    })
     .await
     .expect("stale ticket outcome");
     assert_eq!(stale.state.artifact.terminal, ContentTerminal::Failed);
@@ -377,15 +390,15 @@ async fn live_iroh_blobs_stream_preserves_molten_identity_and_uses_opaque_admitt
 fn status_and_backend_protection_are_redacted_bounded_and_non_authoritative() {
     let profile = profile(ContentAdapterClass::CapabilityLocal);
     let backend_label = "/private/root?ticket=secret";
-    let status = bounded_content_status(
-        &profile,
-        GENERATION_ONE,
-        0,
-        0,
-        vec![(ContentTerminal::Verified, 1)],
+    let status = bounded_content_status(StatusInput {
+        profile: &profile,
+        generation: GENERATION_ONE,
+        active_operations: 0,
+        queued_bytes: 0,
+        terminal_counts: vec![(ContentTerminal::Verified, 1)],
         backend_label,
-        Vec::new(),
-    )
+        issues: Vec::new(),
+    })
     .expect("status");
     let status_text = crate::preserves_rail::to_text(&status.value).expect("status text");
     assert!(!status_text.contains(backend_label));

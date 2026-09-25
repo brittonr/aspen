@@ -40,41 +40,56 @@ pub enum ExportFormat {
 
 // r[impl molten.fabric_observability.adapter_contract]
 // r[impl molten.fabric_observability.failure_semantics]
+/// The admitted profile, adapter, delivery request, and shell state that bound one export attempt.
+#[derive(Clone, Copy)]
+pub struct AdapterDelivery<'a> {
+    pub profile: &'a ObservationProfile,
+    pub adapter: &'a ObservationAdapterProfile,
+    pub request: &'a AdapterDeliveryRequest,
+    pub state: &'a ExportShellState,
+    pub last_export_tick: Option<u64>,
+}
+
+struct RenderedPayload<'a> {
+    media_type: &'a str,
+    payload: Vec<u8>,
+    payload_ref: String,
+}
+
 pub fn execute_snapshot_export(
-    profile: &ObservationProfile,
-    adapter: &ObservationAdapterProfile,
+    delivery: AdapterDelivery<'_>,
     snapshot: &ObservationSnapshot,
-    request: &AdapterDeliveryRequest,
-    state: &ExportShellState,
-    last_export_tick: Option<u64>,
     format: ExportFormat,
     sink: &mut dyn ObservationSink,
 ) -> crate::error::Result<ExportExecution> {
-    require_export_class(adapter.class, format)?;
-    let canonical = canonical_observation_snapshot(profile, snapshot, request.submitted_tick)?;
-    let (media_type, payload) = render_snapshot(format, &canonical)?;
-    execute_rendered_export(
+    let AdapterDelivery {
         profile,
         adapter,
         request,
-        state,
-        last_export_tick,
+        ..
+    } = delivery;
+    require_export_class(adapter.class, format)?;
+    let canonical = canonical_observation_snapshot(profile, snapshot, request.submitted_tick)?;
+    let (media_type, payload) = render_snapshot(format, &canonical)?;
+    let rendered = RenderedPayload {
         media_type,
         payload,
-        canonical.artifact_ref,
-        sink,
-    )
+        payload_ref: canonical.artifact_ref,
+    };
+    execute_rendered_export(delivery, rendered, sink)
 }
 
 pub fn execute_event_export(
-    profile: &ObservationProfile,
-    adapter: &ObservationAdapterProfile,
+    delivery: AdapterDelivery<'_>,
     event: &ObservationEvent,
-    request: &AdapterDeliveryRequest,
-    state: &ExportShellState,
-    last_export_tick: Option<u64>,
     sink: &mut dyn ObservationSink,
 ) -> crate::error::Result<ExportExecution> {
+    let AdapterDelivery {
+        profile,
+        adapter,
+        request,
+        ..
+    } = delivery;
     if !matches!(
         adapter.class,
         ObservationAdapterClass::Tracing
@@ -87,30 +102,31 @@ pub fn execute_event_export(
     }
     let canonical = canonical_observation_event(profile, event, request.submitted_tick)?;
     let (media_type, payload) = render_event(adapter.class, &canonical)?;
-    execute_rendered_export(
+    let rendered = RenderedPayload {
+        media_type,
+        payload,
+        payload_ref: canonical.artifact_ref,
+    };
+    execute_rendered_export(delivery, rendered, sink)
+}
+
+fn execute_rendered_export(
+    delivery: AdapterDelivery<'_>,
+    rendered: RenderedPayload<'_>,
+    sink: &mut dyn ObservationSink,
+) -> crate::error::Result<ExportExecution> {
+    let AdapterDelivery {
         profile,
         adapter,
         request,
         state,
         last_export_tick,
+    } = delivery;
+    let RenderedPayload {
         media_type,
         payload,
-        canonical.artifact_ref,
-        sink,
-    )
-}
-
-fn execute_rendered_export(
-    profile: &ObservationProfile,
-    adapter: &ObservationAdapterProfile,
-    request: &AdapterDeliveryRequest,
-    state: &ExportShellState,
-    last_export_tick: Option<u64>,
-    media_type: &str,
-    payload: Vec<u8>,
-    payload_ref: String,
-    sink: &mut dyn ObservationSink,
-) -> crate::error::Result<ExportExecution> {
+        payload_ref,
+    } = rendered;
     validate_request_binding(request, &payload_ref, payload.len())?;
     let preflight_runtime = AdapterRuntimeObservation {
         available: state.available,

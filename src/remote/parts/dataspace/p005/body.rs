@@ -124,16 +124,7 @@ pub fn plan_traversal(descriptor: &TraversalDescriptor, inventory: &LocalInvento
     let local_inventory_ref = inventory_summary_ref(inventory);
     let is_replayable = diagnostics.is_empty();
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let receipt_value = traversal_plan_receipt_value(
-        decision,
-        &descriptor_ref,
-        &local_inventory_ref,
-        &selected_refs,
-        &already_present_refs,
-        &fetch_refs,
-        &diagnostics,
-        is_replayable,
-    );
+    let receipt_value = traversal_plan_receipt_value(TraversalPlanReceiptInput { decision, descriptor_ref: &descriptor_ref, local_inventory_ref: &local_inventory_ref, selected_refs: &selected_refs, already_present_refs: &already_present_refs, fetch_refs: &fetch_refs, diagnostics: &diagnostics, replayable: is_replayable });
     Ok(TraversalPlan {
         decision: decision.to_string(),
         descriptor_ref,
@@ -324,16 +315,19 @@ fn inventory_summary_ref(inventory: &LocalInventorySummary) -> String {
     canonical_hash(&value).unwrap_or_else(|_| content_ref_from_bytes(b"invalid-local-inventory-summary"))
 }
 
-fn traversal_plan_receipt_value(
-    decision: &str,
-    descriptor_ref: &str,
-    local_inventory_ref: &str,
-    selected_refs: &[String],
-    already_present_refs: &[String],
-    fetch_refs: &[String],
-    diagnostics: &[String],
+struct TraversalPlanReceiptInput<'a> {
+    decision: &'a str,
+    descriptor_ref: &'a str,
+    local_inventory_ref: &'a str,
+    selected_refs: &'a [String],
+    already_present_refs: &'a [String],
+    fetch_refs: &'a [String],
+    diagnostics: &'a [String],
     replayable: bool,
-) -> IoValue {
+}
+
+fn traversal_plan_receipt_value(input: TraversalPlanReceiptInput<'_>) -> IoValue {
+    let TraversalPlanReceiptInput { decision, descriptor_ref, local_inventory_ref, selected_refs, already_present_refs, fetch_refs, diagnostics, replayable } = input;
     record("remote-sync-traversal-plan-receipt-v1", vec![
         string(TRAVERSAL_PLAN_RECEIPT_SCHEMA),
         record("decision", vec![string(decision)]),

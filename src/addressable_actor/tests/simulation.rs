@@ -25,23 +25,23 @@ fn deterministic_simulation_replays_sleep_wake_lifecycle_exactly() {
         },
     ];
     let script = vec![ActorEffectDisposition::Succeeded; SIMULATION_EFFECT_COUNT];
-    let first = simulate_actor_sequence(
-        &profile,
-        &actor_key,
-        &reference("system-extension-manifest"),
-        &reference("placement"),
-        &steps,
-        &script,
-    )
+    let first = simulate_actor_sequence(SequenceRunInput {
+        profile: &profile,
+        actor_key: &actor_key,
+        system_extension_manifest_ref: &reference("system-extension-manifest"),
+        placement_ref: &reference("placement"),
+        steps: &steps,
+        scripted_effects: &script,
+    })
     .expect("first simulation");
-    let second = simulate_actor_sequence(
-        &profile,
-        &actor_key,
-        &reference("system-extension-manifest"),
-        &reference("placement"),
-        &steps,
-        &script,
-    )
+    let second = simulate_actor_sequence(SequenceRunInput {
+        profile: &profile,
+        actor_key: &actor_key,
+        system_extension_manifest_ref: &reference("system-extension-manifest"),
+        placement_ref: &reference("placement"),
+        steps: &steps,
+        scripted_effects: &script,
+    })
     .expect("second simulation");
 
     assert_eq!(first.receipt_refs, second.receipt_refs);
@@ -60,14 +60,14 @@ fn simulation_preserves_unknown_effect_without_automatic_follow_up() {
         logical_tick: INITIAL_TICK,
         operation: ActorOperation::Wake { reason: message_wake() },
     }];
-    let report = simulate_actor_sequence(
-        &profile,
-        &actor_key,
-        &reference("system-extension-manifest"),
-        &reference("placement"),
-        &steps,
-        &[ActorEffectDisposition::Unknown],
-    )
+    let report = simulate_actor_sequence(SequenceRunInput {
+        profile: &profile,
+        actor_key: &actor_key,
+        system_extension_manifest_ref: &reference("system-extension-manifest"),
+        placement_ref: &reference("placement"),
+        steps: &steps,
+        scripted_effects: &[ActorEffectDisposition::Unknown],
+    })
     .expect("unknown simulation");
 
     assert_eq!(report.effect_observations.len(), 1);

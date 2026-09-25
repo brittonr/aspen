@@ -78,14 +78,7 @@ pub async fn serve_control_live_listener(input: &ControlLiveServeInput<'_>) -> R
         .subscribe(control_live_topic_id(input.topic), Vec::new())
         .await
         .map_err(|error| MoltenError::invalid_harness(format!("live Iroh serve subscribe failed: {error}")))?;
-    let served = serve_node_control_live_listener_with_topic(
-        &state_root,
-        input,
-        &mut topic,
-        &identity.node_id,
-        &identity.endpoint_id,
-        &bound_endpoint_id,
-    )
+    let served = serve_node_control_live_listener_with_topic(&state_root, input, &mut topic, EndpointIdentityInput { node_id: &identity.node_id, logical_endpoint_id: &identity.endpoint_id, bound_endpoint_id: &bound_endpoint_id })
     .await;
     router
         .shutdown()
@@ -145,14 +138,7 @@ pub async fn control_live_serve_listener_loopback(
         max_requests_per_tick: input.max_requests_per_tick,
         supervisor_policy_value: None,
     };
-    let mut listener = serve_node_control_live_listener_with_topic(
-        &state_root,
-        &listener_input,
-        &mut receiver_topic,
-        &node_id,
-        &endpoint_id,
-        &bound_endpoint_id,
-    )
+    let mut listener = serve_node_control_live_listener_with_topic(&state_root, &listener_input, &mut receiver_topic, EndpointIdentityInput { node_id: &node_id, logical_endpoint_id: &endpoint_id, bound_endpoint_id: &bound_endpoint_id })
     .await?;
     listener.live_ticket_ref = Some(ticket_ref);
     listener.live_ticket_value = Some(ticket_value);

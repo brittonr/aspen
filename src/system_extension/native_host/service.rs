@@ -79,6 +79,14 @@ where
     host: SystemExtensionHost<NativeProcessSystemExtensionExecutor<P, J>>,
 }
 
+/// The admitted native host profile, executable evidence, and manifest a native service is built
+/// from.
+pub struct AdmissionSet {
+    pub profile: AdmittedNativeHostProfile,
+    pub executable: AdmittedNativeExecutable,
+    pub admitted: CanonicalAdmittedSystemExtensionManifest,
+}
+
 impl<P, J> NativeSystemExtensionService<P, J>
 where
     P: crate::fabric_execution::ExecutionFabricPort,
@@ -87,14 +95,17 @@ where
     // r[impl molten.system_extension.native_host.profile]
     // r[impl molten.system_extension.native_host.operator]
     pub fn install(
-        profile: AdmittedNativeHostProfile,
-        executable: AdmittedNativeExecutable,
-        admitted: CanonicalAdmittedSystemExtensionManifest,
+        admission: AdmissionSet,
         port: P,
         journal: std::sync::Arc<std::sync::Mutex<J>>,
         values: SharedNativeCallbackValuePort,
         template: NativeExecutionTemplate,
     ) -> std::result::Result<Self, NativeServiceError> {
+        let AdmissionSet {
+            profile,
+            executable,
+            admitted,
+        } = admission;
         if admitted.manifest().execution_profile != ExecutionProfile::NativeProcess {
             return Err(NativeServiceError::Host("native service manifest does not select native-process".to_string()));
         }
@@ -121,13 +132,16 @@ where
 
     // r[impl molten.system_extension.native_host.recovery]
     pub fn from_recovered(
-        profile: AdmittedNativeHostProfile,
-        executable: AdmittedNativeExecutable,
-        admitted: CanonicalAdmittedSystemExtensionManifest,
+        admission: AdmissionSet,
         executor: NativeProcessSystemExtensionExecutor<P, J>,
         journal: std::sync::Arc<std::sync::Mutex<J>>,
         instance: std::sync::Arc<std::sync::Mutex<NativeInstanceRecord>>,
     ) -> std::result::Result<Self, NativeServiceError> {
+        let AdmissionSet {
+            profile,
+            executable,
+            admitted,
+        } = admission;
         let restored = lock_instance(&instance)?.clone();
         admit_native_instance_recovery(&profile, &executable, &restored).map_err(NativeServiceError::Admission)?;
         if restored.manifest_ref != admitted.manifest_ref() {
@@ -135,16 +149,14 @@ where
                 "durable native instance manifest differs from the admitted manifest".to_string(),
             ));
         }
-        let host = SystemExtensionHost::from_recovered_state(
-            admitted,
-            executor,
-            restored.lifecycle.clone(),
-            restored.usage,
-            restored.callback_sequence,
-            restored.event_sequence,
-            restored.state_ref.clone(),
-            restored.evidence_refs.last().cloned(),
-        )?;
+        let host = SystemExtensionHost::from_recovered_state(admitted, executor, RecoveredState {
+            state: restored.lifecycle.clone(),
+            usage: restored.usage,
+            invocation_sequence: restored.callback_sequence,
+            event_sequence: restored.event_sequence,
+            semantic_state_ref: restored.state_ref.clone(),
+            last_lifecycle_ref: restored.evidence_refs.last().cloned(),
+        })?;
         Ok(Self {
             profile,
             executable,

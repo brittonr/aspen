@@ -72,8 +72,7 @@ impl<P: ExecutionOutputPublisher> ExecutionFabricPort for SimulatedExecutionAdap
                 ExecutionPortFailureKind::ProfileUnavailable,
                 SIMULATION_PROFILE_CODE,
                 "simulation adapter received a non-simulation request".to_string(),
-                None,
-                None,
+                super::mechanics::FailureEvidence::NONE,
             ));
         }
         super::mechanics::validate_resolved_context(request, resolved).map_err(|detail| {
@@ -82,8 +81,7 @@ impl<P: ExecutionOutputPublisher> ExecutionFabricPort for SimulatedExecutionAdap
                 ExecutionPortFailureKind::ResolutionDenied,
                 SIMULATION_OBSERVATION_CODE,
                 detail,
-                None,
-                None,
+                super::mechanics::FailureEvidence::NONE,
             )
         })?;
         let Some(script) = self.scripts.get(&request.plan.request.operation_ref) else {
@@ -92,8 +90,7 @@ impl<P: ExecutionOutputPublisher> ExecutionFabricPort for SimulatedExecutionAdap
                 ExecutionPortFailureKind::RejectedBeforeStart,
                 SIMULATION_SCRIPT_CODE,
                 "no deterministic execution script matches the exact operation".to_string(),
-                None,
-                None,
+                super::mechanics::FailureEvidence::NONE,
             ));
         };
         let mut process = script.process.clone();
@@ -110,8 +107,10 @@ impl<P: ExecutionOutputPublisher> ExecutionFabricPort for SimulatedExecutionAdap
                 ExecutionPortFailureKind::ResolutionDenied,
                 SIMULATION_OBSERVATION_CODE,
                 detail,
-                Some(process.clone()),
-                None,
+                super::mechanics::FailureEvidence {
+                    process_observation: Some(process.clone()),
+                    receipt: None,
+                },
             )
         })?;
         self.publish_and_record(request, process)
@@ -150,8 +149,10 @@ impl<P: ExecutionOutputPublisher> SimulatedExecutionAdapter<P> {
                 ExecutionPortFailureKind::RejectedBeforeStart,
                 SIMULATION_PRESTART_CODE,
                 "scripted execution refused before process start".to_string(),
-                Some(process),
-                None,
+                super::mechanics::FailureEvidence {
+                    process_observation: Some(process),
+                    receipt: None,
+                },
             ));
         }
         let stdout_publication =
@@ -173,8 +174,10 @@ impl<P: ExecutionOutputPublisher> SimulatedExecutionAdapter<P> {
                 ExecutionPortFailureKind::ReceiptConstruction,
                 SIMULATION_RECEIPT_CODE,
                 error.to_string(),
-                Some(process.clone()),
-                None,
+                super::mechanics::FailureEvidence {
+                    process_observation: Some(process.clone()),
+                    receipt: None,
+                },
             )
         })?;
         if matches!(
@@ -192,8 +195,10 @@ impl<P: ExecutionOutputPublisher> SimulatedExecutionAdapter<P> {
                 ExecutionPortFailureKind::UnknownAfterStart,
                 SIMULATION_UNKNOWN_CODE,
                 "scripted execution lacks definitive completion and teardown evidence".to_string(),
-                Some(process),
-                Some(receipt),
+                super::mechanics::FailureEvidence {
+                    process_observation: Some(process),
+                    receipt: Some(receipt),
+                },
             ));
         }
         self.operations.insert(
@@ -206,8 +211,10 @@ impl<P: ExecutionOutputPublisher> SimulatedExecutionAdapter<P> {
                 ExecutionPortFailureKind::OutputPublication,
                 SIMULATION_PUBLICATION_CODE,
                 "one or more simulated output streams were not published".to_string(),
-                Some(process),
-                Some(receipt),
+                super::mechanics::FailureEvidence {
+                    process_observation: Some(process),
+                    receipt: Some(receipt),
+                },
             ));
         }
         Ok(receipt)
@@ -246,9 +253,12 @@ fn simulation_failure(
     kind: ExecutionPortFailureKind,
     diagnostic_code: &'static str,
     detail: String,
-    process_observation: Option<ExecutionProcessObservation>,
-    receipt: Option<CanonicalExecutionReceipt>,
+    evidence: super::mechanics::FailureEvidence,
 ) -> Box<ExecutionPortFailure> {
+    let super::mechanics::FailureEvidence {
+        process_observation,
+        receipt,
+    } = evidence;
     Box::new(ExecutionPortFailure {
         kind,
         operation_ref: request.plan.request.operation_ref.clone(),

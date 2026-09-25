@@ -85,7 +85,14 @@ async fn build_node_with_root(
     let (time, inbox) = time_for(group, node_id, timer, entropy_profile_ref)?;
     let application = application_for(group)?;
     let (control, control_receiver) = control_for(group, supervision_ref)?;
-    let ports = assemble_scoped_concrete_replica_ports(identity, durability, transport, time, application, control)?;
+    let adapters = ReplicaAdapterSet {
+        durability,
+        transport,
+        time,
+        application,
+        control,
+    };
+    let ports = assemble_scoped_concrete_replica_ports(identity, adapters)?;
     let service = ScopedLiveReplicaService::start(plan, ports, inbox).await?;
     Ok(LiveNode {
         service,

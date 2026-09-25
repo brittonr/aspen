@@ -47,17 +47,27 @@ pub fn manifest_descriptor(manifest: &crate::chunk_store::ChunkManifest) -> Cont
     }
 }
 
+pub struct StreamPutInput<'a> {
+    pub profile: &'a ContentAdapterProfile,
+    pub root: &'a crate::chunk_store::CapabilityChunkRoot,
+    pub command: &'a ContentCommand,
+    pub expected_manifest: &'a ContentManifestDescriptor,
+    pub object_kind: &'a str,
+    pub bytes: &'a [u8],
+}
+
 // r[impl molten.content_store_adapter.port_contract]
 // r[impl molten.content_store_adapter.streaming_bounds]
 // r[impl molten.content_store_adapter.verify_before_available]
-pub fn execute_local_stream_put(
-    profile: &ContentAdapterProfile,
-    root: &crate::chunk_store::CapabilityChunkRoot,
-    command: &ContentCommand,
-    expected_manifest: &ContentManifestDescriptor,
-    object_kind: &str,
-    bytes: &[u8],
-) -> crate::error::Result<LocalContentPutExecution> {
+pub fn execute_local_stream_put(input: StreamPutInput<'_>) -> crate::error::Result<LocalContentPutExecution> {
+    let StreamPutInput {
+        profile,
+        root,
+        command,
+        expected_manifest,
+        object_kind,
+        bytes,
+    } = input;
     if command.operation != ContentOperation::Put && command.operation != ContentOperation::Import {
         return Err(crate::error::MoltenError::invalid_harness("local stream put requires put or import operation"));
     }
@@ -77,8 +87,15 @@ pub fn execute_local_stream_put(
             "local put readback differs from expected canonical manifest",
         ));
     }
-    let event =
-        content_event(command, 0, ContentTerminal::Durable, None, manifest.total_length, None, &manifest.evidence_refs);
+    let event = content_event(EventInput {
+        command,
+        sequence: 0,
+        terminal: ContentTerminal::Durable,
+        chunk_ref: None,
+        observed_bytes: manifest.total_length,
+        failure: None,
+        evidence_refs: &manifest.evidence_refs,
+    });
     Ok(LocalContentPutExecution {
         manifest,
         event: canonical_content_event(profile, &event)?,
@@ -129,15 +146,15 @@ pub fn execute_local_stream_get(
         };
         state = apply_chunk_observation(profile, &manifest, &state, &observation)
             .map_err(|issues| validation_error("local content chunk", &issues))?;
-        let event = content_event(
+        let event = content_event(EventInput {
             command,
             sequence,
-            state.terminal,
-            Some(chunk.chunk_ref.clone()),
-            observation.observed_length,
-            None,
-            &source_manifest.evidence_refs,
-        );
+            terminal: state.terminal,
+            chunk_ref: Some(chunk.chunk_ref.clone()),
+            observed_bytes: observation.observed_length,
+            failure: None,
+            evidence_refs: &source_manifest.evidence_refs,
+        });
         events.push(canonical_content_event(profile, &event)?);
         verified_chunks.push(VerifiedChunkPayload {
             chunk_ref: chunk.chunk_ref.clone(),
@@ -187,70 +204,27 @@ pub fn execute_local_verified_range(
     Ok(read.bytes)
 }
 
-pub fn redb_index_content_status(
-    profile: &ContentAdapterProfile,
-    root: &crate::chunk_store::CapabilityChunkRoot,
-    generation: u64,
-) -> crate::error::Result<CanonicalContentArtifact<ContentAdapterStatus>> {
-    let index = crate::chunk_store::index_status_with_root(root)?;
-    bounded_content_status(
-        profile,
-        generation,
-        0,
-        0,
-        vec![
-            (ContentTerminal::Verified, index.available_chunks),
-            (ContentTerminal::Retryable, index.missing_chunks),
-        ],
-        "redb-index-v1",
-        Vec::new(),
-    )
+pub(crate) struct EventInput<'a> {
+    pub(crate) command: &'a ContentCommand,
+    pub(crate) sequence: u64,
+    pub(crate) terminal: ContentTerminal,
+    pub(crate) chunk_ref: Option<String>,
+    pub(crate) observed_bytes: u64,
+    pub(crate) failure: Option<ContentFailure>,
+    pub(crate) evidence_refs: &'a [String],
 }
 
-pub fn bounded_content_status(
-    profile: &ContentAdapterProfile,
-    generation: u64,
-    active_operations: u64,
-    queued_bytes: u64,
-    mut terminal_counts: Vec<(ContentTerminal, u64)>,
-    backend_label: &str,
-    issues: Vec<ContentIssue>,
-) -> crate::error::Result<CanonicalContentArtifact<ContentAdapterStatus>> {
-    terminal_counts.sort_by_key(|(terminal, _count)| *terminal);
-    let status = ContentAdapterStatus {
-        schema: CONTENT_STATUS_SCHEMA.to_string(),
-        profile_ref: profile.profile_ref.clone(),
-        class: profile.class,
-        generation,
-        active_operations: crate::bounded::usize_from_u64(active_operations, "content active operations")?,
-        queued_bytes,
-        terminal_counts,
-        backend_hint_ref: Some(backend_hint_ref(profile.class, backend_label)),
-        issues,
-        non_claims: REQUIRED_CONTENT_NON_CLAIMS.to_vec(),
-    };
-    canonical_content_status(profile, &status)
-}
-
-pub(crate) fn content_event(
-    command: &ContentCommand,
-    sequence: u64,
-    terminal: ContentTerminal,
-    chunk_ref: Option<String>,
-    observed_bytes: u64,
-    failure: Option<ContentFailure>,
-    evidence_refs: &[String],
-) -> ContentEvent {
+pub(crate) fn content_event(input: EventInput<'_>) -> ContentEvent {
     ContentEvent {
         schema: CONTENT_EVENT_SCHEMA.to_string(),
-        operation_ref: command.operation_ref.clone(),
-        manifest_ref: command.manifest_ref.clone(),
-        sequence,
-        terminal,
-        chunk_ref,
-        observed_bytes,
-        failure,
-        evidence_refs: sorted_refs(evidence_refs.to_vec()),
+        operation_ref: input.command.operation_ref.clone(),
+        manifest_ref: input.command.manifest_ref.clone(),
+        sequence: input.sequence,
+        terminal: input.terminal,
+        chunk_ref: input.chunk_ref,
+        observed_bytes: input.observed_bytes,
+        failure: input.failure,
+        evidence_refs: sorted_refs(input.evidence_refs.to_vec()),
         non_claims: REQUIRED_CONTENT_NON_CLAIMS.to_vec(),
     }
 }

@@ -232,16 +232,14 @@ fn prometheus_opentelemetry_and_tracing_shells_export_only_bounded_public_views(
         let request = export_request(&adapter, &snapshot, format);
         let mut sink = success_sink();
         let execution = execute_snapshot_export(
-            &profile,
-            &adapter,
-            &snapshot,
-            &request,
-            &ExportShellState {
-                available: true,
-                queued_bytes: 0,
-                cancelled: false,
+            AdapterDelivery {
+                profile: &profile,
+                adapter: &adapter,
+                request: &request,
+                state: &shell_state(true, 0),
+                last_export_tick: None,
             },
-            None,
+            &snapshot,
             format,
             &mut sink,
         )
@@ -281,33 +279,29 @@ fn prometheus_opentelemetry_and_tracing_shells_export_only_bounded_public_views(
     };
     let mut event_sink = success_sink();
     let tracing_event = execute_event_export(
-        &profile,
-        &tracing_adapter,
-        &event,
-        &event_request,
-        &ExportShellState {
-            available: true,
-            queued_bytes: 0,
-            cancelled: false,
+        AdapterDelivery {
+            profile: &profile,
+            adapter: &tracing_adapter,
+            request: &event_request,
+            state: &shell_state(true, 0),
+            last_export_tick: None,
         },
-        None,
+        &event,
         &mut event_sink,
     )
     .expect("tracing event export");
     assert_eq!(tracing_event.payload, tracing_event.payload_ref.as_bytes());
     assert!(
         execute_event_export(
-            &profile,
-            &adapter(ObservationAdapterClass::Prometheus),
-            &event,
-            &event_request,
-            &ExportShellState {
-                available: true,
-                queued_bytes: 0,
-                cancelled: false,
+            AdapterDelivery {
+                profile: &profile,
+                adapter: &adapter(ObservationAdapterClass::Prometheus),
+                request: &event_request,
+                state: &shell_state(true, 0),
+                last_export_tick: None
             },
-            None,
-            &mut event_sink,
+            &event,
+            &mut event_sink
         )
         .is_err()
     );
@@ -317,16 +311,14 @@ fn prometheus_opentelemetry_and_tracing_shells_export_only_bounded_public_views(
     let mut simulation_sink =
         DeterministicSimulationSink::new(OBSERVED_TICK, SIMULATION_RECORD_LIMIT).expect("simulation sink");
     let simulation = execute_snapshot_export(
-        &profile,
-        &simulation_adapter,
-        &snapshot,
-        &simulation_request,
-        &ExportShellState {
-            available: true,
-            queued_bytes: 0,
-            cancelled: false,
+        AdapterDelivery {
+            profile: &profile,
+            adapter: &simulation_adapter,
+            request: &simulation_request,
+            state: &shell_state(true, 0),
+            last_export_tick: None,
         },
-        None,
+        &snapshot,
         ExportFormat::Prometheus,
         &mut simulation_sink,
     )
@@ -346,16 +338,14 @@ fn exporter_unavailable_backpressure_and_sink_failure_are_terminal_without_hidde
     let request = export_request(&adapter, &snapshot, ExportFormat::Prometheus);
     let mut sink = success_sink();
     let unavailable = execute_snapshot_export(
-        &profile,
-        &adapter,
-        &snapshot,
-        &request,
-        &ExportShellState {
-            available: false,
-            queued_bytes: 0,
-            cancelled: false,
+        AdapterDelivery {
+            profile: &profile,
+            adapter: &adapter,
+            request: &request,
+            state: &shell_state(false, 0),
+            last_export_tick: None,
         },
-        None,
+        &snapshot,
         ExportFormat::Prometheus,
         &mut sink,
     )
@@ -365,16 +355,14 @@ fn exporter_unavailable_backpressure_and_sink_failure_are_terminal_without_hidde
 
     let mut pressure_sink = success_sink();
     let pressure = execute_snapshot_export(
-        &profile,
-        &adapter,
-        &snapshot,
-        &request,
-        &ExportShellState {
-            available: true,
-            queued_bytes: MAX_QUEUED_BYTES,
-            cancelled: false,
+        AdapterDelivery {
+            profile: &profile,
+            adapter: &adapter,
+            request: &request,
+            state: &shell_state(true, MAX_QUEUED_BYTES),
+            last_export_tick: None,
         },
-        None,
+        &snapshot,
         ExportFormat::Prometheus,
         &mut pressure_sink,
     )
@@ -392,16 +380,14 @@ fn exporter_unavailable_backpressure_and_sink_failure_are_terminal_without_hidde
         payload: Vec::new(),
     };
     let failed = execute_snapshot_export(
-        &profile,
-        &adapter,
-        &snapshot,
-        &request,
-        &ExportShellState {
-            available: true,
-            queued_bytes: 0,
-            cancelled: false,
+        AdapterDelivery {
+            profile: &profile,
+            adapter: &adapter,
+            request: &request,
+            state: &shell_state(true, 0),
+            last_export_tick: None,
         },
-        None,
+        &snapshot,
         ExportFormat::Prometheus,
         &mut failed_sink,
     )
@@ -409,6 +395,14 @@ fn exporter_unavailable_backpressure_and_sink_failure_are_terminal_without_hidde
     assert_eq!(failed.outcome.artifact.kind, AdapterOutcomeKind::Failed);
     assert_eq!(failed_sink.calls, 1);
     assert!(failed.payload.is_empty());
+}
+
+fn shell_state(available: bool, queued_bytes: u64) -> ExportShellState {
+    ExportShellState {
+        available,
+        queued_bytes,
+        cancelled: false,
+    }
 }
 
 fn integrity_plan(bytes: &[u8]) -> IntegrityPlan {

@@ -1,10 +1,6 @@
 
 fn executions_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
-    collect_matching_refs(
-        root,
-        GC_EXECUTE_DIR,
-        parse_gc_execution_gate,
-        |execute| {
+    collect_matching_refs(root, RefListing { directory: GC_EXECUTE_DIR, label: "retention candidate GC executions" }, parse_gc_execution_gate, |execute| {
             filter.matches_gc(
                 &execute.subsystem,
                 &execute.object_ref,
@@ -12,18 +8,11 @@ fn executions_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) 
                 &execute.retention_class,
                 &execute.action,
             )
-        },
-        |execute| execute.execution_ref.clone(),
-        "retention candidate GC executions",
-    )
+        }, |execute| execute.execution_ref.clone())
 }
 
 fn audits_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
-    collect_matching_refs(
-        root,
-        GC_AUDIT_DIR,
-        parse_gc_audit,
-        |audit| {
+    collect_matching_refs(root, RefListing { directory: GC_AUDIT_DIR, label: "retention candidate GC audits" }, parse_gc_audit, |audit| {
             filter.matches_gc(
                 &audit.subsystem,
                 &audit.object_ref,
@@ -31,46 +20,29 @@ fn audits_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> R
                 &audit.retention_class,
                 &audit.action,
             )
-        },
-        |audit| audit.audit_ref.clone(),
-        "retention candidate GC audits",
-    )
+        }, |audit| audit.audit_ref.clone())
 }
 
 fn receipts_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
-    collect_matching_refs(
-        root,
-        RECEIPT_DIR,
-        parse_receipt,
-        |receipt| {
+    collect_matching_refs(root, RefListing { directory: RECEIPT_DIR, label: "retention candidate receipts" }, parse_receipt, |receipt| {
             filter.matches_retention(
                 &receipt.object_ref,
                 &receipt.object_kind,
                 &receipt.retention_class,
                 &receipt.action,
             )
-        },
-        |receipt| receipt.receipt_ref.clone(),
-        "retention candidate receipts",
-    )
+        }, |receipt| receipt.receipt_ref.clone())
 }
 
 fn tombstones_for(root: &CapabilityRetentionRoot, filter: &CandidateFilter<'_>) -> Result<Vec<String>> {
-    collect_matching_refs(
-        root,
-        TOMBSTONE_DIR,
-        parse_tombstone,
-        |tombstone| {
+    collect_matching_refs(root, RefListing { directory: TOMBSTONE_DIR, label: "retention candidate tombstones" }, parse_tombstone, |tombstone| {
             filter.matches_retention(
                 &tombstone.object_ref,
                 &tombstone.object_kind,
                 &tombstone.retention_class,
                 &tombstone.action,
             )
-        },
-        |tombstone| tombstone.tombstone_ref.clone(),
-        "retention candidate tombstones",
-    )
+        }, |tombstone| tombstone.tombstone_ref.clone())
 }
 
 fn candidate_explain_diagnostics(input: &CandidateExplainValueInput<'_>) -> Result<Vec<String>> {

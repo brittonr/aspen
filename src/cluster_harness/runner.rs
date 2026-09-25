@@ -118,8 +118,15 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> crate::e
 
     let mut child_executions = Vec::new();
     let mut diagnostics = Vec::new();
-    let is_init_passed =
-        execute_phase_for_nodes(input, &plan, "init", &mut child_executions, &mut artifacts, |node| {
+    let is_init_passed = execute_phase_for_nodes(
+        PhaseStep {
+            input,
+            plan: &plan,
+            phase: "init",
+        },
+        &mut child_executions,
+        &mut artifacts,
+        |node| {
             vec![
                 std::ffi::OsString::from("node"),
                 std::ffi::OsString::from("init"),
@@ -128,62 +135,99 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> crate::e
                 std::ffi::OsString::from("--node-id"),
                 std::ffi::OsString::from(&node.node_id),
             ]
-        })?;
+        },
+    )?;
     let is_start_passed = if is_init_passed {
-        execute_phase_for_nodes(input, &plan, "start", &mut child_executions, &mut artifacts, |node| {
-            vec![
-                std::ffi::OsString::from("node"),
-                std::ffi::OsString::from("run"),
-                std::ffi::OsString::from("--state-root"),
-                node.state_root.as_os_str().to_os_string(),
-            ]
-        })?
+        execute_phase_for_nodes(
+            PhaseStep {
+                input,
+                plan: &plan,
+                phase: "start",
+            },
+            &mut child_executions,
+            &mut artifacts,
+            |node| {
+                vec![
+                    std::ffi::OsString::from("node"),
+                    std::ffi::OsString::from("run"),
+                    std::ffi::OsString::from("--state-root"),
+                    node.state_root.as_os_str().to_os_string(),
+                ]
+            },
+        )?
     } else {
         diagnostics.push("cluster-harness-start-skipped-after-init-failure".to_string());
         false
     };
     let is_workflow_passed = if is_start_passed {
-        execute_phase_for_nodes(input, &plan, "workflow", &mut child_executions, &mut artifacts, |node| {
-            vec![
-                std::ffi::OsString::from("node"),
-                std::ffi::OsString::from("run-loop"),
-                std::ffi::OsString::from("--state-root"),
-                node.state_root.as_os_str().to_os_string(),
-                std::ffi::OsString::from("--max-requests"),
-                std::ffi::OsString::from(WORKFLOW_MAX_REQUESTS),
-                std::ffi::OsString::from("--receipt-out"),
-                node.state_root.join("cluster-harness-workflow.preserves").into_os_string(),
-                std::ffi::OsString::from("--heartbeat-out"),
-                node.state_root.join("cluster-harness-heartbeat.preserves").into_os_string(),
-            ]
-        })?
+        execute_phase_for_nodes(
+            PhaseStep {
+                input,
+                plan: &plan,
+                phase: "workflow",
+            },
+            &mut child_executions,
+            &mut artifacts,
+            |node| {
+                vec![
+                    std::ffi::OsString::from("node"),
+                    std::ffi::OsString::from("run-loop"),
+                    std::ffi::OsString::from("--state-root"),
+                    node.state_root.as_os_str().to_os_string(),
+                    std::ffi::OsString::from("--max-requests"),
+                    std::ffi::OsString::from(WORKFLOW_MAX_REQUESTS),
+                    std::ffi::OsString::from("--receipt-out"),
+                    node.state_root.join("cluster-harness-workflow.preserves").into_os_string(),
+                    std::ffi::OsString::from("--heartbeat-out"),
+                    node.state_root.join("cluster-harness-heartbeat.preserves").into_os_string(),
+                ]
+            },
+        )?
     } else {
         diagnostics.push("cluster-harness-workflow-skipped-after-start-failure".to_string());
         false
     };
     let is_status_passed = if is_workflow_passed {
-        execute_phase_for_nodes(input, &plan, "status", &mut child_executions, &mut artifacts, |node| {
-            vec![
-                std::ffi::OsString::from("node"),
-                std::ffi::OsString::from("status"),
-                std::ffi::OsString::from("--state-root"),
-                node.state_root.as_os_str().to_os_string(),
-            ]
-        })?
+        execute_phase_for_nodes(
+            PhaseStep {
+                input,
+                plan: &plan,
+                phase: "status",
+            },
+            &mut child_executions,
+            &mut artifacts,
+            |node| {
+                vec![
+                    std::ffi::OsString::from("node"),
+                    std::ffi::OsString::from("status"),
+                    std::ffi::OsString::from("--state-root"),
+                    node.state_root.as_os_str().to_os_string(),
+                ]
+            },
+        )?
     } else {
         diagnostics.push("cluster-harness-status-skipped-after-workflow-failure".to_string());
         false
     };
 
     let is_stop_passed = if is_start_passed {
-        execute_phase_for_nodes_reverse(input, &plan, "stop", &mut child_executions, &mut artifacts, |node| {
-            vec![
-                std::ffi::OsString::from("node"),
-                std::ffi::OsString::from("stop"),
-                std::ffi::OsString::from("--state-root"),
-                node.state_root.as_os_str().to_os_string(),
-            ]
-        })?
+        execute_phase_for_nodes_reverse(
+            PhaseStep {
+                input,
+                plan: &plan,
+                phase: "stop",
+            },
+            &mut child_executions,
+            &mut artifacts,
+            |node| {
+                vec![
+                    std::ffi::OsString::from("node"),
+                    std::ffi::OsString::from("stop"),
+                    std::ffi::OsString::from("--state-root"),
+                    node.state_root.as_os_str().to_os_string(),
+                ]
+            },
+        )?
     } else {
         true
     };
@@ -222,15 +266,15 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> crate::e
     let cleanup_ref = crate::preserves_rail::canonical_hash(&cleanup)?;
     push_artifact(&mut artifacts, CLEANUP_FILE, CLEANUP_KIND, cleanup)?;
 
-    let lifecycle = build_lifecycle_artifacts(
-        &fixture_ref,
-        &node_ids,
-        &node_artifacts,
-        &child_executions,
-        &diagnostics,
-        is_init_passed && is_start_passed && is_workflow_passed && is_status_passed && is_stop_passed,
-        &caveats,
-    )?;
+    let lifecycle = build_lifecycle_artifacts(LifecycleArtifactsInput {
+        fixture_ref: &fixture_ref,
+        node_ids: &node_ids,
+        nodes: &node_artifacts,
+        child_executions: &child_executions,
+        diagnostics: &diagnostics,
+        phases_passed: is_init_passed && is_start_passed && is_workflow_passed && is_status_passed && is_stop_passed,
+        caveats: &caveats,
+    })?;
     push_artifact(&mut artifacts, LIFECYCLE_FILE, CLUSTER_LIFECYCLE_KIND, lifecycle.lifecycle_value)?;
     push_artifact(&mut artifacts, DRIFT_SUMMARY_FILE, DRIFT_SUMMARY_KIND, lifecycle.drift_value)?;
 
@@ -477,10 +521,15 @@ fn local_plan_input(
     }
 }
 
+#[derive(Clone, Copy)]
+struct PhaseStep<'a> {
+    input: &'a ClusterHarnessExecutionInput,
+    plan: &'a crate::cluster::ClusterPlan,
+    phase: &'a str,
+}
+
 fn execute_phase_for_nodes<F>(
-    input: &ClusterHarnessExecutionInput,
-    plan: &crate::cluster::ClusterPlan,
-    phase: &str,
+    step: PhaseStep<'_>,
     executions: &mut Vec<ChildExecution>,
     artifacts: &mut Vec<PreparedArtifact>,
     arguments: F,
@@ -488,6 +537,7 @@ fn execute_phase_for_nodes<F>(
 where
     F: Fn(&crate::cluster::ClusterNodePlan) -> Vec<std::ffi::OsString>,
 {
+    let PhaseStep { input, plan, phase } = step;
     let mut is_passed = true;
     for node in &plan.nodes {
         let execution = execute_child(input, node, phase, arguments(node))?;
@@ -504,9 +554,7 @@ where
 }
 
 fn execute_phase_for_nodes_reverse<F>(
-    input: &ClusterHarnessExecutionInput,
-    plan: &crate::cluster::ClusterPlan,
-    phase: &str,
+    step: PhaseStep<'_>,
     executions: &mut Vec<ChildExecution>,
     artifacts: &mut Vec<PreparedArtifact>,
     arguments: F,
@@ -514,6 +562,7 @@ fn execute_phase_for_nodes_reverse<F>(
 where
     F: Fn(&crate::cluster::ClusterNodePlan) -> Vec<std::ffi::OsString>,
 {
+    let PhaseStep { input, plan, phase } = step;
     let mut is_passed = true;
     for node in plan.nodes.iter().rev() {
         let execution = execute_child(input, node, phase, arguments(node))?;
@@ -747,15 +796,26 @@ struct LifecycleArtifacts {
     drift_value: IoValue,
 }
 
-fn build_lifecycle_artifacts(
-    fixture_ref: &str,
-    node_ids: &[String],
-    nodes: &[NodeArtifacts],
-    child_executions: &[ChildExecution],
-    diagnostics: &[String],
+struct LifecycleArtifactsInput<'a> {
+    fixture_ref: &'a str,
+    node_ids: &'a [String],
+    nodes: &'a [NodeArtifacts],
+    child_executions: &'a [ChildExecution],
+    diagnostics: &'a [String],
     phases_passed: bool,
-    caveats: &[String],
-) -> crate::error::Result<LifecycleArtifacts> {
+    caveats: &'a [String],
+}
+
+fn build_lifecycle_artifacts(input: LifecycleArtifactsInput<'_>) -> crate::error::Result<LifecycleArtifacts> {
+    let LifecycleArtifactsInput {
+        fixture_ref,
+        node_ids,
+        nodes,
+        child_executions,
+        diagnostics,
+        phases_passed,
+        caveats,
+    } = input;
     let is_complete = phases_passed && nodes.len() == node_ids.len() && nodes.iter().all(NodeArtifacts::complete);
     let (lifecycle_value, drift_summary) = if is_complete {
         let phase = |name: &str| crate::cluster::ClusterLifecyclePhaseObservation {

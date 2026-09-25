@@ -62,10 +62,22 @@ impl<P: ExecutionOutputPublisher> ExecutionFabricPort for LiveExecutionAdapter<P
         cancellation: Option<&std::sync::atomic::AtomicBool>,
     ) -> ExecutionPortResult<CanonicalExecutionReceipt> {
         validate_resolved_context(request, resolved).map_err(|detail| {
-            failure(request, ExecutionPortFailureKind::ResolutionDenied, RESOLUTION_DENIED_CODE, detail, None, None)
+            failure(
+                request,
+                ExecutionPortFailureKind::ResolutionDenied,
+                RESOLUTION_DENIED_CODE,
+                detail,
+                FailureEvidence::NONE,
+            )
         })?;
         let run_request = bounded_request(request, resolved).map_err(|detail| {
-            failure(request, ExecutionPortFailureKind::RejectedBeforeStart, PRESTART_FAILURE_CODE, detail, None, None)
+            failure(
+                request,
+                ExecutionPortFailureKind::RejectedBeforeStart,
+                PRESTART_FAILURE_CODE,
+                detail,
+                FailureEvidence::NONE,
+            )
         })?;
         let run_result = match cancellation {
             Some(flag) => bounded_exec::run_with_cancellation(run_request, flag),
@@ -80,7 +92,13 @@ impl<P: ExecutionOutputPublisher> ExecutionFabricPort for LiveExecutionAdapter<P
                 request.plan.request.operation_ref.clone(),
                 (request.plan.request.generation, OperationStatus::Unknown),
             );
-            failure(request, ExecutionPortFailureKind::UnknownAfterStart, UNKNOWN_FAILURE_CODE, detail, None, None)
+            failure(
+                request,
+                ExecutionPortFailureKind::UnknownAfterStart,
+                UNKNOWN_FAILURE_CODE,
+                detail,
+                FailureEvidence::NONE,
+            )
         })?;
         self.publish_and_record(request, process)
     }
@@ -133,7 +151,7 @@ impl<P: ExecutionOutputPublisher> LiveExecutionAdapter<P> {
         };
         self.operations
             .insert(request.plan.request.operation_ref.clone(), (request.plan.request.generation, status));
-        failure(request, kind, code, error.to_string(), None, None)
+        failure(request, kind, code, error.to_string(), FailureEvidence::NONE)
     }
 
     fn publish_and_record(
@@ -164,8 +182,10 @@ impl<P: ExecutionOutputPublisher> LiveExecutionAdapter<P> {
                 ExecutionPortFailureKind::ReceiptConstruction,
                 RECEIPT_FAILURE_CODE,
                 error.to_string(),
-                Some(process.clone()),
-                None,
+                FailureEvidence {
+                    process_observation: Some(process.clone()),
+                    receipt: None,
+                },
             )
         })?;
         self.operations.insert(
@@ -178,8 +198,10 @@ impl<P: ExecutionOutputPublisher> LiveExecutionAdapter<P> {
                 ExecutionPortFailureKind::OutputPublication,
                 PUBLICATION_FAILURE_CODE,
                 "one or more retained execution streams were not published".to_string(),
-                Some(process),
-                Some(receipt),
+                FailureEvidence {
+                    process_observation: Some(process),
+                    receipt: Some(receipt),
+                },
             ));
         }
         Ok(receipt)
@@ -191,9 +213,12 @@ fn failure(
     kind: ExecutionPortFailureKind,
     diagnostic_code: &'static str,
     detail: String,
-    process_observation: Option<ExecutionProcessObservation>,
-    receipt: Option<CanonicalExecutionReceipt>,
+    evidence: FailureEvidence,
 ) -> Box<ExecutionPortFailure> {
+    let FailureEvidence {
+        process_observation,
+        receipt,
+    } = evidence;
     Box::new(ExecutionPortFailure {
         kind,
         operation_ref: request.plan.request.operation_ref.clone(),

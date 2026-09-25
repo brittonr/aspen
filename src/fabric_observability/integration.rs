@@ -60,16 +60,27 @@ pub fn node_health_input(input: HealthProjectionInput<'_>, node_decision: &str) 
     })
 }
 
+pub struct CounterSampleInput<'a> {
+    pub profile: &'a ObservationProfile,
+    pub descriptor: &'a MetricDescriptor,
+    pub sample_ref: String,
+    pub context: ObservationContext,
+    pub labels: Vec<MetricLabel>,
+    pub value: i64,
+    pub as_of_tick: u64,
+}
+
 // r[impl molten.fabric_observability.adapter_contract]
-pub fn runtime_counter_sample(
-    profile: &ObservationProfile,
-    descriptor: &MetricDescriptor,
-    sample_ref: String,
-    context: ObservationContext,
-    labels: Vec<MetricLabel>,
-    value: i64,
-    as_of_tick: u64,
-) -> crate::error::Result<CanonicalArtifact<MetricSample>> {
+pub fn runtime_counter_sample(input: CounterSampleInput<'_>) -> crate::error::Result<CanonicalArtifact<MetricSample>> {
+    let CounterSampleInput {
+        profile,
+        descriptor,
+        sample_ref,
+        context,
+        labels,
+        value,
+        as_of_tick,
+    } = input;
     canonical_metric_sample(
         profile,
         descriptor,

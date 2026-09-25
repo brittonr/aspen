@@ -413,9 +413,25 @@ mod tests {
         let left = test_ref("cycle-left");
         let right = test_ref("cycle-right");
         let evidence = vec![test_ref("cycle-evidence")];
-        let left_to_right = dependency_edge(&left, &right, "artifact", "imports", true, "cycle", &evidence)
+        let left_to_right = dependency_edge(DependencyEdgeInput {
+            source_ref: &left,
+            target_ref: &right,
+            target_kind: "artifact",
+            relation: "imports",
+            required: true,
+            scope: "cycle",
+            evidence_refs: &evidence,
+        })
             .expect("left edge");
-        let right_to_left = dependency_edge(&right, &left, "artifact", "imports", true, "cycle", &evidence)
+        let right_to_left = dependency_edge(DependencyEdgeInput {
+            source_ref: &right,
+            target_ref: &left,
+            target_kind: "artifact",
+            relation: "imports",
+            required: true,
+            scope: "cycle",
+            evidence_refs: &evidence,
+        })
             .expect("right edge");
         let normalized = normalize_dependency_edges(&[
             left_to_right.clone(),

@@ -81,6 +81,14 @@ pub struct IrohEd25519FileAdapter<'a> {
     backend_ref: String,
 }
 
+pub struct VerificationInput<'a> {
+    pub expected_domain: &'a CanonicalSignatureDomain,
+    pub signature: &'a CanonicalSignatureOutcome,
+    pub signer_currentness: KeyCurrentness,
+    pub signer_generation: u64,
+    pub policy_ref: &'a str,
+}
+
 impl<'a> IrohEd25519FileAdapter<'a> {
     pub fn new(
         namespace: &'a crate::node_state::NodeStateNamespace,
@@ -196,16 +204,16 @@ impl<'a> IrohEd25519FileAdapter<'a> {
             &public_key_ref,
             &self.backend_ref,
         )?;
-        let handle = canonical_key_handle(
-            &self.profile,
+        let handle = canonical_key_handle(KeyHandleInput {
+            profile: &self.profile,
             purpose,
-            record.generation,
-            &public_key_ref,
-            KeyBackendClass::CapabilityFile,
-            &self.backend_ref,
-            KeyCurrentness::Current,
-            &currentness_evidence_ref,
-        )?;
+            generation: record.generation,
+            public_key_ref: &public_key_ref,
+            backend_class: KeyBackendClass::CapabilityFile,
+            backend_ref: &self.backend_ref,
+            currentness: KeyCurrentness::Current,
+            currentness_evidence_ref: &currentness_evidence_ref,
+        })?;
         Ok(ResolvedProductionKey {
             handle,
             public_key: public_key.to_string(),
@@ -288,12 +296,15 @@ impl<'a> IrohEd25519FileAdapter<'a> {
     pub fn verify(
         &self,
         public_key: &str,
-        expected_domain: &CanonicalSignatureDomain,
-        signature: &CanonicalSignatureOutcome,
-        signer_currentness: KeyCurrentness,
-        signer_generation: u64,
-        policy_ref: &str,
+        input: VerificationInput<'_>,
     ) -> crate::error::Result<CanonicalVerificationOutcome> {
+        let VerificationInput {
+            expected_domain,
+            signature,
+            signer_currentness,
+            signer_generation,
+            policy_ref,
+        } = input;
         require_blake3_ref("verification policy", policy_ref)?;
         require_canonical_domain(&self.profile, expected_domain)?;
         require_canonical_signature(signature)?;
@@ -528,16 +539,16 @@ pub(crate) fn transport_endpoint_material(
         &public_key_ref,
         backend_ref,
     )?;
-    let handle = canonical_key_handle(
-        &profile,
-        KeyPurpose::TransportEndpoint,
-        key_record.generation,
-        &public_key_ref,
-        KeyBackendClass::CapabilityFile,
+    let handle = canonical_key_handle(KeyHandleInput {
+        profile: &profile,
+        purpose: KeyPurpose::TransportEndpoint,
+        generation: key_record.generation,
+        public_key_ref: &public_key_ref,
+        backend_class: KeyBackendClass::CapabilityFile,
         backend_ref,
-        KeyCurrentness::Current,
-        &currentness_ref,
-    )?;
+        currentness: KeyCurrentness::Current,
+        currentness_evidence_ref: &currentness_ref,
+    })?;
     let handle_ref = handle.handle.handle_ref;
     Ok(TransportEndpointKeyMaterial {
         public_key: public_key.to_string(),

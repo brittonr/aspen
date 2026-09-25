@@ -20,15 +20,24 @@ pub struct LocalWorldHeadSigningAdapter<'a> {
     allow_generation: bool,
 }
 
+/// The crypto profile, entropy profile, backend, and producer a local signing adapter binds.
+pub struct SignerIdentity {
+    pub profile_ref: String,
+    pub entropy_profile_ref: String,
+    pub backend_ref: String,
+    pub producer_id: String,
+    pub allow_generation: bool,
+}
+
 impl<'a> LocalWorldHeadSigningAdapter<'a> {
-    pub fn new(
-        namespace: &'a NodeStateNamespace,
-        profile_ref: String,
-        entropy_profile_ref: String,
-        backend_ref: String,
-        producer_id: String,
-        allow_generation: bool,
-    ) -> crate::error::Result<Self> {
+    pub fn new(namespace: &'a NodeStateNamespace, identity: SignerIdentity) -> crate::error::Result<Self> {
+        let SignerIdentity {
+            profile_ref,
+            entropy_profile_ref,
+            backend_ref,
+            producer_id,
+            allow_generation,
+        } = identity;
         let profile = canonical_crypto_profile(&production_ed25519_profile(profile_ref, entropy_profile_ref))?;
         let adapter = IrohEd25519FileAdapter::new(namespace, profile, backend_ref)?;
         Ok(Self {

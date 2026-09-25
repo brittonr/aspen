@@ -372,7 +372,7 @@ fn evaluate_upgrade_drain_readiness(input: &UpgradeDrainReadinessInput<'_>) -> R
         has_gate_decision_pass |= is_decision_pass;
         has_terminal_state |= is_terminal;
         has_protocol_match |= is_protocol_match;
-        note_protocol_drain_gate(gate, &expected_refs, is_decision_pass, is_terminal, is_protocol_match, &mut diagnostics)?;
+        note_protocol_drain_gate(gate, &expected_refs, DrainGateOutcome { is_decision_pass, is_terminal, is_protocol_match, diagnostics: &mut diagnostics })?;
         if is_decision_pass && is_terminal && is_protocol_match {
             has_drained_gate = true;
             for terminal_state_ref in &gate.terminal_state_refs {
@@ -434,14 +434,15 @@ fn validate_upgrade_drain_readiness_input(input: &UpgradeDrainReadinessInput<'_>
     Ok(())
 }
 
-fn note_protocol_drain_gate(
-    gate: &ProtocolDrainGateEvidence,
-    expected_refs: &[String],
+struct DrainGateOutcome<'a> {
     is_decision_pass: bool,
     is_terminal: bool,
     is_protocol_match: bool,
-    diagnostics: &mut Vec<String>,
-) -> Result<()> {
+    diagnostics: &'a mut Vec<String>,
+}
+
+fn note_protocol_drain_gate(gate: &ProtocolDrainGateEvidence, expected_refs: &[String], input: DrainGateOutcome<'_>) -> Result<()> {
+    let DrainGateOutcome { is_decision_pass, is_terminal, is_protocol_match, diagnostics } = input;
     if !is_decision_pass {
         push_upgrade_drain_diagnostic(
             diagnostics,

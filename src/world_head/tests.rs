@@ -156,14 +156,13 @@ fn artifact_ref(profile: &str, label: &str) -> ArtifactRef {
 fn signing_adapter<'a>(
     secrets: &'a molten_node_host::node_state::NodeStateNamespace,
 ) -> LocalWorldHeadSigningAdapter<'a> {
-    LocalWorldHeadSigningAdapter::new(
-        secrets,
-        reference("crypto-profile"),
-        reference("entropy-profile"),
-        reference("crypto-backend"),
-        "molten".to_string(),
-        true,
-    )
+    LocalWorldHeadSigningAdapter::new(secrets, SignerIdentity {
+        profile_ref: reference("crypto-profile"),
+        entropy_profile_ref: reference("entropy-profile"),
+        backend_ref: reference("crypto-backend"),
+        producer_id: "molten".to_string(),
+        allow_generation: true,
+    })
     .expect("world-head signing adapter")
 }
 

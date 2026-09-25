@@ -408,15 +408,7 @@ pub fn parse_consensus_engine_descriptor(value: &IoValue) -> Result<ConsensusEng
     let required_evidence_refs = parse_ref_sequence(&fields[10], "evidence")?;
     let conformance_receipt_refs = parse_ref_sequence(&fields[11], "conformance")?;
     let caveats = parse_string_sequence(&fields[12], "caveats")?;
-    validate_engine_descriptor_core(
-        &profile_id,
-        &profile_version,
-        &implementation_id,
-        &capabilities,
-        &currentness_evidence_classes,
-        &membership_capabilities,
-        &caveats,
-    )?;
+    validate_engine_descriptor_core(EngineDescriptorInput { profile_id: &profile_id, profile_version: &profile_version, implementation_id: &implementation_id, capabilities: &capabilities, currentness: &currentness_evidence_classes, membership: &membership_capabilities, caveats: &caveats })?;
     Ok(ConsensusEngineDescriptor {
         descriptor_ref: canonical_hash(value)?,
         profile_id,
@@ -435,15 +427,18 @@ pub fn parse_consensus_engine_descriptor(value: &IoValue) -> Result<ConsensusEng
     })
 }
 
-fn validate_engine_descriptor_core(
-    profile_id: &str,
-    profile_version: &str,
-    implementation_id: &str,
-    capabilities: &[String],
-    currentness: &[String],
-    membership: &[String],
-    caveats: &[String],
-) -> Result<()> {
+struct EngineDescriptorInput<'a> {
+    profile_id: &'a str,
+    profile_version: &'a str,
+    implementation_id: &'a str,
+    capabilities: &'a [String],
+    currentness: &'a [String],
+    membership: &'a [String],
+    caveats: &'a [String],
+}
+
+fn validate_engine_descriptor_core(input: EngineDescriptorInput<'_>) -> Result<()> {
+    let EngineDescriptorInput { profile_id, profile_version, implementation_id, capabilities, currentness, membership, caveats } = input;
     validate_non_empty(profile_id, "consensus engine profile")?;
     validate_non_empty(profile_version, "consensus engine profile version")?;
     validate_non_empty(implementation_id, "consensus engine implementation id")?;

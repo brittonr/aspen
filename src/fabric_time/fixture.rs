@@ -107,60 +107,60 @@ pub fn run_executable_fabric_time_fixture(
 
     let live_final_ticks = live_clock.now_ticks()?;
     let simulation_initial_ticks = virtual_clock.now_ticks()?;
-    let live_initial = canonical_named_event(
-        &live_profile.profile_ref,
-        CanonicalTimeEventKind::Conformance,
-        FIXTURE_GENERATION,
-        "live-run-state",
-        "initialized",
-        live_final_ticks,
-    )?;
-    let simulation_initial = canonical_named_event(
-        &simulation_profile.profile_ref,
-        CanonicalTimeEventKind::Conformance,
-        FIXTURE_GENERATION,
-        "simulation-run-state",
-        "initialized",
-        simulation_initial_ticks,
-    )?;
+    let live_initial = canonical_named_event(EventHeader {
+        profile_ref: &live_profile.profile_ref,
+        kind: CanonicalTimeEventKind::Conformance,
+        generation: FIXTURE_GENERATION,
+        subject: "live-run-state",
+        action: "initialized",
+        ticks: live_final_ticks,
+    })?;
+    let simulation_initial = canonical_named_event(EventHeader {
+        profile_ref: &simulation_profile.profile_ref,
+        kind: CanonicalTimeEventKind::Conformance,
+        generation: FIXTURE_GENERATION,
+        subject: "simulation-run-state",
+        action: "initialized",
+        ticks: simulation_initial_ticks,
+    })?;
     let mut events = vec![live_initial.clone(), simulation_initial.clone()];
-    events.push(canonical_named_event(
-        &live_profile.profile_ref,
-        CanonicalTimeEventKind::Conformance,
-        FIXTURE_GENERATION,
-        "live-adapter",
-        "passed",
-        live_final_ticks,
-    )?);
-    events.push(canonical_named_event(
-        &simulation_profile.profile_ref,
-        CanonicalTimeEventKind::Conformance,
-        FIXTURE_GENERATION,
-        "simulation-adapter",
-        "passed",
-        simulation_initial_ticks,
-    )?);
+    events.push(canonical_named_event(EventHeader {
+        profile_ref: &live_profile.profile_ref,
+        kind: CanonicalTimeEventKind::Conformance,
+        generation: FIXTURE_GENERATION,
+        subject: "live-adapter",
+        action: "passed",
+        ticks: live_final_ticks,
+    })?);
+    events.push(canonical_named_event(EventHeader {
+        profile_ref: &simulation_profile.profile_ref,
+        kind: CanonicalTimeEventKind::Conformance,
+        generation: FIXTURE_GENERATION,
+        subject: "simulation-adapter",
+        action: "passed",
+        ticks: simulation_initial_ticks,
+    })?);
     events.push(canonical_clock_anomaly_event(&live_profile.profile_ref, FIXTURE_GENERATION, &live_wall_decision)?);
     events.push(run_live_scheduler_scenario(&live_profile)?);
 
     let _counters = run_simulation_scenarios(&simulation_profile, &mut virtual_clock, &mut events)?;
     let production_entropy_source = run_production_entropy_scenario(&live_profile, &mut events)?;
-    let live_terminal = canonical_named_event(
-        &live_profile.profile_ref,
-        CanonicalTimeEventKind::Conformance,
-        FIXTURE_GENERATION,
-        "live-run-state",
-        "completed",
-        live_final_ticks,
-    )?;
-    let simulation_terminal = canonical_named_event(
-        &simulation_profile.profile_ref,
-        CanonicalTimeEventKind::Conformance,
-        FIXTURE_GENERATION,
-        "simulation-run-state",
-        "completed",
-        virtual_clock.now_ticks()?,
-    )?;
+    let live_terminal = canonical_named_event(EventHeader {
+        profile_ref: &live_profile.profile_ref,
+        kind: CanonicalTimeEventKind::Conformance,
+        generation: FIXTURE_GENERATION,
+        subject: "live-run-state",
+        action: "completed",
+        ticks: live_final_ticks,
+    })?;
+    let simulation_terminal = canonical_named_event(EventHeader {
+        profile_ref: &simulation_profile.profile_ref,
+        kind: CanonicalTimeEventKind::Conformance,
+        generation: FIXTURE_GENERATION,
+        subject: "simulation-run-state",
+        action: "completed",
+        ticks: virtual_clock.now_ticks()?,
+    })?;
     events.push(live_terminal.clone());
     events.push(simulation_terminal.clone());
 
@@ -326,14 +326,14 @@ fn run_simulation_scenarios(
     let delayed_transition =
         poll_timer_with_fault(&delayed, FIXTURE_GENERATION, delayed.next_deadline_ticks, 1, Some(&delay_fault))?;
     events.push(canonical_timer_event(&profile.profile_ref, &delayed_transition)?);
-    events.push(canonical_named_event(
-        &profile.profile_ref,
-        CanonicalTimeEventKind::Fault,
-        FIXTURE_GENERATION,
-        "timer-delay",
-        "injected",
-        TIMER_DELAY_FAULT,
-    )?);
+    events.push(canonical_named_event(EventHeader {
+        profile_ref: &profile.profile_ref,
+        kind: CanonicalTimeEventKind::Fault,
+        generation: FIXTURE_GENERATION,
+        subject: "timer-delay",
+        action: "injected",
+        ticks: TIMER_DELAY_FAULT,
+    })?);
     counters.timer_events = checked_increment(counters.timer_events, "timer event count")?;
     counters.fault_events = checked_increment(counters.fault_events, "fault event count")?;
 
@@ -350,14 +350,14 @@ fn run_simulation_scenarios(
     let dropped_transition =
         poll_timer_with_fault(&dropped, FIXTURE_GENERATION, dropped.next_deadline_ticks, 1, Some(&drop_fault))?;
     events.push(canonical_timer_event(&profile.profile_ref, &dropped_transition)?);
-    events.push(canonical_named_event(
-        &profile.profile_ref,
-        CanonicalTimeEventKind::Fault,
-        FIXTURE_GENERATION,
-        "timer-drop",
-        "injected-and-recorded",
-        dropped.next_deadline_ticks,
-    )?);
+    events.push(canonical_named_event(EventHeader {
+        profile_ref: &profile.profile_ref,
+        kind: CanonicalTimeEventKind::Fault,
+        generation: FIXTURE_GENERATION,
+        subject: "timer-drop",
+        action: "injected-and-recorded",
+        ticks: dropped.next_deadline_ticks,
+    })?);
     counters.timer_events = checked_increment(counters.timer_events, "timer event count")?;
     counters.fault_events = checked_increment(counters.fault_events, "fault event count")?;
 
@@ -384,14 +384,14 @@ fn run_simulation_scenarios(
         Some(&cancellation_fault),
     )?;
     events.push(canonical_timer_event(&profile.profile_ref, &cancelled)?);
-    events.push(canonical_named_event(
-        &profile.profile_ref,
-        CanonicalTimeEventKind::Fault,
-        FIXTURE_GENERATION,
-        "timer-cancellation-race",
-        "cancellation-won",
-        cancellable.next_deadline_ticks,
-    )?);
+    events.push(canonical_named_event(EventHeader {
+        profile_ref: &profile.profile_ref,
+        kind: CanonicalTimeEventKind::Fault,
+        generation: FIXTURE_GENERATION,
+        subject: "timer-cancellation-race",
+        action: "cancellation-won",
+        ticks: cancellable.next_deadline_ticks,
+    })?);
     counters.timer_events = checked_increment(counters.timer_events, "timer event count")?;
     counters.fault_events = checked_increment(counters.fault_events, "fault event count")?;
 
@@ -399,14 +399,14 @@ fn run_simulation_scenarios(
     if cleaned.iter().any(|timer| timer.phase != TimerPhase::Cancelled) {
         return Err(crate::error::MoltenError::invalid_harness("fixture generation cleanup leaked an active timer"));
     }
-    events.push(canonical_named_event(
-        &profile.profile_ref,
-        CanonicalTimeEventKind::Timer,
-        FIXTURE_GENERATION,
-        "timer-generation-cleanup",
-        "no-leaks",
-        clock.now_ticks()?,
-    )?);
+    events.push(canonical_named_event(EventHeader {
+        profile_ref: &profile.profile_ref,
+        kind: CanonicalTimeEventKind::Timer,
+        generation: FIXTURE_GENERATION,
+        subject: "timer-generation-cleanup",
+        action: "no-leaks",
+        ticks: clock.now_ticks()?,
+    })?);
     counters.timer_events = checked_increment(counters.timer_events, "timer event count")?;
 
     run_scheduler_scenario(profile, events, &mut counters)?;
@@ -455,14 +455,14 @@ fn run_scheduler_scenario(
     ) {
         return Err(crate::error::MoltenError::invalid_harness("fixture scheduler accepted a divergent replay choice"));
     }
-    events.push(canonical_named_event(
-        &profile.profile_ref,
-        CanonicalTimeEventKind::Scheduler,
-        FIXTURE_GENERATION,
-        "scheduler-replay",
-        "divergence-detected",
-        state.choice_sequence,
-    )?);
+    events.push(canonical_named_event(EventHeader {
+        profile_ref: &profile.profile_ref,
+        kind: CanonicalTimeEventKind::Scheduler,
+        generation: FIXTURE_GENERATION,
+        subject: "scheduler-replay",
+        action: "divergence-detected",
+        ticks: state.choice_sequence,
+    })?);
     counters.scheduler_events = checked_increment(counters.scheduler_events, "scheduler event count")?;
     events.push(canonical_scheduler_selection(&profile.profile_ref, &selection)?);
     counters.scheduler_events = checked_increment(counters.scheduler_events, "scheduler event count")?;
@@ -504,14 +504,14 @@ fn run_scheduler_scenario(
         .map_err(|error| core_error("probe saturated fixture scheduler", error))?;
     validate_scheduler_fault_outcome(&saturation_fault, &overload)?;
     events.push(canonical_scheduler_transition(&profile.profile_ref, &overload)?);
-    events.push(canonical_named_event(
-        &profile.profile_ref,
-        CanonicalTimeEventKind::Fault,
-        FIXTURE_GENERATION,
-        "scheduler-queue",
-        "saturated",
-        profile.profile.max_scheduler_queue_depth,
-    )?);
+    events.push(canonical_named_event(EventHeader {
+        profile_ref: &profile.profile_ref,
+        kind: CanonicalTimeEventKind::Fault,
+        generation: FIXTURE_GENERATION,
+        subject: "scheduler-queue",
+        action: "saturated",
+        ticks: profile.profile.max_scheduler_queue_depth,
+    })?);
     counters.scheduler_events = checked_increment(counters.scheduler_events, "scheduler event count")?;
     counters.fault_events = checked_increment(counters.fault_events, "fault event count")?;
     Ok(())
@@ -657,22 +657,22 @@ pub(super) fn retry_events(
         jitter,
     )
     .map_err(|error| core_error("plan fixture retry", error))?;
-    let deadline = canonical_named_event(
-        &profile.profile_ref,
-        CanonicalTimeEventKind::Deadline,
-        FIXTURE_GENERATION,
-        "fixture-retry",
-        "retry-planned",
-        retry.deadline.target.ticks(),
-    )?;
-    let delay = canonical_named_event(
-        &profile.profile_ref,
-        CanonicalTimeEventKind::Deadline,
-        FIXTURE_GENERATION,
-        "fixture-retry",
-        "retry-delay",
-        retry.delay.ticks,
-    )?;
+    let deadline = canonical_named_event(EventHeader {
+        profile_ref: &profile.profile_ref,
+        kind: CanonicalTimeEventKind::Deadline,
+        generation: FIXTURE_GENERATION,
+        subject: "fixture-retry",
+        action: "retry-planned",
+        ticks: retry.deadline.target.ticks(),
+    })?;
+    let delay = canonical_named_event(EventHeader {
+        profile_ref: &profile.profile_ref,
+        kind: CanonicalTimeEventKind::Deadline,
+        generation: FIXTURE_GENERATION,
+        subject: "fixture-retry",
+        action: "retry-delay",
+        ticks: retry.delay.ticks,
+    })?;
     Ok([deadline, delay])
 }
 
@@ -695,14 +695,14 @@ fn run_clock_partition_faults(
     })
     .map_err(|error| core_error("classify injected wall jump", error))?;
     events.push(canonical_clock_anomaly_event(&profile.profile_ref, FIXTURE_GENERATION, &anomaly)?);
-    events.push(canonical_named_event(
-        &profile.profile_ref,
-        CanonicalTimeEventKind::Fault,
-        FIXTURE_GENERATION,
-        "wall-clock",
-        "backward-jump-injected",
-        WALL_JUMP_FAULT,
-    )?);
+    events.push(canonical_named_event(EventHeader {
+        profile_ref: &profile.profile_ref,
+        kind: CanonicalTimeEventKind::Fault,
+        generation: FIXTURE_GENERATION,
+        subject: "wall-clock",
+        action: "backward-jump-injected",
+        ticks: WALL_JUMP_FAULT,
+    })?);
     counters.fault_events = checked_increment(counters.fault_events, "fault event count")?;
 
     let partition_until = clock
@@ -733,22 +733,22 @@ fn run_clock_partition_faults(
             "partition fault did not make the coupled deadline indeterminate",
         ));
     }
-    events.push(canonical_named_event(
-        &profile.profile_ref,
-        CanonicalTimeEventKind::Fault,
-        FIXTURE_GENERATION,
-        "partition-window",
-        "deadline-indeterminate",
-        partition_until,
-    )?);
-    events.push(canonical_named_event(
-        &profile.profile_ref,
-        CanonicalTimeEventKind::Deadline,
-        FIXTURE_GENERATION,
-        "partition-coupled-deadline",
-        "indeterminate-during-partition",
-        partition_deadline_ticks,
-    )?);
+    events.push(canonical_named_event(EventHeader {
+        profile_ref: &profile.profile_ref,
+        kind: CanonicalTimeEventKind::Fault,
+        generation: FIXTURE_GENERATION,
+        subject: "partition-window",
+        action: "deadline-indeterminate",
+        ticks: partition_until,
+    })?);
+    events.push(canonical_named_event(EventHeader {
+        profile_ref: &profile.profile_ref,
+        kind: CanonicalTimeEventKind::Deadline,
+        generation: FIXTURE_GENERATION,
+        subject: "partition-coupled-deadline",
+        action: "indeterminate-during-partition",
+        ticks: partition_deadline_ticks,
+    })?);
     counters.fault_events = checked_increment(counters.fault_events, "fault event count")?;
     counters.deadline_lease_events = checked_increment(counters.deadline_lease_events, "deadline/lease event count")?;
     Ok(())

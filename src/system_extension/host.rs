@@ -140,6 +140,24 @@ pub struct SystemExtensionHost<E: SystemExtensionExecutor> {
     last_lifecycle_ref: Option<String>,
 }
 
+pub struct RecoveredState {
+    pub state: super::LifecycleState,
+    pub usage: super::ResourceUsage,
+    pub invocation_sequence: u64,
+    pub event_sequence: u64,
+    pub semantic_state_ref: Option<String>,
+    pub last_lifecycle_ref: Option<String>,
+}
+
+struct InvocationFailureInput<'a> {
+    invocation: &'a super::CallbackInvocation,
+    accounted_bytes: u64,
+    decision: super::CallbackExecutionDecision,
+    diagnostic: &'static str,
+    outcome: Option<&'a super::CallbackOutcome>,
+    failure_class: super::FailureClass,
+}
+
 impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
     // r[impl molten.system_extension.execution_profiles]
     pub fn new(admitted: super::CanonicalAdmittedSystemExtensionManifest, executor: E) -> crate::error::Result<Self> {
@@ -175,13 +193,16 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
     pub fn from_recovered_state(
         admitted: super::CanonicalAdmittedSystemExtensionManifest,
         executor: E,
-        state: super::LifecycleState,
-        usage: super::ResourceUsage,
-        invocation_sequence: u64,
-        event_sequence: u64,
-        semantic_state_ref: Option<String>,
-        last_lifecycle_ref: Option<String>,
+        input: RecoveredState,
     ) -> crate::error::Result<Self> {
+        let RecoveredState {
+            state,
+            usage,
+            invocation_sequence,
+            event_sequence,
+            semantic_state_ref,
+            last_lifecycle_ref,
+        } = input;
         let actual = executor.execution_profile();
         let expected = admitted.manifest().execution_profile;
         if actual != expected {
@@ -314,25 +335,25 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
 
         let execution = self.executor.invoke(&invocation);
         match execution {
-            Err(_executor_error) => self.fail_invocation(
-                &invocation,
-                event.accounted_bytes,
-                super::CallbackExecutionDecision::ExecutorFailed,
-                EXECUTOR_ERROR_DIAGNOSTIC,
-                None,
-                super::FailureClass::Retryable,
-            ),
+            Err(_executor_error) => self.fail_invocation(InvocationFailureInput {
+                invocation: &invocation,
+                accounted_bytes: event.accounted_bytes,
+                decision: super::CallbackExecutionDecision::ExecutorFailed,
+                diagnostic: EXECUTOR_ERROR_DIAGNOSTIC,
+                outcome: None,
+                failure_class: super::FailureClass::Retryable,
+            }),
             Ok(outcome) => {
                 let outcome_issues = super::validate_callback_outcome(self.admitted.manifest(), &invocation, &outcome);
                 if !outcome_issues.is_empty() {
-                    return self.fail_invocation(
-                        &invocation,
-                        event.accounted_bytes,
-                        super::CallbackExecutionDecision::OutcomeDenied,
-                        OUTCOME_DENIED_DIAGNOSTIC,
-                        Some(&outcome),
-                        super::FailureClass::PolicyViolation,
-                    );
+                    return self.fail_invocation(InvocationFailureInput {
+                        invocation: &invocation,
+                        accounted_bytes: event.accounted_bytes,
+                        decision: super::CallbackExecutionDecision::OutcomeDenied,
+                        diagnostic: OUTCOME_DENIED_DIAGNOSTIC,
+                        outcome: Some(&outcome),
+                        failure_class: super::FailureClass::PolicyViolation,
+                    });
                 }
                 let reserved = super::reserve_effect_requests(
                     &self.admitted.manifest().resources,
@@ -342,25 +363,25 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
                 let reserved = match reserved {
                     Ok(usage) => usage,
                     Err(_resource_issues) => {
-                        return self.fail_invocation(
-                            &invocation,
-                            event.accounted_bytes,
-                            super::CallbackExecutionDecision::OutcomeDenied,
-                            OUTCOME_DENIED_DIAGNOSTIC,
-                            Some(&outcome),
-                            super::FailureClass::ResourceViolation,
-                        );
+                        return self.fail_invocation(InvocationFailureInput {
+                            invocation: &invocation,
+                            accounted_bytes: event.accounted_bytes,
+                            decision: super::CallbackExecutionDecision::OutcomeDenied,
+                            diagnostic: OUTCOME_DENIED_DIAGNOSTIC,
+                            outcome: Some(&outcome),
+                            failure_class: super::FailureClass::ResourceViolation,
+                        });
                     }
                 };
                 if self.executor.commit_admitted_outcome(&invocation, &outcome).is_err() {
-                    return self.fail_invocation(
-                        &invocation,
-                        event.accounted_bytes,
-                        super::CallbackExecutionDecision::ExecutorFailed,
-                        EXECUTOR_ERROR_DIAGNOSTIC,
-                        Some(&outcome),
-                        super::FailureClass::Retryable,
-                    );
+                    return self.fail_invocation(InvocationFailureInput {
+                        invocation: &invocation,
+                        accounted_bytes: event.accounted_bytes,
+                        decision: super::CallbackExecutionDecision::ExecutorFailed,
+                        diagnostic: EXECUTOR_ERROR_DIAGNOSTIC,
+                        outcome: Some(&outcome),
+                        failure_class: super::FailureClass::Retryable,
+                    });
                 }
                 self.usage = super::release_callback_resources(reserved, event.accounted_bytes, outcome.effects.len())
                     .map_err(|issues| validation_error("callback resource release", &issues))?;
@@ -717,14 +738,14 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         let deadline_tick = logical_tick
             .checked_add(self.admitted.manifest().resources.callback_deadline_ticks)
             .ok_or_else(|| crate::error::MoltenError::invalid_harness("system-extension callback deadline overflow"))?;
-        let value = super::callback_event_value(
+        let value = super::callback_event_value(super::CallbackEventInput {
             callback,
-            self.state.generation,
-            event_sequence,
+            generation: self.state.generation,
+            sequence: event_sequence,
             payload_ref,
             logical_tick,
             deadline_tick,
-        );
+        });
         let event_ref = crate::preserves_rail::canonical_hash(&value)?;
         self.event_sequence = event_sequence;
         Ok(super::CallbackEvent {
@@ -739,15 +760,15 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         })
     }
 
-    fn fail_invocation(
-        &mut self,
-        invocation: &super::CallbackInvocation,
-        accounted_bytes: u64,
-        decision: super::CallbackExecutionDecision,
-        diagnostic: &'static str,
-        outcome: Option<&super::CallbackOutcome>,
-        failure_class: super::FailureClass,
-    ) -> crate::error::Result<HostDispatchResult> {
+    fn fail_invocation(&mut self, input: InvocationFailureInput<'_>) -> crate::error::Result<HostDispatchResult> {
+        let InvocationFailureInput {
+            invocation,
+            accounted_bytes,
+            decision,
+            diagnostic,
+            outcome,
+            failure_class,
+        } = input;
         self.usage = super::release_callback_resources(self.usage, accounted_bytes, 0)
             .map_err(|issues| validation_error("failed callback resource release", &issues))?;
         let receipt = super::canonical_callback_receipt(super::CallbackReceiptInput {
@@ -796,15 +817,15 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
             self.admitted.manifest().resources.max_restart_attempts,
         )
         .map_err(|issues| validation_error("lifecycle transition", &issues))?;
-        let receipt = super::canonical_lifecycle_receipt(
-            self.admitted.manifest_ref(),
-            &self.admitted.manifest().extension_id,
-            &self.admitted.manifest().service_id,
-            &previous,
-            &next,
-            &event,
-            self.usage,
-        )?;
+        let receipt = super::canonical_lifecycle_receipt(super::LifecycleReceiptInput {
+            manifest_ref: self.admitted.manifest_ref(),
+            extension_id: &self.admitted.manifest().extension_id,
+            service_id: &self.admitted.manifest().service_id,
+            previous: &previous,
+            next: &next,
+            event: &event,
+            usage: self.usage,
+        })?;
         self.state = next;
         self.last_lifecycle_ref = Some(receipt.receipt_ref.clone());
         self.record_evidence(HostEvidence::Lifecycle(receipt.clone()))?;

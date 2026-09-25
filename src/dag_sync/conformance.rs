@@ -158,14 +158,14 @@ impl DagFabricTransportAdapter {
             }
             DagTransportMechanism::IrohLive { adapter, runtime } => {
                 runtime
-                    .block_on(adapter.live_loopback_frame(
-                        &self.session_id,
-                        &self.stream_id,
-                        DAG_TRANSPORT_OPERATION_REF,
-                        DAG_TRANSPORT_ALPN,
-                        &payload,
-                        observed_tick(request.sequence)?,
-                    ))?
+                    .block_on(adapter.live_loopback_frame(LoopbackFrameInput {
+                        session_id: &self.session_id,
+                        stream_id: &self.stream_id,
+                        operation_id: DAG_TRANSPORT_OPERATION_REF,
+                        alpn: DAG_TRANSPORT_ALPN,
+                        payload: &payload,
+                        observed_tick: observed_tick(request.sequence)?,
+                    }))?
                     .acknowledged
                     .transition_ref
             }

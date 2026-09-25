@@ -93,14 +93,13 @@ fn production_sign_verify_binds_domain_and_denies_wrong_purpose_or_payload() {
     let signature = sign_federation_payload(&adapter, &key.handle.handle, &signed_domain, &test_ref("sign-policy"))
         .expect("production federation signature");
     let verified = adapter
-        .verify(
-            &key.public_key,
-            &signed_domain,
-            &signature,
-            KeyCurrentness::Current,
-            key.handle.handle.generation,
-            &test_ref("verify-policy"),
-        )
+        .verify(&key.public_key, VerificationInput {
+            expected_domain: &signed_domain,
+            signature: &signature,
+            signer_currentness: KeyCurrentness::Current,
+            signer_generation: key.handle.handle.generation,
+            policy_ref: &test_ref("verify-policy"),
+        })
         .expect("verification outcome");
     assert_eq!(verified.decision.kind, VerificationDecisionKind::Accept);
     admit_federation_verification(&verified).expect("federation verification admission");
@@ -117,14 +116,13 @@ fn production_sign_verify_binds_domain_and_denies_wrong_purpose_or_payload() {
         .resolve_or_generate(KeyPurpose::FederationOrigin, &test_ref("generation-policy"), true)
         .expect("other federation key");
     let wrong_key = adapter
-        .verify(
-            &other_key.public_key,
-            &signed_domain,
-            &signature,
-            KeyCurrentness::Current,
-            key.handle.handle.generation,
-            &test_ref("verify-policy"),
-        )
+        .verify(&other_key.public_key, VerificationInput {
+            expected_domain: &signed_domain,
+            signature: &signature,
+            signer_currentness: KeyCurrentness::Current,
+            signer_generation: key.handle.handle.generation,
+            policy_ref: &test_ref("verify-policy"),
+        })
         .expect("wrong key outcome");
     assert_eq!(wrong_key.decision.kind, VerificationDecisionKind::Deny);
     assert!(wrong_key.decision.issues.contains(&CryptoIdentityIssue::SignerPublicRefMismatch));
@@ -132,40 +130,37 @@ fn production_sign_verify_binds_domain_and_denies_wrong_purpose_or_payload() {
     let mut malformed_signature = signature.clone();
     malformed_signature.signature = b"not-an-ed25519-signature".to_vec();
     let malformed = adapter
-        .verify(
-            &key.public_key,
-            &signed_domain,
-            &malformed_signature,
-            KeyCurrentness::Current,
-            key.handle.handle.generation,
-            &test_ref("verify-policy"),
-        )
+        .verify(&key.public_key, VerificationInput {
+            expected_domain: &signed_domain,
+            signature: &malformed_signature,
+            signer_currentness: KeyCurrentness::Current,
+            signer_generation: key.handle.handle.generation,
+            policy_ref: &test_ref("verify-policy"),
+        })
         .expect_err("malformed signature outcome denied");
     assert!(malformed.to_string().contains("canonical Preserves identity"));
 
     let mut inconsistent_domain = signed_domain.clone();
     inconsistent_domain.bytes = b"non-canonical-domain-bytes".to_vec();
     let inconsistent = adapter
-        .verify(
-            &key.public_key,
-            &inconsistent_domain,
-            &signature,
-            KeyCurrentness::Current,
-            key.handle.handle.generation,
-            &test_ref("verify-policy"),
-        )
+        .verify(&key.public_key, VerificationInput {
+            expected_domain: &inconsistent_domain,
+            signature: &signature,
+            signer_currentness: KeyCurrentness::Current,
+            signer_generation: key.handle.handle.generation,
+            policy_ref: &test_ref("verify-policy"),
+        })
         .expect_err("inconsistent canonical domain denied");
     assert!(inconsistent.to_string().contains("canonical Preserves identity"));
 
     let revoked = adapter
-        .verify(
-            &key.public_key,
-            &signed_domain,
-            &signature,
-            KeyCurrentness::Revoked,
-            key.handle.handle.generation,
-            &test_ref("verify-policy"),
-        )
+        .verify(&key.public_key, VerificationInput {
+            expected_domain: &signed_domain,
+            signature: &signature,
+            signer_currentness: KeyCurrentness::Revoked,
+            signer_generation: key.handle.handle.generation,
+            policy_ref: &test_ref("verify-policy"),
+        })
         .expect("revoked outcome");
     assert_eq!(revoked.decision.kind, VerificationDecisionKind::Deny);
     assert!(revoked.decision.issues.contains(&CryptoIdentityIssue::HandleNotCurrent(KeyCurrentness::Revoked)));
@@ -185,14 +180,13 @@ fn production_sign_verify_binds_domain_and_denies_wrong_purpose_or_payload() {
         "tampered-inventory",
     );
     let tampered = adapter
-        .verify(
-            &key.public_key,
-            &tampered_domain,
-            &signature,
-            KeyCurrentness::Current,
-            key.handle.handle.generation,
-            &test_ref("verify-policy"),
-        )
+        .verify(&key.public_key, VerificationInput {
+            expected_domain: &tampered_domain,
+            signature: &signature,
+            signer_currentness: KeyCurrentness::Current,
+            signer_generation: key.handle.handle.generation,
+            policy_ref: &test_ref("verify-policy"),
+        })
         .expect("tamper decision");
     assert_eq!(tampered.decision.kind, VerificationDecisionKind::Deny);
     assert!(tampered.decision.issues.contains(&CryptoIdentityIssue::PayloadRefMismatch));
@@ -263,14 +257,13 @@ fn evidence_signature_wrapper_consumes_only_canonical_outcomes() {
     let signature = sign_evidence_payload(&adapter, &key.handle.handle, &signed_domain, &test_ref("sign-policy"))
         .expect("evidence signature");
     let verified = adapter
-        .verify(
-            &key.public_key,
-            &signed_domain,
-            &signature,
-            KeyCurrentness::Current,
-            key.handle.handle.generation,
-            &test_ref("verify-policy"),
-        )
+        .verify(&key.public_key, VerificationInput {
+            expected_domain: &signed_domain,
+            signature: &signature,
+            signer_currentness: KeyCurrentness::Current,
+            signer_generation: key.handle.handle.generation,
+            policy_ref: &test_ref("verify-policy"),
+        })
         .expect("verification outcome");
     admit_evidence_verification(&verified).expect("evidence verification admission");
     assert!(admit_federation_verification(&verified).is_err());

@@ -59,15 +59,15 @@ impl ContentPort for SimulatedContent {
     ) -> crate::error::Result<VerificationObservation> {
         self.events.borrow_mut().push("simulated-content");
         let command = command(&self.profile, &self.descriptor, action)?;
-        let execution = execute_simulated_stream(
-            &self.profile,
-            &self.descriptor,
-            &command,
-            GENERATION,
-            None,
-            &self.chunks,
-            self.fault,
-        )?;
+        let execution = execute_simulated_stream(SimulatedStreamInput {
+            profile: &self.profile,
+            manifest: &self.descriptor,
+            command: &command,
+            generation: GENERATION,
+            retained: None,
+            chunks: &self.chunks,
+            fault: self.fault,
+        })?;
         if !content_is_available(&self.descriptor, &execution.state.artifact) {
             return Err(crate::error::MoltenError::invalid_harness(
                 "simulated replication content did not become verified",
