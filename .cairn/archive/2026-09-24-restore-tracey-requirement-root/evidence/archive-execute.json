@@ -1,0 +1,201 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: restore-tracey-requirement-root",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-09-24-restore-tracey-requirement-root"
+    }
+  ],
+  "blocked": false,
+  "change": "restore-tracey-requirement-root",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "f9ba0a3d59da8493ec9f0a90d2b51efc0d36adc87fe4b7d129ffbd953472ddcd",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "54cc32716905aaa7773a65c761ad5a6f18a6e77eca572caa362dc788d2e85c2a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-tracey-requirement-root/design.md"
+        },
+        {
+          "content_hash": "bad29b7c91167b5d99bcbc18d90773390811f638670f85d197574ae673f9b4d0",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-tracey-requirement-root/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "ba44ff346b77810de0ea4de645106aad6e7f985b00878a846784de0f43e97fa0",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-tracey-requirement-root/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "9a3ca00f1e0826af0e36dca2e25e98bf41a0a9b659eded07327a5d197d1325c0",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-tracey-requirement-root/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "230e053518902c8f805b5d553c35c8e5bb5aa2a99769eea9f4f88521bc1e720a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-tracey-requirement-root/evidence/marker-justifications.json"
+        },
+        {
+          "content_hash": "8575d2c7b4446fb4a07d6cad9b95d0c116560f2a6f0fcf021f1a5a308e3729a1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-tracey-requirement-root/evidence/review.md"
+        },
+        {
+          "content_hash": "71876541fbde9e2c0fd7e21ca684bbf4414c6946df96439667917d1bdc78f2a2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-tracey-requirement-root/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "d653b76c4a5e7dfaef6465470e2c9ccc4cef454def37458a3d890f7189368339",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-tracey-requirement-root/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "4e963554f5c4631481b893fb44c43f43b2d814dbf0e609490ee73ca6bc61c9a8",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-tracey-requirement-root/evidence/verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-tracey-requirement-root/metadata.json"
+        },
+        {
+          "content_hash": "7c3283f2ec94b16f7f61130302f176bfce58a65def9c70485cec0ae287aaa58b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-tracey-requirement-root/proposal.md"
+        },
+        {
+          "content_hash": "7c1657bdcafb724fc67fd51e468863a5e9f39c32ff3f167da03fc3c8ee3b6238",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-tracey-requirement-root/specs/object-store-cas-coordinator/spec.md"
+        },
+        {
+          "content_hash": "f9412aa6369f7dd2a7af48dc3ceb09c979adaada5222be65ccf0c322d7f90107",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-24-restore-tracey-requirement-root/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/restore-tracey-requirement-root"
+        }
+      ],
+      "manifest_hash": "d24d11f65cf82138b489aae7ab72e9744de5ed46c39dea20dd715f8028b66ed1"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "54cc32716905aaa7773a65c761ad5a6f18a6e77eca572caa362dc788d2e85c2a",
+          "exists": true,
+          "path": "./.cairn/changes/restore-tracey-requirement-root/design.md"
+        },
+        {
+          "content_hash": "bad29b7c91167b5d99bcbc18d90773390811f638670f85d197574ae673f9b4d0",
+          "exists": true,
+          "path": "./.cairn/changes/restore-tracey-requirement-root/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "ba44ff346b77810de0ea4de645106aad6e7f985b00878a846784de0f43e97fa0",
+          "exists": true,
+          "path": "./.cairn/changes/restore-tracey-requirement-root/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "9a3ca00f1e0826af0e36dca2e25e98bf41a0a9b659eded07327a5d197d1325c0",
+          "exists": true,
+          "path": "./.cairn/changes/restore-tracey-requirement-root/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "230e053518902c8f805b5d553c35c8e5bb5aa2a99769eea9f4f88521bc1e720a",
+          "exists": true,
+          "path": "./.cairn/changes/restore-tracey-requirement-root/evidence/marker-justifications.json"
+        },
+        {
+          "content_hash": "8575d2c7b4446fb4a07d6cad9b95d0c116560f2a6f0fcf021f1a5a308e3729a1",
+          "exists": true,
+          "path": "./.cairn/changes/restore-tracey-requirement-root/evidence/review.md"
+        },
+        {
+          "content_hash": "71876541fbde9e2c0fd7e21ca684bbf4414c6946df96439667917d1bdc78f2a2",
+          "exists": true,
+          "path": "./.cairn/changes/restore-tracey-requirement-root/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "d653b76c4a5e7dfaef6465470e2c9ccc4cef454def37458a3d890f7189368339",
+          "exists": true,
+          "path": "./.cairn/changes/restore-tracey-requirement-root/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "4e963554f5c4631481b893fb44c43f43b2d814dbf0e609490ee73ca6bc61c9a8",
+          "exists": true,
+          "path": "./.cairn/changes/restore-tracey-requirement-root/evidence/verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/restore-tracey-requirement-root/metadata.json"
+        },
+        {
+          "content_hash": "7c3283f2ec94b16f7f61130302f176bfce58a65def9c70485cec0ae287aaa58b",
+          "exists": true,
+          "path": "./.cairn/changes/restore-tracey-requirement-root/proposal.md"
+        },
+        {
+          "content_hash": "7c1657bdcafb724fc67fd51e468863a5e9f39c32ff3f167da03fc3c8ee3b6238",
+          "exists": true,
+          "path": "./.cairn/changes/restore-tracey-requirement-root/specs/object-store-cas-coordinator/spec.md"
+        },
+        {
+          "content_hash": "f9412aa6369f7dd2a7af48dc3ceb09c979adaada5222be65ccf0c322d7f90107",
+          "exists": true,
+          "path": "./.cairn/changes/restore-tracey-requirement-root/tasks.md"
+        }
+      ],
+      "manifest_hash": "8d43bb4848c3ffad30c7413f0f1115206513ce86183208168e2ac5f64b6a6703"
+    },
+    "kind": "archive",
+    "manifest_hash": "4e46199a099c1078562272cdee806cdb7adb7799d70d62ee03d165e6e17e6f70"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "00623518c8dd5bc10b41df80c4e0826c46ea9d12b54f02ce2b8f635c5d43d232",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "46eb8d2b6a17d34d1d99529447ce924b1f2f302abf45988ff0889493b27c084e",
+  "reasons": [],
+  "receipt_hash": "54e9ab37ac40221c8c8a0487bef3d8bf42ca2468c741fe5ef811f202e332f8de",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

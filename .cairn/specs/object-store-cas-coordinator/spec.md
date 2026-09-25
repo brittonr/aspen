@@ -6,9 +6,9 @@ Defines the `object-store-cas-coordinator` capability.
 
 ## Requirements
 
-### Requirement: Ownership is a single CAS lease [r[aspen.cas.contract]]
+### Requirement: Ownership is a single CAS lease
 
-In the durable-store-coordinated mode, ownership transfer MUST be a single compare-and-swap lease in a durable dataspace. There MUST be no fixed membership list.
+r[aspen.cas.contract] In the durable-store-coordinated mode, ownership transfer MUST be a single compare-and-swap lease in a durable dataspace. There MUST be no fixed membership list.
 
 #### Scenario: Node claims the current lease
 
@@ -24,9 +24,9 @@ In the durable-store-coordinated mode, ownership transfer MUST be a single compa
 - THEN ownership MUST NOT change
 - AND the claimant MUST NOT damage the entity state
 
-### Requirement: The core decides from supplied values [r[aspen.cas.decision]]
+### Requirement: The core decides from supplied values
 
-The pure core MUST return acquire or reject from supplied current, expected, and proposed leases. It MUST read no store, clock, or network.
+r[aspen.cas.decision] The pure core MUST return acquire or reject from supplied current, expected, and proposed leases. It MUST read no store, clock, or network.
 
 #### Scenario: Expected lease matches and proposed epoch advances
 
@@ -43,9 +43,9 @@ The pure core MUST return acquire or reject from supplied current, expected, and
 - THEN the disposition MUST be reject
 - AND ownership MUST stay unchanged
 
-### Requirement: Decisions do not prove runtime correctness [r[aspen.cas.boundary]]
+### Requirement: Decisions do not prove runtime correctness
 
-A CAS lease decision MUST NOT prove runtime correctness, data integrity, or release readiness. A related CAS-arbiter reference MUST be bounded and non-parity.
+r[aspen.cas.boundary] A CAS lease decision MUST NOT prove runtime correctness, data integrity, or release readiness. A related CAS-arbiter reference MUST be bounded and non-parity.
 
 The reference MUST NOT impose a consensus or vendor requirement.
 
@@ -63,9 +63,9 @@ The reference MUST NOT impose a consensus or vendor requirement.
 - THEN verification MUST fail
 - AND the mechanism MUST stay an explicit extension-port option
 
-### Requirement: Failure coverage remains explicit [r[aspen.cas.verification]]
+### Requirement: Failure coverage remains explicit
 
-Positive and negative fixtures MUST cover every declared lease and boundary.
+r[aspen.cas.verification] Positive and negative fixtures MUST cover every declared lease and boundary.
 
 #### Scenario: Complete focused matrix passes
 

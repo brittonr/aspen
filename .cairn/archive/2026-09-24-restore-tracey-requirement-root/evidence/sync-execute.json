@@ -1,0 +1,142 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/restore-tracey-requirement-root/specs/object-store-cas-coordinator/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/restore-tracey-requirement-root/specs/object-store-cas-coordinator/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "restore-tracey-requirement-root",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/restore-tracey-requirement-root/specs/object-store-cas-coordinator/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "d1ce792a08065e269b47b361db67e600d2fa76d6bfc3763c89a926fdf3991a2a",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "87858bc887cd2cad012e6008f907c448e8d6cda1d29af75e8ed954254146e424",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "7c1657bdcafb724fc67fd51e468863a5e9f39c32ff3f167da03fc3c8ee3b6238",
+        "destination": ".cairn/specs/object-store-cas-coordinator/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "f3bf69cf71551fc613d040f37c064b405fa96f1f6a3e4c16a6a3456e389759bd",
+        "operations": [
+          {
+            "block_hash": "9ff5554473b4e036ba586ab6b1f54393cb6b8dbfe5b3ea18248d97c0beda71a7",
+            "heading": "### Requirement: Ownership is a single CAS lease",
+            "kind": "modified",
+            "requirement_id": "aspen.cas.contract"
+          },
+          {
+            "block_hash": "01de3f581af6212711a32886e366926104cfb4cc71c41ee52da685fe721bf8bb",
+            "heading": "### Requirement: The core decides from supplied values",
+            "kind": "modified",
+            "requirement_id": "aspen.cas.decision"
+          },
+          {
+            "block_hash": "b8bf942843390e057bb5d525eb0a17c6bf9918df9cb1df605c3e47df4822347a",
+            "heading": "### Requirement: Decisions do not prove runtime correctness",
+            "kind": "modified",
+            "requirement_id": "aspen.cas.boundary"
+          },
+          {
+            "block_hash": "60f1592c69cde1e748396545973c2a62e7bfdadb733b809b08cc99153789df70",
+            "heading": "### Requirement: Failure coverage remains explicit",
+            "kind": "modified",
+            "requirement_id": "aspen.cas.verification"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "modified",
+            "requirement_id": "aspen.cas.contract",
+            "state": "applied"
+          },
+          {
+            "kind": "modified",
+            "requirement_id": "aspen.cas.decision",
+            "state": "applied"
+          },
+          {
+            "kind": "modified",
+            "requirement_id": "aspen.cas.boundary",
+            "state": "applied"
+          },
+          {
+            "kind": "modified",
+            "requirement_id": "aspen.cas.verification",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/restore-tracey-requirement-root/specs/object-store-cas-coordinator/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "f3bf69cf71551fc613d040f37c064b405fa96f1f6a3e4c16a6a3456e389759bd",
+          "exists": true,
+          "path": "./.cairn/specs/object-store-cas-coordinator/spec.md"
+        }
+      ],
+      "manifest_hash": "de70cbfaf784a9c19d2e006af0b566c4753008fe4c12062a4fe0cd704d613056"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "87858bc887cd2cad012e6008f907c448e8d6cda1d29af75e8ed954254146e424",
+          "exists": true,
+          "path": "./.cairn/specs/object-store-cas-coordinator/spec.md"
+        }
+      ],
+      "manifest_hash": "a9fcc1cb54082cc732b6bb654a6bf21231a2b0032585979ce47e040feb340dd3"
+    },
+    "kind": "sync",
+    "manifest_hash": "4152e6223579935478b199700472b0c31f65faeacd98e7b6eb948cb59351a3ec"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "e13a5c02ffd431130f56ef2186db0de4f3796c7ed7110e7e66c8c250d00b4fdc",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "46eb8d2b6a17d34d1d99529447ce924b1f2f302abf45988ff0889493b27c084e",
+  "reasons": [],
+  "receipt_hash": "e9382cf10c61d959eee6b2892dac026908890c57d99ee2708927465326a4a6c6",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
