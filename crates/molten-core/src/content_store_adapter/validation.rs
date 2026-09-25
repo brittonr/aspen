@@ -226,14 +226,9 @@ fn validate_partition(
     state: &ContentPartialState,
     issues: &mut Vec<ContentIssue>,
 ) {
-    let manifest_refs = manifest.chunks.iter().map(|chunk| chunk.chunk_ref.as_str()).collect::<Vec<_>>();
-    let state_refs = state
-        .verified_chunk_refs
-        .iter()
-        .chain(&state.missing_chunk_refs)
-        .map(String::as_str)
-        .collect::<Vec<_>>();
-    if state_refs != manifest_refs {
+    let state_refs = state.verified_chunk_refs.iter().chain(&state.missing_chunk_refs).map(String::as_str);
+    let manifest_refs = manifest.chunks.iter().map(|chunk| chunk.chunk_ref.as_str());
+    if !state_refs.eq(manifest_refs) {
         issues.push(ContentIssue::PartialStateMismatch);
     }
 }

@@ -10,7 +10,7 @@ pub fn append_log(
     request: &AppendRequest,
 ) -> Result<DurableTransition, Vec<DurabilityIssue>> {
     let mut issues = state_issues(profile, state);
-    validate_request_scope(state, &request.adapter_id, &request.namespace_id, request.generation, &mut issues);
+    validate_request_scope(state, request, &mut issues);
     validate_level(profile, &state.descriptor.atomicity_domain, request.durability, &mut issues);
     validate_payload(profile, state, &request.value, &request.value_ref, &mut issues);
     match state.next_log_sequence() {
@@ -431,9 +431,17 @@ pub fn apply_effect_transaction(
             operation_ref,
             expires_at_tick,
             profile: effect_profile,
-        } => {
-            reserve_effect(state, transaction_id, *generation, operation_ref, *expires_at_tick, effect_profile, profile)
-        }
+        } => reserve_effect(
+            state,
+            ReserveEffect {
+                transaction_id,
+                generation: *generation,
+                operation_ref,
+                expires_at_tick: *expires_at_tick,
+                effect_profile,
+            },
+            profile,
+        ),
         EffectTransactionCommand::Commit { transaction_id, .. } => {
             transition_effect(state, transaction_id, EffectAction::Commit, None)
         }
@@ -542,20 +550,14 @@ fn state_issues(profile: &DurableStateProfile, state: &DurableState) -> Vec<Dura
     validate_namespace_descriptor(profile, &state.descriptor).err().unwrap_or_default()
 }
 
-fn validate_request_scope(
-    state: &DurableState,
-    adapter_id: &str,
-    namespace_id: &str,
-    generation: u64,
-    issues: &mut Vec<DurabilityIssue>,
-) {
-    if adapter_id != state.descriptor.adapter_id {
+fn validate_request_scope(state: &DurableState, request: &AppendRequest, issues: &mut Vec<DurabilityIssue>) {
+    if request.adapter_id != state.descriptor.adapter_id {
         issues.push(DurabilityIssue::AdapterMismatch);
     }
-    if namespace_id != state.descriptor.namespace_id {
+    if request.namespace_id != state.descriptor.namespace_id {
         issues.push(DurabilityIssue::NamespaceMismatch);
     }
-    validate_generation(state, generation, issues);
+    validate_generation(state, request.generation, issues);
 }
 
 fn validate_generation(state: &DurableState, generation: u64, issues: &mut Vec<DurabilityIssue>) {
@@ -702,23 +704,27 @@ fn apply_ordered_mutation(state: &mut DurableState, mutation: &OrderedMutation) 
     Ok(())
 }
 
+struct ReserveEffect<'a> {
+    transaction_id: &'a str,
+    generation: u64,
+    operation_ref: &'a str,
+    expires_at_tick: Option<u64>,
+    effect_profile: &'a EffectTransactionProfile,
+}
+
 fn reserve_effect(
     state: &DurableState,
-    transaction_id: &str,
-    generation: u64,
-    operation_ref: &str,
-    expires_at_tick: Option<u64>,
-    effect_profile: &EffectTransactionProfile,
+    request: ReserveEffect<'_>,
     profile: &DurableStateProfile,
 ) -> Result<DurableTransition, Vec<DurabilityIssue>> {
     let mut issues = Vec::new();
-    if transaction_id.is_empty() {
+    if request.transaction_id.is_empty() {
         issues.push(DurabilityIssue::EmptyField("effect-transaction-id"));
     }
-    if !crate::fabric::valid_blake3_ref(operation_ref) {
+    if !crate::fabric::valid_blake3_ref(request.operation_ref) {
         issues.push(DurabilityIssue::MalformedContentRef("effect-operation-ref"));
     }
-    if state.effects.contains_key(transaction_id) {
+    if state.effects.contains_key(request.transaction_id) {
         issues.push(DurabilityIssue::EffectAlreadyExists);
     }
     let projected = u64::try_from(state.effects.len())
@@ -728,20 +734,20 @@ fn reserve_effect(
     if projected > profile.max_effect_transactions {
         issues.push(DurabilityIssue::EffectLimitExceeded);
     }
-    if effect_profile.expiring != expires_at_tick.is_some() {
+    if request.effect_profile.expiring != request.expires_at_tick.is_some() {
         issues.push(DurabilityIssue::MalformedField("effect-expiry"));
     }
     if !issues.is_empty() {
         return Err(issues);
     }
     let mut next = state.clone();
-    next.effects.insert(transaction_id.to_string(), EffectTransactionState {
-        transaction_id: transaction_id.to_string(),
-        generation,
-        operation_ref: operation_ref.to_string(),
+    next.effects.insert(request.transaction_id.to_string(), EffectTransactionState {
+        transaction_id: request.transaction_id.to_string(),
+        generation: request.generation,
+        operation_ref: request.operation_ref.to_string(),
         phase: EffectTransactionPhase::Reserved,
-        expires_at_tick,
-        profile: effect_profile.clone(),
+        expires_at_tick: request.expires_at_tick,
+        profile: request.effect_profile.clone(),
     });
     Ok(effect_transition(next, "effect-reserve", MutationOutcome::Durable, false))
 }

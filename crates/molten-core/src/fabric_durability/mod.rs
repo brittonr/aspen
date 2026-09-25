@@ -528,7 +528,13 @@ pub fn validate_durable_profile(profile: &DurableStateProfile) -> Result<(), Vec
     if profile.schema != DURABLE_STATE_PROFILE_SCHEMA {
         issues.push(DurabilityIssue::ProfileSchemaMismatch);
     }
-    validate_token("profile-id", &profile.profile_id, &mut issues);
+    validate_token(
+        TokenField {
+            name: "profile-id",
+            value: &profile.profile_id,
+        },
+        &mut issues,
+    );
     if !crate::fabric::valid_blake3_ref(&profile.profile_ref) {
         issues.push(DurabilityIssue::MalformedContentRef("profile-ref"));
     }
@@ -561,8 +567,20 @@ pub fn validate_namespace_descriptor(
     if descriptor.profile_ref != profile.profile_ref {
         issues.push(DurabilityIssue::MalformedContentRef("namespace-profile-ref"));
     }
-    validate_token("adapter-id", &descriptor.adapter_id, &mut issues);
-    validate_token("namespace-id", &descriptor.namespace_id, &mut issues);
+    validate_token(
+        TokenField {
+            name: "adapter-id",
+            value: &descriptor.adapter_id,
+        },
+        &mut issues,
+    );
+    validate_token(
+        TokenField {
+            name: "namespace-id",
+            value: &descriptor.namespace_id,
+        },
+        &mut issues,
+    );
     if descriptor.generation == 0 {
         issues.push(DurabilityIssue::ZeroLimit("generation"));
     }
@@ -585,7 +603,13 @@ fn validate_atomicity_domain(
     issues: &mut Vec<DurabilityIssue>,
 ) {
     let domain = &descriptor.atomicity_domain;
-    validate_token("atomicity-domain-id", &domain.domain_id, issues);
+    validate_token(
+        TokenField {
+            name: "atomicity-domain-id",
+            value: &domain.domain_id,
+        },
+        issues,
+    );
     if domain.adapter_id != descriptor.adapter_id {
         issues.push(DurabilityIssue::AdapterMismatch);
     }
@@ -624,11 +648,16 @@ fn validate_atomicity_domain(
     }
 }
 
-fn validate_token(field: &'static str, value: &str, issues: &mut Vec<DurabilityIssue>) {
-    if value.is_empty() {
-        issues.push(DurabilityIssue::EmptyField(field));
-    } else if value.len() > MAX_DURABILITY_TEXT_BYTES || !crate::fabric::valid_fabric_token(value) {
-        issues.push(DurabilityIssue::MalformedField(field));
+struct TokenField<'a> {
+    name: &'static str,
+    value: &'a str,
+}
+
+fn validate_token(token: TokenField<'_>, issues: &mut Vec<DurabilityIssue>) {
+    if token.value.is_empty() {
+        issues.push(DurabilityIssue::EmptyField(token.name));
+    } else if token.value.len() > MAX_DURABILITY_TEXT_BYTES || !crate::fabric::valid_fabric_token(token.value) {
+        issues.push(DurabilityIssue::MalformedField(token.name));
     }
 }
 

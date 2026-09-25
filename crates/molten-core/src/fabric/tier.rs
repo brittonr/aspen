@@ -136,8 +136,8 @@ pub fn validate_extension_tier(
     request: &ExtensionTierRequest,
 ) -> Result<ExtensionTierAdmission, Vec<ExtensionTierIssue>> {
     let mut issues = Vec::new();
-    validate_tier_bounds(request, &mut issues);
-    validate_authority_tier(request, &mut issues);
+    validate_bounds(request, &mut issues);
+    validate_authorities(request, &mut issues);
     validate_system_extension_evidence(request, &mut issues);
     if !issues.is_empty() {
         return Err(issues);
@@ -154,7 +154,7 @@ pub fn validate_extension_tier(
     })
 }
 
-fn validate_tier_bounds(request: &ExtensionTierRequest, issues: &mut Vec<ExtensionTierIssue>) {
+fn validate_bounds(request: &ExtensionTierRequest, issues: &mut Vec<ExtensionTierIssue>) {
     if request.requested_authorities.len() > super::MAX_FABRIC_COLLECTION_ITEMS {
         issues.push(ExtensionTierIssue::TooManyAuthorities {
             actual: request.requested_authorities.len(),
@@ -175,7 +175,7 @@ fn validate_tier_bounds(request: &ExtensionTierRequest, issues: &mut Vec<Extensi
     }
 }
 
-fn validate_authority_tier(request: &ExtensionTierRequest, issues: &mut Vec<ExtensionTierIssue>) {
+fn validate_authorities(request: &ExtensionTierRequest, issues: &mut Vec<ExtensionTierIssue>) {
     for authority in &request.requested_authorities {
         if authority.requires_system_extension() && request.tier != ExtensionTier::SystemExtension {
             issues.push(ExtensionTierIssue::AuthorityRequiresSystemExtension {

@@ -27,7 +27,16 @@ pub fn preflight_content_operation(
     issues.extend(validate_manifest_descriptor(manifest));
     validate_command_shape(command, &mut issues);
     validate_binding(profile, manifest, command, &mut issues);
-    validate_resources(profile, manifest, command, active_operations, queued_bytes, &mut issues);
+    validate_resources(
+        profile,
+        manifest,
+        command,
+        ResourceUsage {
+            active_operations,
+            queued_bytes,
+        },
+        &mut issues,
+    );
     let required_chunk_refs = required_chunks(manifest, command, &mut issues);
     let terminal = if command.cancelled || command.operation == ContentOperation::Cancel {
         issues.push(ContentIssue::Cancelled);
@@ -97,12 +106,16 @@ fn validate_binding(
     }
 }
 
+struct ResourceUsage {
+    active_operations: usize,
+    queued_bytes: u64,
+}
+
 fn validate_resources(
     profile: &ContentAdapterProfile,
     manifest: &ContentManifestDescriptor,
     command: &ContentCommand,
-    active_operations: usize,
-    queued_bytes: u64,
+    usage: ResourceUsage,
     issues: &mut Vec<ContentIssue>,
 ) {
     if manifest.total_length > profile.bounds.max_total_bytes || command.expected_bytes > profile.bounds.max_total_bytes
@@ -117,10 +130,10 @@ fn validate_resources(
     if manifest.chunks.iter().any(|chunk| chunk.length > profile.bounds.max_chunk_bytes) {
         issues.push(ContentIssue::ChunkBytesExceeded);
     }
-    if active_operations >= profile.bounds.max_concurrent_operations {
+    if usage.active_operations >= profile.bounds.max_concurrent_operations {
         issues.push(ContentIssue::ConcurrencyExceeded);
     }
-    match queued_bytes.checked_add(command.expected_bytes) {
+    match usage.queued_bytes.checked_add(command.expected_bytes) {
         Some(total) if total > profile.bounds.max_queued_bytes => issues.push(ContentIssue::QueueExceeded),
         Some(_) => {}
         None => issues.push(ContentIssue::ArithmeticOverflow),

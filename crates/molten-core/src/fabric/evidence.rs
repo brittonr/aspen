@@ -172,10 +172,10 @@ pub fn validate_fabric_evidence_profile(
     profile: &FabricEvidenceProfile,
 ) -> Result<FabricEvidenceProfileSummary, Vec<FabricEvidenceIssue>> {
     let mut issues = Vec::new();
-    validate_evidence_identity(profile, &mut issues);
-    validate_evidence_rules(profile, &mut issues);
+    validate_identity(profile, &mut issues);
+    validate_rules(profile, &mut issues);
     validate_aggregate_limit(profile, &mut issues);
-    validate_evidence_non_claims(profile, &mut issues);
+    validate_non_claims(profile, &mut issues);
     if !issues.is_empty() {
         return Err(issues);
     }
@@ -193,7 +193,7 @@ pub fn validate_fabric_evidence_profile(
     })
 }
 
-fn validate_evidence_identity(profile: &FabricEvidenceProfile, issues: &mut Vec<FabricEvidenceIssue>) {
+fn validate_identity(profile: &FabricEvidenceProfile, issues: &mut Vec<FabricEvidenceIssue>) {
     if profile.schema != FABRIC_EVIDENCE_PROFILE_SCHEMA {
         issues.push(FabricEvidenceIssue::SchemaMismatch {
             actual: profile.schema.clone(),
@@ -205,7 +205,7 @@ fn validate_evidence_identity(profile: &FabricEvidenceProfile, issues: &mut Vec<
     }
 }
 
-fn validate_evidence_rules(profile: &FabricEvidenceProfile, issues: &mut Vec<FabricEvidenceIssue>) {
+fn validate_rules(profile: &FabricEvidenceProfile, issues: &mut Vec<FabricEvidenceIssue>) {
     if profile.rules.len() > super::MAX_FABRIC_COLLECTION_ITEMS {
         issues.push(FabricEvidenceIssue::TooManyRules {
             actual: profile.rules.len(),
@@ -251,7 +251,7 @@ fn validate_aggregate_limit(profile: &FabricEvidenceProfile, issues: &mut Vec<Fa
     }
 }
 
-fn validate_evidence_non_claims(profile: &FabricEvidenceProfile, issues: &mut Vec<FabricEvidenceIssue>) {
+fn validate_non_claims(profile: &FabricEvidenceProfile, issues: &mut Vec<FabricEvidenceIssue>) {
     if profile.non_claims.len() > super::MAX_FABRIC_COLLECTION_ITEMS {
         issues.push(FabricEvidenceIssue::TooManyNonClaims {
             actual: profile.non_claims.len(),

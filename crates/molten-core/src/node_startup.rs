@@ -137,13 +137,22 @@ impl TrustedCohort {
             &c.octet_lints_blake3,
             &c.octet_rustc_blake3,
         ];
-        if self.schema != POLICY_SCHEMA
-            || hashes.iter().any(|s| !is_hex(s, 64))
-            || !is_hex(&c.source_revision, 40)
-            || c.octet_revision != OCTET_REVISION
-            || c.build_toolchain != "nightly-2026-05-26"
-            || c.octet_toolchain != "nightly-2026-03-21-x86_64-unknown-linux-gnu"
-        {
+        if self.schema != POLICY_SCHEMA {
+            return Err(Rejection::Policy);
+        }
+        if hashes.iter().any(|hash| !is_hex(hash, 64)) {
+            return Err(Rejection::Policy);
+        }
+        if !is_hex(&c.source_revision, 40) {
+            return Err(Rejection::Policy);
+        }
+        if c.octet_revision != OCTET_REVISION {
+            return Err(Rejection::Policy);
+        }
+        if c.build_toolchain != "nightly-2026-05-26" {
+            return Err(Rejection::Policy);
+        }
+        if c.octet_toolchain != "nightly-2026-03-21-x86_64-unknown-linux-gnu" {
             return Err(Rejection::Policy);
         }
         Ok(())
@@ -212,7 +221,10 @@ impl EvidencePlan {
     }
     pub fn verify_member(&self, index: usize, bytes: &[u8]) -> Result<(), Rejection> {
         let expected = self.members.get(index).ok_or(Rejection::MemberInventory)?;
-        if bytes.len() as u64 != expected.bytes || blake3::hash(bytes).to_hex().as_str() != expected.blake3 {
+        if bytes.len() as u64 != expected.bytes {
+            return Err(Rejection::MemberIdentity);
+        }
+        if blake3::hash(bytes).to_hex().as_str() != expected.blake3 {
             return Err(Rejection::MemberIdentity);
         }
         Ok(())
@@ -289,10 +301,8 @@ pub fn validate_build_inputs(files: &[SourceFile], inputs: &BuildInputs) -> Resu
             }
         }
         if unit.package == "molten-node-runtime" && unit.target == "bin/molten-node" {
-            has_binary = unit
-                .source_paths
-                .iter()
-                .any(|path| path == "crates/molten-node-runtime/src/bin/molten-node.rs");
+            has_binary =
+                unit.source_paths.iter().any(|path| path == "crates/molten-node-runtime/src/bin/molten-node.rs");
         }
         let mut previous_path: Option<&str> = None;
         for path in &unit.source_paths {
@@ -314,7 +324,9 @@ pub fn validate_build_inputs(files: &[SourceFile], inputs: &BuildInputs) -> Resu
     }
     source_paths.sort_unstable();
     source_paths.dedup();
-    if !source_paths.into_iter().eq(files.iter().filter(|file| file.name.ends_with(".rs")).map(|file| file.name.as_str()))
+    if !source_paths
+        .into_iter()
+        .eq(files.iter().filter(|file| file.name.ends_with(".rs")).map(|file| file.name.as_str()))
     {
         return Err(Rejection::SourceContext);
     }
@@ -329,13 +341,22 @@ pub fn validate_source_inventory(plan: &EvidencePlan, files: &[SourceFile]) -> R
     }
     let mut prior: Option<&str> = None;
     for file in files {
-        if file.name.len() > 512
-            || !is_hex(&file.blake3, 64)
-            || file.bytes > MAX_MEMBER_BYTES
-            || file.name.split('/').any(|s| s.is_empty() || s == "." || s == "..")
-            || !file.name.bytes().all(|b| b.is_ascii_alphanumeric() || b"._-/".contains(&b))
-            || prior.is_some_and(|name| name >= file.name.as_str())
-        {
+        if file.name.len() > 512 {
+            return Err(Rejection::SourceInventory);
+        }
+        if !is_hex(&file.blake3, 64) {
+            return Err(Rejection::SourceInventory);
+        }
+        if file.bytes > MAX_MEMBER_BYTES {
+            return Err(Rejection::SourceInventory);
+        }
+        if file.name.split('/').any(|segment| segment.is_empty() || segment == "." || segment == "..") {
+            return Err(Rejection::SourceInventory);
+        }
+        if !file.name.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"._-/".contains(&byte)) {
+            return Err(Rejection::SourceInventory);
+        }
+        if prior.is_some_and(|name| name >= file.name.as_str()) {
             return Err(Rejection::SourceInventory);
         }
         prior = Some(&file.name);

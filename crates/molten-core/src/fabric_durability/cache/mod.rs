@@ -66,12 +66,21 @@ pub struct AccessProjection<'a> {
 pub fn project_key(input: &AccessProjection<'_>) -> Result<String, Issue> {
     validate_projection(input)?;
     let mut hasher = blake3::Hasher::new_derive_key(KEY_CONTEXT);
-    hash_text(&mut hasher, "dataspace", input.dataspace_identity);
+    hash_text(&mut hasher, HashField {
+        label: "dataspace",
+        value: input.dataspace_identity,
+    });
     hash_number(&mut hasher, "argument-count", input.normalized_arguments.len());
     for argument in input.normalized_arguments {
-        hash_text(&mut hasher, "argument", argument);
+        hash_text(&mut hasher, HashField {
+            label: "argument",
+            value: argument,
+        });
     }
-    hash_text(&mut hasher, "capability", input.capability_context.unwrap_or("none"));
+    hash_text(&mut hasher, HashField {
+        label: "capability",
+        value: input.capability_context.unwrap_or("none"),
+    });
     Ok(format!("blake3:{}", hasher.finalize().to_hex()))
 }
 
@@ -154,10 +163,7 @@ pub fn plan_insertion(input: &InsertionInput<'_>) -> Result<InsertionPlan, Issue
     validate_unique_order(input.eviction_order)?;
 
     let retained_before_insert = retained_count(input.policy, input.active_count);
-    let eviction_count = input
-        .active_count
-        .checked_sub(retained_before_insert)
-        .ok_or(Issue::InvalidWatermarks)?;
+    let eviction_count = input.active_count.checked_sub(retained_before_insert).ok_or(Issue::InvalidWatermarks)?;
     let eviction_count = usize::try_from(eviction_count).map_err(|_| Issue::CountRepresentation)?;
     let mut evict_keys = Vec::with_capacity(eviction_count);
     for key in input.eviction_order {
@@ -195,16 +201,24 @@ fn validate_unique_order(keys: &[String]) -> Result<(), Issue> {
 }
 
 fn hash_number(hasher: &mut blake3::Hasher, label: &str, value: usize) {
-    hash_text(hasher, label, &value.to_string());
+    hash_text(hasher, HashField {
+        label,
+        value: &value.to_string(),
+    });
 }
 
-fn hash_text(hasher: &mut blake3::Hasher, label: &str, value: &str) {
-    hasher.update(label.len().to_string().as_bytes());
+struct HashField<'a> {
+    label: &'a str,
+    value: &'a str,
+}
+
+fn hash_text(hasher: &mut blake3::Hasher, field: HashField<'_>) {
+    hasher.update(field.label.len().to_string().as_bytes());
     hasher.update(b":");
-    hasher.update(label.as_bytes());
-    hasher.update(value.len().to_string().as_bytes());
+    hasher.update(field.label.as_bytes());
+    hasher.update(field.value.len().to_string().as_bytes());
     hasher.update(b":");
-    hasher.update(value.as_bytes());
+    hasher.update(field.value.as_bytes());
 }
 
 #[cfg(test)]

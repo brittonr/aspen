@@ -152,15 +152,15 @@ pub enum ReferenceMatrixIssue {
 
 pub fn default_reference_system_matrices() -> Vec<ReferenceSystemMatrix> {
     vec![
-        reference_matrix(ReferenceSystemKind::TransactionalKeyValue, &[
+        matrix_for(ReferenceSystemKind::TransactionalKeyValue, &[
             ReferenceSemantic::TransactionIsolation,
             ReferenceSemantic::ConflictResolution,
         ]),
-        reference_matrix(ReferenceSystemKind::ReplicatedLog, &[
+        matrix_for(ReferenceSystemKind::ReplicatedLog, &[
             ReferenceSemantic::ConsumerOffsets,
             ReferenceSemantic::LogRetention,
         ]),
-        reference_matrix(ReferenceSystemKind::DistributedScheduler, &[
+        matrix_for(ReferenceSystemKind::DistributedScheduler, &[
             ReferenceSemantic::SchedulingPolicy,
             ReferenceSemantic::TaskOwnership,
         ]),
@@ -187,7 +187,7 @@ pub fn validate_reference_system_matrices(
     Ok(ReferenceMatrixSummary { matrices: normalized })
 }
 
-fn reference_matrix(system: ReferenceSystemKind, semantics: &[ReferenceSemantic]) -> ReferenceSystemMatrix {
+fn matrix_for(system: ReferenceSystemKind, semantics: &[ReferenceSemantic]) -> ReferenceSystemMatrix {
     ReferenceSystemMatrix {
         schema: FABRIC_REFERENCE_MATRIX_SCHEMA.to_string(),
         system,

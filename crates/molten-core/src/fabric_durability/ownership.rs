@@ -142,15 +142,33 @@ fn decision_identity(
     rejection: Option<CasLeaseRejection>,
 ) -> String {
     let mut hasher = blake3::Hasher::new_derive_key(CAS_LEASE_DECISION_CONTEXT);
-    hash_text(&mut hasher, "current-owner", &input.current.owner);
+    hash_text(&mut hasher, HashField {
+        label: "current-owner",
+        value: &input.current.owner,
+    });
     hash_number(&mut hasher, "current-epoch", input.current.epoch);
-    hash_text(&mut hasher, "expected-owner", &input.expected.owner);
+    hash_text(&mut hasher, HashField {
+        label: "expected-owner",
+        value: &input.expected.owner,
+    });
     hash_number(&mut hasher, "expected-epoch", input.expected.epoch);
-    hash_text(&mut hasher, "proposed-owner", &input.proposed.owner);
+    hash_text(&mut hasher, HashField {
+        label: "proposed-owner",
+        value: &input.proposed.owner,
+    });
     hash_number(&mut hasher, "proposed-epoch", input.proposed.epoch);
-    hash_text(&mut hasher, "membership", membership_identity(input.membership));
-    hash_text(&mut hasher, "disposition", disposition.identity());
-    hash_text(&mut hasher, "rejection", rejection.map(CasLeaseRejection::identity).unwrap_or("none"));
+    hash_text(&mut hasher, HashField {
+        label: "membership",
+        value: membership_identity(input.membership),
+    });
+    hash_text(&mut hasher, HashField {
+        label: "disposition",
+        value: disposition.identity(),
+    });
+    hash_text(&mut hasher, HashField {
+        label: "rejection",
+        value: rejection.map(CasLeaseRejection::identity).unwrap_or("none"),
+    });
     format!("blake3:{}", hasher.finalize().to_hex())
 }
 
@@ -162,16 +180,24 @@ const fn membership_identity(posture: MembershipPosture) -> &'static str {
 }
 
 fn hash_number(hasher: &mut blake3::Hasher, label: &str, value: u64) {
-    hash_text(hasher, label, &value.to_string());
+    hash_text(hasher, HashField {
+        label,
+        value: &value.to_string(),
+    });
 }
 
-fn hash_text(hasher: &mut blake3::Hasher, label: &str, value: &str) {
-    hasher.update(label.len().to_string().as_bytes());
+struct HashField<'a> {
+    label: &'a str,
+    value: &'a str,
+}
+
+fn hash_text(hasher: &mut blake3::Hasher, field: HashField<'_>) {
+    hasher.update(field.label.len().to_string().as_bytes());
     hasher.update(b":");
-    hasher.update(label.as_bytes());
-    hasher.update(value.len().to_string().as_bytes());
+    hasher.update(field.label.as_bytes());
+    hasher.update(field.value.len().to_string().as_bytes());
     hasher.update(b":");
-    hasher.update(value.as_bytes());
+    hasher.update(field.value.as_bytes());
 }
 
 #[cfg(test)]

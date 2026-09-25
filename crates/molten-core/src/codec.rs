@@ -25,8 +25,7 @@ pub enum CodecIssue {
 
 const BLAKE3_REF_PREFIX: &str = "blake3:";
 const BLAKE3_HEX_CHAR_COUNT: usize = 64;
-const BLAKE3_REF_CHAR_COUNT: usize =
-    BLAKE3_REF_PREFIX.len().checked_add(BLAKE3_HEX_CHAR_COUNT).expect("bounded BLAKE3 reference length");
+const BLAKE3_REF_CHAR_COUNT: usize = BLAKE3_REF_PREFIX.len() + BLAKE3_HEX_CHAR_COUNT;
 
 pub fn validate_domain_artifact(input: &DomainArtifactInput<'_>) -> Result<DomainArtifactSummary, CodecIssue> {
     if input.domain.is_empty() {

@@ -126,22 +126,26 @@ fn map_statement_and_policy(
     Vec<String>,
 > {
     let request = input.request;
-    let key_identity = parse_ref(
-        artifact_auth_core::ED25519_PUBLIC_KEY_PROFILE_V1,
-        &request.observed.signer_public_ref,
-        "observed.signer_public_ref",
-    )?;
-    let subject = parse_ref(
-        &request.expected_domain.payload_schema,
-        &request.expected_domain.payload_ref,
-        "expected_domain.payload_ref",
-    )?;
-    let verifier_context = parse_ref(
-        MOLTEN_VERIFIER_CONTEXT_PROFILE,
-        &request.expected_domain.verifier_context_ref,
-        "expected_domain.verifier_context_ref",
-    )?;
-    let currentness_ref = parse_ref(MOLTEN_CURRENTNESS_PROFILE, input.currentness_ref, "currentness_ref")?;
+    let key_identity = parse_ref(RefInput {
+        profile: artifact_auth_core::ED25519_PUBLIC_KEY_PROFILE_V1,
+        value: &request.observed.signer_public_ref,
+        field: "observed.signer_public_ref",
+    })?;
+    let subject = parse_ref(RefInput {
+        profile: &request.expected_domain.payload_schema,
+        value: &request.expected_domain.payload_ref,
+        field: "expected_domain.payload_ref",
+    })?;
+    let verifier_context = parse_ref(RefInput {
+        profile: MOLTEN_VERIFIER_CONTEXT_PROFILE,
+        value: &request.expected_domain.verifier_context_ref,
+        field: "expected_domain.verifier_context_ref",
+    })?;
+    let currentness_ref = parse_ref(RefInput {
+        profile: MOLTEN_CURRENTNESS_PROFILE,
+        value: input.currentness_ref,
+        field: "currentness_ref",
+    })?;
     if input.profile.algorithm != super::CryptoAlgorithm::Ed25519Iroh {
         return Err(vec!["unsupported-production-algorithm".to_string()]);
     }
@@ -177,15 +181,21 @@ fn map_statement_and_policy(
     Ok((policy, scope, statement))
 }
 
-fn parse_ref(profile: &str, value: &str, field: &str) -> Result<artifact_auth_core::ArtifactRef, Vec<String>> {
-    let Some(digest_hex) = value.strip_prefix(BLAKE3_REF_PREFIX) else {
-        return Err(vec![format!("{field}:expected-blake3-ref")]);
+struct RefInput<'a> {
+    profile: &'a str,
+    value: &'a str,
+    field: &'static str,
+}
+
+fn parse_ref(input: RefInput<'_>) -> Result<artifact_auth_core::ArtifactRef, Vec<String>> {
+    let Some(digest_hex) = input.value.strip_prefix(BLAKE3_REF_PREFIX) else {
+        return Err(vec![format!("{}:expected-blake3-ref", input.field)]);
     };
-    if !crate::fabric::valid_blake3_ref(value) {
-        return Err(vec![format!("{field}:malformed-blake3-ref")]);
+    if !crate::fabric::valid_blake3_ref(input.value) {
+        return Err(vec![format!("{}:malformed-blake3-ref", input.field)]);
     }
     Ok(artifact_auth_core::ArtifactRef {
-        profile: profile.to_string(),
+        profile: input.profile.to_string(),
         algorithm: artifact_auth_core::ALGORITHM_BLAKE3.to_string(),
         digest_hex: digest_hex.to_string(),
     })
@@ -306,8 +316,12 @@ pub fn standalone_observation(
     key_ref: &str,
     verified: bool,
 ) -> Result<artifact_auth_core::CryptographicObservation, String> {
-    let key_identity = parse_ref(artifact_auth_core::ED25519_PUBLIC_KEY_PROFILE_V1, key_ref, "key_ref")
-        .map_err(|issues| issues.join(","))?;
+    let key_identity = parse_ref(RefInput {
+        profile: artifact_auth_core::ED25519_PUBLIC_KEY_PROFILE_V1,
+        value: key_ref,
+        field: "key_ref",
+    })
+    .map_err(|issues| issues.join(","))?;
     Ok(artifact_auth_core::CryptographicObservation {
         algorithm: artifact_auth_core::ALGORITHM_ED25519.to_string(),
         key_identity,
