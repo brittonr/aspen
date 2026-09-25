@@ -536,12 +536,25 @@
           final: prev: {
             # unit2nix auto mode forwards the custom toolchain to Cargo's
             # unit-graph generation, but this pinned revision does not forward it
-            # to the clippy wrapper. Make pkgs.clippy/pkgs.rustc match the
-            # dependency compiler so Nix flake checks do not mix rustc metadata.
+            # to every package helper. Keep package patches and the clippy
+            # wrapper on the same toolchain as the dependency compiler.
+            cargo = rustToolchain;
             clippy = rustToolchain;
             rustc = rustToolchainCompat;
           }
         );
+        nodeWorkspaceSource = builtins.path {
+          path = ./.;
+          name = "source";
+          # Cairn evidence and prose are not compiler inputs; retaining them here
+          # would make recording a build invalidate that very build's source.
+          filter =
+            path: _:
+            !(builtins.elem (builtins.baseNameOf path) [
+              ".cairn"
+              "docs"
+            ]);
+        };
 
         kacheCacheDir = "/var/cache/kache-nix";
         kacheKeySalt = "molten-unit2nix-kache-v1";
@@ -610,6 +623,16 @@
               kamacite-core = attrs: {
                 src = kamaciteSource;
                 sourceRoot = "source/crates/kamacite-core";
+              };
+              # Both node crates compile shared modules outside their own crate
+              # directories; unit2nix's default per-crate source omits them.
+              molten-node-core = attrs: {
+                src = nodeWorkspaceSource;
+                sourceRoot = "source/crates/molten-node-core";
+              };
+              molten-node-runtime = attrs: {
+                src = nodeWorkspaceSource;
+                sourceRoot = "source/crates/molten-node-runtime";
               };
             };
           };
