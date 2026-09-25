@@ -1,0 +1,38 @@
+--- octet summary ---
+Status: integration-failure
+Findings: 11
+Warnings: 0
+Errors: 11
+Autofixable: 0
+Tool: cargo-octet 0.1.0
+Toolchain: nightly-2026-03-21-x86_64-unknown-linux-gnu
+Profile: workspace-metadata
+Config hash: b3:58fad8b399c183822f3511c810b20ef9c8f2e8ae7f1f72710cb94f9297be0abc
+Profile hash: b3:3cfa1bc99d6ed29271c6f9fd2cc5cc00465c56268a65d22ca6a0a7b2c3cd814a
+
+By crate:
+  molten_node_host        11
+
+By effect:
+  unknown         8
+  resource        2
+  failure         1
+
+By lint:
+  missing_const_fn               8
+  borrowed_argument_types        2
+  raw_arithmetic_overflow        1
+
+Index:
+  F1   missing_const_fn        molten_node_host  crates/molten-node-host/src/error/mod.rs:49
+  F2   missing_const_fn        molten_node_host  crates/molten-node-host/src/local_store/path.rs:114
+  F3   borrowed_argument_types molten_node_host  crates/molten-node-host/src/local_store/root.rs:242
+  F4   borrowed_argument_types molten_node_host  crates/molten-node-host/src/local_store/root.rs:248
+  F5   raw_arithmetic_overflow molten_node_host  crates/molten-node-host/src/node/state.rs:22
+  F6   missing_const_fn        molten_node_host  crates/molten-node-host/src/node/state/filesystem.rs:191
+  F7   missing_const_fn        molten_node_host  crates/molten-node-host/src/node/state/filesystem/read.rs:4
+  F8   missing_const_fn        molten_node_host  crates/molten-node-host/src/node/state/locator.rs:96
+  F9   missing_const_fn        molten_node_host  crates/molten-node-host/src/node/state/locator.rs:115
+  F10  missing_const_fn        molten_node_host  crates/molten-node-host/src/node/state/locator.rs:126
+  F11  missing_const_fn        molten_node_host  crates/molten-node-host/src/node/state/namespace.rs:156
+---
