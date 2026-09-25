@@ -1,0 +1,60 @@
+{
+  "acceptance_ids": [
+    "octet-burndown-safety-collections-runtime.behavior",
+    "octet-burndown-safety-collections-runtime.bounds",
+    "octet-burndown-safety-collections-runtime.no-suppression",
+    "octet-burndown-safety-collections-runtime.zero"
+  ],
+  "actions": [],
+  "blocked": false,
+  "change": "octet-burndown-safety-collections-runtime",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [],
+  "dry_run": false,
+  "input_hash": "aefc2e9261660c81b0395b79bfd2198738b33f53fa3e303c172468123441d5d4",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": []
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts",
+    "no-spec profile conformance does not prove zero behavior effect or semantic correctness",
+    "change-local a[...] acceptance IDs are not accepted r[...] requirements and sync never promotes them"
+  ],
+  "plan_hash": "93fb89391b11eab5fa2e839f9466c33ffc43103497d2789fcb693f172d20855c",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "4db2ae506882b5720a24368925a555178e0b4c2beae10b09555d88a337b2d89b",
+  "reasons": [],
+  "receipt_hash": "16ede2093dc12c65356c17317eab39761c548d87cafd69c62d2f0b9b7b146330",
+  "review_receipt_hashes": [
+    "86e2b8a739471899d7f94e0071eb0660ad637c0db77aec87ff7a7c1d78685650"
+  ],
+  "spec_effect": "none",
+  "workflow_profile": "no-spec-delta",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
