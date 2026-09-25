@@ -98,7 +98,9 @@ fn validate_locator(input: &str) -> Result<()> {
     if input.is_empty() {
         return Err(Failure::invalid_harness("local store path cannot be empty"));
     }
-    if has_platform_prefix(input) {
+    let bytes = input.as_bytes();
+    let has_drive_prefix = matches!(bytes, [letter, b':', ..] if letter.is_ascii_alphabetic());
+    if has_drive_prefix || input.starts_with("\\\\") || input.contains('\\') {
         return Err(Failure::invalid_harness(format!(
             "platform-prefixed local store path {input} is not portable relative authority"
         )));
@@ -109,12 +111,6 @@ fn validate_locator(input: &str) -> Result<()> {
         )));
     }
     Ok(())
-}
-
-fn has_platform_prefix(input: &str) -> bool {
-    let bytes = input.as_bytes();
-    let has_drive_prefix = bytes.first().is_some_and(u8::is_ascii_alphabetic) && bytes.get(1) == Some(&b':');
-    has_drive_prefix || input.starts_with("\\\\") || input.contains('\\')
 }
 
 fn checked_component_count(count: usize) -> Result<usize> {

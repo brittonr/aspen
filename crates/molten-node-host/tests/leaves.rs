@@ -18,6 +18,30 @@ fn local_store_file_operations_keep_regular_leaf_rules() {
     assert_eq!(store.read(&path).unwrap(), b"new");
 }
 
+#[test]
+fn local_store_listing_is_sorted_and_excludes_directories() {
+    use molten_node_host::local_store::ObjectKind;
+    use molten_node_host::local_store::RelativeLocator;
+
+    let temp = cap_tempfile::TempDir::new(cap_std::ambient_authority()).unwrap();
+    let root = molten_node_host::node_state::Root::from_dir(temp.try_clone().unwrap());
+    let ledger = root.ledger_store().unwrap();
+    let store = ledger.root();
+    let directory = RelativeLocator::parse("data").unwrap();
+    store.create_dir_all(&RelativeLocator::parse("data/middle").unwrap()).unwrap();
+    store.write(&RelativeLocator::parse("data/zeta").unwrap(), b"z").unwrap();
+    store.write(&RelativeLocator::parse("data/alpha").unwrap(), b"a").unwrap();
+
+    let entries = store.list_entries(&directory).unwrap();
+    let names_and_kinds = entries.iter().map(|entry| (entry.name.as_str(), entry.kind)).collect::<Vec<_>>();
+    assert_eq!(names_and_kinds, [
+        ("alpha", ObjectKind::File),
+        ("middle", ObjectKind::Directory),
+        ("zeta", ObjectKind::File)
+    ]);
+    assert_eq!(store.list_file_names(&directory).unwrap(), ["alpha", "zeta"]);
+}
+
 #[cfg(unix)]
 #[test]
 fn local_store_leaf_links_deny_without_target_changes() {

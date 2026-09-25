@@ -14,7 +14,25 @@ pub struct RelativePath {
 
 impl RelativePath {
     pub fn parse(value: &str) -> crate::error::Result<Self> {
-        validate_input(value)?;
+        if value.is_empty() {
+            return Err(super::invalid("node state path cannot be empty"));
+        }
+        if value.len() > MAX_NODE_STATE_PATH_BYTES {
+            return Err(super::invalid(format!(
+                "node state path length {} exceeds maximum {MAX_NODE_STATE_PATH_BYTES}",
+                value.len()
+            )));
+        }
+        let bytes = value.as_bytes();
+        let has_drive_prefix = bytes.first().is_some_and(u8::is_ascii_alphabetic) && bytes.get(1) == Some(&b':');
+        if has_drive_prefix || value.starts_with("\\\\") || value.contains('\\') {
+            return Err(super::invalid(format!("platform-prefixed node state path {value} is not relative authority")));
+        }
+        if crate::locator::is_remote(value) {
+            return Err(super::invalid(format!(
+                "remote or content locator {value} cannot become node state authority"
+            )));
+        }
         let mut relative = std::path::PathBuf::new();
         let mut component_count = 0usize;
         for component in std::path::Path::new(value).components() {
@@ -93,25 +111,6 @@ pub(super) fn join_scope(scope: &std::path::Path, suffix: &RelativePath) -> crat
     Ok(joined)
 }
 
-fn validate_input(value: &str) -> crate::error::Result<()> {
-    if value.is_empty() {
-        return Err(super::invalid("node state path cannot be empty"));
-    }
-    if value.len() > MAX_NODE_STATE_PATH_BYTES {
-        return Err(super::invalid(format!(
-            "node state path length {} exceeds maximum {MAX_NODE_STATE_PATH_BYTES}",
-            value.len()
-        )));
-    }
-    if has_platform_prefix(value) {
-        return Err(super::invalid(format!("platform-prefixed node state path {value} is not relative authority")));
-    }
-    if crate::locator::is_remote(value) {
-        return Err(super::invalid(format!("remote or content locator {value} cannot become node state authority")));
-    }
-    Ok(())
-}
-
 fn validate_path_bytes(path: &std::path::Path) -> crate::error::Result<()> {
     let bytes = path.to_string_lossy().len();
     if bytes > MAX_NODE_STATE_PATH_BYTES {
@@ -121,12 +120,6 @@ fn validate_path_bytes(path: &std::path::Path) -> crate::error::Result<()> {
     } else {
         Ok(())
     }
-}
-
-fn has_platform_prefix(value: &str) -> bool {
-    let bytes = value.as_bytes();
-    let has_drive_prefix = bytes.first().is_some_and(u8::is_ascii_alphabetic) && bytes.get(1) == Some(&b':');
-    has_drive_prefix || value.starts_with("\\\\") || value.contains('\\')
 }
 
 fn checked_component_count(count: usize) -> crate::error::Result<usize> {

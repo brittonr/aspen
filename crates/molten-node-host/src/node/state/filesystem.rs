@@ -1,7 +1,5 @@
 #[path = "filesystem/metadata.rs"]
 mod metadata;
-#[path = "filesystem/read.rs"]
-pub(super) mod read;
 
 use std::io::Write;
 

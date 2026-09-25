@@ -166,14 +166,20 @@ impl DirectoryHandle {
             let name = entry.file_name().to_string_lossy().into_owned();
             let entry_path = path.join(&name)?;
             let kind = entry_kind(&entry.file_type().map_err(Failure::from)?);
-            push_bounded_entry(
-                &mut entries,
-                StoredEntry {
-                    name,
-                    path: entry_path,
-                    kind,
-                },
-            )?;
+            if entries.len() >= MAX_LOCAL_STORE_ENTRIES {
+                return Err(Failure::invalid_harness(format!(
+                    "local store entry count {} exceeds maximum {MAX_LOCAL_STORE_ENTRIES}",
+                    entries
+                        .len()
+                        .checked_add(1)
+                        .ok_or_else(|| Failure::invalid_harness("local store entry count overflow"))?
+                )));
+            }
+            entries.push(StoredEntry {
+                name,
+                path: entry_path,
+                kind,
+            });
         }
         entries.sort_by(|left, right| left.name.cmp(&right.name));
         Ok(entries)
@@ -184,7 +190,16 @@ impl DirectoryHandle {
         let mut names = Vec::new();
         for entry in entries {
             if entry.kind == ObjectKind::File {
-                push_bounded_name(&mut names, entry.name)?;
+                if names.len() >= MAX_LOCAL_STORE_ENTRIES {
+                    return Err(Failure::invalid_harness(format!(
+                        "local store entry count {} exceeds maximum {MAX_LOCAL_STORE_ENTRIES}",
+                        names
+                            .len()
+                            .checked_add(1)
+                            .ok_or_else(|| Failure::invalid_harness("local store entry count overflow"))?
+                    )));
+                }
+                names.push(entry.name);
             }
         }
         Ok(names)
@@ -237,26 +252,4 @@ fn entry_kind(file_type: &cap_std::fs::FileType) -> ObjectKind {
     } else {
         ObjectKind::Other
     }
-}
-
-fn push_bounded_entry(entries: &mut Vec<StoredEntry>, entry: StoredEntry) -> Result<()> {
-    ensure_entry_capacity(entries.len())?;
-    entries.push(entry);
-    Ok(())
-}
-
-fn push_bounded_name(names: &mut Vec<String>, name: String) -> Result<()> {
-    ensure_entry_capacity(names.len())?;
-    names.push(name);
-    Ok(())
-}
-
-fn ensure_entry_capacity(current: usize) -> Result<()> {
-    let next = current.checked_add(1).ok_or_else(|| Failure::invalid_harness("local store entry count overflow"))?;
-    if next > MAX_LOCAL_STORE_ENTRIES {
-        return Err(Failure::invalid_harness(format!(
-            "local store entry count {next} exceeds maximum {MAX_LOCAL_STORE_ENTRIES}"
-        )));
-    }
-    Ok(())
 }

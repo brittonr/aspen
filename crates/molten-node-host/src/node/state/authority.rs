@@ -101,8 +101,29 @@ impl AcquiredFile {
         self.size
     }
 
+    /// Consume an already-open file under both observed-size and actual-read bounds.
     pub fn read_bounded(self, max_bytes: u64) -> crate::error::Result<Vec<u8>> {
-        super::filesystem::read::consume(self, max_bytes, "observed node state file")
+        use std::io::Read;
+
+        if max_bytes > super::MAX_NODE_STATE_FILE_BYTES {
+            return Err(super::invalid(format!(
+                "node state read bound {max_bytes} exceeds hard maximum {}",
+                super::MAX_NODE_STATE_FILE_BYTES
+            )));
+        }
+        let label = "observed node state file";
+        if self.size > max_bytes {
+            return Err(super::invalid(format!("{label} size {} exceeds bound {max_bytes}", self.size)));
+        }
+        let limit_bytes = max_bytes.checked_add(1).ok_or_else(|| super::invalid("node state read bound overflow"))?;
+        let mut bytes = Vec::new();
+        self.file.take(limit_bytes).read_to_end(&mut bytes).map_err(crate::error::Failure::from)?;
+        if u64::try_from(bytes.len()).map_err(|_| super::invalid("node state read length conversion overflow"))?
+            > max_bytes
+        {
+            return Err(super::invalid(format!("{label} exceeds bound {max_bytes}")));
+        }
+        Ok(bytes)
     }
 }
 

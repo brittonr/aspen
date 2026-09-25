@@ -19,7 +19,8 @@ pub use namespace::DirectoryEntry;
 pub use namespace::DirectoryView;
 
 const MAX_NODE_STATE_ENTRIES: usize = 100_000;
-pub const MAX_NODE_STATE_FILE_BYTES: u64 = 16 * 1_024 * 1_024;
+/// Maximum node-state file size in bytes (16 MiB).
+pub const MAX_NODE_STATE_FILE_BYTES: u64 = 16_777_216;
 pub const MAX_NODE_SECRET_BYTES: u64 = 1_024 * 1_024;
 const MAX_REASONABLE_NODE_STATE_BOUND: usize = 1_000_000;
 
