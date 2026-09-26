@@ -43,10 +43,12 @@ fn exact_plan_and_measured_members() {
     policy.check_descriptor_bytes(b"fixture").unwrap();
     let plan = EvidencePlan::admit(&policy, descriptor, &policy.cohort.executable_blake3).unwrap();
     assert_eq!(plan.members().len(), ROLES.len());
-    for index in 0..ROLES.len() {
+    let role_count = u64::try_from(ROLES.len()).expect("finite startup roles");
+    for index in 0..role_count {
         plan.verify_member(index, b"fixture").unwrap();
     }
-    assert_eq!(plan.verify_member(ROLES.len(), b"fixture"), Err(Rejection::MemberInventory));
+    assert_eq!(plan.verify_member(role_count, b"fixture"), Err(Rejection::MemberInventory));
+    assert_eq!(plan.verify_member(u64::MAX, b"fixture"), Err(Rejection::MemberInventory));
     assert_eq!(plan.verify_member(0, b"changed"), Err(Rejection::MemberIdentity));
     assert_eq!(plan.verify_member(0, b"fixture!"), Err(Rejection::MemberIdentity));
 }

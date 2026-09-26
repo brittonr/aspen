@@ -134,7 +134,11 @@ fn verify_raw_chunk_bytes(bytes: &[u8], chunk_ref: &str, length: u64, chunk_size
 }
 
 fn validate_fixed_chunk_lengths(total_len: u64, chunk_size: u64, chunks: &[ChunkRef]) -> Result<()> {
-    let reconstructed = chunks.iter().map(|chunk| chunk.length).sum::<u64>();
+    let reconstructed = chunks.iter().try_fold(0_u64, |total, chunk| {
+        total
+            .checked_add(chunk.length)
+            .ok_or_else(|| Failure::invalid_harness("chunk manifest length overflow"))
+    })?;
     if reconstructed != total_len {
         return Err(Failure::invalid_harness(format!(
             "chunk manifest total length mismatch: refs sum to {reconstructed}, expected {total_len}"

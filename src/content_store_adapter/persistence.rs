@@ -152,7 +152,7 @@ fn next_line<'a>(lines: &mut impl Iterator<Item = &'a str>, field: &str) -> Resu
 }
 
 fn take_lines<'a>(lines: &mut impl Iterator<Item = &'a str>, count: usize, field: &str) -> Result<Vec<String>> {
-    if count > MAX_PARTIAL_STATE_BYTES as usize {
+    if u64::try_from(count).map_or(true, |count| count > MAX_PARTIAL_STATE_BYTES) {
         return Err(Failure::invalid_harness(format!("{field} count exceeds bound")));
     }
     (0..count).map(|_| next_line(lines, field).map(str::to_string)).collect()

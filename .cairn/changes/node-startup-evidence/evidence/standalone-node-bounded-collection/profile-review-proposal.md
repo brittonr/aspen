@@ -26,6 +26,14 @@ Exact installed-hook node-core diagnostic partition:
 | `usize_in_public_api` | 3 | warn; **deny** in `bounded-systems` | Remain hard errors. Resolve the fixed-width/public-boundary contract and all callers without an `allow` or unchecked cast. |
 | **Total** | **258** | | **255 proposed reviewed advisories, 3 still hard** on the currently reached crate. |
 
+The table is the frozen pre-repair finding inventory. The later
+[fixed-width follow-through](README.md#fixed-width-boundary-and-selected-target-follow-through-2026-09-25)
+eliminated those three hard node-core findings without changing lint severity.
+Its exploratory run then reached runtime compiler units and failed with 216
+hard findings and 2,352 warnings. That run does **not** approve the 255
+node-core advisories, establish full selected-unit coverage, or change the
+unchanged strict startup denial.
+
 ## Candidate contract for owner decision
 
 1. An owner-versioned **new** profile would derive its lint inventory from the canonical catalog, prove every named lint registered, and fail on an unclassified added/removed lint. Keep `-D unknown_lints`; require all 72 currently catalogued lints active on every selected compilation unit. Do not use `disabled_lints`, a warning count ceiling, a silent `allow` override, or a consumer-controlled environment knob as admission. A proposed minimal delta from the reviewed owner's all-deny hook is exactly the seven named advisory categories above; retain deny for the other 65, including `usize_in_public_api`, `no_unwrap`, `no_panic`, bounded-resource checks, unchecked conversion/arithmetic, suppression governance, marked state machines, and exact nominal-domain checks. The owner must review the consequences of enabling nominal-domain mode and scope-specific rules; the older installed hook and a bare `bounded-systems` run do not prove their coverage. **Bind the exact effective lint-level argv or an owner-generated equivalent to the profile identity**: equal hashes for the two hooks above prove that the current workspace-metadata fields alone are insufficient.

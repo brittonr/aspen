@@ -1,0 +1,1 @@
+cargo octet check --profile bounded-systems --artifact-dir target/octet-runtime-arith-20260925

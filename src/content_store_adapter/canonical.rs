@@ -30,7 +30,7 @@ pub fn canonical_content_command(
     profile: &ContentAdapterProfile,
     manifest: &ContentManifestDescriptor,
     command: &ContentCommand,
-    active_operations: usize,
+    active_operations: u64,
     queued_bytes: u64,
 ) -> Result<CanonicalContentArtifact<ContentCommand>> {
     let preflight = preflight_content_operation(profile, manifest, command, active_operations, queued_bytes);
@@ -223,7 +223,7 @@ fn status_value(status: &ContentAdapterStatus) -> IOValue {
         field("profile-ref", string(&status.profile_ref)),
         field("class", string(status.class.as_str())),
         field("generation", u64_value(status.generation)),
-        field("active-operations", usize_value(status.active_operations)),
+        field("active-operations", u64_value(status.active_operations)),
         field("queued-bytes", u64_value(status.queued_bytes)),
         field(
             "terminal-counts",
@@ -250,7 +250,7 @@ fn bounds_value(bounds: &ContentResourceBounds) -> IOValue {
         field("max-chunk-count", usize_value(bounds.max_chunk_count)),
         field("max-chunk-bytes", u64_value(bounds.max_chunk_bytes)),
         field("max-range-bytes", u64_value(bounds.max_range_bytes)),
-        field("max-concurrent-operations", usize_value(bounds.max_concurrent_operations)),
+        field("max-concurrent-operations", u64_value(bounds.max_concurrent_operations)),
         field("max-queued-bytes", u64_value(bounds.max_queued_bytes)),
         field("max-memory-bytes", u64_value(bounds.max_memory_bytes)),
         field("max-deadline-ticks", u64_value(bounds.max_deadline_ticks)),

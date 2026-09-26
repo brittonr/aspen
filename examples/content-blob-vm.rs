@@ -26,7 +26,7 @@ struct Policy {
     schema: String,
     max_archive_bytes: u64,
     chunk_bytes: u64,
-    max_connections: usize,
+    max_connections: u64,
     service_seconds: u64,
     read_seconds: u64,
 }

@@ -6,7 +6,7 @@ pub fn preflight_content_operation(
     profile: &ContentAdapterProfile,
     manifest: &ContentManifestDescriptor,
     command: &ContentCommand,
-    active_operations: usize,
+    active_operations: u64,
     queued_bytes: u64,
 ) -> ContentPreflight {
     let mut issues = validate_content_profile(profile);
@@ -131,7 +131,7 @@ fn validate_binding(
 }
 
 struct ResourceUsage {
-    active_operations: usize,
+    active_operations: u64,
     queued_bytes: u64,
 }
 

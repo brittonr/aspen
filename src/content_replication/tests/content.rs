@@ -14,7 +14,7 @@ use crate::error::Failure;
 use crate::error::Result;
 
 const CONTENT_CHUNK_COUNT: usize = 1;
-const CONTENT_OPERATION_LIMIT: usize = 4;
+const CONTENT_OPERATION_LIMIT: u64 = 4;
 const CONTENT_EVENT_LIMIT: usize = 16;
 const CONTENT_DEADLINE_TICKS: u64 = 64;
 const CONTENT_RETRY_LIMIT: u32 = 4;

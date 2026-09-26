@@ -207,7 +207,7 @@ pub fn redb_index_content_status(
 pub fn bounded_content_status(
     profile: &ContentAdapterProfile,
     generation: u64,
-    active_operations: usize,
+    active_operations: u64,
     queued_bytes: u64,
     mut terminal_counts: Vec<(ContentTerminal, u64)>,
     backend_label: &str,

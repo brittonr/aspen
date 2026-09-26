@@ -1,0 +1,1 @@
+cargo octet check --artifact-dir target/octet-width-strict-20260925

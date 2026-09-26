@@ -76,7 +76,7 @@ Ownership split for the chunk store:
 | lineage | manifest lineage and receipt chains | Evidence-only summaries. |
 | shell | CLI and filesystem orchestration | Effect execution and receipts. |
 
-`semantic_store` preserves the existing parser and identity tests. `molten_core::codec::validate_domain_artifact` is the first domain-owned codec façade used by chunk manifest parsing after canonical ref computation; it validates supported labels, schema identity, and BLAKE3 ref shape before callers consume the parsed manifest. `molten_core::planning::plan_retention_gc` and `plan_store_write` provide the pure destructive/store planning cores used by this slice.
+`semantic_store` preserves the existing parser and identity tests. `molten_core::codec::validate_domain_artifact` is the first domain-owned codec façade used by chunk manifest parsing after canonical ref computation; it validates supported labels, schema identity, and BLAKE3 ref shape before callers consume the parsed manifest. Fixed-chunk length reconstruction uses checked addition before comparing the manifest total, so a forged sequence whose lengths wrap `u64` is denied even when its canonical root matches. `molten_core::planning::plan_retention_gc` and `plan_store_write` provide the pure destructive/store planning cores used by this slice.
 
 ## Preserves boundary adoption profile
 

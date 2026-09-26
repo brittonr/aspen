@@ -13,7 +13,7 @@ const MAX_TOTAL_BYTES: u64 = 1_024;
 const MAX_CHUNK_COUNT: usize = 16;
 const MAX_CHUNK_BYTES: u64 = 256;
 const MAX_RANGE_BYTES: u64 = 512;
-const MAX_CONCURRENT_OPERATIONS: usize = 4;
+const MAX_CONCURRENT_OPERATIONS: u64 = 4;
 const MAX_QUEUED_BYTES: u64 = 2_048;
 const MAX_MEMORY_BYTES: u64 = 1_024;
 const MAX_DEADLINE_TICKS: u64 = 20;
@@ -133,6 +133,8 @@ fn preflight_is_bounded_capability_checked_and_range_specific() {
     let overloaded =
         preflight_content_operation(&profile, &manifest, &command(ContentOperation::Get), MAX_CONCURRENT_OPERATIONS, 0);
     assert!(overloaded.issues.contains(&ContentIssue::ConcurrencyExceeded));
+    let oversized = preflight_content_operation(&profile, &manifest, &command(ContentOperation::Get), u64::MAX, 0);
+    assert!(oversized.issues.contains(&ContentIssue::ConcurrencyExceeded));
 }
 
 #[test]

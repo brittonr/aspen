@@ -193,6 +193,43 @@
         );
     }
 
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn manifest_parser_denies_wrapped_chunk_length_totals() {
+        let root = temp_dir("chunk-overflowed-total");
+        let put = put_bytes(&root, "artifact", b"aaaabbbb", 4).expect("put");
+        let manifest = read_manifest(&root, &put.manifest_ref).expect("read manifest");
+        let mut chunks = manifest.chunks.clone();
+        chunks[0].length = u64::MAX;
+        chunks[1].length = 2;
+        let chunk_size = usize::try_from(u64::MAX).expect("64-bit chunk size");
+        for chunk in &mut chunks {
+            chunk.domain = chunk_domain(chunk_size);
+        }
+        let chunk_values = chunks
+            .iter()
+            .map(|chunk| chunk_ref_value(&chunk.chunk_ref, chunk.length, chunk_size, &manifest.transforms))
+            .collect::<Vec<_>>();
+        let root_ref = chunk_root_ref(&chunks).expect("forged root");
+        let forged = manifest_value(&ChunkManifestValueInput {
+            object_kind: &manifest.object_kind,
+            total_len: 1,
+            chunk_size: u64::MAX,
+            transforms: &manifest.transforms,
+            metadata_ref: &manifest.metadata_ref,
+            policy_refs: &manifest.policy_refs,
+            chunks: &chunk_values,
+            root_ref: &root_ref,
+            evidence_refs: &manifest.evidence_refs,
+        });
+        assert!(
+            parse_manifest_value(&forged, None)
+                .expect_err("wrapped chunk lengths must be denied")
+                .to_string()
+                .contains("chunk manifest length overflow")
+        );
+    }
+
     fn assert_confidential_write_denials() {
         let confidential_root = temp_dir("chunk-confidential-deny");
         let metadata = record("chunk-metadata-v1", vec![record("object-kind", vec![string("artifact")])]);

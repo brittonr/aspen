@@ -12,6 +12,7 @@ use molten_core::node_startup::Descriptor;
 use molten_core::node_startup::EvidencePlan;
 use molten_core::node_startup::TrustedCohort;
 use molten_core::node_startup::MAX_DESCRIPTOR_BYTES;
+use molten_core::node_startup::MAX_MEMBER_BYTES;
 
 use crate::error::Failure;
 use crate::error::Result;
@@ -104,6 +105,7 @@ fn read_plan_members(root: &Dir, plan: &EvidencePlan) -> Result<Vec<Vec<u8>>> {
     let mut members = Vec::with_capacity(plan.members().len());
     for (index, member) in plan.members().iter().enumerate() {
         let bytes = read_regular(root, Path::new(member.role.filename()), member.bytes)?;
+        let index = u64::try_from(index).map_err(|_| deny("member-inventory"))?;
         plan.verify_member(index, &bytes).map_err(|_| deny("member-identity"))?;
         members.push(bytes);
     }
@@ -127,6 +129,9 @@ fn verify_members(root: &Dir, plan: &EvidencePlan) -> Result<VerificationReport>
 
 fn read_regular(root: &Dir, name: &Path, limit: u64) -> Result<Vec<u8>> {
     // Root is an explicit operator read grant; all descendant names are fixed leaves.
+    if limit == 0 || limit > MAX_MEMBER_BYTES {
+        return Err(deny("not-bounded-regular-file"));
+    }
     let observed = root.symlink_metadata(name)?;
     if !observed.is_file() || observed.len() > limit {
         return Err(deny("not-bounded-regular-file"));
@@ -138,10 +143,15 @@ fn read_regular(root: &Dir, name: &Path, limit: u64) -> Result<Vec<u8>> {
     if !before.is_file() || before.len() > limit {
         return Err(deny("not-bounded-regular-file"));
     }
-    let mut bytes = Vec::with_capacity(before.len() as usize);
-    (&mut file).take(limit + 1).read_to_end(&mut bytes)?;
+    let capacity = usize::try_from(before.len()).map_err(|_| deny("not-bounded-regular-file"))?;
+    let read_limit = limit.checked_add(1).ok_or_else(|| deny("not-bounded-regular-file"))?;
+    let mut bytes = Vec::with_capacity(capacity);
+    (&mut file).take(read_limit).read_to_end(&mut bytes)?;
     let after = file.metadata()?;
-    if bytes.len() as u64 != before.len() || after.len() != before.len() || after.modified()? != before.modified()? {
+    if u64::try_from(bytes.len()).map_err(|_| deny("file-changed"))? != before.len()
+        || after.len() != before.len()
+        || after.modified()? != before.modified()?
+    {
         return Err(deny("file-changed"));
     }
     Ok(bytes)
@@ -151,12 +161,13 @@ fn read_regular(root: &Dir, name: &Path, limit: u64) -> Result<Vec<u8>> {
 fn measure_current_executable() -> Result<String> {
     // /proc/self/exe pins this running image even if its original pathname was replaced.
     let file = std::fs::File::open("/proc/self/exe")?;
-    let limit = 512 * 1024 * 1024;
+    let limit: u64 = 512 * 1024 * 1024;
     let meta = file.metadata()?;
     if !meta.is_file() || meta.len() == 0 || meta.len() > limit {
         return Err(deny("executable-bounds"));
     }
-    let mut reader = file.take(limit + 1);
+    let read_limit = limit.checked_add(1).ok_or_else(|| deny("executable-bounds"))?;
+    let mut reader = file.take(read_limit);
     let mut hash = blake3::Hasher::new();
     let mut bytes = [0_u8; 64 * 1024];
     let mut total = 0_u64;
@@ -166,7 +177,8 @@ fn measure_current_executable() -> Result<String> {
             break;
         }
         hash.update(&bytes[..count]);
-        total += count as u64;
+        let count = u64::try_from(count).map_err(|_| deny("executable-bounds"))?;
+        total = total.checked_add(count).ok_or_else(|| deny("executable-bounds"))?;
     }
     if total != meta.len() {
         return Err(deny("executable-changed"));

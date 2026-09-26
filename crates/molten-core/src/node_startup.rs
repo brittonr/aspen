@@ -120,7 +120,7 @@ pub struct EvidencePlan {
     members: Vec<Member>,
 }
 
-pub fn is_hex(value: &str, length: usize) -> bool {
+fn is_hex(value: &str, length: usize) -> bool {
     value.len() == length && value.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
@@ -219,9 +219,10 @@ impl EvidencePlan {
     pub fn members(&self) -> &[Member] {
         &self.members
     }
-    pub fn verify_member(&self, index: usize, bytes: &[u8]) -> Result<(), Rejection> {
+    pub fn verify_member(&self, index: u64, bytes: &[u8]) -> Result<(), Rejection> {
+        let index = usize::try_from(index).map_err(|_| Rejection::MemberInventory)?;
         let expected = self.members.get(index).ok_or(Rejection::MemberInventory)?;
-        if bytes.len() as u64 != expected.bytes {
+        if u64::try_from(bytes.len()).map_err(|_| Rejection::MemberIdentity)? != expected.bytes {
             return Err(Rejection::MemberIdentity);
         }
         if blake3::hash(bytes).to_hex().as_str() != expected.blake3 {

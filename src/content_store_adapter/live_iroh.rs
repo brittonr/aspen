@@ -243,18 +243,22 @@ async fn publish_live_iroh_inner(
     let blobs = BlobsProtocol::new(&store, None);
     let denied_connections = Arc::new(AtomicU64::new(0));
     let router = match options {
-        Some(options) => Router::builder(endpoint)
-            .accept(
-                iroh_blobs::ALPN,
-                read_gate::ReadGatedBlobs::new(
-                    blobs,
-                    options.read_grant,
-                    manifest_ref.to_string(),
-                    denied_connections.clone(),
-                    profile.bounds.max_concurrent_operations,
-                ),
-            )
-            .spawn(),
+        Some(options) => {
+            let max_connections = usize::try_from(profile.bounds.max_concurrent_operations)
+                .map_err(|_| Failure::invalid_harness("live Iroh connection bound exceeds host capacity"))?;
+            Router::builder(endpoint)
+                .accept(
+                    iroh_blobs::ALPN,
+                    read_gate::ReadGatedBlobs::new(
+                        blobs,
+                        options.read_grant,
+                        manifest_ref.to_string(),
+                        denied_connections.clone(),
+                        max_connections,
+                    ),
+                )
+                .spawn()
+        }
         None => Router::builder(endpoint).accept(iroh_blobs::ALPN, blobs).spawn(),
     };
     let backend_hint_ref = backend_hint_ref(

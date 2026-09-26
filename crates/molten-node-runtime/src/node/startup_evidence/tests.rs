@@ -81,6 +81,10 @@ fn symlinks_directories_and_oversized_leaves_fail_closed() {
     for name in ["link", "directory", "large"] {
         assert!(read_regular(&cap, Path::new(name), 3).unwrap_err().to_string().contains("not-bounded-regular"));
     }
+    assert!(read_regular(&cap, Path::new("large"), u64::MAX)
+        .unwrap_err()
+        .to_string()
+        .contains("not-bounded-regular"));
     assert_eq!(std::fs::read(outside.join("outside")).unwrap(), b"secret");
 }
 

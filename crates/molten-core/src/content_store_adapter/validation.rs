@@ -241,6 +241,7 @@ fn validate_positive_bounds(bounds: &ContentResourceBounds, issues: &mut Vec<Con
         ("max-total-bytes", bounds.max_total_bytes),
         ("max-chunk-bytes", bounds.max_chunk_bytes),
         ("max-range-bytes", bounds.max_range_bytes),
+        ("max-concurrent-operations", bounds.max_concurrent_operations),
         ("max-queued-bytes", bounds.max_queued_bytes),
         ("max-memory-bytes", bounds.max_memory_bytes),
         ("max-deadline-ticks", bounds.max_deadline_ticks),
@@ -251,7 +252,6 @@ fn validate_positive_bounds(bounds: &ContentResourceBounds, issues: &mut Vec<Con
     }
     for (name, value) in [
         ("max-chunk-count", bounds.max_chunk_count),
-        ("max-concurrent-operations", bounds.max_concurrent_operations),
         ("max-events", bounds.max_events),
         ("max-status-entries", bounds.max_status_entries),
     ] {

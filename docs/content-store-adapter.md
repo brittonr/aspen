@@ -18,11 +18,13 @@ Profiles declare capabilities explicitly. Unsupported range, transform, durabili
 
 Preflight checks total bytes, chunk count and size, range size, concurrency, queue and memory bytes, logical deadline, retry count, and event count. Local and live shells read one bounded chunk at a time. Each shell computes the existing domain-separated chunk identity and passes an observation into the pure transition core. Bytes enter a `VerifiedChunkPayload` only after hash, length, position, sequence, operation, manifest, profile, and generation checks pass. Full assembly additionally re-verifies every payload and is unavailable until the complete manifest is verified.
 
+The public `max_concurrent_operations` and `active_operations` counts use `u64`, including preflight and canonical status. An active count at the configured maximum is denied; oversized counts cannot truncate to a smaller host `usize`. Live Iroh serving retains its separate maximum of 64 connections and converts the admitted bound to the host semaphore width with a checked conversion.
+
 A backend success callback, QUIC connection, Iroh blob hash, or Redb row never marks a Molten chunk available by itself.
 
 ## Partial state and failure semantics
 
-Canonical partial state records the exact verified prefix, missing suffix, verified bytes, generation, event count, sequence, and terminal class. Capability-rooted persistence uses a bounded deterministic `MCPS001` record under a caller-supplied `node_state::DirectoryView`; load revalidates profile, manifest, operation, partition, generation, refs, bytes, and event limits before resume.
+Canonical partial state records the exact verified prefix, missing suffix, verified bytes, generation, event count, sequence, and terminal class. Capability-rooted persistence uses a bounded deterministic `MCPS001` record under a caller-supplied `node_state::DirectoryView`; its line-count bound uses a checked conversion rather than a host-width cast. Load revalidates profile, manifest, operation, partition, generation, refs, bytes, and event limits before resume.
 
 Terminal classes distinguish accepted, streaming, verified, durable, cancelled, retryable, failed, uncertain, and denied. Corruption, truncation, reordering, unexpected chunks, stale tickets, unsupported transforms, root escape, overload, permission denial, timeout, disconnect, and adapter failure remain distinct. Disconnect or timeout after possible progress is uncertain, never normalized to success or definite absence.
 

@@ -75,6 +75,8 @@ Descriptor and policy limits are 32 KiB each. Members have an 8 MiB limit. The c
 
 Member reads reject symlinks, special files, excess bytes, and observed size/time changes. Nonblocking opens prevent a substituted FIFO from waiting for a writer. The root must be operator-owned. This is not hostile-parent or whole-filesystem snapshot protection. Exact hashes reject mixed snapshots that differ from approved bytes.
 
+`EvidencePlan::verify_member` takes a fixed-width `u64` member index. It rejects an index that cannot fit the host collection width, or that is outside the fixed ordered member list; callers convert their enumerated indices before verification. This boundary check grants no startup authority.
+
 On Linux, the executable read uses `/proc/self/exe`. It refers to the running image, not a replaceable pathname. Other platforms fail closed in this initial adapter.
 Unit tests supply a synthetic executable digest to the verifier's in-memory test seam because the all-targets test binary can exceed the production 512 MiB executable limit. Production verification always measures the running image; these tests do not prove a runnable approved cohort.
 

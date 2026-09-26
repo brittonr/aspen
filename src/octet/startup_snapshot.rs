@@ -15,6 +15,7 @@ pub fn evaluate(snapshot: Snapshot<'_>) -> Result<OctetGateEvaluation> {
         return Err(Failure::invalid_harness("startup-evidence-member-inventory"));
     }
     for (index, bytes) in snapshot.members.iter().enumerate() {
+        let index = u64::try_from(index).map_err(|_| Failure::invalid_harness("startup-evidence-member-inventory"))?;
         snapshot
             .plan
             .verify_member(index, bytes)

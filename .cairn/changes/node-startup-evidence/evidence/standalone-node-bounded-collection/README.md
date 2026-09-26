@@ -328,3 +328,121 @@ summary are byte-identical to the earlier 68-flag run: the recorded
 workspace profile/config hashes do not bind the differing effective
 `DYLINT_RUSTFLAGS`. The proposal requires an explicit policy/flag identity
 and owner review before any future gate can claim complete coverage.
+
+## Fixed-width boundary and selected-target follow-through (2026-09-25)
+
+On the subsequent producer review source, `preflight_content_operation` and
+its resource bounds, status, canonical output, and callers use fixed-width
+`u64` concurrency counts. `EvidencePlan::verify_member` accepts a `u64`
+index and rejects host-width conversion failure before indexing; the
+module-private hexadecimal helper no longer presents a public `usize` API.
+The Iroh semaphore alone converts an already-admitted bound to `usize`.
+Host and runtime integration test fixtures now propagate setup errors rather
+than calling `unwrap`, retaining their negative assertions. The startup
+member reader checks its 8 MiB limit, capacity conversion, and read limit;
+executable measurement checks its read limit and cumulative byte count.
+No owner lint rule, installed hook, producer startup verifier, admission
+policy, or selected Cargo package list changed.
+
+With the already-installed March-21 Rust, Dylint driver, reviewed lint
+library, offline Cargo, and `TMPDIR=$PWD/target`, `cargo test --locked
+--offline -p molten-core --lib` passed 390, the root content-adapter slice
+passed 6, `molten-node-host --tests` passed 22, and
+`molten-node-runtime --tests` passed 404 across five suites. A throwaway
+compiled executable called the public preflight API: active counts 0, 2,
+and `u64::MAX` returned accepted, denied, and denied respectively, with
+the overload issue only on the latter two. It was removed afterward.
+
+The original installed `/nix/store/.../hooks/octet-deny-all.sh` path had
+been collected. Its byte-identical source was recovered from the already
+pinned Octet `c9b06bcf565c51d4a77d210e61b69ae51db9df25` Git object:
+BLAKE3 `41603febce44635585c6010557f6991008976b7e2f7e417c9c78f5299690522f`.
+Executing that exact hook with `OCTET_PRECOMMIT_USE_INSTALLED=true` still
+exited **2** (Cargo **101**): 258 errors, zero warnings, 257 in
+`molten_node_core` and one in cache-selected `locators`. The old
+`workspace-metadata` profile/config hashes remain unchanged. The three
+former hard `usize_in_public_api` findings are absent, but the unchanged
+all-deny policy still rejects the remaining node-core findings and stops
+before complete selected-unit coverage. The exact runner outputs are
+`width-strict-{command.txt,status.json,summary.txt,provenance.jsonl}`;
+BLAKE3 in that order:
+`1789b3d674fd257f86cc3faeab63a03b6ce956507c3a55b85f5b88a72104f2be`,
+`90ce38151387908aa7fc03840dddc315170ce6d87547e1db1700aef2e4f06f7a`,
+`e74ce90478580841f9d52ba7a8119cf18be2a08692b89c05bfbe234410d9f9d1`,
+`ff5944af1e93565f473ae40b8d0bec124b34ed9137f7d3a3e690bc78637fc84a`.
+
+A separate, **non-admitting** `bounded-systems` run reached runtime units.
+It also exited **2** (Cargo **101**): 2,568 findings, 2,352 warnings
+and 216 hard errors. `molten_node_core` emitted 114 advisory findings
+and no hard public-width finding; `molten_node_runtime` emitted 2,446
+findings, including repeated locations from multiple compiler units.
+The startup reader's six previously duplicated cast/overflow errors are
+absent. These totals are not a complete-source or distinct-location count:
+Cargo failed while checking the selected all-targets cohort. The exact
+`width-bounded-{command.txt,status.json,summary.txt,provenance.jsonl}`
+outputs have BLAKE3, in that order:
+`3c823169ec463665c5a75ec6a5ea3308df7c7f22cbcab1434b78f7c052e5bafb`,
+`6927448d98cb759b649bf7e1914ea69e093b8be9da7de65a925bd6de25284a02`,
+`3df46ed624ede700661774ad2d9551f9decea36d39dcc70559a8a16816049df5`,
+`197f209cf5973abcae4d794c4f0cd467a0c26c658784d30e1159a2357923a11e`.
+The reviewed owner profile remains unapproved, and the producer still
+requires a complete compiler-bound source/build/binary cohort, normal
+startup, independent VM lifecycle, and replay before promotion.
+
+## Chunk-total overflow and host-width follow-through (2026-09-25)
+
+The runtime chunk-manifest parser previously summed attacker-controlled
+`ChunkRef.length` values with `sum::<u64>()`. A manifest with two lengths
+`u64::MAX` and `2`, declared total `1`, matching fixed chunk size and
+recomputed canonical chunk root panicked during parsing in the debug
+build; an unchecked release sum could wrap to the declared total.
+`validate_fixed_chunk_lengths` now uses `checked_add` and denies that
+manifest before comparing totals or accepting its root. The permanent
+parser regression failed before the fix with `attempt to add with
+overflow`, then passed. The partial-state line-count guard also converts
+`usize` to `u64` with a checked conversion instead of casting the byte
+bound to the host width. No manifest schema, content identity, lint rule,
+source selection, startup admission, or installed hook changed.
+
+With the same installed Rust and offline Cargo, the
+`molten::blocks::semantic_store::tests::manifest_parser_denies_wrapped_chunk_length_totals`
+test passed after the failing-before run; `molten-node-runtime --lib`
+passed 393 and the root `content_store_adapter::tests` slice passed 6.
+A throwaway compiled `molten` example then put and parsed a real
+three-chunk manifest through the public API, printing
+`manifest=blake3:596dd657e244bbd83677ddc5ae8626de6a6f377b5207d48c847700ea7b5fc5f7 chunks=3 total=12`;
+its source and isolated store root were removed. These checks prove the
+parser denial and normal valid-manifest behavior, not the normal-node
+startup cohort or VM lifecycle.
+
+The separate exploratory `cargo octet check --profile bounded-systems`
+run with the reviewed local lint library and already-installed Dylint
+driver exited **2** (Cargo **101**): 2,558 findings, 2,344 warnings,
+214 hard errors. The two previous duplicated `platform_dependent_cast`
+errors in `content_store_adapter/persistence.rs` disappeared. The
+underflow/overflow lint did **not** detect the former `sum::<u64>()`
+integrity bug, so its remaining 101 arithmetic findings are not a
+measure of the parser repair. The selected compiler-unit set differs
+from the earlier bounded run; do not interpret the other count changes
+as behavioral improvements. Raw `arith-bounded-{command.txt,status.json,summary.txt,provenance.jsonl}`
+files have BLAKE3 hashes in that order:
+`87758bc35ba5c307595a5300a8d523bf7dcd3ed079ea6c4081f9ffe3629c41fa`,
+`e5f40fce7769b05979df6016f9390c042fc66de9864b2ce5de4ec79974bf21c3`,
+`4c1191367a01e737b62e86d2d82929c7e9d4dd1670eaa39d00e9b8c1466cb443`,
+`2a4de92d35580445e0d26f3b4a67c8366fe7723e3504a03a461006b4c6948ace`.
+
+The byte-identical recovered pinned hook (BLAKE3 above), run with the
+same installed CLI, driver, lint library and workspace-metadata policy,
+still exited **2** (Cargo **101**). This invocation reported 262 hard
+findings: 257 node-core and five cache-selected `atomic_namespace`
+integration-test findings. It stopped before runtime coverage. The
+earlier strict run selected `locators` instead; different selected units
+make raw totals incomparable. Raw
+`arith-strict-{command.txt,status.json,summary.txt,provenance.jsonl}`
+files have BLAKE3 hashes in that order:
+`88ab17f44f55f53a484ce1c3a42774d060dc492494a445ddaf740b9e6dcb1f01`,
+`90beccb9efc1db8d14962a7295a7770f1461ab86fe7a48bcabc9c134057bd408`,
+`cfddd534218a20cf9839d632836492646ae355f6ed2b0910fe7d9038afa13ce0`,
+`707af3cc373d4f0b9fcdfef0f6b914bf240b18d44d5fb5912b9043513da39a13`.
+The bounded profile is still an unapproved diagnostic; the strict gate
+and real startup/VM/replay admission remain denied.
