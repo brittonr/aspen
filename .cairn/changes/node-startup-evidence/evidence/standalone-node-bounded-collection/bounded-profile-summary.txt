@@ -1,0 +1,144 @@
+--- octet summary ---
+Status: integration-failure
+Findings: 117
+Warnings: 114
+Errors: 3
+Autofixable: 0
+Tool: cargo-octet 0.1.0
+Toolchain: nightly-2026-03-21-x86_64-unknown-linux-gnu
+Profile: bounded-systems
+Config hash: b3:6579cbfbb4d278f730447f34573a9074f257748b20ed6e452d857dabed5f862f
+Profile hash: b3:55f4b3e950764ca4758fa1fe8e1527b756964f08ffab4156944cbb5ff79bed28
+
+By crate:
+  molten_node_core        117
+
+By effect:
+  unknown         101
+  resource        16
+
+By lint:
+  path_segment_repetition              97
+  excessive_file_length                13
+  underscore_in_module_filename        4
+  usize_in_public_api                  3
+
+Index:
+  F1    path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/codec.rs:19
+  F2    excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:1
+  F3    path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:22
+  F4    path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:47
+  F5    path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:66
+  F6    path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:93
+  F7    path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:108
+  F8    path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:121
+  F9    path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:129
+  F10   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:141
+  F11   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:183
+  F12   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:189
+  F13   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:206
+  F14   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:248
+  F15   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:283
+  F16   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:299
+  F17   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:310
+  F18   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:324
+  F19   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:331
+  F20   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:345
+  F21   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:356
+  F22   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/model.rs:362
+  F23   underscore_in_module_filename molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/node_service.rs:1
+  F24   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/node_service.rs:12
+  F25   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/node_service.rs:21
+  F26   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/node_service.rs:62
+  F27   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/node_service.rs:78
+  F28   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/preflight.rs:5
+  F29   usize_in_public_api           molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/preflight.rs:5
+  F30   underscore_in_module_filename molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/read_grant.rs:1
+  F31   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/read_grant.rs:7
+  F32   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/read_grant.rs:14
+  F33   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/transition.rs:130
+  F34   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/transition.rs:145
+  F35   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/transition.rs:152
+  F36   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/transition.rs:167
+  F37   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/transition.rs:176
+  F38   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/transition.rs:191
+  F39   excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/validation.rs:1
+  F40   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/validation.rs:5
+  F41   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/validation.rs:126
+  F42   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/content_store_adapter/validation.rs:159
+  F43   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/boundary.rs:5
+  F44   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/boundary.rs:22
+  F45   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/boundary.rs:137
+  F46   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/boundary.rs:145
+  F47   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/boundary.rs:152
+  F48   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/boundary.rs:164
+  F49   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/boundary.rs:176
+  F50   excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:1
+  F51   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:8
+  F52   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:23
+  F53   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:61
+  F54   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:107
+  F55   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:113
+  F56   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:123
+  F57   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:132
+  F58   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:147
+  F59   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/evidence.rs:171
+  F60   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/mod.rs:32
+  F61   excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:1
+  F62   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:6
+  F63   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:81
+  F64   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:112
+  F65   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:118
+  F66   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:146
+  F67   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:161
+  F68   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:170
+  F69   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:181
+  F70   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/port.rs:235
+  F71   excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:1
+  F72   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:7
+  F73   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:39
+  F74   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:83
+  F75   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:93
+  F76   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:98
+  F77   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:153
+  F78   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/reference.rs:173
+  F79   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/tier.rs:4
+  F80   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/tier.rs:21
+  F81   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/tier.rs:68
+  F82   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/tier.rs:100
+  F83   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/tier.rs:107
+  F84   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/tier.rs:114
+  F85   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric/tier.rs:135
+  F86   excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/admission.rs:1
+  F87   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/admission.rs:5
+  F88   excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/artifact_auth.rs:1
+  F89   underscore_in_module_filename molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/artifact_auth.rs:1
+  F90   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/artifact_auth.rs:12
+  F91   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/artifact_auth.rs:21
+  F92   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/artifact_auth.rs:85
+  F93   excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:1
+  F94   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:25
+  F95   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:48
+  F96   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:63
+  F97   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:120
+  F98   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/model.rs:331
+  F99   path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/rotation.rs:4
+  F100  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/rotation.rs:21
+  F101  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/rotation.rs:38
+  F102  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/rotation.rs:46
+  F103  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/rotation.rs:63
+  F104  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_crypto_identity/rotation.rs:127
+  F105  excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:1
+  F106  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:37
+  F107  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:79
+  F108  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/mod.rs:483
+  F109  excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/ownership.rs:1
+  F110  excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:1
+  F111  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:763
+  F112  path_segment_repetition       molten_node_core  crates/molten-node-core/src/../../molten-core/src/fabric_durability/transition.rs:838
+  F113  excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/node_startup.rs:1
+  F114  underscore_in_module_filename molten_node_core  crates/molten-node-core/src/../../molten-core/src/node_startup.rs:1
+  F115  usize_in_public_api           molten_node_core  crates/molten-node-core/src/../../molten-core/src/node_startup.rs:123
+  F116  usize_in_public_api           molten_node_core  crates/molten-node-core/src/../../molten-core/src/node_startup.rs:222
+  F117  excessive_file_length         molten_node_core  crates/molten-node-core/src/../../molten-core/src/nominal.rs:1
+---

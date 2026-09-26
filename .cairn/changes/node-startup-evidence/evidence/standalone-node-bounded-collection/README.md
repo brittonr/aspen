@@ -297,3 +297,34 @@ ran `validate --root .` with `valid=true`, 16 changes and no issues.
 `gate proposal`, `gate design`, and `gate tasks node-startup-evidence --root .`
 each returned `PASS`; task gate retained four done and two unchecked tasks.
 This validates Cairn structure, not the denied source gate or startup.
+
+The non-operative [profile review proposal](profile-review-proposal.md) records
+the 258-finding partition, the reviewed owner's 72-name catalog versus the
+installed hook's 68 flags, and the limits of an exploratory
+`bounded-systems` run. Its adjacent `bounded-profile-*` files are exact runner
+outputs; BLAKE3 for command/status/summary/provenance, respectively:
+`297d1473ce4068a0becf2cdd220c7c30496e2a87006f35e4c26f16aedfe7a592`,
+`75995182db2befd05b49f5e41ad12e1b9fea7f86283f3492c0d29134c730e2e6`,
+`2147d6a7467e49cb3121be78ff8a109aa045912904956267b8c923c47ac83873`,
+and `71c9e12526f157df95fccc57ff11279933d1215c0659ab8db8dcb8c70764f212`.
+The exploratory run still failed: 114 warnings and three hard public-width
+errors on the first reached crate; it is not an alternative startup gate.
+
+The reviewed owner candidate's 72-lint hook was also exercised as a
+separate, non-admitting comparison; the installed hook names only 68.
+It used `OCTET_PRECOMMIT_USE_INSTALLED=true`, the owner hook at
+`/home/brittonr/git/octet-worktrees/molten-reviewed-20260925/hooks/octet-deny-all.sh`,
+no inherited `DYLINT_RUSTFLAGS`, the same corrected library/nightly/driver,
+offline Cargo, `TMPDIR=$PWD/target`, and
+`CARGO_TARGET_DIR=$PWD/target/gate-reviewed-hook-20260925`.
+`reviewed-hook-{command.txt,status.json,summary.txt,provenance.jsonl}` are
+the exact outputs, BLAKE3 in that order:
+`35f467d73425ba10953488a04a6fecc2f66be15a1e708d9c1a838bba107a272b`,
+`90ce38151387908aa7fc03840dddc315170ce6d87547e1db1700aef2e4f06f7a`,
+`246b1673e5699a1f8cf4f80179ac9e9bc101e4955de33368d54b391865f94b30`,
+and `ac283b5cee3d8ab767d0073e01f2cee0830966eecdd3cadd3c13ce8c57de1f92`.
+It still exited 2 / Cargo 101 with 258 node-core errors. Its status and
+summary are byte-identical to the earlier 68-flag run: the recorded
+workspace profile/config hashes do not bind the differing effective
+`DYLINT_RUSTFLAGS`. The proposal requires an explicit policy/flag identity
+and owner review before any future gate can claim complete coverage.
