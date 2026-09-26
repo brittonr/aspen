@@ -1,0 +1,360 @@
+    Blocking waiting for file lock on build directory
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 26s
+     Running tests/ui.rs (/home/brittonr/.cargo-target/debug/deps/ui-1a9419ab59cb00e3)
+
+running 1 test
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.07s
+[ui fixture] acronym_allowlist_custom/acronym_allowlist_custom
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/acronym_allowlist_custom.stderr
+[ui fixture] acronym_style
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/acronym_style.stderr
+[ui fixture] allocation_in_loop
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/allocation_in_loop.stderr
+[ui fixture] ambient_clock
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/ambient_clock.stderr
+[ui fixture] ambient_env
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/ambient_env.stderr
+[ui fixture] ambient_random
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/ambient_random.stderr
+[ui fixture] ambiguous_params
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/ambiguous_params.stderr
+[ui fixture] assertion_density
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/assertion_density.stderr
+[ui fixture] assertion_density_custom/assertion_density_custom
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/assertion_density_custom.stderr
+[ui fixture] bool_naming
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/bool_naming.stderr
+[ui fixture] bool_naming_local_rename
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/bool_naming_local_rename.stderr
+[ui fixture] bool_naming_macro_fallback
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/bool_naming_macro_fallback.stderr
+[ui fixture] borrowed_argument_types
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/borrowed_argument_types.stderr
+[ui fixture] catch_all_on_enum
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/catch_all_on_enum.stderr
+[ui fixture] clone_then_borrow
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/clone_then_borrow.stderr
+[ui fixture] compound_assertion
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/compound_assertion.stderr
+[ui fixture] compound_assertion_indented
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/compound_assertion_indented.stderr
+[ui fixture] compound_assertion_machine_applicable
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/compound_assertion_machine_applicable.stderr
+[ui fixture] compound_assertion_message_guardrail
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/compound_assertion_message_guardrail.stderr
+[ui fixture] compound_assertion_or_guardrail
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/compound_assertion_or_guardrail.stderr
+[ui fixture] compound_condition
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/compound_condition.stderr
+[ui fixture] contradictory_time
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/contradictory_time.stderr
+[ui fixture] concrete_construction_in_core/concrete_construction_in_core
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/concrete_construction_in_core.stderr
+warning: struct `DomainValue` is never constructed
+ --> concrete_construction_in_core.rs:1:8
+  |
+1 | struct DomainValue;
+  |        ^^^^^^^^^^^
+  |
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: associated function `new` is never used
+ --> concrete_construction_in_core.rs:4:8
+  |
+3 | impl DomainValue {
+  | ---------------- associated function in this implementation
+4 |     fn new() -> Self {
+  |        ^^^
+
+warning: function `construct_local_domain_value` is never used
+ --> concrete_construction_in_core.rs:9:4
+  |
+9 | fn construct_local_domain_value() {
+  |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `construct_standard_value` is never used
+  --> concrete_construction_in_core.rs:13:4
+   |
+13 | fn construct_standard_value() {
+   |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `construct_nested_external_value` is never used
+  --> concrete_construction_in_core.rs:17:4
+   |
+17 | fn construct_nested_external_value() {
+   |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `main` is never used
+  --> concrete_construction_in_core.rs:21:4
+   |
+21 | fn main() {
+   |    ^^^^
+
+[ui fixture] concrete_construction_in_core_no_scope
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/concrete_construction_in_core_no_scope.stderr
+[ui fixture] defaulting_trait_method
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/defaulting_trait_method.stderr
+[ui fixture] defaulting_trait_method_required
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/defaulting_trait_method_required.stderr
+[ui fixture] deref_polymorphism
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/deref_polymorphism.stderr
+[ui fixture] drop_must_use
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/drop_must_use.stderr
+[ui fixture] excessive_file_length
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/excessive_file_length.stderr
+[ui fixture] excessive_file_length_within_limit
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/excessive_file_length_within_limit.stderr
+[ui fixture] explicit_defaults/explicit_defaults
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/explicit_defaults.stderr
+[ui fixture] fallible_int_fallback
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/fallible_int_fallback.stderr
+[ui fixture] fat_trait
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/fat_trait.stderr
+[ui fixture] fat_trait_within_limit
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/fat_trait_within_limit.stderr
+[ui fixture] float_for_currency
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/float_for_currency.stderr
+[ui fixture] foreign_enum_catch_all
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/foreign_enum_catch_all.stderr
+[ui fixture] foreign_enum_catch_all_macro
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/foreign_enum_catch_all_macro.stderr
+[ui fixture] foreign_enum_catch_all_own_enum
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/foreign_enum_catch_all_own_enum.stderr
+[ui fixture] fragile_exhaustive_enum_match
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/fragile_exhaustive_enum_match.stderr
+[ui fixture] fragile_exhaustive_enum_match_foreign
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/fragile_exhaustive_enum_match_foreign.stderr
+[ui fixture] fragile_exhaustive_enum_match_sealed
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/fragile_exhaustive_enum_match_sealed.stderr
+[ui fixture] fragile_exhaustive_enum_match_state_machine
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/fragile_exhaustive_enum_match_state_machine.stderr
+[ui fixture] state_machine_exhaustiveness
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/state_machine_exhaustiveness.stderr
+[ui fixture] state_machine_exhaustiveness_negative
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/state_machine_exhaustiveness_negative.stderr
+[ui fixture] function_length
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/function_length.stderr
+[ui fixture] function_length_custom/function_length_custom
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/function_length_custom.stderr
+[ui fixture] group_allow_safety
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/group_allow_safety.stderr
+[ui fixture] group_deny_naming
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/group_deny_naming.stderr
+[ui fixture] global_state_in_core/global_state_in_core
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/global_state_in_core.stderr
+[ui fixture] ignored_join_handle
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/ignored_join_handle.stderr
+[ui fixture] ignored_result
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/ignored_result.stderr
+[ui fixture] ignored_result_drop
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/ignored_result_drop.stderr
+[ui fixture] impure_call_in_core/impure_call_in_core
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/impure_call_in_core.stderr
+[ui fixture] interior_mutability_in_core/interior_mutability_in_core
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/interior_mutability_in_core.stderr
+[ui fixture] ignored_result_shutdown_send
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/ignored_result_shutdown_send.stderr
+[ui fixture] lint_guardrail_common
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/lint_guardrail_common.stderr
+[ui fixture] logging_in_core/logging_in_core
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/logging_in_core.stderr
+[ui fixture] magic_number
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/magic_number.stderr
+[ui fixture] max_parameters_custom/max_parameters_custom
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/max_parameters_custom.stderr
+[ui fixture] missing_const_fn
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/missing_const_fn.stderr
+[ui fixture] module_file_count
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/module_file_count.stderr
+[ui fixture] module_file_count_at_limit
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/module_file_count_at_limit.stderr
+[ui fixture] multi_lock_ordering
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/multi_lock_ordering.stderr
+[ui fixture] mutating_input_in_pure
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/mutating_input_in_pure.stderr
+[ui fixture] negated_predicate
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/negated_predicate.stderr
+[ui fixture] negated_predicate_local_rename
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/negated_predicate_local_rename.stderr
+[ui fixture] nested_conditionals
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/nested_conditionals.stderr
+[ui fixture] nesting_custom/nesting_custom
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/nesting_custom.stderr
+[ui fixture] namespace_bare_lint_deny
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/namespace_bare_lint_deny.stderr
+[ui fixture] namespace_canonical_group_allow
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/namespace_canonical_group_allow.stderr
+[ui fixture] namespace_canonical_lint_allow
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/namespace_canonical_lint_allow.stderr
+[ui fixture] namespace_unsupported_octet_attr
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/namespace_unsupported_octet_attr.stderr
+[ui fixture] no_panic
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_panic.stderr
+[ui fixture] no_panic_cfg_not
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_panic_cfg_not.stderr
+[ui fixture] no_panic_exhaustive
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_panic_exhaustive.stderr
+[ui fixture] no_panic_exhaustive_external
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_panic_exhaustive_external.stderr
+[ui fixture] no_panic_exhaustive_indirect
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_panic_exhaustive_indirect.stderr
+[ui fixture] no_panic_exhaustive_non_exhaustive
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_panic_exhaustive_non_exhaustive.stderr
+[ui fixture] no_recursion
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_recursion.stderr
+[ui fixture] no_todo
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_todo.stderr
+[ui fixture] no_todo_allow
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_todo_allow.stderr
+[ui fixture] no_todo_legacy_no_panic_allow
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_todo_legacy_no_panic_allow.stderr
+[ui fixture] no_todo_orphan_allow
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_todo_orphan_allow.stderr
+[ui fixture] no_unwrap
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_unwrap.stderr
+[ui fixture] no_unwrap_allow_custom/no_unwrap_allow_custom
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_unwrap_allow_custom.stderr
+[ui fixture] no_unwrap_cfg_not
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_unwrap_cfg_not.stderr
+[ui fixture] no_unwrap_compile_time_known
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_unwrap_compile_time_known.stderr
+[ui fixture] no_unwrap_default_custom/no_unwrap_default_custom
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_unwrap_default_custom.stderr
+[ui fixture] no_unwrap_deny_custom/no_unwrap_deny_custom
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_unwrap_deny_custom.stderr
+[ui fixture] no_unwrap_disabled_custom/no_unwrap_disabled_custom
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_unwrap_disabled_custom.stderr
+[ui fixture] no_unwrap_disabled_deny_custom/no_unwrap_disabled_deny_custom
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_unwrap_disabled_deny_custom.stderr
+[ui fixture] no_unwrap_disabled_source_attr_custom/no_unwrap_disabled_source_attr_custom
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_unwrap_disabled_source_attr_custom.stderr
+[ui fixture] no_unwrap_guarded
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_unwrap_guarded.stderr
+[ui fixture] no_unwrap_test_target
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_unwrap_test_target.stderr
+[ui fixture] no_unwrap_tool_attr
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_unwrap_tool_attr.stderr
+[ui fixture] no_unwrap_warn_custom/no_unwrap_warn_custom
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/no_unwrap_warn_custom.stderr
+[ui fixture] nominal_domain_compile_fail
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/nominal_domain_compile_fail.stderr
+[ui fixture] nominal_domain_compile_pass
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/nominal_domain_compile_pass.stderr
+[ui fixture] nondeterministic_output
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/nondeterministic_output.stderr
+[ui fixture] numeric_units
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/numeric_units.stderr
+[ui fixture] newtype_invariant_bypass
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/newtype_invariant_bypass.stderr
+[ui fixture] newtype_invariant_safe
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/newtype_invariant_safe.stderr
+[ui fixture] platform_dependent_cast
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/platform_dependent_cast.stderr
+[ui fixture] primitive_domain_alias
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/primitive_domain_alias.stderr
+[ui fixture] primitive_domain_alias_compat
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/primitive_domain_alias_compat.stderr
+[ui fixture] primitive_domain_alias_exact
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/primitive_domain_alias_exact.stderr
+[ui fixture] public_unsafe_api
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/public_unsafe_api.stderr
+[ui fixture] raw_arithmetic_overflow
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/raw_arithmetic_overflow.stderr
+[ui fixture] raw_domain_value
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/raw_domain_value.stderr
+[ui fixture] raw_domain_value_compat
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/raw_domain_value_compat.stderr
+[ui fixture] raw_domain_value_ffi
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/raw_domain_value_ffi.stderr
+[ui fixture] raw_domain_value_generated
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/raw_domain_value_generated.stderr
+[ui fixture] sentinel_fallback
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/sentinel_fallback.stderr
+[ui fixture] tokio_async/ignored_result_shutdown_send_tokio
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/ignored_result_shutdown_send_tokio.stderr
+[ui fixture] tokio_async/ignored_result_try_send_tokio
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/ignored_result_try_send_tokio.stderr
+[ui fixture] tokio_async/unbounded_loop_bare_async
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/unbounded_loop_bare_async.stderr
+[ui fixture] tokio_async/unbounded_loop_bounded_receiver
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/unbounded_loop_bounded_receiver.stderr
+[ui fixture] tokio_async/unbounded_loop_imported_select
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/unbounded_loop_imported_select.stderr
+[ui fixture] tokio_async/unbounded_loop_non_tokio_select
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/unbounded_loop_non_tokio_select.stderr
+[ui fixture] tokio_async/unbounded_loop_plain_await
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/unbounded_loop_plain_await.stderr
+[ui fixture] tokio_async/unbounded_loop_tokio_select
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/unbounded_loop_tokio_select.stderr
+[ui fixture] tokio_async/unbounded_loop_unbounded_receiver
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/unbounded_loop_unbounded_receiver.stderr
+[ui fixture] too_many_parameters
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/too_many_parameters.stderr
+[ui fixture] type_accumulation
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/type_accumulation.stderr
+[ui fixture] type_accumulation_within_limit
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/type_accumulation_within_limit.stderr
+[ui fixture] unbounded_channel/unbounded_channel
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/unbounded_channel.stderr
+[ui fixture] unbounded_collection_growth
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/unbounded_collection_growth.stderr
+[ui fixture] unbounded_loop
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/unbounded_loop.stderr
+[ui fixture] unbounded_loop_iter_next
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/unbounded_loop_iter_next.stderr
+[ui fixture] unchecked_division
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/unchecked_division.stderr
+[ui fixture] unchecked_narrowing
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/unchecked_narrowing.stderr
+[ui fixture] unchecked_narrowing_min
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/unchecked_narrowing_min.stderr
+[ui fixture] unchecked_narrowing_same_block_assert
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/unchecked_narrowing_same_block_assert.stderr
+[ui fixture] unchecked_narrowing_try_from
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/unchecked_narrowing_try_from.stderr
+[ui fixture] underscore_in_module_filename
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/underscore_in_module_filename.stderr
+[ui fixture] underscore_in_module_filename_directory
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/underscore_in_module_filename_directory.stderr
+[ui fixture] non_trait_imports
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/non_trait_imports.stderr
+[ui fixture] non_trait_imports_trait
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/non_trait_imports_trait.stderr
+[ui fixture] non_trait_imports_public_reexport
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/non_trait_imports_public_reexport.stderr
+[ui fixture] renamed_imports_compat
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/renamed_imports_compat.stderr
+[ui fixture] renamed_imports_trait
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/renamed_imports_trait.stderr
+[ui fixture] renamed_imports
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/renamed_imports.stderr
+[ui fixture] path_segment_repetition_compat
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/path_segment_repetition_compat.stderr
+[ui fixture] path_segment_repetition_non_repeating
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/path_segment_repetition_non_repeating.stderr
+[ui fixture] path_segment_repetition
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/path_segment_repetition.stderr
+[ui fixture] pure_attr_contract/pure_attr_contract
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/pure_attr_contract.stderr
+[ui fixture] purity_effect_lints_guardrails
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/purity_effect_lints_guardrails.stderr
+[ui fixture] resource_return_from_core/resource_return_from_core
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/resource_return_from_core.stderr
+[ui fixture] spawn_in_core/spawn_in_core
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/spawn_in_core.stderr
+[ui fixture] zero_alloc_attr_contract/zero_alloc_attr_contract
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/zero_alloc_attr_contract.stderr
+[ui fixture] zero_alloc_attr_contract_allow
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/zero_alloc_attr_contract_allow.stderr
+[ui fixture] zero_alloc_attr_contract_silent_allow
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/zero_alloc_attr_contract_silent_allow.stderr
+[ui fixture] unjustified_allow
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/unjustified_allow.stderr
+[ui fixture] usize_in_public_api
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/usize_in_public_api.stderr
+[ui fixture] verified/verified_purity
+[ui snapshot] /home/brittonr/git/octet-worktrees/molten-reviewed-20260925/ui_tests/verified_purity.stderr
+test ui ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 9.30s
+

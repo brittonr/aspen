@@ -236,3 +236,64 @@ or adding catch-all enum arms just to clear the gate is not an approved
 startup route. Exact reviewed policy or semantics-preserving source
 resolution is still required before an independently bound executable
 cohort and real normal-node VM evidence can exist.
+
+## Integration-test compilation context review (2026-09-25)
+
+The owner review worktree now treats `rustc --test` as test context for
+production-only lints, including unannotated helper functions in an
+integration-test crate. A plain `--cfg test` still checks unannotated
+production functions. The new `no_unwrap_test_target` UI fixture compiled
+under `--test` with `#![deny(tigerstyle::no_unwrap)]`; the full owner UI
+suite passed, the 155 owner library tests passed, and the edited Rust files
+passed pinned rustfmt. The owner library built with the existing
+`nightly-2026-03-21` compiler and clang/mold tools has BLAKE3
+`3d58e616b83b54d462cca9cc3c91ca90e9e7cb4d823842b1f2235bfd05f0f79b`.
+The exact owner candidate is
+`46ca9bbb8c4ab4bd5ca4b39fa17f57bc36dab9b5`. It is local, not an
+approved release.
+
+The owner checks ran from
+`/home/brittonr/git/octet-worktrees/molten-reviewed-20260925`:
+`cargo test --locked --offline --test ui ui -- --ignored --nocapture`,
+`cargo test --locked --offline --lib`, and
+`rustfmt --edition 2024 --check src/test_context.rs tests/ui.rs ui_tests/no_unwrap_test_target.rs`.
+The first two used `CARGO_TARGET_DIR=/home/brittonr/.cargo-target`,
+`TMPDIR=$PWD/target`, empty `RUSTC_WRAPPER` and
+`RUSTC_WORKSPACE_WRAPPER`, the cached `nightly-2026-03-21` compiler,
+clang 21/mold 2.40.4, and installed Dylint driver
+`/nix/store/r5bzbvda2ydnz09c6vxvqhxsmh37nhpw-dylint-driver-5.0.0/bin/dylint-driver`
+for UI compilation. Both tests exited 0; rustfmt exited 0.
+`test-context-owner-ui.log` and `test-context-owner-lib.log` retain the
+two raw test outputs, BLAKE3
+`f3f82578182c14c4526d492cb4bf8758591caf2e162a8b9acaddcc74e4f47119`
+and `a18dc8d2a8f33b04e27acff30310b5a1c2185b49e6bf0109f0a19a4db6602681`.
+
+From this producer worktree, the unchanged strict hook, installed CLI,
+Dylint driver, toolchain, source selection, workspace-metadata profile and
+config were exercised with that library, `TMPDIR=$PWD/target`,
+`CARGO_TARGET_DIR=$PWD/target/gate-test-context-20260925`, and
+`--artifact-dir target/octet-test-context-20260925`. The adjacent
+`test-context-{command.txt,status.json,summary.txt,provenance.jsonl}`
+are the exact runner outputs. Their BLAKE3 digests in that order are
+`40883d2dd151b1abd38030cc8abb7d2018928245ab7a83c1482de4d4c86df632`,
+`90ce38151387908aa7fc03840dddc315170ce6d87547e1db1700aef2e4f06f7a`,
+`246b1673e5699a1f8cf4f80179ac9e9bc101e4955de33368d54b391865f94b30`,
+and `cb11f0064754dbbe2b111aa5a53f3405e8a96934fb98e6269b9c2f50a4c52d72`.
+
+The gate still exited **2** (Cargo **101**) with **258 errors**, all in
+`molten_node_core`. Relative to the prior 285-error run, its 27
+`classifications` test-target errors disappeared; the 258 node-core
+diagnostics did not. The profile hash remains
+`b3:3cfa1bc99d6ed29271c6f9fd2cc5cc00465c56268a65d22ca6a0a7b2c3cd814a`
+and the config hash remains
+`b3:58fad8b399c183822f3511c810b20ef9c8f2e8ae7f1f72710cb94f9297be0abc`.
+No compiler-bound complete source/build/binary inventory, owner-approved
+release, normal-node start, VM lifecycle, or replay is claimed.
+
+The ambient Cairn binary cannot parse this producer's older workflow profile
+policy (`outcome-machine` is missing). The previously verified compatible
+`/nix/store/5ykphxi2a0dnplai4jmgh34sdb9cfvwl-cairn-0.1.0/bin/cairn`
+ran `validate --root .` with `valid=true`, 16 changes and no issues.
+`gate proposal`, `gate design`, and `gate tasks node-startup-evidence --root .`
+each returned `PASS`; task gate retained four done and two unchecked tasks.
+This validates Cairn structure, not the denied source gate or startup.
