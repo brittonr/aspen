@@ -1,0 +1,131 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/consume-onixpkgs-kache/specs/kache-nix-rust/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/consume-onixpkgs-kache/specs/kache-nix-rust/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "consume-onixpkgs-kache",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/consume-onixpkgs-kache/specs/kache-nix-rust/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "948e4a7c182cc80f40d8dcdf54198e4db2b914b43b1ee876d368aec73d0ba13b",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": false,
+        "accepted_before_hash": "4f034f99e2cd6d06413d75d9f6e66a8fcdb41a106eae06de8171ee62d159ce89",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "0a1405be1cd6175ff33dafff1bde3d223176c8b4b673aa9ed23c47215fa3d257",
+        "destination": ".cairn/specs/kache-nix-rust/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "711219a20c965777d27a20f17b190e0a1bf4e37d8af4f4014790b9d95fd91712",
+        "operations": [
+          {
+            "block_hash": "7788e2d456aee0f7fa183d1902205449ff462c7d17ddbd11a2ec7f5bcc5b04dc",
+            "heading": "### Requirement: Kache comes from onixpkgs",
+            "kind": "added",
+            "requirement_id": "molten.onixpkgs_kache.source"
+          },
+          {
+            "block_hash": "27c264ab90febd167d696c989f4b18fcae01f339d43a7b7e6e5b9969a1fb6f89",
+            "heading": "### Requirement: The overlay does not change unrelated derivations",
+            "kind": "added",
+            "requirement_id": "molten.onixpkgs_kache.isolation"
+          },
+          {
+            "block_hash": "9fa819194cdf665d7e065b7a3a7a2dd7ec19076ce9f466748fb887997622ac57",
+            "heading": "### Requirement: Wrapper behavior stays under contract",
+            "kind": "added",
+            "requirement_id": "molten.onixpkgs_kache.contract"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.onixpkgs_kache.source",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.onixpkgs_kache.isolation",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.onixpkgs_kache.contract",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/consume-onixpkgs-kache/specs/kache-nix-rust/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "711219a20c965777d27a20f17b190e0a1bf4e37d8af4f4014790b9d95fd91712",
+          "exists": true,
+          "path": "./.cairn/specs/kache-nix-rust/spec.md"
+        }
+      ],
+      "manifest_hash": "b6251824241d7180b24e6252c5f37fa5c9774db2b3c4311c98dee8849b9eee45"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/specs/kache-nix-rust/spec.md"
+        }
+      ],
+      "manifest_hash": "80ce988e790253cc47b7fb047772cded6114b4426b3317f7e82085b53a831062"
+    },
+    "kind": "sync",
+    "manifest_hash": "13c09cde90e846b299d6180a532db37189d0bf1882482b56cfefb0945d932052"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "c65e82ddec68bd3ceca2bb58f980ba7ebb0f6891e5e0a667d2d3500ec57bc8e5",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "a2aa4aa1eaeff1d43dff29e2cb4ae0fade8ecc4e997d5202ed31eeb9ccc9ec74",
+  "reasons": [],
+  "receipt_hash": "28cb1f51a46e90828a75f708b6e1ecb571ca2d827c3b2f818d17157756e85b7a",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

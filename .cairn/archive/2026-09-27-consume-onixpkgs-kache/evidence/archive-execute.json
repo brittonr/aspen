@@ -1,0 +1,181 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: consume-onixpkgs-kache",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-09-27-consume-onixpkgs-kache"
+    }
+  ],
+  "blocked": false,
+  "change": "consume-onixpkgs-kache",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "dc47829c98c64d84bcc9f29491947995c96b1d3b8bd878202f8e0acf14ee5e38",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "51aef8a1d516ede67d9a3beb5bcd89291bf4b6906240690358a08c18bc883ce7",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-27-consume-onixpkgs-kache/design.md"
+        },
+        {
+          "content_hash": "71acf50b213543db6d8eee80394891839308cae7daa71ef7160f44e9e9dbea35",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-27-consume-onixpkgs-kache/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "7e06955cb3bd5e5544c0b5fe261025f3fc1105ace7805ccdbd8da8b8010525c4",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-27-consume-onixpkgs-kache/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "fa10007ccadf7b4e094af26fbf7b54c6dfba90c89dbe40b0811acc82bd99587a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-27-consume-onixpkgs-kache/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "52ae836a85674cdb2b501bbfed56aa78484e52dfec46891d137100c30b6234af",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-27-consume-onixpkgs-kache/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "5723509f2cad0f217212c8ffb473cc1e895e9f0a1885124a3c799973456071b6",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-27-consume-onixpkgs-kache/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "cbc0ca5a050ee207da0da1d3e2a13d8b410dee8e155c920878cc73019bc950c2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-27-consume-onixpkgs-kache/evidence/verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-27-consume-onixpkgs-kache/metadata.json"
+        },
+        {
+          "content_hash": "02a50fdc0956fe46c7a205b90e818c04ac2c80f72b79430718a4d1117ad7571a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-27-consume-onixpkgs-kache/proposal.md"
+        },
+        {
+          "content_hash": "0a1405be1cd6175ff33dafff1bde3d223176c8b4b673aa9ed23c47215fa3d257",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-27-consume-onixpkgs-kache/specs/kache-nix-rust/spec.md"
+        },
+        {
+          "content_hash": "46e85cca4e2ba7b849bd986ecde243bc970f14296cd3d25717c5429e1e1aa863",
+          "exists": true,
+          "path": "./.cairn/archive/2026-09-27-consume-onixpkgs-kache/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/consume-onixpkgs-kache"
+        }
+      ],
+      "manifest_hash": "5a7524c6c7a7002f6711eceb0e808846df9bc3f24da8ef9e161028391bb635eb"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "51aef8a1d516ede67d9a3beb5bcd89291bf4b6906240690358a08c18bc883ce7",
+          "exists": true,
+          "path": "./.cairn/changes/consume-onixpkgs-kache/design.md"
+        },
+        {
+          "content_hash": "71acf50b213543db6d8eee80394891839308cae7daa71ef7160f44e9e9dbea35",
+          "exists": true,
+          "path": "./.cairn/changes/consume-onixpkgs-kache/evidence/gate-design.json"
+        },
+        {
+          "content_hash": "7e06955cb3bd5e5544c0b5fe261025f3fc1105ace7805ccdbd8da8b8010525c4",
+          "exists": true,
+          "path": "./.cairn/changes/consume-onixpkgs-kache/evidence/gate-proposal.json"
+        },
+        {
+          "content_hash": "fa10007ccadf7b4e094af26fbf7b54c6dfba90c89dbe40b0811acc82bd99587a",
+          "exists": true,
+          "path": "./.cairn/changes/consume-onixpkgs-kache/evidence/gate-tasks.json"
+        },
+        {
+          "content_hash": "52ae836a85674cdb2b501bbfed56aa78484e52dfec46891d137100c30b6234af",
+          "exists": true,
+          "path": "./.cairn/changes/consume-onixpkgs-kache/evidence/sync-execute.json"
+        },
+        {
+          "content_hash": "5723509f2cad0f217212c8ffb473cc1e895e9f0a1885124a3c799973456071b6",
+          "exists": true,
+          "path": "./.cairn/changes/consume-onixpkgs-kache/evidence/validate-strict.json"
+        },
+        {
+          "content_hash": "cbc0ca5a050ee207da0da1d3e2a13d8b410dee8e155c920878cc73019bc950c2",
+          "exists": true,
+          "path": "./.cairn/changes/consume-onixpkgs-kache/evidence/verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/consume-onixpkgs-kache/metadata.json"
+        },
+        {
+          "content_hash": "02a50fdc0956fe46c7a205b90e818c04ac2c80f72b79430718a4d1117ad7571a",
+          "exists": true,
+          "path": "./.cairn/changes/consume-onixpkgs-kache/proposal.md"
+        },
+        {
+          "content_hash": "0a1405be1cd6175ff33dafff1bde3d223176c8b4b673aa9ed23c47215fa3d257",
+          "exists": true,
+          "path": "./.cairn/changes/consume-onixpkgs-kache/specs/kache-nix-rust/spec.md"
+        },
+        {
+          "content_hash": "46e85cca4e2ba7b849bd986ecde243bc970f14296cd3d25717c5429e1e1aa863",
+          "exists": true,
+          "path": "./.cairn/changes/consume-onixpkgs-kache/tasks.md"
+        }
+      ],
+      "manifest_hash": "43d860838ebbd283ded5ee80fcd90421b296e0c26402548353a619c2a976ecf2"
+    },
+    "kind": "archive",
+    "manifest_hash": "26e8adb11d7167633eb3d0f077c4c7ca329e4661846dabb7f1e5f6c69d35898b"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "ab8ea87fde9f845a588a5646e7d796bb3484e2562eba7329f73e7e9a273867d4",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "a2aa4aa1eaeff1d43dff29e2cb4ae0fade8ecc4e997d5202ed31eeb9ccc9ec74",
+  "reasons": [],
+  "receipt_hash": "f15a0d2e64c98994fb80074e6fab8d95d18365c8fdd694a7c6a797ea1199febf",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
