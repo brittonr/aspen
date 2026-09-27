@@ -208,7 +208,7 @@ nix run \
   --override-input basalt-src path:../basalt \
   --override-input cairn-src path:../cairn \
   --override-input valence-src path:../valence \
-  --override-input onix-core-src path:../../onix-core \
+  --override-input onixpkgs path:../onixpkgs \
   .#molten -- cluster status --state-root target/cluster
 ```
 
@@ -690,7 +690,7 @@ nix build .#checks.x86_64-linux.nixos-vm-multinode -L \
   --override-input basalt-src path:../basalt \
   --override-input cairn-src path:../cairn \
   --override-input valence-src path:../valence \
-  --override-input onix-core-src path:../../onix-core
+  --override-input onixpkgs path:../onixpkgs
 ```
 
 `nixos-vm-multinode` is an explicit `testers.runNixOSTest` platform integration check. It starts two headless NixOS VMs with the current Molten package, runs the real node init/start/status/control-loop/stop service path under systemd with isolated `/var/lib/molten` roots, checks VM networking, exercises queued control-request recovery across a service restart, and emits `nixos-vm-topology-v1`, `nixos-vm-node-evidence-v1`, and `nixos-vm-test-run-v1` receipts inside the VM evidence directories. It also emits `prod-soak-evidence-export-v1`, `prod-soak-durability-v1`, `prod-soak-fault-case-v1`, `prod-soak-fault-matrix-v1`, `prod-soak-resource-envelope-v1`, and `prod-soak-run-v1` receipts that bind the production-shaped live workflow child evidence: peer tickets, node-control bundle lifecycle, remote dataspace/service exchange, blob-ref job execution, coordination apply, restart durability, network/transport fault coverage, resource envelope bounds, per-node evidence exports, replay status, logs, and pilot-scope caveats. For an internal pilot, this soak evidence is sufficient to show that the VM topology can coordinate live child receipts across peers, survive the bounded restart path, preserve referenced artifacts, and report pilot resource bounds. It remains out of scope for broad production claims about real WAN transport, sustained SLOs, adversarial security, authority delegation, retention policy, destructive operations, source-gate trust, or fleet-scale resource pressure. It requires working NixOS VM execution support; missing KVM/QEMU support must fail or report unavailable rather than minting pass evidence.
@@ -863,7 +863,7 @@ Earlier permissive grants remain valid. The current declaration applies prospect
 - [Engineering Record And Replay For Deployability](https://www.usenix.org/system/files/conference/atc17/atc17-o_callahan.pdf) — replay-boundary reference for explicit nondeterministic inputs and sealed observations. Molten adapts the principle at typed hostcalls and effect ports rather than adopting native syscall replay as world semantics.
 - [`rr-debugger/rr` `5.9.0` at `aaed29dc0324444e36503a26dcec96731d1942b0`](https://github.com/rr-debugger/rr/tree/aaed29dc0324444e36503a26dcec96731d1942b0) — optional native-process diagnostic mechanism owned through the ChaosControl adapter. It does not replace logical world replay or deterministic VM simulation.
 - [PsychoLlama/ambient](https://github.com/PsychoLlama/ambient) — design reference for immutable content-addressed implementations, explicit one-snapshot late binding, runtime-owned state roots, semantic handler keys, and generation retirement tracing. Molten retains its own Preserves identity, receiver-side authority and policy admission, resource limits, evidence, retention, and distributed-runtime semantics; it does not adopt Ambient's language, VM, mobile-code model, or unauthenticated deployment posture.
-- [`onix-core` kache Nix Rust helpers](../../onix-core/lib/kache-nix-rust.nix) — reference implementation for opt-in Nix-owned kache wrappers around sandboxed Rust builds.
+- [`onixpkgs` kache Nix Rust helpers](../onixpkgs/lib/kache-nix-rust.nix) — pinned `onixpkgs` flake input that supplies the kache package (`onixpkgs.overlays.default`) and `lib.kacheNixRust`, the helpers behind the opt-in Nix-owned kache wrappers around sandboxed Rust builds.
 - [`verus-lang/verified-node-replication`](https://github.com/verus-lang/verified-node-replication) — pinned local multicore/NUMA compatibility pilot only; it is not network replication or consensus, current verifier compatibility is blocked, and upstream trusted boundaries do not transfer proof authority.
 - [`verus-lang/verus`](https://github.com/verus-lang/verus) — exact current and historical verifier source identities for the pilot; verifier execution is bounded evidence, not a tool-soundness or Molten-correctness claim.
 - [`n0-computer/iroh-experiments`](https://github.com/n0-computer/iroh-experiments) — design reference for hint-only Iroh content discovery, deterministic DAG traversal, optional pkarr pointers, HTTP3-over-Iroh readback, and remote byte-source ideas; Molten keeps Preserves receipts, BLAKE3 identity, and capability/policy/resource gates normative.

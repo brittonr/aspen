@@ -117,6 +117,44 @@
         "url": "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git"
       }
     },
+    "bun2nix": {
+      "inputs": {
+        "flake-parts": [
+          "onixpkgs",
+          "llm-agents",
+          "flake-parts"
+        ],
+        "nixpkgs": [
+          "onixpkgs",
+          "llm-agents",
+          "nixpkgs"
+        ],
+        "systems": [
+          "onixpkgs",
+          "llm-agents",
+          "systems"
+        ],
+        "treefmt-nix": [
+          "onixpkgs",
+          "llm-agents",
+          "treefmt-nix"
+        ]
+      },
+      "locked": {
+        "lastModified": 1790001035,
+        "narHash": "sha256-1/SLBjSYBzDdDhvLQ83wrzBakyS/xNGgtxHGNuveOEQ=",
+        "owner": "Mic92",
+        "repo": "bun2nix",
+        "rev": "07a5bfc8ac36c5370199343fa620b69f63186e33",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Mic92",
+        "ref": "llm-agents",
+        "repo": "bun2nix",
+        "type": "github"
+      }
+    },
     "cairn": {
       "inputs": {
         "artifact": "artifact",
@@ -753,6 +791,28 @@
     "flake-parts": {
       "inputs": {
         "nixpkgs-lib": [
+          "onixpkgs",
+          "llm-agents",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1788450739,
+        "narHash": "sha256-glZLQlzIn1fXH6PazR2iUmTo7kzzyYSshrWhLS9TqCU=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "31729ca8cbdb4fa927b34e5f4353e6a83f39e993",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
+    "flake-parts_2": {
+      "inputs": {
+        "nixpkgs-lib": [
           "unit2nix",
           "nixpkgs"
         ]
@@ -1103,6 +1163,24 @@
         "type": "github"
       }
     },
+    "horizon": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1790372577,
+        "lfs": true,
+        "narHash": "sha256-XqrSVHdsfuOz+8WBcdMQqEp71vLSVpUc2FB6kbn8DNw=",
+        "ref": "refs/heads/main",
+        "rev": "138c5571a5efc9506f6e2a2c4d33e9f5ebb8067b",
+        "revCount": 1112,
+        "type": "git",
+        "url": "https://github.com/peters/horizon"
+      },
+      "original": {
+        "lfs": true,
+        "type": "git",
+        "url": "https://github.com/peters/horizon"
+      }
+    },
     "kamacite-src": {
       "flake": false,
       "locked": {
@@ -1134,6 +1212,31 @@
         "owner": "leanprover",
         "repo": "lean4",
         "rev": "68218e876d2a38b1985b8590fff244a83c321783",
+        "type": "github"
+      }
+    },
+    "llm-agents": {
+      "inputs": {
+        "bun2nix": "bun2nix",
+        "flake-parts": "flake-parts",
+        "nixpkgs": [
+          "onixpkgs",
+          "nixpkgs"
+        ],
+        "systems": "systems_14",
+        "treefmt-nix": "treefmt-nix"
+      },
+      "locked": {
+        "lastModified": 1790372205,
+        "narHash": "sha256-CWIDZFX/HsNJeMv6hOqVT6m/5Tkx9xfEzok+Lw2zkHk=",
+        "owner": "numtide",
+        "repo": "llm-agents.nix",
+        "rev": "2e9c743bc337136b0714f27dae05d575ad81f0ee",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "llm-agents.nix",
         "type": "github"
       }
     },
@@ -1490,22 +1593,29 @@
         "type": "github"
       }
     },
-    "onix-core-src": {
-      "flake": false,
+    "onixpkgs": {
+      "inputs": {
+        "horizon": "horizon",
+        "llm-agents": "llm-agents",
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "treefmt-nix": "treefmt-nix_2",
+        "wrappers": "wrappers"
+      },
       "locked": {
-        "lastModified": 1783296811,
-        "narHash": "sha256-SlSpP5CZEdYZlr3KlRjEgYxntcHHb3qWM+F1pbnbJpo=",
+        "lastModified": 1790539518,
+        "narHash": "sha256-jOmVibE6UP1Az4O1xqyAnwNaRrMny+1JpGUX9NJA4sU=",
         "ref": "refs/heads/main",
-        "rev": "ae895854eb049ff152d3f1b96cb90a5fa45c3ec6",
-        "shallow": true,
+        "rev": "56a93169f4ace2394dc4c474c6d28911c24c35e7",
+        "revCount": 6,
         "type": "git",
-        "url": "ssh://git@github.com/onixcomputer/onix-core.git"
+        "url": "ssh://git@github.com/OnixResearch/onixpkgs.git"
       },
       "original": {
-        "rev": "ae895854eb049ff152d3f1b96cb90a5fa45c3ec6",
-        "shallow": true,
+        "rev": "56a93169f4ace2394dc4c474c6d28911c24c35e7",
         "type": "git",
-        "url": "ssh://git@github.com/onixcomputer/onix-core.git"
+        "url": "ssh://git@github.com/OnixResearch/onixpkgs.git"
       }
     },
     "pre-commit-hooks": {
@@ -1575,7 +1685,7 @@
         "nixpkgs": "nixpkgs_9",
         "octet-cutover-src": "octet-cutover-src",
         "octet-toolchain": "octet-toolchain",
-        "onix-core-src": "onix-core-src",
+        "onixpkgs": "onixpkgs",
         "rust-overlay": "rust-overlay_13",
         "schema-identity-src": "schema-identity-src",
         "schema-migration-core-src": "schema-migration-core-src",
@@ -2130,6 +2240,21 @@
         "type": "github"
       }
     },
+    "systems_14": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
+        "type": "github"
+      }
+    },
     "systems_2": {
       "locked": {
         "lastModified": 1681028828,
@@ -2267,9 +2392,52 @@
         "url": "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git"
       }
     },
+    "treefmt-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "onixpkgs",
+          "llm-agents",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1786901030,
+        "narHash": "sha256-WSFCsDSE5ffgD2MqzkM2CYjeFiKhRF/dJUN8uedb6YE=",
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "rev": "27b3b12a8e6375f28ebe122f07d230ca5459bbfa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "type": "github"
+      }
+    },
+    "treefmt-nix_2": {
+      "inputs": {
+        "nixpkgs": [
+          "onixpkgs",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1786901030,
+        "narHash": "sha256-WSFCsDSE5ffgD2MqzkM2CYjeFiKhRF/dJUN8uedb6YE=",
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "rev": "27b3b12a8e6375f28ebe122f07d230ca5459bbfa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "type": "github"
+      }
+    },
     "unit2nix": {
       "inputs": {
-        "flake-parts": "flake-parts",
+        "flake-parts": "flake-parts_2",
         "nixpkgs": [
           "nixpkgs"
         ]
@@ -2343,6 +2511,27 @@
         "rev": "31f1696ba9391bfda8577a58af84f72361d5573e",
         "type": "git",
         "url": "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3"
+      }
+    },
+    "wrappers": {
+      "inputs": {
+        "nixpkgs": [
+          "onixpkgs",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1774029376,
+        "narHash": "sha256-VmD1jJVs2GnQXorVrLEwF0kNtK34nHSxrcsYNtVvPEU=",
+        "owner": "brittonr",
+        "repo": "wrappers",
+        "rev": "dc3a664bc01b46c704621cdf647a2293ea1dddff",
+        "type": "github"
+      },
+      "original": {
+        "owner": "brittonr",
+        "repo": "wrappers",
+        "type": "github"
       }
     }
   },

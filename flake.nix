@@ -21,9 +21,9 @@
       url = "github:oxalica/rust-overlay/6cddd512fa2bf7231f098d3a2f92f6e4cff71e0a";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    onix-core-src = {
-      url = "git+ssh://git@github.com/onixcomputer/onix-core.git?rev=ae895854eb049ff152d3f1b96cb90a5fa45c3ec6&shallow=1";
-      flake = false;
+    onixpkgs = {
+      url = "git+ssh://git@github.com/OnixResearch/onixpkgs.git?rev=56a93169f4ace2394dc4c474c6d28911c24c35e7";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
     basalt-src = {
       url = "github:OnixResearch/basalt/89675cd4f585f837323c049e4a25f7b94c903038";
@@ -106,7 +106,7 @@
       unit2nix,
       rust-overlay,
       flake-utils,
-      onix-core-src,
+      onixpkgs,
       basalt-src,
       bounded-exec-src,
       artifact-src,
@@ -132,7 +132,10 @@
       let
         pkgsBase = import nixpkgs {
           localSystem = system;
-          overlays = [ (import rust-overlay) ];
+          overlays = [
+            (import rust-overlay)
+            onixpkgs.overlays.default
+          ];
         };
 
         # r[impl molten.nickel_toolchain.cohort]
@@ -549,10 +552,10 @@
 
         kacheCacheDir = "/var/cache/kache-nix";
         kacheKeySalt = "molten-unit2nix-kache-v1";
-        kachePackage = pkgs.callPackage (onix-core-src + "/pkgs/kache") { };
-        kacheLib = import (onix-core-src + "/lib/kache-nix-rust.nix") {
+        kacheLib = onixpkgs.lib.kacheNixRust {
           lib = pkgs.lib;
-          inherit pkgs kachePackage;
+          inherit pkgs;
+          kachePackage = pkgs.kache;
         };
         mkUnit2nixRust =
           {
@@ -3543,7 +3546,7 @@
                     exec "$@"
                   '';
                 };
-                checkedKacheLib = import (onix-core-src + "/lib/kache-nix-rust.nix") {
+                checkedKacheLib = onixpkgs.lib.kacheNixRust {
                   lib = pkgs.lib;
                   inherit pkgs;
                   kachePackage = fakeKache;
