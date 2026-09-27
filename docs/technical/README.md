@@ -2,6 +2,8 @@
 
 One hundred advanced reading notes on Molten's implementation boundaries. These articles complement—not replace—the [architecture](../architecture.md), [fabric ownership law](../distributed-system-fabric.md), [modularity boundaries](../modularity-boundaries.md), accepted Cairn requirements, and subsystem documentation linked in each article. They explain existing contracts; they do not introduce new requirements or certify production readiness.
 
+Looking for a concrete workflow, command reference, or diagnostic procedure? Use the [workflow handbook](../handbook/README.md). The [documentation map](../README.md) explains how both collections relate to governing subsystem documents.
+
 ## How to read this collection
 
 The intended reader is comfortable with Rust, state machines, content-addressed data, object capabilities, and distributed failure models. Start with **Foundations**, then follow the subsystem relevant to the change or incident you are investigating. Each article separates mechanics, invariants, failure reasoning, verification guidance, and non-claims, with links back to the owning sources.
