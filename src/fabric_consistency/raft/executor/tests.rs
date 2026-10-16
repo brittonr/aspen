@@ -10,7 +10,7 @@ impl RecordingPorts {
     fn record(&mut self, kind: ReplicaEffectKind) -> crate::error::Result<String> {
         self.executed.push(kind);
         if self.fail_on == Some(kind) {
-            return Err(crate::error::MoltenError::invalid_harness(format!("injected {} failure", kind.as_str())));
+            return Err(crate::error::Failure::invalid_harness(format!("injected {} failure", kind.as_str())));
         }
         Ok(super::tests::test_ref(kind.as_str()))
     }
@@ -81,7 +81,7 @@ impl ReplicaControlEffects for RecordingPorts {
     fn read_outcome(
         &mut self,
         _request_ref: &str,
-        _mode: crate::fabric_consistency::ConsistencyReadMode,
+        _mode: crate::fabric_consistency::ReadMode,
         _disposition: ReadDisposition,
         _observed_index: u64,
     ) -> crate::error::Result<String> {

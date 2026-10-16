@@ -3,7 +3,7 @@ mod validation;
 pub const COMPONENT_RECEIPT_SCHEMA: &str = "molten.wasm-component-receipt.v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ComponentReceiptStage {
+pub enum Stage {
     Inspection,
     Instantiation,
     Execution,
@@ -12,7 +12,7 @@ pub enum ComponentReceiptStage {
     Migration,
 }
 
-impl ComponentReceiptStage {
+impl Stage {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Inspection => "inspection",
@@ -26,12 +26,12 @@ impl ComponentReceiptStage {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ComponentReceiptDecision {
+pub enum Decision {
     Pass,
     Deny,
 }
 
-impl ComponentReceiptDecision {
+impl Decision {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Pass => "pass",
@@ -41,11 +41,11 @@ impl ComponentReceiptDecision {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ComponentReceiptInput {
-    pub stage: ComponentReceiptStage,
-    pub decision: ComponentReceiptDecision,
+pub struct Input {
+    pub stage: Stage,
+    pub decision: Decision,
     pub evidence_scope: super::super::model::EvidenceScope,
-    pub consumer: super::super::model::ComponentConsumer,
+    pub consumer: super::super::model::Consumer,
     pub component_ref: String,
     pub wit_ref: String,
     pub profile_ref: String,
@@ -70,67 +70,61 @@ pub struct ComponentReceiptInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ComponentReceipt {
-    pub input: ComponentReceiptInput,
+pub struct ExecutionRecord {
+    pub input: Input,
     pub non_claims: Vec<String>,
     pub receipt_ref: String,
 }
 
-pub fn build_component_receipt(input: ComponentReceiptInput) -> super::super::model::ComponentResult<ComponentReceipt> {
+pub fn build(input: Input) -> super::super::model::Result<ExecutionRecord> {
     validation::validate_input_bounds(&input)?;
     let non_claims = super::super::profile::COMPONENT_NON_CLAIMS
         .iter()
         .map(|value| (*value).to_string())
         .collect::<Vec<_>>();
-    let mut receipt = ComponentReceipt {
+    let mut receipt = ExecutionRecord {
         input: normalize_input(input),
         non_claims,
         receipt_ref: String::new(),
     };
-    validation::validate_receipt_shape(&receipt)?;
-    receipt.receipt_ref =
-        crate::preserves_rail::canonical_hash(&component_receipt_value(&receipt)).map_err(|error| {
-            super::super::model::ComponentDenial::new(format!("component receipt hashing failed: {error}"))
-        })?;
+    validation::validate_shape(&receipt)?;
+    receipt.receipt_ref = crate::preserves_rail::canonical_hash(&value(&receipt))
+        .map_err(|error| super::super::model::Denial::new(format!("component receipt hashing failed: {error}")))?;
     Ok(receipt)
 }
 
-pub fn validate_component_receipt(receipt: &ComponentReceipt) -> super::super::model::ComponentResult<()> {
+pub fn validate(receipt: &ExecutionRecord) -> super::super::model::Result<()> {
     validation::validate_input_bounds(&receipt.input)?;
-    validation::validate_receipt_shape(receipt)?;
-    let expected = crate::preserves_rail::canonical_hash(&component_receipt_value(receipt)).map_err(|error| {
-        super::super::model::ComponentDenial::new(format!("component receipt hashing failed: {error}"))
-    })?;
+    validation::validate_shape(receipt)?;
+    let expected = crate::preserves_rail::canonical_hash(&value(receipt))
+        .map_err(|error| super::super::model::Denial::new(format!("component receipt hashing failed: {error}")))?;
     if receipt.receipt_ref != expected {
-        return Err(super::super::model::ComponentDenial::new("component receipt identity is stale or cross-profile"));
+        return Err(super::super::model::Denial::new("component receipt identity is stale or cross-profile"));
     }
     Ok(())
 }
 
-pub fn validate_component_receipt_against(
-    receipt: &ComponentReceipt,
-    expected_input: &ComponentReceiptInput,
-) -> super::super::model::ComponentResult<()> {
-    validate_component_receipt(receipt)?;
-    let expected = build_component_receipt(expected_input.clone())?;
+pub fn validate_against(receipt: &ExecutionRecord, expected_input: &Input) -> super::super::model::Result<()> {
+    validate(receipt)?;
+    let expected = build(expected_input.clone())?;
     if receipt != &expected {
-        return Err(super::super::model::ComponentDenial::new(
+        return Err(super::super::model::Denial::new(
             "component receipt differs from the expected inspected bytes or execution plan",
         ));
     }
     Ok(())
 }
 
-pub fn validate_component_receipt_chain(receipts: &[ComponentReceipt]) -> super::super::model::ComponentResult<()> {
+pub fn validate_chain(receipts: &[ExecutionRecord]) -> super::super::model::Result<()> {
     if receipts.is_empty() {
-        return Err(super::super::model::ComponentDenial::new("component receipt chain cannot be empty"));
+        return Err(super::super::model::Denial::new("component receipt chain cannot be empty"));
     }
     let mut previous_ref = None;
     for receipt in receipts {
-        validate_component_receipt(receipt)?;
+        validate(receipt)?;
         let expected_parent_refs = previous_ref.iter().cloned().collect::<Vec<_>>();
         if receipt.input.parent_refs != expected_parent_refs {
-            return Err(super::super::model::ComponentDenial::new(
+            return Err(super::super::model::Denial::new(
                 "component receipt parent does not match the preceding canonical stage",
             ));
         }
@@ -139,7 +133,7 @@ pub fn validate_component_receipt_chain(receipts: &[ComponentReceipt]) -> super:
     Ok(())
 }
 
-pub fn component_receipt_value(receipt: &ComponentReceipt) -> preserves::IOValue {
+pub fn value(receipt: &ExecutionRecord) -> preserves::IOValue {
     crate::preserves_rail::record("wasm-component-receipt-v1", vec![
         crate::preserves_rail::record("schema", vec![crate::preserves_rail::string(COMPONENT_RECEIPT_SCHEMA)]),
         crate::preserves_rail::record("stage", vec![crate::preserves_rail::string(receipt.input.stage.as_str())]),
@@ -192,7 +186,7 @@ pub fn component_receipt_value(receipt: &ComponentReceipt) -> preserves::IOValue
     ])
 }
 
-pub fn component_receipt_summary(receipt: &ComponentReceipt) -> String {
+pub fn summary(receipt: &ExecutionRecord) -> String {
     format!(
         "wasm component {} {} profile={} component={} receipt={} (non-normative)",
         receipt.input.stage.as_str(),
@@ -203,11 +197,11 @@ pub fn component_receipt_summary(receipt: &ComponentReceipt) -> String {
     )
 }
 
-pub fn replay_receipts_match(left: &[ComponentReceipt], right: &[ComponentReceipt]) -> bool {
-    left == right && validate_component_receipt_chain(left).is_ok() && validate_component_receipt_chain(right).is_ok()
+pub fn replay_receipts_match(left: &[ExecutionRecord], right: &[ExecutionRecord]) -> bool {
+    left == right && validate_chain(left).is_ok() && validate_chain(right).is_ok()
 }
 
-fn normalize_input(mut input: ComponentReceiptInput) -> ComponentReceiptInput {
+fn normalize_input(mut input: Input) -> Input {
     input.imports = super::super::model::sorted_unique(&input.imports);
     input.capabilities = super::super::model::sorted_unique(&input.capabilities);
     input.mantle_evidence_refs = super::super::model::sorted_unique(&input.mantle_evidence_refs);

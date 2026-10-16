@@ -61,8 +61,8 @@ mod tests {
         crate::preserves_rail::content_ref_from_bytes(label.as_bytes())
     }
 
-    fn release_refs() -> ReleaseEvidenceRefs {
-        ReleaseEvidenceRefs {
+    fn refs() -> EvidenceRefs {
+        EvidenceRefs {
             source_gate_ref: Some(local_ref("source-gate")),
             policy_ref: Some(local_ref("policy")),
             octet_ref: Some(local_ref("octet")),
@@ -72,14 +72,14 @@ mod tests {
         }
     }
 
-    fn release_input() -> ReleaseProfileInput {
+    fn input() -> Input {
         let generated = local_ref("generated-profile");
-        ReleaseProfileInput {
+        Input {
             profile_id: "release-candidate".to_string(),
             tier: "release".to_string(),
             candidate_ref: Some(local_ref("candidate")),
-            evidence_refs: release_refs(),
-            freshness: ReleaseProfileFreshness {
+            evidence_refs: refs(),
+            freshness: Freshness {
                 expected_generated_export_ref: Some(generated.clone()),
                 actual_generated_export_ref: Some(generated),
             },
@@ -99,11 +99,11 @@ mod tests {
     // r[verify molten.evidence.stack_provenance.release_required]
     // r[verify molten.evidence.stack_provenance.non_placeholder_hashes]
     #[test]
-    fn release_profile_accepts_development_pilot_and_release_tiers() {
-        let mut development = release_input();
+    fn accepts_development_pilot_and_tiers() {
+        let mut development = input();
         development.tier = "development".to_string();
         development.stack_provenance_required = false;
-        development.evidence_refs = ReleaseEvidenceRefs {
+        development.evidence_refs = EvidenceRefs {
             source_gate_ref: None,
             policy_ref: None,
             octet_ref: None,
@@ -112,14 +112,14 @@ mod tests {
             production_profile_ref: None,
         };
         development.accepted_valence_policy_hashes.clear();
-        assert_eq!(validate_release_profile(&development).expect("development").decision, DECISION_PASS);
+        assert_eq!(validate(&development).expect("development").decision, DECISION_PASS);
 
-        let mut pilot = release_input();
+        let mut pilot = input();
         pilot.tier = "pilot".to_string();
         pilot.stack_provenance_required = false;
-        assert_eq!(validate_release_profile(&pilot).expect("pilot").decision, DECISION_PASS);
+        assert_eq!(validate(&pilot).expect("pilot").decision, DECISION_PASS);
 
-        let release = validate_release_profile(&release_input()).expect("release");
+        let release = validate(&input()).expect("release");
         assert_eq!(release.decision, DECISION_PASS);
         assert!(
             crate::preserves_rail::to_text(&release.value)
@@ -129,10 +129,10 @@ mod tests {
     }
 
     #[test]
-    fn release_profile_denies_missing_and_placeholder_candidate_refs() {
-        let mut missing = release_input();
+    fn denies_missing_and_placeholder_candidate_refs() {
+        let mut missing = input();
         missing.candidate_ref = None;
-        let missing_validation = validate_release_profile(&missing).expect("missing candidate validation");
+        let missing_validation = validate(&missing).expect("missing candidate validation");
         assert_eq!(missing_validation.decision, DECISION_DENY);
         assert!(
             missing_validation
@@ -141,10 +141,10 @@ mod tests {
                 .any(|diagnostic| diagnostic == "missing-release-candidate-ref")
         );
 
-        let mut placeholder = release_input();
+        let mut placeholder = input();
         placeholder.candidate_ref =
             Some("blake3:0000000000000000000000000000000000000000000000000000000000000000".to_string());
-        let placeholder_validation = validate_release_profile(&placeholder).expect("placeholder candidate validation");
+        let placeholder_validation = validate(&placeholder).expect("placeholder candidate validation");
         assert_eq!(placeholder_validation.decision, DECISION_DENY);
         assert!(
             placeholder_validation
@@ -155,8 +155,8 @@ mod tests {
     }
 
     #[test]
-    fn release_profile_denies_zero_dummy_and_optional_stack_provenance() {
-        let mut input = release_input();
+    fn denies_zero_dummy_and_optional_stack_provenance() {
+        let mut input = input();
         input.evidence_refs.source_gate_ref =
             Some("blake3:0000000000000000000000000000000000000000000000000000000000000000".to_string());
         input.evidence_refs.policy_ref =
@@ -164,7 +164,7 @@ mod tests {
         input.stack_provenance_required = false;
         input.accepted_valence_policy_hashes =
             vec!["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()];
-        let validation = validate_release_profile(&input).expect("validation");
+        let validation = validate(&input).expect("validation");
         assert_eq!(validation.decision, DECISION_DENY);
         assert!(validation.diagnostics.iter().any(|diagnostic| diagnostic == "placeholder-release-ref:source-gate"));
         assert!(validation.diagnostics.iter().any(|diagnostic| diagnostic == "placeholder-release-ref:policy"));
@@ -178,22 +178,22 @@ mod tests {
     }
 
     #[test]
-    fn release_profile_denies_stale_generated_export_and_missing_evidence() {
-        let mut input = release_input();
+    fn denies_stale_generated_export_and_missing_evidence() {
+        let mut input = input();
         input.evidence_refs.octet_ref = None;
         input.freshness.actual_generated_export_ref = Some(local_ref("stale-generated-profile"));
-        let validation = validate_release_profile(&input).expect("validation");
+        let validation = validate(&input).expect("validation");
         assert_eq!(validation.decision, DECISION_DENY);
         assert!(validation.diagnostics.iter().any(|diagnostic| diagnostic == "missing-release-ref:octet"));
         assert!(validation.diagnostics.iter().any(|diagnostic| diagnostic.starts_with("stale-generated-profile:")));
     }
 
     #[test]
-    fn release_profile_denies_unsupported_tier_and_missing_valence_policy_hash() {
-        let mut input = release_input();
+    fn denies_unsupported_tier_and_missing_valence_policy_hash() {
+        let mut input = input();
         input.tier = "production-ish".to_string();
         input.accepted_valence_policy_hashes.clear();
-        let validation = validate_release_profile(&input).expect("validation");
+        let validation = validate(&input).expect("validation");
         assert_eq!(validation.decision, DECISION_DENY);
         assert!(
             validation

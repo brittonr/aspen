@@ -1,11 +1,11 @@
 
-pub fn unpin_chunk_with_root(root: &CapabilityChunkRoot, chunk_ref: &str) -> Result<ChunkStorePin> {
+pub fn unpin_chunk_with_root(root: &CapabilityChunkRoot, chunk_ref: &str) -> Result<ChunkPin> {
     ensure_dirs(root)?;
     let pin_path = chunk_pin_path(chunk_ref)?;
     if root.root().try_exists(&pin_path)? {
         root.root().remove_file(&pin_path)?;
     }
-    let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
+    let receipt_value = receipt_value(ChunkReceiptValueInput {
         operation: "unpin",
         decision: "pass",
         manifest_ref: None,
@@ -14,7 +14,7 @@ pub fn unpin_chunk_with_root(root: &CapabilityChunkRoot, chunk_ref: &str) -> Res
         details: vec![record("pin-kind", vec![string("chunk")])],
     });
     index_set_pin(root, "chunk", chunk_ref, false, Some(&receipt_value))?;
-    Ok(ChunkStorePin {
+    Ok(ChunkPin {
         kind: "chunk".to_string(),
         reference: chunk_ref.to_string(),
         pinned: false,

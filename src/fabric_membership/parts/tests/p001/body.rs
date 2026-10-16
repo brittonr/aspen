@@ -4,28 +4,28 @@
 #[test]
 fn canonical_plan_and_readback_retain_bounded_authority_evidence() {
     let mut provider =
-        StaticMembershipProvider::new(provider_snapshot(MembershipProviderKind::Static)).expect("provider");
+        StaticProvider::new(provider_snapshot(MembershipProviderKind::Static)).expect("provider");
     let admitted = observe_provider(&mut provider).expect("observe");
     let placement =
-        canonical_placement_outcome(&admitted.membership, &placement_request()).expect("placement evidence");
+        placement_outcome(&admitted.membership, &placement_request()).expect("placement evidence");
     let PlacementOutcome::Planned(plan) = placement.outcome else {
         panic!("expected plan")
     };
     assert!(plan.advisory_only);
     assert!(!placement.outcome_ref.is_empty());
 
-    let readback = membership_status_readback(&admitted.membership, &[]).expect("readback");
+    let readback = status_readback(&admitted.membership, &[]).expect("readback");
     assert_eq!(readback.member_ids, vec!["node-a".to_string(), "node-b".to_string()]);
     assert_eq!(readback.active_assignments, 0);
     assert_eq!(readback.non_claims, REQUIRED_MEMBERSHIP_NON_CLAIMS);
 
-    let profile = canonical_membership_profile(&admitted.membership.admitted.profile).expect("profile");
-    let ports = fabric_membership_port_descriptors(&profile);
+    let profile = profile(&admitted.membership.admitted.profile).expect("profile");
+    let ports = port_descriptors(&profile);
     assert_eq!(ports.len(), EXPECTED_MEMBERSHIP_PORT_COUNT);
     assert!(ports.iter().any(|port| port.port_id == FABRIC_ASSIGNMENT_PORT_ID));
 
     let context =
-        ExtensionMembershipPlacementContext::from_test_snapshot("service-a", SERVICE_GENERATION, &profile, vec![
+        ExtensionPlacementContext::from_test_snapshot("service-a", SERVICE_GENERATION, &profile, vec![
             FABRIC_PLACEMENT_PORT_ID.to_string(),
             FABRIC_ASSIGNMENT_PORT_ID.to_string(),
         ]);
@@ -41,7 +41,7 @@ fn canonical_plan_and_readback_retain_bounded_authority_evidence() {
 
     let oversized_assignment_count = MAX_MEMBERSHIP_ITEMS + 1;
     let oversized_assignments = vec![(test_ref("oversized-assignment"), assignment); oversized_assignment_count];
-    let oversized = membership_status_readback(&admitted.membership, &oversized_assignments)
+    let oversized = status_readback(&admitted.membership, &oversized_assignments)
         .expect_err("oversized operator readback denied");
     assert!(oversized.to_string().contains("assignment limit exceeded"));
 }

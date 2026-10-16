@@ -1,0 +1,17 @@
+{
+  "command": [
+    "nix",
+    "develop",
+    "--no-update-lock-file",
+    "-c",
+    "rustfmt",
+    "--check",
+    "crates/octet-lint-metadata/src/identity/admission.rs",
+    "crates/octet-lint-metadata/src/identity/tests.rs",
+    "src/structure/primitive_domain_alias.rs"
+  ],
+  "exit_code": 1,
+  "failure": "src/structure/primitive_domain_alias.rs:131-132 must join the expanded && !matches!(...) condition onto one line.",
+  "scope": "Formatting only; no runtime or policy behavior failure.",
+  "next_attempt": "10/20"
+}

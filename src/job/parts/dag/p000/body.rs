@@ -1,6 +1,6 @@
 type FilePath = std::path::Path;
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 type Record<T> = preserves::Record<T>;

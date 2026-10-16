@@ -53,7 +53,7 @@
         let retention_evidence = retention_evidence(&root, "receipt-index");
         let apply_refs =
             gc_apply_refs(&root, std::slice::from_ref(&put.manifest_ref), &put.chunk_refs, &retention_evidence);
-        gc(&root, ChunkStoreGcInput {
+        gc(&root, ChunkGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
             apply_refs: &apply_refs,

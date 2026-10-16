@@ -1,5 +1,5 @@
 
-fn finalize_successful_session(input: SessionCloseInput<'_>) -> crate::error::Result<CrossProcessFrameEvidence> {
+fn finalize_successful_session(input: SessionCloseInput<'_>) -> crate::error::Result<FrameEvidence> {
     let SessionCloseInput {
         mut session,
         role,
@@ -10,18 +10,18 @@ fn finalize_successful_session(input: SessionCloseInput<'_>) -> crate::error::Re
         frame,
     } = input;
     session = apply_cross_process_session_command(&session, &CrossProcessSessionCommand::Close)
-        .map_err(|issues| shell_validation_error("cross-process session close", &issues))?
+        .map_err(|issues| validation_error("cross-process session close", &issues))?
         .next;
     session = apply_cross_process_session_command(&session, &CrossProcessSessionCommand::BeginCleanup)
-        .map_err(|issues| shell_validation_error("cross-process session cleanup", &issues))?
+        .map_err(|issues| validation_error("cross-process session cleanup", &issues))?
         .next;
     let cleanup_evidence_ref = cleanup_ref(session_ref, descriptor_ref, session.identity.generation);
     session = apply_cross_process_session_command(&session, &CrossProcessSessionCommand::CompleteCleanup {
         cleanup_evidence_ref: cleanup_evidence_ref.clone(),
     })
-    .map_err(|issues| shell_validation_error("cross-process session cleanup completion", &issues))?
+    .map_err(|issues| validation_error("cross-process session cleanup completion", &issues))?
     .next;
-    Ok(CrossProcessFrameEvidence {
+    Ok(FrameEvidence {
         role,
         descriptor_ref: descriptor_ref.to_string(),
         session_ref: session_ref.to_string(),
@@ -46,28 +46,28 @@ fn finalize_failed_session(
         class,
         delivery_definitive: false,
     })
-    .map_err(|issues| shell_validation_error("cross-process session failure", &issues))?
+    .map_err(|issues| validation_error("cross-process session failure", &issues))?
     .next;
     session = apply_cross_process_session_command(&session, &CrossProcessSessionCommand::BeginCleanup)
-        .map_err(|issues| shell_validation_error("cross-process failed-session cleanup", &issues))?
+        .map_err(|issues| validation_error("cross-process failed-session cleanup", &issues))?
         .next;
     let cleanup_evidence_ref =
         cleanup_ref(&session.identity.session_ref, &session.identity.descriptor_ref, session.identity.generation);
     session = apply_cross_process_session_command(&session, &CrossProcessSessionCommand::CompleteCleanup {
         cleanup_evidence_ref,
     })
-    .map_err(|issues| shell_validation_error("cross-process failed-session cleanup completion", &issues))?
+    .map_err(|issues| validation_error("cross-process failed-session cleanup completion", &issues))?
     .next;
     Ok(session)
 }
 
-fn validate_listener_shell_input(input: &IrohCrossProcessListenerInput) -> crate::error::Result<()> {
+fn validate_listener_input(input: &ListenerInput) -> crate::error::Result<()> {
     crate::preserves_rail::validate_content_ref(input.capability.capability_ref())?;
     crate::preserves_rail::validate_content_ref(&input.listener_identity_ref)?;
     crate::preserves_rail::validate_content_ref(&input.expected_peer_context_ref)?;
     crate::preserves_rail::validate_content_ref(&input.locator_cohort_ref)?;
     if !input.bind_addr.ip().is_loopback() {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "initial cross-process Iroh profile requires an explicit loopback bind address",
         ));
     }
@@ -77,21 +77,21 @@ fn validate_listener_shell_input(input: &IrohCrossProcessListenerInput) -> crate
         || !input.admission.profile_active
         || !input.admission.listener_ready
     {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "cross-process listener capability admission is not fully active",
         ));
     }
     Ok(())
 }
 
-fn validate_client_shell_input(input: &IrohCrossProcessClientInput, payload: &[u8]) -> crate::error::Result<()> {
+fn validate_client_input(input: &ClientInput, payload: &[u8]) -> crate::error::Result<()> {
     crate::preserves_rail::validate_content_ref(input.capability.capability_ref())?;
     validate_exchange_refs(&input.session_ref, &input.request_ref)?;
     if payload.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness("cross-process payload must not be empty"));
+        return Err(crate::error::Failure::invalid_harness("cross-process payload must not be empty"));
     }
     if !input.bind_addr.ip().is_loopback() {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "initial cross-process Iroh client profile requires an explicit loopback bind address",
         ));
     }
@@ -110,18 +110,18 @@ fn endpoint_locators(endpoint_addr: &iroh::EndpointAddr) -> crate::error::Result
             iroh::TransportAddr::Ip(_) => EndpointLocatorClass::Ip,
             iroh::TransportAddr::Relay(_) => EndpointLocatorClass::Relay,
             iroh::TransportAddr::Custom(_) => {
-                return Err(crate::error::MoltenError::invalid_harness(
+                return Err(crate::error::Failure::invalid_harness(
                     "custom Iroh transport addresses are outside the admitted profile",
                 ));
             }
             _ => {
-                return Err(crate::error::MoltenError::invalid_harness(
+                return Err(crate::error::Failure::invalid_harness(
                     "unknown Iroh transport address is outside the admitted profile",
                 ));
             }
         };
         if locators.len() >= MAX_ENDPOINT_LOCATORS {
-            return Err(crate::error::MoltenError::invalid_harness("Iroh endpoint locator count exceeds bound"));
+            return Err(crate::error::Failure::invalid_harness("Iroh endpoint locator count exceeds bound"));
         }
         locators.push(EndpointLocator {
             class,
@@ -131,15 +131,15 @@ fn endpoint_locators(endpoint_addr: &iroh::EndpointAddr) -> crate::error::Result
     Ok(locators)
 }
 
-fn iroh_endpoint_addr(plan: &EndpointDialPlan) -> crate::error::Result<iroh::EndpointAddr> {
+fn endpoint_addr(plan: &EndpointDialPlan) -> crate::error::Result<iroh::EndpointAddr> {
     let endpoint_id = plan
         .public_endpoint_identity
         .strip_prefix("iroh:")
         .ok_or_else(|| {
-            crate::error::MoltenError::invalid_harness("cross-process endpoint identity must use iroh prefix")
+            crate::error::Failure::invalid_harness("cross-process endpoint identity must use iroh prefix")
         })?
         .parse::<iroh::EndpointId>()
-        .map_err(iroh_error)?;
+        .map_err(error)?;
     let mut addresses = Vec::with_capacity(plan.locators.len());
     for locator in &plan.locators {
         let address = match locator.class {
@@ -148,10 +148,10 @@ fn iroh_endpoint_addr(plan: &EndpointDialPlan) -> crate::error::Result<iroh::End
                     .value
                     .strip_prefix("ip:")
                     .ok_or_else(|| {
-                        crate::error::MoltenError::invalid_harness("cross-process IP locator prefix mismatch")
+                        crate::error::Failure::invalid_harness("cross-process IP locator prefix mismatch")
                     })?
                     .parse::<std::net::SocketAddr>()
-                    .map_err(iroh_error)?;
+                    .map_err(error)?;
                 iroh::TransportAddr::Ip(address)
             }
             EndpointLocatorClass::Relay => {
@@ -159,14 +159,14 @@ fn iroh_endpoint_addr(plan: &EndpointDialPlan) -> crate::error::Result<iroh::End
                     .value
                     .strip_prefix("relay:")
                     .ok_or_else(|| {
-                        crate::error::MoltenError::invalid_harness("cross-process relay locator prefix mismatch")
+                        crate::error::Failure::invalid_harness("cross-process relay locator prefix mismatch")
                     })?
                     .parse::<iroh::RelayUrl>()
-                    .map_err(iroh_error)?;
+                    .map_err(error)?;
                 iroh::TransportAddr::Relay(relay)
             }
             EndpointLocatorClass::Custom | EndpointLocatorClass::Private => {
-                return Err(crate::error::MoltenError::invalid_harness(
+                return Err(crate::error::Failure::invalid_harness(
                     "cross-process endpoint contains an unsupported locator class",
                 ));
             }
@@ -191,7 +191,7 @@ fn dial_plan_from_descriptor(descriptor: &CrossProcessEndpointDescriptor) -> End
     }
 }
 
-pub fn cross_process_frame_ref(request_ref: &str, payload: &[u8]) -> String {
+pub fn frame_ref(request_ref: &str, payload: &[u8]) -> String {
     let mut hasher = blake3::Hasher::new();
     hasher.update(FRAME_DOMAIN.as_bytes());
     hasher.update(request_ref.as_bytes());
@@ -212,10 +212,10 @@ fn blake3_ref(bytes: &[u8]) -> String {
     format!("blake3:{}", blake3::hash(bytes).to_hex())
 }
 
-fn iroh_error(error: impl std::fmt::Display) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(format!("cross-process Iroh transport failed: {error}"))
+fn error(error: impl std::fmt::Display) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("cross-process Iroh transport failed: {error}"))
 }
 
-fn shell_validation_error(label: &str, issues: &impl std::fmt::Debug) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(format!("{label} denied: {issues:?}"))
+fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("{label} denied: {issues:?}"))
 }

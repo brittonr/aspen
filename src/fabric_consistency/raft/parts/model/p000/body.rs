@@ -99,7 +99,7 @@ pub struct ReplicaSnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RaftMessage {
+pub enum Message {
     RequestVote {
         term: u64,
         candidate_id: String,
@@ -167,7 +167,7 @@ pub enum RaftMessage {
     },
 }
 
-impl RaftMessage {
+impl Message {
     pub const fn term(&self) -> u64 {
         match self {
             Self::RequestVote { term, .. }
@@ -222,7 +222,7 @@ pub struct ReplicaMessageEnvelope {
     pub service_generation: u64,
     pub from: String,
     pub to: String,
-    pub message: RaftMessage,
+    pub message: Message,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -241,7 +241,7 @@ pub enum ReplicaEvent {
     },
     Read {
         request_ref: String,
-        mode: crate::fabric_consistency::ConsistencyReadMode,
+        mode: crate::fabric_consistency::ReadMode,
     },
     CreateSnapshot {
         application_state_ref: String,

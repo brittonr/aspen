@@ -18,7 +18,7 @@ fn run_entropy_conformance(profile: &super::AdmittedTimeProfile, generation: u64
     let over_limit = profile
         .max_entropy_request_bytes
         .checked_add(1)
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("conformance entropy bound overflow"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("conformance entropy bound overflow"))?;
     let request = super::EntropyRequest::Bytes { count: over_limit };
     let is_rejected = match mode {
         super::EntropyMode::DeterministicSimulation => matches!(
@@ -79,7 +79,7 @@ impl<S: CryptographicEntropySource> ProductionEntropyAdapter<S> {
         request: super::EntropyRequest,
     ) -> crate::error::Result<(super::EntropyTransition, super::EntropyEvidenceMetadata)> {
         let output_len = usize::try_from(request.requested_bytes())
-            .map_err(|_| crate::error::MoltenError::invalid_harness("entropy request length overflow"))?;
+            .map_err(|_| crate::error::Failure::invalid_harness("entropy request length overflow"))?;
         let mut secret = vec![0; output_len];
         self.source.fill_secret(&mut secret)?;
         let transition = super::consume_production_entropy(profile, active_generation, state, request, secret)
@@ -90,7 +90,7 @@ impl<S: CryptographicEntropySource> ProductionEntropyAdapter<S> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FabricTimeFault {
+pub enum Fault {
     BackwardWallJump { ticks: u64 },
     ForwardWallJump { ticks: u64 },
     DelayTimer { key: super::TimerKey, ticks: u64 },
@@ -100,13 +100,13 @@ pub enum FabricTimeFault {
     PartitionWindow { until_ticks: u64 },
 }
 
-pub fn apply_clock_fault(clock: &mut VirtualClockAdapter, fault: &FabricTimeFault) -> crate::error::Result<bool> {
+pub fn apply_clock_fault(clock: &mut VirtualClockAdapter, fault: &Fault) -> crate::error::Result<bool> {
     match fault {
-        FabricTimeFault::BackwardWallJump { ticks } => {
+        Fault::BackwardWallJump { ticks } => {
             clock.inject_wall_jump(-i128::from(*ticks))?;
             Ok(true)
         }
-        FabricTimeFault::ForwardWallJump { ticks } => {
+        Fault::ForwardWallJump { ticks } => {
             clock.inject_wall_jump(i128::from(*ticks))?;
             Ok(true)
         }
@@ -115,13 +115,13 @@ pub fn apply_clock_fault(clock: &mut VirtualClockAdapter, fault: &FabricTimeFaul
 }
 
 pub fn validate_scheduler_fault_outcome(
-    fault: &FabricTimeFault,
+    fault: &Fault,
     transition: &super::SchedulerTransition,
 ) -> crate::error::Result<()> {
-    if matches!(fault, FabricTimeFault::SaturateSchedulerQueue)
+    if matches!(fault, Fault::SaturateSchedulerQueue)
         && !matches!(transition.action, super::SchedulerAction::RejectedOverload | super::SchedulerAction::Backpressure)
     {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "scheduler saturation fault did not produce an explicit overload outcome",
         ));
     }
@@ -133,23 +133,23 @@ pub fn poll_timer_with_fault(
     active_generation: u64,
     now_ticks: u64,
     delivery_capacity: u64,
-    fault: Option<&FabricTimeFault>,
+    fault: Option<&Fault>,
 ) -> crate::error::Result<super::TimerTransition> {
     let mut faulted = state.clone();
     let mut capacity = delivery_capacity;
     if let Some(fault) = fault {
         match fault {
-            FabricTimeFault::DelayTimer { key, ticks } if key == &state.key => {
+            Fault::DelayTimer { key, ticks } if key == &state.key => {
                 faulted.next_deadline_ticks = faulted
                     .next_deadline_ticks
                     .checked_add(*ticks)
-                    .ok_or_else(|| crate::error::MoltenError::invalid_harness("faulted timer deadline overflow"))?;
+                    .ok_or_else(|| crate::error::Failure::invalid_harness("faulted timer deadline overflow"))?;
             }
-            FabricTimeFault::DropTimerDelivery { key } if key == &state.key => {
+            Fault::DropTimerDelivery { key } if key == &state.key => {
                 faulted.overload = super::TimerOverloadPolicy::DropDue;
                 capacity = 0;
             }
-            FabricTimeFault::CancelTimer { key } if key == &state.key => {
+            Fault::CancelTimer { key } if key == &state.key => {
                 return super::cancel_timer(&faulted, active_generation)
                     .map_err(|error| core_error("cancel faulted timer", error));
             }
@@ -171,9 +171,9 @@ pub fn evaluate_deadline_with_fault(
     active_generation: u64,
     deadline: &super::Deadline,
     observed: &super::TimeValue,
-    fault: Option<&FabricTimeFault>,
+    fault: Option<&Fault>,
 ) -> crate::error::Result<FaultedDeadlineDecision> {
-    if let Some(FabricTimeFault::PartitionWindow { until_ticks }) = fault
+    if let Some(Fault::PartitionWindow { until_ticks }) = fault
         && observed.ticks() <= *until_ticks
     {
         return Ok(FaultedDeadlineDecision::PartitionIndeterminate {
@@ -226,12 +226,12 @@ fn duration_to_u64_nanos(duration: std::time::Duration) -> crate::error::Result<
     let seconds = duration
         .as_secs()
         .checked_mul(NANOS_PER_SECOND)
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("duration seconds overflow"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("duration seconds overflow"))?;
     seconds
         .checked_add(u64::from(duration.subsec_nanos()))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("duration nanoseconds overflow"))
+        .ok_or_else(|| crate::error::Failure::invalid_harness("duration nanoseconds overflow"))
 }
 
-fn core_error(label: &str, error: impl std::fmt::Debug) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(format!("{label}: {error:?}"))
+fn core_error(label: &str, error: impl std::fmt::Debug) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("{label}: {error:?}"))
 }

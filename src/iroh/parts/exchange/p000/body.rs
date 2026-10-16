@@ -1,10 +1,10 @@
 type IoValue = preserves::IOValue;
 
-type LocalStorePath = crate::local_store::LocalStorePath;
+type LocalStorePath = crate::local_store::Locator;
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type Path = std::path::Path;
 type Value<T> = preserves::Value<T>;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 const EVIDENCE_CHAIN_SEGMENT_BUNDLE_SCHEMA: &str = crate::preserves_rail::EVIDENCE_CHAIN_SEGMENT_BUNDLE_SCHEMA;

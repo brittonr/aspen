@@ -12,7 +12,7 @@ fn loaded_ticket(
                     ("ticket-availability", "fail"),
                     ("deny-missing-or-invalid-ticket", "pass"),
                 ]);
-            store_receipt(dest_root, &receipt_value)?;
+            receipt(dest_root, &receipt_value)?;
             return Err(error);
         }
     };
@@ -24,7 +24,7 @@ fn loaded_ticket(
                     ("ticket-shape", "fail"),
                     ("deny-missing-or-invalid-ticket", "pass"),
                 ]);
-            store_receipt(dest_root, &receipt_value)?;
+            receipt(dest_root, &receipt_value)?;
             return Err(error);
         }
     };
@@ -37,7 +37,7 @@ fn loaded_ticket(
             ("ticket-manifest-binding", "fail"),
             ("deny-wrong-manifest", "pass"),
         ]);
-        store_receipt(dest_root, &receipt_value)?;
+        receipt(dest_root, &receipt_value)?;
         return Err(MoltenError::invalid_harness(message));
     }
     Ok(parsed_ticket)
@@ -56,7 +56,7 @@ fn received_manifest(
                     ("manifest-blob-availability", "fail"),
                     ("deny-missing-manifest-blob", "pass"),
                 ]);
-            store_receipt(dest_root, &receipt_value)?;
+            receipt(dest_root, &receipt_value)?;
             return Err(error);
         }
     };
@@ -66,7 +66,7 @@ fn received_manifest(
             ("manifest-blob-verification", "fail"),
             ("deny-corrupt-manifest-blob", "pass"),
         ]);
-        store_receipt(dest_root, &receipt_value)?;
+        receipt(dest_root, &receipt_value)?;
         return Err(MoltenError::invalid_harness(message));
     }
     let manifest_value = parse_canonical_bytes(&manifest_bytes)?;
@@ -77,7 +77,7 @@ fn received_manifest(
             ("manifest-identity-preserved", "fail"),
             ("transport-does-not-grant-trust", "pass"),
         ]);
-        store_receipt(dest_root, &receipt_value)?;
+        receipt(dest_root, &receipt_value)?;
         return Err(MoltenError::invalid_harness(message));
     }
     write_immutable_bytes(
@@ -109,7 +109,7 @@ fn require_part(
         ("ticket-chunk-map", "fail"),
         ("deny-incomplete-ticket", "pass"),
     ]);
-    store_receipt(dest_root, &receipt_value)?;
+    receipt(dest_root, &receipt_value)?;
     Err(MoltenError::invalid_harness(message))
 }
 
@@ -132,7 +132,7 @@ fn available_ref(
                     ("existing-chunk-verification", "fail"),
                     ("deny-corrupt-dedup-source", "pass"),
                 ]);
-            store_receipt(dest_root, &receipt_value)?;
+            receipt(dest_root, &receipt_value)?;
             Err(error)
         }
     }
@@ -203,7 +203,7 @@ fn require_blob_len(
         ("ticket-chunk-map", "fail"),
         ("deny-incomplete-ticket", "pass"),
     ]);
-    store_receipt(dest_root, &receipt_value)?;
+    receipt(dest_root, &receipt_value)?;
     Err(MoltenError::invalid_harness(message))
 }
 
@@ -226,7 +226,7 @@ fn blob_bytes(input: BlobInput<'_>) -> Result<Vec<u8>> {
                 error.to_string(),
                 vec![("chunk-blob-availability", "fail"), ("deny-missing-chunk-blob", "pass")],
             );
-            store_receipt(input.dest_root, &receipt_value)?;
+            receipt(input.dest_root, &receipt_value)?;
             return Err(error);
         }
     };
@@ -239,7 +239,7 @@ fn blob_bytes(input: BlobInput<'_>) -> Result<Vec<u8>> {
             ("chunk-blob-verification", "fail"),
             ("deny-corrupt-chunk-blob", "pass"),
         ]);
-    store_receipt(input.dest_root, &receipt_value)?;
+    receipt(input.dest_root, &receipt_value)?;
     Err(MoltenError::invalid_harness(message))
 }
 

@@ -62,7 +62,7 @@ impl ConfigurationTransition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ConsistencyOperation {
+pub enum Request {
     Open {
         mode: GroupOpenMode,
     },
@@ -73,7 +73,7 @@ pub enum ConsistencyOperation {
     },
     Read {
         query_ref: String,
-        mode: super::ConsistencyReadMode,
+        mode: super::ReadMode,
     },
     Snapshot {
         snapshot_policy_ref: String,
@@ -91,7 +91,7 @@ pub enum ConsistencyOperation {
     Remove,
 }
 
-impl ConsistencyOperation {
+impl Request {
     pub const fn as_str(&self) -> &'static str {
         match self {
             Self::Open { .. } => "open",
@@ -109,7 +109,7 @@ impl ConsistencyOperation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConsistencyPortCommandInput {
+pub struct PortCommandInput {
     pub request_ref: String,
     pub binding_ref: String,
     pub group_id: String,
@@ -128,16 +128,16 @@ pub struct ConsistencyPortCommandInput {
     pub policy_refs: Vec<String>,
     pub authority_refs: Vec<String>,
     pub observed_in_flight_operations: u32,
-    pub operation: ConsistencyOperation,
+    pub operation: Request,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConsistencyPlanDecision {
+pub enum PlanDecision {
     Admitted,
     Denied,
 }
 
-impl ConsistencyPlanDecision {
+impl PlanDecision {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Admitted => "admitted",
@@ -147,27 +147,24 @@ impl ConsistencyPlanDecision {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConsistencyPortPlan {
+pub struct PortPlan {
     pub plan_ref: String,
     pub request_ref: String,
     pub binding_ref: String,
-    pub operation: ConsistencyOperation,
-    pub decision: ConsistencyPlanDecision,
-    pub lifecycle_before: super::ConsistencyGroupLifecycle,
-    pub lifecycle_after: super::ConsistencyGroupLifecycle,
+    pub operation: Request,
+    pub decision: PlanDecision,
+    pub lifecycle_before: super::GroupLifecycle,
+    pub lifecycle_after: super::GroupLifecycle,
     pub diagnostics: Vec<String>,
     pub value: preserves::IOValue,
 }
 
-impl ConsistencyPortPlan {
+impl PortPlan {
     pub fn admitted(&self) -> bool {
-        self.decision == ConsistencyPlanDecision::Admitted
+        self.decision == PlanDecision::Admitted
     }
 }
 
-pub fn plan_consistency_operation(
-    binding: &super::ConsistencyGroupBinding,
-    input: ConsistencyPortCommandInput,
-) -> crate::error::Result<ConsistencyPortPlan> {
-    super::planner::plan_consistency_operation(binding, input)
+pub fn plan(binding: &super::Group, input: PortCommandInput) -> crate::error::Result<PortPlan> {
+    super::planner::plan_operation(binding, input)
 }

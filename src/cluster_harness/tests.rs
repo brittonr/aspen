@@ -4,8 +4,8 @@ fn test_ref(label: &str) -> String {
     crate::preserves_rail::content_ref_from_bytes(label.as_bytes())
 }
 
-fn parent_input() -> ClusterHarnessParentInput {
-    ClusterHarnessParentInput {
+fn parent_input() -> ParentInput {
+    ParentInput {
         fixture_ref: test_ref("fixture"),
         command_plan_ref: test_ref("command-plan"),
         local_plan_ref: test_ref("local-plan"),
@@ -27,7 +27,7 @@ fn parent_input() -> ClusterHarnessParentInput {
 fn canonical_parent_binds_children_and_required_artifact_kinds() {
     // r[verify molten.testing.receipt_first_cluster_harness.cli_receipt_surface]
     // r[verify molten.testing.fixture_driven_cluster_execution.observation_gate]
-    let receipt = build_cluster_harness_parent(&parent_input()).expect("parent receipt");
+    let receipt = build_parent(&parent_input()).expect("parent receipt");
     let rendered = crate::preserves_rail::to_text(&receipt.value).expect("parent text");
 
     assert_eq!(receipt.decision, RUN_DIRECTORY_PASS);
@@ -43,7 +43,7 @@ fn canonical_parent_denies_missing_kind_and_unsupported_pass_claim() {
     let mut input = parent_input();
     input.observed_artifact_kinds.retain(|kind| kind != DRIFT_SUMMARY_KIND);
     input.unsupported_pass_claim = true;
-    let receipt = build_cluster_harness_parent(&input).expect("denied parent receipt");
+    let receipt = build_parent(&input).expect("denied parent receipt");
 
     assert_eq!(receipt.decision, RUN_DIRECTORY_DENY);
     assert!(receipt.diagnostics.iter().any(|item| item == "cluster-run-unsupported-pass-claim"));
@@ -58,7 +58,7 @@ fn canonical_parent_denies_missing_kind_and_unsupported_pass_claim() {
 #[test]
 fn child_timeout_or_orphan_and_stale_ticket_cleanup_are_denied() {
     // r[verify molten.testing.local_multiprocess_cluster_tier.cleanup_negatives]
-    let child = child_process_value(&ClusterHarnessChildProcessInput {
+    let child = child_process_value(&ChildProcessInput {
         node_id: "node:fixture-a".to_string(),
         phase: "start".to_string(),
         command_profile_ref: test_ref("command-profile"),
@@ -69,7 +69,7 @@ fn child_timeout_or_orphan_and_stale_ticket_cleanup_are_denied() {
         succeeded: false,
     })
     .expect("denied child process receipt");
-    let cleanup = cleanup_value(&ClusterHarnessCleanupInput {
+    let cleanup = cleanup_value(&CleanupInput {
         child_process_refs: vec![crate::preserves_rail::canonical_hash(&child).expect("child ref")],
         stopped_node_ids: Vec::new(),
         orphaned_processes: vec!["start:node:fixture-a".to_string()],
@@ -94,9 +94,9 @@ fn child_timeout_or_orphan_and_stale_ticket_cleanup_are_denied() {
 fn failure_bundle_is_canonical_diagnostic_evidence_not_pass_evidence() {
     // r[verify molten.testing.cluster_failure_repro_bundles.bundle_schema]
     // r[verify molten.testing.cluster_failure_repro_bundles.privacy_and_nonpass]
-    let parent = build_cluster_harness_parent(&parent_input()).expect("parent receipt");
+    let parent = build_parent(&parent_input()).expect("parent receipt");
     let failure =
-        crate::harness::failure_value("execute", &crate::error::MoltenError::invalid_harness("fixture failure"), vec![
+        crate::harness::failure_value("execute", &crate::error::Failure::invalid_harness("fixture failure"), vec![
             crate::preserves_rail::record("cluster-run-ref", vec![crate::preserves_rail::string(&parent.receipt_ref)]),
         ]);
     let bundle = crate::harness::failure_repro_bundle_value_with_command(&failure, &[

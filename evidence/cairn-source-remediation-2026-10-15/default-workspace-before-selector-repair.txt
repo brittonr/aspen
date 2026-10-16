@@ -1,0 +1,48 @@
+test cells::tests::hegel_entry_ref_hashes_schema_and_revision_are_stable ... ok
+test inventory::tests::hegel_catalog_identity_short_ids_and_visibility_are_stable ... ok
+test pilot::tests::local_node_dogfood_runs_and_gates_release ... ok
+test pilot::tests::nix_dogfood_release_evidence_verifies_and_denies_stale_refs ... ok
+test objects::tests::hegel_artifact_closure_reverse_edges_and_no_name_identity ... ok
+test fabric_consistency::raft::live_process::three_elects_commits_reads_and_catches_up ... FAILED
+test workload::tests::sync_plan_and_loopback_copy_dependency_closure_without_execution ... ok
+test workload::tests::hegel_blob_ref_submission_rejects_inline_tokens_and_records_pin_lifecycle ... ok
+test transforms::tests::hegel_preview_apply_consistency_and_path_stability ... ok
+test blocks::semantic_store::tests::hegel_chunk_store_determinism_range_resumable_and_no_dangling has been running for over 60 seconds
+test blocks::semantic_store::tests::hegel_chunk_store_determinism_range_resumable_and_no_dangling ... ok
+
+failures:
+
+---- addressable_actor::tests::multiprocess::restart_recovers_state_and_fences_stale_generation stdout ----
+
+thread 'addressable_actor::tests::multiprocess::restart_recovers_state_and_fences_stale_generation' (2232441) panicked at src/addressable_actor/tests/multiprocess.rs:77:5:
+assertion `left == right` failed
+  left: Dormant
+ right: Starting
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- coordination_delivery::tests::multiprocess::restart_recovers_claim_and_fences_stale_consumer stdout ----
+
+thread 'coordination_delivery::tests::multiprocess::restart_recovers_claim_and_fences_stale_consumer' (2232627) panicked at src/coordination_delivery/tests/multiprocess.rs:64:5:
+assertion failed: observed.state.in_flight.is_empty()
+
+---- fabric_consistency::raft::live_process::three_elects_commits_reads_and_catches_up stdout ----
+
+thread 'fabric_consistency::raft::live_process::three_elects_commits_reads_and_catches_up' (2233334) panicked at src/fabric_consistency/raft/live_process/mod.rs:77:45:
+child readiness: InvalidHarness("timed out waiting for explicit harness file /home/brittonr/.cache/molten-guided-goal-69fuhbc2/tmp/nix-shell.GAIjZQ/fdf6779d-e000-4deb-aab6-03af062a07cd/state/node-a-ready.preserves")
+
+
+failures:
+    addressable_actor::tests::multiprocess::restart_recovers_state_and_fences_stale_generation
+    coordination_delivery::tests::multiprocess::restart_recovers_claim_and_fences_stale_consumer
+    fabric_consistency::raft::live_process::three_elects_commits_reads_and_catches_up
+
+test result: FAILED. 1515 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 102.60s
+
+error: test failed, to rerun pass `-p molten --lib`
+
+
+Wall time: 177.24 seconds
+
+Command exited with code 101
+
+[Showing lines 1-295 and 1297-1590 of 1590; 1,001 middle lines (89.3KB) elided. Read artifact://274 for full output]

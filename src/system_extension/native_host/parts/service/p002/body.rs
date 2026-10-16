@@ -1,12 +1,12 @@
 
-impl<P, J> NativeSystemExtensionService<P, J>
+impl<P, J> Supervisor<P, J>
 where
     P: crate::fabric_execution::ExecutionFabricPort,
     J: NativeHostJournal,
 {
     // r[impl molten.system_extension.native_host.operator]
     // r[impl molten.system_extension.native_host.nonclaims]
-    pub fn status(&self) -> std::result::Result<CanonicalNativeServiceStatus, NativeServiceError> {
+    pub fn status(&self) -> std::result::Result<CanonicalStatus, Failure> {
         let instance = self.instance()?;
         let operator = self.host.operator_status()?;
         let recovery = classify_native_recovery(&instance);
@@ -19,7 +19,7 @@ where
             crate::preserves_rail::string(instance.lifecycle.phase.as_str()),
             crate::preserves_rail::u64_value(
                 u64::try_from(recovery.len())
-                    .map_err(|_| NativeServiceError::Host("native recovery count does not fit u64".to_string()))?,
+                    .map_err(|_| Failure::Host("native recovery count does not fit u64".to_string()))?,
             ),
             crate::preserves_rail::sequence(
                 REQUIRED_NATIVE_HOST_NON_CLAIMS
@@ -28,7 +28,7 @@ where
                     .collect(),
             ),
         ]);
-        Ok(CanonicalNativeServiceStatus {
+        Ok(CanonicalStatus {
             status_ref: crate::preserves_rail::canonical_hash(&value)?,
             claim_level: CLAIM_LEVEL.to_string(),
             operator,
@@ -38,7 +38,7 @@ where
     }
 
     // r[impl molten.system_extension.native_host.semantic_state]
-    fn sync_instance(&mut self, is_accepting_ingress: bool) -> std::result::Result<(), NativeServiceError> {
+    fn sync_instance(&mut self, is_accepting_ingress: bool) -> std::result::Result<(), Failure> {
         let mut next = self.instance()?;
         next.lifecycle = self.host.state().clone();
         next.usage = self.host.usage();
@@ -55,31 +55,31 @@ where
         self.replace_instance(next)
     }
 
-    fn set_ingress(&mut self, is_accepting: bool) -> std::result::Result<(), NativeServiceError> {
+    fn set_ingress(&mut self, is_accepting: bool) -> std::result::Result<(), Failure> {
         let mut next = self.instance()?;
         next.is_accepting_ingress = is_accepting;
         self.replace_instance(next)
     }
 
-    fn replace_instance(&mut self, next: NativeInstanceRecord) -> std::result::Result<(), NativeServiceError> {
+    fn replace_instance(&mut self, next: NativeInstanceRecord) -> std::result::Result<(), Failure> {
         save_shared(&self.journal, &next)?;
         *lock_instance(&self.instance)? = next;
         Ok(())
     }
 }
 
-impl<P, J> NativeServiceIngressPort for NativeSystemExtensionService<P, J>
+impl<P, J> NativeServiceIngressPort for Supervisor<P, J>
 where
     P: crate::fabric_execution::ExecutionFabricPort,
     J: NativeHostJournal,
 {
-    type Error = NativeServiceError;
+    type Error = Failure;
 
     fn submit(
         &mut self,
         ingress: &NativeIngressEnvelope,
         logical_tick: u64,
-    ) -> std::result::Result<NativeServiceIngressResult, Self::Error> {
+    ) -> std::result::Result<IngressResult, Self::Error> {
         self.ingress(ingress, logical_tick)
     }
 }
@@ -102,7 +102,7 @@ where
 {
     fn route(
         &mut self,
-        binding: &crate::fabric::CanonicalFabricPortBinding,
+        binding: &crate::fabric::CanonicalPortBinding,
         effect: &TypedEffectRequest,
     ) -> crate::fabric::FabricPortResult<PortEffectOutput> {
         let operation_ref = native_identity_ref(&[
@@ -208,7 +208,7 @@ fn admit_materialized_effect_output(
 fn initial_instance(
     profile: &AdmittedNativeHostProfile,
     executable: &AdmittedNativeExecutable,
-    admitted: &CanonicalAdmittedSystemExtensionManifest,
+    admitted: &AdmittedManifest,
 ) -> NativeInstanceRecord {
     NativeInstanceRecord {
         schema: NATIVE_INSTANCE_STATE_SCHEMA.to_string(),
@@ -246,18 +246,18 @@ fn initial_instance(
 
 fn lock_instance(
     instance: &std::sync::Arc<std::sync::Mutex<NativeInstanceRecord>>,
-) -> std::result::Result<std::sync::MutexGuard<'_, NativeInstanceRecord>, NativeServiceError> {
-    instance.lock().map_err(|_| NativeServiceError::StatePoisoned)
+) -> std::result::Result<std::sync::MutexGuard<'_, NativeInstanceRecord>, Failure> {
+    instance.lock().map_err(|_| Failure::StatePoisoned)
 }
 
 fn save_shared<J: NativeHostJournal>(
     journal: &std::sync::Arc<std::sync::Mutex<J>>,
     instance: &NativeInstanceRecord,
-) -> std::result::Result<(), NativeServiceError> {
+) -> std::result::Result<(), Failure> {
     journal
         .lock()
-        .map_err(|_| NativeServiceError::StatePoisoned)?
+        .map_err(|_| Failure::StatePoisoned)?
         .save_instance(instance)
         .map(|_| ())
-        .map_err(NativeServiceError::Journal)
+        .map_err(Failure::Journal)
 }

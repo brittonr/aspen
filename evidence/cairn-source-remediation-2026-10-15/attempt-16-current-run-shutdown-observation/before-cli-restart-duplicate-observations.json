@@ -1,0 +1,8 @@
+{
+  "current_run_active_lock_present": true,
+  "current_active_lock_unchanged": true,
+  "current_shutdown_artifact_present": false,
+  "duplicate_loop_stdout": "node control loop receipt blake3:11ecf03bb8408898182d156cb10c06cdc29f8d6df1892bd7ee1cc6a7ee0f53ce written to /tmp/molten-f14-current-run-16-restored-se51n6m8/duplicate-loop-before.preserves\nnode run-loop loop_receipt=blake3:11ecf03bb8408898182d156cb10c06cdc29f8d6df1892bd7ee1cc6a7ee0f53ce heartbeat=blake3:de45efd53fb434287d73b8c28001aa4494f478e6fdf255ccb68016ae978e5044 processed=1 stopped=yes\n",
+  "duplicate_loop_receipt": "<node-control-loop-receipt-v1 \"molten.node.control-loop-receipt.v1\" <decision \"pass\"> <startup \"blake3:ec6ffdf0ff44b0774e94740d054e43b6f08c4374a46a1539a02513f01adf3ec2\"> <heartbeat \"blake3:de45efd53fb434287d73b8c28001aa4494f478e6fdf255ccb68016ae978e5044\"> <max-requests \"1\"> <processed-requests [\"blake3:76346c59b3e425ec512e67ddd7f6c80e4778aaff5632f59ee7577d7dc2a5629f\"]> <dispatch-receipts [\"blake3:7b2755e135145f66b2851f5ff478f3dd0c285039069297c0de170980a3b4df62\"]> <stopped \"yes\"> <profile \"local-preserves-control-loop-v1\"> <diagnostics []> <checks [<check \"bounded-request-loop\" \"pass\">, <check \"deterministic-inbox-order\" \"pass\">, <check \"idempotent-request-dispatch\" \"pass\">, <check \"shutdown-stops-loop\" \"pass\">]>>",
+  "expected_current_stopped": false
+}

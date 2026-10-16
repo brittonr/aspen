@@ -18,18 +18,18 @@ The packages are plans only. No implementation task is complete, and no fix, arc
 
 | Finding | Severity | Evidence | Planned change |
 |---|---|---|---|
-| F01: denied shutdown changes node lifecycle state | High | Source | [fix-node-shutdown-admission](../../.cairn/changes/fix-node-shutdown-admission/proposal.md) |
+| F01: denied shutdown changes node lifecycle state | High | Source | [fix-node-shutdown-admission](../../.cairn/archive/1970-01-01-fix-node-shutdown-admission/proposal.md) |
 | F02: normal startup supplies synthetic gate evidence | High | Source | [require-node-startup-source-gate-evidence](../../.cairn/changes/require-node-startup-source-gate-evidence/proposal.md) |
 | F03: dedup commit precedes unrecoverable ingress enqueue | High | Source | [recover-ingress-enqueue-after-dedup](../../.cairn/changes/recover-ingress-enqueue-after-dedup/proposal.md) |
 | F04: historical success suppresses repair after replica loss | High | Core reproduction | [repair-lost-replicas-after-prior-success](../../.cairn/changes/repair-lost-replicas-after-prior-success/proposal.md) |
 | F05: cleanup removes the only replica in a required domain | High | Core plan reproduction | [preserve-replica-fault-domains-during-cleanup](../../.cairn/changes/preserve-replica-fault-domains-during-cleanup/proposal.md) |
 | F06: merge preparation bypasses migration admission | High | Source | [admit-world-merge-migrations-before-execution](../../.cairn/changes/admit-world-merge-migrations-before-execution/proposal.md) |
 | F07: missing targets disappear from under-replication status | Medium | Core reproduction | [preserve-under-replicated-status-without-targets](../../.cairn/changes/preserve-under-replicated-status-without-targets/proposal.md) |
-| F08: duplicate claim returns a later consumer token | Medium | Core reproduction | [bind-delivery-duplicate-results-to-original-claims](../../.cairn/changes/bind-delivery-duplicate-results-to-original-claims/proposal.md) |
+| F08: duplicate claim returns a later consumer token | Medium | Core reproduction | [bind-delivery-duplicate-results-to-original-claims](../../.cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/proposal.md) |
 | F09: blocked runnable cannot resume | Medium | Core reproduction | [resume-blocked-scheduler-runnables](../../.cairn/changes/resume-blocked-scheduler-runnables/proposal.md) |
 | F10: yield exceeds queue depth | Medium | Core reproduction | [enforce-scheduler-queue-bounds-on-yield](../../.cairn/changes/enforce-scheduler-queue-bounds-on-yield/proposal.md) |
 | F11: terminal runnable records accumulate without a bound | Medium | Core reproduction | [bound-terminal-scheduler-retention](../../.cairn/changes/bound-terminal-scheduler-retention/proposal.md) |
-| F12: exponential retry wraps to zero | Medium | Core reproduction | [saturate-exponential-retry-arithmetic](../../.cairn/changes/saturate-exponential-retry-arithmetic/proposal.md) |
+| F12: exponential retry wraps to zero | Medium | Core reproduction | [saturate-exponential-retry-arithmetic](../../.cairn/archive/1970-01-01-saturate-exponential-retry-arithmetic/proposal.md) |
 | F13: merge publication confuses absent and generated roots | Medium | Source | [distinguish-absent-world-merge-roots](../../.cairn/changes/distinguish-absent-world-merge-roots/proposal.md) |
 | F14: historical shutdown success becomes a current stopped observation | Medium | Source | [bind-shutdown-observations-to-current-node-run](../../.cairn/changes/bind-shutdown-observations-to-current-node-run/proposal.md) |
 

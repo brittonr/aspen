@@ -259,7 +259,7 @@
     }
 
     #[test]
-    fn boundary_codec_report_binds_strict_decode_schema_and_typed_refs() {
+    fn boundary_report_binds_strict_decode_schema_and_typed_refs() {
         // r[verify molten.preserves_schema_boundaries.schema_artifacts]
         // r[verify molten.preserves_boundary_codegen.typed_codecs]
         // r[verify molten.preserves_boundary_codegen.strict_decode]
@@ -274,7 +274,7 @@
         assert_eq!(report.input_bytes_ref.as_str(), super::content_ref_from_bytes(&bytes));
         assert_eq!(report.decoded_value_ref.as_str(), super::canonical_hash(&value).expect("value ref"));
         assert!(report.typed_value_ref.as_str().starts_with("blake3:"));
-        let rendered = super::to_text(&super::boundary_codec_report_value(&report)).expect("report text");
+        let rendered = super::to_text(&super::boundary_report_value(&report)).expect("report text");
         assert!(rendered.contains("typed-value-ref"));
         assert!(rendered.contains(spec.family));
     }

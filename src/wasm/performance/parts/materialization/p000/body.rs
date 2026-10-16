@@ -7,11 +7,11 @@ const MINIMUM_REPEATED_WIZER_OUTPUTS: usize = 2;
 const REQUIRED_WIZER_NON_CLAIM: &str = "not-semantic-equivalence";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PerformanceMaterializationBundle {
+pub struct Bundle {
     pub schema_id: String,
     pub bundle_ref: String,
-    pub kind: super::model::PerformanceArtifactKind,
-    pub consumer: crate::wasm_component::ComponentConsumer,
+    pub kind: super::model::ArtifactKind,
+    pub consumer: crate::wasm_component::Consumer,
     pub source_component_ref: String,
     pub artifact_ref: String,
     pub artifact_length: u64,
@@ -27,7 +27,7 @@ pub struct PerformanceMaterializationBundle {
     pub locally_produced_transform: bool,
 }
 
-pub fn performance_materialization_bundle_ref(bundle: &PerformanceMaterializationBundle) -> String {
+pub fn bundle_ref(bundle: &Bundle) -> String {
     let mut lines = vec![
         format!("schema:{}", bundle.schema_id),
         format!("kind:{}", bundle.kind.as_str()),
@@ -65,26 +65,26 @@ pub fn performance_materialization_bundle_ref(bundle: &PerformanceMaterializatio
     super::model::content_ref(lines.join("\n").as_bytes())
 }
 
-pub fn verify_performance_materialization(
+pub fn verify(
     suite: &super::model::BenchmarkSuite,
-    bundle: &PerformanceMaterializationBundle,
+    bundle: &Bundle,
     artifact_bytes: &[u8],
-) -> super::model::PerformanceResult<super::model::MaterializedPerformanceArtifact> {
-    let component_profile = crate::wasm_component::supported_component_profile().map_err(|error| {
-        super::model::PerformanceDenial::new(format!(
+) -> super::model::Result<super::model::MaterializedArtifact> {
+    let component_profile = crate::wasm_component::supported().map_err(|error| {
+        super::model::Denial::new(format!(
             "component profile required by performance admission is invalid: {error}"
         ))
     })?;
-    let expected_component_profile_ref = crate::wasm_component::component_profile_ref(&component_profile);
+    let expected_component_profile_ref = crate::wasm_component::r#ref(&component_profile);
     let artifact_length = u64::try_from(artifact_bytes.len()).map_err(|error| {
-        super::model::PerformanceDenial::new(format!("performance artifact length is unsupported: {error}"))
+        super::model::Denial::new(format!("performance artifact length is unsupported: {error}"))
     })?;
     let measured_artifact_ref = super::model::content_ref(artifact_bytes);
     let mut blockers = Vec::new();
     if bundle.schema_id != PERFORMANCE_MANTLE_BUNDLE_SCHEMA {
         blockers.push("performance artifact uses an unsupported Mantle bundle schema".to_string());
     }
-    if bundle.bundle_ref != performance_materialization_bundle_ref(bundle) {
+    if bundle.bundle_ref != bundle_ref(bundle) {
         blockers.push("performance Mantle bundle identity does not match its canonical fields".to_string());
     }
     if !suite.materialization_bundle_refs.iter().any(|value| value == &bundle.bundle_ref) {
@@ -109,9 +109,9 @@ pub fn verify_performance_materialization(
     validate_artifact_kind(bundle, &mut blockers);
     validate_component_bytes(bundle, artifact_bytes, &mut blockers);
     if !blockers.is_empty() {
-        return Err(super::model::PerformanceDenial::from_blockers(blockers));
+        return Err(super::model::Denial::from_blockers(blockers));
     }
-    Ok(super::model::MaterializedPerformanceArtifact {
+    Ok(super::model::MaterializedArtifact {
         kind: bundle.kind,
         consumer: bundle.consumer,
         source_component_ref: bundle.source_component_ref.clone(),
@@ -131,14 +131,14 @@ pub fn verify_performance_materialization(
 }
 
 fn validate_component_bytes(
-    bundle: &PerformanceMaterializationBundle,
+    bundle: &Bundle,
     artifact_bytes: &[u8],
     blockers: &mut impl crate::bounded::VecSink<String>,
 ) {
     if matches!(
         bundle.kind,
-        super::model::PerformanceArtifactKind::PortableComponent
-            | super::model::PerformanceArtifactKind::WizerComponent
+        super::model::ArtifactKind::PortableComponent
+            | super::model::ArtifactKind::WizerComponent
     ) && crate::wasm_component::classify_for_profile(
         crate::wasm_component::RequestedExecutionProfile::ComponentV1,
         artifact_bytes,
@@ -203,9 +203,9 @@ impl AdmittedPrecompiledComponent {
         &self.mantle_bundle_ref
     }
 
-    pub fn verify_bytes_before_deserialization(&self, bytes: &[u8]) -> super::model::PerformanceResult<()> {
+    pub fn verify_bytes_before_deserialization(&self, bytes: &[u8]) -> super::model::Result<()> {
         if bytes.is_empty() || super::model::content_ref(bytes) != self.output_ref {
-            return Err(super::model::PerformanceDenial::new(
+            return Err(super::model::Denial::new(
                 "precompiled bytes differ from the sealed admission identity",
             ));
         }
@@ -223,12 +223,12 @@ pub struct PrecompiledRuntimeExpectation {
 }
 
 pub fn admit_precompiled_component(
-    materialized: &super::model::MaterializedPerformanceArtifact,
+    materialized: &super::model::MaterializedArtifact,
     manifest: &PrecompiledComponentManifest,
     expectation: &PrecompiledRuntimeExpectation,
-) -> super::model::PerformanceResult<AdmittedPrecompiledComponent> {
+) -> super::model::Result<AdmittedPrecompiledComponent> {
     let mut blockers = Vec::new();
-    if materialized.kind != super::model::PerformanceArtifactKind::PrecompiledComponent {
+    if materialized.kind != super::model::ArtifactKind::PrecompiledComponent {
         blockers.push("precompiled admission received a non-precompiled artifact".to_string());
     }
     if manifest.schema_id != PRECOMPILED_ADMISSION_SCHEMA {
@@ -272,7 +272,7 @@ pub fn admit_precompiled_component(
             _admission_seal: PrecompiledAdmissionSeal,
         })
     } else {
-        Err(super::model::PerformanceDenial::from_blockers(blockers))
+        Err(super::model::Denial::from_blockers(blockers))
     }
 }
 

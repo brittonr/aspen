@@ -84,7 +84,7 @@ fn persist_ordered_batch(
             match mutation {
                 OrderedMutation::Put { key, .. } => {
                     let value = next.ordered.get(key).ok_or_else(|| {
-                        crate::error::MoltenError::invalid_harness("admitted ordered mutation produced no value")
+                        crate::error::Failure::invalid_harness("admitted ordered mutation produced no value")
                     })?;
                     let bytes = encode_versioned_value(value)?;
                     table.insert(key.as_slice(), bytes.as_slice()).map_err(adapter_error)?;
@@ -106,10 +106,10 @@ fn persist_snapshot(
     next: &DurableState,
 ) -> crate::error::Result<()> {
     let snapshot = next.snapshots.get(&request.snapshot_ref).ok_or_else(|| {
-        crate::error::MoltenError::invalid_harness("admitted snapshot transition produced no snapshot")
+        crate::error::Failure::invalid_harness("admitted snapshot transition produced no snapshot")
     })?;
     let relative = format!("{SNAPSHOT_DIRECTORY}/{}.bin", snapshot_file_stem(&request.content_ref)?);
-    root.root().write(&crate::local_store::LocalStorePath::parse(&relative)?, bytes)?;
+    root.root().write(&crate::local_store::Locator::parse(&relative)?, bytes)?;
     let encoded = encode_snapshot(snapshot)?;
     let write = database.begin_write().map_err(adapter_error)?;
     {
@@ -126,7 +126,7 @@ fn persist_effect(
 ) -> crate::error::Result<()> {
     let transaction_id = effect_transaction_id(command);
     let effect = next.effects.get(transaction_id).ok_or_else(|| {
-        crate::error::MoltenError::invalid_harness("admitted effect transition produced no effect state")
+        crate::error::Failure::invalid_harness("admitted effect transition produced no effect state")
     })?;
     let encoded = encode_effect(effect)?;
     let write = database.begin_write().map_err(adapter_error)?;

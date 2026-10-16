@@ -1,0 +1,21 @@
+# Transcript blake3:b1cee518478e16f6fcb8dec786785e8264d5f27169b18de05fc963b71a38c594
+
+```preserves
+<value "source-smoke">
+```
+decision: pass
+```preserves-output
+<value "source-smoke">
+```
+
+```expect
+<expect-output <value "source-smoke">>
+```
+decision: pass
+```preserves-output
+<expect-output <value "source-smoke">>
+```
+
+
+Final decision: pass
+Receipt: blake3:64df04f9631140aa3c48fffb44b54f64a6502fdca73b025a8612bd344a40381c

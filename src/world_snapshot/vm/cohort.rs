@@ -9,7 +9,7 @@ use serde::Serialize;
 use vm_cohort_core as vm;
 
 use super::helpers::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub const VM_COHORT_PUBLICATION_REVISION: &str = "31f1696ba9391bfda8577a58af84f72361d5573e";
@@ -101,13 +101,13 @@ pub fn plan_vm_cohort_clones(
     if descriptor.class != molten_core::world_snapshot::SnapshotClass::Opaque
         || descriptor.commit_ref != request.parent_ref
     {
-        return Err(MoltenError::invalid_harness("VM Cohort planning requires one matching opaque parent"));
+        return Err(Failure::invalid_harness("VM Cohort planning requires one matching opaque parent"));
     }
     validate_clone_plan(request).map_err(clone_issues)?;
     validate_mapped_descriptor(descriptor, chaos_descriptor)?;
     validate_limits(limits)?;
     if effective_disk_bytes == 0 {
-        return Err(MoltenError::invalid_harness("VM Cohort effective disk observation is empty"));
+        return Err(Failure::invalid_harness("VM Cohort effective disk observation is empty"));
     }
 
     let compatibility = vm::CompatibilityProfile {
@@ -126,9 +126,9 @@ pub fn plan_vm_cohort_clones(
         adapter_ref: vm_resource_ref(&adapter_ref())?,
     };
     let device_count = u32::try_from(chaos_descriptor.descriptor.topology.devices.len())
-        .map_err(|_| MoltenError::invalid_harness("VM Cohort device count exceeds u32"))?
+        .map_err(|_| Failure::invalid_harness("VM Cohort device count exceeds u32"))?
         .checked_add(IN_KERNEL_DEVICE_COUNT)
-        .ok_or_else(|| MoltenError::invalid_harness("VM Cohort device count overflow"))?;
+        .ok_or_else(|| Failure::invalid_harness("VM Cohort device count overflow"))?;
     let checkpoint = vm::admit_checkpoint(&vm::CheckpointCandidate {
         compatibility: compatibility.clone(),
         effective_memory_base_ref: vm_resource_ref(component_ref(descriptor, SnapshotComponentKind::Memory)?)?,
@@ -141,9 +141,9 @@ pub fn plan_vm_cohort_clones(
         host_handles_present: descriptor.contains_live_handle,
         bases_mutable: false,
     })
-    .map_err(|issues| MoltenError::invalid_harness(format!("VM Cohort checkpoint denied: {issues:?}")))?;
+    .map_err(|issues| Failure::invalid_harness(format!("VM Cohort checkpoint denied: {issues:?}")))?;
     let worker_count = u32::try_from(request.children.len())
-        .map_err(|_| MoltenError::invalid_harness("VM Cohort child count exceeds u32"))?;
+        .map_err(|_| Failure::invalid_harness("VM Cohort child count exceeds u32"))?;
     let plan = vm::plan_cohort(&vm::CohortRequest {
         checkpoint,
         expected_compatibility: compatibility,
@@ -151,10 +151,10 @@ pub fn plan_vm_cohort_clones(
         limits: mechanism_limits(limits)?,
         context_ref: vm_resource_ref(&context_ref(descriptor, request)?)?,
     })
-    .map_err(|issues| MoltenError::invalid_harness(format!("VM Cohort plan denied: {issues:?}")))?;
+    .map_err(|issues| Failure::invalid_harness(format!("VM Cohort plan denied: {issues:?}")))?;
     let isolation_issues = vm::validate_clone_isolation(&plan);
     if !isolation_issues.is_empty() {
-        return Err(MoltenError::invalid_harness(format!("VM Cohort isolation denied: {isolation_issues:?}")));
+        return Err(Failure::invalid_harness(format!("VM Cohort isolation denied: {isolation_issues:?}")));
     }
     project_plan(descriptor, request, &plan)
 }
@@ -172,7 +172,7 @@ pub fn realize_vm_cohort_clones<P: VmCohortRealizationPort>(
 ) -> Result<VmCohortRealizationObservation> {
     let observation = port.realize(plan)?;
     crate::preserves_rail::validate_content_ref(&observation.mechanism_receipt_ref)
-        .map_err(|_| MoltenError::invalid_harness("VM Cohort receipt reference is invalid"))?;
+        .map_err(|_| Failure::invalid_harness("VM Cohort receipt reference is invalid"))?;
     if observation.plan_ref != plan.plan_ref
         || observation.cohort_ref != plan.cohort_ref
         || observation.active_clones != plan.worker_count
@@ -181,7 +181,7 @@ pub fn realize_vm_cohort_clones<P: VmCohortRealizationPort>(
         || observation.replay_authority_granted
         || observation.release_authority_granted
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "VM Cohort realization is partial, crossed, uncertain, or overclaims authority",
         ));
     }

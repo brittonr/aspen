@@ -2,7 +2,7 @@ use redb::ReadableDatabase;
 
 type IoValue = preserves::IOValue;
 type Value<T> = preserves::Value<T>;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {

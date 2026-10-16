@@ -6,7 +6,7 @@ impl VirtualClockAdapter {
         wall_base_nanos: u64,
     ) -> crate::error::Result<Self> {
         if profile.kind != super::TimeProfileKind::DeterministicSimulation {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "virtual clock requires an admitted deterministic simulation profile",
             ));
         }
@@ -26,7 +26,7 @@ impl VirtualClockAdapter {
         self.virtual_ticks = self
             .virtual_ticks
             .checked_add(delta_ticks)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("virtual time overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("virtual time overflow"))?;
         Ok(self.observe_virtual())
     }
 
@@ -34,7 +34,7 @@ impl VirtualClockAdapter {
         self.logical_position = self
             .logical_position
             .checked_add(1)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("logical time overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("logical time overflow"))?;
         Ok(self.logical_position)
     }
 
@@ -49,13 +49,13 @@ impl VirtualClockAdapter {
         self.observation_sequence = self
             .observation_sequence
             .checked_add(1)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("virtual wall observation sequence overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("virtual wall observation sequence overflow"))?;
         let base = i128::from(self.wall_base_nanos)
             .checked_add(i128::from(self.virtual_ticks))
             .and_then(|value| value.checked_add(self.wall_offset_nanos))
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("virtual wall clock overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("virtual wall clock overflow"))?;
         let unix_nanos = u64::try_from(base)
-            .map_err(|_| crate::error::MoltenError::invalid_harness("virtual wall clock underflow"))?;
+            .map_err(|_| crate::error::Failure::invalid_harness("virtual wall clock underflow"))?;
         Ok(super::WallClockObservation {
             profile_ref: self.profile_ref.clone(),
             unix_nanos,
@@ -68,7 +68,7 @@ impl VirtualClockAdapter {
         self.wall_offset_nanos = self
             .wall_offset_nanos
             .checked_add(signed_delta_nanos)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("virtual wall fault offset overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("virtual wall fault offset overflow"))?;
         Ok(())
     }
 
@@ -123,7 +123,7 @@ pub fn run_timer_adapter_conformance<A: TimerClockAdapter>(
     generation: u64,
 ) -> crate::error::Result<AdapterConformanceObservation> {
     if adapter.profile_ref() != profile.profile_ref {
-        return Err(crate::error::MoltenError::invalid_harness("timer adapter profile mismatch"));
+        return Err(crate::error::Failure::invalid_harness("timer adapter profile mismatch"));
     }
     let start = adapter.now_ticks()?;
     let delay = match profile.kind {
@@ -132,7 +132,7 @@ pub fn run_timer_adapter_conformance<A: TimerClockAdapter>(
     };
     let deadline = start
         .checked_add(delay)
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("conformance deadline overflow"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("conformance deadline overflow"))?;
     let request = conformance_timer_request(TimerRequestInput {
         profile,
         service_id,
@@ -201,7 +201,7 @@ pub struct ThreadSchedulerWakeAdapter {
 impl ThreadSchedulerWakeAdapter {
     pub fn register(&mut self, key: super::RunnableKey, thread: std::thread::Thread) -> crate::error::Result<()> {
         if self.targets.insert(key.clone(), thread).is_some() {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "scheduler wake target {}:{}:{} is already registered",
                 key.service_id, key.generation, key.runnable_id
             )));
@@ -217,12 +217,12 @@ impl ThreadSchedulerWakeAdapter {
     // translates an admitted wake into the host thread wake primitive.
     pub fn route(&self, transition: &super::SchedulerTransition) -> crate::error::Result<()> {
         if !matches!(transition.action, super::SchedulerAction::Woken | super::SchedulerAction::Yielded) {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "thread wake adapter received a non-wake scheduler transition",
             ));
         }
         let thread = self.targets.get(&transition.runnable).ok_or_else(|| {
-            crate::error::MoltenError::invalid_harness(format!(
+            crate::error::Failure::invalid_harness(format!(
                 "no live scheduler wake target for {}:{}:{}",
                 transition.runnable.service_id, transition.runnable.generation, transition.runnable.runnable_id
             ))

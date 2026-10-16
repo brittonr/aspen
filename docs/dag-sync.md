@@ -30,7 +30,7 @@ Peer reassignment requires a new traversal epoch. Old progress cannot move to th
 
 ## Conformance profiles
 
-The deterministic profile uses `DeterministicTransportAdapter`. The live profile uses the existing Iroh loopback adapter through the fabric transport port.
+The deterministic profile uses `DeterministicAdapter`. The live profile uses the existing Iroh loopback adapter through the fabric transport port.
 
 Both profiles run the same DAG planner, response transition, progress transition, and domain-boundary code. DAG code does not import Iroh backend types.
 

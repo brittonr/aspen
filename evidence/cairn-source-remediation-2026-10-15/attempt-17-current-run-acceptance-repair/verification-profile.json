@@ -1,0 +1,18 @@
+{
+  "scope": "Exactly four F14 requirements over current root Rust; not a release closure or live external-adapter campaign.",
+  "root_source_files": 1897,
+  "source_content_hashes": "blake3:bba7f6827c948853b367eb32b5e2763d4c90d322d851042cbb30932e6390b242",
+  "driver_sources": "blake3:28746a1ae433575dc5c41c8f45342a15a6bba6cdba9d083d44ec42d29d957752",
+  "actual_compiler_version": "rustc 1.98.0-nightly (31a9463c6 2026-05-25)\nbinary: rustc\ncommit-hash: 31a9463c6e2794a59ce57a8f37abc6966afc2a58\ncommit-date: 2026-05-25\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0-nightly\nLLVM version: 22.1.6\n",
+  "source_build_selection": "native-consumer-current-library-selection.json",
+  "ordered_acceptance": "Source producers/strict-ci gate, default/feature tests and default/enabled Clippy were checked passing; lifecycle acceptance independently requires every remaining ordered gate.",
+  "actual_cli_records": [
+    "final-cli-positive.json",
+    "final-cli-expected-deny.json",
+    "final-reviewed-cli-positive-canonical-pending.json",
+    "final-reviewed-cli-expected-deny.json"
+  ],
+  "positive_expected_exit": 0,
+  "negative_expected_exit": 1,
+  "negative_driver_contract": "Only all intended observed denials and unchanged-lifecycle assertions yield 1; unexpected consumer failures yield 2."
+}

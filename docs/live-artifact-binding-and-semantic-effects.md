@@ -109,7 +109,7 @@ Replay-only compatibility cannot authorize live host execution. Reverse substitu
 
 ## Canonical artifacts
 
-`src/live_binding_adoption.rs` constructs and parses bounded canonical Preserves envelopes for:
+`src/live/binding/adoption.rs` constructs and parses bounded canonical Preserves envelopes for:
 
 - binding records and snapshots;
 - resolution and transition receipts;

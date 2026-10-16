@@ -1,6 +1,6 @@
 type IoValue = preserves::IOValue;
 type Result<T> = crate::error::Result<T>;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 
 const CONTEXT_PROFILE_SCHEMA: &str = "molten.operator.context-profile.v1";
@@ -15,7 +15,7 @@ const MAX_DIAGNOSTICS: usize = 4096;
 const EVIDENCE_ONLY_CAVEAT: &str = "operator context profiles are convenience and review evidence only; expanded refs must still pass subsystem authority, policy, resource, provenance, retention, source-gate, transport, mutation, and release gates";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ContextRefSet {
+pub struct RefSet {
     pub policy_refs: Vec<String>,
     pub capability_refs: Vec<String>,
     pub authority_refs: Vec<String>,
@@ -26,10 +26,10 @@ pub struct ContextRefSet {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ContextProfileInput {
+pub struct Input {
     pub profile_id: String,
     pub profile_tier: String,
-    pub refs: ContextRefSet,
+    pub refs: RefSet,
     pub allowed_operations: Vec<String>,
     pub caveats: Vec<String>,
 }
@@ -45,7 +45,7 @@ pub struct OperationRequirements {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ContextOverrideInput {
+pub struct OverrideInput {
     pub policy_refs: Vec<String>,
     pub authority_refs: Vec<String>,
     pub resource_refs: Vec<String>,
@@ -54,7 +54,7 @@ pub struct ContextOverrideInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ContextProfileArtifact {
+pub struct Artifact {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub profile_ref: String,
@@ -62,17 +62,17 @@ pub struct ContextProfileArtifact {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ContextExpansion {
+pub struct Expansion {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub profile_ref: String,
-    pub expanded_refs: ContextRefSet,
+    pub expanded_refs: RefSet,
     pub expansion_ref: String,
     pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ContextAuthorizationUse {
+pub struct AuthorizationUse {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub value: IoValue,
@@ -82,9 +82,9 @@ pub struct ContextAuthorizationUse {
 // r[impl molten.operator_workflow.context_profile.expansion]
 // r[impl molten.operator_workflow.context_profile.overrides]
 // r[impl molten.operator_workflow.context_profile.evidence_only]
-pub fn build_context_profile_artifact(input: &ContextProfileInput) -> Result<ContextProfileArtifact> {
+pub fn build_artifact(input: &Input) -> Result<Artifact> {
     let mut diagnostics = Vec::new();
-    validate_profile(input, &mut diagnostics)?;
+    validate(input, &mut diagnostics)?;
     diagnostics.sort();
     diagnostics.dedup();
     ensure_diagnostic_bound(diagnostics.len())?;
@@ -93,9 +93,9 @@ pub fn build_context_profile_artifact(input: &ContextProfileInput) -> Result<Con
     } else {
         DECISION_DENY
     };
-    let value = context_profile_value(input, decision, &diagnostics)?;
+    let value = value(input, decision, &diagnostics)?;
     let profile_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(ContextProfileArtifact {
+    Ok(Artifact {
         decision: decision.to_string(),
         diagnostics,
         profile_ref,
@@ -103,12 +103,12 @@ pub fn build_context_profile_artifact(input: &ContextProfileInput) -> Result<Con
     })
 }
 
-pub fn expand_context_profile(
-    profile: &ContextProfileInput,
+pub fn expand(
+    profile: &Input,
     requirements: &OperationRequirements,
-    overrides: &ContextOverrideInput,
-) -> Result<ContextExpansion> {
-    let profile_artifact = build_context_profile_artifact(profile)?;
+    overrides: &OverrideInput,
+) -> Result<Expansion> {
+    let profile_artifact = build_artifact(profile)?;
     let mut diagnostics = profile_artifact.diagnostics.clone();
     validate_requirements(requirements)?;
     validate_overrides(overrides, &mut diagnostics)?;
@@ -125,7 +125,7 @@ pub fn expand_context_profile(
     } else {
         DECISION_DENY
     };
-    let value = context_expansion_value(ExpansionValueInput {
+    let value = expansion_value(ExpansionValueInput {
         profile_ref: &profile_artifact.profile_ref,
         requirements,
         overrides,
@@ -134,7 +134,7 @@ pub fn expand_context_profile(
         diagnostics: &diagnostics,
     })?;
     let expansion_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(ContextExpansion {
+    Ok(Expansion {
         decision: decision.to_string(),
         diagnostics,
         profile_ref: profile_artifact.profile_ref,
@@ -144,11 +144,11 @@ pub fn expand_context_profile(
     })
 }
 
-pub fn evaluate_context_profile_authorization_use(
+pub fn evaluate_authorization_use(
     profile_ref: &str,
     requested_operation: &str,
     expanded_authority_refs: &[String],
-) -> Result<ContextAuthorizationUse> {
+) -> Result<AuthorizationUse> {
     validate_ref(profile_ref, "context profile")?;
     validate_text("requested operation", requested_operation)?;
     validate_ref_list("expanded authority", expanded_authority_refs)?;
@@ -165,16 +165,16 @@ pub fn evaluate_context_profile_authorization_use(
         field_sequence("diagnostics", string_values(&diagnostics)?),
         field_sequence("caveats", string_values(&[EVIDENCE_ONLY_CAVEAT.to_string()])?),
     ]);
-    Ok(ContextAuthorizationUse {
+    Ok(AuthorizationUse {
         decision: DECISION_DENY.to_string(),
         diagnostics,
         value,
     })
 }
 
-fn validate_profile(input: &ContextProfileInput, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
+fn validate(input: &Input, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
     validate_text("context profile id", &input.profile_id)?;
-    validate_profile_tier(&input.profile_tier, diagnostics)?;
+    validate_tier(&input.profile_tier, diagnostics)?;
     validate_ref_set(&input.refs, diagnostics)?;
     ensure_scope_bound(input.allowed_operations.len(), "allowed operations")?;
     let mut seen = OrderedSet::new();
@@ -191,7 +191,7 @@ fn validate_profile(input: &ContextProfileInput, diagnostics: &mut impl crate::b
     Ok(())
 }
 
-fn validate_profile_tier(tier: &str, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
+fn validate_tier(tier: &str, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
     match tier {
         "local" | "pilot" | "release" => Ok(()),
         other => {
@@ -201,7 +201,7 @@ fn validate_profile_tier(tier: &str, diagnostics: &mut impl crate::bounded::VecS
     }
 }
 
-fn validate_ref_set(refs: &ContextRefSet, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
+fn validate_ref_set(refs: &RefSet, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
     validate_ref_list_with_diagnostics("policy", &refs.policy_refs, diagnostics)?;
     validate_ref_list_with_diagnostics("capability", &refs.capability_refs, diagnostics)?;
     validate_ref_list_with_diagnostics("authority", &refs.authority_refs, diagnostics)?;
@@ -216,7 +216,7 @@ fn validate_requirements(requirements: &OperationRequirements) -> Result<()> {
 }
 
 fn validate_overrides(
-    overrides: &ContextOverrideInput,
+    overrides: &OverrideInput,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<()> {
     validate_ref_list_with_diagnostics("override policy", &overrides.policy_refs, diagnostics)?;
@@ -227,10 +227,10 @@ fn validate_overrides(
 }
 
 fn merge_refs(
-    profile: &ContextProfileInput,
-    overrides: &ContextOverrideInput,
+    profile: &Input,
+    overrides: &OverrideInput,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
-) -> Result<ContextRefSet> {
+) -> Result<RefSet> {
     if !overrides.policy_refs.is_empty() && !same_ref_set(&profile.refs.policy_refs, &overrides.policy_refs) {
         diagnostics.push_item("conflicting-policy-override".to_string());
     }
@@ -240,18 +240,18 @@ fn merge_refs(
     if !overrides.resource_refs.is_empty() && !same_ref_set(&profile.refs.resource_refs, &overrides.resource_refs) {
         diagnostics.push_item("conflicting-resource-override".to_string());
     }
-    Ok(ContextRefSet {
-        policy_refs: merge_same_or_profile(&profile.refs.policy_refs, &overrides.policy_refs),
+    Ok(RefSet {
+        policy_refs: merge_same_or(&profile.refs.policy_refs, &overrides.policy_refs),
         capability_refs: profile.refs.capability_refs.clone(),
-        authority_refs: merge_same_or_profile(&profile.refs.authority_refs, &overrides.authority_refs),
-        resource_refs: merge_same_or_profile(&profile.refs.resource_refs, &overrides.resource_refs),
+        authority_refs: merge_same_or(&profile.refs.authority_refs, &overrides.authority_refs),
+        resource_refs: merge_same_or(&profile.refs.resource_refs, &overrides.resource_refs),
         evidence_refs: merge_additive(&profile.refs.evidence_refs, &overrides.evidence_refs),
         redaction_refs: profile.refs.redaction_refs.clone(),
-        retention_refs: merge_same_or_profile(&profile.refs.retention_refs, &overrides.retention_refs),
+        retention_refs: merge_same_or(&profile.refs.retention_refs, &overrides.retention_refs),
     })
 }
 
-fn merge_same_or_profile(profile_refs: &[String], override_refs: &[String]) -> Vec<String> {
+fn merge_same_or(profile_refs: &[String], override_refs: &[String]) -> Vec<String> {
     if override_refs.is_empty() || same_ref_set(profile_refs, override_refs) {
         return profile_refs.to_vec();
     }

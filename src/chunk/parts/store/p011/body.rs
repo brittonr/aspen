@@ -24,12 +24,12 @@ fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<Str
     }
 }
 
-pub fn index_status(root: &Path) -> Result<ChunkStoreIndexStatus> {
+pub fn index_status(root: &Path) -> Result<ChunkIndexStatus> {
     let root = open_capability_chunk_root(root)?;
     index_status_with_root(&root)
 }
 
-pub fn index_status_with_root(root: &CapabilityChunkRoot) -> Result<ChunkStoreIndexStatus> {
+pub fn index_status_with_root(root: &CapabilityChunkRoot) -> Result<ChunkIndexStatus> {
     ensure_dirs(root)?;
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
@@ -60,7 +60,7 @@ pub fn index_status_with_root(root: &CapabilityChunkRoot) -> Result<ChunkStoreIn
     let partial_fetches =
         read_txn.open_table(INDEX_PARTIAL_FETCHES).map_err(index_error)?.len().map_err(index_error)?;
     let receipts = read_txn.open_table(INDEX_RECEIPTS).map_err(index_error)?.len().map_err(index_error)?;
-    Ok(ChunkStoreIndexStatus {
+    Ok(ChunkIndexStatus {
         manifests,
         chunks,
         available_chunks,
@@ -72,16 +72,16 @@ pub fn index_status_with_root(root: &CapabilityChunkRoot) -> Result<ChunkStoreIn
     })
 }
 
-pub fn rebuild_index(root: &Path) -> Result<ChunkStoreIndexRebuild> {
+pub fn rebuild_index(root: &Path) -> Result<ChunkIndexRebuild> {
     let root = open_capability_chunk_root(root)?;
     rebuild_index_with_root(&root)
 }
 
-pub fn rebuild_index_with_root(root: &CapabilityChunkRoot) -> Result<ChunkStoreIndexRebuild> {
+pub fn rebuild_index_with_root(root: &CapabilityChunkRoot) -> Result<ChunkIndexRebuild> {
     ensure_dirs(root)?;
     let inputs = scan_inputs(root)?;
     let receipt_value = write_inputs(root, &inputs)?;
-    Ok(ChunkStoreIndexRebuild {
+    Ok(ChunkIndexRebuild {
         status: index_status_with_root(root)?,
         receipt_value,
     })
@@ -112,8 +112,8 @@ fn scan_inputs(root: &CapabilityChunkRoot) -> Result<IndexInputs> {
     Ok(IndexInputs {
         manifest_entries,
         chunk_entries,
-        pinned_manifests: pinned_refs(root, &store_path("pins/manifests")?)?,
-        pinned_chunks: pinned_refs(root, &store_path("pins/chunks")?)?,
+        pinned_manifests: pinned_refs(root, &path("pins/manifests")?)?,
+        pinned_chunks: pinned_refs(root, &path("pins/chunks")?)?,
     })
 }
 
@@ -150,7 +150,7 @@ fn write_inputs(root: &CapabilityChunkRoot, inputs: &IndexInputs) -> Result<IoVa
     write_entries(&write_txn, &inputs.chunk_entries)?;
     write_pin_entries(&write_txn, &inputs.pinned_manifests, &inputs.pinned_chunks)?;
     let receipt_value = rebuild_receipt(inputs);
-    store_receipt_in_tx(&write_txn, &receipt_value)?;
+    receipt_in_tx(&write_txn, &receipt_value)?;
     write_txn.commit().map_err(index_error)?;
     drop(db);
     Ok(receipt_value)
@@ -195,7 +195,7 @@ fn write_pin_entries(
 
 fn rebuild_receipt(inputs: &IndexInputs) -> IoValue {
     let chunk_refs = inputs.chunk_entries.keys().cloned().collect::<Vec<_>>();
-    receipt_value(ChunkStoreReceiptValueInput {
+    receipt_value(ChunkReceiptValueInput {
         operation: "index-rebuild",
         decision: "pass",
         manifest_ref: None,

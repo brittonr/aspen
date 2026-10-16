@@ -67,7 +67,7 @@ fn deliver_local(command: Command) -> Outcome<()> {
 fn run_two_peer(transport_root: FilePath, out: FilePath) -> Outcome<()> {
     let harness =
         molten::remote_dataspace::two_peer_service_ready_harness(&transport_root, remote_evidence_fixture()?)?;
-    std::fs::create_dir_all(&out).map_err(molten::error::MoltenError::from)?;
+    std::fs::create_dir_all(&out).map_err(molten::error::Failure::from)?;
     write_two_peer_outputs(&out, &harness)?;
     println!(
         "remote run-two-peer ok delivery_log={} gate_receipt={} out={}",
@@ -174,7 +174,7 @@ fn parse_remote_operation(operation: &str) -> Outcome<molten::remote_dataspace::
         "assert" => Ok(molten::remote_dataspace::Operation::Assert),
         "retract" => Ok(molten::remote_dataspace::Operation::Retract),
         "observe" => Ok(molten::remote_dataspace::Operation::Observe),
-        _ => Err(molten::error::MoltenError::invalid_harness(format!(
+        _ => Err(molten::error::Failure::invalid_harness(format!(
             "unsupported remote dataspace operation {operation}; expected message/assert/retract/observe"
         ))),
     }
@@ -199,31 +199,31 @@ fn remote_cli_synthetic_ref(label: &str) -> Outcome<String> {
 fn remote_gate_turn_context_ref(gate_receipt: &preserves::IOValue) -> Outcome<String> {
     let fields = gate_receipt
         .collect_simple_record("remote-dataspace-gate-receipt-v1", Some(7))
-        .ok_or_else(|| molten::error::MoltenError::invalid_harness("expected remote dataspace gate receipt"))?;
+        .ok_or_else(|| molten::error::Failure::invalid_harness("expected remote dataspace gate receipt"))?;
     let context = molten::preserves_rail::value_to_iovalue(&fields[4]);
     let refs = context
         .collect_simple_record("turn-journal-context-refs", Some(1))
-        .ok_or_else(|| molten::error::MoltenError::invalid_harness("expected remote turn context refs"))?;
+        .ok_or_else(|| molten::error::Failure::invalid_harness("expected remote turn context refs"))?;
     let sequence = refs[0]
         .collect_sequence()
-        .ok_or_else(|| molten::error::MoltenError::invalid_harness("expected turn context ref sequence"))?;
+        .ok_or_else(|| molten::error::Failure::invalid_harness("expected turn context ref sequence"))?;
     let first = sequence
         .iter()
         .next()
-        .ok_or_else(|| molten::error::MoltenError::invalid_harness("missing turn context ref"))?;
+        .ok_or_else(|| molten::error::Failure::invalid_harness("missing turn context ref"))?;
     first
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| molten::error::MoltenError::invalid_harness("expected string turn context ref"))
+        .ok_or_else(|| molten::error::Failure::invalid_harness("expected string turn context ref"))
 }
 
 pub(super) fn remote_dataspace_gate_summary(value: &preserves::IOValue) -> Outcome<String> {
     if molten::ledger::artifact_kind(value) != "remote-dataspace-gate-receipt" {
-        return Err(molten::error::MoltenError::invalid_harness("not a remote dataspace gate receipt"));
+        return Err(molten::error::Failure::invalid_harness("not a remote dataspace gate receipt"));
     }
     Ok(format!("remote dataspace gate receipt ref={}", molten::preserves_rail::canonical_hash(value)?))
 }
 
-fn wrong_handler(name: &str) -> molten::error::MoltenError {
-    molten::error::MoltenError::invalid_harness(format!("remote {name} handler called with another command"))
+fn wrong_handler(name: &str) -> molten::error::Failure {
+    molten::error::Failure::invalid_harness(format!("remote {name} handler called with another command"))
 }

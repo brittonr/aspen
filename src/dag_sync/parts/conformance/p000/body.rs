@@ -1,7 +1,7 @@
 use molten_core::dag_sync::*;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric_transport::*;
 
@@ -43,9 +43,9 @@ pub enum DagTransportFixtureFault {
 }
 
 enum DagTransportMechanism {
-    Deterministic(DeterministicTransportAdapter),
+    Deterministic(DeterministicAdapter),
     IrohLive {
-        adapter: IrohTransportAdapter,
+        adapter: IrohAdapter,
         runtime: tokio::runtime::Runtime,
     },
 }
@@ -63,19 +63,19 @@ impl DagFabricTransportAdapter {
         let mechanism = match kind {
             DagTransportFixtureKind::DeterministicSimulation => {
                 let profile = dag_transport_profile(TransportAdapterKind::DeterministicSimulation)?;
-                DagTransportMechanism::Deterministic(DeterministicTransportAdapter::new(profile)?)
+                DagTransportMechanism::Deterministic(DeterministicAdapter::new(profile)?)
             }
             DagTransportFixtureKind::IrohLiveLoopback => {
                 if fault.is_some() {
-                    return Err(MoltenError::invalid_harness("live DAG loopback does not synthesize transport faults"));
+                    return Err(Failure::invalid_harness("live DAG loopback does not synthesize transport faults"));
                 }
                 let profile = dag_transport_profile(TransportAdapterKind::IrohLive)?;
                 let runtime = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()
-                    .map_err(|error| MoltenError::invalid_harness(format!("DAG Iroh runtime failed: {error}")))?;
+                    .map_err(|error| Failure::invalid_harness(format!("DAG Iroh runtime failed: {error}")))?;
                 DagTransportMechanism::IrohLive {
-                    adapter: IrohTransportAdapter::new(profile)?,
+                    adapter: IrohAdapter::new(profile)?,
                     runtime,
                 }
             }
@@ -102,14 +102,14 @@ impl DagFabricTransportAdapter {
         Ok(())
     }
 
-    fn execute_command(&mut self, command: &TransportCommand) -> Result<CanonicalTransportTransition> {
+    fn execute_command(&mut self, command: &TransportCommand) -> Result<Transition> {
         match &mut self.mechanism {
             DagTransportMechanism::Deterministic(adapter) => adapter
                 .execute_command(command)
-                .map_err(|error| MoltenError::invalid_harness(format!("simulated DAG transport failed: {error}"))),
+                .map_err(|error| Failure::invalid_harness(format!("simulated DAG transport failed: {error}"))),
             DagTransportMechanism::IrohLive { adapter, .. } => adapter
                 .execute_command(command)
-                .map_err(|error| MoltenError::invalid_harness(format!("live DAG transport failed: {error}"))),
+                .map_err(|error| Failure::invalid_harness(format!("live DAG transport failed: {error}"))),
         }
     }
 
@@ -128,24 +128,24 @@ impl DagFabricTransportAdapter {
     fn partition(&mut self, request: &DagFetchRequest) -> Result<DagTransferOutcome> {
         let command = self.send_command(request)?;
         let DagTransportMechanism::Deterministic(adapter) = &mut self.mechanism else {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "partition injection requires the deterministic transport adapter",
             ));
         };
-        let transition = adapter.execute_with_fault(&command, Some(SimulatedTransportFault::Partition))?;
+        let transition = adapter.execute_with_fault(&command, Some(SimulatedFault::Partition))?;
         Ok(DagTransferOutcome::Deferred(transition.transition_ref))
     }
 
     fn transfer(&mut self, request: &DagFetchRequest) -> Result<DagTransferOutcome> {
         let payload = dag_request_payload(request);
         let encoded_bytes = u64::try_from(payload.len())
-            .map_err(|_| MoltenError::invalid_harness("DAG transport payload length exceeds u64"))?;
+            .map_err(|_| Failure::invalid_harness("DAG transport payload length exceeds u64"))?;
         let observation_ref = match &mut self.mechanism {
             DagTransportMechanism::Deterministic(adapter) => {
                 let send = send_command(&self.session_id, &self.stream_id, request, &payload)?;
                 let _submitted = adapter
                     .execute_command(&send)
-                    .map_err(|error| MoltenError::invalid_harness(format!("simulated DAG send failed: {error}")))?;
+                    .map_err(|error| Failure::invalid_harness(format!("simulated DAG send failed: {error}")))?;
                 let acknowledged = adapter
                     .execute_command(&TransportCommand::AcknowledgeFrame {
                         operation_id: DAG_TRANSPORT_OPERATION_REF.to_string(),
@@ -153,7 +153,7 @@ impl DagFabricTransportAdapter {
                         stream_id: self.stream_id.clone(),
                         payload_bytes: encoded_bytes,
                     })
-                    .map_err(|error| MoltenError::invalid_harness(format!("simulated DAG ack failed: {error}")))?;
+                    .map_err(|error| Failure::invalid_harness(format!("simulated DAG ack failed: {error}")))?;
                 acknowledged.transition_ref
             }
             DagTransportMechanism::IrohLive { adapter, runtime } => {
@@ -188,7 +188,7 @@ impl DagTransportPort for DagFabricTransportAdapter {
         self.request_count = self
             .request_count
             .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("DAG transport request count overflow"))?;
+            .ok_or_else(|| Failure::invalid_harness("DAG transport request count overflow"))?;
         match self.fault {
             Some(DagTransportFixtureFault::CancelAt { sequence }) if sequence == request.sequence => self.cancel(),
             Some(DagTransportFixtureFault::PartitionAt { sequence }) if sequence == request.sequence => {
@@ -199,8 +199,8 @@ impl DagTransportPort for DagFabricTransportAdapter {
     }
 }
 
-fn dag_transport_profile(kind: TransportAdapterKind) -> Result<CanonicalTransportProfile> {
-    canonical_transport_profile(&TransportProfile {
+fn dag_transport_profile(kind: TransportAdapterKind) -> Result<Profile> {
+    profile(&TransportProfile {
         schema: TRANSPORT_PROFILE_SCHEMA.to_string(),
         profile_id: format!("dag-sync-{}", kind.as_str()),
         profile_ref: DAG_TRANSPORT_PROFILE_REF.to_string(),

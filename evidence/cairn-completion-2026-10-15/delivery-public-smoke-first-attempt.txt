@@ -1,0 +1,30 @@
+   Compiling wiggle v45.0.0
+   Compiling wasmtime-wasi v45.0.0
+   Compiling molten-node-host v0.1.0 (/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-node-host)
+   Compiling nickel-lang v2.2.0
+   Compiling molten v0.1.0 (/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015)
+error[E0433]: cannot find type `DeliveryServiceStatus` in this scope
+  --> examples/f08smoke20261015.rs:32:46
+   |
+32 |         assert_eq!(duplicate.receipt.status, DeliveryServiceStatus::DuplicateReplay);
+   |                                              ^^^^^^^^^^^^^^^^^^^^^ use of undeclared type `DeliveryServiceStatus`
+   |
+help: a struct with a similar name exists
+   |
+32 -         assert_eq!(duplicate.receipt.status, DeliveryServiceStatus::DuplicateReplay);
+32 +         assert_eq!(duplicate.receipt.status, DeliveryStatus::DuplicateReplay);
+   |
+help: consider importing one of these enums
+   |
+ 4 +     use crate::DeliveryServiceStatus;
+   |
+ 4 +     use molten::coordination_delivery::DeliveryServiceStatus;
+   |
+
+For more information about this error, try `rustc --explain E0433`.
+error: could not compile `molten` (example "f08smoke20261015") due to 1 previous error
+
+
+Wall time: 194.77 seconds
+
+Command exited with code 101

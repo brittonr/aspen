@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "/tmp/molten-f14-current-run-16-restored-se51n6m8/traceability17",
+    "pack",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/canonical-observations/final-reviewed-cli-expected-deny--unresolved-service.preserves",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/canonical-observations/final-reviewed-cli-expected-deny--unresolved-service.packed"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T21:24:22.008246+00:00",
+  "elapsed_seconds": 0.003,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

@@ -1,0 +1,1 @@
+cargo octet check -p molten --artifact-dir target/octet-nominal-immutable-library-final -- --lib

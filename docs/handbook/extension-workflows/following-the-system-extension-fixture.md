@@ -2,13 +2,13 @@
 
 Mode: Walkthrough
 
-This walkthrough follows the checked-in `run_executable_system_extension_fixture` from manifest inputs to operator artifacts. Use it to establish what the deterministic fixture actually exercises before using its evidence in an integration review. It is not a native-process deployment tutorial. For lifecycle theory, see [Generation-fenced lifecycle](../../technical/extensions/generation-fenced-lifecycle.md); return to the [Handbook](../README.md) for other practical workflows.
+This walkthrough follows the checked-in `run_executable` from manifest inputs to operator artifacts. Use it to establish what the deterministic fixture actually exercises before using its evidence in an integration review. It is not a native-process deployment tutorial. For lifecycle theory, see [Generation-fenced lifecycle](../../technical/extensions/generation-fenced-lifecycle.md); return to the [Handbook](../README.md) for other practical workflows.
 
 **Execution status:** the path and commands below are source-checked, not executed for this documentation batch. No successful build, fixture run, or runtime readiness is claimed.
 
 ## 1. Choose the actual execution path
 
-The CLI is reached through the `system_extension_port` alias in `src/main.rs`, the root `SystemExtension` variant, and `src/cli/runtime/system_extension.rs`. The fixture implementation is split into two included source files; the small `fixture.rs` wrapper is not the implementation itself.
+The CLI is reached through the `system_extension_port` alias in `src/main.rs`, the root `SystemExtension` variant, and `src/cli/runtime/system_extension/mod.rs`. The fixture implementation is split into two included source files; the small `fixture.rs` wrapper is not the implementation itself.
 
 Choose `sandboxed-component` or `in-process-native`. Although the CLI value enum also contains `native-process`, the deterministic fixture explicitly rejects it. The separate-process integration test is a different path, not another mode of this tutorial.
 
@@ -24,7 +24,7 @@ The repeated-letter BLAKE3-looking references in this source are synthetic fixtu
 
 ## 3. Trace invocation and effect release
 
-The host activates, invokes health, and dispatches its first request. That request must return `HostDispatchResult::Executed` before the fixture proceeds. The returned receipt carries approved typed effects, which are then passed separately to `route_approved_effects`.
+The host activates, invokes health, and dispatches its first request. That request must return `DispatchResult::Executed` before the fixture proceeds. The returned receipt carries approved typed effects, which are then passed separately to `route_approved_effects`.
 
 The fixture transport adapter checks the binding and operation, increments its route counter, and returns a reference-only output. This demonstrates the generic host's routing boundary. It does not demonstrate network delivery or the native v2 materialized-output requirement. A successful callback and an effect-completion receipt answer different questions.
 

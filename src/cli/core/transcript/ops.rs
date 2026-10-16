@@ -20,7 +20,7 @@ pub(super) fn parse(command: super::Command) -> molten::error::Result<()> {
     else {
         return dispatch_mismatch("parse");
     };
-    let source = std::fs::read_to_string(&markdown).map_err(molten::error::MoltenError::from)?;
+    let source = std::fs::read_to_string(&markdown).map_err(molten::error::Failure::from)?;
     let transcript = molten::transcripts::parse_markdown(&source, &molten::transcripts::TranscriptParseInput {
         dependency_refs,
         dependency_closure_hash,
@@ -68,11 +68,15 @@ pub(super) fn run(command: super::Command) -> molten::error::Result<()> {
         }
     };
     let mode = molten::transcripts::TranscriptRunMode::parse(&state)?;
-    let run = molten::transcripts::run_transcript(&artifact, &molten::transcripts::TranscriptRunInput {
-        mode,
-        cache_root: cache,
-        save_root,
-    })?;
+    let run = molten::transcripts::run_transcript(
+        &artifact,
+        &molten::transcripts::TranscriptRunInput {
+            mode,
+            cache_root: cache,
+            save_root,
+        },
+        allocate_state_root,
+    )?;
     if let Some(path) = out.as_ref() {
         super::io::write_file(path, &molten::transcripts::render_transcript(&artifact, Some(&run))?)?;
     }
@@ -82,11 +86,18 @@ pub(super) fn run(command: super::Command) -> molten::error::Result<()> {
         run.decision, run.transcript_ref, run.receipt_ref
     );
     if run.decision == "deny" || run.decision == "error" {
-        let error = molten::error::MoltenError::invalid_harness(format!("transcript run decision {}", run.decision));
+        let error = molten::error::Failure::invalid_harness(format!("transcript run decision {}", run.decision));
         super::io::write_optional_failure(failure_out.as_ref(), "run", &error, Some(vec![run.receipt_value]))?;
         return Err(error);
     }
     Ok(())
+}
+
+fn allocate_state_root(label: &str) -> molten::error::Result<std::path::PathBuf> {
+    let temporary = tempfile::Builder::new().prefix("molten-transcript-").suffix(label).tempdir()?;
+    // Save mode can return this root to the caller, so preserve the prior persistent
+    // allocation lifetime. Fresh mode never exposes the host path in its receipt.
+    Ok(temporary.keep())
 }
 
 pub(super) fn show(command: super::Command) -> molten::error::Result<()> {
@@ -113,7 +124,7 @@ pub(super) fn render(command: super::Command) -> molten::error::Result<()> {
         .map(|path| {
             let receipt_value = super::io::read_preserves_file(path)?;
             let receipt = molten::transcripts::parse_transcript_run_receipt(&receipt_value)?;
-            Ok::<molten::transcripts::TranscriptRun, molten::error::MoltenError>(molten::transcripts::TranscriptRun {
+            Ok::<molten::transcripts::TranscriptRun, molten::error::Failure>(molten::transcripts::TranscriptRun {
                 transcript_ref: receipt.transcript_ref,
                 decision: receipt.decision,
                 stanza_outcomes: Vec::new(),
@@ -130,5 +141,5 @@ pub(super) fn render(command: super::Command) -> molten::error::Result<()> {
 }
 
 fn dispatch_mismatch(command: &str) -> molten::error::Result<()> {
-    Err(molten::error::MoltenError::invalid_harness(format!("transcript {command} dispatch mismatch")))
+    Err(molten::error::Failure::invalid_harness(format!("transcript {command} dispatch mismatch")))
 }

@@ -1,5 +1,5 @@
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 pub use crate::preserves_rail::ContentRef;

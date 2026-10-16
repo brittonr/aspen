@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use molten::error::MoltenError;
+use molten::error::Failure;
 use molten::error::Result;
 use molten::world_head::LocalWorldHeadSigningAdapter;
 use molten::world_head::LocalWorldHeadStore;
@@ -16,8 +16,8 @@ use molten_core::world_head::WorldHeadClaim;
 use molten_core::world_head::WorldHeadPolicyRef;
 use molten_core::world_head::WorldHeadPurpose;
 use molten_core::world_head::WorldHeadSignerRole;
-use molten_node_host::node_state::NodeStateNamespaceKind;
-use molten_node_host::node_state::NodeStateRoot;
+use molten_node_host::node_state::NamespaceKind;
+use molten_node_host::node_state::DirectoryRoot;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -224,8 +224,8 @@ fn sign(input: SignInput) -> Result<()> {
     let claim_bytes = std::fs::read(&input.claim)?;
     let claim = parse_canonical_world_head_claim(&claim_bytes)?;
     let role = WorldHeadSignerRole::parse(&input.role).map_err(head_reference_error)?;
-    let root = NodeStateRoot::open_existing(&input.state_root)?;
-    let secrets = root.namespace(NodeStateNamespaceKind::Secrets)?;
+    let root = DirectoryRoot::open_existing(&input.state_root)?;
+    let secrets = root.namespace(NamespaceKind::Secrets)?;
     let mut signer = LocalWorldHeadSigningAdapter::new(&secrets, molten::world_head::SignerIdentity {
         profile_ref: input.profile_ref,
         entropy_profile_ref: input.entropy_profile_ref,
@@ -244,7 +244,7 @@ fn sign(input: SignInput) -> Result<()> {
         authority_admitted: false,
     };
     let output = serde_json::to_vec_pretty(&document)
-        .map_err(|error| MoltenError::invalid_harness(format!("serialize world-head signature: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("serialize world-head signature: {error}")))?;
     std::fs::write(&input.out, output)?;
     println!("claim_ref={}", claim.claim_ref);
     println!("statement_ref={statement_ref}");
@@ -255,12 +255,12 @@ fn sign(input: SignInput) -> Result<()> {
 
 fn inspect(state_root: &Path, branch: &str) -> Result<()> {
     let branch = WorldBranchId::new(branch).map_err(head_reference_error)?;
-    let root = NodeStateRoot::open_existing(state_root)?;
-    let storage = root.namespace(NodeStateNamespaceKind::Storage)?;
+    let root = DirectoryRoot::open_existing(state_root)?;
+    let storage = root.namespace(NamespaceKind::Storage)?;
     let store = LocalWorldHeadStore::open(&storage)?;
     let state = store
         .read_head(&branch)
-        .map_err(|error| MoltenError::invalid_harness(format!("read world head: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("read world head: {error}")))?;
     if let Some(state) = state {
         println!("branch={}", state.branch_id);
         println!("class={}", state.branch_class.as_str());

@@ -7,7 +7,7 @@ const PEER_DEMOTION_RECEIPT_SCHEMA: &str = "molten.peer-demotion-receipt.v1";
 const DIAGNOSTICS_PER_REQUESTED_ROLE: usize = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PeerPromotionRequest {
+pub struct PeerRequest {
     pub issuer_ref: String,
     pub target_peer_ref: String,
     pub target_session_ref: String,
@@ -24,7 +24,7 @@ pub struct PeerPromotionRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PeerPromotionReceipt {
+pub struct PeerReceipt {
     pub decision: String,
     pub admitted_roles: Vec<String>,
     pub diagnostics: Vec<String>,
@@ -32,7 +32,7 @@ pub struct PeerPromotionReceipt {
     pub receipt_ref: String,
 }
 
-pub fn preflight_peer_promotion(input: &PeerPromotionRequest) -> Result<PeerPromotionReceipt> {
+pub fn preflight_peer(input: &PeerRequest) -> Result<PeerReceipt> {
     let mut diagnostics = Vec::new();
     if input.issuer_ref == input.target_peer_ref {
         diagnostics.push("self-promotion denied".to_string());
@@ -70,9 +70,9 @@ pub fn preflight_peer_promotion(input: &PeerPromotionRequest) -> Result<PeerProm
     } else {
         Vec::new()
     };
-    let value = promotion_value(PEER_PROMOTION_RECEIPT_SCHEMA, decision, &admitted_roles, &diagnostics, input);
+    let value = value(PEER_PROMOTION_RECEIPT_SCHEMA, decision, &admitted_roles, &diagnostics, input);
     let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(PeerPromotionReceipt {
+    Ok(PeerReceipt {
         decision: decision.to_string(),
         admitted_roles,
         diagnostics,
@@ -81,7 +81,7 @@ pub fn preflight_peer_promotion(input: &PeerPromotionRequest) -> Result<PeerProm
     })
 }
 
-pub fn demote_peer(input: &PeerPromotionRequest, retained_roles: Vec<String>) -> Result<PeerPromotionReceipt> {
+pub fn demote_peer(input: &PeerRequest, retained_roles: Vec<String>) -> Result<PeerReceipt> {
     let diagnostics =
         if retained_roles.iter().any(|role| input.requested_roles.iter().any(|requested| requested == role)) {
             vec!["demotion retained a requested revoked role".to_string()]
@@ -89,9 +89,9 @@ pub fn demote_peer(input: &PeerPromotionRequest, retained_roles: Vec<String>) ->
             Vec::new()
         };
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let value = promotion_value(PEER_DEMOTION_RECEIPT_SCHEMA, decision, &retained_roles, &diagnostics, input);
+    let value = value(PEER_DEMOTION_RECEIPT_SCHEMA, decision, &retained_roles, &diagnostics, input);
     let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(PeerPromotionReceipt {
+    Ok(PeerReceipt {
         decision: decision.to_string(),
         admitted_roles: retained_roles,
         diagnostics,
@@ -110,13 +110,7 @@ fn is_raft_role(role: &str) -> bool {
     matches!(role, "raft-voter" | "raft-non-voter" | "raft-learner" | "linearizable-reader")
 }
 
-fn promotion_value(
-    schema: &str,
-    decision: &str,
-    roles: &[String],
-    diagnostics: &[String],
-    input: &PeerPromotionRequest,
-) -> IoValue {
+fn value(schema: &str, decision: &str, roles: &[String], diagnostics: &[String], input: &PeerRequest) -> IoValue {
     crate::preserves_rail::record("peer-promotion-receipt-v1", vec![
         string(schema),
         field("decision", decision),
@@ -149,20 +143,20 @@ mod tests {
     const STALE_TICK: u64 = 5;
 
     #[test]
-    fn scoped_promotion_passes_with_authority_and_approval() {
+    fn scoped_passes_with_authority_and_approval() {
         let mut request = request(vec!["node.publisher".to_string()], CURRENT_TICK);
         request.approval_refs = vec!["subscriber-write-upgrade".to_string()];
-        let receipt = preflight_peer_promotion(&request).expect("promotion");
+        let receipt = preflight_peer(&request).expect("promotion");
         assert_eq!(receipt.decision, "pass");
         assert_eq!(receipt.admitted_roles, request.requested_roles);
     }
 
     #[test]
-    fn self_promotion_raft_and_stale_grants_deny() {
+    fn self_raft_and_stale_grants_deny() {
         let mut request = request(vec!["raft-voter".to_string(), "publisher".to_string()], STALE_TICK);
         request.issuer_ref = request.target_peer_ref.clone();
         request.promotion_authority_refs.clear();
-        let receipt = preflight_peer_promotion(&request).expect("promotion");
+        let receipt = preflight_peer(&request).expect("promotion");
         assert_eq!(receipt.decision, "deny");
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("self-promotion")));
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("Raft role")));
@@ -178,8 +172,8 @@ mod tests {
         assert_eq!(receipt.admitted_roles, vec!["subscriber".to_string()]);
     }
 
-    fn request(requested_roles: Vec<String>, at_tick: u64) -> PeerPromotionRequest {
-        PeerPromotionRequest {
+    fn request(requested_roles: Vec<String>, at_tick: u64) -> PeerRequest {
+        PeerRequest {
             issuer_ref: test_ref("issuer"),
             target_peer_ref: test_ref("peer"),
             target_session_ref: test_ref("session"),

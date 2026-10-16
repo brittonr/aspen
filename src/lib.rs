@@ -9,7 +9,7 @@ pub mod addressable_actor;
 #[path = "effects/mod.rs"]
 pub mod actions;
 #[doc(hidden)]
-#[path = "audit/ast_grep.rs"]
+#[path = "audit/ast/grep.rs"]
 pub mod ast_grep_runtime_authority_core;
 #[doc(hidden)]
 #[path = "chunk/store.rs"]
@@ -117,6 +117,7 @@ pub mod lineage;
 #[doc(hidden)]
 #[path = "provenance/mod.rs"]
 pub mod lineage_meta;
+#[path = "live/binding/adoption.rs"]
 pub mod live_binding_adoption;
 pub mod local_store;
 #[doc(hidden)]
@@ -208,6 +209,7 @@ pub mod remediator;
 #[doc(hidden)]
 #[path = "protocol/sans/io.rs"]
 pub mod sans_io_protocol_core;
+#[path = "schema/identity/core/pilot.rs"]
 pub mod schema_identity_core_pilot;
 #[doc(hidden)]
 #[path = "resources/mod.rs"]

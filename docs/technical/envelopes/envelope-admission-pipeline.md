@@ -14,7 +14,7 @@ There is an important construction-path qualification. The local actor, capabili
 
 For packed input, the shared rail supplies `strict_canonical_decode`: parse, re-encode, compare bytes. `validate_boundary_bytes` uses strict decoding and then validates the value against a supplied `BoundarySchemaSpec`. These are generic boundary facilities; their existence does not establish that `Envelope::from_dto`, a textual DTO conversion, invokes them.
 
-The schema report also has a subtle result convention. A noncanonical input produces an error. A canonical input with a schema mismatch can produce an `Ok(BoundaryCodecReport)` whose `decision` is `deny` and whose diagnostics explain the mismatch. A caller that checks only whether the function returned `Ok` would confuse report construction with admission. The [schema-validation implementation](../../../src/preserves/parts/rail/p005/body.rs) makes this distinction explicit.
+The schema report also has a subtle result convention. A noncanonical input produces an error. A canonical input with a schema mismatch can produce an `Ok(BoundaryReport)` whose `decision` is `deny` and whose diagnostics explain the mismatch. A caller that checks only whether the function returned `Ok` would confuse report construction with admission. The [schema-validation implementation](../../../src/preserves/parts/rail/p005/body.rs) makes this distinction explicit.
 
 ## Remote identity is not capability approval
 
@@ -43,7 +43,7 @@ This is a reasoning decomposition, not a newly mandated orchestration API. It do
 ## Sources
 
 - [Architecture and pure admission model](../../architecture.md)
-- [Nominal reference admission guidance](../../nominal-authority-references.md#core-and-wire-boundary)
+- [Nominal reference admission guidance](../../nominal-authority-references.md#core-admission-and-wire-apis)
 - [Envelope construction and validation](../../../src/runtime/envelope/mod.rs)
 - [Remote envelope and blob identity checks](../../../src/runtime/bridge/mod.rs)
 - [Runtime grant and policy evaluation](../../../src/runtime/admission/mod.rs)

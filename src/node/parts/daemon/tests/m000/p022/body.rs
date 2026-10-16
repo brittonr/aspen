@@ -1,11 +1,11 @@
 
     fn write_active_service_lock(root: &Path, service_suffix: &str) {
-        let state_root = crate::node_state::NodeStateRoot::open(root).expect("open node state root");
+        let state_root = crate::node_state::DirectoryRoot::open(root).expect("open node state root");
         let startup = current_startup_receipt(&state_root).expect("startup");
         let identity = crate::node_identity::parse_identity(
             &read_preserves(
                 &state_root,
-                &crate::node_state::NodeStatePath::parse(IDENTITY_FILE).expect("identity path"),
+                &crate::node_state::RelativePath::parse(IDENTITY_FILE).expect("identity path"),
             )
             .expect("identity"),
         )
@@ -22,7 +22,7 @@
         .expect("service lock");
         write_preserves(
             &state_root,
-            &crate::node_state::NodeStatePath::parse(CONTROL_SERVICE_LOCK_FILE).expect("service lock path"),
+            &crate::node_state::RelativePath::parse(CONTROL_SERVICE_LOCK_FILE).expect("service lock path"),
             &lock_value,
         )
         .expect("write service lock");

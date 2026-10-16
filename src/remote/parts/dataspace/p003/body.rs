@@ -214,7 +214,7 @@ fn extend_bounded<T>(
 where
     T: Clone,
 {
-    crate::bounded::extend_bounded(values, &incoming, maximum, label)
+    crate::bounded::extend(values, &incoming, maximum, label)
 }
 
 fn validate_refs(refs: &[String], label: &str) -> Result<()> {

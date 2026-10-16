@@ -1,7 +1,7 @@
 
 /// A revoked signer is denied with an explained currentness cause, and an unknown currentness ref
 /// is refused.
-fn assert_currentness_enforced(statement: &MoltenArtifactAuthStatementInput<'_>, signed: &SignedArtifactAuthStatement) {
+fn assert_currentness_enforced(statement: &MoltenArtifactAuthStatementInput<'_>, signed: &SignedStatement) {
     let mut revoked_request = statement.request.clone();
     revoked_request.signer_currentness = KeyCurrentness::Revoked;
     let revoked_input = MoltenArtifactAuthStatementInput {
@@ -30,7 +30,7 @@ fn assert_currentness_enforced(statement: &MoltenArtifactAuthStatementInput<'_>,
 #[test]
 fn artifact_auth_operational_receipt_survives_restart_and_rejects_rotation() {
     let workspace = temp_dir("artifact-auth-operational-restart");
-    let root = crate::node_state::NodeStateRoot::open(&workspace).expect("node state root");
+    let root = crate::node_state::DirectoryRoot::open(&workspace).expect("node state root");
     root.create_layout().expect("node state layout");
     let secrets = root.secrets().expect("secrets namespace");
     let receipts = root.receipts().expect("receipts namespace");
@@ -39,9 +39,9 @@ fn artifact_auth_operational_receipt_survives_restart_and_rejects_rotation() {
         .resolve_or_generate(KeyPurpose::EvidenceSigning, &test_ref("generation-policy"), true)
         .expect("evidence key");
     let (request, signing_policy_ref, receipt) = operational_receipt_fixture(&initial_adapter, &key);
-    let path = write_artifact_auth_operational_receipt(&receipts, &receipt).expect("write receipt");
+    let path = write_receipt(&receipts, &receipt).expect("write receipt");
 
-    let reopened_root = crate::node_state::NodeStateRoot::open_existing(&workspace).expect("reopen node state");
+    let reopened_root = crate::node_state::DirectoryRoot::open_existing(&workspace).expect("reopen node state");
     let reopened_secrets = reopened_root.secrets().expect("reopened secrets");
     let reopened_receipts = reopened_root.receipts().expect("reopened receipts");
     let reopened_adapter = adapter(&reopened_secrets);
@@ -55,7 +55,7 @@ fn artifact_auth_operational_receipt_survives_restart_and_rejects_rotation() {
         key_id: "evidence-signing-key",
         currentness_ref: &reopened_key.handle.handle.currentness_evidence_ref,
     };
-    let input = MoltenArtifactAuthShellInput {
+    let input = ShellInput {
         statement,
         handle: &reopened_key.handle.handle,
         signing_policy_ref: &signing_policy_ref,
@@ -92,7 +92,7 @@ fn artifact_auth_operational_receipt_survives_restart_and_rejects_rotation() {
 #[test]
 fn artifact_auth_operational_receipt_rejects_namespace_revocation_and_tamper() {
     let workspace = temp_dir("artifact-auth-operational-negative");
-    let root = crate::node_state::NodeStateRoot::open(&workspace).expect("node state root");
+    let root = crate::node_state::DirectoryRoot::open(&workspace).expect("node state root");
     root.create_layout().expect("node state layout");
     let secrets = root.secrets().expect("secrets namespace");
     let receipts = root.receipts().expect("receipts namespace");
@@ -101,10 +101,10 @@ fn artifact_auth_operational_receipt_rejects_namespace_revocation_and_tamper() {
         .resolve_or_generate(KeyPurpose::EvidenceSigning, &test_ref("generation-policy"), true)
         .expect("evidence key");
     let (request, signing_policy_ref, receipt) = operational_receipt_fixture(&adapter, &key);
-    let wrong_namespace = write_artifact_auth_operational_receipt(&secrets, &receipt)
+    let wrong_namespace = write_receipt(&secrets, &receipt)
         .expect_err("secrets namespace cannot store public operational receipts");
     assert!(wrong_namespace.to_string().contains("require receipts namespace"));
-    let path = write_artifact_auth_operational_receipt(&receipts, &receipt).expect("write receipt");
+    let path = write_receipt(&receipts, &receipt).expect("write receipt");
     let statement = MoltenArtifactAuthStatementInput {
         profile: &adapter.profile().profile,
         request: &request,
@@ -112,7 +112,7 @@ fn artifact_auth_operational_receipt_rejects_namespace_revocation_and_tamper() {
         key_id: "evidence-signing-key",
         currentness_ref: &key.handle.handle.currentness_evidence_ref,
     };
-    let input = MoltenArtifactAuthShellInput {
+    let input = ShellInput {
         statement,
         handle: &key.handle.handle,
         signing_policy_ref: &signing_policy_ref,
@@ -125,12 +125,12 @@ fn artifact_auth_operational_receipt_rejects_namespace_revocation_and_tamper() {
     assert!(revoked.to_string().contains("key is revoked"));
 
     receipts.write(&path, b"{\"schema\":\"tampered\"}").expect("replace test receipt bytes");
-    let tampered = read_artifact_auth_operational_receipt(&receipts, &path).expect_err("malformed receipt is rejected");
+    let tampered = read_receipt(&receipts, &path).expect_err("malformed receipt is rejected");
     assert!(tampered.to_string().contains("receipt parsing failed"));
 }
 
 fn operational_receipt_fixture(
-    adapter: &IrohEd25519FileAdapter<'_>,
+    adapter: &IrohEd25519<'_>,
     key: &ResolvedProductionKey,
 ) -> (VerificationRequest, String, MoltenArtifactAuthOperationalReceipt) {
     let signed_domain =
@@ -156,12 +156,12 @@ fn operational_receipt_fixture(
         key_id: "evidence-signing-key",
         currentness_ref: &key.handle.handle.currentness_evidence_ref,
     };
-    let input = MoltenArtifactAuthShellInput {
+    let input = ShellInput {
         statement,
         handle: &key.handle.handle,
         signing_policy_ref: &signing_policy_ref,
     };
-    let signed = sign_artifact_auth_for_dual_run(adapter, &input).expect("exact standalone signature");
+    let signed = sign_for_dual_run(adapter, &input).expect("exact standalone signature");
     let report = evaluate_artifact_auth_shell_dual_run(&statement, &signed).expect("exact standalone verification");
     let receipt = build_artifact_auth_operational_receipt(&input, &signed, &report).expect("operational receipt");
     (request, signing_policy_ref, receipt)

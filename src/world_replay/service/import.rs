@@ -5,7 +5,7 @@ use molten_core::world_replay::*;
 use super::super::*;
 use super::model::*;
 use super::support::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 struct ImportReview {
@@ -164,10 +164,10 @@ fn stage_verified_members(
     for member in &request.capsule.members {
         let payload = payloads
             .get(member.object_ref.as_str())
-            .ok_or_else(|| MoltenError::invalid_harness("verified replay payload disappeared"))?;
+            .ok_or_else(|| Failure::invalid_harness("verified replay payload disappeared"))?;
         let verification = verifications
             .get(member.object_ref.as_str())
-            .ok_or_else(|| MoltenError::invalid_harness("replay member verification disappeared"))?;
+            .ok_or_else(|| Failure::invalid_harness("replay member verification disappeared"))?;
         let staged_ref = publication.stage_member(member, payload, verification)?;
         validate_ref(&staged_ref, "world replay staged member")?;
         staged_refs.push(staged_ref);

@@ -24,16 +24,16 @@ fn statement_set_ref(
     let mut refs = statements.iter().map(|(_, statement_ref)| statement_ref.as_str()).collect::<Vec<_>>();
     refs.sort_unstable();
     let mut hasher = blake3::Hasher::new_derive_key(STATEMENT_SET_IDENTITY_DOMAIN);
-    let count = u64::try_from(refs.len()).map_err(|_| MoltenError::invalid_harness("statement set count overflow"))?;
+    let count = u64::try_from(refs.len()).map_err(|_| Failure::invalid_harness("statement set count overflow"))?;
     hasher.update(&count.to_le_bytes());
     for reference in refs {
         let length = u64::try_from(reference.len())
-            .map_err(|_| MoltenError::invalid_harness("statement ref length overflow"))?;
+            .map_err(|_| Failure::invalid_harness("statement ref length overflow"))?;
         hasher.update(&length.to_le_bytes());
         hasher.update(reference.as_bytes());
     }
     WorldHeadStatementRef::new(format!("blake3:{}", hasher.finalize().to_hex()))
-        .map_err(|error| MoltenError::invalid_harness(format!("statement set identity failed: {error}")))
+        .map_err(|error| Failure::invalid_harness(format!("statement set identity failed: {error}")))
 }
 
 struct TransitionReceiptInput<'a> {
@@ -74,8 +74,8 @@ fn decision_issues(decision: WorldHeadDecision) -> Vec<WorldHeadIssue> {
     }
 }
 
-fn port_error(error: WorldHeadPortError) -> MoltenError {
-    MoltenError::invalid_harness(format!("world-head port failed: {error}"))
+fn port_error(error: WorldHeadPortError) -> Failure {
+    Failure::invalid_harness(format!("world-head port failed: {error}"))
 }
 
 pub fn conflict_receipt(

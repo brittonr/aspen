@@ -1,8 +1,21 @@
+# Review inventory only. Octet executes its provider-owned embedded generated catalog;
+# this file is not an additional runtime policy input.
+let CatalogRow = {
+  domain_id | String,
+  symbols | Array String,
+  raw_representation | String,
+  core_scopes | Array String,
+  compatibility_scopes | Array String,
+  compatibility_required | Bool,
+  wrapper_kind | String,
+  constructor_policy | String,
+}
+in
 let Domain = {
   name | String,
   family | [| 'entity, 'canonical |],
   rust_alias | String,
-  migrated_scopes | Array String,
+  catalog | CatalogRow,
 }
 in
 let Profile = {
@@ -14,28 +27,83 @@ let Profile = {
   constructor_non_claims | Array String,
 }
 in
-let entity_ref_byte_limit = 256 in
+let row = fun name row_symbols => {
+  domain_id = "molten.nominal-reference." ++ name,
+  symbols = row_symbols,
+  raw_representation = "string",
+  core_scopes = ["crates/molten-core/src/nominal.rs"],
+  compatibility_scopes = ["src/authority/nominal.rs"],
+  compatibility_required = true,
+  wrapper_kind = "marker-generic",
+  constructor_policy = "private-fallible",
+}
+in
 let profile | Profile = {
-  schema = "molten.nominal-reference-domains.v1",
-  maximum_entity_ref_bytes = entity_ref_byte_limit,
+  schema = "molten.nominal-reference-domains.v2",
+  maximum_entity_ref_bytes = 256,
   canonical_algorithm = "blake3",
   wire_authority = 'preserves,
   domains = [
-    { name = "principal", family = 'entity, rust_alias = "PrincipalRef", migrated_scopes = ["authority-holder"] },
-    { name = "node", family = 'entity, rust_alias = "NodeRef", migrated_scopes = ["node-control"] },
-    { name = "actor", family = 'entity, rust_alias = "ActorRef", migrated_scopes = ["handler-admission"] },
-    { name = "service", family = 'entity, rust_alias = "ServiceRef", migrated_scopes = ["handler-admission"] },
-    { name = "session", family = 'entity, rust_alias = "SessionRef", migrated_scopes = ["authority", "effect-admission"] },
-    { name = "authority-context", family = 'entity, rust_alias = "AuthorityContextRef", migrated_scopes = ["authority"] },
-    { name = "delegation", family = 'canonical, rust_alias = "DelegationRef", migrated_scopes = ["capability-proofset"] },
-    { name = "revocation", family = 'canonical, rust_alias = "RevocationRef", migrated_scopes = ["capability-proofset"] },
-    { name = "key", family = 'canonical, rust_alias = "KeyRef", migrated_scopes = ["authority"] },
-    { name = "policy", family = 'canonical, rust_alias = "PolicyRef", migrated_scopes = ["authority", "retention"] },
-    { name = "resource", family = 'canonical, rust_alias = "ResourceRef", migrated_scopes = ["effect-admission", "node-control"] },
-    { name = "evidence", family = 'canonical, rust_alias = "EvidenceRef", migrated_scopes = ["authority", "provenance", "replay"] },
-    { name = "artifact", family = 'canonical, rust_alias = "ArtifactRef", migrated_scopes = ["artifact-binding", "retention", "cache"] },
-    { name = "operation", family = 'entity, rust_alias = "OperationRef", migrated_scopes = ["effect-admission", "artifact-binding"] },
-    { name = "receipt", family = 'canonical, rust_alias = "ReceiptRef", migrated_scopes = ["provenance", "replay"] },
+    {
+      name = "principal", family = 'entity, rust_alias = "PrincipalRef",
+      catalog = row "principal" ["PrincipalRef", "AuthorityReferenceSet::holder"],
+    },
+    {
+      name = "node", family = 'entity, rust_alias = "NodeRef",
+      catalog = row "node" ["NodeRef", "ExecutionReferenceSet::node"],
+    },
+    {
+      name = "actor", family = 'entity, rust_alias = "ActorRef",
+      catalog = row "actor" ["ActorRef", "ExecutionReferenceSet::actor"],
+    },
+    {
+      name = "service", family = 'entity, rust_alias = "ServiceRef",
+      catalog = row "service" ["ServiceRef", "ExecutionReferenceSet::service"],
+    },
+    {
+      name = "session", family = 'entity, rust_alias = "SessionRef",
+      catalog = row "session" ["SessionRef", "AuthorityReferenceSet::session", "ExecutionReferenceSet::session"],
+    },
+    {
+      name = "authority-context", family = 'entity, rust_alias = "AuthorityContextRef",
+      catalog = row "authority-context" ["AuthorityContextRef", "AuthorityReferenceSet::context"],
+    },
+    {
+      name = "delegation", family = 'canonical, rust_alias = "DelegationRef",
+      catalog = row "delegation" ["DelegationRef", "AuthorityReferenceSet::delegation"],
+    },
+    {
+      name = "revocation", family = 'canonical, rust_alias = "RevocationRef",
+      catalog = row "revocation" ["RevocationRef", "AuthorityReferenceSet::revocation"],
+    },
+    {
+      name = "key", family = 'canonical, rust_alias = "KeyRef",
+      catalog = row "key" ["KeyRef", "AuthorityReferenceSet::key"],
+    },
+    {
+      name = "policy", family = 'canonical, rust_alias = "PolicyRef",
+      catalog = row "policy" ["PolicyRef", "AuthorityReferenceSet::policy"],
+    },
+    {
+      name = "resource", family = 'canonical, rust_alias = "ResourceRef",
+      catalog = row "resource" ["ResourceRef", "AuthorityReferenceSet::resource", "ExecutionReferenceSet::resource"],
+    },
+    {
+      name = "evidence", family = 'canonical, rust_alias = "EvidenceRef",
+      catalog = row "evidence" ["EvidenceRef", "AuthorityReferenceSet::evidence", "ArtifactReferenceSet::evidence", "HistoricalReferenceSet::evidence"],
+    },
+    {
+      name = "artifact", family = 'canonical, rust_alias = "ArtifactRef",
+      catalog = row "artifact" ["ArtifactRef", "ArtifactReferenceSet::artifact", "HistoricalReferenceSet::artifact"],
+    },
+    {
+      name = "operation", family = 'entity, rust_alias = "OperationRef",
+      catalog = row "operation" ["OperationRef", "ExecutionReferenceSet::operation", "ArtifactReferenceSet::operation"],
+    },
+    {
+      name = "receipt", family = 'canonical, rust_alias = "ReceiptRef",
+      catalog = row "receipt" ["ReceiptRef", "ArtifactReferenceSet::receipt", "HistoricalReferenceSet::receipt"],
+    },
   ],
   constructor_non_claims = [
     "typed-reference-is-not-authority",

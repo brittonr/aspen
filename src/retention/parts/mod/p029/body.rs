@@ -134,7 +134,7 @@ fn ensure_count_at_most(count: usize, limit: usize, label: &str) -> Result<()> {
 
 fn push_bounded<T, S>(values: &mut S, value: T, limit: usize, label: &str) -> Result<()>
 where S: VecSink<T> {
-    crate::bounded::push_bounded(values, value, limit, label)
+    crate::bounded::push(values, value, limit, label)
 }
 
 fn extend_bounded<T, S, I>(values: &mut S, items: I, limit: usize, label: &str) -> Result<()>

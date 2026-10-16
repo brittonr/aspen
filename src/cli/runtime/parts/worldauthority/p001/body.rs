@@ -8,7 +8,7 @@ fn parse_capability_kind(value: &str) -> Result<CapabilityKind> {
         "deferred-effect" => Ok(CapabilityKind::DeferredEffect),
         "host-secret" => Ok(CapabilityKind::HostSecret),
         "bearer-credential" => Ok(CapabilityKind::BearerCredential),
-        _ => Err(MoltenError::invalid_harness("unknown world authority capability kind")),
+        _ => Err(Failure::invalid_harness("unknown world authority capability kind")),
     }
 }
 
@@ -19,20 +19,20 @@ fn parse_action(value: &str) -> Result<WorldBranchAction> {
         "promote" => Ok(WorldBranchAction::Promote),
         "simulate" => Ok(WorldBranchAction::Simulate),
         "transfer" => Ok(WorldBranchAction::Transfer),
-        _ => Err(MoltenError::invalid_harness("unknown world authority action")),
+        _ => Err(Failure::invalid_harness("unknown world authority action")),
     }
 }
 
 fn read_bounded(path: &Path, maximum_bytes: u64, label: &str) -> Result<Vec<u8>> {
-    let metadata = std::fs::metadata(path).map_err(MoltenError::from)?;
+    let metadata = std::fs::metadata(path).map_err(Failure::from)?;
     if metadata.len() > maximum_bytes {
-        return Err(MoltenError::invalid_harness(format!("{label} exceeds the reviewed byte bound")));
+        return Err(Failure::invalid_harness(format!("{label} exceeds the reviewed byte bound")));
     }
-    let bytes = std::fs::read(path).map_err(MoltenError::from)?;
+    let bytes = std::fs::read(path).map_err(Failure::from)?;
     let observed =
-        u64::try_from(bytes.len()).map_err(|_| MoltenError::invalid_harness(format!("{label} length exceeds u64")))?;
+        u64::try_from(bytes.len()).map_err(|_| Failure::invalid_harness(format!("{label} length exceeds u64")))?;
     if observed > maximum_bytes {
-        return Err(MoltenError::invalid_harness(format!("{label} changed beyond the reviewed byte bound")));
+        return Err(Failure::invalid_harness(format!("{label} changed beyond the reviewed byte bound")));
     }
     Ok(bytes)
 }

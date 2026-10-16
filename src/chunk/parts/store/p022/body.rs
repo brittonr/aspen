@@ -1,7 +1,7 @@
 
 fn write_immutable_bytes(
     root: &CapabilityChunkRoot,
-    path: &StorePath,
+    path: &Locator,
     bytes: &[u8],
     expected_ref: &str,
     parser: fn(&[u8]) -> Result<IoValue>,

@@ -1,7 +1,7 @@
 
 fn duplicate_control_live_send(
     input: &ControlLiveSendInput<'_>,
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::DirectoryRoot,
     ticket: &ControlLiveTicket,
     envelope: &ControlIngressEnvelope,
 ) -> Result<Option<ControlLiveSend>> {
@@ -247,7 +247,7 @@ impl FlowChecks<'_> {
 }
 
 fn import_flow_values(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::DirectoryRoot,
     input: &ControlLiveWorkflowInput<'_>,
     receipt_ref: &str,
     receipt_value: &IoValue,

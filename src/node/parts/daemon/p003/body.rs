@@ -42,6 +42,7 @@ pub struct ControlLoop {
     pub processed_request_refs: Vec<String>,
     pub dispatch_receipt_refs: Vec<String>,
     pub has_stopped: bool,
+    pub is_denied: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,5 +1,5 @@
 type HarnessDivergence = crate::error::HarnessDivergence;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 type RuntimeObserver = crate::runtime::RuntimeObserver;
 

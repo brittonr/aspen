@@ -171,7 +171,7 @@
     }
 
     #[test]
-    fn retry_only_rerun_does_not_mask_canonical_ref_drift() {
+    fn retry_only_rerun_does_not_mask_canonical_ref() {
         let input = ComparisonInput {
             left: summary(vec![
                 field("artifact", &local_ref("left-artifact"), true),

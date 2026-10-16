@@ -107,8 +107,8 @@ fn required_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Stri
 }
 
 pub fn plugin_extension_contract_value(input: &PluginExtensionContractInput<'_>) -> Result<IoValue> {
-    validate_extension_id(input.extension_id)?;
-    validate_extension_version(input.version)?;
+    validate_id(input.extension_id)?;
+    validate_version(input.version)?;
     validate_abi(input.compatible_host_abi)?;
     validate_lifecycle_callbacks(input.lifecycle_callbacks)?;
     ensure_count_at_most(
@@ -170,7 +170,7 @@ fn hostcall_descriptor_value(input: &PluginHostcallDescriptorInput<'_>) -> Resul
     ]))
 }
 
-fn conformance_value(input: &PluginExtensionConformanceInput<'_>) -> Result<IoValue> {
+fn conformance_value(input: &PluginConformanceInput<'_>) -> Result<IoValue> {
     validate_ref(input.positive_suite_ref, "plugin extension positive conformance ref")?;
     validate_ref(input.negative_suite_ref, "plugin extension negative conformance ref")?;
     validate_ref(input.property_suite_ref, "plugin extension property conformance ref")?;
@@ -204,8 +204,8 @@ pub fn parse_plugin_extension_contract(value: &IoValue) -> Result<PluginExtensio
     let checks = parse_checks(&fields[10])?;
     require_check_status(&checks, "canonical-contract", PLUGIN_DECISION_PASS, "plugin extension contract")?;
     require_check_status(&checks, "no-ambient-authority", PLUGIN_DECISION_PASS, "plugin extension contract")?;
-    validate_extension_id(&extension_id)?;
-    validate_extension_version(&version)?;
+    validate_id(&extension_id)?;
+    validate_version(&version)?;
     validate_abi(&compatible_host_abi)?;
     validate_lifecycle_callbacks(&lifecycle_callbacks)?;
     if hostcall_descriptors.is_empty() {
@@ -279,10 +279,10 @@ fn parse_hostcall_descriptor(value: &IoValue) -> Result<PluginHostcallDescriptor
     })
 }
 
-fn parse_conformance(value: &Value<IoValue>) -> Result<PluginExtensionConformance> {
+fn parse_conformance(value: &Value<IoValue>) -> Result<PluginConformance> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, "conformance", PLUGIN_CONFORMANCE_ARITY)?;
-    Ok(PluginExtensionConformance {
+    Ok(PluginConformance {
         positive_suite_ref: record_ref(&fields[0], "positive")?,
         negative_suite_ref: record_ref(&fields[1], "negative")?,
         property_suite_ref: record_ref(&fields[2], "property")?,

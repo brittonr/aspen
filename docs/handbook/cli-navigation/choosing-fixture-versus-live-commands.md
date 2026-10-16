@@ -29,13 +29,13 @@ Follow aliases through [main.rs](../../../src/main.rs). At the leaf, identify fi
 
 ## 3. Check whether selection restricts execution or reporting
 
-A worked source-review case is `FabricTimeFixtureSelection::DeterministicSimulation`. The name might suggest that live adapters are not touched. The [fixture implementation](../../../src/fabric_time/parts/fixture/p000/body.rs) instead constructs both profiles, runs live and virtual conformance, observes the live clock, and runs production entropy before constructing the selected report. Selection affects report construction and final-time choice; it is not an offline execution switch.
+A worked source-review case is `Selection::DeterministicSimulation`. The name might suggest that live adapters are not touched. The [fixture implementation](../../../src/fabric_time/parts/fixture/p000/body.rs) instead constructs both profiles, runs live and virtual conformance, observes the live clock, and runs production entropy before constructing the selected report. Selection affects report construction and final-time choice; it is not an offline execution switch.
 
 The [existing reproducibility test](../../../src/fabric_time/parts/tests/p000/body.rs) explicitly concerns deterministic report identity despite live adapter execution. Therefore choose this fixture only if those host effects are acceptable. If your requirement is “no live clock or production entropy access,” stop: this CLI route does not establish that requirement. Do not substitute a seed, suppress the host failure, or relabel the result as pure simulation.
 
 ## 4. Use a bounded readback when it answers the question
 
-If you already possess a fabric-time run report, readback avoids rerunning the fixture. The recipe below is source-checked and **not executed**. `FABRIC_TIME_REPORT` must name an existing report you are authorized to read, not an event file. Provenance: [Show's positional report declaration](../../../src/cli/runtime/fabric_time/command.rs), [routing](../../../src/cli/runtime/fabric_time.rs), and [readback implementation](../../../src/cli/runtime/fabric_time/ops.rs).
+If you already possess a fabric-time run report, readback avoids rerunning the fixture. The recipe below is source-checked and **not executed**. `FABRIC_TIME_REPORT` must name an existing report you are authorized to read, not an event file. Provenance: [Show's positional report declaration](../../../src/cli/runtime/fabric_time/command.rs), [routing](../../../src/cli/runtime/fabric_time/mod.rs), and [readback implementation](../../../src/cli/runtime/fabric_time/ops.rs).
 
 ```sh
 : "${FABRIC_TIME_REPORT:?Set the path of an existing fabric-time run report}"

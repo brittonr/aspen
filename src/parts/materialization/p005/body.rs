@@ -35,16 +35,16 @@ fn parse_replacement_policy(value: &str) -> crate::error::Result<ReplacementPoli
     }
 }
 
-fn build_materialization_receipt(plan: &MaterializationPlan) -> crate::error::Result<MaterializationReceipt> {
+fn build_receipt(plan: &Plan) -> crate::error::Result<Receipt> {
     // r[impl molten.filesystem_materialization.receipt]
-    validate_materialization_plan(plan)?;
+    validate_plan(plan)?;
     let member_refs = plan
         .members
         .iter()
         .map(|member| (member.logical_path.as_str().to_string(), member.expected_content_ref.clone()))
         .collect::<Vec<_>>();
     let non_claims = MATERIALIZATION_NON_CLAIMS.iter().map(|claim| (*claim).to_string()).collect::<Vec<_>>();
-    let value = materialization_receipt_value(&MaterializationReceiptValueInput {
+    let value = receipt_value(&ReceiptValueInput {
         decision: DECISION_PASS,
         profile: &plan.profile,
         plan_ref: &plan.plan_ref,
@@ -58,7 +58,7 @@ fn build_materialization_receipt(plan: &MaterializationPlan) -> crate::error::Re
         non_claims: &non_claims,
     })?;
     let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(MaterializationReceipt {
+    Ok(Receipt {
         receipt_ref,
         decision: DECISION_PASS.to_string(),
         profile: plan.profile.clone(),
@@ -75,7 +75,7 @@ fn build_materialization_receipt(plan: &MaterializationPlan) -> crate::error::Re
     })
 }
 
-struct MaterializationReceiptValueInput<'a> {
+struct ReceiptValueInput<'a> {
     decision: &'a str,
     profile: &'a str,
     plan_ref: &'a str,
@@ -89,8 +89,8 @@ struct MaterializationReceiptValueInput<'a> {
     non_claims: &'a [String],
 }
 
-fn materialization_receipt_value(
-    input: &MaterializationReceiptValueInput<'_>,
+fn receipt_value(
+    input: &ReceiptValueInput<'_>,
 ) -> crate::error::Result<preserves::IOValue> {
     let member_count =
         u64::try_from(input.member_count).map_err(|_| invalid("materialization member count does not fit u64"))?;
@@ -132,10 +132,10 @@ fn materialization_receipt_value(
 }
 
 fn validate_payloads<'a>(
-    plan: &MaterializationPlan,
-    payloads: &'a [MaterializationPayload],
-) -> crate::error::Result<std::collections::BTreeMap<MaterializationPath, &'a [u8]>> {
-    validate_materialization_plan(plan)?;
+    plan: &Plan,
+    payloads: &'a [Payload],
+) -> crate::error::Result<std::collections::BTreeMap<Path, &'a [u8]>> {
+    validate_plan(plan)?;
     let planned_paths = plan
         .members
         .iter()
@@ -162,7 +162,7 @@ fn validate_payloads<'a>(
     Ok(payload_map)
 }
 
-fn verify_payload_bytes(member: &MaterializationMember, bytes: &[u8]) -> crate::error::Result<()> {
+fn verify_payload_bytes(member: &Member, bytes: &[u8]) -> crate::error::Result<()> {
     let size = u64::try_from(bytes.len()).map_err(|_| invalid("materialization payload size does not fit u64"))?;
     if size != member.expected_size {
         return Err(invalid(format!(
@@ -183,7 +183,7 @@ fn verify_payload_bytes(member: &MaterializationMember, bytes: &[u8]) -> crate::
 }
 
 fn verify_member_bytes(
-    member: &MaterializationMember,
+    member: &Member,
     dir: &cap_std::fs::Dir,
     path: &std::path::Path,
 ) -> crate::error::Result<()> {
@@ -191,14 +191,14 @@ fn verify_member_bytes(
     verify_payload_bytes(member, &bytes)
 }
 
-fn verify_published_members(dir: &cap_std::fs::Dir, plan: &MaterializationPlan) -> crate::error::Result<()> {
+fn verify_published_members(dir: &cap_std::fs::Dir, plan: &Plan) -> crate::error::Result<()> {
     for member in &plan.members {
         verify_member_bytes(member, dir, member.logical_path.as_path())?;
     }
     Ok(())
 }
 
-fn validate_policy(policy: &MaterializationPolicy) -> crate::error::Result<()> {
+fn validate_policy(policy: &Policy) -> crate::error::Result<()> {
     validate_profile(&policy.profile)?;
     validate_bounds(policy.max_members, policy.max_member_bytes, policy.max_total_bytes, policy.max_path_bytes)?;
     let mut reserved = std::collections::BTreeSet::new();

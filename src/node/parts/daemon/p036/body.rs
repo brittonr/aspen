@@ -39,7 +39,7 @@ fn require_schema(value: &preserves::Value<preserves::IOValue>, expected: &str, 
     }
 }
 
-fn verify_init_state(root: &crate::node_state::NodeStateRoot) -> Result<()> {
+fn verify_init_state(root: &crate::node_state::DirectoryRoot) -> Result<()> {
     let state = inspect_node_lifecycle_state_with_root(root)?;
     if state == NodeLifecycleState::Empty {
         return Ok(());
@@ -50,20 +50,20 @@ fn verify_init_state(root: &crate::node_state::NodeStateRoot) -> Result<()> {
 }
 
 pub fn inspect_node_lifecycle_state(state_root: &Path) -> NodeLifecycleState {
-    let Ok(root) = crate::node_state::NodeStateRoot::open_existing(state_root) else {
+    let Ok(root) = crate::node_state::DirectoryRoot::open_existing(state_root) else {
         return NodeLifecycleState::Empty;
     };
     inspect_node_lifecycle_state_with_root(&root).unwrap_or(NodeLifecycleState::Inconsistent)
 }
 
 pub fn inspect_node_lifecycle_state_with_root(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::DirectoryRoot,
 ) -> Result<NodeLifecycleState> {
     Ok(node_lifecycle_state(&node_lifecycle_files_with_root(root)?))
 }
 
 pub fn node_lifecycle_files(state_root: &Path) -> NodeLifecycleFiles {
-    let Ok(root) = crate::node_state::NodeStateRoot::open_existing(state_root) else {
+    let Ok(root) = crate::node_state::DirectoryRoot::open_existing(state_root) else {
         return NodeLifecycleFiles {
             has_config: false,
             has_identity_receipt: false,
@@ -81,7 +81,7 @@ pub fn node_lifecycle_files(state_root: &Path) -> NodeLifecycleFiles {
     })
 }
 
-pub fn node_lifecycle_files_with_root(root: &crate::node_state::NodeStateRoot) -> Result<NodeLifecycleFiles> {
+pub fn node_lifecycle_files_with_root(root: &crate::node_state::DirectoryRoot) -> Result<NodeLifecycleFiles> {
     Ok(NodeLifecycleFiles {
         has_config: root.try_exists(&fixed_node_path(CONFIG_FILE)?)?,
         has_identity_receipt: root.try_exists(&fixed_node_path(IDENTITY_RECEIPT_FILE)?)?,
@@ -112,7 +112,7 @@ pub fn node_lifecycle_state(files: &NodeLifecycleFiles) -> NodeLifecycleState {
     NodeLifecycleState::Inconsistent
 }
 
-fn verify_restart_state(root: &crate::node_state::NodeStateRoot) -> Result<()> {
+fn verify_restart_state(root: &crate::node_state::DirectoryRoot) -> Result<()> {
     let startup_path = fixed_node_path(STARTUP_FILE)?;
     if root.try_exists(&startup_path)? {
         let shutdown_path = fixed_node_path(SHUTDOWN_FILE)?;
@@ -123,6 +123,9 @@ fn verify_restart_state(root: &crate::node_state::NodeStateRoot) -> Result<()> {
         }
         let startup_value = read_preserves(root, &startup_path)?;
         let startup = crate::node_runtime::parse_node_startup_receipt(&startup_value)?;
+        if !completed_node_run_is_stopped(root, &startup.receipt_ref)? {
+            return Err(MoltenError::invalid_harness("node restart has unresolved current-run shutdown observations"));
+        }
         let shutdown_ref = crate::preserves_rail::canonical_hash(&read_preserves(root, &shutdown_path)?)?;
         let head_refs = vec![startup.receipt_ref.clone()];
         let health_value = crate::node_runtime::node_restart_health_receipt_value(
@@ -148,7 +151,7 @@ fn verify_restart_state(root: &crate::node_state::NodeStateRoot) -> Result<()> {
     Ok(())
 }
 
-fn default_adapter_bindings(root: &crate::node_state::NodeStateRoot) -> Result<Vec<crate::node_runtime::NodeAdapterBinding>> {
+fn default_adapter_bindings(root: &crate::node_state::DirectoryRoot) -> Result<Vec<crate::node_runtime::NodeAdapterBinding>> {
     let mut adapters = Vec::with_capacity(crate::node_runtime::REQUIRED_RUNTIME_ADAPTERS.len());
     for name in crate::node_runtime::REQUIRED_RUNTIME_ADAPTERS {
         let profile_ref =
@@ -241,15 +244,15 @@ fn index_receipt_refs<Root: ?Sized>(root: &Root) -> Result<Vec<String>> {
     Ok(refs)
 }
 
-fn resource_receipt_refs(root: &crate::node_state::NodeStateRoot) -> Result<Vec<String>> {
+fn resource_receipt_refs(root: &crate::node_state::DirectoryRoot) -> Result<Vec<String>> {
     Ok(vec![local_ref("node-resource-profile", &state_root_profile_ref(root)?)?])
 }
 
-fn capability_receipt_refs(root: &crate::node_state::NodeStateRoot) -> Result<Vec<String>> {
+fn capability_receipt_refs(root: &crate::node_state::DirectoryRoot) -> Result<Vec<String>> {
     Ok(vec![local_ref("node-authority-profile", &state_root_profile_ref(root)?)?])
 }
 
-fn profile_metadata_refs(root: &crate::node_state::NodeStateRoot) -> Result<Vec<String>> {
+fn profile_metadata_refs(root: &crate::node_state::DirectoryRoot) -> Result<Vec<String>> {
     let mut refs = vec![local_ref(
         "node-production-profile-metadata",
         &format!(

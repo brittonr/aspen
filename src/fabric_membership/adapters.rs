@@ -15,18 +15,18 @@ use crate::fabric::FabricPortError;
 use crate::fabric::FabricPortResult;
 
 #[derive(Debug, Clone)]
-pub struct StaticMembershipProvider {
+pub struct StaticProvider {
     snapshot: MembershipProviderSnapshot,
 }
 
-impl StaticMembershipProvider {
+impl StaticProvider {
     pub fn new(snapshot: MembershipProviderSnapshot) -> FabricPortResult<Self> {
         require_provider_kind(&snapshot, MembershipProviderKind::Static)?;
         Ok(Self { snapshot })
     }
 }
 
-impl MembershipPlacementProvider for StaticMembershipProvider {
+impl MembershipPlacementProvider for StaticProvider {
     fn provider_kind(&self) -> MembershipProviderKind {
         MembershipProviderKind::Static
     }
@@ -37,11 +37,11 @@ impl MembershipPlacementProvider for StaticMembershipProvider {
 }
 
 #[derive(Debug, Clone)]
-pub struct PolicyManagedMembershipProvider {
+pub struct PolicyManagedProvider {
     current: MembershipProviderSnapshot,
 }
 
-impl PolicyManagedMembershipProvider {
+impl PolicyManagedProvider {
     pub fn new(current: MembershipProviderSnapshot) -> FabricPortResult<Self> {
         if !matches!(
             current.profile.provider_kind,
@@ -69,7 +69,7 @@ impl PolicyManagedMembershipProvider {
     }
 }
 
-impl MembershipPlacementProvider for PolicyManagedMembershipProvider {
+impl MembershipPlacementProvider for PolicyManagedProvider {
     fn provider_kind(&self) -> MembershipProviderKind {
         self.current.profile.provider_kind
     }
@@ -80,12 +80,12 @@ impl MembershipPlacementProvider for PolicyManagedMembershipProvider {
 }
 
 #[derive(Debug, Clone)]
-pub struct DeterministicSimulationMembershipProvider {
+pub struct DeterministicSimulationProvider {
     snapshots: Vec<MembershipProviderSnapshot>,
     cursor: usize,
 }
 
-impl DeterministicSimulationMembershipProvider {
+impl DeterministicSimulationProvider {
     pub fn new(snapshots: Vec<MembershipProviderSnapshot>) -> FabricPortResult<Self> {
         if snapshots.is_empty() {
             return Err(FabricPortError::malformed("deterministic membership provider requires at least one snapshot"));
@@ -113,7 +113,7 @@ impl DeterministicSimulationMembershipProvider {
     }
 }
 
-impl MembershipPlacementProvider for DeterministicSimulationMembershipProvider {
+impl MembershipPlacementProvider for DeterministicSimulationProvider {
     fn provider_kind(&self) -> MembershipProviderKind {
         MembershipProviderKind::DeterministicSimulation
     }

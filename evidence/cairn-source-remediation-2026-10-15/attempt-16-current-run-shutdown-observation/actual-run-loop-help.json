@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "node",
+    "run-loop",
+    "--help"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T17:49:54.172071+00:00",
+  "elapsed_seconds": 0.015,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "Usage: molten node run-loop [OPTIONS] --state-root <STATE_ROOT>\n\nOptions:\n      --state-root <STATE_ROOT>        \n      --max-requests <MAX_REQUESTS>    [default: 64]\n      --receipt-out <RECEIPT_OUT>      \n      --heartbeat-out <HEARTBEAT_OUT>  \n  -h, --help                           Print help\n",
+  "stderr": ""
+}

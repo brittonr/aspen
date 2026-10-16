@@ -1,0 +1,17 @@
+{
+  "command": [
+    "nix",
+    "develop",
+    "--no-update-lock-file",
+    "-c",
+    "rustfmt",
+    "--check",
+    "crates/octet-lint-metadata/src/identity/admission.rs",
+    "crates/octet-lint-metadata/src/identity/tests.rs",
+    "src/structure/primitive_domain_alias.rs"
+  ],
+  "cwd": "/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015",
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "building '/nix/store/83f5ck41iivxb2i8ri45p4y7mxc1v9iz-octet-standards-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...\ncopying 1 paths...\ncopying path '/nix/store/sgcgd6l4g5nzz34zlby0v05g1czk1msb-source' to 'ssh-ng://root@aspen1.local'...\nbuilding '/nix/store/83f5ck41iivxb2i8ri45p4y7mxc1v9iz-octet-standards-0.1.0.drv'...\ncopying 1 paths...\ncopying path '/nix/store/qixvs0sxskyywkn5y4d1haf8icg5vzrs-octet-standards-0.1.0' from 'ssh-ng://root@aspen1.local'...\nbuilding '/nix/store/0lir21kj8354wdplpryvs7z1lm2hbkic-nix-shell-env.drv'...\n"
+}

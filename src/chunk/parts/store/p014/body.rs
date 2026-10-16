@@ -7,7 +7,7 @@ fn checked_count_sum(left: usize, right: usize, maximum: usize, label: &str) -> 
 }
 
 fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maximum: usize, label: &str) -> Result<()> {
-    crate::bounded::push_bounded(values, value, maximum, label)
+    crate::bounded::push(values, value, maximum, label)
 }
 
 fn extend_bytes_bounded(
@@ -109,7 +109,7 @@ pub(crate) fn read_verified_chunk(root: &CapabilityChunkRoot, chunk: &ChunkRef, 
 
 fn verify_raw_chunk_file(
     root: &CapabilityChunkRoot,
-    path: &StorePath,
+    path: &Locator,
     chunk_ref: &str,
     length: u64,
     chunk_size: usize,
@@ -182,20 +182,20 @@ fn hash_blob_bytes(bytes: &[u8]) -> String {
 }
 
 fn ensure_iroh_dirs(root: &CapabilityChunkRoot) -> Result<()> {
-    root.root().create_dir_all(&store_path("blobs")?)?;
-    root.root().create_dir_all(&store_path("tickets")?)
+    root.root().create_dir_all(&path("blobs")?)?;
+    root.root().create_dir_all(&path("tickets")?)
 }
 
 fn ensure_dirs(root: &CapabilityChunkRoot) -> Result<()> {
-    root.root().create_dir_all(&store_path("chunks")?)?;
-    root.root().create_dir_all(&store_path("manifests")?)?;
-    root.root().create_dir_all(&store_path("metadata")?)?;
-    root.root().create_dir_all(&store_path("pins/manifests")?)?;
-    root.root().create_dir_all(&store_path("pins/chunks")?)
+    root.root().create_dir_all(&path("chunks")?)?;
+    root.root().create_dir_all(&path("manifests")?)?;
+    root.root().create_dir_all(&path("metadata")?)?;
+    root.root().create_dir_all(&path("pins/manifests")?)?;
+    root.root().create_dir_all(&path("pins/chunks")?)
 }
 
-fn chunk_path(chunk_ref: &str) -> Result<StorePath> {
-    store_path("chunks")?.join(&filename_for_ref(chunk_ref)?)
+fn chunk_path(chunk_ref: &str) -> Result<Locator> {
+    path("chunks")?.join(&filename_for_ref(chunk_ref)?)
 }
 
 #[cfg(test)]
@@ -203,16 +203,16 @@ fn test_chunk_path(root: &Path, chunk_ref: &str) -> Result<PathBuf> {
     Ok(root.join("chunks").join(filename_for_ref(chunk_ref)?))
 }
 
-fn iroh_blob_path(blob_ref: &str) -> Result<StorePath> {
-    store_path("blobs")?.join(&filename_for_ref(blob_ref)?)
+fn iroh_blob_path(blob_ref: &str) -> Result<Locator> {
+    path("blobs")?.join(&filename_for_ref(blob_ref)?)
 }
 
-fn iroh_ticket_path(manifest_ref: &str) -> Result<StorePath> {
-    store_path("tickets")?.join(&filename_for_ref(manifest_ref)?)
+fn iroh_ticket_path(manifest_ref: &str) -> Result<Locator> {
+    path("tickets")?.join(&filename_for_ref(manifest_ref)?)
 }
 
-fn manifest_path(manifest_ref: &str) -> Result<StorePath> {
-    store_path("manifests")?.join(&filename_for_ref(manifest_ref)?)
+fn manifest_path(manifest_ref: &str) -> Result<Locator> {
+    path("manifests")?.join(&filename_for_ref(manifest_ref)?)
 }
 
 #[cfg(test)]
@@ -220,16 +220,16 @@ fn test_manifest_path(root: &Path, manifest_ref: &str) -> Result<PathBuf> {
     Ok(root.join("manifests").join(filename_for_ref(manifest_ref)?))
 }
 
-fn metadata_path(metadata_ref: &str) -> Result<StorePath> {
-    store_path("metadata")?.join(&filename_for_ref(metadata_ref)?)
+fn metadata_path(metadata_ref: &str) -> Result<Locator> {
+    path("metadata")?.join(&filename_for_ref(metadata_ref)?)
 }
 
-fn manifest_pin_path(manifest_ref: &str) -> Result<StorePath> {
-    store_path("pins/manifests")?.join(&filename_for_ref(manifest_ref)?)
+fn manifest_pin_path(manifest_ref: &str) -> Result<Locator> {
+    path("pins/manifests")?.join(&filename_for_ref(manifest_ref)?)
 }
 
-fn chunk_pin_path(chunk_ref: &str) -> Result<StorePath> {
-    store_path("pins/chunks")?.join(&filename_for_ref(chunk_ref)?)
+fn chunk_pin_path(chunk_ref: &str) -> Result<Locator> {
+    path("pins/chunks")?.join(&filename_for_ref(chunk_ref)?)
 }
 
 fn filename_for_ref(reference: &str) -> Result<String> {
@@ -244,13 +244,13 @@ fn ref_from_filename(filename: &str) -> Option<String> {
     content_ref_from_hex(hex).ok()
 }
 
-fn refs_from_dir(root: &CapabilityChunkRoot, dir: &StorePath) -> Result<Vec<String>> {
+fn refs_from_dir(root: &CapabilityChunkRoot, dir: &Locator) -> Result<Vec<String>> {
     if !root.root().try_exists(dir)? {
         return Ok(Vec::new());
     }
     let mut refs = Vec::new();
     for entry in root.root().list_entries(dir)? {
-        if entry.kind != StoreEntryKind::File {
+        if entry.kind != EntryKind::File {
             return Err(MoltenError::invalid_harness(format!(
                 "chunk store directory entry {} must be a regular file, got {:?}",
                 entry.path.display(),
@@ -264,13 +264,13 @@ fn refs_from_dir(root: &CapabilityChunkRoot, dir: &StorePath) -> Result<Vec<Stri
     Ok(refs)
 }
 
-fn pinned_refs(root: &CapabilityChunkRoot, dir: &StorePath) -> Result<Vec<String>> {
+fn pinned_refs(root: &CapabilityChunkRoot, dir: &Locator) -> Result<Vec<String>> {
     if !root.root().try_exists(dir)? {
         return Ok(Vec::new());
     }
     let mut refs = Vec::new();
     for entry in root.root().list_entries(dir)? {
-        if entry.kind != StoreEntryKind::File {
+        if entry.kind != EntryKind::File {
             return Err(MoltenError::invalid_harness(format!(
                 "chunk pin entry {} must be a regular file, got {:?}",
                 entry.path.display(),

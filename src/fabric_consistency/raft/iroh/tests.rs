@@ -7,8 +7,8 @@ const INGRESS_TEST_DELIVERY_LIMIT: u64 = 4;
 
 // r[verify molten.fabric_consistency.live_service_ports]
 #[test]
-fn raft_iroh_transport_denies_empty_peer_registry() {
-    let error = IrohReplicaTransportPort::new(
+fn transport_denies_empty_peer_registry() {
+    let error = ReplicaTransportPort::new(
         super::tests::test_ref("empty-Iroh-peer-registry"),
         std::collections::BTreeMap::new(),
         std::time::Duration::from_secs(POSITIVE_TIMEOUT_SECONDS),
@@ -20,7 +20,7 @@ fn raft_iroh_transport_denies_empty_peer_registry() {
 // r[verify molten.fabric_consistency.live_service_ports]
 #[test]
 fn ingress_config_admits_bounded_values_and_denies_zero_capacity() {
-    let valid = IrohReplicaIngressConfig {
+    let valid = ReplicaIngressConfig {
         session_ref: super::tests::test_ref("ingress-session"),
         accept_timeout: std::time::Duration::from_secs(POSITIVE_TIMEOUT_SECONDS),
         event_capacity: INGRESS_TEST_CAPACITY,
@@ -37,7 +37,7 @@ fn ingress_config_admits_bounded_values_and_denies_zero_capacity() {
 #[tokio::test]
 async fn ingress_shutdown_cancels_accept_and_returns_the_listener() {
     let listener = crate::fabric_transport::cross_process::tests::listener().await;
-    let pump = IrohReplicaIngressPump::spawn(listener, IrohReplicaIngressConfig {
+    let pump = ReplicaIngressPump::spawn(listener, ReplicaIngressConfig {
         session_ref: super::tests::test_ref("ingress-cancellation-session"),
         accept_timeout: std::time::Duration::from_secs(
             crate::fabric_transport::cross_process::tests::TEST_TIMEOUT_SECONDS,
@@ -56,7 +56,7 @@ async fn ingress_shutdown_cancels_accept_and_returns_the_listener() {
 // r[verify molten.fabric_consistency.live_service_ports]
 // r[verify molten.fabric_consistency.live_raft]
 #[tokio::test]
-async fn canonical_raft_envelope_crosses_admitted_iroh_listener() {
+async fn canonical_envelope_crosses_admitted_listener() {
     let group = super::tests::active_group();
     let node_a = super::tests::started_state(&group, super::tests::NODE_A);
     let election = apply_replica_event(&node_a, ReplicaEvent::ElectionTimeout {
@@ -77,7 +77,7 @@ async fn canonical_raft_envelope_crosses_admitted_iroh_listener() {
     let mut peers = std::collections::BTreeMap::new();
     peers.insert(NODE_B.to_string(), input);
     let timeout = std::time::Duration::from_secs(crate::fabric_transport::cross_process::tests::TEST_TIMEOUT_SECONDS);
-    let mut transport = IrohReplicaTransportPort::new(super::tests::test_ref("Raft-Iroh-protocol"), peers, timeout)
+    let mut transport = ReplicaTransportPort::new(super::tests::test_ref("Raft-Iroh-protocol"), peers, timeout)
         .expect("Raft Iroh transport");
     let envelopes = [first_envelope, second_envelope];
     let mut request_refs = Vec::with_capacity(envelopes.len());
@@ -103,14 +103,14 @@ async fn canonical_raft_envelope_crosses_admitted_iroh_listener() {
 
 // r[verify molten.fabric_consistency.live_service_ports]
 #[tokio::test]
-async fn malformed_raft_payload_is_denied_before_transport_acknowledgement() {
+async fn malformed_payload_is_denied_before_transport_acknowledgement() {
     let mut listener = crate::fabric_transport::cross_process::tests::listener().await;
     let endpoint = listener.handoff().clone();
     let input = crate::fabric_transport::cross_process::tests::client_input(endpoint);
     let session_ref = input.session_ref.clone();
     let timeout = std::time::Duration::from_secs(crate::fabric_transport::cross_process::tests::TEST_TIMEOUT_SECONDS);
 
-    let send = crate::fabric_transport::exchange_cross_process_frame(input, b"not-a-canonical-raft-frame", timeout);
+    let send = crate::fabric_transport::exchange_frame(input, b"not-a-canonical-raft-frame", timeout);
     let receive = receive_replica_event(&mut listener, &session_ref, timeout);
     let (send, receive) = tokio::join!(send, receive);
 

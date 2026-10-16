@@ -1,6 +1,6 @@
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 type Value<T> = preserves::Value<T>;
 type VecDeque<T> = std::collections::VecDeque<T>;

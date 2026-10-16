@@ -1,0 +1,12 @@
+{
+  "required_tests": [
+    "test daemon_core::tests::control_loop_processes_queue_idempotently_and_stops_on_shutdown ... ok",
+    "test daemon_core::tests::local_node_init_run_status_stop_and_restart_recovery_are_receipted ... ok"
+  ],
+  "executed_before_F14_core_edits": "The full attempt-13 acceptance ran before F14. Attempts 14 and 15 retained that unchanged product source, as their recorded completion files state; this is reuse of recorded execution, not a new baseline run.",
+  "baseline_record": "../attempt-13-retry-arithmetic-acceptance/cargo-workspace-all-targets-and-doc.txt",
+  "retained_before_cli_reproduction": "before-cli-restart-duplicate-observations.json",
+  "normal_failing_before_regression": "normal-restart-duplicate-regression-before.json",
+  "after": "final-focused-library.json",
+  "non_claim": "No claim that an edited implementation was tested before it existed; no old failure was overwritten or rerun merely to reconfirm it."
+}

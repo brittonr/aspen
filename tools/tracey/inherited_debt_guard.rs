@@ -2,14 +2,21 @@
 //! r[impl molten.project.inherited_tracey_debt.baseline]
 //! r[impl molten.project.inherited_tracey_debt.growth_denial]
 //! r[impl molten.project.inherited_tracey_debt.non_claims]
+//! r[impl molten.project.inherited_tracey_debt.active_delta_scope]
+//! r[impl molten.project.inherited_tracey_debt.active_delta_admission]
+//! r[impl molten.project.inherited_tracey_debt.active_delta_non_claims]
 
 use std::collections::BTreeSet;
 use std::env;
+use std::ffi::OsStr;
 use std::fs;
+use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 
 const REQUIREMENT_ROOT: &str = ".cairn/specs";
+const ACTIVE_REQUIREMENT_ROOT: &str = ".cairn/changes";
+const ACTIVE_SPEC_FILE: &str = "spec.md";
 const ROOT_EVIDENCE_FILE: &str = "flake.nix";
 const EVIDENCE_ROOTS: &[&str] = &["src", "crates", "tests", "tools", "docs", "scripts"];
 const EVIDENCE_EXTENSIONS: &[&str] = &["rs", "ncl", "md", "sh", "nix"];
@@ -26,6 +33,7 @@ struct Coverage {
     references: BTreeSet<String>,
     missing: BTreeSet<String>,
     dangling: BTreeSet<String>,
+    pending: BTreeSet<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,14 +79,22 @@ fn reference_markers(line: &str) -> Vec<String> {
     found
 }
 
-fn classify(requirements: BTreeSet<String>, references: BTreeSet<String>) -> Coverage {
+fn classify(
+    requirements: BTreeSet<String>,
+    active_requirements: &BTreeSet<String>,
+    references: BTreeSet<String>,
+) -> Coverage {
     let missing = requirements.difference(&references).cloned().collect();
-    let dangling = references.difference(&requirements).cloned().collect();
+    let (pending, dangling) = references
+        .difference(&requirements)
+        .cloned()
+        .partition(|requirement| active_requirements.contains(requirement));
     Coverage {
         requirements,
         references,
         missing,
         dangling,
+        pending,
     }
 }
 
@@ -144,6 +160,44 @@ fn read_requirements(root: &Path) -> Result<BTreeSet<String>, String> {
     Ok(requirements)
 }
 
+fn is_active_delta_spec(change_root: &Path, path: &Path) -> bool {
+    let Ok(relative) = path.strip_prefix(change_root) else {
+        return false;
+    };
+    let mut components = relative.components();
+    if !matches!(components.next(), Some(Component::Normal(_)))
+        || components.next() != Some(Component::Normal(OsStr::new("specs")))
+        || !matches!(components.next(), Some(Component::Normal(_)))
+    {
+        return false;
+    }
+    components.next().is_some() && relative.file_name() == Some(OsStr::new(ACTIVE_SPEC_FILE))
+}
+
+fn active_requirement_markers(text: &str) -> impl Iterator<Item = String> + '_ {
+    let mut admits_requirements = false;
+    text.lines().filter_map(move |line| {
+        let trimmed = line.trim();
+        if trimmed.starts_with("# ") || trimmed.starts_with("## ") {
+            admits_requirements = matches!(trimmed, "## ADDED Requirements" | "## MODIFIED Requirements");
+            return None;
+        }
+        admits_requirements.then(|| requirement_marker(trimmed)).flatten()
+    })
+}
+
+fn read_active_requirements(root: &Path) -> Result<BTreeSet<String>, String> {
+    let change_root = root.join(ACTIVE_REQUIREMENT_ROOT);
+    let mut files = Vec::new();
+    walk_files(&change_root, &mut files)?;
+    let mut requirements = BTreeSet::new();
+    for path in files.iter().filter(|path| is_active_delta_spec(&change_root, path)) {
+        let text = fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
+        requirements.extend(active_requirement_markers(&text));
+    }
+    Ok(requirements)
+}
+
 fn read_references(root: &Path) -> Result<BTreeSet<String>, String> {
     let mut files = Vec::new();
     for source_root in EVIDENCE_ROOTS {
@@ -190,8 +244,14 @@ fn render_values(label: &str, values: &BTreeSet<String>) {
 fn run(args: &[String]) -> Result<(), String> {
     let root = option_value(args, OPTION_ROOT).unwrap_or_else(|| PathBuf::from("."));
     let requirements = read_requirements(&root)?;
+    let active_requirements = read_active_requirements(&root)?;
     let references = read_references(&root)?;
-    let coverage = classify(requirements, references);
+    let coverage = classify(requirements, &active_requirements, references);
+    println!("pending_references={}", coverage.pending.len());
+    println!(concat!(
+        "pending_non_claim=identity resolution only; not accepted coverage, marker truth, ",
+        "package validity, runtime behavior, sync/archive authority, or release readiness"
+    ));
 
     if let Some(output) = option_value(args, OPTION_WRITE_BASELINE) {
         if !coverage.dangling.is_empty() {
@@ -250,7 +310,7 @@ mod tests {
         // r[verify molten.project.inherited_tracey_debt.baseline]
         // r[verify molten.project.inherited_tracey_debt.validation]
         // r[verify molten.project.inherited_tracey_debt.fixtures]
-        let coverage = classify(set(&["alpha", "beta"]), set(&["alpha"]));
+        let coverage = classify(set(&["alpha", "beta"]), &set(&[]), set(&["alpha"]));
         let comparison = compare_baseline(&coverage.missing, &set(&["beta"]));
         assert!(comparison.unexpected_missing.is_empty());
         assert!(comparison.stale_baseline.is_empty());
@@ -261,7 +321,7 @@ mod tests {
     fn drift_and_dangling_fail() {
         // r[verify molten.project.inherited_tracey_debt.growth_denial]
         // r[verify molten.project.inherited_tracey_debt.fixtures]
-        let coverage = classify(set(&["alpha", "beta"]), set(&["alpha", "gamma"]));
+        let coverage = classify(set(&["alpha", "beta"]), &set(&[]), set(&["alpha", "gamma"]));
         let comparison = compare_baseline(&coverage.missing, &set(&["alpha"]));
         assert_eq!(comparison.unexpected_missing, set(&["beta"]));
         assert_eq!(comparison.stale_baseline, set(&["alpha"]));
@@ -288,9 +348,86 @@ mod tests {
     }
 
     #[test]
-    fn non_claim_is_bound_to_the_guard() {
-        // r[verify molten.project.inherited_tracey_debt.non_claims]
-        let non_claim = "inherited requirements remain uncovered until direct evidence references them";
-        assert!(non_claim.contains("remain uncovered"));
+    fn pending_resolution_preserves_accepted_debt_and_unknown_denial() {
+        // r[verify molten.project.inherited_tracey_debt.active_delta_scope]
+        // r[verify molten.project.inherited_tracey_debt.active_delta_validation]
+        let coverage = classify(
+            set(&["alpha", "beta"]),
+            &set(&["gamma", "not_yet_implemented"]),
+            set(&["alpha", "gamma", "unknown"]),
+        );
+        assert_eq!(coverage.missing, set(&["beta"]));
+        assert_eq!(coverage.pending, set(&["gamma"]));
+        assert_eq!(coverage.dangling, set(&["unknown"]));
+        assert_eq!(coverage.requirements.intersection(&coverage.references).count(), 1);
+        let comparison = compare_baseline(&coverage.missing, &set(&["beta"]));
+        assert!(comparison.unexpected_missing.is_empty());
+        assert!(comparison.stale_baseline.is_empty());
+    }
+
+    #[test]
+    fn accepted_overlap_is_not_pending_and_does_not_mask_debt_growth() {
+        // r[verify molten.project.inherited_tracey_debt.active_delta_scope]
+        // r[verify molten.project.inherited_tracey_debt.growth_denial]
+        let coverage = classify(set(&["alpha", "beta"]), &set(&["alpha", "beta"]), set(&["alpha"]));
+        assert!(coverage.pending.is_empty());
+        assert_eq!(coverage.missing, set(&["beta"]));
+        assert_eq!(compare_baseline(&coverage.missing, &set(&[])).unexpected_missing, set(&["beta"]));
+    }
+
+    #[test]
+    fn only_added_and_modified_requirement_sections_admit_pending_ids() {
+        // r[verify molten.project.inherited_tracey_debt.active_delta_admission]
+        let text = "r[outside]
+## ADDED Requirements
+r[added]
+### Requirement: Added
+r[added.scenario]
+## REMOVED Requirements
+r[removed]
+## MODIFIED Requirements
+r[modified]
+## RENAMED Requirements
+r[renamed]
+# Appendix
+r[appendix]
+";
+        assert_eq!(
+            active_requirement_markers(text).collect::<BTreeSet<_>>(),
+            set(&["added", "added.scenario", "modified"])
+        );
+    }
+
+    #[test]
+    fn pending_identity_becomes_dangling_when_its_delta_is_removed() {
+        // r[verify molten.project.inherited_tracey_debt.active_delta_admission]
+        let before = classify(set(&["accepted"]), &set(&["proposed"]), set(&["proposed"]));
+        let after = classify(set(&["accepted"]), &set(&[]), set(&["proposed"]));
+        assert_eq!(before.pending, set(&["proposed"]));
+        assert!(before.dangling.is_empty());
+        assert!(after.pending.is_empty());
+        assert_eq!(after.dangling, set(&["proposed"]));
+    }
+
+    #[test]
+    fn only_native_active_spec_paths_supply_pending_definitions() {
+        // r[verify molten.project.inherited_tracey_debt.active_delta_admission]
+        let root = Path::new(".cairn/changes");
+        for path in [
+            ".cairn/changes/change/specs/topic/spec.md",
+            ".cairn/changes/change/specs/topic/nested/spec.md",
+        ] {
+            assert!(is_active_delta_spec(root, Path::new(path)), "{path}");
+        }
+        for path in [
+            ".cairn/archive/change/specs/topic/spec.md",
+            ".cairn/changes/change/proposal.md",
+            ".cairn/changes/change/tasks.md",
+            ".cairn/changes/change/evidence/topic/spec.md",
+            ".cairn/changes/change/specs/topic/notes.md",
+            ".cairn/changes/change/specs/spec.md",
+        ] {
+            assert!(!is_active_delta_spec(root, Path::new(path)), "{path}");
+        }
     }
 }

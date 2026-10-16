@@ -34,7 +34,7 @@ A production profile illustrates a different boundary. Its contract rejects plac
 
 ## Diagnostics and review
 
-`nickel_error` converts formatted Nickel text into `MoltenError::invalid_harness`, falling back to debug formatting if text formatting fails. That local helper is error conversion, not evidence of complete redaction. The toolchain guidance explicitly keeps diagnostic handling within existing bounded error and redaction paths and forbids treating secret-like diagnostic text as release evidence. Reviewers should trace the eventual output consumer before assuming the message is operator-safe.
+`nickel_error` converts formatted Nickel text into `Failure::invalid_harness`, falling back to debug formatting if text formatting fails. That local helper is error conversion, not evidence of complete redaction. The toolchain guidance explicitly keeps diagnostic handling within existing bounded error and redaction paths and forbids treating secret-like diagnostic text as release evidence. Reviewers should trace the eventual output consumer before assuming the message is operator-safe.
 
 Suggested verification, not executed for this documentation, is to run the existing cohort and contract-export checks in the pinned environment. For normalization changes, inspect both positive source/export agreement and a coherently rehashed but mismatched source/export pair. Review canonical artifacts before rendered logs, following the [proof workflow](../../proof-workflow.md).
 

@@ -28,7 +28,7 @@ pub fn run_reference_harness(
 
         let fanout = syndicate_state.preview_fanout(step)?;
         let fanout_usize = usize::try_from(fanout)
-            .map_err(|_| crate::error::MoltenError::invalid_harness("syndicate fanout count overflow"))?;
+            .map_err(|_| crate::error::Failure::invalid_harness("syndicate fanout count overflow"))?;
         let flow = flow_control_receipt(step, fanout_usize, budget)?;
         let is_flow_passed = flow.decision == SYNDICATE_DECISION_PASS;
         flow_control.push(flow);

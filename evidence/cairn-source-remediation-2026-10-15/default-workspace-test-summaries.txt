@@ -1,0 +1,110 @@
+Command: env TMPDIR=/home/brittonr/.cache/molten-guided-goal-69fuhbc2/tmp nix develop -c cargo test --workspace --all-targets --offline --locked --no-fail-fast
+Worktree: /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015
+Observed result: exit 0; 2096 passed, 0 failed, 0 ignored; 18 test binaries.
+Source: exact matching status lines from full artifact://292; auxiliary diagnostics, not canonical receipt authority.
+
+ 1544|
+*1545|test result: ok. 1518 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 47.26s
+ 1546|
+ 1547|     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/molten-6a5373b9da2ffaf8)
+ 1548|
+...
+ 1624|
+*1625|test result: ok. 74 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.12s
+ 1626|
+ 1627|     Running unittests src/bin/molten-native-extension-fixture.rs (/home/brittonr/.cargo-target/debug/deps/molten_native_extension_fixture-073b389d560598fa)
+ 1628|
+...
+ 1630|
+*1631|test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+ 1632|
+ 1633|     Running tests/cliharness.rs (/home/brittonr/.cargo-target/debug/deps/cliharness-09501dd10f583167)
+ 1634|
+...
+ 1697|
+*1698|test result: ok. 61 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.79s
+ 1699|
+ 1700|     Running tests/content/replication.rs (/home/brittonr/.cargo-target/debug/deps/content_replication-0d7814715aee56b7)
+ 1701|
+...
+ 1715|
+*1716|test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+ 1717|
+ 1718|     Running tests/devfunctionprofilingboundary.rs (/home/brittonr/.cargo-target/debug/deps/devfunctionprofilingboundary-b631f65f813e3c27)
+ 1719|
+...
+ 1727|
+*1728|test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+ 1729|
+ 1730|     Running tests/executable/extent.rs (/home/brittonr/.cargo-target/debug/deps/executable_extent-031c212891271858)
+ 1731|
+...
+ 1733|
+*1734|test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+ 1735|
+ 1736|     Running tests/fabric/simulation/boundary.rs (/home/brittonr/.cargo-target/debug/deps/fabric_simulation_boundary-6cff41b6e6db5368)
+ 1737|
+...
+ 1742|
+*1743|test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+ 1744|
+ 1745|     Running tests/fabricboundarycompat.rs (/home/brittonr/.cargo-target/debug/deps/fabricboundarycompat-86fbf38e23c1d8c6)
+ 1746|
+...
+ 1753|
+*1754|test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+ 1755|
+ 1756|     Running tests/moltennodehostfacade.rs (/home/brittonr/.cargo-target/debug/deps/moltennodehostfacade-bede3fb26ba4a411)
+ 1757|
+...
+ 1761|
+*1762|test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+ 1763|
+ 1764|     Running tests/nativesystemextension.rs (/home/brittonr/.cargo-target/debug/deps/nativesystemextension-bedbf794c9c70f67)
+ 1765|
+...
+ 1778|
+*1779|test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 263.17s
+ 1780|
+ 1781|     Running tests/worldcommit.rs (/home/brittonr/.cargo-target/debug/deps/worldcommit-d4c10649311a34b8)
+ 1782|
+...
+ 1788|
+*1789|test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+ 1790|
+ 1791|     Running unittests examples/profilerprobe.rs (/home/brittonr/.cargo-target/debug/examples/profilerprobe-756785185015c309)
+ 1792|
+...
+ 1794|
+*1795|test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+ 1796|
+ 1797|     Running unittests src/lib.rs (/home/brittonr/.cargo-target/debug/deps/molten_core-c06a57fddc57d84d)
+ 1798|
+...
+ 2192|
+*2193|test result: ok. 392 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+ 2194|
+ 2195|     Running unittests src/lib.rs (/home/brittonr/.cargo-target/debug/deps/molten_node_host-e5be62f408c54769)
+ 2196|
+...
+ 2198|
+*2199|test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+ 2200|
+ 2201|     Running tests/nodehostboundary.rs (/home/brittonr/.cargo-target/debug/deps/nodehostboundary-0e289d707d6520fd)
+ 2202|
+...
+ 2209|
+*2210|test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+ 2211|
+ 2212|     Running unittests src/lib.rs (/home/brittonr/.cargo-target/debug/deps/molten_release_policy-087d987e4f06e358)
+ 2213|
+...
+ 2215|
+*2216|test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+ 2217|
+ 2218|     Running unittests src/main.rs (/home/brittonr/.cargo-target/debug/deps/molten_release_policy-4d32226c734ebc6c)
+ 2219|
+...
+ 2226|
+*2227|test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+ 2228|

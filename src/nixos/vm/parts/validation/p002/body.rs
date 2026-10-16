@@ -1,5 +1,5 @@
 
-fn fault_validation_diagnostics(
+fn fault_diagnostics(
     topology: &ParsedTopology,
     topology_ref: &str,
     descriptors: &[ParsedFaultDescriptor],

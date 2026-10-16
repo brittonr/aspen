@@ -18,7 +18,7 @@ Node first boot writes a binary Ed25519 key record through the identity namespac
 
 ## Signing and verification
 
-`IrohEd25519FileAdapter` signs canonical domain records, not arbitrary ambient bytes. The signed record binds the profile, purpose, domain ID/version, payload schema/ref, signer public-key ref, and verifier-context ref. The shell returns canonical public signatures and outcomes. Federation and evidence admission helpers consume those outcomes without receiving adapter runtime objects or private material.
+`IrohEd25519` signs canonical domain records, not arbitrary ambient bytes. The signed record binds the profile, purpose, domain ID/version, payload schema/ref, signer public-key ref, and verifier-context ref. The shell returns canonical public signatures and outcomes. Federation and evidence admission helpers consume those outcomes without receiving adapter runtime objects or private material.
 
 A transport key cannot sign federation, delegation, evidence, or authority records. Verification fails closed for wrong purpose, wrong public key, malformed signatures, stale generations, revocation, and payload-reference changes.
 
@@ -38,7 +38,7 @@ Molten pins `artifact-auth-core`, `artifact-auth-ed25519`, and `artifact-binding
 
 `fabric_crypto_identity::evaluate_artifact_auth_dual_run` maps an already measured Molten verification request plus a separate `CryptographicObservation` for the exact standalone statement. The legacy `cryptographic_verification_passed` field is never reused as proof of the standalone preimage. The adapter preserves domain, purpose, profile, payload, public-key, verifier-context, generation, and currentness fields while keeping opaque handles, backend class, entropy profile, and rotation transitions as Molten-owned extensions.
 
-The shell pilot calls the pure `map_artifact_auth_statement` function, canonicalizes that signer-specific `artifact_auth.statement.v1`, and asks `IrohEd25519FileAdapter` to sign only those bytes with the current purpose-matched capability-file key. `evaluate_artifact_auth_shell_dual_run` independently reconstructs the statement, recomputes the public statement/key/signature carrier identities, verifies through the pinned `artifact-auth-ed25519` package, and supplies that observation to the existing dual-run comparator. Its bounded public report includes statement, full-key, and signature refs, lowercase signature hex, and a stable cryptographic failure code; it excludes private key bytes and backend locators.
+The shell pilot calls the pure `map_artifact_auth_statement` function, canonicalizes that signer-specific `artifact_auth.statement.v1`, and asks `IrohEd25519` to sign only those bytes with the current purpose-matched capability-file key. `evaluate_artifact_auth_shell_dual_run` independently reconstructs the statement, recomputes the public statement/key/signature carrier identities, verifies through the pinned `artifact-auth-ed25519` package, and supplies that observation to the existing dual-run comparator. Its bounded public report includes statement, full-key, and signature refs, lowercase signature hex, and a stable cryptographic failure code; it excludes private key bytes and backend locators.
 
 Compatibility output classifies the intentionally distinct canonical preimages, full-key identity, decisions, consumer-specific issue taxonomy, mandatory non-claims, and unrelated-failure false parity. Real shell verification does not itself admit authority: `legacy_authoritative` and `rollback_available` remain true, while `standalone_authority_admitted` remains false. Key generation/storage/signing permission, currentness, membership, capability, transport, runtime, evidence composition, deployment, lifecycle, and release gates remain Molten-owned. A separate reviewed authority-admission change still requires current operational evidence beyond this pilot.
 
@@ -54,7 +54,7 @@ The receipt is operational evidence for local capability-file state only. It gra
 
 To update, review the candidate standalone release and `config/consumers/molten.ncl`, change all exact Cargo and Nix revisions together, regenerate `Cargo.lock` with Cargo and both unit2nix plans with the pinned tool, then rerun focused identity tests, strict Clippy/Octet, Cairn validation, and the Nix checks. Never edit either lock manually.
 
-Runtime rollback is immediate: stop calling `sign_artifact_auth_for_dual_run` and `evaluate_artifact_auth_shell_dual_run`, then continue evaluating the legacy Molten decision. Dependency rollback restores the last reviewed Cargo/Nix declarations as one VCS change, regenerates the lock and unit2nix plans with their owning tools, and preserves the compatibility evidence explaining the rejection.
+Runtime rollback is immediate: stop calling `sign_for_dual_run` and `evaluate_artifact_auth_shell_dual_run`, then continue evaluating the legacy Molten decision. Dependency rollback restores the last reviewed Cargo/Nix declarations as one VCS change, regenerates the lock and unit2nix plans with their owning tools, and preserves the compatibility evidence explaining the rejection.
 
 ## Claim boundaries
 

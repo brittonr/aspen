@@ -63,13 +63,9 @@ pub(crate) fn run() -> molten::error::Result<()> {
         Some(command::Top::Node { command }) => crate::cli_node::run(command),
         Some(command::Top::Peer { command }) => crate::cli_peer::run(command),
         Some(command::Top::Runtime { command }) => run_runtime_command(command),
-        Some(command::Top::FabricTime { command }) => crate::cli_fabric_time::run_fabric_time_command(command),
-        Some(command::Top::FabricSimulation { command }) => {
-            crate::cli_fabric_simulation::run_fabric_simulation_command(command)
-        }
-        Some(command::Top::SystemExtension { command }) => {
-            crate::cli_system_extension::run_system_extension_command(command)
-        }
+        Some(command::Top::FabricTime { command }) => crate::cli_fabric_time::run_command(command),
+        Some(command::Top::FabricSimulation { command }) => crate::cli_fabric_simulation::run_command(command),
+        Some(command::Top::SystemExtension { command }) => crate::cli_system_extension::run_command(command),
         Some(command::Top::World { command }) => crate::cli_world_operator::run_world_command(command),
         Some(command::Top::WorldCommit { command }) => crate::cli_world_commit::run_world_commit_command(command),
         Some(command::Top::WorldSnapshot { command }) => crate::cli_world_snapshot::run_world_snapshot_command(command),
@@ -90,7 +86,7 @@ pub(crate) fn run() -> molten::error::Result<()> {
 pub(crate) fn run_runtime_command(command: command::Runtime) -> molten::error::Result<()> {
     match command {
         command::Runtime::Config { config } => {
-            let source = std::fs::read_to_string(&config).map_err(molten::error::MoltenError::from)?;
+            let source = std::fs::read_to_string(&config).map_err(molten::error::Failure::from)?;
             let startup = molten::runtime::RuntimeStartupConfig::from_nickel_export_json(&source)?;
             println!(
                 "runtime config ok source=nickel actors={} subscriptions={}",
@@ -111,7 +107,7 @@ pub(crate) fn run_test_command(command: command::Test) -> molten::error::Result<
         command::Test::ReplayFixture { command } => crate::cli_replay_fixture::run_replay_fixture_command(command),
         command::Test::Report { command } => crate::cli_report::run_report_command(command),
         command::Test::Gate { command } => crate::cli_gate::run_gate_command(command),
-        command::Test::Drift { command } => crate::cli_drift::run_drift_command(command),
+        command::Test::Drift { command } => crate::cli_drift::run_command(command),
         command::Test::Gateway { command } => crate::cli_gateway::run_command(command),
         command::Test::Receipt { command } => crate::cli_receipts::run_receipt_command(command),
         command::Test::Ledger { command } => crate::cli_ledger::run_ledger_command(command),

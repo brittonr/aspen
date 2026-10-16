@@ -66,7 +66,7 @@ pub struct ChaosControlProposalAttempt {
 // operation applies at most once.
 pub fn admit_proposal_attempts(attempts: &[ChaosControlProposalAttempt]) -> crate::error::Result<()> {
     if attempts.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "ChaosControl operation trace requires at least one proposal attempt",
         ));
     }
@@ -76,12 +76,12 @@ pub fn admit_proposal_attempts(attempts: &[ChaosControlProposalAttempt]) -> crat
     let mut is_saw_indefinite = false;
     for attempt in attempts {
         if &attempt.operation != identity {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "ChaosControl operation retry changed client-session or sequence identity, invalid idempotency input",
             ));
         }
         if attempt.operation_ref != attempts[0].operation_ref {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "ChaosControl operation trace mixes operation refs for one logical operation",
             ));
         }
@@ -90,14 +90,14 @@ pub fn admit_proposal_attempts(attempts: &[ChaosControlProposalAttempt]) -> crat
                 None => acknowledged_index = Some(committed_index),
                 Some(observed) if observed == committed_index => {}
                 Some(_) => {
-                    return Err(crate::error::MoltenError::invalid_harness(
+                    return Err(crate::error::Failure::invalid_harness(
                         "ChaosControl retry acknowledges a different committed index, operation identity violated",
                     ));
                 }
             },
             ChaosControlProposalOutcome::DefinitelyRejected => {
                 if is_saw_indefinite {
-                    return Err(crate::error::MoltenError::invalid_harness(
+                    return Err(crate::error::Failure::invalid_harness(
                         "ChaosControl indefinite outcome cannot become definite non-execution evidence",
                     ));
                 }
@@ -110,12 +110,12 @@ pub fn admit_proposal_attempts(attempts: &[ChaosControlProposalAttempt]) -> crat
 
 fn validate_logical_operation(operation: &ChaosControlLogicalOperation) -> crate::error::Result<()> {
     if operation.client_session.is_empty() || operation.client_session.len() > MAX_CHAOSCONTROL_CLIENT_SESSION_BYTES {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "ChaosControl client session identity is empty or exceeds the bounded maximum",
         ));
     }
     if operation.sequence == 0 {
-        return Err(crate::error::MoltenError::invalid_harness("ChaosControl operation sequence must start at one"));
+        return Err(crate::error::Failure::invalid_harness("ChaosControl operation sequence must start at one"));
     }
     Ok(())
 }

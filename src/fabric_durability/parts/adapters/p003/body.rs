@@ -4,7 +4,7 @@ fn decode_level(value: u8) -> crate::error::Result<DurabilityLevel> {
         LEVEL_BUFFERED => Ok(DurabilityLevel::Buffered),
         LEVEL_PROCESS_LOSS => Ok(DurabilityLevel::ProcessLoss),
         LEVEL_MACHINE_LOSS => Ok(DurabilityLevel::MachineLoss),
-        _ => Err(crate::error::MoltenError::invalid_harness(format!("unknown durability level code {value}"))),
+        _ => Err(crate::error::Failure::invalid_harness(format!("unknown durability level code {value}"))),
     }
 }
 
@@ -19,7 +19,7 @@ fn decode_snapshot_kind(value: u8) -> crate::error::Result<SnapshotKind> {
     match value {
         SNAPSHOT_KIND_SNAPSHOT => Ok(SnapshotKind::Snapshot),
         SNAPSHOT_KIND_CHECKPOINT => Ok(SnapshotKind::Checkpoint),
-        _ => Err(crate::error::MoltenError::invalid_harness(format!("unknown snapshot kind code {value}"))),
+        _ => Err(crate::error::Failure::invalid_harness(format!("unknown snapshot kind code {value}"))),
     }
 }
 
@@ -44,7 +44,7 @@ fn decode_phase(value: u8) -> crate::error::Result<EffectTransactionPhase> {
         PHASE_UNCERTAIN => Ok(EffectTransactionPhase::Uncertain),
         PHASE_RECONCILED_COMMITTED => Ok(EffectTransactionPhase::ReconciledCommitted),
         PHASE_RECONCILED_ABORTED => Ok(EffectTransactionPhase::ReconciledAborted),
-        _ => Err(crate::error::MoltenError::invalid_harness(format!("unknown effect phase code {value}"))),
+        _ => Err(crate::error::Failure::invalid_harness(format!("unknown effect phase code {value}"))),
     }
 }
 
@@ -84,11 +84,11 @@ impl<'a> ByteCursor<'a> {
             .bytes
             .get(self.offset)
             .copied()
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("truncated durable adapter record"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("truncated durable adapter record"))?;
         self.offset = self
             .offset
             .checked_add(1)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("durable adapter cursor overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("durable adapter cursor overflow"))?;
         Ok(value)
     }
 
@@ -96,36 +96,36 @@ impl<'a> ByteCursor<'a> {
         let end = self
             .offset
             .checked_add(LENGTH_PREFIX_BYTES)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("durable adapter cursor overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("durable adapter cursor overflow"))?;
         let bytes = self
             .bytes
             .get(self.offset..end)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("truncated durable adapter integer"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("truncated durable adapter integer"))?;
         let array: [u8; LENGTH_PREFIX_BYTES] = bytes
             .try_into()
-            .map_err(|_| crate::error::MoltenError::invalid_harness("invalid durable adapter integer width"))?;
+            .map_err(|_| crate::error::Failure::invalid_harness("invalid durable adapter integer width"))?;
         self.offset = end;
         Ok(u64::from_be_bytes(array))
     }
 
     fn take_blob(&mut self) -> crate::error::Result<&'a [u8]> {
         let length = usize::try_from(self.take_u64()?)
-            .map_err(|_| crate::error::MoltenError::invalid_harness("durable adapter blob length overflow"))?;
+            .map_err(|_| crate::error::Failure::invalid_harness("durable adapter blob length overflow"))?;
         let end = self
             .offset
             .checked_add(length)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("durable adapter cursor overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("durable adapter cursor overflow"))?;
         let value = self
             .bytes
             .get(self.offset..end)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("truncated durable adapter blob"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("truncated durable adapter blob"))?;
         self.offset = end;
         Ok(value)
     }
 
     fn take_string(&mut self) -> crate::error::Result<String> {
         String::from_utf8(self.take_blob()?.to_vec()).map_err(|error| {
-            crate::error::MoltenError::invalid_harness(format!("durable adapter string is not UTF-8: {error}"))
+            crate::error::Failure::invalid_harness(format!("durable adapter string is not UTF-8: {error}"))
         })
     }
 
@@ -141,7 +141,7 @@ impl<'a> ByteCursor<'a> {
         if self.offset == self.bytes.len() {
             Ok(())
         } else {
-            Err(crate::error::MoltenError::invalid_harness("durable adapter record contains trailing bytes"))
+            Err(crate::error::Failure::invalid_harness("durable adapter record contains trailing bytes"))
         }
     }
 }
@@ -150,14 +150,14 @@ fn decode_bool(value: u8) -> crate::error::Result<bool> {
     match value {
         0 => Ok(false),
         1 => Ok(true),
-        _ => Err(crate::error::MoltenError::invalid_harness(format!("invalid durable adapter boolean {value}"))),
+        _ => Err(crate::error::Failure::invalid_harness(format!("invalid durable adapter boolean {value}"))),
     }
 }
 
 fn snapshot_file_stem(snapshot_ref: &str) -> crate::error::Result<&str> {
     snapshot_ref
         .strip_prefix("blake3:")
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("snapshot ref must be a BLAKE3 content ref"))
+        .ok_or_else(|| crate::error::Failure::invalid_harness("snapshot ref must be a BLAKE3 content ref"))
 }
 
 fn blake3_ref(bytes: &[u8]) -> String {
@@ -165,18 +165,18 @@ fn blake3_ref(bytes: &[u8]) -> String {
 }
 
 fn byte_count(value: usize) -> crate::error::Result<u64> {
-    u64::try_from(value).map_err(|_| crate::error::MoltenError::invalid_harness("durable adapter byte count overflow"))
+    u64::try_from(value).map_err(|_| crate::error::Failure::invalid_harness("durable adapter byte count overflow"))
 }
 
 fn checked_adapter_add(left: u64, right: u64) -> crate::error::Result<u64> {
     left.checked_add(right)
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("durable adapter byte accounting overflow"))
+        .ok_or_else(|| crate::error::Failure::invalid_harness("durable adapter byte accounting overflow"))
 }
 
-fn adapter_error(error: impl std::fmt::Display) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(format!("durable adapter error: {error}"))
+fn adapter_error(error: impl std::fmt::Display) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("durable adapter error: {error}"))
 }
 
-fn adapter_validation_error(label: &str, issues: &impl std::fmt::Debug) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(format!("durable adapter {label} denied: {issues:?}"))
+fn adapter_validation_error(label: &str, issues: &impl std::fmt::Debug) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("durable adapter {label} denied: {issues:?}"))
 }

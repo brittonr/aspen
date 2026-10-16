@@ -10,22 +10,22 @@ fn test_ref(label: &str) -> String {
     crate::preserves_rail::content_ref_from_bytes(label.as_bytes())
 }
 
-fn profile() -> CanonicalCryptoProfile {
-    canonical_crypto_profile(&production_ed25519_profile(test_ref("production-profile"), test_ref("os-csprng-entropy")))
+fn profile() -> Profile {
+    crate::fabric_crypto_identity::profile(&production_ed25519_profile(test_ref("production-profile"), test_ref("os-csprng-entropy")))
         .expect("production profile")
 }
 
-fn adapter<'a>(namespace: &'a crate::node_state::NodeStateNamespace) -> IrohEd25519FileAdapter<'a> {
-    IrohEd25519FileAdapter::new(namespace, profile(), test_ref("capability-file-backend")).expect("file adapter")
+fn adapter<'a>(namespace: &'a crate::node_state::Scope) -> IrohEd25519<'a> {
+    IrohEd25519::new(namespace, profile(), test_ref("capability-file-backend")).expect("file adapter")
 }
 
 fn domain(
-    profile: &CanonicalCryptoProfile,
+    profile: &Profile,
     purpose: KeyPurpose,
     public_key_ref: &str,
     payload_label: &str,
-) -> CanonicalSignatureDomain {
-    canonical_signature_domain(profile, &SignatureDomain {
+) -> DomainEnvelope {
+    signature_domain(profile, &SignatureDomain {
         schema: SIGNATURE_DOMAIN_SCHEMA.to_string(),
         domain_id: format!("{}-domain", purpose.as_str()),
         domain_version: profile.profile.domain_version.clone(),
@@ -44,7 +44,7 @@ fn domain(
 fn production_file_key_is_random_persisted_restricted_and_restart_stable() {
     let workspace = temp_dir("crypto-production-restart");
     let namespace =
-        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Identity, &workspace)
+        crate::node_state::Scope::open(crate::node_state::NamespaceKind::Identity, &workspace)
             .expect("identity namespace");
     let adapter = adapter(&namespace);
     let first = adapter
@@ -82,7 +82,7 @@ fn production_file_key_is_random_persisted_restricted_and_restart_stable() {
 fn production_sign_verify_binds_domain_and_denies_wrong_purpose_or_payload() {
     let workspace = temp_dir("crypto-production-sign");
     let namespace =
-        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Secrets, &workspace)
+        crate::node_state::Scope::open(crate::node_state::NamespaceKind::Secrets, &workspace)
             .expect("secrets namespace");
     let adapter = adapter(&namespace);
     let key = adapter
@@ -145,7 +145,7 @@ fn production_sign_verify_binds_domain_and_denies_wrong_purpose_or_payload() {
 /// Signing under another purpose is denied, and a signature over a different payload fails
 /// verification.
 fn assert_cross_purpose_and_tampered_payload_denied(
-    adapter: &IrohEd25519FileAdapter<'_>,
+    adapter: &IrohEd25519<'_>,
     key: &ResolvedProductionKey,
     verify_input: VerificationInput<'_>,
 ) {
@@ -176,12 +176,12 @@ fn assert_cross_purpose_and_tampered_payload_denied(
 /// The public key of a federation-origin key generated in a separate secrets namespace.
 fn other_federation_public_key() -> String {
     let other_workspace = temp_dir("crypto-production-wrong-key");
-    let other_namespace = crate::node_state::NodeStateNamespace::open(
-        crate::node_state::NodeStateNamespaceKind::Secrets,
+    let other_namespace = crate::node_state::Scope::open(
+        crate::node_state::NamespaceKind::Secrets,
         &other_workspace,
     )
     .expect("other secrets namespace");
-    let other_adapter = IrohEd25519FileAdapter::new(&other_namespace, profile(), test_ref("capability-file-backend"))
+    let other_adapter = IrohEd25519::new(&other_namespace, profile(), test_ref("capability-file-backend"))
         .expect("other file adapter");
     let other_key = other_adapter
         .resolve_or_generate(KeyPurpose::FederationOrigin, &test_ref("generation-policy"), true)
@@ -195,7 +195,7 @@ fn other_federation_public_key() -> String {
 fn rotation_fences_stale_handle_and_restart_resolves_new_generation() {
     let workspace = temp_dir("crypto-production-rotation");
     let namespace =
-        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Secrets, &workspace)
+        crate::node_state::Scope::open(crate::node_state::NamespaceKind::Secrets, &workspace)
             .expect("secrets namespace");
     let adapter = adapter(&namespace);
     let first = adapter
@@ -242,7 +242,7 @@ fn rotation_fences_stale_handle_and_restart_resolves_new_generation() {
 fn evidence_signature_wrapper_consumes_only_canonical_outcomes() {
     let workspace = temp_dir("crypto-evidence-signature");
     let namespace =
-        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Secrets, &workspace)
+        crate::node_state::Scope::open(crate::node_state::NamespaceKind::Secrets, &workspace)
             .expect("secrets namespace");
     let adapter = adapter(&namespace);
     let key = adapter

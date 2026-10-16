@@ -14,11 +14,11 @@ const ASSEMBLY_CONTROL_CAPACITY: usize = 4;
 struct AssemblyApplicationHandler;
 
 impl CommittedBatchHandler for AssemblyApplicationHandler {
-    fn restore_snapshot(&mut self, _snapshot: &ApplicationSnapshotRestore) -> crate::error::Result<String> {
+    fn restore_snapshot(&mut self, _snapshot: &SnapshotRestore) -> crate::error::Result<String> {
         Ok(super::tests::test_ref("assembled-application-snapshot-evidence"))
     }
 
-    fn apply_batch(&mut self, _commands: &[ApplicationCommand]) -> crate::error::Result<String> {
+    fn apply_batch(&mut self, _commands: &[Command]) -> crate::error::Result<String> {
         Ok(super::tests::test_ref("assembled-application-evidence"))
     }
 }
@@ -38,7 +38,7 @@ async fn concrete_port_assembly_denies_substitution_then_executes_bound_startup(
         super::iroh_tests::NODE_B.to_string(),
         crate::fabric_transport::cross_process::tests::client_input(endpoint),
     );
-    let transport = IrohReplicaTransportPort::new(
+    let transport = ReplicaTransportPort::new(
         refs.protocol_ref.clone(),
         peers,
         std::time::Duration::from_secs(super::iroh_tests::POSITIVE_TIMEOUT_SECONDS),
@@ -51,8 +51,8 @@ async fn concrete_port_assembly_denies_substitution_then_executes_bound_startup(
     let time = assembly_time_port(canonical_time, &group.service_id, &refs.entropy_profile_ref, event_sender);
     let application = assembly_application_port(&group);
     let (control_sender, _control_receiver) = tokio::sync::mpsc::channel(ASSEMBLY_CONTROL_CAPACITY);
-    let control = ChannelReplicaControlPort::new(
-        ReplicaControlConfig {
+    let control = ChannelReplicaPort::new(
+        ReplicaConfig {
             service_id: group.service_id.clone(),
             service_generation: ASSEMBLY_GENERATION,
             supervision_ref: refs.supervision_ref.clone(),
@@ -80,8 +80,8 @@ async fn concrete_port_assembly_denies_substitution_then_executes_bound_startup(
     assert!(error.to_string().contains("concrete adapter identity"));
 
     let plan = assembly_start_plan(&group, replica_state, fabric_binding_refs);
-    let bundle = assemble_scoped_concrete_replica_ports(identity, adapters).expect("concrete port assembly");
-    let service = ScopedLiveReplicaService::start(plan, bundle, event_receiver)
+    let bundle = assemble_scoped_concrete_replica(identity, adapters).expect("concrete port assembly");
+    let service = ScopedLiveReplica::start(plan, bundle, event_receiver)
         .await
         .expect("concrete scoped service startup");
     assert_eq!(service.startup_observations().len(), ASSEMBLY_STARTUP_OBSERVATIONS);
@@ -96,14 +96,14 @@ async fn concrete_port_assembly_denies_substitution_then_executes_bound_startup(
 
 /// A live Redb durability port under `root` bound to the assembly's durable log and snapshot store
 /// refs.
-fn assembly_durability_port(root: &std::path::Path, refs: &AssemblyRefs) -> RedbReplicaDurabilityPort {
+fn assembly_durability_port(root: &std::path::Path, refs: &AssemblyRefs) -> RedbReplicaPort {
     let redb = crate::fabric_durability::RedbDurableStateAdapter::open(
         root,
         crate::fabric_durability::tests::profile(crate::fabric_durability::DurableAdapterKind::LiveRedb),
         crate::fabric_durability::tests::descriptor(),
     )
     .expect("assembled Redb adapter");
-    RedbReplicaDurabilityPort::new(redb, refs.durable_log_ref.clone(), refs.snapshot_store_ref.clone())
+    RedbReplicaPort::new(redb, refs.durable_log_ref.clone(), refs.snapshot_store_ref.clone())
         .expect("assembled durability port")
 }
 
@@ -141,7 +141,7 @@ impl AssemblyRefs {
 
     fn identity(
         self,
-        group: &crate::fabric_consistency::ConsistencyGroupBinding,
+        group: &crate::fabric_consistency::Group,
         replica_state: &ReplicaState,
         fabric_binding_refs: Vec<String>,
     ) -> ReplicaRuntimePortIdentity {
@@ -170,9 +170,9 @@ fn assembly_time_port(
     service_id: &str,
     entropy_binding_ref: &str,
     event_sender: tokio::sync::mpsc::Sender<ReplicaEvent>,
-) -> TokioReplicaTimePort<crate::fabric_time::OperatingSystemEntropySource> {
-    TokioReplicaTimePort::new_operating_system(
-        TokioReplicaTimeConfig {
+) -> TokioReplicaPort<crate::fabric_time::OperatingSystemEntropySource> {
+    TokioReplicaPort::new_operating_system(
+        TokioReplicaConfig {
             profile,
             generation: ASSEMBLY_GENERATION,
             service_id: service_id.to_string(),
@@ -189,10 +189,10 @@ fn assembly_time_port(
 }
 
 fn assembly_application_port(
-    group: &crate::fabric_consistency::ConsistencyGroupBinding,
-) -> AdmittedReplicaApplicationPort<AssemblyApplicationHandler> {
-    AdmittedReplicaApplicationPort::new(
-        ReplicaApplicationConfig {
+    group: &crate::fabric_consistency::Group,
+) -> AdmittedReplicaPort<AssemblyApplicationHandler> {
+    AdmittedReplicaPort::new(
+        ServiceReplicaConfig {
             group_binding_ref: group.binding_ref.clone(),
             application_manifest_ref: group.application_manifest_ref.clone(),
             handler_ref: super::tests::test_ref("assembled-application-handler"),
@@ -206,7 +206,7 @@ fn assembly_application_port(
 
 /// A start plan that persists the initial hard state and arms the replica's current election timer.
 fn assembly_start_plan(
-    group: &crate::fabric_consistency::ConsistencyGroupBinding,
+    group: &crate::fabric_consistency::Group,
     replica_state: ReplicaState,
     port_binding_refs: Vec<String>,
 ) -> ReplicaStartPlan {

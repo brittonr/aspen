@@ -27,7 +27,7 @@ Plugin manifests, plugin permission receipts, artifact possession, service names
 
 The core performs no filesystem, network, storage, process, environment, clock, entropy, telemetry, or code-loading effects.
 
-`molten::system_extension::SystemExtensionHost` is the imperative shell. It invokes an admitted `SystemExtensionExecutor`, validates its result before releasing any typed effect request, accounts resources, applies the pure lifecycle transitions, and emits canonical Preserves/BLAKE3 evidence. The host does not expose ambient filesystem, network, clock, randomness, process, environment, or backend handles in callback context.
+`molten::system_extension::Dispatcher` is the imperative shell. It invokes an admitted `SystemExtensionExecutor`, validates its result before releasing any typed effect request, accounts resources, applies the pure lifecycle transitions, and emits canonical Preserves/BLAKE3 evidence. The host does not expose ambient filesystem, network, clock, randomness, process, environment, or backend handles in callback context.
 
 ## Canonical manifest
 

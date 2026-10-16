@@ -1,0 +1,264 @@
+{
+  "scope": "Current five F14 governing/operator/replay documents; local target existence only, not external links or execution claims.",
+  "result": "pass",
+  "checks": [
+    {
+      "source": "docs/architecture.md",
+      "line": 9,
+      "target": "distributed-system-fabric.md",
+      "exists": true
+    },
+    {
+      "source": "docs/architecture.md",
+      "line": 17,
+      "target": "fabric-execution.md",
+      "exists": true
+    },
+    {
+      "source": "docs/architecture.md",
+      "line": 23,
+      "target": "system-extension-runtime.md",
+      "exists": true
+    },
+    {
+      "source": "docs/architecture.md",
+      "line": 29,
+      "target": "fabric-time-scheduler-runtime.md",
+      "exists": true
+    },
+    {
+      "source": "docs/architecture.md",
+      "line": 290,
+      "target": "handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "exists": true
+    },
+    {
+      "source": "docs/architecture.md",
+      "line": 291,
+      "target": "handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md",
+      "exists": true
+    },
+    {
+      "source": "docs/architecture.md",
+      "line": 461,
+      "target": "../.cairn/archive/1970-01-01-fix-node-shutdown-admission/evidence/2026-10-16-acceptance.json",
+      "exists": true
+    },
+    {
+      "source": "docs/production-operator-runbooks.md",
+      "line": 146,
+      "target": "handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "line": 5,
+      "target": "../../node-state-filesystem-authority.md",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "line": 5,
+      "target": "../../technical/storage/capability-rooted-node-state.md",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "line": 9,
+      "target": "../../../src/node/parts/daemon/p000/body.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "line": 9,
+      "target": "../../../src/node/parts/daemon/p058/body.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "line": 26,
+      "target": "../../../src/cli/ops/node/command/base.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "line": 26,
+      "target": "../../../src/cli/ops/node/parts/lifecycle/p001/body.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "line": 37,
+      "target": "../../../crates/molten-node-host/src/node/state/authority.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "line": 54,
+      "target": "../../../src/node/parts/daemon/p034/body.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "line": 67,
+      "target": "../../../src/node/parts/identity/p000/body.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "line": 79,
+      "target": "../README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "line": 80,
+      "target": "../../node-state-filesystem-authority.md",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "line": 81,
+      "target": "../../technical/storage/capability-rooted-node-state.md",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "line": 82,
+      "target": "../../../src/node/parts/daemon/p000/body.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "line": 83,
+      "target": "../../../crates/molten-node-host/src/node/state/authority.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "line": 84,
+      "target": "../../../src/node/parts/daemon/p036/body.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "line": 85,
+      "target": "../../../src/node/parts/daemon/p018/body.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "line": 86,
+      "target": "../../../src/node/parts/runtime/p009/body.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "line": 87,
+      "target": "../../../src/node/parts/daemon/p058/body.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md",
+      "line": 5,
+      "target": "../../production-operator-runbooks.md",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md",
+      "line": 5,
+      "target": "../../technical/operations/node-lifecycle-and-recovery.md",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md",
+      "line": 11,
+      "target": "../../../src/cli/ops/node/command/base.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md",
+      "line": 11,
+      "target": "../../../src/main.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md",
+      "line": 11,
+      "target": "../../../src/cli/ops/node/parts/lifecycle/p001/body.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md",
+      "line": 48,
+      "target": "../../../src/node/parts/daemon/tests/m000/p014/body.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md",
+      "line": 60,
+      "target": "../README.md",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md",
+      "line": 61,
+      "target": "../../production-operator-runbooks.md",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md",
+      "line": 62,
+      "target": "../../technical/operations/node-lifecycle-and-recovery.md",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md",
+      "line": 63,
+      "target": "../../../src/node/parts/daemon/p036/body.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md",
+      "line": 64,
+      "target": "../../../src/node/parts/daemon/p034/body.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md",
+      "line": 65,
+      "target": "../../../src/node/parts/daemon/p018/body.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md",
+      "line": 66,
+      "target": "../../../src/node/parts/daemon/tests/m000/p014/body.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md",
+      "line": 67,
+      "target": "../../../src/node/parts/daemon/p058/body.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md",
+      "line": 68,
+      "target": "../../../src/node/parts/daemon/tests/m000/p023/body.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/replay-identity-freshness.md",
+      "line": 26,
+      "target": "handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "exists": true
+    },
+    {
+      "source": "docs/replay-identity-freshness.md",
+      "line": 27,
+      "target": "../src/node/parts/runtime/p009/body.rs",
+      "exists": true
+    }
+  ]
+}

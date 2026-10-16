@@ -48,18 +48,18 @@ const WASM_PROBE_SOURCE: &str = r#"
 "#;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExecutableSystemExtensionFixtureRun {
+pub struct ExecutableRun {
     pub profile: super::ExecutionProfile,
     pub manifest_ref: String,
     pub manifest_value: preserves::IOValue,
-    pub evidence: Vec<super::HostEvidence>,
+    pub evidence: Vec<super::Evidence>,
     pub conformance: super::ExecutableConformanceInput,
     pub first_request_effects: Vec<super::TypedEffectRequest>,
-    pub first_effect_completions: Vec<super::CanonicalEffectCompletion>,
-    pub upgraded_status: super::CanonicalOperatorStatus,
-    pub rolled_back_status: super::CanonicalOperatorStatus,
-    pub recovered_status: super::CanonicalOperatorStatus,
-    pub final_status: super::CanonicalOperatorStatus,
+    pub first_effect_completions: Vec<super::EffectCompletion>,
+    pub upgraded_status: super::OperatorStatusRecord,
+    pub rolled_back_status: super::OperatorStatusRecord,
+    pub recovered_status: super::OperatorStatusRecord,
+    pub final_status: super::OperatorStatusRecord,
 }
 
 struct WasmProbe {
@@ -72,12 +72,12 @@ impl WasmProbe {
         let mut config = wasmtime::Config::new();
         config.consume_fuel(true);
         let engine = wasmtime::Engine::new(&config).map_err(|error| {
-            crate::error::MoltenError::invalid_harness(format!(
+            crate::error::Failure::invalid_harness(format!(
                 "sandboxed fixture engine initialization failed: {error}"
             ))
         })?;
         let module = wasmtime::Module::new(&engine, WASM_PROBE_SOURCE).map_err(|error| {
-            crate::error::MoltenError::invalid_harness(format!("sandboxed fixture module compilation failed: {error}"))
+            crate::error::Failure::invalid_harness(format!("sandboxed fixture module compilation failed: {error}"))
         })?;
         Ok(Self { engine, module })
     }
@@ -104,14 +104,14 @@ impl WasmProbe {
 }
 
 #[derive(Default)]
-struct FixtureTransportPort {
+struct TransportPort {
     routed: u64,
 }
 
-impl FabricEffectPort for FixtureTransportPort {
+impl FabricEffectPort for TransportPort {
     fn route(
         &mut self,
-        binding: &crate::fabric::CanonicalFabricPortBinding,
+        binding: &crate::fabric::CanonicalPortBinding,
         effect: &super::TypedEffectRequest,
     ) -> crate::fabric::FabricPortResult<super::PortEffectOutput> {
         if binding.binding.key.port_id != PORT_ID
@@ -205,40 +205,40 @@ impl SystemExtensionExecutor for EchoExecutor {
 
 // r[impl molten.system_extension.callbacks]
 // r[impl molten.system_extension.final_validation]
-pub fn run_executable_system_extension_fixture(
+pub fn run_executable(
     profile: super::ExecutionProfile,
-) -> crate::error::Result<ExecutableSystemExtensionFixtureRun> {
+) -> crate::error::Result<ExecutableRun> {
     if profile == super::ExecutionProfile::NativeProcess {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "the deterministic fixture admits in-process-native or sandboxed-component profiles only",
         ));
     }
     let [admitted, upgrade_manifest, rollback_manifest] = fixture_manifests(profile)?;
     let manifest_ref = admitted.manifest_ref().to_string();
     let manifest_value = admitted.value().clone();
-    let mut host = super::SystemExtensionHost::new(admitted, EchoExecutor::new(profile)?)?;
+    let mut host = super::Dispatcher::new(admitted, EchoExecutor::new(profile)?)?;
 
     host.activate(START_TICK)?;
     host.health(HEALTH_TICK)?.require_executed("health")?;
     let (first_request_receipt, first_request_effects) =
         match host.dispatch_request(HASH_C, REQUEST_BYTES, REQUEST_TICK)? {
-            super::HostDispatchResult::Executed {
+            super::DispatchResult::Executed {
                 receipt,
                 approved_effects,
                 ..
             } => (receipt, approved_effects),
             other => {
-                return Err(crate::error::MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "fixture first request did not execute: {other:?}"
                 )));
             }
         };
-    let mut transport_port = FixtureTransportPort::default();
+    let mut transport_port = TransportPort::default();
     let first_effect_completions = host.route_approved_effects(&first_request_receipt, &mut transport_port)?;
     host.checkpoint(CHECKPOINT_TICK)?;
     let checkpoint_ref =
         host.state().checkpoint_ref.clone().ok_or_else(|| {
-            crate::error::MoltenError::invalid_harness("fixture checkpoint ref missing after checkpoint")
+            crate::error::Failure::invalid_harness("fixture checkpoint ref missing after checkpoint")
         })?;
     let upgraded_status =
         host.upgrade(upgrade_manifest, EchoExecutor::new(profile)?, &checkpoint_ref, UPGRADE_TICK)?.status;
@@ -254,7 +254,7 @@ pub fn run_executable_system_extension_fixture(
 
     let conformance = validated_conformance(&host)?;
 
-    Ok(ExecutableSystemExtensionFixtureRun {
+    Ok(ExecutableRun {
         profile,
         manifest_ref,
         manifest_value,

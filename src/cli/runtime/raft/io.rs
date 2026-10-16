@@ -7,7 +7,7 @@ pub(super) fn write_fixture(
     snapshot: &preserves::IOValue,
     recovery: &preserves::IOValue,
 ) -> Outcome<()> {
-    std::fs::create_dir_all(out).map_err(molten::error::MoltenError::from)?;
+    std::fs::create_dir_all(out).map_err(molten::error::Failure::from)?;
     write_file(out.join("manifest.preserves"), &molten::preserves_rail::to_text(&runtime.manifest.value)?)?;
     write_file(out.join("state.preserves"), &molten::preserves_rail::to_text(&runtime.state.value)?)?;
     write_file(out.join("read-receipt.preserves"), &molten::preserves_rail::to_text(read_receipt)?)?;
@@ -96,7 +96,7 @@ pub(super) fn artifact_summary(value: &preserves::IOValue) -> Outcome<String> {
 }
 
 pub(super) fn read_preserves_file(path: &std::path::Path) -> Outcome<preserves::IOValue> {
-    let text = std::fs::read_to_string(path).map_err(molten::error::MoltenError::from)?;
+    let text = std::fs::read_to_string(path).map_err(molten::error::Failure::from)?;
     molten::preserves_rail::parse_text(&text)
 }
 
@@ -109,7 +109,7 @@ fn write_indexed_values(out: &std::path::Path, prefix: &str, values: &[preserves
 
 fn write_file(path: std::path::PathBuf, contents: &str) -> Outcome<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(molten::error::MoltenError::from)?;
+        std::fs::create_dir_all(parent).map_err(molten::error::Failure::from)?;
     }
-    std::fs::write(path, contents).map_err(molten::error::MoltenError::from)
+    std::fs::write(path, contents).map_err(molten::error::Failure::from)
 }

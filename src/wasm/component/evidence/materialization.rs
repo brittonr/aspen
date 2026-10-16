@@ -9,9 +9,9 @@ pub struct MaterializedObjectIdentity {
 }
 
 impl MaterializedObjectIdentity {
-    pub fn measure(bytes: &[u8]) -> super::super::model::ComponentResult<Self> {
+    pub fn measure(bytes: &[u8]) -> super::super::model::Result<Self> {
         let byte_length = u64::try_from(bytes.len()).map_err(|error| {
-            super::super::model::ComponentDenial::new(format!("materialized object length is unsupported: {error}"))
+            super::super::model::Denial::new(format!("materialized object length is unsupported: {error}"))
         })?;
         Ok(Self {
             content_ref: super::super::model::content_ref(bytes),
@@ -21,13 +21,13 @@ impl MaterializedObjectIdentity {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MantleComponentBundle {
+pub struct MantleBundle {
     pub schema_id: String,
     pub bundle_ref: String,
     pub component: MaterializedObjectIdentity,
     pub wit: MaterializedObjectIdentity,
-    pub artifact_kind: super::super::model::WasmArtifactKind,
-    pub consumer: super::super::model::ComponentConsumer,
+    pub artifact_kind: super::super::model::ArtifactKind,
+    pub consumer: super::super::model::Consumer,
     pub expected_profile_id: String,
     pub expected_cohort_ref: String,
     pub build_cohort_ref: String,
@@ -39,7 +39,7 @@ pub struct MantleComponentBundle {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ComponentAdmissionEnvelope {
+pub struct AdmissionEnvelope {
     pub schema_id: String,
     pub bundle_ref: String,
     pub valence_sidecar_refs: Vec<String>,
@@ -50,10 +50,10 @@ pub struct ComponentAdmissionEnvelope {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum ComponentArtifactSource<'a> {
+pub enum ArtifactSource<'a> {
     Mantle {
-        bundle: &'a MantleComponentBundle,
-        envelope: &'a ComponentAdmissionEnvelope,
+        bundle: &'a MantleBundle,
+        envelope: &'a AdmissionEnvelope,
         component_bytes: &'a [u8],
         wit_bytes: &'a [u8],
     },
@@ -63,7 +63,7 @@ pub enum ComponentArtifactSource<'a> {
     },
 }
 
-impl<'a> ComponentArtifactSource<'a> {
+impl<'a> ArtifactSource<'a> {
     pub const fn component_bytes(self) -> &'a [u8] {
         match self {
             Self::Mantle { component_bytes, .. } | Self::TestOnlyLoose { component_bytes, .. } => component_bytes,
@@ -78,12 +78,12 @@ impl<'a> ComponentArtifactSource<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MaterializationAdmission {
+pub struct Admission {
     pub evidence_scope: super::super::model::EvidenceScope,
     pub component_ref: String,
     pub wit_ref: String,
     pub bundle_ref: Option<String>,
-    pub consumer: super::super::model::ComponentConsumer,
+    pub consumer: super::super::model::Consumer,
     pub profile_ref: String,
     pub mantle_evidence_refs: Vec<String>,
     pub valence_evidence_refs: Vec<String>,
@@ -93,7 +93,7 @@ pub struct MaterializationAdmission {
     pub resource_refs: Vec<String>,
 }
 
-pub fn mantle_bundle_ref(bundle: &MantleComponentBundle) -> String {
+pub fn mantle_bundle_ref(bundle: &MantleBundle) -> String {
     let mut lines = vec![
         format!("schema:{}", bundle.schema_id),
         format!("component-ref:{}", bundle.component.content_ref),
@@ -122,16 +122,16 @@ pub fn mantle_bundle_ref(bundle: &MantleComponentBundle) -> String {
     super::super::model::content_ref(lines.join("\n").as_bytes())
 }
 
-pub fn verify_materialization(
-    profile: &super::super::model::ComponentRuntimeProfile,
+pub fn verify(
+    profile: &super::super::model::RuntimeProfile,
     requested_scope: super::super::model::EvidenceScope,
-    source: ComponentArtifactSource<'_>,
-) -> super::super::model::ComponentResult<MaterializationAdmission> {
+    source: ArtifactSource<'_>,
+) -> super::super::model::Result<Admission> {
     let component = MaterializedObjectIdentity::measure(source.component_bytes())?;
     let wit = MaterializedObjectIdentity::measure(source.wit_bytes())?;
     validate_byte_bounds(profile, &component, &wit)?;
     match source {
-        ComponentArtifactSource::Mantle {
+        ArtifactSource::Mantle {
             bundle,
             envelope,
             component_bytes: _,
@@ -144,22 +144,22 @@ pub fn verify_materialization(
             measured_component: &component,
             measured_wit: &wit,
         }),
-        ComponentArtifactSource::TestOnlyLoose {
+        ArtifactSource::TestOnlyLoose {
             component_bytes: _,
             wit_bytes: _,
         } => {
             if requested_scope != super::super::model::EvidenceScope::TestOnly {
-                return Err(super::super::model::ComponentDenial::new(
+                return Err(super::super::model::Denial::new(
                     "production component execution requires a Mantle materialization bundle",
                 ));
             }
-            Ok(MaterializationAdmission {
+            Ok(Admission {
                 evidence_scope: super::super::model::EvidenceScope::TestOnly,
                 component_ref: component.content_ref,
                 wit_ref: wit.content_ref,
                 bundle_ref: None,
-                consumer: super::super::model::ComponentConsumer::Actor,
-                profile_ref: super::super::profile::component_profile_ref(profile),
+                consumer: super::super::model::Consumer::Actor,
+                profile_ref: super::super::profile::r#ref(profile),
                 mantle_evidence_refs: Vec::new(),
                 valence_evidence_refs: Vec::new(),
                 cairn_evidence_refs: Vec::new(),
@@ -172,10 +172,10 @@ pub fn verify_materialization(
 }
 
 fn validate_byte_bounds(
-    profile: &super::super::model::ComponentRuntimeProfile,
+    profile: &super::super::model::RuntimeProfile,
     component: &MaterializedObjectIdentity,
     wit: &MaterializedObjectIdentity,
-) -> super::super::model::ComponentResult<()> {
+) -> super::super::model::Result<()> {
     let mut blockers = Vec::new();
     if component.byte_length > profile.resources.max_component_bytes {
         blockers.push("component bytes exceed the admitted profile bound".to_string());
@@ -186,20 +186,20 @@ fn validate_byte_bounds(
     if blockers.is_empty() {
         Ok(())
     } else {
-        Err(super::super::model::ComponentDenial::from_blockers(blockers))
+        Err(super::super::model::Denial::from_blockers(blockers))
     }
 }
 
 struct BundleVerificationInput<'a> {
-    profile: &'a super::super::model::ComponentRuntimeProfile,
+    profile: &'a super::super::model::RuntimeProfile,
     requested_scope: super::super::model::EvidenceScope,
-    bundle: &'a MantleComponentBundle,
-    envelope: &'a ComponentAdmissionEnvelope,
+    bundle: &'a MantleBundle,
+    envelope: &'a AdmissionEnvelope,
     measured_component: &'a MaterializedObjectIdentity,
     measured_wit: &'a MaterializedObjectIdentity,
 }
 
-fn verify_bundle(input: BundleVerificationInput<'_>) -> super::super::model::ComponentResult<MaterializationAdmission> {
+fn verify_bundle(input: BundleVerificationInput<'_>) -> super::super::model::Result<Admission> {
     let mut blockers = Vec::new();
     if input.requested_scope != super::super::model::EvidenceScope::Production {
         blockers.push("Mantle production bundle must execute in production evidence scope".to_string());
@@ -213,11 +213,11 @@ fn verify_bundle(input: BundleVerificationInput<'_>) -> super::super::model::Com
     if &input.bundle.component != input.measured_component || &input.bundle.wit != input.measured_wit {
         blockers.push("Mantle component bundle object identity differs from remeasured bytes".to_string());
     }
-    if input.bundle.artifact_kind != super::super::model::WasmArtifactKind::Component {
+    if input.bundle.artifact_kind != super::super::model::ArtifactKind::Component {
         blockers.push("Mantle component bundle is not classified as a component".to_string());
     }
     if input.bundle.expected_profile_id != input.profile.profile_id
-        || input.bundle.expected_cohort_ref != super::super::profile::component_profile_ref(input.profile)
+        || input.bundle.expected_cohort_ref != super::super::profile::r#ref(input.profile)
     {
         blockers.push("Mantle component bundle expected profile is stale or mismatched".to_string());
     }
@@ -231,16 +231,16 @@ fn verify_bundle(input: BundleVerificationInput<'_>) -> super::super::model::Com
             .push("initial component cohort admits portable bytes and rejects precompiled deserialization".to_string());
     }
     if !blockers.is_empty() {
-        return Err(super::super::model::ComponentDenial::from_blockers(blockers));
+        return Err(super::super::model::Denial::from_blockers(blockers));
     }
-    Ok(MaterializationAdmission {
+    Ok(Admission {
         evidence_scope: super::super::model::EvidenceScope::Production,
         component_ref: input.measured_component.content_ref.clone(),
         wit_ref: input.measured_wit.content_ref.clone(),
         bundle_ref: Some(input.bundle.bundle_ref.clone()),
         consumer: input.bundle.consumer,
-        profile_ref: super::super::profile::component_profile_ref(input.profile),
-        mantle_evidence_refs: mantle_evidence_refs(input.bundle),
+        profile_ref: super::super::profile::r#ref(input.profile),
+        mantle_evidence_refs: mantle_refs(input.bundle),
         valence_evidence_refs: input.envelope.valence_sidecar_refs.clone(),
         cairn_evidence_refs: input.envelope.cairn_acceptance_refs.clone(),
         policy_refs: input.envelope.policy_refs.clone(),
@@ -249,13 +249,13 @@ fn verify_bundle(input: BundleVerificationInput<'_>) -> super::super::model::Com
     })
 }
 
-fn mantle_evidence_refs(bundle: &MantleComponentBundle) -> Vec<String> {
+fn mantle_refs(bundle: &MantleBundle) -> Vec<String> {
     let mut refs = vec![bundle.build_cohort_ref.clone(), bundle.octet_report_ref.clone()];
     refs.extend(bundle.stage_receipt_refs.clone());
     super::super::model::sorted_unique(&refs)
 }
 
-fn validate_bundle_refs(bundle: &MantleComponentBundle, blockers: &mut impl crate::bounded::VecSink<String>) {
+fn validate_bundle_refs(bundle: &MantleBundle, blockers: &mut impl crate::bounded::VecSink<String>) {
     if !super::super::model::valid_content_ref(&bundle.build_cohort_ref)
         || !super::super::model::valid_content_ref(&bundle.octet_report_ref)
         || bundle.stage_receipt_refs.len() > MAX_COMPONENT_EVIDENCE_REFS
@@ -271,8 +271,8 @@ fn validate_bundle_refs(bundle: &MantleComponentBundle, blockers: &mut impl crat
 }
 
 fn validate_envelope(
-    bundle: &MantleComponentBundle,
-    envelope: &ComponentAdmissionEnvelope,
+    bundle: &MantleBundle,
+    envelope: &AdmissionEnvelope,
     blockers: &mut impl crate::bounded::VecSink<String>,
 ) {
     if envelope.schema_id != COMPONENT_ADMISSION_ENVELOPE_SCHEMA || envelope.bundle_ref != bundle.bundle_ref {

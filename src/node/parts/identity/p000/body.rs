@@ -10,7 +10,7 @@ const GROUP_OR_OTHER_SECRET_PERMISSION_BITS: u32 = 0o077;
 const IDENTITY_NAMESPACE_LABEL: &str = "node-state/identity";
 
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 type Value<T> = preserves::Value<T>;
 

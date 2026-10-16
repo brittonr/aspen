@@ -4,13 +4,13 @@ const BLAKE3_REFERENCE_PREFIX: &str = "blake3:";
 const BLAKE3_HEX_LENGTH: usize = 64;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ActorPortError {
+pub struct PortError {
     pub code: &'static str,
     pub detail: String,
     pub outcome_unknown: bool,
 }
 
-impl ActorPortError {
+impl PortError {
     pub fn new(code: &'static str, detail: impl Into<String>, outcome_unknown: bool) -> Self {
         Self {
             code,
@@ -20,16 +20,16 @@ impl ActorPortError {
     }
 }
 
-pub type ActorPortResult<T> = std::result::Result<T, ActorPortError>;
+pub type PortResult<T> = std::result::Result<T, PortError>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PublishedActorState {
+pub struct PublishedState {
     pub state: ActorState,
     pub state_ref: String,
     pub revision: u64,
 }
 
-impl PublishedActorState {
+impl PublishedState {
     #[must_use]
     pub fn from_state(state: ActorState) -> Self {
         let state_ref = identify_actor_state(&state);
@@ -43,21 +43,21 @@ impl PublishedActorState {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ExpectedActorState {
+pub struct ExpectedState {
     pub state_ref: Option<String>,
     pub revision: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ActorCommitRequest {
+pub struct CommitRequest {
     pub actor_key_ref: String,
-    pub expected: ExpectedActorState,
-    pub next: PublishedActorState,
+    pub expected: ExpectedState,
+    pub next: PublishedState,
     pub requested_engine_epoch: u64,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ActorCommitDisposition {
+pub enum CommitDisposition {
     Applied,
     AlreadyApplied,
     Stale,
@@ -65,13 +65,13 @@ pub enum ActorCommitDisposition {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ActorCommitCurrentness {
+pub enum CommitCurrentness {
     Linearizable,
     Stale,
     Unknown,
 }
 
-impl ActorCommitCurrentness {
+impl CommitCurrentness {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Linearizable => "linearizable",
@@ -86,13 +86,13 @@ impl ActorCommitCurrentness {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ActorDurabilityOutcome {
+pub enum DurabilityOutcome {
     Durable,
     Buffered,
     Unknown,
 }
 
-impl ActorDurabilityOutcome {
+impl DurabilityOutcome {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Durable => "durable",
@@ -103,22 +103,22 @@ impl ActorDurabilityOutcome {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ActorCommitObservation {
-    pub disposition: ActorCommitDisposition,
-    pub currentness: ActorCommitCurrentness,
-    pub durability: ActorDurabilityOutcome,
+pub struct CommitObservation {
+    pub disposition: CommitDisposition,
+    pub currentness: CommitCurrentness,
+    pub durability: DurabilityOutcome,
     pub engine_epoch: u64,
     pub observed_state_ref: Option<String>,
 }
 
 pub trait ActorCommitPort {
-    fn load(&self, actor_key_ref: &str) -> ActorPortResult<Option<PublishedActorState>>;
+    fn load(&self, actor_key_ref: &str) -> PortResult<Option<PublishedState>>;
 
-    fn compare_and_commit(&mut self, request: &ActorCommitRequest) -> ActorPortResult<ActorCommitObservation>;
+    fn compare_and_commit(&mut self, request: &CommitRequest) -> PortResult<CommitObservation>;
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ActorEffectAdmissionObservation {
+pub struct EffectAdmissionObservation {
     pub admission_ref: String,
     pub actor_key_ref: String,
     pub profile_ref: String,
@@ -133,10 +133,10 @@ pub struct ActorEffectAdmissionObservation {
     pub adapter_admitted: bool,
 }
 
-impl ActorEffectAdmissionObservation {
+impl EffectAdmissionObservation {
     #[must_use]
     pub fn admits(&self, effect: &ActorEffectIntent) -> bool {
-        valid_actor_reference(&self.admission_ref)
+        valid_reference(&self.admission_ref)
             && self.actor_key_ref == effect.actor_key_ref
             && self.profile_ref == effect.profile_ref
             && self.system_extension_manifest_ref == effect.system_extension_manifest_ref
@@ -153,14 +153,14 @@ impl ActorEffectAdmissionObservation {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ActorEffectDisposition {
+pub enum EffectDisposition {
     Succeeded,
     Failed,
     Unknown,
     AdmissionDenied,
 }
 
-impl ActorEffectDisposition {
+impl EffectDisposition {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Succeeded => "succeeded",
@@ -172,34 +172,34 @@ impl ActorEffectDisposition {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ActorEffectObservation {
+pub struct EffectObservation {
     pub effect_ref: String,
     pub admission_ref: String,
-    pub disposition: ActorEffectDisposition,
+    pub disposition: EffectDisposition,
     pub outcome_ref: Option<String>,
 }
 
 pub trait ActorEffectPort {
-    fn observe_admission(&mut self, effect: &ActorEffectIntent) -> ActorPortResult<ActorEffectAdmissionObservation>;
+    fn observe_admission(&mut self, effect: &ActorEffectIntent) -> PortResult<EffectAdmissionObservation>;
 
     fn execute(
         &mut self,
         effect: &ActorEffectIntent,
-        admission: &ActorEffectAdmissionObservation,
-    ) -> ActorPortResult<ActorEffectObservation>;
+        admission: &EffectAdmissionObservation,
+    ) -> PortResult<EffectObservation>;
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ActorStatusObservation {
+pub struct StatusObservation {
     pub status_ref: Option<String>,
     pub outcome_unknown: bool,
 }
 
 pub trait ActorStatusPort {
-    fn publish_status(&mut self, status: &ActorStatus) -> ActorPortResult<ActorStatusObservation>;
+    fn publish_status(&mut self, status: &ActorStatus) -> PortResult<StatusObservation>;
 }
 
-pub(crate) fn valid_actor_reference(value: &str) -> bool {
+pub(crate) fn valid_reference(value: &str) -> bool {
     let Some(hex) = value.strip_prefix(BLAKE3_REFERENCE_PREFIX) else {
         return false;
     };

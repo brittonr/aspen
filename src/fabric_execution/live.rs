@@ -7,7 +7,7 @@ const UNKNOWN_FAILURE_CODE: &str = "execution-outcome-unknown";
 const RECEIPT_FAILURE_CODE: &str = "execution-receipt-construction-failed";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LiveExecutionAdapterBuildError {
+pub enum AdapterBuildError {
     WrongProfileKind,
 }
 
@@ -20,16 +20,16 @@ enum OperationStatus {
 
 // r[impl molten.fabric_execution.port_contract]
 // r[impl molten.fabric_execution.environment]
-pub struct LiveExecutionAdapter<P: ExecutionOutputPublisher> {
-    profile: CanonicalExecutionProfile,
+pub struct Adapter<P: ExecutionOutputPublisher> {
+    profile: Profile,
     publisher: P,
     operations: std::collections::BTreeMap<String, (u64, OperationStatus)>,
 }
 
-impl<P: ExecutionOutputPublisher> LiveExecutionAdapter<P> {
-    pub fn new(profile: CanonicalExecutionProfile, publisher: P) -> Result<Self, LiveExecutionAdapterBuildError> {
+impl<P: ExecutionOutputPublisher> Adapter<P> {
+    pub fn new(profile: Profile, publisher: P) -> Result<Self, AdapterBuildError> {
         if profile.profile.descriptor.kind != ExecutionProfileKind::LiveBoundedProcess {
-            return Err(LiveExecutionAdapterBuildError::WrongProfileKind);
+            return Err(AdapterBuildError::WrongProfileKind);
         }
         Ok(Self {
             profile,
@@ -47,8 +47,8 @@ impl<P: ExecutionOutputPublisher> LiveExecutionAdapter<P> {
     }
 }
 
-impl<P: ExecutionOutputPublisher> ExecutionFabricPort for LiveExecutionAdapter<P> {
-    fn profile(&self) -> &CanonicalExecutionProfile {
+impl<P: ExecutionOutputPublisher> ExecutionFabricPort for Adapter<P> {
+    fn profile(&self) -> &Profile {
         &self.profile
     }
 
@@ -57,27 +57,15 @@ impl<P: ExecutionOutputPublisher> ExecutionFabricPort for LiveExecutionAdapter<P
     // r[impl molten.fabric_execution.uncertainty]
     fn execute(
         &mut self,
-        request: &CanonicalExecutionRequest,
-        resolved: &ResolvedExecutionContext,
+        request: &Request,
+        resolved: &ResolvedContext,
         cancellation: Option<&std::sync::atomic::AtomicBool>,
-    ) -> ExecutionPortResult<CanonicalExecutionReceipt> {
+    ) -> PortResult<Receipt> {
         validate_resolved_context(request, resolved).map_err(|detail| {
-            failure(
-                request,
-                ExecutionPortFailureKind::ResolutionDenied,
-                RESOLUTION_DENIED_CODE,
-                detail,
-                FailureEvidence::NONE,
-            )
+            failure(request, PortFailureKind::ResolutionDenied, RESOLUTION_DENIED_CODE, detail, FailureEvidence::NONE)
         })?;
         let run_request = bounded_request(request, resolved).map_err(|detail| {
-            failure(
-                request,
-                ExecutionPortFailureKind::RejectedBeforeStart,
-                PRESTART_FAILURE_CODE,
-                detail,
-                FailureEvidence::NONE,
-            )
+            failure(request, PortFailureKind::RejectedBeforeStart, PRESTART_FAILURE_CODE, detail, FailureEvidence::NONE)
         })?;
         let run_result = match cancellation {
             Some(flag) => bounded_exec::run_with_cancellation(run_request, flag),
@@ -92,40 +80,30 @@ impl<P: ExecutionOutputPublisher> ExecutionFabricPort for LiveExecutionAdapter<P
                 request.plan.request.operation_ref.clone(),
                 (request.plan.request.generation, OperationStatus::Unknown),
             );
-            failure(
-                request,
-                ExecutionPortFailureKind::UnknownAfterStart,
-                UNKNOWN_FAILURE_CODE,
-                detail,
-                FailureEvidence::NONE,
-            )
+            failure(request, PortFailureKind::UnknownAfterStart, UNKNOWN_FAILURE_CODE, detail, FailureEvidence::NONE)
         })?;
         self.publish_and_record(request, process)
     }
 
-    fn reconcile(&self, operation_ref: &str, generation: u64) -> ExecutionReconciliationStatus {
+    fn reconcile(&self, operation_ref: &str, generation: u64) -> ReconciliationStatus {
         let Some((recorded_generation, status)) = self.operations.get(operation_ref) else {
-            return ExecutionReconciliationStatus::NotFound;
+            return ReconciliationStatus::NotFound;
         };
         if *recorded_generation != generation {
-            return ExecutionReconciliationStatus::NotFound;
+            return ReconciliationStatus::NotFound;
         }
         match status {
-            OperationStatus::DefinitePreStartFailure => ExecutionReconciliationStatus::DefinitePreStartFailure,
-            OperationStatus::Terminal(receipt_ref) => ExecutionReconciliationStatus::Terminal {
+            OperationStatus::DefinitePreStartFailure => ReconciliationStatus::DefinitePreStartFailure,
+            OperationStatus::Terminal(receipt_ref) => ReconciliationStatus::Terminal {
                 receipt_ref: receipt_ref.clone(),
             },
-            OperationStatus::Unknown => ExecutionReconciliationStatus::UnknownRequiresReconciliation,
+            OperationStatus::Unknown => ReconciliationStatus::UnknownRequiresReconciliation,
         }
     }
 }
 
-impl<P: ExecutionOutputPublisher> LiveExecutionAdapter<P> {
-    fn record_run_failure(
-        &mut self,
-        request: &CanonicalExecutionRequest,
-        error: bounded_exec::RunError,
-    ) -> Box<ExecutionPortFailure> {
+impl<P: ExecutionOutputPublisher> Adapter<P> {
+    fn record_run_failure(&mut self, request: &Request, error: bounded_exec::RunError) -> Box<PortFailure> {
         let is_before_start = matches!(
             error,
             bounded_exec::RunError::InvalidLimits(_)
@@ -142,52 +120,42 @@ impl<P: ExecutionOutputPublisher> LiveExecutionAdapter<P> {
         );
         let (kind, code, status) = if is_before_start {
             (
-                ExecutionPortFailureKind::RejectedBeforeStart,
+                PortFailureKind::RejectedBeforeStart,
                 PRESTART_FAILURE_CODE,
                 OperationStatus::DefinitePreStartFailure,
             )
         } else {
-            (ExecutionPortFailureKind::UnknownAfterStart, UNKNOWN_FAILURE_CODE, OperationStatus::Unknown)
+            (PortFailureKind::UnknownAfterStart, UNKNOWN_FAILURE_CODE, OperationStatus::Unknown)
         };
         self.operations
             .insert(request.plan.request.operation_ref.clone(), (request.plan.request.generation, status));
         failure(request, kind, code, error.to_string(), FailureEvidence::NONE)
     }
 
-    fn publish_and_record(
-        &mut self,
-        request: &CanonicalExecutionRequest,
-        process: ExecutionProcessObservation,
-    ) -> ExecutionPortResult<CanonicalExecutionReceipt> {
+    fn publish_and_record(&mut self, request: &Request, process: ProcessObservation) -> PortResult<Receipt> {
         let stdout_publication =
             publish_stream(&mut self.publisher, &request.plan.request.operation_ref, &process.stdout);
         let stderr_publication =
             publish_stream(&mut self.publisher, &request.plan.request.operation_ref, &process.stderr);
-        let is_publication_failed = matches!(stdout_publication, ExecutionStreamPublication::Failed { .. })
-            || matches!(stderr_publication, ExecutionStreamPublication::Failed { .. });
-        let receipt = canonical_execution_receipt(
-            request,
-            &self.profile,
-            process.clone(),
-            stdout_publication,
-            stderr_publication,
-        )
-        .map_err(|error| {
-            self.operations.insert(
-                request.plan.request.operation_ref.clone(),
-                (request.plan.request.generation, OperationStatus::Unknown),
-            );
-            failure(
-                request,
-                ExecutionPortFailureKind::ReceiptConstruction,
-                RECEIPT_FAILURE_CODE,
-                error.to_string(),
-                FailureEvidence {
-                    process_observation: Some(process.clone()),
-                    receipt: None,
-                },
-            )
-        })?;
+        let is_publication_failed = matches!(stdout_publication, StreamPublication::Failed { .. })
+            || matches!(stderr_publication, StreamPublication::Failed { .. });
+        let receipt = receipt(request, &self.profile, process.clone(), stdout_publication, stderr_publication)
+            .map_err(|error| {
+                self.operations.insert(
+                    request.plan.request.operation_ref.clone(),
+                    (request.plan.request.generation, OperationStatus::Unknown),
+                );
+                failure(
+                    request,
+                    PortFailureKind::ReceiptConstruction,
+                    RECEIPT_FAILURE_CODE,
+                    error.to_string(),
+                    FailureEvidence {
+                        process_observation: Some(process.clone()),
+                        receipt: None,
+                    },
+                )
+            })?;
         self.operations.insert(
             request.plan.request.operation_ref.clone(),
             (request.plan.request.generation, OperationStatus::Terminal(receipt.receipt_ref.clone())),
@@ -195,7 +163,7 @@ impl<P: ExecutionOutputPublisher> LiveExecutionAdapter<P> {
         if is_publication_failed {
             return Err(failure(
                 request,
-                ExecutionPortFailureKind::OutputPublication,
+                PortFailureKind::OutputPublication,
                 PUBLICATION_FAILURE_CODE,
                 "one or more retained execution streams were not published".to_string(),
                 FailureEvidence {
@@ -209,17 +177,17 @@ impl<P: ExecutionOutputPublisher> LiveExecutionAdapter<P> {
 }
 
 fn failure(
-    request: &CanonicalExecutionRequest,
-    kind: ExecutionPortFailureKind,
+    request: &Request,
+    kind: PortFailureKind,
     diagnostic_code: &'static str,
     detail: String,
     evidence: FailureEvidence,
-) -> Box<ExecutionPortFailure> {
+) -> Box<PortFailure> {
     let FailureEvidence {
         process_observation,
         receipt,
     } = evidence;
-    Box::new(ExecutionPortFailure {
+    Box::new(PortFailure {
         kind,
         operation_ref: request.plan.request.operation_ref.clone(),
         diagnostic_code,
@@ -230,9 +198,9 @@ fn failure(
     })
 }
 
-pub fn unavailable_execution_port_failure(operation_ref: &str) -> ExecutionPortFailure {
-    ExecutionPortFailure {
-        kind: ExecutionPortFailureKind::ProfileUnavailable,
+pub fn unavailable_port_failure(operation_ref: &str) -> PortFailure {
+    PortFailure {
+        kind: PortFailureKind::ProfileUnavailable,
         operation_ref: operation_ref.to_string(),
         diagnostic_code: PROFILE_UNAVAILABLE_CODE,
         detail: "the exact admitted execution profile is unavailable; no fallback was selected".to_string(),

@@ -22,7 +22,7 @@ Canonical decoding alone remains insufficient. It establishes a byte representat
 
 ## What the nominal pilot actually admits
 
-The separate [pilot adapter](../../../src/schema_identity_core_pilot.rs) supplies three explicit facts: `owner`, `local_key`, and `stable_member_id`. It derives a nominal lineage from the first two, then constructs a closed graph descriptor with a record root and one required text member. Its text bound is 64 bytes; the supplied admission limits permit 16 nodes and 32 members. These are the inspected pilot's bounds and shape, not general limits for every Molten schema.
+The separate [pilot adapter](../../../src/schema/identity/core/pilot.rs) supplies three explicit facts: `owner`, `local_key`, and `stable_member_id`. It derives a nominal lineage from the first two, then constructs a closed graph descriptor with a record root and one required text member. Its text bound is 64 bytes; the supplied admission limits permit 16 nodes and 32 members. These are the inspected pilot's bounds and shape, not general limits for every Molten schema.
 
 The adapter's tests compare one profile with a published nominal fixture vector and establish that changing the owner changes the nominal identity. This is identity separation, not an access-control rejection: both owner variants in that test are admitted successfully and their schema IDs differ. The [pilot note](../../schema-identity-core-pilot.md) describes owner crossing as rejected “by identity separation”; that wording should be read in this narrow sense, not as evidence that the adapter denies constructing the second descriptor.
 
@@ -47,4 +47,4 @@ The cited tests were inspected, not executed for this documentation task. Their 
 - [Nominal authority boundaries](../../nominal-authority-references.md)
 - [Schema artifacts, validators, and typed-value references](../../../src/preserves/parts/rail/p005/body.rs)
 - [Boundary schema negative cases](../../../src/preserves/parts/rail/tests/m000/p001/body.rs)
-- [Nominal graph pilot and owner-separation test](../../../src/schema_identity_core_pilot.rs)
+- [Nominal graph pilot and owner-separation test](../../../src/schema/identity/core/pilot.rs)

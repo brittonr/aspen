@@ -23,7 +23,7 @@ pub fn observe_artifact_surface(
     world: &str,
     component_ref: &str,
     bytes: &[u8],
-) -> super::super::model::ComponentResult<super::surface::DeclaredObservation> {
+) -> super::super::model::Result<super::surface::DeclaredObservation> {
     let mut imports = Vec::with_capacity(MAX_OBSERVED_SURFACE_ENTRIES);
     let mut exports = Vec::with_capacity(MAX_OBSERVED_SURFACE_ENTRIES);
     for payload in wasmparser::Parser::new(0).parse_all(bytes) {
@@ -56,15 +56,15 @@ pub fn observe_artifact_surface(
 /// binds the verdict in a canonical receipt. It never instantiates the
 /// component.
 pub fn record_surface_admission(
-    profile: &super::super::model::ComponentRuntimeProfile,
+    profile: &super::super::model::RuntimeProfile,
     manifest: ManifestSource<'_>,
     component_ref: &str,
     component_bytes: &[u8],
-) -> super::super::model::ComponentResult<AdmissionRecord> {
+) -> super::super::model::Result<AdmissionRecord> {
     let manifest = match manifest {
         ManifestSource::Provided(manifest) => manifest,
         ManifestSource::Missing => {
-            return Err(super::super::model::ComponentDenial::new(
+            return Err(super::super::model::Denial::new(
                 "component import manifest is missing, partial, or unreadable",
             ));
         }
@@ -91,9 +91,7 @@ pub fn record_surface_admission(
     })
 }
 
-fn declared_names(
-    section: wasmparser::ComponentImportSectionReader<'_>,
-) -> super::super::model::ComponentResult<Vec<String>> {
+fn declared_names(section: wasmparser::ComponentImportSectionReader<'_>) -> super::super::model::Result<Vec<String>> {
     let mut names = Vec::with_capacity(MAX_OBSERVED_SURFACE_ENTRIES);
     for import in section {
         names.push(import.map_err(parse_denial)?.name.0.to_string());
@@ -101,9 +99,7 @@ fn declared_names(
     Ok(names)
 }
 
-fn exported_names(
-    section: wasmparser::ComponentExportSectionReader<'_>,
-) -> super::super::model::ComponentResult<Vec<String>> {
+fn exported_names(section: wasmparser::ComponentExportSectionReader<'_>) -> super::super::model::Result<Vec<String>> {
     let mut names = Vec::with_capacity(MAX_OBSERVED_SURFACE_ENTRIES);
     for export in section {
         names.push(export.map_err(parse_denial)?.name.0.to_string());
@@ -111,18 +107,18 @@ fn exported_names(
     Ok(names)
 }
 
-fn validate_observed_bounds(entries: &[String], label: &str) -> super::super::model::ComponentResult<()> {
+fn validate_observed_bounds(entries: &[String], label: &str) -> super::super::model::Result<()> {
     if entries.len() > MAX_OBSERVED_SURFACE_ENTRIES {
-        return Err(super::super::model::ComponentDenial::new(format!(
+        return Err(super::super::model::Denial::new(format!(
             "observed component {label} surface exceeds the declared bound"
         )));
     }
     Ok(())
 }
 
-fn parse_denial(error: wasmparser::BinaryReaderError) -> super::super::model::ComponentDenial {
-    super::super::model::ComponentDenial::classified(
-        super::super::model::ComponentDenialClass::ComponentAdmissionDenial,
+fn parse_denial(error: wasmparser::BinaryReaderError) -> super::super::model::Denial {
+    super::super::model::Denial::classified(
+        super::super::model::DenialClass::ComponentAdmissionDenial,
         format!("component surface extraction failed: {error}"),
     )
 }

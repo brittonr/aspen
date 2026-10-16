@@ -1,6 +1,6 @@
 type IoValue = preserves::IOValue;
 type Value<T> = preserves::Value<T>;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 pub const HARNESS_SUITE_SCHEMA: &str = "molten.harness.suite.v1";
@@ -185,6 +185,9 @@ pub const NODE_ADAPTER_RECEIPT_SCHEMA: &str = "molten.node.adapter-receipt.v1";
 pub const NODE_CONTROL_REQUEST_SCHEMA: &str = "molten.node.control-request.v1";
 pub const NODE_CONTROL_RECEIPT_SCHEMA: &str = "molten.node.control-receipt.v1";
 pub const NODE_CONTROL_LOCK_SCHEMA: &str = "molten.node.control-lock.v1";
+pub const NODE_CONTROL_LOCK_SCHEMA_V2: &str = "molten.node.control-lock.v2";
+pub const NODE_CONTROL_RUN_SCHEMA: &str = "molten.node.control-run.v1";
+pub const NODE_CONTROL_RUN_SHUTDOWN_SCHEMA: &str = "molten.node.control-run-shutdown.v1";
 pub const NODE_CONTROL_QUEUE_RECEIPT_SCHEMA: &str = "molten.node.control-queue-receipt.v1";
 pub const NODE_CONTROL_OPERATION_RECEIPT_SCHEMA: &str = "molten.node.control-operation-receipt.v1";
 pub const NODE_CONTROL_HEARTBEAT_RECEIPT_SCHEMA: &str = "molten.node.control-heartbeat-receipt.v1";

@@ -22,7 +22,7 @@ fn cli_cluster_init_denies_lifecycle_collision_and_force_resets_planned_node() -
     assert_success(&first, "cluster init first run");
     assert!(node_root.join("config.preserves").exists());
 
-    std::fs::remove_file(molten::cluster::cluster_manifest_path(&root))?;
+    std::fs::remove_file(molten::cluster::manifest_path(&root))?;
     let denied = molten_cmd()
         .args(["cluster", "init", "--state-root"])
         .arg(&root)
@@ -41,7 +41,7 @@ fn cli_cluster_init_denies_lifecycle_collision_and_force_resets_planned_node() -
     assert_success(&forced, "cluster init force reset");
     assert!(!sentinel.exists());
     assert!(node_root.join("config.preserves").exists());
-    assert!(molten::cluster::cluster_manifest_path(&root).exists());
+    assert!(molten::cluster::manifest_path(&root).exists());
     Ok(())
 }
 
@@ -49,8 +49,8 @@ fn cli_cluster_init_denies_lifecycle_collision_and_force_resets_planned_node() -
 fn cli_cluster_init_denies_existing_manifest_without_force() -> CliResult<()> {
     let root = temp_dir("cli-cluster-manifest-collision")?;
     let nodes = vec![CLUSTER_TEST_NODE.to_string()];
-    let plan = molten::cluster::plan_cluster(&root, &nodes)?;
-    std::fs::write(molten::cluster::cluster_manifest_path(&root), molten::cluster::render_cluster_manifest(&plan))?;
+    let plan = molten::cluster::plan(&root, &nodes)?;
+    std::fs::write(molten::cluster::manifest_path(&root), molten::cluster::render_manifest(&plan))?;
 
     let denied = molten_cmd()
         .args(["cluster", "init", "--state-root"])
@@ -72,7 +72,7 @@ fn cli_cluster_lifecycle_commands_fail_closed_for_bad_manifests() -> CliResult<(
     assert_failure(&missing, "cluster start missing manifest");
 
     let empty_root = temp_dir("cli-cluster-empty-manifest")?;
-    std::fs::write(molten::cluster::cluster_manifest_path(&empty_root), "")?;
+    std::fs::write(molten::cluster::manifest_path(&empty_root), "")?;
     let empty = molten_cmd()
         .args(["cluster", "status", "--state-root"])
         .arg(&empty_root)
@@ -82,7 +82,7 @@ fn cli_cluster_lifecycle_commands_fail_closed_for_bad_manifests() -> CliResult<(
 
     let malformed_root = temp_dir("cli-cluster-malformed-manifest")?;
     std::fs::write(
-        molten::cluster::cluster_manifest_path(&malformed_root),
+        molten::cluster::manifest_path(&malformed_root),
         "not-a-cluster\nnode:node-a\n",
     )?;
     let malformed = molten_cmd()
@@ -94,7 +94,7 @@ fn cli_cluster_lifecycle_commands_fail_closed_for_bad_manifests() -> CliResult<(
 
     let stale_root = temp_dir("cli-cluster-stale-manifest")?;
     std::fs::write(
-        molten::cluster::cluster_manifest_path(&stale_root),
+        molten::cluster::manifest_path(&stale_root),
         "molten.cluster.nodes.v1\nnode:node-a\n",
     )?;
     let stale = molten_cmd()
@@ -116,9 +116,9 @@ fn cli_cluster_two_node_lifecycle_roundtrip_writes_canonical_receipts() -> CliRe
         .output()?;
     assert_success(&init, "cluster init roundtrip");
 
-    let manifest_path = molten::cluster::cluster_manifest_path(&root);
+    let manifest_path = molten::cluster::manifest_path(&root);
     let manifest = std::fs::read_to_string(&manifest_path)?;
-    let manifest_nodes = molten::cluster::parse_cluster_manifest(&manifest)?;
+    let manifest_nodes = molten::cluster::parse_manifest(&manifest)?;
     assert_eq!(manifest_nodes, vec!["node:node-a".to_string(), "node:node-b".to_string()]);
     assert_cluster_file_is_canonical(&root, CLUSTER_TEST_NODE, CLUSTER_CONFIG_FILE)?;
     assert_cluster_file_is_canonical(&root, CLUSTER_TEST_NODE, CLUSTER_IDENTITY_RECEIPT_FILE)?;

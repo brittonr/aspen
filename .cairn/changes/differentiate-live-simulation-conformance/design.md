@@ -2,7 +2,7 @@
 
 ## Context
 
-The current differential calls `canonical_simulation_differential` with the same `trace_refs` vector for both profiles. That value is a valid structural summary of the declared contracts, but as an execution comparison it is tautological.
+The current differential calls `differential` with the same `trace_refs` vector for both profiles. That value is a valid structural summary of the declared contracts, but as an execution comparison it is tautological.
 
 ## Approach
 

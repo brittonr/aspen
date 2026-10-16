@@ -10,7 +10,7 @@ pub(super) struct Cli {
 pub(super) enum Top {
     Cluster {
         #[command(subcommand)]
-        command: crate::cli_cluster::ClusterCommand,
+        command: crate::cli_cluster::Command,
     },
     Test {
         #[command(subcommand)]
@@ -38,15 +38,15 @@ pub(super) enum Top {
     },
     FabricTime {
         #[command(subcommand)]
-        command: crate::cli_fabric_time::command::FabricTimeCommand,
+        command: crate::cli_fabric_time::command::ClockAction,
     },
     FabricSimulation {
         #[command(subcommand)]
-        command: crate::cli_fabric_simulation::command::FabricSimulationCommand,
+        command: crate::cli_fabric_simulation::command::ScenarioAction,
     },
     SystemExtension {
         #[command(subcommand)]
-        command: crate::cli_system_extension::SystemExtensionCommand,
+        command: crate::cli_system_extension::Command,
     },
     World {
         #[command(subcommand)]
@@ -117,7 +117,7 @@ pub(crate) enum Test {
     },
     Drift {
         #[command(subcommand)]
-        command: crate::cli_drift::DriftCommand,
+        command: crate::cli_drift::Command,
     },
     Gateway {
         #[command(subcommand)]

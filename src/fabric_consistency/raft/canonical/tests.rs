@@ -5,7 +5,7 @@ const NODE_B: &str = "node-b";
 
 // r[verify molten.fabric_consistency.live_raft]
 #[test]
-fn canonical_raft_vote_and_append_envelopes_roundtrip_exactly() {
+fn vote_and_append_envelopes_roundtrip_exactly() {
     let group = super::tests::active_group();
     let node_a = super::tests::started_state(&group, super::tests::NODE_A);
     let election = apply_replica_event(&node_a, ReplicaEvent::ElectionTimeout {
@@ -27,7 +27,7 @@ fn canonical_raft_vote_and_append_envelopes_roundtrip_exactly() {
 
     let read = apply_replica_event(&leader, ReplicaEvent::Read {
         request_ref: super::tests::test_ref("canonical-read-request"),
-        mode: crate::fabric_consistency::ConsistencyReadMode::Linearizable,
+        mode: crate::fabric_consistency::ReadMode::Linearizable,
     })
     .expect("read transition");
     let probe = super::tests::sent_envelope_to(&read, NODE_B);
@@ -54,7 +54,7 @@ fn canonical_raft_vote_and_append_envelopes_roundtrip_exactly() {
 
 // r[verify molten.fabric_consistency.live_raft]
 #[test]
-fn canonical_raft_decoder_rejects_trailing_bytes_and_sender_substitution() {
+fn decoder_rejects_trailing_bytes_and_sender_substitution() {
     let group = super::tests::active_group();
     let node_a = super::tests::started_state(&group, super::tests::NODE_A);
     let election = apply_replica_event(&node_a, ReplicaEvent::ElectionTimeout {
@@ -62,19 +62,19 @@ fn canonical_raft_decoder_rejects_trailing_bytes_and_sender_substitution() {
     })
     .expect("negative election transition");
     let envelope = super::tests::sent_envelope_to(&election, NODE_B);
-    let mut bytes = canonical_replica_message(&envelope).expect("canonical envelope").bytes;
+    let mut bytes = replica_message(&envelope).expect("canonical envelope").bytes;
     bytes.push(TRAILING_SENTINEL_BYTE);
-    assert!(parse_canonical_replica_message(&bytes).is_err());
+    assert!(parse_replica_message(&bytes).is_err());
 
     let mut substituted = envelope;
     substituted.from = "node-c".to_string();
-    let error = canonical_replica_message(&substituted).expect_err("substituted sender must deny");
+    let error = replica_message(&substituted).expect_err("substituted sender must deny");
     assert!(error.to_string().contains("embedded sender"));
 }
 
 // r[verify molten.fabric_consistency.live_raft]
 #[test]
-fn canonical_raft_encoder_rejects_over_bound_append_batches() {
+fn encoder_rejects_over_bound_append_batches() {
     let group = super::tests::active_group();
     let state = super::tests::started_state(&group, super::tests::NODE_A);
     let entry_count = MAX_REPLICA_MESSAGE_ENTRIES + 1;
@@ -95,7 +95,7 @@ fn canonical_raft_encoder_rejects_over_bound_append_batches() {
         service_generation: state.profile.service_generation,
         from: super::tests::NODE_A.to_string(),
         to: NODE_B.to_string(),
-        message: RaftMessage::AppendEntries {
+        message: Message::AppendEntries {
             term: INITIAL_LOG_INDEX,
             leader_id: super::tests::NODE_A.to_string(),
             prev_log_index: INITIAL_COMMIT_INDEX,
@@ -106,14 +106,14 @@ fn canonical_raft_encoder_rejects_over_bound_append_batches() {
             fencing_epoch: state.profile.fencing_epoch,
         },
     };
-    let error = canonical_replica_message(&envelope).expect_err("over-bound append must deny");
+    let error = replica_message(&envelope).expect_err("over-bound append must deny");
     assert!(error.to_string().contains("message bound"));
 }
 
 fn assert_roundtrip(envelope: &ReplicaMessageEnvelope) {
-    let first = canonical_replica_message(envelope).expect("first canonical envelope");
-    let second = canonical_replica_message(envelope).expect("second canonical envelope");
-    let parsed = parse_canonical_replica_message(&first.bytes).expect("strict canonical parse");
+    let first = replica_message(envelope).expect("first canonical envelope");
+    let second = replica_message(envelope).expect("second canonical envelope");
+    let parsed = parse_replica_message(&first.bytes).expect("strict canonical parse");
     assert_eq!(first, second);
     assert_eq!(&parsed, envelope);
     assert_eq!(first.envelope_ref, crate::preserves_rail::content_ref_from_bytes(&first.bytes));

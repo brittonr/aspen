@@ -1,6 +1,6 @@
 
 // r[impl molten.fabric_time.evidence]
-pub fn parse_fabric_time_run_readback(value: &preserves::IOValue) -> crate::error::Result<FabricTimeRunReadback> {
+pub fn parse_run_readback(value: &preserves::IOValue) -> crate::error::Result<RunReadback> {
     const RUN_REPORT_FIELD_COUNT: usize = 20;
     const PROFILE_KIND_FIELD_INDEX: usize = 2;
     const GENERATION_FIELD_INDEX: usize = 3;
@@ -19,10 +19,10 @@ pub fn parse_fabric_time_run_readback(value: &preserves::IOValue) -> crate::erro
     const CONFORMANCE_FIELD_INDEX: usize = 16;
     let fields = value
         .collect_simple_record(FABRIC_TIME_RUN_RECORD, Some(RUN_REPORT_FIELD_COUNT))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("expected canonical fabric-time run report"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected canonical fabric-time run report"))?;
     let schema = required_string(&fields[0], "fabric-time report schema")?;
     if schema != super::FABRIC_TIME_RUN_REPORT_SCHEMA {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "fabric-time report schema mismatch: {schema}"
         )));
     }
@@ -44,11 +44,11 @@ pub fn parse_fabric_time_run_readback(value: &preserves::IOValue) -> crate::erro
         crate::preserves_rail::validate_content_ref(content_ref)?;
     }
     if !matches!(profile_kind.as_str(), "live" | "deterministic-simulation" | "both") {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported fabric-time profile kind: {profile_kind}"
         )));
     }
-    Ok(FabricTimeRunReadback {
+    Ok(RunReadback {
         profile_ref,
         profile_kind,
         generation: record_u64_field(&fields[GENERATION_FIELD_INDEX], "generation")?,
@@ -69,7 +69,7 @@ pub fn parse_fabric_time_run_readback(value: &preserves::IOValue) -> crate::erro
     })
 }
 
-pub fn canonical_time_trace_ref(trace_kind: &str, evidence_refs: &[String]) -> crate::error::Result<String> {
+pub fn trace_ref(trace_kind: &str, evidence_refs: &[String]) -> crate::error::Result<String> {
     let value = crate::preserves_rail::record("fabric-time-trace-v1", vec![
         field("trace-kind", crate::preserves_rail::string(trace_kind)),
         field("evidence-refs", strings_value(evidence_refs.iter().map(String::as_str))),
@@ -78,7 +78,7 @@ pub fn canonical_time_trace_ref(trace_kind: &str, evidence_refs: &[String]) -> c
     crate::preserves_rail::canonical_hash(&value)
 }
 
-fn time_profile_value(profile: &super::AdmittedTimeProfile) -> preserves::IOValue {
+fn profile_value(profile: &super::AdmittedTimeProfile) -> preserves::IOValue {
     crate::preserves_rail::record(FABRIC_TIME_PROFILE_RECORD, vec![
         crate::preserves_rail::string(super::FABRIC_TIME_PROFILE_SCHEMA),
         field("profile-id", crate::preserves_rail::string(&profile.profile_id)),
@@ -118,7 +118,7 @@ struct PortDescriptorInput<'a> {
     resources: &'a [crate::fabric::FabricResource],
     determinism: crate::fabric::DeterminismClass,
     replay: crate::fabric::ReplayClass,
-    profile: &'a CanonicalTimeProfile,
+    profile: &'a Profile,
 }
 
 fn port_descriptor(input: PortDescriptorInput<'_>) -> crate::fabric::FabricPortDescriptor {
@@ -153,11 +153,11 @@ fn port_descriptor(input: PortDescriptorInput<'_>) -> crate::fabric::FabricPortD
     }
 }
 
-fn canonical_event(
+fn event(
     header: EventHeader<'_>,
     details: Vec<preserves::IOValue>,
     event_checks: &[&str],
-) -> crate::error::Result<CanonicalTimeEvent> {
+) -> crate::error::Result<Event> {
     let EventHeader {
         profile_ref,
         kind,
@@ -167,7 +167,7 @@ fn canonical_event(
         ticks,
     } = header;
     if generation == 0 {
-        return Err(crate::error::MoltenError::invalid_harness("fabric time event generation must be non-zero"));
+        return Err(crate::error::Failure::invalid_harness("fabric time event generation must be non-zero"));
     }
     let value = crate::preserves_rail::record(FABRIC_TIME_EVENT_RECORD, vec![
         crate::preserves_rail::string(super::FABRIC_TIME_OBSERVATION_SCHEMA),
@@ -181,7 +181,7 @@ fn canonical_event(
         checks(event_checks),
     ]);
     let evidence_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalTimeEvent {
+    Ok(Event {
         evidence_ref,
         profile_ref: profile_ref.to_string(),
         kind,
@@ -282,6 +282,6 @@ fn record_u64_field(value: &preserves::Value<preserves::IOValue>, label: &str) -
     let field_value = named_field_value(value, label)?;
     field_value
         .as_u64()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected u64 for {label}")))?
-        .map_err(|error| crate::error::MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected u64 for {label}")))?
+        .map_err(|error| crate::error::Failure::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }

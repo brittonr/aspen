@@ -11,7 +11,7 @@ use molten_core::world_merge::WorldMergeSchemaRef;
 use molten_core::world_merge::WorldMergedRoot;
 use preserves::IOValue;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub const WORLD_DIFF_RECORD: &str = "world-diff";
@@ -140,7 +140,7 @@ pub fn canonical_generated_world_root(output: &WorldMergedRoot) -> Result<(World
     let schema = output
         .output_schema
         .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("generated merge root requires an output schema"))?;
+        .ok_or_else(|| Failure::invalid_harness("generated merge root requires an output schema"))?;
     let mut entries = output.generated_values.iter().collect::<Vec<_>>();
     entries.sort_by(|left, right| left.0.cmp(right.0));
     let entries = entries
@@ -164,7 +164,7 @@ pub fn canonical_generated_world_root(output: &WorldMergedRoot) -> Result<(World
     ]);
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     let root = WorldRootRef::parse(output.kind, crate::preserves_rail::content_ref_from_bytes(&bytes))
-        .map_err(|error| MoltenError::invalid_harness(format!("generated root identity failed: {error:?}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("generated root identity failed: {error:?}")))?;
     Ok((root, bytes))
 }
 

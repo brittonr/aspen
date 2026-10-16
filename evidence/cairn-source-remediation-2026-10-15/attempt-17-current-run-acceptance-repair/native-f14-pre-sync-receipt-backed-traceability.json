@@ -1,0 +1,27 @@
+{
+  "argv": [
+    "/tmp/molten-f14-current-run-16-restored-se51n6m8/traceability17",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/.cairn/changes/bind-shutdown-observations-to-current-node-run/specs/node-runtime/spec.md",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/f14-pre-sync-traceability.preserves",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/verification-runs/current_binding-positive.preserves",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/verification-runs/current_binding-negative.preserves",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/verification-runs/duplicate_scope-positive.preserves",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/verification-runs/duplicate_scope-negative.preserves",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/verification-runs/preserve_state-positive.preserves",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/verification-runs/preserve_state-negative.preserves",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/verification-runs/validation-positive.preserves",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/verification-runs/validation-negative.preserves"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T21:24:22.316693+00:00",
+  "elapsed_seconds": 0.006,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "traceability ref=blake3:7b33bc22ffb6da56434b3799e9fbd45721b39be5ef36722407e664b92cad20c1 decision=pass covered=[\"molten.audit_f14.current_binding\", \"molten.audit_f14.duplicate_scope\", \"molten.audit_f14.preserve_state\", \"molten.audit_f14.validation\"] missing-positive=0 missing-negative=0 stale=0 compatibility-only=0 scope=F14-only\n",
+  "stderr": "",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "attempt": "9/20",
+  "change": "adopt-octet-nominal-domain-enforcement and provider adopt-molten-nominal-reference-domains",
+  "status": "entered; scoped provider review found a historical-test/live-catalog cohort mismatch; focused reproduction launched before correction",
+  "provider_worktree": "/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015",
+  "provider_branch": "cairn/molten-nominal-adoption-20261015",
+  "authorized": "Validate, review, commit and publish only the reviewed provider cohort; then perform coordinated immutable consumer pin adoption. No Molten remote push.",
+  "review_finding": {
+    "path": "crates/octet-lint-metadata/src/identity/tests.rs",
+    "lines": "159-178",
+    "fact": "The frozen pilot receipt test compares historical policy identity with the mutable current embedded catalog.",
+    "review_source": "agent://ProviderReview"
+  },
+  "boundaries": [
+    "Preserve historical provider/Molten archives and frozen fixtures.",
+    "No unrelated pin or toolchain changes.",
+    "Native policy and recorded acceptance remain required."
+  ]
+}

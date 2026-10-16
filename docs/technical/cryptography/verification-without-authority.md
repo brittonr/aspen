@@ -4,7 +4,7 @@ A verified signature establishes a relationship between a public key and an exac
 
 ## Separate observation from decision
 
-The shell's `IrohEd25519FileAdapter::verify` parses the supplied public key, checks canonical domain and signature representations, parses the signature, and attempts Ed25519 verification over the expected canonical domain bytes. It derives the actual public-key reference from the parsed key rather than relying solely on carrier metadata. These are concrete [shell observations](../../../src/fabric_crypto_identity/file/parts/adapter/p001/body.rs).
+The shell's `IrohEd25519::verify` parses the supplied public key, checks canonical domain and signature representations, parses the signature, and attempts Ed25519 verification over the expected canonical domain bytes. It derives the actual public-key reference from the parsed key rather than relying solely on carrier metadata. These are concrete [shell observations](../../../src/fabric_crypto_identity/file/parts/adapter/p001/body.rs).
 
 The core receives a `VerificationRequest` containing those observations and the caller's expected domain, signer currentness, signer generation, and policy reference. `evaluate_verification` deterministically checks consistency and returns `Accept` or `Deny` with issues. It does not perform cryptographic I/O or discover a trust root. Crucially, `cryptographic_verification_passed` is an input to this pure function. Calling the core with that field set to true is not evidence that the shell actually verified anything. The [admission implementation](../../../crates/molten-core/src/fabric_crypto_identity/admission.rs) makes the boundary visible rather than hiding it behind a cryptographic-sounding name.
 
@@ -28,7 +28,7 @@ The same distinction applies to content truth. An evidence-signing key can sign 
 
 ## Standalone parity does not authorize cutover
 
-The artifact-auth pilot independently reconstructs the standalone statement, checks statement/key/signature carrier identities, and calls `artifact_auth_ed25519::verify_statement`. Its [shell implementation](../../../src/fabric_crypto_identity/artifact_auth.rs) passes that separate observation into the compatibility comparator. It does not reuse the legacy Boolean as proof of a different canonical preimage.
+The artifact-auth pilot independently reconstructs the standalone statement, checks statement/key/signature carrier identities, and calls `artifact_auth_ed25519::verify_statement`. Its [shell implementation](../../../src/fabric_crypto_identity/artifact_auth/mod.rs) passes that separate observation into the compatibility comparator. It does not reuse the legacy Boolean as proof of a different canonical preimage.
 
 The governing contract retains `legacy_authoritative = true`, `standalone_authority_admitted = false`, and `rollback_available = true`. Accordingly, agreement between legacy and standalone observations is compatibility evidence, not a new authority source. Two failures also need not constitute meaningful parity: unrelated rejection reasons can produce superficially equal decisions while exposing incompatible semantics.
 
@@ -52,4 +52,4 @@ This explanation does not select trust roots or prescribe a new policy engine. I
 - [Required cryptographic non-claims](../../../crates/molten-core/src/fabric_crypto_identity/model.rs)
 - [Shell cryptographic observations](../../../src/fabric_crypto_identity/file/parts/adapter/p001/body.rs)
 - [Consumer verification gates](../../../src/fabric_crypto_identity/integration.rs)
-- [Standalone shell verification](../../../src/fabric_crypto_identity/artifact_auth.rs)
+- [Standalone shell verification](../../../src/fabric_crypto_identity/artifact_auth/mod.rs)

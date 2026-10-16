@@ -1,6 +1,6 @@
 
     #[test]
-    fn boundary_codec_report_denies_malformed_canonical_records_before_side_effects() {
+    fn boundary_report_denies_malformed_canonical_records_before_side_effects() {
         // r[verify molten.preserves_boundary_codegen.fixture_corpus]
         let spec = &super::PLUGIN_HOSTCALL_RECEIPT_BOUNDARY_SCHEMA;
         let malformed = boundary_fixture_with_field(spec, SCHEMA_FIELD_INDEX, super::string("unsupported.schema.v0"));

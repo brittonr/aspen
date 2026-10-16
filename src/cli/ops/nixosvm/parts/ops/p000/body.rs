@@ -97,7 +97,7 @@ fn run_validate(input: super::command::ValidateInput) -> Outcome<()> {
     let prod_soak = read_preserves_files(&input.prod_soak)?;
     let child_artifacts = read_preserves_files(&input.child_artifacts)?;
     let expected_child_receipts = parse_expected_child_receipts(&input.expected_child_receipts)?;
-    let validation = molten::nixos_vm::validate_nixos_vm_evidence(&molten::nixos_vm::NixosVmEvidenceValidationInput {
+    let validation = molten::nixos_vm::validate_nixos_vm_evidence(&molten::nixos_vm::NixosVmEvidenceInput {
         topology_value: &topology,
         node_evidence_values: &node_evidence,
         test_run_value: &test_run,
@@ -121,7 +121,7 @@ fn run_validate(input: super::command::ValidateInput) -> Outcome<()> {
     if validation.decision == "pass" {
         Ok(())
     } else {
-        Err(molten::error::MoltenError::invalid_harness(format!(
+        Err(molten::error::Failure::invalid_harness(format!(
             "nixos VM evidence validation denied: {}",
             validation.diagnostics.join(",")
         )))
@@ -168,7 +168,7 @@ fn run_manifest(input: super::command::ManifestInput) -> Outcome<()> {
     if manifest.decision == "pass" {
         Ok(())
     } else {
-        Err(molten::error::MoltenError::invalid_harness(format!(
+        Err(molten::error::Failure::invalid_harness(format!(
             "nixos VM evidence manifest denied: {}",
             manifest.diagnostics.join(",")
         )))
@@ -234,7 +234,7 @@ fn run_fault_validate(input: super::command::FaultValidateInput) -> Outcome<()> 
     let descriptors = read_preserves_files(&input.descriptors)?;
     let receipts = read_preserves_files(&input.receipts)?;
     let validation =
-        molten::nixos_vm::validate_nixos_vm_fault_evidence(&molten::nixos_vm::NixosVmFaultEvidenceValidationInput {
+        molten::nixos_vm::validate_nixos_vm_fault_evidence(&molten::nixos_vm::NixosVmFaultEvidenceInput {
             topology_value: &topology,
             descriptor_values: &descriptors,
             receipt_values: &receipts,
@@ -252,7 +252,7 @@ fn run_fault_validate(input: super::command::FaultValidateInput) -> Outcome<()> 
     if validation.decision == "pass" {
         Ok(())
     } else {
-        Err(molten::error::MoltenError::invalid_harness(format!(
+        Err(molten::error::Failure::invalid_harness(format!(
             "nixos VM fault validation denied: {}",
             validation.diagnostics.join(",")
         )))

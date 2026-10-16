@@ -2,9 +2,9 @@
 /// Parses the append-response, read, and snapshot Raft message variants.
 fn parse_response_or_snapshot_message(
     value: &preserves::Value<preserves::IOValue>,
-) -> crate::error::Result<RaftMessage> {
+) -> crate::error::Result<Message> {
     if let Some(fields) = value.collect_simple_record("append-response", Some(APPEND_RESPONSE_ARITY)) {
-        return Ok(RaftMessage::AppendResponse {
+        return Ok(Message::AppendResponse {
             term: required_u64(&fields[0], "Raft append response term")?,
             follower_id: required_string(&fields[1], "Raft append response follower")?,
             success: required_bool(&fields[2], "Raft append response decision")?,
@@ -16,7 +16,7 @@ fn parse_response_or_snapshot_message(
         });
     }
     if let Some(fields) = value.collect_simple_record("read-probe", Some(READ_PROBE_ARITY)) {
-        return Ok(RaftMessage::ReadProbe {
+        return Ok(Message::ReadProbe {
             term: required_u64(&fields[0], "Raft read probe term")?,
             leader_id: required_string(&fields[1], "Raft read probe leader")?,
             request_ref: required_string(&fields[2], "Raft read probe request ref")?,
@@ -26,7 +26,7 @@ fn parse_response_or_snapshot_message(
         });
     }
     if let Some(fields) = value.collect_simple_record("read-acknowledgement", Some(READ_ACKNOWLEDGEMENT_ARITY)) {
-        return Ok(RaftMessage::ReadAcknowledgement {
+        return Ok(Message::ReadAcknowledgement {
             term: required_u64(&fields[0], "Raft read acknowledgement term")?,
             follower_id: required_string(&fields[1], "Raft read acknowledgement follower")?,
             request_ref: required_string(&fields[2], "Raft read acknowledgement request ref")?,
@@ -37,7 +37,7 @@ fn parse_response_or_snapshot_message(
     if let Some(fields) = value.collect_simple_record("install-snapshot", Some(INSTALL_SNAPSHOT_ARITY)) {
         let snapshot_value: &preserves::IOValue = (&fields[2]).into();
         let snapshot_bytes = crate::preserves_rail::canonical_bytes(snapshot_value)?;
-        return Ok(RaftMessage::InstallSnapshot {
+        return Ok(Message::InstallSnapshot {
             term: required_u64(&fields[0], "Raft install snapshot term")?,
             leader_id: required_string(&fields[1], "Raft install snapshot leader")?,
             snapshot: Box::new(super::recovery::parse_snapshot(&snapshot_bytes)?),
@@ -46,7 +46,7 @@ fn parse_response_or_snapshot_message(
         });
     }
     if let Some(fields) = value.collect_simple_record("snapshot-response", Some(SNAPSHOT_RESPONSE_ARITY)) {
-        return Ok(RaftMessage::SnapshotResponse {
+        return Ok(Message::SnapshotResponse {
             term: required_u64(&fields[0], "Raft snapshot response term")?,
             follower_id: required_string(&fields[1], "Raft snapshot response follower")?,
             snapshot_index: required_u64(&fields[2], "Raft snapshot response index")?,
@@ -55,20 +55,20 @@ fn parse_response_or_snapshot_message(
             fencing_epoch: required_u64(&fields[5], "Raft snapshot response fencing epoch")?,
         });
     }
-    Err(crate::error::MoltenError::invalid_harness("unsupported canonical Raft message variant"))
+    Err(crate::error::Failure::invalid_harness("unsupported canonical Raft message variant"))
 }
 
-fn parse_append_entries(fields: &[preserves::Value<preserves::IOValue>]) -> crate::error::Result<RaftMessage> {
+fn parse_append_entries(fields: &[preserves::Value<preserves::IOValue>]) -> crate::error::Result<Message> {
     let sequence = fields[4]
         .collect_sequence()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("Raft append entries must be a sequence"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("Raft append entries must be a sequence"))?;
     if sequence.len() > MAX_REPLICA_MESSAGE_ENTRIES {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "canonical Raft append entries exceed the message bound",
         ));
     }
     let entries = sequence.as_ref().as_slice().iter().map(parse_entry).collect::<crate::error::Result<Vec<_>>>()?;
-    Ok(RaftMessage::AppendEntries {
+    Ok(Message::AppendEntries {
         term: required_u64(&fields[0], "Raft append term")?,
         leader_id: required_string(&fields[1], "Raft append leader")?,
         prev_log_index: required_u64(&fields[2], "Raft append previous index")?,
@@ -83,7 +83,7 @@ fn parse_append_entries(fields: &[preserves::Value<preserves::IOValue>]) -> crat
 pub(super) fn parse_entry(value: &preserves::Value<preserves::IOValue>) -> crate::error::Result<ReplicatedEntry> {
     let fields = required_record(value, "raft-replicated-entry-v1", ENTRY_ARITY)?;
     if required_string(&fields[0], "Raft entry schema")? != RAFT_REPLICATED_ENTRY_SCHEMA {
-        return Err(crate::error::MoltenError::invalid_harness("unsupported canonical Raft entry schema"));
+        return Err(crate::error::Failure::invalid_harness("unsupported canonical Raft entry schema"));
     }
     Ok(ReplicatedEntry {
         index: required_u64(&fields[1], "Raft entry index")?,
@@ -99,14 +99,14 @@ fn validate_envelope_shape(envelope: &ReplicaMessageEnvelope) -> crate::error::R
     validate_identifier(&envelope.from, "Raft wire sender")?;
     validate_identifier(&envelope.to, "Raft wire recipient")?;
     if envelope.from == envelope.to {
-        return Err(crate::error::MoltenError::invalid_harness("Raft wire sender and recipient must differ"));
+        return Err(crate::error::Failure::invalid_harness("Raft wire sender and recipient must differ"));
     }
     if envelope.service_generation == 0
         || envelope.message.term() == 0
         || envelope.message.config_epoch() == 0
         || envelope.message.fencing_epoch() == 0
     {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "Raft wire generation, term, and epochs must be positive",
         ));
     }
@@ -116,30 +116,30 @@ fn validate_envelope_shape(envelope: &ReplicaMessageEnvelope) -> crate::error::R
 
 fn validate_embedded_sender(envelope: &ReplicaMessageEnvelope) -> crate::error::Result<()> {
     let embedded = match &envelope.message {
-        RaftMessage::RequestVote { candidate_id, .. } => candidate_id,
-        RaftMessage::VoteResponse { voter_id, .. } => voter_id,
-        RaftMessage::AppendEntries { leader_id, .. }
-        | RaftMessage::ReadProbe { leader_id, .. }
-        | RaftMessage::InstallSnapshot { leader_id, .. } => leader_id,
-        RaftMessage::AppendResponse { follower_id, .. }
-        | RaftMessage::ReadAcknowledgement { follower_id, .. }
-        | RaftMessage::SnapshotResponse { follower_id, .. } => follower_id,
+        Message::RequestVote { candidate_id, .. } => candidate_id,
+        Message::VoteResponse { voter_id, .. } => voter_id,
+        Message::AppendEntries { leader_id, .. }
+        | Message::ReadProbe { leader_id, .. }
+        | Message::InstallSnapshot { leader_id, .. } => leader_id,
+        Message::AppendResponse { follower_id, .. }
+        | Message::ReadAcknowledgement { follower_id, .. }
+        | Message::SnapshotResponse { follower_id, .. } => follower_id,
     };
     if embedded != &envelope.from {
-        return Err(crate::error::MoltenError::invalid_harness("Raft wire sender does not match the embedded sender"));
+        return Err(crate::error::Failure::invalid_harness("Raft wire sender does not match the embedded sender"));
     }
     Ok(())
 }
 
-fn validate_message_entries(message: &RaftMessage) -> crate::error::Result<()> {
+fn validate_message_entries(message: &Message) -> crate::error::Result<()> {
     match message {
-        RaftMessage::ReadProbe { request_ref, .. } | RaftMessage::ReadAcknowledgement { request_ref, .. } => {
+        Message::ReadProbe { request_ref, .. } | Message::ReadAcknowledgement { request_ref, .. } => {
             return crate::preserves_rail::validate_content_ref(request_ref);
         }
-        RaftMessage::InstallSnapshot { snapshot, .. } => return validate_wire_snapshot(snapshot),
+        Message::InstallSnapshot { snapshot, .. } => return validate_wire_snapshot(snapshot),
         _ => {}
     }
-    let RaftMessage::AppendEntries {
+    let Message::AppendEntries {
         term,
         prev_log_index,
         entries,
@@ -149,14 +149,14 @@ fn validate_message_entries(message: &RaftMessage) -> crate::error::Result<()> {
         return Ok(());
     };
     if entries.len() > MAX_REPLICA_MESSAGE_ENTRIES {
-        return Err(crate::error::MoltenError::invalid_harness("Raft wire entries exceed the message bound"));
+        return Err(crate::error::Failure::invalid_harness("Raft wire entries exceed the message bound"));
     }
     let mut expected = prev_log_index
         .checked_add(NEXT_LOG_INDEX_STEP)
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("Raft wire entry index overflow"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("Raft wire entry index overflow"))?;
     for entry in entries {
         if entry.index != expected || entry.term == 0 || entry.term > *term {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "Raft wire entries are non-contiguous or use an invalid term",
             ));
         }
@@ -165,7 +165,7 @@ fn validate_message_entries(message: &RaftMessage) -> crate::error::Result<()> {
         }
         expected = expected
             .checked_add(NEXT_LOG_INDEX_STEP)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("Raft wire entry index overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("Raft wire entry index overflow"))?;
     }
     Ok(())
 }
@@ -184,12 +184,12 @@ fn validate_wire_snapshot(snapshot: &ReplicaSnapshot) -> crate::error::Result<()
         || snapshot.last_included_term == INITIAL_TERM
         || snapshot.completed_requests.len() > MAX_REPLICA_LOG_ENTRIES
     {
-        return Err(crate::error::MoltenError::invalid_harness("Raft wire snapshot identity or boundary is invalid"));
+        return Err(crate::error::Failure::invalid_harness("Raft wire snapshot identity or boundary is invalid"));
     }
     for (request_ref, index) in &snapshot.completed_requests {
         crate::preserves_rail::validate_content_ref(request_ref)?;
         if *index == INITIAL_COMMIT_INDEX || *index > snapshot.last_included_index {
-            return Err(crate::error::MoltenError::invalid_harness("Raft wire snapshot request index is invalid"));
+            return Err(crate::error::Failure::invalid_harness("Raft wire snapshot request index is invalid"));
         }
     }
     Ok(())
@@ -202,7 +202,7 @@ pub(super) fn required_record(
 ) -> crate::error::Result<Vec<preserves::Value<preserves::IOValue>>> {
     let fields = value
         .collect_simple_record(label, Some(arity))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected canonical {label} record")))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected canonical {label} record")))?;
     Ok(fields.iter().collect())
 }
 
@@ -213,30 +213,30 @@ pub(super) fn required_string(
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected string for {label}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected string for {label}")))
 }
 
 pub(super) fn required_u64(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected u64 for {label}")))?
-        .map_err(|error| crate::error::MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected u64 for {label}")))?
+        .map_err(|error| crate::error::Failure::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
 pub(super) fn required_bool(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<bool> {
     value
         .as_boolean()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected bool for {label}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected bool for {label}")))
 }
 
 fn validate_identifier(value: &str, label: &str) -> crate::error::Result<()> {
     if value.is_empty() || value.len() > MAX_WIRE_IDENTIFIER_BYTES {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "{label} must be non-empty and at most {MAX_WIRE_IDENTIFIER_BYTES} bytes"
         )));
     }
     if !value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':')) {
-        return Err(crate::error::MoltenError::invalid_harness(format!("{label} contains unsupported characters")));
+        return Err(crate::error::Failure::invalid_harness(format!("{label} contains unsupported characters")));
     }
     Ok(())
 }

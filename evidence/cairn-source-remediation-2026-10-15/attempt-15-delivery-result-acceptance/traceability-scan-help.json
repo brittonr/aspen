@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "test",
+    "traceability",
+    "scan",
+    "--help"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T17:05:39.110230+00:00",
+  "elapsed_seconds": 0.01,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "Usage: molten test traceability scan [OPTIONS]\n\nOptions:\n      --root <ROOT>                  [default: .]\n      --changed-only                 \n      --coverage <COVERAGE>          \n      --exemption <EXEMPTIONS>       \n      --receipt <RECEIPTS>           \n      --require-receipt-backed       \n      --out <OUT>                    \n      --summary-out <SUMMARY_OUT>    \n      --readback-out <READBACK_OUT>  \n  -h, --help                         Print help\n",
+  "stderr": ""
+}

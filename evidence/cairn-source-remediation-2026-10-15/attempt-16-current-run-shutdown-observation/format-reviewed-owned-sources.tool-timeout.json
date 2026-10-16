@@ -1,0 +1,6 @@
+{
+  "command": ["python3", "/tmp/molten-f14-current-run-16-restored-se51n6m8/record-command.py", "evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/format-reviewed-owned-sources.json", "nix", "develop", "--offline", "--no-update-lock-file", "-c", "rustfmt", "--edition", "2024", "src/node/parts/runtime/p008/body.rs", "src/node/parts/runtime/p009/body.rs", "src/node/parts/runtime/tests/m000/p003/body.rs", "src/node/parts/runtime/tests/m000/p004/body.rs", "src/node/parts/runtime/tests/m000/p005/body.rs", "src/node/parts/daemon/p058/body.rs", "src/node/parts/daemon/tests/m000/p023/body.rs"],
+  "observed_result": "Tool job bg_31 timed out after 180.10 seconds; the recorder did not publish its result file.",
+  "subprocess_completion": "unknown",
+  "verification_claim": "None. Resolving the already recorded immutable dev-shell cohort rather than treating the timeout as a source failure or a passing format check."
+}

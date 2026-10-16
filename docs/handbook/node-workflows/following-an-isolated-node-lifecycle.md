@@ -10,7 +10,7 @@ Everything below is source-checked, not executed for this document. The regressi
 
 The [regression case](../../../src/node/parts/daemon/tests/m000/p000/body.rs) obtains a process workspace before initialization. Mirror that separation: select an unused node root and a separate unused evidence directory, neither shared with another service nor nested in an existing deployment. Keep permissions suitable for persisted endpoint secrets. Do not initialize over an old root to repair it.
 
-The source path is `src/main.rs` → `cli/ops/node.rs` → the lifecycle shell → `init_local_with_root`. The public shell accepts a host path, opens a `NodeStateRoot`, and passes the acquired capability onward. Descendant operations are not authorized by repeatedly trusting the path string.
+The source path is `src/main.rs` → `cli/ops/node.rs` → the lifecycle shell → `init_local_with_root`. The public shell accepts a host path, opens a `DirectoryRoot`, and passes the acquired capability onward. Descendant operations are not authorized by repeatedly trusting the path string.
 
 The following optional local exercise requires an already-built `molten` on PATH and operator-selected fresh paths. It refuses existing destinations. Command spellings come from the [base declarations](../../../src/cli/ops/node/command/base.rs), [command routing](../../../src/cli/ops/node.rs), and [init shell](../../../src/cli/ops/node/parts/lifecycle/p000/body.rs). Source-checked; not executed.
 

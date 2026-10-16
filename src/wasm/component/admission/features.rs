@@ -1,6 +1,6 @@
-pub(crate) fn validate_features(
-    profile: &super::super::model::ComponentRuntimeProfile,
-    facts: &super::ComponentArtifactFacts,
+pub(crate) fn validate(
+    profile: &super::super::model::RuntimeProfile,
+    facts: &super::ArtifactFacts,
     blockers: &mut impl crate::bounded::VecSink<String>,
 ) {
     if super::super::model::sorted_unique(&facts.enabled_features) != facts.enabled_features {

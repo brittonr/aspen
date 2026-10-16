@@ -1,5 +1,6 @@
 mod adapters;
 #[cfg(unix)]
+#[path = "conformance/tests.rs"]
 mod conformance_tests;
 mod content;
 mod support;

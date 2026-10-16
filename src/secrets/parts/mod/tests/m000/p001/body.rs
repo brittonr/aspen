@@ -1,7 +1,8 @@
 
     #[test]
     fn ledger_catalog_and_mcp_classify_confidentiality_artifacts() {
-        let run = run_secrets_fixture().expect("fixture");
+        let retention_root = crate::test_support::process_workspace("secrets-retention").expect("retention workspace");
+        let run = run_secrets_fixture(retention_root.as_ref()).expect("fixture");
         assert_eq!(crate::ledger::artifact_kind(&run.secret.value), "secret-ref");
         assert_eq!(crate::ledger::artifact_kind(&run.encrypted.value), "encrypted-ref");
         assert_eq!(crate::ledger::artifact_kind(&run.marker.value), "redaction-marker");

@@ -1,9 +1,9 @@
 
 fn select_source<'a>(
     field: &str,
-    sources: &'a [ConfigSourceInput],
+    sources: &'a [SourceInput],
     diagnostics: &mut impl crate::bounded::VecSink<String>,
-) -> Result<&'a ConfigSourceInput> {
+) -> Result<&'a SourceInput> {
     let mut selected = sources
         .first()
         .ok_or_else(|| MoltenError::invalid_harness(format!("field {field} has no sources")))?;
@@ -25,7 +25,7 @@ fn select_source<'a>(
     Ok(selected)
 }
 
-fn merged_caveats(sources: &[ConfigSourceInput]) -> Result<Vec<String>> {
+fn merged_caveats(sources: &[SourceInput]) -> Result<Vec<String>> {
     let mut caveats = OrderedSet::new();
     for source in sources {
         for caveat in &source.caveats {
@@ -57,7 +57,7 @@ fn validate_source_class(source_class: &str, diagnostics: &mut impl crate::bound
     }
 }
 
-fn field_map(fields: &[EffectiveConfigField]) -> Result<OrderedMap<String, EffectiveConfigField>> {
+fn field_map(fields: &[Field]) -> Result<OrderedMap<String, Field>> {
     let mut output = OrderedMap::new();
     for field in fields {
         if output.insert(field.field.clone(), field.clone()).is_some() {
@@ -67,26 +67,26 @@ fn field_map(fields: &[EffectiveConfigField]) -> Result<OrderedMap<String, Effec
     Ok(output)
 }
 
-fn effective_config_value(
-    input: &EffectiveConfigInput,
+fn value(
+    input: &Input,
     decision: &str,
     diagnostics: &[String],
-    fields: &[EffectiveConfigField],
+    fields: &[Field],
 ) -> Result<IoValue> {
     Ok(record("effective-config-readback-v1", vec![
         string(EFFECTIVE_CONFIG_SCHEMA),
         field_string("decision", decision),
         field_sequence("profile-refs", string_values(&input.profile_refs)?),
         record("release-mode", vec![bool_value(input.release_mode)]),
-        field_sequence("fields", effective_field_values(fields)?),
+        field_sequence("fields", field_values(fields)?),
         field_sequence("diagnostics", string_values(diagnostics)?),
         field_sequence("caveats", string_values(&[EVIDENCE_ONLY_CAVEAT.to_string()])?),
     ]))
 }
 
-fn effective_config_diff_value(
-    left: &EffectiveConfigReadback,
-    right: &EffectiveConfigReadback,
+fn diff_value(
+    left: &Readback,
+    right: &Readback,
     decision: &str,
     diagnostics: &[String],
 ) -> Result<IoValue> {
@@ -100,7 +100,7 @@ fn effective_config_diff_value(
     ]))
 }
 
-fn effective_field_values(fields: &[EffectiveConfigField]) -> Result<Vec<IoValue>> {
+fn field_values(fields: &[Field]) -> Result<Vec<IoValue>> {
     fields
         .iter()
         .map(|field| {
@@ -116,7 +116,7 @@ fn effective_field_values(fields: &[EffectiveConfigField]) -> Result<Vec<IoValue
         .collect()
 }
 
-fn source_values(sources: &[ConfigSourceInput]) -> Result<Vec<IoValue>> {
+fn source_values(sources: &[SourceInput]) -> Result<Vec<IoValue>> {
     sources
         .iter()
         .map(|source| {
@@ -204,8 +204,8 @@ mod tests {
         crate::preserves_rail::content_ref_from_bytes(label.as_bytes())
     }
 
-    fn source(field: &str, value: &str, source_class: &str, source_ref: Option<String>) -> ConfigSourceInput {
-        ConfigSourceInput {
+    fn source(field: &str, value: &str, source_class: &str, source_ref: Option<String>) -> SourceInput {
+        SourceInput {
             field: field.to_string(),
             value: value.to_string(),
             source_class: source_class.to_string(),
@@ -215,13 +215,13 @@ mod tests {
         }
     }
 
-    fn valid_input() -> EffectiveConfigInput {
-        EffectiveConfigInput {
+    fn valid_input() -> Input {
+        Input {
             profile_refs: vec![local_ref("profile")],
             sources: vec![
                 source("node.id", "node:local", "profile", Some(local_ref("profile-node"))),
                 source("state.root", "target/node", "cli-override", Some(local_ref("cli-state-root"))),
-                ConfigSourceInput {
+                SourceInput {
                     caveats: vec!["local fixture only".to_string()],
                     ..source("max.events", "16", "default", None)
                 },
@@ -236,21 +236,21 @@ mod tests {
     // r[verify molten.project.effective_config_readback.cli_core]
     // r[verify molten.project.effective_config_readback.evidence_only]
     #[test]
-    fn effective_config_readback_has_stable_canonical_identity() {
-        let first = build_effective_config_readback(&valid_input()).expect("first readback");
-        let second = build_effective_config_readback(&valid_input()).expect("second readback");
+    fn readback_has_stable_canonical_identity() {
+        let first = build_readback(&valid_input()).expect("first readback");
+        let second = build_readback(&valid_input()).expect("second readback");
         assert_eq!(first.decision, DECISION_PASS);
         assert_eq!(first.fingerprint_ref, second.fingerprint_ref);
-        assert!(explain_effective_config(&first).expect("explain").contains("effective-config ref=blake3:"));
+        assert!(explain(&first).expect("explain").contains("effective-config ref=blake3:"));
     }
 
     #[test]
-    fn effective_config_denies_conflicts_hidden_defaults_and_stale_refs() {
+    fn denies_conflicts_hidden_defaults_and_stale_refs() {
         let mut input = valid_input();
         input.release_mode = true;
         input.sources.push(source("node.id", "node:other", "profile", Some(local_ref("other-profile"))));
         input.sources.push(source("policy.ref", "blake3:policy", "ledger", Some("not-a-ref".to_string())));
-        let readback = build_effective_config_readback(&input).expect("readback");
+        let readback = build_readback(&input).expect("readback");
         assert_eq!(readback.decision, DECISION_DENY);
         assert!(readback.diagnostics.iter().any(|diagnostic| diagnostic.starts_with("conflicting-sources:node.id")));
         assert!(readback.diagnostics.iter().any(|diagnostic| diagnostic == "fixture-default-in-release:max.events"));
@@ -258,19 +258,19 @@ mod tests {
     }
 
     #[test]
-    fn effective_config_diff_reports_normalized_changes() {
-        let left = build_effective_config_readback(&valid_input()).expect("left");
+    fn diff_reports_normalized_changes() {
+        let left = build_readback(&valid_input()).expect("left");
         let mut changed = valid_input();
         changed.sources.push(source("node.id", "node:local", "cli-override", Some(local_ref("cli-node"))));
-        let right = build_effective_config_readback(&changed).expect("right");
-        let diff = diff_effective_config_readbacks(&left, &right).expect("diff");
+        let right = build_readback(&changed).expect("right");
+        let diff = diff_readbacks(&left, &right).expect("diff");
         assert_eq!(diff.decision, DECISION_DENY);
         assert!(diff.diagnostics.iter().any(|diagnostic| diagnostic == "changed-source:node.id"));
     }
 
     #[test]
-    fn effective_config_readback_cannot_authorize_mutation_by_itself() {
-        let readback = build_effective_config_readback(&valid_input()).expect("readback");
+    fn readback_cannot_authorize_mutation_by_itself() {
+        let readback = build_readback(&valid_input()).expect("readback");
         let use_decision =
             evaluate_readback_authorization_use(&readback.fingerprint_ref, "install", &[]).expect("authorization use");
         assert_eq!(use_decision.decision, DECISION_DENY);

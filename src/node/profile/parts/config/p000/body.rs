@@ -1,8 +1,8 @@
 type IoValue = preserves::IOValue;
 type Result<T> = crate::error::Result<T>;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 
-type NodeAdapterBinding = crate::node_runtime::NodeAdapterBinding;
+type AdapterBinding = crate::node_runtime::NodeAdapterBinding;
 
 const PROFILE_RESOLUTION_SCHEMA: &str = "molten.node.profile-config-resolution.v1";
 const DECISION_PASS: &str = "pass";
@@ -24,7 +24,7 @@ const MAX_ADAPTERS: usize = 16;
 const MAX_OVERRIDES: usize = 32;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CheckedNodeProfile {
+pub struct Checked {
     pub profile_ref: String,
     pub actual_profile_ref: Option<String>,
     pub source_kind: String,
@@ -34,7 +34,7 @@ pub struct CheckedNodeProfile {
     pub source_language: String,
     pub profile_identity: String,
     pub state_root_ref: String,
-    pub adapters: Vec<NodeAdapterBinding>,
+    pub adapters: Vec<AdapterBinding>,
     pub policy_refs: Vec<String>,
     pub capability_refs: Vec<String>,
     pub resource_refs: Vec<String>,
@@ -43,24 +43,24 @@ pub struct CheckedNodeProfile {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct NodeProfileOverrides {
+pub struct Overrides {
     pub state_root_ref: Option<String>,
-    pub adapters: Option<Vec<NodeAdapterBinding>>,
+    pub adapters: Option<Vec<AdapterBinding>>,
     pub policy_refs: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProfileBackedConfigInput {
+pub struct BackedInput {
     pub identity_ref: String,
-    pub profile: CheckedNodeProfile,
-    pub overrides: NodeProfileOverrides,
+    pub profile: Checked,
+    pub overrides: Overrides,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LocalDefaultConfigInput {
+pub struct LocalDefaultInput {
     pub identity_ref: String,
     pub state_root_ref: String,
-    pub adapters: Vec<NodeAdapterBinding>,
+    pub adapters: Vec<AdapterBinding>,
     pub policy_refs: Vec<String>,
     pub capability_refs: Vec<String>,
     pub resource_refs: Vec<String>,
@@ -68,7 +68,7 @@ pub struct LocalDefaultConfigInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ResolvedNodeConfig {
+pub struct Resolved {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub accepted_overrides: Vec<String>,
@@ -82,16 +82,16 @@ pub struct ResolvedNodeConfig {
 // r[impl molten.node_runtime.profile_backed_config]
 // r[impl molten.node_runtime.profile_override_policy]
 // r[impl molten.node_runtime.profile_startup_receipt_binding]
-pub fn resolve_profile_backed_config(input: &ProfileBackedConfigInput) -> Result<ResolvedNodeConfig> {
+pub fn resolve_backed(input: &BackedInput) -> Result<Resolved> {
     validate_ref(&input.identity_ref, "node profile identity ref")?;
-    validate_checked_profile(&input.profile)?;
+    validate_checked(&input.profile)?;
     validate_overrides(&input.overrides)?;
     let mut diagnostics = Vec::new();
     collect_source_kind_diagnostics(&input.profile, &mut diagnostics);
-    collect_profile_ref_diagnostics(&input.profile, &mut diagnostics);
+    collect_ref_diagnostics(&input.profile, &mut diagnostics);
     collect_adapter_diagnostics(&input.profile.adapters, &mut diagnostics);
     let accepted_overrides = collect_override_diagnostics(&input.profile, &input.overrides, &mut diagnostics);
-    let effective = effective_profile(&input.profile, &input.overrides);
+    let effective = effective(&input.profile, &input.overrides);
     let config_value = crate::node_runtime::node_config_value(&crate::node_runtime::ConfigValueInput {
         identity_ref: &input.identity_ref,
         state_root_ref: &effective.state_root_ref,
@@ -117,7 +117,7 @@ pub fn resolve_profile_backed_config(input: &ProfileBackedConfigInput) -> Result
 }
 
 // r[impl molten.node_runtime.local_default_config_caveat]
-pub fn resolve_local_default_config(input: &LocalDefaultConfigInput) -> Result<ResolvedNodeConfig> {
+pub fn resolve_local_default(input: &LocalDefaultInput) -> Result<Resolved> {
     validate_ref(&input.identity_ref, "local node identity ref")?;
     validate_ref(&input.state_root_ref, "local node state root ref")?;
     validate_adapter_diagnostics_or_error(&input.adapters)?;
@@ -150,7 +150,7 @@ pub fn resolve_local_default_config(input: &LocalDefaultConfigInput) -> Result<R
     })
 }
 
-fn validate_checked_profile(profile: &CheckedNodeProfile) -> Result<()> {
+fn validate_checked(profile: &Checked) -> Result<()> {
     validate_ref(&profile.profile_ref, "checked node profile ref")?;
     if let Some(actual) = profile.actual_profile_ref.as_ref() {
         validate_ref(actual, "actual checked node profile ref")?;
@@ -178,7 +178,7 @@ fn validate_checked_profile(profile: &CheckedNodeProfile) -> Result<()> {
     Ok(())
 }
 
-fn validate_overrides(overrides: &NodeProfileOverrides) -> Result<()> {
+fn validate_overrides(overrides: &Overrides) -> Result<()> {
     if let Some(state_root_ref) = overrides.state_root_ref.as_ref() {
         validate_ref(state_root_ref, "node profile override state root ref")?;
     }
@@ -206,7 +206,7 @@ fn validate_source_kind(kind: &str) -> Result<()> {
 }
 
 fn collect_source_kind_diagnostics(
-    profile: &CheckedNodeProfile,
+    profile: &Checked,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) {
     if profile.source_kind == SOURCE_KIND_NICKEL_SOURCE {
@@ -214,8 +214,8 @@ fn collect_source_kind_diagnostics(
     }
 }
 
-fn collect_profile_ref_diagnostics(
-    profile: &CheckedNodeProfile,
+fn collect_ref_diagnostics(
+    profile: &Checked,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) {
     if let Some(actual) = profile.actual_profile_ref.as_ref()
@@ -226,7 +226,7 @@ fn collect_profile_ref_diagnostics(
 }
 
 fn collect_adapter_diagnostics(
-    adapters: &[NodeAdapterBinding],
+    adapters: &[AdapterBinding],
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) {
     for adapter in adapters {
@@ -241,7 +241,7 @@ fn collect_adapter_diagnostics(
     }
 }
 
-fn validate_adapter_diagnostics_or_error(adapters: &[NodeAdapterBinding]) -> Result<()> {
+fn validate_adapter_diagnostics_or_error(adapters: &[AdapterBinding]) -> Result<()> {
     crate::bounded::ensure_count_at_most(adapters.len(), MAX_ADAPTERS, "node profile adapters")?;
     for adapter in adapters {
         crate::node_runtime::node_adapter_binding(&adapter.name, &adapter.profile_ref)?;
@@ -250,8 +250,8 @@ fn validate_adapter_diagnostics_or_error(adapters: &[NodeAdapterBinding]) -> Res
 }
 
 fn collect_override_diagnostics(
-    profile: &CheckedNodeProfile,
-    overrides: &NodeProfileOverrides,
+    profile: &Checked,
+    overrides: &Overrides,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Vec<String> {
     let mut accepted = Vec::new();

@@ -1,0 +1,105 @@
+{
+  "attempt": "17/20",
+  "scope": "Fresh actual F14 CLI behaviors and native receipt-backed coverage; full lifecycle acceptance remains independent.",
+  "executed_cases": 15,
+  "actual_cli_calls": 89,
+  "runs": {
+    "final-cli-positive": {
+      "exit_code": 0,
+      "timed_out": false,
+      "cases": [
+        "current-shutdown-stops",
+        "historical-duplicate-keeps-active-lock",
+        "duplicate-retains-original-dispatch-ref",
+        "new-request-stops-current-run",
+        "legacy-control-and-shutdown-stay-readable"
+      ],
+      "actual_cli_calls": 15,
+      "canonical_artifacts": [
+        "completion",
+        "current_loop",
+        "current_run",
+        "duplicate_loop",
+        "first_loop"
+      ]
+    },
+    "final-cli-expected-deny": {
+      "exit_code": 1,
+      "timed_out": false,
+      "cases": [
+        "missing-run-rejected-without-lifecycle-change",
+        "malformed-run-rejected-without-lifecycle-change",
+        "unreadable-completion-rejected-without-lifecycle-change",
+        "conflicting-lock-run-rejected-without-lifecycle-change",
+        "historical-shutdown-artifact-rejected-without-lifecycle-change",
+        "legacy-completion-cannot-prove-current-stopped-or-reset-lineage"
+      ],
+      "actual_cli_calls": 49,
+      "canonical_artifacts": []
+    },
+    "final-reviewed-cli-positive-canonical-pending": {
+      "exit_code": 0,
+      "timed_out": false,
+      "cases": [
+        "denied-repeat-stop-does-not-invalidate-immutable-current-completion",
+        "completed-shutdown-remains-stopped-despite-pending-work-denial"
+      ],
+      "actual_cli_calls": 14,
+      "canonical_artifacts": [
+        "completed-with-pending",
+        "repeat-stop-completion"
+      ]
+    },
+    "final-reviewed-cli-expected-deny": {
+      "exit_code": 1,
+      "timed_out": false,
+      "cases": [
+        "unreadable-completion-rejects-active-status-without-lifecycle-mutation",
+        "unresolved-historical-completion-propagates-service-denial-without-shutdown"
+      ],
+      "actual_cli_calls": 11,
+      "canonical_artifacts": [
+        "unresolved-service"
+      ]
+    }
+  },
+  "native_traceability": {
+    "record": "native-f14-pre-sync-receipt-backed-traceability.json",
+    "exit_code": 0,
+    "stdout": "traceability ref=blake3:7b33bc22ffb6da56434b3799e9fbd45721b39be5ef36722407e664b92cad20c1 decision=pass covered=[\"molten.audit_f14.current_binding\", \"molten.audit_f14.duplicate_scope\", \"molten.audit_f14.preserve_state\", \"molten.audit_f14.validation\"] missing-positive=0 missing-negative=0 stale=0 compatibility-only=0 scope=F14-only\n"
+  },
+  "normal_suites": {
+    "ordered-workspace-all-targets": {
+      "exit_code": 0,
+      "passed": 2118,
+      "failed": 0,
+      "ignored": 0,
+      "reported_binaries": 18
+    },
+    "ordered-workspace-doctests": {
+      "exit_code": 0,
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "reported_binaries": 4
+    },
+    "ordered-enabled-feature-tests": {
+      "exit_code": 0,
+      "passed": 2137,
+      "failed": 0,
+      "ignored": 1,
+      "reported_binaries": 19
+    },
+    "ordered-disabled-profiler-tests": {
+      "exit_code": 0,
+      "passed": 2118,
+      "failed": 0,
+      "ignored": 0,
+      "reported_binaries": 18
+    }
+  },
+  "non_claims": [
+    "This summary does not satisfy outstanding required Nix/Cairn acceptance or authorize sync/archive by itself.",
+    "No remote authority, crash durability, physical process termination, release eligibility or whole-system proof."
+  ]
+}

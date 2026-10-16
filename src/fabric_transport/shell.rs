@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 use crate::fabric::FabricPortError;
 use crate::fabric::FabricPortResult;
@@ -18,15 +18,15 @@ use crate::fabric::FabricPortResult;
 
 pub struct RegisteredTransportEffectPort<A: TransportCommandShell> {
     adapter: A,
-    context: ExtensionTransportContext,
-    profile: CanonicalTransportProfile,
+    context: ExtensionContext,
+    profile: Profile,
     requests: BTreeMap<String, TransportCommand>,
 }
 
 impl<A: TransportCommandShell> RegisteredTransportEffectPort<A> {
-    pub fn new(adapter: A, context: ExtensionTransportContext, profile: CanonicalTransportProfile) -> Result<Self> {
+    pub fn new(adapter: A, context: ExtensionContext, profile: Profile) -> Result<Self> {
         if adapter.profile_id() != profile.profile.profile_id {
-            return Err(MoltenError::invalid_harness("registered transport adapter profile mismatch"));
+            return Err(Failure::invalid_harness("registered transport adapter profile mismatch"));
         }
         Ok(Self {
             adapter,
@@ -39,7 +39,7 @@ impl<A: TransportCommandShell> RegisteredTransportEffectPort<A> {
     pub fn register(&mut self, request_ref: String, command: TransportCommand) -> Result<()> {
         crate::preserves_rail::validate_content_ref(&request_ref)?;
         if self.requests.insert(request_ref.clone(), command).is_some() {
-            return Err(MoltenError::invalid_harness(format!("transport request {request_ref} is already registered")));
+            return Err(Failure::invalid_harness(format!("transport request {request_ref} is already registered")));
         }
         Ok(())
     }
@@ -54,9 +54,9 @@ impl<A: TransportCommandShell> RegisteredTransportEffectPort<A> {
 
     pub(crate) fn execute_effect(
         &mut self,
-        binding: &crate::fabric::CanonicalFabricPortBinding,
+        binding: &crate::fabric::CanonicalPortBinding,
         effect: &crate::system_extension::TypedEffectRequest,
-    ) -> FabricPortResult<(TransportCommand, CanonicalTransportTransition)> {
+    ) -> FabricPortResult<(TransportCommand, Transition)> {
         if binding.binding.key.port_id != FABRIC_TRANSPORT_PORT_ID
             || binding.binding.key.version != FABRIC_TRANSPORT_PORT_VERSION
         {
@@ -97,7 +97,7 @@ impl<A: TransportCommandShell> RegisteredTransportEffectPort<A> {
 impl<A: TransportCommandShell> crate::system_extension::FabricEffectPort for RegisteredTransportEffectPort<A> {
     fn route(
         &mut self,
-        binding: &crate::fabric::CanonicalFabricPortBinding,
+        binding: &crate::fabric::CanonicalPortBinding,
         effect: &crate::system_extension::TypedEffectRequest,
     ) -> FabricPortResult<crate::system_extension::PortEffectOutput> {
         let (_command, transition) = self.execute_effect(binding, effect)?;

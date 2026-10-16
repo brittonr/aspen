@@ -1,0 +1,1 @@
+Expected current-run observation denials executed; lifecycle state remained unchanged.

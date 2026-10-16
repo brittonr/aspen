@@ -1,7 +1,7 @@
 use molten_core::coordination_delivery::*;
 
 #[derive(Clone, Debug)]
-pub enum DeliverySimulationAction {
+pub enum Action {
     Request(DeliveryRequest),
     FaultedRequest {
         fault: molten_core::fabric_simulation::SimulationFaultKind,
@@ -11,7 +11,7 @@ pub enum DeliverySimulationAction {
 }
 
 #[derive(Clone, Debug)]
-pub struct DeliverySimulationTrace {
+pub struct Trace {
     pub transitions: Vec<DeliveryTransition>,
     pub state_refs: Vec<String>,
     pub fault_classes: Vec<String>,
@@ -19,7 +19,7 @@ pub struct DeliverySimulationTrace {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DeliverySimulationError {
+pub enum ModelFailure {
     StateCodec,
     UnsupportedFault(molten_core::fabric_simulation::SimulationFaultKind),
 }
@@ -29,27 +29,27 @@ pub enum DeliverySimulationError {
 const MAX_FAULT_CLASSES_PER_ACTION: usize = 2;
 
 // r[impl molten.coordination_delivery.final_validation]
-pub fn run_delivery_simulation(
+pub fn run(
     manifest: &DeliveryManifest,
     policy: &DeliveryPolicy,
     time_profile: &molten_core::fabric_time::AdmittedTimeProfile,
     initial: DeliveryState,
-    actions: &[DeliverySimulationAction],
-) -> Result<DeliverySimulationTrace, DeliverySimulationError> {
+    actions: &[Action],
+) -> Result<Trace, ModelFailure> {
     let mut state = initial;
     let mut transitions = Vec::new();
     let mut state_refs = vec![identify_delivery_state(&state)];
     let mut fault_classes = Vec::with_capacity(actions.len().saturating_mul(MAX_FAULT_CLASSES_PER_ACTION));
     for action in actions {
         match action {
-            DeliverySimulationAction::Request(request) => {
+            Action::Request(request) => {
                 apply_simulated_request(manifest, policy, time_profile, request, RequestProgress {
                     state: &mut state,
                     transitions: &mut transitions,
                     state_refs: &mut state_refs,
                 });
             }
-            DeliverySimulationAction::FaultedRequest { fault, request } => {
+            Action::FaultedRequest { fault, request } => {
                 let mut faulted = request.clone();
                 match fault {
                     molten_core::fabric_simulation::SimulationFaultKind::Partition
@@ -64,7 +64,7 @@ pub fn run_delivery_simulation(
                     }
                     molten_core::fabric_simulation::SimulationFaultKind::Duplicate => {}
                     other => {
-                        return Err(DeliverySimulationError::UnsupportedFault(*other));
+                        return Err(ModelFailure::UnsupportedFault(*other));
                     }
                 }
                 apply_simulated_request(manifest, policy, time_profile, &faulted, RequestProgress {
@@ -81,16 +81,16 @@ pub fn run_delivery_simulation(
                 }
                 fault_classes.push(fault.as_str().to_string());
             }
-            DeliverySimulationAction::CrashRestart => {
-                let bytes = serde_json::to_vec(&state).map_err(|_| DeliverySimulationError::StateCodec)?;
-                state = serde_json::from_slice(&bytes).map_err(|_| DeliverySimulationError::StateCodec)?;
+            Action::CrashRestart => {
+                let bytes = serde_json::to_vec(&state).map_err(|_| ModelFailure::StateCodec)?;
+                state = serde_json::from_slice(&bytes).map_err(|_| ModelFailure::StateCodec)?;
                 state_refs.push(identify_delivery_state(&state));
                 fault_classes.push(molten_core::fabric_simulation::SimulationFaultKind::Crash.as_str().to_string());
                 fault_classes.push(molten_core::fabric_simulation::SimulationFaultKind::Restart.as_str().to_string());
             }
         }
     }
-    Ok(DeliverySimulationTrace {
+    Ok(Trace {
         transitions,
         state_refs,
         fault_classes,

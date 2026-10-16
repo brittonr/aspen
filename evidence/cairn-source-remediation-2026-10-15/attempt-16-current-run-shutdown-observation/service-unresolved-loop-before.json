@@ -1,0 +1,22 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "node",
+    "serve",
+    "--state-root",
+    "/tmp/molten-f14-current-run-16-restored-se51n6m8/unresolved-service-before",
+    "--max-ticks",
+    "1",
+    "--max-requests-per-tick",
+    "1",
+    "--service-receipt-out",
+    "/tmp/molten-f14-current-run-16-restored-se51n6m8/service-conflict-before.preserves"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T18:28:40.469527+00:00",
+  "elapsed_seconds": 0.019,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "<node-control-service-run-receipt-v1 \"molten.node.control-service-run-receipt.v1\" <decision \"pass\"> <startup \"blake3:649f1c935e8c41778344fe7c1c3e08281d084680573e498d292b37f9cc0fe97b\"> <service-lock <some \"blake3:cf6c9580b6da018db0dbf3d2dcb93505e875388795b0af8ad2c2edc5bac3de80\">> <topic \"node-control\"> <max-ticks \"1\"> <max-requests-per-tick \"1\"> <ticks \"1\"> <heartbeats [\"blake3:02c7faff4761c6bcdc4e1578eacfd2a93372e5ab34bf76738aa91015bf5c1d81\"]> <ingress-receipts []> <loop-receipts [\"blake3:f41ae0f4a4233c40dff8790f78ff3fc69af547c9e9027a4418fac4c0b5768c9f\"]> <processed-requests [\"blake3:76346c59b3e425ec512e67ddd7f6c80e4778aaff5632f59ee7577d7dc2a5629f\"]> <stopped \"false\"> <supervisor-policy <none>> <supervisor-receipts []> <diagnostics []> <checks [<check \"single-active-service\" \"pass\">, <check \"ingress-before-loop\" \"pass\">, <check \"loop-reuse\" \"pass\">, <check \"shutdown-stop-semantics\" \"pass\">, <check \"bounded-ticks\" \"pass\">, <check \"supervisor-policy-bound\" \"pass\">]>>\nnode serve decision=pass receipt=blake3:52414b459bd11e12f76f5d9d0273e954e8ad57d68b409f663385968d7960e0fe ticks=1 heartbeats=1 ingress=0 loops=1 processed=1 stopped=no\n",
+  "stderr": "node control service run receipt blake3:52414b459bd11e12f76f5d9d0273e954e8ad57d68b409f663385968d7960e0fe\n"
+}

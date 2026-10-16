@@ -1,0 +1,70 @@
+{
+  "attempt": "16/20",
+  "change": "bind-shutdown-observations-to-current-node-run",
+  "state": "Behavior implemented and exercised; ordered final acceptance is executing, not accepted or archived.",
+  "normal_test_record": "final-focused-library.json",
+  "normal_test_result": {
+    "passed": 1540,
+    "failed": 0
+  },
+  "actual_cli_records": {
+    "final-cli-positive.json": {
+      "exit_code": 0,
+      "cases": [
+        "current-shutdown-stops",
+        "historical-duplicate-keeps-active-lock",
+        "duplicate-retains-original-dispatch-ref",
+        "new-request-stops-current-run",
+        "legacy-control-and-shutdown-stay-readable"
+      ]
+    },
+    "final-cli-expected-deny.json": {
+      "exit_code": 1,
+      "cases": [
+        "missing-run-rejected-without-lifecycle-change",
+        "malformed-run-rejected-without-lifecycle-change",
+        "unreadable-completion-rejected-without-lifecycle-change",
+        "conflicting-lock-run-rejected-without-lifecycle-change",
+        "historical-shutdown-artifact-rejected-without-lifecycle-change",
+        "legacy-completion-cannot-prove-current-stopped-or-reset-lineage"
+      ]
+    },
+    "final-reviewed-cli-positive-canonical-pending.json": {
+      "exit_code": 0,
+      "cases": [
+        "denied-repeat-stop-does-not-invalidate-immutable-current-completion",
+        "completed-shutdown-remains-stopped-despite-pending-work-denial"
+      ]
+    },
+    "final-reviewed-cli-expected-deny.json": {
+      "exit_code": 1,
+      "cases": [
+        "unreadable-completion-rejects-active-status-without-lifecycle-mutation",
+        "unresolved-historical-completion-propagates-service-denial-without-shutdown"
+      ]
+    }
+  },
+  "native_receipt_backed_coverage": "native-f14-pre-sync-receipt-backed-traceability.json",
+  "coverage_scope": "Exactly four F14 requirements; eight executed positive/expected-deny verification receipts.",
+  "current_document_check": "documentation-links-current.json",
+  "document_check_result": {
+    "documents": 6,
+    "local_links": 60,
+    "missing": 0
+  },
+  "exact_producer": "producer-realization-binding.json",
+  "preserved_failed_environment_attempt": "rooted-current-dev-shell.json",
+  "ordered_acceptance_driver": {
+    "path": "/tmp/molten-f14-current-run-16-restored-se51n6m8/run-acceptance.py",
+    "blake3": "d436353e555148b339ba6d12a9ba6d85e003deefa04f180bd9d5f31ff4bb53d9",
+    "command_recorder_blake3": "c47b864c6434b166553f03ceccd19406afa759c9a29b8b232adc2ab52b449f9d"
+  },
+  "immediate_outcome": "An old successful shutdown result no longer establishes stopped state for a restarted active run; service denial preserves an independently verified current completion.",
+  "durable_capability": "Canonical successor-run and exact completion linkage, allocation-free pure lifecycle classification, capability-rooted observation/readback, normal regression coverage and repeatable actual CLI consumers.",
+  "maintenance_owner": "Molten node-runtime and node-host maintainers; source-policy and lifecycle maintainers own final gate acceptance.",
+  "non_claims": [
+    "No physical process termination, live external-adapter shutdown, crash durability or whole-system liveness proof.",
+    "No lifecycle sync/archive, Molten integration, remote publication or release readiness is claimed.",
+    "Pre-F14 source/matrix gates are not reused as proof for edited Rust source."
+  ]
+}

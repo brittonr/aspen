@@ -1,0 +1,26 @@
+{
+  "attempt": "10/20",
+  "formatting": {
+    "exit_code": 0,
+    "evidence": "provider-final-format-check.json"
+  },
+  "final_ui": {
+    "exit_code": 0,
+    "passed_rails": 4,
+    "fixture_announcements": 163,
+    "derivation": "/nix/store/fxnars681pxily6n016bwpb48xmhnj9j-octet-ui-0.1.0.drv",
+    "unblessed": true,
+    "log": "provider-final-ui-replay-log.json"
+  },
+  "prior_behavioral_acceptance": "pre-publication-acceptance.json",
+  "reviewed_scope_unchanged": true,
+  "publication_scope": "Only refs/heads/cairn/molten-nominal-adoption-20261015 on git@github.com:OnixResearch/octet.git; no tag, default-branch update, unrelated change, or Molten push.",
+  "remaining": [
+    "Observe upstream immutable provider availability, complete the last provider task, and perform native sync/archive.",
+    "Adopt the resulting published immutable cohort in Molten and prove its pinned behavior."
+  ],
+  "non_claims": [
+    "Evidence/lifecycle metadata appended to the commit is not a changed Rust/Nickel/UI implementation input.",
+    "No provider publication has occurred at the time of this preflight."
+  ]
+}

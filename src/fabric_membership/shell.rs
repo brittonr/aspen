@@ -12,8 +12,8 @@ use super::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdmittedProviderSnapshot {
-    pub membership: CanonicalMembershipView,
-    pub failures: CanonicalFailureObservationSet,
+    pub membership: View,
+    pub failures: FailureObservationSet,
     pub reservations: Vec<CapacityReservation>,
 }
 
@@ -22,13 +22,11 @@ pub struct AdmittedProviderSnapshot {
 pub fn observe_provider(
     provider: &mut dyn MembershipPlacementProvider,
 ) -> crate::error::Result<AdmittedProviderSnapshot> {
-    let snapshot = provider.snapshot().map_err(crate::error::MoltenError::from)?;
+    let snapshot = provider.snapshot().map_err(crate::error::Failure::from)?;
     if provider.provider_kind() != snapshot.profile.provider_kind {
-        return Err(crate::error::MoltenError::invalid_harness(
-            "membership provider kind differs from its source profile",
-        ));
+        return Err(crate::error::Failure::invalid_harness("membership provider kind differs from its source profile"));
     }
-    let profile = canonical_membership_profile(&snapshot.profile)?;
+    let profile = profile(&snapshot.profile)?;
     let membership = canonical_membership_view(
         &profile,
         &snapshot.view,
@@ -36,7 +34,7 @@ pub fn observe_provider(
         snapshot.observed_now_ticks,
         &snapshot.required_compatibility_ref,
     )?;
-    let failures = canonical_failure_observations(
+    let failures = failure_observations(
         &membership,
         &snapshot.detector_profiles,
         &snapshot.failure_observations,
@@ -68,7 +66,7 @@ pub struct UncertainAssignmentExecution {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AssignmentExecutionOutcome {
-    Committed(CanonicalAssignmentTransition),
+    Committed(AssignmentEnvelope),
     Uncertain(UncertainAssignmentExecution),
 }
 
@@ -157,7 +155,7 @@ pub fn execute_assignment_command(
             effect_may_have_happened: true,
         }));
     }
-    match canonical_assignment_transition(&transition, &intent_ref, role_effect_ref.as_deref(), &persistence_ref) {
+    match assignment_transition(&transition, &intent_ref, role_effect_ref.as_deref(), &persistence_ref) {
         Ok(canonical) => Ok(AssignmentExecutionOutcome::Committed(canonical)),
         Err(error) => Ok(AssignmentExecutionOutcome::Uncertain(UncertainAssignmentExecution {
             transition,

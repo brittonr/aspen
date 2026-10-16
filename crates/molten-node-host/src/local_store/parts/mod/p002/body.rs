@@ -3,28 +3,28 @@ impl RetentionStoreRoot {
     #[doc(hidden)]
     pub fn share_chunk_state(parent: &ChunkStoreRoot) -> Result<Self> {
         Ok(Self {
-            root: parent.root().share_authority_as(LocalStoreKind::Retention)?,
+            root: parent.root().share_authority_as(Kind::Retention)?,
         })
     }
 
     #[doc(hidden)]
     pub fn open_bundle_state(parent: &ArtifactStoreRoot) -> Result<Self> {
         Ok(Self {
-            root: parent.root().open_subdir(LocalStoreKind::Retention, &LocalStorePath::parse("state")?)?,
+            root: parent.root().open_subdir(Kind::Retention, &Locator::parse("state")?)?,
         })
     }
 }
 
 impl ExchangeStoreRoot {
     #[doc(hidden)]
-    pub fn open_chunk_subdir(parent: &ChunkStoreRoot, path: &LocalStorePath) -> Result<Self> {
+    pub fn open_chunk_subdir(parent: &ChunkStoreRoot, path: &Locator) -> Result<Self> {
         Ok(Self {
-            root: parent.root().open_subdir(LocalStoreKind::Exchange, path)?,
+            root: parent.root().open_subdir(Kind::Exchange, path)?,
         })
     }
 }
 
-fn validate_local_locator(input: &str) -> Result<()> {
+fn validate_locator(input: &str) -> Result<()> {
     if input.is_empty() {
         return Err(MoltenError::invalid_harness("local store path cannot be empty"));
     }
@@ -65,15 +65,15 @@ fn checked_component_count(count: usize) -> Result<usize> {
     }
 }
 
-fn local_store_entry_kind(file_type: &cap_std::fs::FileType) -> LocalStoreEntryKind {
+fn entry_kind(file_type: &cap_std::fs::FileType) -> MemberKind {
     if file_type.is_file() {
-        LocalStoreEntryKind::File
+        MemberKind::File
     } else if file_type.is_dir() {
-        LocalStoreEntryKind::Directory
+        MemberKind::Directory
     } else if file_type.is_symlink() {
-        LocalStoreEntryKind::Symlink
+        MemberKind::Symlink
     } else {
-        LocalStoreEntryKind::Other
+        MemberKind::Other
     }
 }
 

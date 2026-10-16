@@ -4,7 +4,7 @@ fn parse_retry(value: &str) -> crate::error::Result<RetryDisposition> {
         "not-applicable" => Ok(RetryDisposition::NotApplicable),
         "higher-level-policy-required" => Ok(RetryDisposition::HigherLevelPolicyRequired),
         "unsafe-without-reconciliation" => Ok(RetryDisposition::UnsafeWithoutReconciliation),
-        other => Err(crate::error::MoltenError::invalid_harness(format!("unsupported retry disposition {other}"))),
+        other => Err(crate::error::Failure::invalid_harness(format!("unsupported retry disposition {other}"))),
     }
 }
 

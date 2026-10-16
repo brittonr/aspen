@@ -1,0 +1,32 @@
+{
+  "argv": [
+    "cargo",
+    "run",
+    "--offline",
+    "--locked",
+    "--",
+    "test",
+    "octet",
+    "remediation",
+    "plan",
+    "--artifacts",
+    "target/octet-f14-cohort17-workspace",
+    "--lib-artifacts",
+    "target/octet-f14-cohort17-library",
+    "--focused-object-corpus",
+    "target/octet-f14-cohort17-workspace/object-corpus-receipt.json",
+    "--receipt-out",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/ordered-remediation-plan.preserves"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T20:22:53.939523+00:00",
+  "elapsed_seconds": 0.404,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "octet remediation plan blake3:97b67d9ad3a3285de81b9f9d13ed0f5974c1b8087beb6e4f7ac5caaad2283c07 written to /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/ordered-remediation-plan.preserves\noctet remediation plan receipt=blake3:97b67d9ad3a3285de81b9f9d13ed0f5974c1b8087beb6e4f7ac5caaad2283c07\n",
+  "stderr": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.33s\n     Running `/home/brittonr/.cargo-target/debug/molten test octet remediation plan --artifacts target/octet-f14-cohort17-workspace --lib-artifacts target/octet-f14-cohort17-library --focused-object-corpus target/octet-f14-cohort17-workspace/object-corpus-receipt.json --receipt-out /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/ordered-remediation-plan.preserves`\n",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

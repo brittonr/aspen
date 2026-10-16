@@ -1,0 +1,26 @@
+{
+  "text": "{\n  \"confidence\": 0.93,\n  \"explanation\": \"No blocking findings in the reviewed core/receipt slice: the classifier keeps duplicate provenance independent, performs no allocation, and requires absent active-lock evidence plus matching current run/startup/shutdown/control links before returning Stopped; canonical lineage hashes the exact Preserves value and uses previous-run references rather than an overflowable generation counter, while legacy receipts alone cannot establish current stopped state.\\n\\nReviewed against .cairn/changes/bind-shutdown-observations-to-current-node-run/specs/node-runtime/spec.md and design.md: src/node/parts/runtime/p008/body.rs and p009/body.rs in full; runtime helpers p000/body.rs, p002/body.rs, p003/body.rs and p004/body.rs; test sources under src/node/parts/runtime/tests/m000/p001/body.rs, p002/body.rs, p003/body.rs, p004/body.rs and p005/body.rs; canonical hashing/reference validation in src/preserves/parts/rail/p001/body.rs and p003/body.rs; ledger import/readback and artifact routing in src/ledger/parts/mod/p000/body.rs, p001/body.rs and artifacts/p000/body.rs; and relevant receipt/lifecycle consumer branches in src/node/parts/daemon/p018/body.rs, p033/body.rs, p046/body.rs and p058/body.rs, with legacy-interpretation assertions in daemon/tests/m000/p023/body.rs.\\n\\nThis was static source inspection only: tests were read, not executed; no Git/diff commands, edits, builds, lints, formatters or remote operations were performed, helper/consumer files were inspected only in relevant ranges, and daemon-effects verification and runtime/native acceptance remain with the sibling reviewer and parent.\",\n  \"findings\": [],\n  \"overall_correctness\": \"correct\"\n}",
+  "details": {
+    "resolvedPath": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-aspen/2026-10-15T17-47-46-479Z_01a140ad-5faf-7599-8f93-cc88719aa0a6/F14CoreReview17.md",
+    "contentType": "text/markdown",
+    "totalLines": 6,
+    "displayContent": {
+      "text": "{\n  \"confidence\": 0.93,\n  \"explanation\": \"No blocking findings in the reviewed core/receipt slice: the classifier keeps duplicate provenance independent, performs no allocation, and requires absent active-lock evidence plus matching current run/startup/shutdown/control links before returning Stopped; canonical lineage hashes the exact Preserves value and uses previous-run references rather than an overflowable generation counter, while legacy receipts alone cannot establish current stopped state.\\n\\nReviewed against .cairn/changes/bind-shutdown-observations-to-current-node-run/specs/node-runtime/spec.md and design.md: src/node/parts/runtime/p008/body.rs and p009/body.rs in full; runtime helpers p000/body.rs, p002/body.rs, p003/body.rs and p004/body.rs; test sources under src/node/parts/runtime/tests/m000/p001/body.rs, p002/body.rs, p003/body.rs, p004/body.rs and p005/body.rs; canonical hashing/reference validation in src/preserves/parts/rail/p001/body.rs and p003/body.rs; ledger import/readback and artifact routing in src/ledger/parts/mod/p000/body.rs, p001/body.rs and artifacts/p000/body.rs; and relevant receipt/lifecycle consumer branches in src/node/parts/daemon/p018/body.rs, p033/body.rs, p046/body.rs and p058/body.rs, with legacy-interpretation assertions in daemon/tests/m000/p023/body.rs.\\n\\nThis was static source inspection only: tests were read, not executed; no Git/diff commands, edits, builds, lints, formatters or remote operations were performed, helper/consumer files were inspected only in relevant ranges, and daemon-effects verification and runtime/native acceptance remain with the sibling reviewer and parent.\",\n  \"findings\": [],\n  \"overall_correctness\": \"correct\"\n}",
+      "startLine": 1,
+      "lineNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    "meta": {
+      "source": {
+        "type": "internal",
+        "value": "agent://F14CoreReview17"
+      }
+    }
+  }
+}

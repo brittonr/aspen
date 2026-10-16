@@ -1,6 +1,6 @@
 type IoValue = preserves::IOValue;
 type Value<T> = preserves::Value<T>;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 fn canonical_hash(value: &IoValue) -> Result<String> {

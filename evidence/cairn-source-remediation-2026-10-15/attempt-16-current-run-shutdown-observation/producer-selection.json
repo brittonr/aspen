@@ -1,0 +1,19 @@
+{
+  "selection": "Declared README/catalogued Octet source revision; no ambient cargo-octet accepted as provenance.",
+  "revision": "3f7abb641ee604f54629da415bc7686f89662065",
+  "evaluation": {
+    "argv": [
+      "nix",
+      "eval",
+      "--offline",
+      "--raw",
+      "github:OnixResearch/octet/3f7abb641ee604f54629da415bc7686f89662065#packages.x86_64-linux.cargo-octet.outPath"
+    ],
+    "execution": "background job bg_42",
+    "stdout": "/nix/store/i0njyjw82syb1dbzby3gafl5chfk1swm-cargo-octet-0.1.0",
+    "stderr": "error (ignored): SQLite database eval-cache-v6 was busy",
+    "wall_seconds": 2.77
+  },
+  "realization": "catalogued-octet-local-realization.json; completion must be read before using its output.",
+  "non_claim": "Derivation selection/evaluation is not realization, producer execution, or source-gate acceptance."
+}

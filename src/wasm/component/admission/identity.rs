@@ -1,11 +1,11 @@
 pub(super) fn runtime_configuration_ref(
-    profile: &super::super::model::ComponentRuntimeProfile,
-    facts: &super::ComponentArtifactFacts,
-    materialization: &super::super::evidence::materialization::MaterializationAdmission,
+    profile: &super::super::model::RuntimeProfile,
+    facts: &super::ArtifactFacts,
+    materialization: &super::super::evidence::materialization::Admission,
     grants: &super::GrantPlan,
 ) -> String {
     let mut lines = vec![
-        format!("profile-ref:{}", super::super::profile::component_profile_ref(profile)),
+        format!("profile-ref:{}", super::super::profile::r#ref(profile)),
         format!("component-ref:{}", materialization.component_ref),
         format!("wit-ref:{}", materialization.wit_ref),
         format!("artifact-kind:{}", facts.artifact_kind.as_str()),

@@ -31,7 +31,7 @@ const CHILD_PROCESS_RECORD_ARITY: u64 = 10;
 const CLEANUP_RECORD_ARITY: u64 = 9;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClusterHarnessChildProcessInput {
+pub struct ChildProcessInput {
     pub node_id: String,
     pub phase: String,
     pub command_profile_ref: String,
@@ -43,7 +43,7 @@ pub struct ClusterHarnessChildProcessInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClusterHarnessCleanupInput {
+pub struct CleanupInput {
     pub child_process_refs: Vec<String>,
     pub stopped_node_ids: Vec<String>,
     pub orphaned_processes: Vec<String>,
@@ -54,7 +54,7 @@ pub struct ClusterHarnessCleanupInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClusterHarnessParentInput {
+pub struct ParentInput {
     pub fixture_ref: String,
     pub command_plan_ref: String,
     pub local_plan_ref: String,
@@ -72,7 +72,7 @@ pub struct ClusterHarnessParentInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClusterHarnessParentReceipt {
+pub struct ParentReceipt {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub receipt_ref: String,
@@ -80,7 +80,7 @@ pub struct ClusterHarnessParentReceipt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClusterRunVerificationReceipt {
+pub struct RunVerificationReceipt {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub verification_ref: String,
@@ -118,7 +118,7 @@ pub fn command_plan_value(
 ) -> crate::error::Result<IoValue> {
     crate::preserves_rail::validate_content_ref(fixture_ref)?;
     if child_timeout_ms == 0 {
-        return Err(crate::error::MoltenError::invalid_harness("cluster harness child timeout must be positive"));
+        return Err(crate::error::Failure::invalid_harness("cluster harness child timeout must be positive"));
     }
     validate_non_empty_strings("command plan node", node_ids)?;
     validate_non_empty_strings("expected artifact kind", expected_artifact_kinds)?;
@@ -140,7 +140,7 @@ pub fn command_plan_value(
     ]))
 }
 
-pub fn unavailable_cluster_lifecycle_value(
+pub fn unavailable_lifecycle_value(
     fixture_ref: &str,
     node_ids: &[String],
     diagnostics: &[String],
@@ -172,7 +172,7 @@ pub fn unavailable_cluster_lifecycle_value(
 // r[impl molten.testing.receipt_first_cluster_harness.run_artifact_directory]
 pub fn drift_summary_value(summary: &crate::drift_core::EvidenceSummary) -> crate::error::Result<IoValue> {
     if summary.workflow.trim().is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness("cluster drift summary workflow must be non-empty"));
+        return Err(crate::error::Failure::invalid_harness("cluster drift summary workflow must be non-empty"));
     }
     let fields = summary
         .fields
@@ -215,9 +215,9 @@ pub fn drift_summary_value(summary: &crate::drift_core::EvidenceSummary) -> crat
 
 // r[impl molten.testing.local_multiprocess_cluster_tier.middle_tier]
 // r[impl molten.testing.local_multiprocess_cluster_tier.cleanup_negatives]
-pub fn child_process_value(input: &ClusterHarnessChildProcessInput) -> crate::error::Result<IoValue> {
+pub fn child_process_value(input: &ChildProcessInput) -> crate::error::Result<IoValue> {
     if input.node_id.trim().is_empty() || input.phase.trim().is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness("cluster child process requires node and phase"));
+        return Err(crate::error::Failure::invalid_harness("cluster child process requires node and phase"));
     }
     crate::preserves_rail::validate_content_ref(&input.command_profile_ref)?;
     crate::preserves_rail::validate_content_ref(&input.diagnostic_log_ref)?;
@@ -252,7 +252,7 @@ pub fn child_process_value(input: &ClusterHarnessChildProcessInput) -> crate::er
 }
 
 // r[impl molten.testing.local_multiprocess_cluster_tier.cleanup_negatives]
-pub fn cleanup_value(input: &ClusterHarnessCleanupInput) -> crate::error::Result<IoValue> {
+pub fn cleanup_value(input: &CleanupInput) -> crate::error::Result<IoValue> {
     validate_refs("cleanup child process", &input.child_process_refs)?;
     validate_refs("cleanup removed ticket", &input.removed_ticket_refs)?;
     validate_non_empty_strings("cleanup caveat", &input.caveats)?;

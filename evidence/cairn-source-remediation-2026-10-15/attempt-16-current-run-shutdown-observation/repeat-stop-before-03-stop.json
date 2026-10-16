@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "node",
+    "stop",
+    "--state-root",
+    "/tmp/molten-f14-current-run-16-restored-se51n6m8/repeated-stop-before"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T18:26:37.042464+00:00",
+  "elapsed_seconds": 0.024,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "<node-control-receipt-v1 \"molten.node.control-receipt.v1\" <decision \"pass\"> <request \"blake3:19558b020967d50f52786af1e665b02c9e79b8ca7f5e655c90d96df296ae5df7\"> <startup \"blake3:59bd9127f5e9c8bb554f3763f7f54649da7a71f0a438bcce776fe025cf900509\"> <authority [\"blake3:83bb3c44e0d14927bfc20b73ee57c4e655b1ac08003c93a2a618299997a38e9a\"]> <resource [\"blake3:fb82d256eced2cca892ff2e6c63a27fbbd7def43b92ad77d16c3b1ed26abde1f\"]> <subreceipts [\"blake3:5033c41ec983e5d239aab1c3a201f2e143b3fb3312789125b1f7d4b7faede549\"]> <diagnostics []> <checks [<check \"local-preserves-control\" \"pass\">, <check \"authority-gated\" \"pass\">, <check \"resource-gated\" \"pass\">, <check \"subreceipts-bound\" \"pass\">, <check \"canonical-receipt\" \"pass\">]>>\nnode stop shutdown=blake3:5033c41ec983e5d239aab1c3a201f2e143b3fb3312789125b1f7d4b7faede549 control_receipt=blake3:67daa84a4906faf083e5c0510d2a8d3ff2a5bd605bca6e0ed2080c566ad5d9b8\n",
+  "stderr": "node control receipt blake3:67daa84a4906faf083e5c0510d2a8d3ff2a5bd605bca6e0ed2080c566ad5d9b8\n"
+}

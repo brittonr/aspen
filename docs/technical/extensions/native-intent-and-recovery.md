@@ -4,7 +4,7 @@ Native recovery reconstructs what the host knows about interrupted work without 
 
 ## The durable object is a host knowledge record
 
-The native instance record binds manifest, executable, profile, and state schema; lifecycle and generation; resource and sequence state; semantic state and checkpoint references; and operation/evidence collections. It is not simply a process identifier to restart. `DurableNativeHostJournal` serializes canonical instance records through the Redb durability adapter, while an in-memory journal supports conformance use. The [journal implementation](../../../src/system_extension/native_host/parts/journal/p000/body.rs) exposes saving, latest-instance lookup, and history.
+The native instance record binds manifest, executable, profile, and state schema; lifecycle and generation; resource and sequence state; semantic state and checkpoint references; and operation/evidence collections. It is not simply a process identifier to restart. `system_extension::Durable` serializes canonical instance records through the Redb durability adapter, while an in-memory journal supports conformance use. The [journal implementation](../../../src/system_extension/native_host/parts/journal/p000/body.rs) exposes saving, latest-instance lookup, and history.
 
 These records distinguish semantic state from lifecycle checkpoint state. A callback's admitted next-state value is not automatically interchangeable with the checkpoint selected for restart recovery. The [general runtime](../../system-extension-runtime.md) keeps checkpoint and recovery explicit for that reason.
 
@@ -36,7 +36,7 @@ Even if an operator can locate bytes with the expected BLAKE3 identity, that obs
 
 ## Review and suggested verification
 
-Review every external boundary for a preceding saved intent and a subsequent definite or uncertain observation. The [native host tests](../../../src/system_extension/native_host/tests.rs) contain canonical envelope/outcome cases, rejected reference-only values, value-port uncertainty cases, and in-memory/Redb journal round trips. Suggested failure-injection review places interruption between intent save, publication, observation save, and dependent routing. These are suggested checks; this article reports no execution of them.
+Review every external boundary for a preceding saved intent and a subsequent definite or uncertain observation. The [native host tests](../../../src/system_extension/native_host/tests/mod.rs) contain canonical envelope/outcome cases, rejected reference-only values, value-port uncertainty cases, and in-memory/Redb journal round trips. Suggested failure-injection review places interruption between intent save, publication, observation save, and dependent routing. These are suggested checks; this article reports no execution of them.
 
 Also distinguish terminal provider execution from successful completion delivery. The governing native contract keeps a provider effect terminal if output-value admission fails; it does not retry the provider or infer workload success. The extension decides its semantic transition after an admitted completion callback.
 
@@ -52,4 +52,4 @@ The profile is a local materialized-values pilot. Canonical journal records do n
 - [Callback and publication intent ordering](../../../src/system_extension/native_host/parts/executor/p001/body.rs)
 - [Process result and value admission](../../../src/system_extension/native_host/parts/executor/p002/body.rs)
 - [Canonical native journal](../../../src/system_extension/native_host/parts/journal/p000/body.rs)
-- [Native protocol and journal tests](../../../src/system_extension/native_host/tests.rs)
+- [Native protocol and journal tests](../../../src/system_extension/native_host/tests/mod.rs)

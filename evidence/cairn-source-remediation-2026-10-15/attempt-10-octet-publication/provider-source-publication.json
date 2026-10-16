@@ -1,0 +1,10 @@
+{
+  "source_revision": "82a6f01a15cfbfda7ed9b37e03605d0c052391c4",
+  "upstream": "git@github.com:OnixResearch/octet.git",
+  "reference": "refs/heads/cairn/molten-nominal-adoption-20261015",
+  "push_exit_code": 0,
+  "remote_exact_revision_observed": true,
+  "consumer_pin_changed": false,
+  "provider_lifecycle_complete": false,
+  "scope": "Authorized reviewed nominal-domain provider cohort only; no tag, default-branch update, unrelated change, or Molten push."
+}

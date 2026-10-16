@@ -1,6 +1,7 @@
 # F10 tasks
 
-All tasks are proposed work. This package grants no implementation permission.
+Implementation is authorized under the bounded completion campaign. Checked tasks
+record implemented and exercised work; required acceptance blockers remain open.
 
 - [x] [serial] Run the smallest existing core scheduler, capacity, and shell tests before core edits and retain the baseline result. Cite r[molten.audit_f10.validation].
 - [x] [serial] Move the queue-bound-one A/B Yield reproduction into normal core tests with a successful Yield control. Cite r[molten.audit_f10.queue].
@@ -14,3 +15,14 @@ All tasks are proposed work. This package grants no implementation permission.
 - [ ] [serial] Run focused Octet checks, the existing strict Octet gate, and Clippy with `-D warnings` across required targets and features. Cite r[molten.audit_f10.validation].
 - [ ] [serial] Run required workspace tests, relevant Nix checks, and the repository Nix gate without weakening existing checks. Cite r[molten.audit_f10.validation].
 - [x] [serial] Run native `.cairn/` validation and required gates with tracked evidence and explicit limits on adapter claims. Cite r[molten.audit_f10.validation].
+
+## 2026-10-15 acceptance attempt
+
+Fresh execution is recorded in
+[`evidence/2026-10-15-verification.md`](evidence/2026-10-15-verification.md).
+Five new adapter regressions passed for both admitted profile kinds, including
+observed live thread wakes. Task 11 remains open: these tests do not implement or
+prove the missing production scheduler/capacity/effect composition or independent
+simulation effect dispatcher. Required strict Octet acceptance denied the run;
+the compatible-feature and required Nix rails are not complete. No sync or
+archive is authorized by these partial results.

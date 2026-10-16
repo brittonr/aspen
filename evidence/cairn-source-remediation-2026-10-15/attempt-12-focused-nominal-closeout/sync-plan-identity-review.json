@@ -1,0 +1,14 @@
+{
+  "attempt": "12/20",
+  "change": "adopt-octet-nominal-domain-enforcement",
+  "input_hash": "23d2fb2068d1099a2af1039681c41a97257f030ba1e3018a10730fb850a38f93",
+  "actions_equal": true,
+  "policy_and_profile_equal": true,
+  "preview_plan_hash": "b7e302477fac6fb348723a702d8feb97188bdabd1a2aeecc96a00e28f76396f8",
+  "execution_plan_hash": "949a37a12252877b549f966f5146cc74b8dbd43ac01baaa41b675281e4411311",
+  "expected_before_hash": "e1b9560649eeebdf609e536a20b28eac736e3b07187c820cb8524628df71c0f0",
+  "observed_before_hash": "e1b9560649eeebdf609e536a20b28eac736e3b07187c820cb8524628df71c0f0",
+  "expected_after_hash": "d8187c0609e2586eeb8e8e632e8670da6ff20359f2d7d1736119b39dc9bce816",
+  "observed_after_hash": "d8187c0609e2586eeb8e8e632e8670da6ff20359f2d7d1736119b39dc9bce816",
+  "mode_dependent_plan_hash_not_claimed_equal": true
+}

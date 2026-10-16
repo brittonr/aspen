@@ -104,9 +104,8 @@ pub(super) fn name_show(command: super::Command) -> molten::error::Result<()> {
     let super::Command::NameShow { registry, kind, name } = command else {
         return dispatch_mismatch("name-show");
     };
-    let pointer = molten::artifacts::read_name_pointer(&registry, &kind, &name)?.ok_or_else(|| {
-        molten::error::MoltenError::invalid_harness(format!("artifact pointer {kind}:{name} not found"))
-    })?;
+    let pointer = molten::artifacts::read_name_pointer(&registry, &kind, &name)?
+        .ok_or_else(|| molten::error::Failure::invalid_harness(format!("artifact pointer {kind}:{name} not found")))?;
     println!("{} {} {}", pointer.pointer_kind, pointer.name, pointer.artifact_ref);
     Ok(())
 }
@@ -176,5 +175,5 @@ pub(super) fn index_rebuild(command: super::Command) -> molten::error::Result<()
 }
 
 fn dispatch_mismatch(command: &str) -> molten::error::Result<()> {
-    Err(molten::error::MoltenError::invalid_harness(format!("artifact {command} dispatch mismatch")))
+    Err(molten::error::Failure::invalid_harness(format!("artifact {command} dispatch mismatch")))
 }

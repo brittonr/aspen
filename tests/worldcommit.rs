@@ -12,8 +12,8 @@ use std::collections::BTreeMap;
 
 use molten::world_commit::*;
 use molten_core::world_commit::*;
-use molten_node_host::node_state::NodeStateNamespace;
-use molten_node_host::node_state::NodeStateNamespaceKind;
+use molten_node_host::node_state::NamespaceKind;
+use molten_node_host::node_state::Scope;
 const INITIAL_REVISION: u64 = 1;
 const DRIFTED_REVISION: u64 = 2;
 #[derive(Debug, Default)]
@@ -259,9 +259,7 @@ fn closure_accepts_shared_ancestor_and_requires_transitive_parent_objects() {
 fn local_store_closure_and_restore_roundtrip() {
     // r[verify molten.world_commit.restore]
     let temporary = cap_tempfile::tempdir(cap_tempfile::ambient_authority()).expect("temporary root");
-    let storage =
-        NodeStateNamespace::from_dir(NodeStateNamespaceKind::Storage, temporary.try_clone().expect("clone root"))
-            .expect("storage");
+    let storage = Scope::from_dir(NamespaceKind::Storage, temporary.try_clone().expect("clone root")).expect("storage");
     let mut store = LocalWorldCommitStore::open(&storage).expect("store");
     let (input, mut roots, mut revisions) = inputs();
     let execution = capture_world_commit(&input, &mut roots, &mut store, &mut revisions).expect("capture");

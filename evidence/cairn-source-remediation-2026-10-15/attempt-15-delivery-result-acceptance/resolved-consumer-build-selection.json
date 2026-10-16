@@ -1,0 +1,17 @@
+{
+  "observed_initial_failure": "public-consumer-compile.json: E0463 for the unhashed libmolten.rlib.",
+  "actual_cause": "rustc -Zls=root identified the old unhashed library as molten-75c131fc501643bc, requiring molten_core-f586455b96aa76cc; that dependency is absent. The current Cargo library molten-630cfac42a3e1cbf requires the present molten_core-6aad29da51b17af9.",
+  "evidence": [
+    "unhashed-library-metadata.json",
+    "cargo-library-metadata.json",
+    "public-consumer-compile-current-cargo-library.json"
+  ],
+  "selected_library": "/home/brittonr/.cargo-target/debug/deps/libmolten-630cfac42a3e1cbf.rlib",
+  "current_consumer_compile": "pass, zero compiler diagnostics",
+  "nix_runner_observations": {
+    "nix_develop": "Timed out at 900 seconds with no stdout/stderr; preserved in public-consumer-positive.json.",
+    "cached_shell": "Owned job bg_24 was cancelled without a product execution claim after the complete current Cargo crate graph was identified.",
+    "temporary_workspace_example": "Removed after the successfully compiled external public consumer made it unnecessary."
+  },
+  "scope": "External throwaway consumer uses the actual built product library and pinned repository rustc. Shared product Nix-shell acceptance remains the recorded attempt-13 run; no new product build, source change, pin change, or gate relaxation is claimed."
+}

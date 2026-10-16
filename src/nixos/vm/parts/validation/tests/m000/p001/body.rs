@@ -133,7 +133,7 @@
         let descriptor_ref = crate::preserves_rail::canonical_hash(&descriptor).expect("descriptor ref");
         let receipt = fault_receipt(&descriptor_ref, "pass", "supported", &[local_ref("workflow-child")], &[]);
 
-        let validation = validate_nixos_vm_fault_evidence(&NixosVmFaultEvidenceValidationInput {
+        let validation = validate_nixos_vm_fault_evidence(&NixosVmFaultEvidenceInput {
             topology_value: &topology,
             descriptor_values: &[descriptor],
             receipt_values: &[receipt],
@@ -145,7 +145,7 @@
     }
 
     #[test]
-    fn vm_fault_validation_rejects_unavailable_log_only_and_wrong_topology() {
+    fn vm_fault_rejects_unavailable_log_only_and_wrong_topology() {
         // r[verify molten.testing.nixos_vm_fault_injection.unavailable_boundary]
         // r[verify molten.testing.nixos_vm_fault_injection.negative_fixtures]
         let topology = topology();
@@ -155,7 +155,7 @@
         let receipt =
             fault_receipt(&descriptor_ref, "pass", "unavailable", &[], &["host feature unavailable".to_string()]);
 
-        let validation = validate_nixos_vm_fault_evidence(&NixosVmFaultEvidenceValidationInput {
+        let validation = validate_nixos_vm_fault_evidence(&NixosVmFaultEvidenceInput {
             topology_value: &topology,
             descriptor_values: &[descriptor],
             receipt_values: &[receipt],
@@ -174,7 +174,7 @@
     }
 
     #[test]
-    fn vm_fault_validation_covers_restart_and_storage_denials() {
+    fn vm_fault_covers_restart_and_storage_denials() {
         // r[verify molten.testing.nixos_vm_fault_injection.restart_windows]
         // r[verify molten.testing.nixos_vm_fault_injection.storage_state_faults]
         let topology = topology();
@@ -188,7 +188,7 @@
         let storage_receipt =
             fault_receipt(&storage_ref, "deny", "supported", &[], &["permission denied before mutation".to_string()]);
 
-        let validation = validate_nixos_vm_fault_evidence(&NixosVmFaultEvidenceValidationInput {
+        let validation = validate_nixos_vm_fault_evidence(&NixosVmFaultEvidenceInput {
             topology_value: &topology,
             descriptor_values: &[restart, storage],
             receipt_values: &[restart_receipt, storage_receipt],

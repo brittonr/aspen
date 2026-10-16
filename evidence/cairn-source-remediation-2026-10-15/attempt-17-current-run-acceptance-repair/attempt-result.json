@@ -1,0 +1,126 @@
+{
+  "attempt": "17/20",
+  "change": "bind-shutdown-observations-to-current-node-run",
+  "result": "blocked-by-required-nix-acceptance",
+  "package_acceptance_record": ".cairn/changes/bind-shutdown-observations-to-current-node-run/evidence/2026-10-16-attempt-17-blocked.json",
+  "immediate_outcome": "Test-only borrowed slices remove the denied-warning clone findings; fresh actual CLI scenarios preserve historical duplicate suppression without false current shutdown.",
+  "durable_capability": "Normal core/daemon regressions, canonical current-run/completion linkage, actual positive/expected-deny CLI coverage and exact repeatable command/driver/source bindings are retained.",
+  "maintenance_owner": "Molten node-runtime maintainers own lifecycle decisions; node-host maintainers own capability-rooted observations; host operator owns Nix GC/headroom remediation.",
+  "repeatability_evidence": "Exact executed CLI and native helper sources, command argv, compiler/library/source identities, stdout/stderr refs and canonical packed outputs are retained; normal regression and all feature-cohort results are recorded.",
+  "behavior": {
+    "actual_cases": 15,
+    "actual_cli_calls": 89,
+    "canonical_packed_observations": 8,
+    "positive_exit": 0,
+    "expected_deny_exit": 1,
+    "record": "runtime-and-suite-summary.json"
+  },
+  "normal_suites": {
+    "ordered-workspace-all-targets": {
+      "exit_code": 0,
+      "passed": 2118,
+      "failed": 0,
+      "ignored": 0,
+      "reported_binaries": 18
+    },
+    "ordered-workspace-doctests": {
+      "exit_code": 0,
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0,
+      "reported_binaries": 4
+    },
+    "ordered-enabled-feature-tests": {
+      "exit_code": 0,
+      "passed": 2137,
+      "failed": 0,
+      "ignored": 1,
+      "reported_binaries": 19
+    },
+    "ordered-disabled-profiler-tests": {
+      "exit_code": 0,
+      "passed": 2118,
+      "failed": 0,
+      "ignored": 0,
+      "reported_binaries": 18
+    }
+  },
+  "clippy": {
+    "default": "pass",
+    "enabled_features": "pass",
+    "profiler_disabled": "pass",
+    "warnings": "denied"
+  },
+  "format": "pass",
+  "configured_octet": {
+    "workspace": "clean; zero findings",
+    "library": "clean; zero findings",
+    "strict_ci_gate_ref": "blake3:ab8f48249b87c5caeedf35eb796ad79e245bac83fd1ef4b6a3bb692294ab23c0"
+  },
+  "native_traceability": {
+    "scope": "Exactly four F14 requirements; pre-sync delta, not accepted-spec or release coverage.",
+    "manifest_ref": "blake3:7b33bc22ffb6da56434b3799e9fbd45721b39be5ef36722407e664b92cad20c1",
+    "missing_positive": 0,
+    "missing_negative": 0,
+    "stale": 0,
+    "compatibility_only": 0,
+    "record": "native-f14-pre-sync-receipt-backed-traceability.json"
+  },
+  "final_documented_checkpoint": {
+    "strict_cairn_valid": true,
+    "proposal_gate": "PASS",
+    "design_gate": "PASS",
+    "tasks_structural_gate": "PASS",
+    "tasks_completed": 9,
+    "tasks_total": 10,
+    "inherited_guard": "pass; dangling=0; inherited uncovered=1924",
+    "boundary": "Structural passes do not complete the open acceptance task or substitute for required Nix execution."
+  },
+  "blocker": {
+    "command_record": "ordered-relevant-nix-checks.json",
+    "required_checks": [
+      "checks.x86_64-linux.node-state-authority",
+      "checks.x86_64-linux.nextest"
+    ],
+    "timed_out": true,
+    "elapsed_seconds": 3500.144,
+    "stderr": "running auto-GC to free 53263728640 bytes\nwaiting for the big garbage collector lock...\n\nshutting down\u001b[Kerror: interrupted by the user\n",
+    "reason": "The required Nix command timed out while waiting for the host-wide garbage collector lock; no successful execution of either selected check was observed.",
+    "observed_store_available_bytes": 73027944448,
+    "configured_min_free_bytes": 107374182400,
+    "configured_max_free_bytes": 137438953472,
+    "observed_tmp_available_bytes": 4381212672,
+    "lock_owner_limit": "Unprivileged lslocks output did not identify a precise gc.lock owner; no PID is blamed or authorized for termination.",
+    "remediation_required": "Operator resolves GC contention and restores configured Nix headroom, or explicitly authorizes a specific safe host-level remediation. Required acceptance is not waived."
+  },
+  "lifecycle": {
+    "synced": false,
+    "archived": false,
+    "mainline_integrated": false,
+    "committed_in_this_resume": false,
+    "molten_remote_push": false,
+    "remaining_active_changes_in_dedicated_worktree": 48
+  },
+  "campaign": {
+    "attempts_consumed": 17,
+    "attempt_cap": 20,
+    "new_attempts_started_after_blocker": false,
+    "halt": "Agreed mandatory-gate escalation; host-wide remediation requires operator action or additional explicit authority."
+  },
+  "cleanup": {
+    "removed_task_owned_binary": "/tmp/molten-f14-current-run-16-restored-se51n6m8/traceability17",
+    "released_tmp_bytes": 950039952,
+    "retained": [
+      "execution-drivers.json exact executed Rust/Python sources",
+      "native-traceability-consumer-compile.json actual compile command/result",
+      "native-consumer-library-provenance.json exact library/binary/source binding",
+      "All canonical observations, native verification receipts and original attempt-16 failed-before states"
+    ],
+    "scope": "Only the newly compiled attempt-17 external helper was removed; no unrelated files, processes, old evidence or failed-before roots were touched."
+  },
+  "non_claims": [
+    "Molten is not finished; zero-active-Cairns objective is not met.",
+    "No accepted or archived status for F14, mainline integration or release eligibility.",
+    "No physical process termination, arbitrary VM correctness, external DoltLite execution, global liveness or whole-system proof."
+  ]
+}

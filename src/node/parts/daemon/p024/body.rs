@@ -57,7 +57,7 @@ fn live_listener_receipt_refs(value: &IoValue) -> Result<(String, Vec<String>, S
 }
 
 pub async fn serve_control_live_listener(input: &ControlLiveServeInput<'_>) -> Result<ControlLiveServe> {
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::DirectoryRoot::open(input.state_root)?;
     validate_state_root(input.state_root)?;
     validate_node_id(input.topic)?;
     validate_listener_event_limit(input.max_events)?;
@@ -65,7 +65,7 @@ pub async fn serve_control_live_listener(input: &ControlLiveServeInput<'_>) -> R
     ensure_state_layout(&state_root)?;
     let identity = crate::node_identity::parse_identity(&read_preserves(
         &state_root,
-        &crate::node_state::NodeStatePath::parse(IDENTITY_FILE)?,
+        &crate::node_state::RelativePath::parse(IDENTITY_FILE)?,
     )?)?;
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
     let endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(&state_root, &identity)?)).await?;
@@ -93,7 +93,7 @@ pub async fn serve_control_live_listener(input: &ControlLiveServeInput<'_>) -> R
 pub async fn control_live_serve_listener_loopback(
     input: &ControlLiveServeLoopbackInput<'_>,
 ) -> Result<ControlLiveServeLoopback> {
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::DirectoryRoot::open(input.state_root)?;
     validate_state_root(input.state_root)?;
     ensure_state_layout(&state_root)?;
     let envelope_input = ControlIngressEnvelopeInput {
@@ -168,10 +168,10 @@ struct LoopbackPair {
     endpoint_id: String,
 }
 
-async fn loopback_pair(state_root: &crate::node_state::NodeStateRoot, topic: &str) -> Result<LoopbackPair> {
+async fn loopback_pair(state_root: &crate::node_state::DirectoryRoot, topic: &str) -> Result<LoopbackPair> {
     let identity = crate::node_identity::parse_identity(&read_preserves(
         state_root,
-        &crate::node_state::NodeStatePath::parse(IDENTITY_FILE)?,
+        &crate::node_state::RelativePath::parse(IDENTITY_FILE)?,
     )?)?;
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
     let receiver_endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(state_root, &identity)?)).await?;
@@ -220,7 +220,7 @@ struct EventScan {
 }
 
 async fn scan_events(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::DirectoryRoot,
     input: &ControlLiveServeInput<'_>,
     receiver: &mut iroh_gossip::api::GossipTopic,
     node_id: &str,

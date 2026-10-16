@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "python3",
+    "/tmp/molten-f14-current-run-16-restored-se51n6m8/cli-consumer.py",
+    "/home/brittonr/.cargo-target/debug/molten",
+    "positive"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T18:23:06.808775+00:00",
+  "elapsed_seconds": 1.338,
+  "exit_code": 2,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "AssertionError()\n"
+}

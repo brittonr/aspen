@@ -57,6 +57,35 @@ molten test traceability scan --root . --changed-only \
 
 The pure core derives coverage from validated receipt fields rather than rendered logs. The Nix/release gate surface can call the same scan command and fail closed on missing positive, missing negative, stale receipt refs, duplicate receipt refs, or compatibility-only coverage when receipt-backed coverage is required. `tests/evidence-matrix.ncl` is the checked-in Nickel matrix source for durable review; its exported entries feed the same requirement ids, positive/negative coverage split, artifact refs, receipt refs, evidence scope, and diagnostic-only exemptions.
 
+## Pre-sync source identities and inherited debt
+
+<!-- r[impl molten.project.inherited_tracey_debt.active_delta_non_claims] -->
+
+The standalone inherited-debt guard separates accepted coverage from pending identity
+resolution. Only accepted `.cairn/specs` requirements contribute to accepted reference
+counts, uncovered requirements, and the exact reviewed inherited baseline.
+
+An otherwise unknown source reference can resolve as pending when its identifier is
+declared under ADDED or MODIFIED requirements in a native
+`.cairn/changes/<change>/specs/**/spec.md` delta. The guard reports these separately as
+`pending_references`; unreferenced proposed requirements do not become inherited debt.
+REMOVED requirements, rename labels, proposals, tasks, archives, and unrelated Markdown
+do not admit pending identities. Unknown references still deny normal and baseline-write
+execution, and active declarations cannot hide new or stale accepted debt.
+
+Run the existing repository rail from the Molten checkout:
+
+```sh
+nix build .#checks.x86_64-linux.inherited-tracey-debt --no-update-lock-file --no-link -L
+```
+
+Pending resolution proves only that a proposed identity exists in the admitted source
+scope. It proves neither marker truth, accepted coverage, package validity, runtime
+behavior, lifecycle eligibility, nor release readiness. Native Cairn structural
+validation, reviewed behavioral acceptance, and all-task/passing-gate sync/archive
+requirements remain mandatory. Molten lifecycle/traceability maintainers own this
+boundary; a passing source identity check must never close an unfinished package.
+
 ## Testing hardening receipts
 
 `molten::testing_hardening` provides pure in-memory builders for the current testing-harness hardening rails:

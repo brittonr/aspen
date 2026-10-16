@@ -4,7 +4,7 @@ type Result<T> = crate::error::Result<T>;
 const EXTERNAL_LIVE_PILOT_SCHEMA: &str = "molten.external-live-pilot-decision-v1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PilotScope {
+pub struct Scope {
     pub allowed_workloads: Vec<String>,
     pub denied_workloads: Vec<String>,
     pub host_identity_refs: Vec<String>,
@@ -14,8 +14,8 @@ pub struct PilotScope {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PilotDecisionInput {
-    pub scope: PilotScope,
+pub struct DecisionInput {
+    pub scope: Scope,
     pub child_evidence_refs: Vec<String>,
     pub replay_refs: Vec<String>,
     pub network_diagnostic_refs: Vec<String>,
@@ -29,14 +29,14 @@ pub struct PilotDecisionInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PilotDecisionReceipt {
+pub struct DecisionReceipt {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub value: IoValue,
     pub receipt_ref: String,
 }
 
-pub fn validate_pilot_decision(input: &PilotDecisionInput) -> Result<PilotDecisionReceipt> {
+pub fn validate_decision(input: &DecisionInput) -> Result<DecisionReceipt> {
     let mut diagnostics = Vec::new();
     require_non_empty(&mut diagnostics, "allowed workload", &input.scope.allowed_workloads);
     require_non_empty(&mut diagnostics, "host identity", &input.scope.host_identity_refs);
@@ -62,7 +62,7 @@ pub fn validate_pilot_decision(input: &PilotDecisionInput) -> Result<PilotDecisi
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let value = receipt_value(decision, &diagnostics, input);
     let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(PilotDecisionReceipt {
+    Ok(DecisionReceipt {
         decision: decision.to_string(),
         diagnostics,
         value,
@@ -70,7 +70,7 @@ pub fn validate_pilot_decision(input: &PilotDecisionInput) -> Result<PilotDecisi
     })
 }
 
-pub fn pilot_evidence_bundle_members() -> &'static [&'static str] {
+pub fn evidence_bundle_members() -> &'static [&'static str] {
     &[
         "node-control-workflow",
         "service-exchange",
@@ -90,7 +90,7 @@ fn require_non_empty(diagnostics: &mut impl crate::bounded::VecSink<String>, lab
     }
 }
 
-fn receipt_value(decision: &str, diagnostics: &[String], input: &PilotDecisionInput) -> IoValue {
+fn receipt_value(decision: &str, diagnostics: &[String], input: &DecisionInput) -> IoValue {
     crate::preserves_rail::record("external-live-pilot-decision-v1", vec![
         string(EXTERNAL_LIVE_PILOT_SCHEMA),
         field("decision", decision),
@@ -125,15 +125,15 @@ mod tests {
     const STALE_TICK: u64 = 5;
 
     #[test]
-    fn constrained_pilot_decision_passes_with_child_evidence() {
-        let receipt = validate_pilot_decision(&input(CURRENT_TICK, false, true, true)).expect("pilot");
+    fn constrained_decision_passes_with_child_evidence() {
+        let receipt = validate_decision(&input(CURRENT_TICK, false, true, true)).expect("pilot");
         assert_eq!(receipt.decision, "pass");
-        assert!(pilot_evidence_bundle_members().contains(&"retention-readback"));
+        assert!(evidence_bundle_members().contains(&"retention-readback"));
     }
 
     #[test]
-    fn pilot_denies_stale_overbroad_or_resource_breached_claims() {
-        let receipt = validate_pilot_decision(&input(STALE_TICK, true, false, false)).expect("pilot");
+    fn denies_stale_overbroad_or_resource_breached_claims() {
+        let receipt = validate_decision(&input(STALE_TICK, true, false, false)).expect("pilot");
         assert_eq!(receipt.decision, "deny");
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("stale")));
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("resource")));
@@ -145,9 +145,9 @@ mod tests {
         claims_broad_production: bool,
         diagnostics_within_threshold: bool,
         resource_within_threshold: bool,
-    ) -> PilotDecisionInput {
-        PilotDecisionInput {
-            scope: PilotScope {
+    ) -> DecisionInput {
+        DecisionInput {
+            scope: Scope {
                 allowed_workloads: vec!["node-control-status".to_string()],
                 denied_workloads: vec!["destructive-retention".to_string()],
                 host_identity_refs: vec![test_ref("host")],

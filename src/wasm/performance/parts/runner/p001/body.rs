@@ -1,16 +1,16 @@
 
 pub fn parse_sightglass_measurements(
-    profile: &super::model::PerformanceProfile,
+    profile: &super::model::Profile,
     suite: &super::model::BenchmarkSuite,
     expected_architecture: &str,
     bytes: &[u8],
-) -> super::model::PerformanceResult<Vec<super::model::PhaseSamples>> {
-    super::profile::validate_performance_profile(profile)?;
+) -> super::model::Result<Vec<super::model::PhaseSamples>> {
+    super::profile::validate(profile)?;
     super::comparison::validate_suite_instance(profile, suite)?;
     let measurements: Vec<RawSightglassMeasurement> = serde_json::from_slice(bytes)
-        .map_err(|error| super::model::PerformanceDenial::new(format!("Sightglass raw JSON is malformed: {error}")))?;
+        .map_err(|error| super::model::Denial::new(format!("Sightglass raw JSON is malformed: {error}")))?;
     if measurements.is_empty() {
-        return Err(super::model::PerformanceDenial::new("Sightglass raw JSON contains no measurements"));
+        return Err(super::model::Denial::new("Sightglass raw JSON contains no measurements"));
     }
     let process_ordinals = diagnostic_process_ordinals(&measurements, suite)?;
     let mut phases = group_phase_samples(measurements, suite, expected_architecture, &process_ordinals)?;
@@ -23,21 +23,21 @@ pub fn parse_sightglass_measurements(
 fn diagnostic_process_ordinals(
     measurements: &[RawSightglassMeasurement],
     suite: &super::model::BenchmarkSuite,
-) -> super::model::PerformanceResult<std::collections::BTreeMap<u32, u32>> {
+) -> super::model::Result<std::collections::BTreeMap<u32, u32>> {
     let admitted_processes = measurements
         .iter()
         .filter(|measurement| measurement.event == suite.measurement)
         .filter_map(|measurement| {
-            super::model::PerformancePhase::parse(&measurement.phase)
+            super::model::Phase::parse(&measurement.phase)
                 .filter(|phase| suite.phases.contains(phase))
                 .map(|_| measurement.process)
         })
         .collect::<std::collections::BTreeSet<_>>();
     let expected_processes = usize::try_from(suite.sampling.processes).map_err(|error| {
-        super::model::PerformanceDenial::new(format!("Sightglass process count is unsupported: {error}"))
+        super::model::Denial::new(format!("Sightglass process count is unsupported: {error}"))
     })?;
     if admitted_processes.len() != expected_processes {
-        return Err(super::model::PerformanceDenial::new(
+        return Err(super::model::Denial::new(
             "Sightglass raw JSON has an incomplete or extra diagnostic process set",
         ));
     }
@@ -46,10 +46,10 @@ fn diagnostic_process_ordinals(
         .enumerate()
         .map(|(ordinal, diagnostic_process)| {
             u32::try_from(ordinal).map(|ordinal| (diagnostic_process, ordinal)).map_err(|error| {
-                super::model::PerformanceDenial::new(format!("Sightglass process ordinal is unsupported: {error}"))
+                super::model::Denial::new(format!("Sightglass process ordinal is unsupported: {error}"))
             })
         })
-        .collect::<super::model::PerformanceResult<std::collections::BTreeMap<_, _>>>()
+        .collect::<super::model::Result<std::collections::BTreeMap<_, _>>>()
 }
 
 /// Groups the selected measurements by phase, requiring one host architecture and one diagnostic
@@ -59,25 +59,25 @@ fn group_phase_samples(
     suite: &super::model::BenchmarkSuite,
     expected_architecture: &str,
     process_ordinals: &std::collections::BTreeMap<u32, u32>,
-) -> super::model::PerformanceResult<Vec<super::model::PhaseSamples>> {
+) -> super::model::Result<Vec<super::model::PhaseSamples>> {
     // Selected groups share the suite event and an admitted phase, so each suite phase yields at most
     // one group.
     let mut phases = Vec::<super::model::PhaseSamples>::with_capacity(suite.phases.len());
     let mut diagnostic_identity = None;
     for measurement in measurements {
         if measurement.arch != expected_architecture {
-            return Err(super::model::PerformanceDenial::new(
+            return Err(super::model::Denial::new(
                 "Sightglass measurement architecture differs from the admitted host",
             ));
         }
         if measurement.engine.trim().is_empty() || measurement.wasm.trim().is_empty() {
-            return Err(super::model::PerformanceDenial::new(
+            return Err(super::model::Denial::new(
                 "Sightglass measurement omits its diagnostic engine or benchmark label",
             ));
         }
         let current_identity = (measurement.engine.clone(), measurement.engine_flags.clone(), measurement.wasm.clone());
         if diagnostic_identity.as_ref().is_some_and(|expected| expected != &current_identity) {
-            return Err(super::model::PerformanceDenial::new(
+            return Err(super::model::Denial::new(
                 "Sightglass raw output mixes diagnostic engine or benchmark identities",
             ));
         }
@@ -85,19 +85,19 @@ fn group_phase_samples(
         if measurement.event != suite.measurement {
             continue;
         }
-        let phase = super::model::PerformancePhase::parse(&measurement.phase)
-            .ok_or_else(|| super::model::PerformanceDenial::new("Sightglass measurement uses an unsupported phase"))?;
+        let phase = super::model::Phase::parse(&measurement.phase)
+            .ok_or_else(|| super::model::Denial::new("Sightglass measurement uses an unsupported phase"))?;
         if !suite.phases.contains(&phase) {
-            return Err(super::model::PerformanceDenial::new(
+            return Err(super::model::Denial::new(
                 "Sightglass measurement phase is not admitted by the suite",
             ));
         }
         let process = process_ordinals.get(&measurement.process).copied().ok_or_else(|| {
-            super::model::PerformanceDenial::new(
+            super::model::Denial::new(
                 "Sightglass selected measurement uses an unadmitted diagnostic process",
             )
         })?;
-        let sample = super::model::PerformanceSample {
+        let sample = super::model::Sample {
             process,
             iteration: measurement.iteration,
             count: measurement.count,
@@ -118,12 +118,12 @@ fn group_phase_samples(
 /// grid.
 fn validate_phase_grid(
     phases: &mut [super::model::PhaseSamples],
-    profile: &super::model::PerformanceProfile,
+    profile: &super::model::Profile,
     suite: &super::model::BenchmarkSuite,
-) -> super::model::PerformanceResult<()> {
+) -> super::model::Result<()> {
     for required in &suite.phases {
         if !phases.iter().any(|group| group.phase == *required) {
-            return Err(super::model::PerformanceDenial::new(format!(
+            return Err(super::model::Denial::new(format!(
                 "Sightglass raw JSON omits the {} phase for the selected event",
                 required.as_str()
             )));
@@ -131,13 +131,13 @@ fn validate_phase_grid(
     }
     phases.sort_by(|left, right| (left.phase, &left.event).cmp(&(right.phase, &right.event)));
     let expected_samples = usize::try_from(suite.sampling.expected_samples_per_phase()?).map_err(|error| {
-        super::model::PerformanceDenial::new(format!("Sightglass sample count is unsupported: {error}"))
+        super::model::Denial::new(format!("Sightglass sample count is unsupported: {error}"))
     })?;
     let expected_iterations = usize::try_from(suite.sampling.iterations_per_process).map_err(|error| {
-        super::model::PerformanceDenial::new(format!("Sightglass iteration count is unsupported: {error}"))
+        super::model::Denial::new(format!("Sightglass iteration count is unsupported: {error}"))
     })?;
     if phases.len() != suite.phases.len() {
-        return Err(super::model::PerformanceDenial::new(
+        return Err(super::model::Denial::new(
             "Sightglass output contains duplicate or extra phase/event groups",
         ));
     }
@@ -164,7 +164,7 @@ fn validate_phase_grid(
                 .windows(ADJACENT_PAIR_WIDTH)
                 .any(|pair| (pair[0].process, pair[0].iteration) == (pair[1].process, pair[1].iteration))
         {
-            return Err(super::model::PerformanceDenial::new(format!(
+            return Err(super::model::Denial::new(format!(
                 "Sightglass {} samples are incomplete, duplicate, zero, or over bound",
                 phase.phase.as_str()
             )));
@@ -201,48 +201,48 @@ fn open_admitted_process_file(
     expected_ref: &str,
     maximum_bytes: u64,
     label: &str,
-) -> super::model::PerformanceResult<AdmittedProcessFile> {
+) -> super::model::Result<AdmittedProcessFile> {
     let parent = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| std::path::Path::new("."));
     let leaf = path
         .file_name()
-        .ok_or_else(|| super::model::PerformanceDenial::new(format!("Sightglass {label} path has no file name")))?;
+        .ok_or_else(|| super::model::Denial::new(format!("Sightglass {label} path has no file name")))?;
     let directory = cap_std::fs::Dir::open_ambient_dir(parent, cap_std::ambient_authority()).map_err(|error| {
-        super::model::PerformanceDenial::new(format!("Sightglass could not open {label} parent authority: {error}"))
+        super::model::Denial::new(format!("Sightglass could not open {label} parent authority: {error}"))
     })?;
     let mut options = cap_std::fs::OpenOptions::new();
     options.read(true).follow(cap_fs_ext::FollowSymlinks::No);
     let mut file = directory.open_with(std::path::Path::new(leaf), &options).map_err(|error| {
-        super::model::PerformanceDenial::new(format!("Sightglass could not open no-follow {label} artifact: {error}"))
+        super::model::Denial::new(format!("Sightglass could not open no-follow {label} artifact: {error}"))
     })?;
     let metadata = file.metadata().map_err(|error| {
-        super::model::PerformanceDenial::new(format!("Sightglass {label} metadata failed: {error}"))
+        super::model::Denial::new(format!("Sightglass {label} metadata failed: {error}"))
     })?;
     if !metadata.is_file() || metadata.len() > maximum_bytes {
-        return Err(super::model::PerformanceDenial::new(format!(
+        return Err(super::model::Denial::new(format!(
             "Sightglass {label} artifact is not a bounded regular file"
         )));
     }
     let maximum_bytes = usize::try_from(maximum_bytes).map_err(|error| {
-        super::model::PerformanceDenial::new(format!("Sightglass {label} artifact bound is unsupported: {error}"))
+        super::model::Denial::new(format!("Sightglass {label} artifact bound is unsupported: {error}"))
     })?;
     let bytes = read_bounded(&mut file, maximum_bytes).map_err(|error| {
-        super::model::PerformanceDenial::new(format!("Sightglass {label} artifact read failed: {error}"))
+        super::model::Denial::new(format!("Sightglass {label} artifact read failed: {error}"))
     })?;
     if super::model::content_ref(&bytes) != expected_ref {
-        return Err(super::model::PerformanceDenial::new(format!(
+        return Err(super::model::Denial::new(format!(
             "Sightglass {label} artifact differs from its admitted content identity"
         )));
     }
     if !metadata.permissions().readonly() {
-        return Err(super::model::PerformanceDenial::new(format!(
+        return Err(super::model::Denial::new(format!(
             "Sightglass {label} artifact is mutable after content admission"
         )));
     }
     file.seek(std::io::SeekFrom::Start(0))
-        .map_err(|error| super::model::PerformanceDenial::new(format!("Sightglass {label} rewind failed: {error}")))?;
+        .map_err(|error| super::model::Denial::new(format!("Sightglass {label} rewind failed: {error}")))?;
     let process_path = process_file_path(&file, label)?;
     Ok(AdmittedProcessFile {
         _file: file,
@@ -251,15 +251,15 @@ fn open_admitted_process_file(
 }
 
 #[cfg(target_os = "linux")]
-fn process_file_path(file: &cap_std::fs::File, _label: &str) -> super::model::PerformanceResult<std::path::PathBuf> {
+fn process_file_path(file: &cap_std::fs::File, _label: &str) -> super::model::Result<std::path::PathBuf> {
     use std::os::fd::AsRawFd;
 
     Ok(std::path::PathBuf::from(format!("/proc/{}/fd/{}", std::process::id(), file.as_raw_fd())))
 }
 
 #[cfg(not(target_os = "linux"))]
-fn process_file_path(_file: &cap_std::fs::File, label: &str) -> super::model::PerformanceResult<std::path::PathBuf> {
-    Err(super::model::PerformanceDenial::new(format!(
+fn process_file_path(_file: &cap_std::fs::File, label: &str) -> super::model::Result<std::path::PathBuf> {
+    Err(super::model::Denial::new(format!(
         "Sightglass same-handle {label} execution is unsupported on this host"
     )))
 }

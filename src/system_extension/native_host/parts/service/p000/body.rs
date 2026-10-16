@@ -3,32 +3,32 @@ const STATUS_RECORD: &str = "native-host-status-v2";
 const CLAIM_LEVEL: &str = "local-live-materialized-values-pilot";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum NativeServiceError {
+pub enum Failure {
     Host(String),
-    Journal(NativeJournalError),
-    Executor(NativeExecutorError),
+    Journal(Error),
+    Executor(CallbackFailure),
     StatePoisoned,
     Admission(Vec<NativeHostIssue>),
     MissingCheckpoint,
 }
 
-impl From<crate::error::MoltenError> for NativeServiceError {
-    fn from(error: crate::error::MoltenError) -> Self {
+impl From<crate::error::Failure> for Failure {
+    fn from(error: crate::error::Failure) -> Self {
         Self::Host(error.to_string())
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NativeServiceIngressResult {
+pub struct IngressResult {
     pub admission: NativeIngressAdmission,
-    pub dispatch: HostDispatchResult,
+    pub dispatch: DispatchResult,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalNativeServiceStatus {
+pub struct CanonicalStatus {
     pub status_ref: String,
     pub claim_level: String,
-    pub operator: CanonicalOperatorStatus,
+    pub operator: OperatorStatusRecord,
     pub recovery: Vec<NativeRecoveryInventory>,
     pub non_claims: Vec<NativeHostNonClaim>,
 }
@@ -40,14 +40,14 @@ pub trait NativeServiceIngressPort {
         &mut self,
         ingress: &NativeIngressEnvelope,
         logical_tick: u64,
-    ) -> std::result::Result<NativeServiceIngressResult, Self::Error>;
+    ) -> std::result::Result<IngressResult, Self::Error>;
 }
 
-pub struct NativeServiceClient<'a, T: NativeServiceIngressPort> {
+pub struct Client<'a, T: NativeServiceIngressPort> {
     port: &'a mut T,
 }
 
-impl<'a, T: NativeServiceIngressPort> NativeServiceClient<'a, T> {
+impl<'a, T: NativeServiceIngressPort> Client<'a, T> {
     pub fn new(port: &'a mut T) -> Self {
         Self { port }
     }
@@ -56,12 +56,12 @@ impl<'a, T: NativeServiceIngressPort> NativeServiceClient<'a, T> {
         &mut self,
         ingress: &NativeIngressEnvelope,
         logical_tick: u64,
-    ) -> std::result::Result<NativeServiceIngressResult, T::Error> {
+    ) -> std::result::Result<IngressResult, T::Error> {
         self.port.submit(ingress, logical_tick)
     }
 }
 
-pub struct NativeSystemExtensionService<P, J>
+pub struct Supervisor<P, J>
 where
     P: crate::fabric_execution::ExecutionFabricPort,
     J: NativeHostJournal,
@@ -70,7 +70,7 @@ where
     executable: AdmittedNativeExecutable,
     journal: std::sync::Arc<std::sync::Mutex<J>>,
     instance: std::sync::Arc<std::sync::Mutex<NativeInstanceRecord>>,
-    host: SystemExtensionHost<NativeProcessSystemExtensionExecutor<P, J>>,
+    host: Dispatcher<Process<P, J>>,
 }
 
 /// The admitted native host profile, executable evidence, and manifest a native service is built
@@ -78,5 +78,5 @@ where
 pub struct AdmissionSet {
     pub profile: AdmittedNativeHostProfile,
     pub executable: AdmittedNativeExecutable,
-    pub admitted: CanonicalAdmittedSystemExtensionManifest,
+    pub admitted: AdmittedManifest,
 }

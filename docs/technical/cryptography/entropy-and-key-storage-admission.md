@@ -12,7 +12,7 @@ The checked [production template](../../fabric-cryptographic-identity/profile-te
 
 ## Resolution does not silently repair missing identity
 
-`IrohEd25519FileAdapter::new` first admits the production profile, requires capability-file support, validates the backend reference, and accepts only Identity or Secrets node-state namespaces. The [resolution implementation](../../../src/fabric_crypto_identity/file/parts/adapter/p001/body.rs) checks revocation before observing the purpose-specific leaf. Missing, nonregular, and regular files take distinct paths.
+`IrohEd25519::new` first admits the production profile, requires capability-file support, validates the backend reference, and accepts only Identity or Secrets node-state namespaces. The [resolution implementation](../../../src/fabric_crypto_identity/file/parts/adapter/p001/body.rs) checks revocation before observing the purpose-specific leaf. Missing, nonregular, and regular files take distinct paths.
 
 A missing file is generated only when the caller explicitly permits first-boot generation. With that permission disabled, the adapter returns an error rather than inventing a replacement identity. A nonregular leaf is rejected. A regular file must have restricted permissions before bounded reading and record decoding. These decisions preserve the distinction between intentional enrollment and recovery from unexpected key loss: treating every missing key as first boot would change public identity while hiding the operational failure.
 

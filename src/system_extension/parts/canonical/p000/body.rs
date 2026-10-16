@@ -2,16 +2,16 @@ const MAX_CANONICAL_EXTENSION_ITEMS: usize = 128;
 const MAX_READBACK_IDENTIFIER_BYTES: usize = 256;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalAdmittedSystemExtensionManifest {
+pub struct AdmittedManifest {
     manifest: super::AdmittedSystemExtensionManifest,
     manifest_ref: String,
     value: preserves::IOValue,
     tier_admission_ref: String,
-    required_port_bindings: Vec<crate::fabric::CanonicalFabricPortBinding>,
-    optional_port_bindings: Vec<crate::fabric::CanonicalFabricPortBinding>,
+    required_port_bindings: Vec<crate::fabric::CanonicalPortBinding>,
+    optional_port_bindings: Vec<crate::fabric::CanonicalPortBinding>,
 }
 
-impl CanonicalAdmittedSystemExtensionManifest {
+impl AdmittedManifest {
     pub fn manifest(&self) -> &super::AdmittedSystemExtensionManifest {
         &self.manifest
     }
@@ -28,11 +28,11 @@ impl CanonicalAdmittedSystemExtensionManifest {
         &self.tier_admission_ref
     }
 
-    pub fn required_port_bindings(&self) -> &[crate::fabric::CanonicalFabricPortBinding] {
+    pub fn required_port_bindings(&self) -> &[crate::fabric::CanonicalPortBinding] {
         &self.required_port_bindings
     }
 
-    pub fn optional_port_bindings(&self) -> &[crate::fabric::CanonicalFabricPortBinding] {
+    pub fn optional_port_bindings(&self) -> &[crate::fabric::CanonicalPortBinding] {
         &self.optional_port_bindings
     }
 
@@ -46,7 +46,7 @@ impl CanonicalAdmittedSystemExtensionManifest {
     pub fn binding_for(
         &self,
         key: &crate::fabric::FabricPortKey,
-    ) -> Option<&crate::fabric::CanonicalFabricPortBinding> {
+    ) -> Option<&crate::fabric::CanonicalPortBinding> {
         self.required_port_bindings
             .iter()
             .chain(self.optional_port_bindings.iter())
@@ -56,12 +56,12 @@ impl CanonicalAdmittedSystemExtensionManifest {
 
 // r[impl molten.system_extension.manifest]
 // r[impl molten.system_extension.typed_effects]
-pub fn canonical_admit_system_extension_manifest(
+pub fn admit_manifest(
     input: &super::SystemExtensionManifestInput,
     descriptors: &[crate::fabric::FabricPortDescriptor],
     tier: &crate::fabric::CanonicalExtensionTierAdmission,
     admitted_execution_profiles: &[super::ExecutionProfile],
-) -> crate::error::Result<CanonicalAdmittedSystemExtensionManifest> {
+) -> crate::error::Result<AdmittedManifest> {
     let registry = crate::fabric::build_fabric_port_registry(descriptors)
         .map_err(|issues| validation_error("system-extension fabric registry", &issues))?;
     let manifest = super::admit_system_extension_manifest(input, super::SystemExtensionAdmissionContext {
@@ -73,7 +73,7 @@ pub fn canonical_admit_system_extension_manifest(
 
     let mut required_port_bindings = Vec::with_capacity(manifest.required_port_requirements.len());
     for requirement in &manifest.required_port_requirements {
-        required_port_bindings.push(crate::fabric::resolve_canonical_fabric_port_binding(descriptors, requirement)?);
+        required_port_bindings.push(crate::fabric::resolve_canonical_port_binding(descriptors, requirement)?);
     }
     let mut optional_port_bindings = Vec::with_capacity(manifest.optional_port_bindings.len());
     for binding in &manifest.optional_port_bindings {
@@ -84,12 +84,12 @@ pub fn canonical_admit_system_extension_manifest(
                 requirement.port_id == binding.key.port_id && requirement.version == binding.key.version
             })
             .ok_or_else(|| {
-                crate::error::MoltenError::invalid_harness(format!(
+                crate::error::Failure::invalid_harness(format!(
                     "optional binding {}@{} has no admitted requirement",
                     binding.key.port_id, binding.key.version
                 ))
             })?;
-        optional_port_bindings.push(crate::fabric::resolve_canonical_fabric_port_binding(descriptors, requirement)?);
+        optional_port_bindings.push(crate::fabric::resolve_canonical_port_binding(descriptors, requirement)?);
     }
     required_port_bindings.sort_by(|left, right| left.binding.key.cmp(&right.binding.key));
     optional_port_bindings.sort_by(|left, right| left.binding.key.cmp(&right.binding.key));
@@ -101,7 +101,7 @@ pub fn canonical_admit_system_extension_manifest(
         &optional_port_bindings,
     );
     let manifest_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalAdmittedSystemExtensionManifest {
+    Ok(AdmittedManifest {
         manifest,
         manifest_ref,
         value,
@@ -114,8 +114,8 @@ pub fn canonical_admit_system_extension_manifest(
 fn system_extension_manifest_value(
     manifest: &super::AdmittedSystemExtensionManifest,
     tier_admission_ref: &str,
-    required_bindings: &[crate::fabric::CanonicalFabricPortBinding],
-    optional_bindings: &[crate::fabric::CanonicalFabricPortBinding],
+    required_bindings: &[crate::fabric::CanonicalPortBinding],
+    optional_bindings: &[crate::fabric::CanonicalPortBinding],
 ) -> preserves::IOValue {
     crate::preserves_rail::record("system-extension-manifest-v1", vec![
         crate::preserves_rail::string(super::SYSTEM_EXTENSION_MANIFEST_SCHEMA),
@@ -157,7 +157,7 @@ fn system_extension_manifest_value(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalLifecycleReceipt {
+pub struct LifecycleReceipt {
     pub receipt_ref: String,
     pub previous: super::LifecycleState,
     pub next: super::LifecycleState,
@@ -175,9 +175,9 @@ pub(crate) struct LifecycleReceiptInput<'a> {
     pub(crate) usage: super::ResourceUsage,
 }
 
-pub(crate) fn canonical_lifecycle_receipt(
+pub(crate) fn lifecycle_receipt(
     input: LifecycleReceiptInput<'_>,
-) -> crate::error::Result<CanonicalLifecycleReceipt> {
+) -> crate::error::Result<LifecycleReceipt> {
     let LifecycleReceiptInput {
         manifest_ref,
         extension_id,
@@ -211,7 +211,7 @@ pub(crate) fn canonical_lifecycle_receipt(
         ]),
     ]);
     let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalLifecycleReceipt {
+    Ok(LifecycleReceipt {
         receipt_ref,
         previous: previous.clone(),
         next: next.clone(),
@@ -238,7 +238,7 @@ impl CallbackExecutionDecision {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalCallbackReceipt {
+pub struct CallbackReceipt {
     pub receipt_ref: String,
     pub execution_binding_ref: String,
     pub invocation: super::CallbackInvocation,

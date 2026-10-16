@@ -1,18 +1,13 @@
-type Counter = std::sync::atomic::AtomicU64;
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type PathBuf = std::path::PathBuf;
 type PreservesRecord<T> = preserves::Record<T>;
 type PreservesValue<T> = preserves::Value<T>;
 type Result<T> = crate::error::Result<T>;
 type Set<T> = std::collections::BTreeSet<T>;
 
-const RELAXED: std::sync::atomic::Ordering = std::sync::atomic::Ordering::Relaxed;
 
 mod fs {
-    pub(super) fn create_dir(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
-        std::fs::create_dir(path)
-    }
 
     pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
         std::fs::create_dir_all(path)
@@ -63,7 +58,6 @@ fn value_to_iovalue(value: &PreservesValue<IoValue>) -> IoValue {
 
 pub const RUNNER_TOOL_VERSION: &str = "local-transcript-runner-v1";
 
-const MAX_TEMP_STATE_ROOT_ATTEMPTS: u64 = 1024;
 const MAX_TRANSCRIPT_SEQUENCE_ITEMS: usize = 4_096;
 const TRANSCRIPT_ARTIFACT_LEGACY_FIELD_COUNT: usize = 11;
 const TRANSCRIPT_ARTIFACT_FIELD_COUNT: usize = 17;
@@ -75,7 +69,6 @@ const _: () = assert!(MAX_TRANSCRIPT_SEQUENCE_ITEMS > 0);
 const _: () = assert!(TRANSCRIPT_ARTIFACT_FIELD_COUNT > TRANSCRIPT_ARTIFACT_LEGACY_FIELD_COUNT);
 const _: () = assert!(TRANSCRIPT_RUN_RECEIPT_FIELD_COUNT > TRANSCRIPT_RUN_RECEIPT_LEGACY_FIELD_COUNT);
 
-static TEMP_STATE_ROOT_COUNTER: Counter = Counter::new(0);
 
 pub const KIND_MOLTEN_CLI: &str = "molten-cli";
 pub const KIND_PRESERVES: &str = "preserves";

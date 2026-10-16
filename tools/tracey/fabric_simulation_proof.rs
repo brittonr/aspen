@@ -2,7 +2,7 @@
 //
 // Product implementation lives in `src/fabric_simulation/` and
 // `crates/molten-core/src/fabric_simulation/`. Positive and negative validation
-// lives beside those modules and in `tests/fabric_simulation_boundary.rs`.
+// lives beside those modules and in `tests/fabric_simulation_boundary/main.rs`.
 // Cairn Tracey currently scans `tools/` and `crates/`, but not top-level `src/`.
 
 // r[impl molten.fabric_simulation.world_manifest]

@@ -180,8 +180,6 @@ fn replay_fixture_variant_from_kind(
         "live-effect" | "missing-effect" => {
             Ok(molten::deterministic_replay::ReplayFixtureVariant::MissingRecordedEffect)
         }
-        _ => Err(molten::error::MoltenError::invalid_harness(format!(
-            "unsupported replay fixture tamper kind {kind}"
-        ))),
+        _ => Err(molten::error::Failure::invalid_harness(format!("unsupported replay fixture tamper kind {kind}"))),
     }
 }

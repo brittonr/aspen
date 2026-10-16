@@ -45,12 +45,12 @@ impl LiveClockAdapter {
     )]
     pub fn new(profile: &super::AdmittedTimeProfile, wall_uncertainty_nanos: u64) -> crate::error::Result<Self> {
         if profile.kind != super::TimeProfileKind::Live {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "live clock requires an admitted live time profile",
             ));
         }
         if wall_uncertainty_nanos > profile.max_uncertainty_ticks {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "wall uncertainty {wall_uncertainty_nanos} exceeds profile maximum {}",
                 profile.max_uncertainty_ticks
             )));
@@ -71,12 +71,12 @@ impl LiveClockAdapter {
     )]
     pub fn observe_wall(&mut self) -> crate::error::Result<super::WallClockObservation> {
         let duration = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|error| {
-            crate::error::MoltenError::invalid_harness(format!("system clock predates Unix epoch: {error}"))
+            crate::error::Failure::invalid_harness(format!("system clock predates Unix epoch: {error}"))
         })?;
         self.observation_sequence = self
             .observation_sequence
             .checked_add(1)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("wall observation sequence overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("wall observation sequence overflow"))?;
         Ok(super::WallClockObservation {
             profile_ref: self.profile_ref.clone(),
             unix_nanos: duration_to_u64_nanos(duration)?,
@@ -88,7 +88,7 @@ impl LiveClockAdapter {
     pub fn observe_monotonic(&mut self) -> crate::error::Result<super::MonotonicInstant> {
         let ticks = duration_to_u64_nanos(self.monotonic_origin.elapsed())?;
         if ticks < self.last_monotonic_ticks {
-            return Err(crate::error::MoltenError::invalid_harness("live monotonic clock moved backwards"));
+            return Err(crate::error::Failure::invalid_harness("live monotonic clock moved backwards"));
         }
         self.last_monotonic_ticks = ticks;
         Ok(super::MonotonicInstant {
@@ -171,11 +171,11 @@ impl SupervisionDeadline {
     pub fn after(timeout: std::time::Duration) -> crate::error::Result<Self> {
         let timeout_ticks = duration_to_u64_nanos(timeout)?;
         if timeout_ticks > PROCESS_SUPERVISION_MAX_TICKS {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "supervision timeout {timeout_ticks}ns exceeds the admitted maximum {PROCESS_SUPERVISION_MAX_TICKS}ns"
             )));
         }
-        let profile = super::canonical_admit_time_profile(&process_supervision_profile())?;
+        let profile = super::admit_profile(&process_supervision_profile())?;
         let mut clock = LiveClockAdapter::new(&profile.profile, 0)?;
         let deadline = TickDeadline::after(&mut clock, timeout_ticks)?;
         Ok(Self { clock, deadline })

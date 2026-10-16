@@ -1,6 +1,6 @@
 type IoValue = preserves::IOValue;
 type Result<T> = crate::error::Result<T>;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 
 const RELEASE_PROFILE_SCHEMA: &str = "molten.prod-ops.release-profile-validation.v1";
@@ -21,7 +21,7 @@ const PLACEHOLDER_MARKER: &str = "placeholder";
 const EVIDENCE_ONLY_CAVEAT: &str = "release profile validation is release-review evidence only and does not grant runtime authority, policy admission, provenance trust, source-gate acceptance, resource rights, transport trust, retention clearance, destructive-operation permission, deployment trust, or release eligibility by itself";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReleaseEvidenceRefs {
+pub struct EvidenceRefs {
     pub source_gate_ref: Option<String>,
     pub policy_ref: Option<String>,
     pub octet_ref: Option<String>,
@@ -31,25 +31,25 @@ pub struct ReleaseEvidenceRefs {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReleaseProfileFreshness {
+pub struct Freshness {
     pub expected_generated_export_ref: Option<String>,
     pub actual_generated_export_ref: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReleaseProfileInput {
+pub struct Input {
     pub profile_id: String,
     pub tier: String,
     pub candidate_ref: Option<String>,
-    pub evidence_refs: ReleaseEvidenceRefs,
-    pub freshness: ReleaseProfileFreshness,
+    pub evidence_refs: EvidenceRefs,
+    pub freshness: Freshness,
     pub stack_provenance_required: bool,
     pub accepted_valence_policy_hashes: Vec<String>,
     pub caveats: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReleaseProfileValidation {
+pub struct Validation {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub validation_ref: String,
@@ -63,7 +63,7 @@ pub struct ReleaseProfileValidation {
 // r[impl molten.prod_ops.release_profile.candidate_binding]
 // r[impl molten.evidence.stack_provenance.release_required]
 // r[impl molten.evidence.stack_provenance.non_placeholder_hashes]
-pub fn validate_release_profile(input: &ReleaseProfileInput) -> Result<ReleaseProfileValidation> {
+pub fn validate(input: &Input) -> Result<Validation> {
     validate_text("release profile id", &input.profile_id)?;
     ensure_ref_bound(optional_ref_count(&input.evidence_refs), "release evidence refs")?;
     ensure_hash_bound(input.accepted_valence_policy_hashes.len(), "accepted valence policy hashes")?;
@@ -84,9 +84,9 @@ pub fn validate_release_profile(input: &ReleaseProfileInput) -> Result<ReleasePr
     } else {
         DECISION_DENY
     };
-    let value = release_profile_value(input, decision, &diagnostics)?;
+    let value = value(input, decision, &diagnostics)?;
     let validation_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(ReleaseProfileValidation {
+    Ok(Validation {
         decision: decision.to_string(),
         diagnostics,
         validation_ref,
@@ -104,7 +104,7 @@ fn validate_tier(tier: &str, diagnostics: &mut impl crate::bounded::VecSink<Stri
     }
 }
 
-fn validate_candidate_ref(input: &ReleaseProfileInput, diagnostics: &mut impl crate::bounded::VecSink<String>) {
+fn validate_candidate_ref(input: &Input, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if input.tier != "release" {
         return;
     }
@@ -119,7 +119,7 @@ fn validate_candidate_ref(input: &ReleaseProfileInput, diagnostics: &mut impl cr
     }
 }
 
-fn validate_refs(input: &ReleaseProfileInput, diagnostics: &mut impl crate::bounded::VecSink<String>) {
+fn validate_refs(input: &Input, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     let is_release = input.tier == "release";
     for (field, reference) in evidence_ref_pairs(&input.evidence_refs) {
         match reference {
@@ -135,7 +135,7 @@ fn validate_refs(input: &ReleaseProfileInput, diagnostics: &mut impl crate::boun
     }
 }
 
-fn validate_stack_provenance(input: &ReleaseProfileInput, diagnostics: &mut impl crate::bounded::VecSink<String>) {
+fn validate_stack_provenance(input: &Input, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if input.tier != "release" {
         return;
     }
@@ -147,7 +147,7 @@ fn validate_stack_provenance(input: &ReleaseProfileInput, diagnostics: &mut impl
     }
 }
 
-fn validate_freshness(input: &ReleaseProfileInput, diagnostics: &mut impl crate::bounded::VecSink<String>) {
+fn validate_freshness(input: &Input, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if input.tier != "release" {
         return;
     }
@@ -171,7 +171,7 @@ fn validate_freshness(input: &ReleaseProfileInput, diagnostics: &mut impl crate:
 }
 
 fn validate_valence_policy_hashes(
-    input: &ReleaseProfileInput,
+    input: &Input,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<()> {
     let mut seen = OrderedSet::new();
@@ -197,7 +197,7 @@ fn validate_caveats(caveats: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn evidence_ref_pairs(refs: &ReleaseEvidenceRefs) -> [(&'static str, Option<&String>); 6] {
+fn evidence_ref_pairs(refs: &EvidenceRefs) -> [(&'static str, Option<&String>); 6] {
     [
         ("source-gate", refs.source_gate_ref.as_ref()),
         ("policy", refs.policy_ref.as_ref()),
@@ -208,7 +208,7 @@ fn evidence_ref_pairs(refs: &ReleaseEvidenceRefs) -> [(&'static str, Option<&Str
     ]
 }
 
-fn optional_ref_count(refs: &ReleaseEvidenceRefs) -> usize {
+fn optional_ref_count(refs: &EvidenceRefs) -> usize {
     evidence_ref_pairs(refs).iter().filter(|(_, reference)| reference.is_some()).count()
 }
 
@@ -243,7 +243,7 @@ fn validate_ref_with_diagnostics(label: &str, reference: &str, diagnostics: &mut
     }
 }
 
-fn release_profile_value(input: &ReleaseProfileInput, decision: &str, diagnostics: &[String]) -> Result<IoValue> {
+fn value(input: &Input, decision: &str, diagnostics: &[String]) -> Result<IoValue> {
     Ok(record("release-profile-validation-v1", vec![
         string(RELEASE_PROFILE_SCHEMA),
         string(STACK_PROVENANCE_SCHEMA),
@@ -256,11 +256,11 @@ fn release_profile_value(input: &ReleaseProfileInput, decision: &str, diagnostic
         record("stack-provenance-required", vec![bool_value(input.stack_provenance_required)]),
         field_sequence("accepted-valence-policy-hashes", string_values(&input.accepted_valence_policy_hashes)?),
         field_sequence("diagnostics", string_values(diagnostics)?),
-        field_sequence("caveats", string_values(&release_caveats(&input.caveats))?),
+        field_sequence("caveats", string_values(&caveats(&input.caveats))?),
     ]))
 }
 
-fn evidence_refs_value(refs: &ReleaseEvidenceRefs) -> IoValue {
+fn evidence_refs_value(refs: &EvidenceRefs) -> IoValue {
     record(
         "evidence-refs",
         evidence_ref_pairs(refs)
@@ -270,7 +270,7 @@ fn evidence_refs_value(refs: &ReleaseEvidenceRefs) -> IoValue {
     )
 }
 
-fn freshness_value(freshness: &ReleaseProfileFreshness) -> IoValue {
+fn freshness_value(freshness: &Freshness) -> IoValue {
     record("freshness", vec![
         field_string(
             "expected-generated-export-ref",
@@ -280,7 +280,7 @@ fn freshness_value(freshness: &ReleaseProfileFreshness) -> IoValue {
     ])
 }
 
-fn release_caveats(caveats: &[String]) -> Vec<String> {
+fn caveats(caveats: &[String]) -> Vec<String> {
     let mut output = caveats.to_vec();
     output.push(EVIDENCE_ONLY_CAVEAT.to_string());
     output

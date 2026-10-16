@@ -40,7 +40,7 @@ fn bounds() -> ContentResourceBounds {
 }
 
 fn profile(class: ContentAdapterClass) -> ContentAdapterProfile {
-    content_adapter_profile(
+    crate::content_store_adapter::profile(
         &format!("{}-v1", class.as_str()),
         test_ref(&format!("{}-profile", class.as_str())),
         class,
@@ -56,7 +56,7 @@ fn command(
     operation: ContentOperation,
     range: Option<ContentRange>,
 ) -> ContentCommand {
-    content_command(profile, ContentCommandInput {
+    crate::content_store_adapter::command(profile, CommandInput {
         operation_ref: test_ref(&format!("{}-operation", operation.as_str())),
         operation,
         manifest,
@@ -70,7 +70,7 @@ fn command(
     .expect("content command")
 }
 
-fn fixture_store(
+fn fixture(
     name: &str,
 ) -> (std::path::PathBuf, crate::chunk_store::CapabilityChunkRoot, ContentManifestDescriptor) {
     let workspace = temp_dir(name);
@@ -94,9 +94,9 @@ fn fixture_chunks(manifest: &ContentManifestDescriptor) -> std::collections::BTr
 
 // r[verify molten.content_store_adapter.port_contract]
 #[test]
-fn content_store_and_exchange_ports_are_exact_versioned_and_backend_neutral() {
+fn and_exchange_ports_are_exact_versioned_and_backend_neutral() {
     let profile = profile(ContentAdapterClass::CapabilityLocal);
-    let descriptors = content_store_port_descriptors(&profile.profile_ref);
+    let descriptors = port_descriptors(&profile.profile_ref);
     let registry = crate::fabric::build_fabric_port_registry(&descriptors).expect("content port registry");
     assert_eq!(registry.descriptors().len(), CONTENT_PORT_COUNT);
     let mut malformed = descriptors;
@@ -109,13 +109,13 @@ fn content_store_and_exchange_ports_are_exact_versioned_and_backend_neutral() {
 // r[verify molten.content_store_adapter.streaming_bounds]
 #[test]
 fn capability_local_stream_and_range_expose_only_verified_bounded_bytes() {
-    let (workspace, root, manifest) = fixture_store("content-adapter-local");
+    let (workspace, root, manifest) = fixture("content-adapter-local");
     let profile = profile(ContentAdapterClass::CapabilityLocal);
     let get = command(&profile, &manifest, ContentOperation::Get, None);
-    let execution = execute_local_stream_get(&profile, &root, &get, GENERATION_ONE, None).expect("local stream get");
+    let execution = execute_stream_get(&profile, &root, &get, GENERATION_ONE, None).expect("local stream get");
     assert_eq!(execution.state.artifact.terminal, ContentTerminal::Durable);
     assert_eq!(
-        assemble_verified_content(&manifest, &execution.state.artifact, &execution.verified_chunks).unwrap(),
+        assemble_verified(&manifest, &execution.state.artifact, &execution.verified_chunks).unwrap(),
         b"aaaabbbbcccc"
     );
     assert!(!execution.backend_hint_ref.contains(workspace.to_string_lossy().as_ref()));
@@ -125,7 +125,7 @@ fn capability_local_stream_and_range_expose_only_verified_bounded_bytes() {
         length: FIXTURE_CHUNK_BYTES,
     };
     let range_command = command(&profile, &manifest, ContentOperation::RangeRead, Some(range));
-    assert_eq!(execute_local_verified_range(&profile, &root, &range_command).expect("range"), b"bbbb");
+    assert_eq!(execute_verified_range(&profile, &root, &range_command).expect("range"), b"bbbb");
 
     let repeated_workspace = temp_dir("content-adapter-repeated-chunk");
     let repeated_put = crate::chunk_store::put_bytes(&repeated_workspace, "artifact", b"aaaaaaaa", FIXTURE_CHUNK_BYTES)
@@ -137,10 +137,10 @@ fn capability_local_stream_and_range_expose_only_verified_bounded_bytes() {
     );
     assert_eq!(repeated_manifest.chunks[0].chunk_ref, repeated_manifest.chunks[1].chunk_ref);
     let repeated_command = command(&profile, &repeated_manifest, ContentOperation::Get, None);
-    let repeated = execute_local_stream_get(&profile, &repeated_root, &repeated_command, GENERATION_ONE, None)
+    let repeated = execute_stream_get(&profile, &repeated_root, &repeated_command, GENERATION_ONE, None)
         .expect("repeated stream");
     assert_eq!(
-        assemble_verified_content(&repeated_manifest, &repeated.state.artifact, &repeated.verified_chunks,)
+        assemble_verified(&repeated_manifest, &repeated.state.artifact, &repeated.verified_chunks,)
             .expect("repeated assembly"),
         b"aaaaaaaa"
     );
@@ -148,7 +148,7 @@ fn capability_local_stream_and_range_expose_only_verified_bounded_bytes() {
     let destination = temp_dir("content-adapter-local-put");
     let destination_root = crate::chunk_store::open_capability_chunk_root(&destination).expect("destination root");
     let put_command = command(&profile, &manifest, ContentOperation::Put, None);
-    let put = execute_local_stream_put(StreamPutInput {
+    let put = execute_stream_put(StreamPutInput {
         profile: &profile,
         root: &destination_root,
         command: &put_command,
@@ -159,7 +159,7 @@ fn capability_local_stream_and_range_expose_only_verified_bounded_bytes() {
     .expect("local stream put");
     assert_eq!(put.manifest.manifest_ref, manifest.manifest_ref);
     assert!(
-        execute_local_stream_put(StreamPutInput {
+        execute_stream_put(StreamPutInput {
             profile: &profile,
             root: &destination_root,
             command: &put_command,
@@ -178,10 +178,10 @@ fn capability_local_stream_and_range_expose_only_verified_bounded_bytes() {
 // r[verify molten.content_store_adapter.live_sim_conformance]
 #[test]
 fn deterministic_simulation_matches_verified_trace_and_models_failure_without_exposure() {
-    let (workspace, root, manifest) = fixture_store("content-adapter-simulation");
+    let (workspace, root, manifest) = fixture("content-adapter-simulation");
     let local_profile = profile(ContentAdapterClass::CapabilityLocal);
     let local_command = command(&local_profile, &manifest, ContentOperation::Get, None);
-    let local = execute_local_stream_get(&local_profile, &root, &local_command, GENERATION_ONE, None).expect("local");
+    let local = execute_stream_get(&local_profile, &root, &local_command, GENERATION_ONE, None).expect("local");
 
     let simulation_profile = profile(ContentAdapterClass::DeterministicSimulation);
     let simulation_command = command(&simulation_profile, &manifest, ContentOperation::Get, None);
@@ -198,34 +198,34 @@ fn deterministic_simulation_matches_verified_trace_and_models_failure_without_ex
     let simulated = execute_simulated_stream(stream_input).expect("simulation");
     assert_eq!(simulated.state.artifact.verified_chunk_refs, local.state.artifact.verified_chunk_refs);
     assert_eq!(
-        assemble_verified_content(&manifest, &simulated.state.artifact, &simulated.verified_chunks).unwrap(),
+        assemble_verified(&manifest, &simulated.state.artifact, &simulated.verified_chunks).unwrap(),
         b"aaaabbbbcccc"
     );
 
     let corrupt = execute_simulated_stream(SimulatedStreamInput {
-        fault: Some(SimulationFault::CorruptAt(1)),
+        fault: Some(Fault::CorruptAt(1)),
         ..stream_input
     })
     .expect("corrupt simulation outcome");
     assert_eq!(corrupt.state.artifact.terminal, ContentTerminal::Failed);
     assert_eq!(corrupt.verified_chunks.len(), 1);
-    assert!(assemble_verified_content(&manifest, &corrupt.state.artifact, &corrupt.verified_chunks).is_err());
+    assert!(assemble_verified(&manifest, &corrupt.state.artifact, &corrupt.verified_chunks).is_err());
 
     let capacity = execute_simulated_stream(SimulatedStreamInput {
-        fault: Some(SimulationFault::CapacityExceeded),
+        fault: Some(Fault::CapacityExceeded),
         ..stream_input
     })
     .expect("capacity outcome");
     assert_eq!(capacity.state.artifact.terminal, ContentTerminal::Retryable);
     let delayed = execute_simulated_stream(SimulatedStreamInput {
-        fault: Some(SimulationFault::LatencyTicks(SIMULATION_TIMEOUT_LATENCY)),
+        fault: Some(Fault::LatencyTicks(SIMULATION_TIMEOUT_LATENCY)),
         ..stream_input
     })
     .expect("latency outcome");
     assert_eq!(delayed.state.artifact.terminal, ContentTerminal::Uncertain);
 
     let cancelled = execute_simulated_stream(SimulatedStreamInput {
-        fault: Some(SimulationFault::CancelAt(1)),
+        fault: Some(Fault::CancelAt(1)),
         ..stream_input
     })
     .expect("cancelled outcome");
@@ -238,11 +238,11 @@ fn deterministic_simulation_matches_verified_trace_and_models_failure_without_ex
 /// refused, and resuming from the reloaded state completes the content.
 fn assert_cancelled_stream_resumes_from_partial_state(
     stream_input: SimulatedStreamInput<'_>,
-    cancelled: SimulationContentExecution,
+    cancelled: ModelExecution,
 ) {
     let partial_workspace = temp_dir("content-adapter-partial-state");
-    let partial_namespace = crate::node_state::NodeStateNamespace::open(
-        crate::node_state::NodeStateNamespaceKind::Ledger,
+    let partial_namespace = crate::node_state::Scope::open(
+        crate::node_state::NamespaceKind::Ledger,
         &partial_workspace,
     )
     .expect("partial-state namespace");
@@ -270,7 +270,7 @@ fn assert_cancelled_stream_resumes_from_partial_state(
     let mut resumed_chunks = cancelled.verified_chunks;
     resumed_chunks.extend(resumed.verified_chunks.clone());
     assert_eq!(
-        assemble_verified_content(stream_input.manifest, &resumed.state.artifact, &resumed_chunks)
+        assemble_verified(stream_input.manifest, &resumed.state.artifact, &resumed_chunks)
             .expect("resumed content"),
         b"aaaabbbbcccc"
     );

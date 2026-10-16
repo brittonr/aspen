@@ -1,6 +1,6 @@
 
 pub(super) async fn poll_event(
-    ingress: &mut IrohReplicaIngressPump,
+    ingress: &mut ReplicaIngressPump,
 ) -> crate::error::Result<Option<ReceivedReplicaEvent>> {
     tokio::select! {
         result = ingress.next() => result.map(Some),
@@ -17,9 +17,9 @@ pub(super) fn require_applied(outcome: ReplicaExecutionOutcome) -> crate::error:
     match outcome {
         ReplicaExecutionOutcome::Applied(_) => Ok(()),
         ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
-            Err(crate::error::MoltenError::invalid_harness(format!("distinct-process turn denied: {diagnostic}")))
+            Err(crate::error::Failure::invalid_harness(format!("distinct-process turn denied: {diagnostic}")))
         }
-        ReplicaExecutionOutcome::Failed(failed) => Err(crate::error::MoltenError::invalid_harness(format!(
+        ReplicaExecutionOutcome::Failed(failed) => Err(crate::error::Failure::invalid_harness(format!(
             "distinct-process effect {} failed: {}",
             failed.failed_kind.as_str(),
             failed.diagnostic

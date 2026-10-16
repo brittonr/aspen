@@ -10,7 +10,7 @@ fn registered_effect_port_routes_only_known_commands_to_the_exact_bound_profile(
         .into_iter()
         .find(|descriptor| descriptor.port_id == FABRIC_DURABLE_LOG_PORT_ID)
         .expect("durable log descriptor");
-    let binding = crate::fabric::resolve_canonical_fabric_port_binding(
+    let binding = crate::fabric::resolve_canonical_port_binding(
         std::slice::from_ref(&port_descriptor),
         &crate::fabric::FabricPortRequirement {
             port_id: port_descriptor.port_id.clone(),
@@ -53,7 +53,7 @@ fn registered_effect_port_routes_only_known_commands_to_the_exact_bound_profile(
 #[test]
 fn extension_context_denies_stale_generation_unbound_port_and_profile_substitution() {
     let simulation = profile(DurableAdapterKind::DeterministicSimulation);
-    let context = ExtensionDurabilityContext::from_test_snapshot("service-a", GENERATION, &simulation, vec![
+    let context = ExtensionContext::from_test_snapshot("service-a", GENERATION, &simulation, vec![
         FABRIC_DURABLE_LOG_PORT_ID.to_string(),
     ]);
     assert!(context.admit_operation(&simulation, FABRIC_DURABLE_LOG_PORT_ID, "service-a", GENERATION, 1).is_ok());

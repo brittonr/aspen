@@ -75,12 +75,12 @@ pub fn receive_control_live_ingress_event(
     topic: &str,
     receiver_node: &str,
 ) -> Result<Option<ControlLiveIngressReceive>> {
-    let state_root = crate::node_state::NodeStateRoot::open(state_root)?;
+    let state_root = crate::node_state::DirectoryRoot::open(state_root)?;
     receive_control_live_ingress_event_with_root(&state_root, event, topic, receiver_node)
 }
 
 fn receive_control_live_ingress_event_with_root(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::DirectoryRoot,
     event: &iroh_gossip::api::Event,
     topic: &str,
     receiver_node: &str,
@@ -103,7 +103,7 @@ fn receive_control_live_ingress_event_with_root(
 pub fn receive_control_live_ingress_bytes(
     input: &ControlLiveIngressReceiveBytesInput<'_>,
 ) -> Result<ControlLiveIngressReceive> {
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::DirectoryRoot::open(input.state_root)?;
     validate_state_root(input.state_root)?;
     receive_control_live_ingress_bytes_with_root(
         &state_root,
@@ -115,7 +115,7 @@ pub fn receive_control_live_ingress_bytes(
 }
 
 fn receive_control_live_ingress_bytes_with_root(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::DirectoryRoot,
     topic: &str,
     receiver_node: &str,
     delivered_from: &str,
@@ -186,7 +186,7 @@ fn envelope_for_loopback(input: &ControlLiveLoopbackInput<'_>) -> Result<Control
 }
 
 pub async fn control_live_iroh_loopback(input: &ControlLiveLoopbackInput<'_>) -> Result<ControlLiveLoopback> {
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::DirectoryRoot::open(input.state_root)?;
     validate_state_root(input.state_root)?;
     ensure_state_layout(&state_root)?;
     let envelope = envelope_for_loopback(input)?;
@@ -255,6 +255,6 @@ pub async fn control_live_iroh_loopback(input: &ControlLiveLoopbackInput<'_>) ->
 }
 
 pub fn preflight_control_live_send(input: &ControlLiveSendInput<'_>) -> Result<ControlLiveSendPreflight> {
-    let state_root = input.state_root.map(crate::node_state::NodeStateRoot::open).transpose()?;
+    let state_root = input.state_root.map(crate::node_state::DirectoryRoot::open).transpose()?;
     preflight_control_live_send_with_root(input, state_root.as_ref())
 }

@@ -1,5 +1,5 @@
 
-    fn storage_extension_contract(profile: &str, version: &str) -> PluginExtensionContract {
+    fn storage_contract(profile: &str, version: &str) -> PluginExtensionContract {
         let authority_refs = vec![test_ref("storage-read-authority")];
         let resource_refs = vec![test_ref("storage-resource")];
         let effect_refs = vec![test_ref("effect-extension")];
@@ -21,7 +21,7 @@
         contract_from_descriptors(profile, version, &[descriptor])
     }
 
-    fn storage_extension_contract_without_hostcall(profile: &str, version: &str) -> PluginExtensionContract {
+    fn storage_contract_without_hostcall(profile: &str, version: &str) -> PluginExtensionContract {
         let authority_refs = vec![test_ref("other-authority")];
         let resource_refs = vec![test_ref("other-resource")];
         let effect_refs = vec![test_ref("effect-extension")];
@@ -54,7 +54,7 @@
         let positive_suite_ref = test_ref("extension-positive-suite");
         let negative_suite_ref = test_ref("extension-negative-suite");
         let property_suite_ref = test_ref("extension-property-suite");
-        let conformance = PluginExtensionConformanceInput {
+        let conformance = PluginConformanceInput {
             positive_suite_ref: &positive_suite_ref,
             negative_suite_ref: &negative_suite_ref,
             property_suite_ref: &property_suite_ref,
@@ -74,7 +74,7 @@
         parse_plugin_extension_contract(&value).expect("parse extension contract")
     }
 
-    fn manifest_value_with_extension_refs(extension_contract_refs: &[String], effect_ref: &str) -> IoValue {
+    fn manifest_value_with_refs(extension_contract_refs: &[String], effect_ref: &str) -> IoValue {
         plugin_manifest_value(&PluginManifestInput {
             plugin_id: "plugin:extension",
             artifact_ref: &test_ref("extension-artifact"),
@@ -91,8 +91,8 @@
         .expect("manifest with extension refs")
     }
 
-    fn manifest_with_extension_refs(extension_contract_refs: &[String], effect_ref: &str) -> PluginManifest {
-        parse_plugin_manifest(&manifest_value_with_extension_refs(extension_contract_refs, effect_ref))
+    fn manifest_with_refs(extension_contract_refs: &[String], effect_ref: &str) -> PluginManifest {
+        parse_plugin_manifest(&manifest_value_with_refs(extension_contract_refs, effect_ref))
             .expect("parse extension manifest")
     }
 

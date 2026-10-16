@@ -17,7 +17,7 @@ fn serve_live(
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
-        .map_err(molten::error::MoltenError::from)?;
+        .map_err(molten::error::Failure::from)?;
     let served = runtime.block_on(molten::node_daemon::serve_control_live_listener(
         &molten::node_daemon::ControlLiveServeInput {
             state_root: &state_root,

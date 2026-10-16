@@ -14,7 +14,7 @@ pub(super) fn handle_proposal(
         return proposal_outcome(state, request_ref, ProposalDisposition::Committed, Some(committed_index));
     }
     if let Some(existing) = state.log.iter().find(|entry| entry.request_ref == request_ref) {
-        return duplicate_proposal_transition(state, request_ref, existing);
+        return duplicate_proposal(state, request_ref, existing);
     }
     if state.role != ReplicaRole::Leader {
         return proposal_outcome(state, request_ref, ProposalDisposition::Retryable, None);
@@ -28,41 +28,37 @@ pub(super) fn handle_proposal(
 pub(super) fn handle_read(
     state: &ReplicaState,
     request_ref: String,
-    mode: crate::fabric_consistency::ConsistencyReadMode,
+    mode: crate::fabric_consistency::ReadMode,
 ) -> crate::error::Result<ReplicaTransition> {
     validation::ensure_running(state)?;
     validation::validate_content_ref(&request_ref, "Raft read request ref")?;
     match mode {
-        crate::fabric_consistency::ConsistencyReadMode::LocalStale => {
+        crate::fabric_consistency::ReadMode::LocalStale => {
             read_outcome(state, request_ref, mode, ReadDisposition::Local)
         }
-        crate::fabric_consistency::ConsistencyReadMode::Lease => {
+        crate::fabric_consistency::ReadMode::Lease => {
             read_outcome(state, request_ref, mode, ReadDisposition::Retryable)
         }
-        crate::fabric_consistency::ConsistencyReadMode::Linearizable if state.role != ReplicaRole::Leader => {
+        crate::fabric_consistency::ReadMode::Linearizable if state.role != ReplicaRole::Leader => {
             read_outcome(state, request_ref, mode, ReadDisposition::Retryable)
         }
-        crate::fabric_consistency::ConsistencyReadMode::Linearizable
-            if state.pending_reads.contains_key(&request_ref) =>
-        {
+        crate::fabric_consistency::ReadMode::Linearizable if state.pending_reads.contains_key(&request_ref) => {
             read_outcome(state, request_ref, mode, ReadDisposition::Retryable)
         }
-        crate::fabric_consistency::ConsistencyReadMode::Linearizable
-            if state.pending_reads.len() >= MAX_PENDING_REPLICA_READS =>
-        {
+        crate::fabric_consistency::ReadMode::Linearizable if state.pending_reads.len() >= MAX_PENDING_REPLICA_READS => {
             read_outcome(state, request_ref, mode, ReadDisposition::Retryable)
         }
-        crate::fabric_consistency::ConsistencyReadMode::Linearizable => begin_linearizable_read(state, request_ref),
+        crate::fabric_consistency::ReadMode::Linearizable => begin_linearizable_read(state, request_ref),
     }
 }
 
 fn read_outcome(
     state: &ReplicaState,
     request_ref: String,
-    mode: crate::fabric_consistency::ConsistencyReadMode,
+    mode: crate::fabric_consistency::ReadMode,
     disposition: ReadDisposition,
 ) -> crate::error::Result<ReplicaTransition> {
-    finish_transition(state.clone(), vec![ReplicaEffect::ReadOutcome {
+    finish(state.clone(), vec![ReplicaEffect::ReadOutcome {
         request_ref,
         mode,
         disposition,
@@ -81,7 +77,7 @@ fn begin_linearizable_read(state: &ReplicaState, request_ref: String) -> crate::
     let effects = support::peers(&next)
         .into_iter()
         .map(|peer| {
-            support::send_effect(&next, peer, RaftMessage::ReadProbe {
+            support::send_effect(&next, peer, Message::ReadProbe {
                 term: next.current_term,
                 leader_id: next.node_id.clone(),
                 request_ref: request_ref.clone(),
@@ -91,7 +87,7 @@ fn begin_linearizable_read(state: &ReplicaState, request_ref: String) -> crate::
             })
         })
         .collect();
-    finish_transition(next, effects)
+    finish(next, effects)
 }
 
 pub(super) fn handle_create_snapshot(
@@ -101,12 +97,10 @@ pub(super) fn handle_create_snapshot(
     validation::ensure_running(state)?;
     validation::validate_content_ref(&application_state_ref, "Raft snapshot application state ref")?;
     if state.last_applied == INITIAL_COMMIT_INDEX {
-        return Err(crate::error::MoltenError::invalid_harness(
-            "Raft snapshot requires a committed application boundary",
-        ));
+        return Err(crate::error::Failure::invalid_harness("Raft snapshot requires a committed application boundary"));
     }
     let last_included_term = support::term_at(state, state.last_applied)
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("Raft snapshot boundary term is absent"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("Raft snapshot boundary term is absent"))?;
     let mut snapshot = ReplicaSnapshot {
         snapshot_ref: String::new(),
         group_binding_ref: state.profile.group_binding_ref.clone(),
@@ -122,7 +116,7 @@ pub(super) fn handle_create_snapshot(
     let mut next = state.clone();
     next.log.retain(|entry| entry.index > snapshot.last_included_index);
     next.snapshot = Some(snapshot.clone());
-    finish_transition(next, vec![ReplicaEffect::PersistSnapshot { snapshot }])
+    finish(next, vec![ReplicaEffect::PersistSnapshot { snapshot }])
 }
 
 pub(super) fn handle_begin_drain(state: &ReplicaState) -> crate::error::Result<ReplicaTransition> {
@@ -130,14 +124,14 @@ pub(super) fn handle_begin_drain(state: &ReplicaState) -> crate::error::Result<R
     let mut next = state.clone();
     next.lifecycle = ReplicaLifecycle::Draining;
     next.pending_reads.clear();
-    finish_transition(next, vec![ReplicaEffect::LifecycleChanged {
+    finish(next, vec![ReplicaEffect::LifecycleChanged {
         lifecycle: ReplicaLifecycle::Draining,
     }])
 }
 
 pub(super) fn handle_stop(state: &ReplicaState) -> crate::error::Result<ReplicaTransition> {
     if state.lifecycle == ReplicaLifecycle::Stopped {
-        return finish_transition(state.clone(), Vec::new());
+        return finish(state.clone(), Vec::new());
     }
     let mut next = state.clone();
     next.lifecycle = ReplicaLifecycle::Stopped;
@@ -145,12 +139,12 @@ pub(super) fn handle_stop(state: &ReplicaState) -> crate::error::Result<ReplicaT
     next.leader_id = None;
     next.pending_reads.clear();
     next.quorum_confirmed_term = None;
-    finish_transition(next, vec![ReplicaEffect::LifecycleChanged {
+    finish(next, vec![ReplicaEffect::LifecycleChanged {
         lifecycle: ReplicaLifecycle::Stopped,
     }])
 }
 
-fn duplicate_proposal_transition(
+fn duplicate_proposal(
     state: &ReplicaState,
     request_ref: String,
     existing: &ReplicatedEntry,
@@ -170,7 +164,7 @@ fn proposal_outcome(
     disposition: ProposalDisposition,
     committed_index: Option<u64>,
 ) -> crate::error::Result<ReplicaTransition> {
-    finish_transition(state.clone(), vec![ReplicaEffect::ProposalOutcome {
+    finish(state.clone(), vec![ReplicaEffect::ProposalOutcome {
         request_ref,
         disposition,
         committed_index,
@@ -186,7 +180,7 @@ fn append_proposal(
     let mut next = state.clone();
     let index = support::last_log_index(&next)
         .checked_add(NEXT_LOG_INDEX_STEP)
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("Raft proposal log index overflow"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("Raft proposal log index overflow"))?;
     let entry = ReplicatedEntry {
         index,
         term: next.current_term,
@@ -204,5 +198,5 @@ fn append_proposal(
         ReplicaEffect::FlushLog { through_index: index },
     ];
     effects.extend(support::append_effects_for_all(&next)?);
-    finish_transition(next, effects)
+    finish(next, effects)
 }

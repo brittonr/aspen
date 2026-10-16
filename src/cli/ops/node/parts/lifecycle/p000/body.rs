@@ -71,7 +71,7 @@ fn init_node(
         return molten::node_daemon::init_local(&molten::node_daemon::InitInput { state_root, node_id });
     };
     let profile = checked_node_profile_from_cli(profile)?;
-    let overrides = molten::node_profile_config::NodeProfileOverrides {
+    let overrides = molten::node_profile_config::Overrides {
         state_root_ref: override_state_root_ref,
         adapters: None,
         policy_refs: None,
@@ -104,13 +104,13 @@ struct CheckedNodeProfileCliInput {
 
 fn checked_node_profile_from_cli(
     input: CheckedNodeProfileCliInput,
-) -> molten::error::Result<molten::node_profile_config::CheckedNodeProfile> {
+) -> molten::error::Result<molten::node_profile_config::Checked> {
     let profile_identity = input.profile_identity.unwrap_or_else(|| "profile-backed-node".to_string());
     let profile_state_root_ref = input.profile_state_root_ref.ok_or_else(|| {
-        molten::error::MoltenError::invalid_harness("--profile-state-root-ref is required with --profile-ref")
+        molten::error::Failure::invalid_harness("--profile-state-root-ref is required with --profile-ref")
     })?;
     let adapters = parse_adapter_profiles(&input.adapter_profiles)?;
-    Ok(molten::node_profile_config::CheckedNodeProfile {
+    Ok(molten::node_profile_config::Checked {
         profile_ref: input.profile_ref,
         actual_profile_ref: input.actual_profile_ref,
         source_kind: input.profile_source_kind,
@@ -133,7 +133,7 @@ fn parse_adapter_profiles(values: &[String]) -> molten::error::Result<Vec<molten
     let mut adapters = Vec::with_capacity(values.len());
     for value in values {
         let (name, profile_ref) = value.split_once('=').ok_or_else(|| {
-            molten::error::MoltenError::invalid_harness("--adapter-profile must use name=blake3:<hash>")
+            molten::error::Failure::invalid_harness("--adapter-profile must use name=blake3:<hash>")
         })?;
         adapters.push(molten::node_runtime::node_adapter_binding(name, profile_ref)?);
     }

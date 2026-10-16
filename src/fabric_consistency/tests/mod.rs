@@ -1,4 +1,5 @@
 mod fastpath;
+#[path = "live/service.rs"]
 mod live_service;
 mod negative;
 mod positive;
@@ -20,8 +21,8 @@ fn test_ref(label: &str) -> String {
     .expect("test ref")
 }
 
-fn binding_input() -> ConsistencyGroupBindingInput {
-    ConsistencyGroupBindingInput {
+fn binding_input() -> GroupInput {
+    GroupInput {
         group_id: "group:extension-a".to_string(),
         extension_id: "extension-a".to_string(),
         service_id: "service-a".to_string(),
@@ -40,18 +41,18 @@ fn binding_input() -> ConsistencyGroupBindingInput {
             "consistency-does-not-prove-extension-semantics".to_string(),
             "local-status-is-not-quorum-currentness".to_string(),
         ],
-        supported_read_modes: vec![ConsistencyReadMode::LocalStale, ConsistencyReadMode::Linearizable],
+        supported_read_modes: vec![ReadMode::LocalStale, ReadMode::Linearizable],
         max_command_bytes: MAX_COMMAND_BYTES,
         max_in_flight_operations: MAX_IN_FLIGHT,
     }
 }
 
-fn declared_binding() -> ConsistencyGroupBinding {
-    canonical_consistency_group_binding(binding_input()).expect("declared binding")
+fn declared_binding() -> Group {
+    canonical_group(binding_input()).expect("declared binding")
 }
 
-fn command_for(binding: &ConsistencyGroupBinding, operation: ConsistencyOperation) -> ConsistencyPortCommandInput {
-    ConsistencyPortCommandInput {
+fn command_for(binding: &Group, operation: Request) -> PortCommandInput {
+    PortCommandInput {
         request_ref: test_ref("request"),
         binding_ref: binding.binding_ref.clone(),
         group_id: binding.group_id.clone(),
@@ -74,26 +75,22 @@ fn command_for(binding: &ConsistencyGroupBinding, operation: ConsistencyOperatio
     }
 }
 
-fn active_binding() -> ConsistencyGroupBinding {
+fn active_binding() -> Group {
     let declared = declared_binding();
-    let plan = plan_consistency_operation(
+    let plan = plan(
         &declared,
-        command_for(&declared, ConsistencyOperation::Open {
+        command_for(&declared, Request::Open {
             mode: GroupOpenMode::Create,
         }),
     )
     .expect("open plan");
     assert!(plan.admitted());
-    let outcome = normalized_success(&declared, &plan, ConsistencyOutcomeKind::Opened);
-    apply_consistency_outcome(&declared, &plan, &outcome).expect("active binding")
+    let outcome = normalized_success(&declared, &plan, Kind::Opened);
+    apply_outcome(&declared, &plan, &outcome).expect("active binding")
 }
 
-fn normalized_success(
-    binding: &ConsistencyGroupBinding,
-    plan: &ConsistencyPortPlan,
-    kind: ConsistencyOutcomeKind,
-) -> ConsistencyPortOutcome {
-    normalize_consistency_outcome(binding, plan, ConsistencyOutcomeInput {
+fn normalized_success(binding: &Group, plan: &PortPlan, kind: Kind) -> Port {
+    normalize(binding, plan, Input {
         request_ref: plan.request_ref.clone(),
         binding_ref: plan.binding_ref.clone(),
         service_generation: binding.service_generation,
@@ -107,14 +104,14 @@ fn normalized_success(
     .expect("normalized success")
 }
 
-fn normalized_denial(binding: &ConsistencyGroupBinding, plan: &ConsistencyPortPlan) -> ConsistencyPortOutcome {
-    normalize_consistency_outcome(binding, plan, ConsistencyOutcomeInput {
+fn normalized_denial(binding: &Group, plan: &PortPlan) -> Port {
+    normalize(binding, plan, Input {
         request_ref: plan.request_ref.clone(),
         binding_ref: plan.binding_ref.clone(),
         service_generation: binding.service_generation,
         config_epoch: binding.config_epoch,
         fencing_epoch: binding.fencing_epoch,
-        kind: ConsistencyOutcomeKind::Denied,
+        kind: Kind::Denied,
         result_ref: None,
         evidence_refs: vec![test_ref("denial-evidence")],
         diagnostics: vec!["operation-denied".to_string()],

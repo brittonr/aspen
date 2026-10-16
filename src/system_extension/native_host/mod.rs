@@ -8,6 +8,7 @@ mod service;
 mod wire;
 
 #[cfg(test)]
+#[path = "tests/mod.rs"]
 mod tests;
 
 pub use artifact::*;

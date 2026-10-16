@@ -4,7 +4,7 @@ Temporary test storage is both a lifetime problem and an authority problem. A un
 
 ## Acquisition and retention are distinct
 
-`TestWorkspace::new` validates a logical label, acquires a `cap_tempfile` temporary directory at the reviewed ambient bootstrap, derives a diagnostic host path, and creates seven role directories. The [construction implementation](../../../src/test/parts/support/p000/body.rs) places the temporary directory inside `WorkspaceInner`, held by `Arc`. Both `TestWorkspace` and individual `TestRoot<R>` values retain that shared owner.
+`Workspace::new` validates a logical label, acquires a `cap_tempfile` temporary directory at the reviewed ambient bootstrap, derives a diagnostic host path, and creates seven role directories. The [construction implementation](../../../src/test/parts/support/p000/body.rs) places the temporary directory inside `WorkspaceInner`, held by `Arc`. Both `Workspace` and individual `Root<R>` values retain that shared owner.
 
 Consequently, the outer workspace variable is not the only lifetime guard. A role root retained across asynchronous work also retains the underlying workspace. Cleanup follows the final owner rather than a process identifier, counter, or directory prefix. This prevents a common illustrative mistake: deleting a shared temporary directory when one concurrent task finishes while another still holds a role root.
 
@@ -12,7 +12,7 @@ This is normal-drop behavior, not crash recovery. The governing guide explicitly
 
 ## Role and locator carry different information
 
-The roles are state, input, output, transport, ledger, cache, and adversarial setup. `TestRoot<R>` combines a role marker, a directory capability, and the shared workspace owner. `WorkspacePath` is instead a relative locator. Its parser rejects empty or escaping forms, backslashes, URL-like locators, and excessive component counts; it does not turn an arbitrary host path into authority.
+The roles are state, input, output, transport, ledger, cache, and adversarial setup. `Root<R>` combines a role marker, a directory capability, and the shared workspace owner. `WorkspacePath` is instead a relative locator. Its parser rejects empty or escaping forms, backslashes, URL-like locators, and excessive component counts; it does not turn an arbitrary host path into authority.
 
 These types answer separate questions: which workspace and role may be accessed, and which relative entry within it is requested? A role marker is not a universal operating-system read-only permission. The inspected generic root implementation exposes read and write methods for all markers. The type helps callers pass the intended role; actual operations still depend on the supplied directory capability and API.
 
@@ -22,7 +22,7 @@ These types answer separate questions: which workspace and role may be accessed,
 
 Existing command-line programs consume paths, so `ProcessPathBridge::plan` verifies workspace ownership and produces a `ChildProcessPlan` with a diagnostic path and logical root label. The path is for command arguments or current-directory setup; logical labels are used for portable observations.
 
-The plan itself contains a `PathBuf` and label, not an `Arc<WorkspaceInner>`. Retaining a cloned plan therefore does not independently retain cleanup ownership. `ProcessWorkspace` addresses path-oriented compatibility by retaining a `TestWorkspace` alongside the plan. For direct bridge usage, reviewers should ensure a workspace or root guard outlives the child operation rather than infer lifetime from the plan's name.
+The plan itself contains a `PathBuf` and label, not an `Arc<WorkspaceInner>`. Retaining a cloned plan therefore does not independently retain cleanup ownership. `ProcessWorkspace` addresses path-oriented compatibility by retaining a `Workspace` alongside the plan. For direct bridge usage, reviewers should ensure a workspace or root guard outlives the child operation rather than infer lifetime from the plan's name.
 
 The inspected Unix helper resolves `/proc/self/fd/<descriptor>` with `std::fs::read_link`. Non-Unix builds explicitly return `Unsupported`. There is a scoped discrepancy with the governing guide's broader wording that hosts without the descriptor bridge return `Unsupported`: on a Unix host lacking usable `/proc/self/fd`, this implementation propagates the filesystem error instead. This article does not claim uniform error classification or portability across all Unix hosts.
 

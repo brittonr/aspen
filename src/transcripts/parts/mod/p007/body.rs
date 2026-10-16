@@ -256,18 +256,6 @@ fn option_value<'a>(args: &'a [&str], name: &str) -> Option<&'a str> {
     args.windows(2).find_map(|window| (window[0] == name).then_some(window[1]))
 }
 
-fn temp_state_root(label: &str) -> Result<PathBuf> {
-    for _ in 0..MAX_TEMP_STATE_ROOT_ATTEMPTS {
-        let nonce = TEMP_STATE_ROOT_COUNTER.fetch_add(1, RELAXED);
-        let path = std::env::temp_dir().join(format!("molten-transcript-{label}-{}-{nonce}", std::process::id()));
-        match fs::create_dir(&path) {
-            Ok(()) => return Ok(path),
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(error) => return Err(MoltenError::from(error)),
-        }
-    }
-    Err(MoltenError::invalid_harness("exhausted bounded transcript temp root attempts"))
-}
 
 fn local_ref(kind: &str, label: &str) -> Result<String> {
     canonical_hash(&record("transcript-local-ref", vec![string(kind), string(label)]))

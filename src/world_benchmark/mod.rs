@@ -10,8 +10,10 @@
 mod chaoscontrol;
 mod fixture;
 mod instrumentation;
+#[path = "contracts/ports.rs"]
 mod ports;
 mod projection;
+#[path = "contracts/records.rs"]
 mod records;
 mod service;
 

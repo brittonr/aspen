@@ -4,7 +4,7 @@ fn parse_operation(value: &preserves::Value<preserves::IOValue>) -> crate::error
     let fields = crate::preserves_rail::simple_record_fields(&value, OPERATION_RECORD, OPERATION_FIELD_COUNT)?;
     let schema = crate::preserves_rail::required_string_field(&fields[0], "native operation schema")?;
     if schema != NATIVE_OPERATION_SCHEMA {
-        return Err(crate::error::MoltenError::invalid_harness("native operation schema mismatch"));
+        return Err(crate::error::Failure::invalid_harness("native operation schema mismatch"));
     }
     Ok(NativeOperationRecord {
         schema,
@@ -59,14 +59,14 @@ fn parse_optional_ref(
 fn required_u64(value: &preserves::Value<preserves::IOValue>, field: &str) -> crate::error::Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected u64 for {field}")))?
-        .map_err(|error| crate::error::MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| crate::error::Failure::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
 fn required_bool(value: &preserves::Value<preserves::IOValue>, field: &str) -> crate::error::Result<bool> {
     value
         .as_boolean()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected boolean for {field}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected boolean for {field}")))
 }
 
 fn parse_phase(value: &str) -> crate::error::Result<LifecyclePhase> {
@@ -90,7 +90,7 @@ fn parse_phase(value: &str) -> crate::error::Result<LifecyclePhase> {
         "quarantined" => Ok(LifecyclePhase::Quarantined),
         "stopped" => Ok(LifecyclePhase::Stopped),
         "removed" => Ok(LifecyclePhase::Removed),
-        _ => Err(crate::error::MoltenError::invalid_harness("native lifecycle phase is unsupported")),
+        _ => Err(crate::error::Failure::invalid_harness("native lifecycle phase is unsupported")),
     }
 }
 
@@ -103,7 +103,7 @@ fn parse_health(value: &str) -> crate::error::Result<HealthState> {
         "failed" => Ok(HealthState::Failed),
         "quarantined" => Ok(HealthState::Quarantined),
         "stopped" => Ok(HealthState::Stopped),
-        _ => Err(crate::error::MoltenError::invalid_harness("native health state is unsupported")),
+        _ => Err(crate::error::Failure::invalid_harness("native health state is unsupported")),
     }
 }
 
@@ -113,7 +113,7 @@ fn parse_operation_kind(value: &str) -> crate::error::Result<NativeOperationKind
         "effect" => Ok(NativeOperationKind::Effect),
         "ingress" => Ok(NativeOperationKind::Ingress),
         "value-publication" => Ok(NativeOperationKind::ValuePublication),
-        _ => Err(crate::error::MoltenError::invalid_harness("native operation kind is unsupported")),
+        _ => Err(crate::error::Failure::invalid_harness("native operation kind is unsupported")),
     }
 }
 
@@ -124,17 +124,17 @@ fn parse_operation_state(value: &str) -> crate::error::Result<NativeOperationSta
         "terminal" => Ok(NativeOperationState::Terminal),
         "unknown" => Ok(NativeOperationState::Unknown),
         "stale" => Ok(NativeOperationState::Stale),
-        _ => Err(crate::error::MoltenError::invalid_harness("native operation state is unsupported")),
+        _ => Err(crate::error::Failure::invalid_harness("native operation state is unsupported")),
     }
 }
 
 fn require_item_bound(actual: usize, field: &str) -> crate::error::Result<()> {
     if actual > MAX_INSTANCE_COLLECTION_ITEMS {
-        return Err(crate::error::MoltenError::invalid_harness(format!("{field} exceeds its item bound")));
+        return Err(crate::error::Failure::invalid_harness(format!("{field} exceeds its item bound")));
     }
     Ok(())
 }
 
-fn journal_invalid(error: crate::error::MoltenError) -> NativeJournalError {
-    NativeJournalError::InvalidRecord(error.to_string())
+fn invalid(error: crate::error::Failure) -> Error {
+    Error::InvalidRecord(error.to_string())
 }

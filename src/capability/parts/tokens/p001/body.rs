@@ -12,7 +12,7 @@ pub fn parse_ucan_verification_receipt_value(value: &IoValue) -> Result<UcanVeri
     )?;
     let decision = record_string(&receipt[UCAN_VERIFICATION_DECISION_INDEX], "decision")?;
     if !matches!(decision.as_str(), DECISION_PASS | DECISION_DENY) {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported UCAN verification decision {decision}"
         )));
     }

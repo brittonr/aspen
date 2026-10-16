@@ -1,0 +1,1178 @@
+{
+  "changes": [
+    {
+      "delta_specs": [
+        "./.cairn/changes/add-chaoscontrol-consensus-conformance/specs/consensus/spec.md",
+        "./.cairn/changes/add-chaoscontrol-consensus-conformance/specs/testing-harness/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "depends_on": [
+          "fabric-consistency-service-runtime"
+        ],
+        "groups": [
+          "current"
+        ],
+        "status": "blocked",
+        "target_date": null
+      },
+      "name": "add-chaoscontrol-consensus-conformance",
+      "path": "./.cairn/changes/add-chaoscontrol-consensus-conformance",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 17,
+        "total": 17,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/add-collaboration-scope-system-extension/specs/collaboration-scope/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "depends_on": [
+          "fabric-consistency-service-runtime",
+          "fabric-durable-state-ports",
+          "fabric-whole-system-simulation",
+          "system-extension-service-runtime",
+          "type-authority-and-artifact-references"
+        ],
+        "groups": [
+          "current"
+        ],
+        "status": "blocked",
+        "target_date": null
+      },
+      "name": "add-collaboration-scope-system-extension",
+      "path": "./.cairn/changes/add-collaboration-scope-system-extension",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 24,
+        "total": 24,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/add-consensus-fast-path-acceleration/specs/consensus/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "depends_on": [
+          "fabric-consistency-service-runtime",
+          "fabric-whole-system-simulation"
+        ],
+        "groups": [
+          "current"
+        ],
+        "status": "blocked",
+        "target_date": null
+      },
+      "name": "add-consensus-fast-path-acceleration",
+      "path": "./.cairn/changes/add-consensus-fast-path-acceleration",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 18,
+        "total": 18,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/add-linux-ebpf-observability-adapter/specs/linux-ebpf-observability/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [
+          "current"
+        ],
+        "status": "blocked",
+        "target_date": null
+      },
+      "name": "add-linux-ebpf-observability-adapter",
+      "path": "./.cairn/changes/add-linux-ebpf-observability-adapter",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 19,
+        "total": 19,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/add-live-consensus-reliability-adapter/specs/consensus/spec.md",
+        "./.cairn/changes/add-live-consensus-reliability-adapter/specs/testing-harness/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "depends_on": [
+          "fabric-consistency-service-runtime"
+        ],
+        "groups": [
+          "current"
+        ],
+        "status": "blocked",
+        "target_date": null
+      },
+      "name": "add-live-consensus-reliability-adapter",
+      "path": "./.cairn/changes/add-live-consensus-reliability-adapter",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 19,
+        "total": 19,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/add-protocol-aware-simulation-oracles/specs/fabric-simulation/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "add-protocol-aware-simulation-oracles",
+      "path": "./.cairn/changes/add-protocol-aware-simulation-oracles",
+      "task_counts": {
+        "done": 1,
+        "in_progress": 0,
+        "todo": 20,
+        "total": 21,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/add-world-head-rollback-witnessing/specs/world-commit/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "depends_on": [
+          "add-world-branch-head-protocol"
+        ],
+        "groups": [
+          "current"
+        ],
+        "status": "blocked",
+        "target_date": null
+      },
+      "name": "add-world-head-rollback-witnessing",
+      "path": "./.cairn/changes/add-world-head-rollback-witnessing",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 14,
+        "total": 14,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/admit-facet-owner-scopes/specs/runtime-spine/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "admit-facet-owner-scopes",
+      "path": "./.cairn/changes/admit-facet-owner-scopes",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 8,
+        "total": 8,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/admit-record-pattern-subset/specs/runtime-spine/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "admit-record-pattern-subset",
+      "path": "./.cairn/changes/admit-record-pattern-subset",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 9,
+        "total": 9,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/admit-recovery-group-supervision/specs/system-extension-runtime/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "admit-recovery-group-supervision",
+      "path": "./.cairn/changes/admit-recovery-group-supervision",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 9,
+        "total": 9,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/admit-time-sliced-component-execution/specs/wasm-component-runtime/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "admit-time-sliced-component-execution",
+      "path": "./.cairn/changes/admit-time-sliced-component-execution",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 8,
+        "total": 8,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/admit-typed-service-facades/specs/system-extension-runtime/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "admit-typed-service-facades",
+      "path": "./.cairn/changes/admit-typed-service-facades",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 10,
+        "total": 10,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/admit-world-merge-migrations-before-execution/specs/world-commit/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "admit-world-merge-migrations-before-execution",
+      "path": "./.cairn/changes/admit-world-merge-migrations-before-execution",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 10,
+        "total": 10,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/adopt-command-pattern-resource-reservation/specs/fabric-time-scheduling/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "adopt-command-pattern-resource-reservation",
+      "path": "./.cairn/changes/adopt-command-pattern-resource-reservation",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 10,
+        "total": 10,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/adopt-shared-wasm-component-runtime/specs/wasm-component-runtime-adoption/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "adopt-shared-wasm-component-runtime",
+      "path": "./.cairn/changes/adopt-shared-wasm-component-runtime",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 14,
+        "total": 14,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/adopt-standalone-batch-orchestration/specs/batch-orchestration-adoption/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "adopt-standalone-batch-orchestration",
+      "path": "./.cairn/changes/adopt-standalone-batch-orchestration",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 11,
+        "total": 11,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/bind-delivery-duplicate-results-to-original-claims/specs/delivery/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "bind-delivery-duplicate-results-to-original-claims",
+      "path": "./.cairn/changes/bind-delivery-duplicate-results-to-original-claims",
+      "task_counts": {
+        "done": 12,
+        "in_progress": 0,
+        "todo": 2,
+        "total": 14,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/bind-promotion-logical-identity-across-restarts/specs/world-commit/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "bind-promotion-logical-identity-across-restarts",
+      "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 8,
+        "total": 8,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/specs/fabric-simulation/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "bind-scheduler-completions-to-lease-epoch",
+      "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 8,
+        "total": 8,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/bind-shutdown-observations-to-current-node-run/specs/node-runtime/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "bind-shutdown-observations-to-current-node-run",
+      "path": "./.cairn/changes/bind-shutdown-observations-to-current-node-run",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 10,
+        "total": 10,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/bound-terminal-scheduler-retention/specs/fabric-time-scheduling/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "bound-terminal-scheduler-retention",
+      "path": "./.cairn/changes/bound-terminal-scheduler-retention",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 14,
+        "total": 14,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/coalesce-assertion-notifications/specs/runtime-spine/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "coalesce-assertion-notifications",
+      "path": "./.cairn/changes/coalesce-assertion-notifications",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 6,
+        "total": 6,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/committed-change-stream/specs/committed-change-stream/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "committed-change-stream",
+      "path": "./.cairn/changes/committed-change-stream",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 10,
+        "total": 10,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/differentiate-live-simulation-conformance/specs/fabric-simulation/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "differentiate-live-simulation-conformance",
+      "path": "./.cairn/changes/differentiate-live-simulation-conformance",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 9,
+        "total": 9,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/distinguish-absent-world-merge-roots/specs/world-commit/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "distinguish-absent-world-merge-roots",
+      "path": "./.cairn/changes/distinguish-absent-world-merge-roots",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 10,
+        "total": 10,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/enforce-introduction-before-reference/specs/runtime-spine/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "enforce-introduction-before-reference",
+      "path": "./.cairn/changes/enforce-introduction-before-reference",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 9,
+        "total": 9,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/enforce-scheduler-queue-bounds-on-yield/specs/fabric-time-scheduling/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "enforce-scheduler-queue-bounds-on-yield",
+      "path": "./.cairn/changes/enforce-scheduler-queue-bounds-on-yield",
+      "task_counts": {
+        "done": 9,
+        "in_progress": 0,
+        "todo": 3,
+        "total": 12,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/exercise-node-processes-under-faults/specs/testing-harness/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "exercise-node-processes-under-faults",
+      "path": "./.cairn/changes/exercise-node-processes-under-faults",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 9,
+        "total": 9,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/exercise-service-recovery-composition/specs/testing-harness/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "exercise-service-recovery-composition",
+      "path": "./.cairn/changes/exercise-service-recovery-composition",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 6,
+        "total": 6,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/federated-pull-system-extension/specs/federated-pull-sync/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "depends_on": [
+          "content-store-adapter-runtime",
+          "dag-sync-system-extension",
+          "fabric-cryptographic-identity-adapters",
+          "fabric-observability-integrity-runtime",
+          "fabric-time-scheduler-runtime",
+          "fabric-transport-session-runtime",
+          "fabric-whole-system-simulation"
+        ],
+        "groups": [
+          "current"
+        ],
+        "status": "blocked",
+        "target_date": null
+      },
+      "name": "federated-pull-system-extension",
+      "path": "./.cairn/changes/federated-pull-system-extension",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 13,
+        "total": 13,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/fence-runtime-local-work-across-restarts/specs/system-extension-runtime/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "fence-runtime-local-work-across-restarts",
+      "path": "./.cairn/changes/fence-runtime-local-work-across-restarts",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 9,
+        "total": 9,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/fix-node-shutdown-admission/specs/node-runtime/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "fix-node-shutdown-admission",
+      "path": "./.cairn/changes/fix-node-shutdown-admission",
+      "task_counts": {
+        "done": 11,
+        "in_progress": 0,
+        "todo": 1,
+        "total": 12,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/harden-prolly-publication-integrity/specs/prolly-publication-integrity/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "harden-prolly-publication-integrity",
+      "path": "./.cairn/changes/harden-prolly-publication-integrity",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 9,
+        "total": 9,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/harden-world-replay-observation-boundary/specs/world-commit/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "harden-world-replay-observation-boundary",
+      "path": "./.cairn/changes/harden-world-replay-observation-boundary",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 13,
+        "total": 13,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/pilot-marble-object-store/specs/marble-object-store/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "pilot-marble-object-store",
+      "path": "./.cairn/changes/pilot-marble-object-store",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 12,
+        "total": 12,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/pilot-spacewasm-core-runtime-profile/specs/spacewasm-core-runtime/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [
+          "current"
+        ],
+        "status": "blocked",
+        "target_date": null
+      },
+      "name": "pilot-spacewasm-core-runtime-profile",
+      "path": "./.cairn/changes/pilot-spacewasm-core-runtime-profile",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 10,
+        "total": 10,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/pilot-wrpc-component-transport/specs/component-rpc-pilot/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [
+          "current"
+        ],
+        "status": "blocked",
+        "target_date": null
+      },
+      "name": "pilot-wrpc-component-transport",
+      "path": "./.cairn/changes/pilot-wrpc-component-transport",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 9,
+        "total": 9,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/preserve-replica-fault-domains-during-cleanup/specs/content-replication/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "preserve-replica-fault-domains-during-cleanup",
+      "path": "./.cairn/changes/preserve-replica-fault-domains-during-cleanup",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 14,
+        "total": 14,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/preserve-under-replicated-status-without-targets/specs/content-replication/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "preserve-under-replicated-status-without-targets",
+      "path": "./.cairn/changes/preserve-under-replicated-status-without-targets",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 13,
+        "total": 13,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/prolly-storage-work-reduction/specs/prolly-storage-work-reduction/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "prolly-storage-work-reduction",
+      "path": "./.cairn/changes/prolly-storage-work-reduction",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 11,
+        "total": 11,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/publish-withdrawable-service-demand/specs/runtime-spine/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "publish-withdrawable-service-demand",
+      "path": "./.cairn/changes/publish-withdrawable-service-demand",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 8,
+        "total": 8,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/record-turn-causality-in-traces/specs/runtime-spine/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "record-turn-causality-in-traces",
+      "path": "./.cairn/changes/record-turn-causality-in-traces",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 8,
+        "total": 8,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/recover-from-storage-faults/specs/consensus/spec.md",
+        "./.cairn/changes/recover-from-storage-faults/specs/durable-state-ports/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "recover-from-storage-faults",
+      "path": "./.cairn/changes/recover-from-storage-faults",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 15,
+        "total": 15,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/recover-ingress-enqueue-after-dedup/specs/node-runtime/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "recover-ingress-enqueue-after-dedup",
+      "path": "./.cairn/changes/recover-ingress-enqueue-after-dedup",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 15,
+        "total": 15,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/repair-lost-replicas-after-prior-success/specs/content-replication/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "repair-lost-replicas-after-prior-success",
+      "path": "./.cairn/changes/repair-lost-replicas-after-prior-success",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 13,
+        "total": 13,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/repair-partial-replicas-without-complete-donor/specs/content-replication/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "repair-partial-replicas-without-complete-donor",
+      "path": "./.cairn/changes/repair-partial-replicas-without-complete-donor",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 8,
+        "total": 8,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/require-node-startup-source-gate-evidence/specs/node-runtime/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "require-node-startup-source-gate-evidence",
+      "path": "./.cairn/changes/require-node-startup-source-gate-evidence",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 14,
+        "total": 14,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/resume-blocked-scheduler-runnables/specs/fabric-time-scheduling/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "resume-blocked-scheduler-runnables",
+      "path": "./.cairn/changes/resume-blocked-scheduler-runnables",
+      "task_counts": {
+        "done": 9,
+        "in_progress": 0,
+        "todo": 3,
+        "total": 12,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/saturate-exponential-retry-arithmetic/specs/fabric-time-scheduling/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "saturate-exponential-retry-arithmetic",
+      "path": "./.cairn/changes/saturate-exponential-retry-arithmetic",
+      "task_counts": {
+        "done": 10,
+        "in_progress": 0,
+        "todo": 2,
+        "total": 12,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/store-declared-state-as-digest-named-records/specs/durable-state-ports/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "store-declared-state-as-digest-named-records",
+      "path": "./.cairn/changes/store-declared-state-as-digest-named-records",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 7,
+        "total": 7,
+        "unmarked": 0
+      }
+    },
+    {
+      "delta_specs": [
+        "./.cairn/changes/unify-service-state-assertions/specs/runtime-spine/spec.md"
+      ],
+      "has_design": true,
+      "has_proposal": true,
+      "has_tasks": true,
+      "metadata": {
+        "groups": [],
+        "status": null,
+        "target_date": null
+      },
+      "name": "unify-service-state-assertions",
+      "path": "./.cairn/changes/unify-service-state-assertions",
+      "task_counts": {
+        "done": 0,
+        "in_progress": 0,
+        "todo": 9,
+        "total": 9,
+        "unmarked": 0
+      }
+    }
+  ],
+  "layout": "cairn",
+  "root": "."
+}

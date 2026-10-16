@@ -1,11 +1,11 @@
 type IoValue = preserves::IOValue;
 type Value<T> = preserves::Value<T>;
 
-type LocalStorePath = crate::local_store::LocalStorePath;
+type LocalStorePath = crate::local_store::Locator;
 type Path = std::path::Path;
 #[cfg(test)]
 type PathBuf = std::path::PathBuf;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 type RuntimeEvent = crate::runtime::RuntimeEvent;
 type RuntimeState = crate::runtime::RuntimeState;

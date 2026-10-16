@@ -53,8 +53,8 @@ fn checks_value(checks: &[&str]) -> preserves::IOValue {
     field("checks", strings_value(checks.iter().copied()))
 }
 
-fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(format!("{label} validation denied: {issues:?}"))
+fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("{label} validation denied: {issues:?}"))
 }
 
 // r[impl molten.fabric_boundary.final_validation]
@@ -111,10 +111,10 @@ mod tests {
     // r[verify molten.fabric_boundary.final_validation]
     #[test]
     fn canonical_port_binding_is_stable_and_names_only_reviewed_profile() {
-        let first = resolve_canonical_fabric_port_binding(&[descriptor()], &requirement())
+        let first = resolve_canonical_port_binding(&[descriptor()], &requirement())
             .expect("canonical compatible binding");
         let second =
-            resolve_canonical_fabric_port_binding(&[descriptor()], &requirement()).expect("repeat canonical binding");
+            resolve_canonical_port_binding(&[descriptor()], &requirement()).expect("repeat canonical binding");
         let text = crate::preserves_rail::to_text(&first.binding_value).expect("binding text");
 
         assert_eq!(first.descriptor_ref, second.descriptor_ref);
@@ -134,9 +134,9 @@ mod tests {
     // r[verify molten.fabric_boundary.non_claims]
     // r[verify molten.fabric_boundary.final_validation]
     #[test]
-    fn canonical_fabric_reports_bind_non_claims_and_reference_scope() {
-        let boundary = canonical_fabric_boundary(&default_fabric_boundary_descriptor()).expect("boundary artifact");
-        let evidence = canonical_fabric_evidence_profile(&default_production_evidence_profile(LIMIT_REF))
+    fn canonical_reports_bind_non_claims_and_reference_scope() {
+        let boundary = canonical_boundary(&default_fabric_boundary_descriptor()).expect("boundary artifact");
+        let evidence = canonical_evidence_profile(&default_production_evidence_profile(LIMIT_REF))
             .expect("evidence artifact");
         let references =
             canonical_reference_matrix_suite(&default_reference_system_matrices()).expect("reference artifact");
@@ -176,7 +176,7 @@ mod tests {
         let mut request = requirement();
         request.expected_profile = "different-profile-v1".to_string();
 
-        let error = resolve_canonical_fabric_port_binding(&[descriptor()], &request)
+        let error = resolve_canonical_port_binding(&[descriptor()], &request)
             .expect_err("profile substitution must deny");
 
         assert!(error.to_string().contains("SilentProfileSubstitution"));
@@ -193,8 +193,8 @@ mod tests {
         reordered.operation_classes.reverse();
         reordered.resource_requirements.reverse();
 
-        let ordered_ref = canonical_fabric_port_descriptor(&ordered).expect("ordered descriptor").0;
-        let reordered_ref = canonical_fabric_port_descriptor(&reordered).expect("reordered descriptor").0;
+        let ordered_ref = canonical_port_descriptor(&ordered).expect("ordered descriptor").0;
+        let reordered_ref = canonical_port_descriptor(&reordered).expect("reordered descriptor").0;
         assert_eq!(ordered_ref, reordered_ref);
 
         let mut time_descriptor = descriptor();
@@ -207,9 +207,9 @@ mod tests {
         time_descriptor.resource_requirements = vec![FabricResource::LogicalTime];
         time_descriptor.implementation_profile = "logical-time-v1".to_string();
 
-        let forward = resolve_canonical_fabric_port_binding(&[descriptor(), time_descriptor.clone()], &requirement())
+        let forward = resolve_canonical_port_binding(&[descriptor(), time_descriptor.clone()], &requirement())
             .expect("forward registry");
-        let reversed = resolve_canonical_fabric_port_binding(&[time_descriptor, descriptor()], &requirement())
+        let reversed = resolve_canonical_port_binding(&[time_descriptor, descriptor()], &requirement())
             .expect("reversed registry");
 
         assert_eq!(forward.registry_ref, reversed.registry_ref);

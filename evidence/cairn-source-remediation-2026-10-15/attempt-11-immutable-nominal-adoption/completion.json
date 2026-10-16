@@ -1,0 +1,71 @@
+{
+  "attempt": "11/20",
+  "status": "blocked_for_user_acceptance_scope_decision",
+  "objective_complete": false,
+  "change": "adopt-octet-nominal-domain-enforcement",
+  "provider_revision": "3f7abb641ee604f54629da415bc7686f89662065",
+  "implemented": [
+    "Pinned current Octet to the published reviewed cohort and regenerated the Nix lock with Nix.",
+    "Retained the original frozen verifier cohort under its dedicated input with an identical complete lock closure.",
+    "Recorded real pinned nominal positive/negative diagnostics and current compatibility outcomes.",
+    "Updated only supported completed checklist items and current governing documentation."
+  ],
+  "verified": {
+    "pinned_nominal_nix": "passed; 15 matching rows, clean positive, exact raw-field and actual-macro-alias denials",
+    "inherited_traceability_nix": "passed; zero dangling references",
+    "frozen_verifier_replay_nix": "passed; decision bytes equal the frozen archive",
+    "nominal_schema_tests": 16,
+    "frozen_boundary_tests": 5,
+    "compile_fail_doctests": 7,
+    "selected_library_clippy": "passed with denied warnings",
+    "nix_formatting": "passed",
+    "strict_native_validation": "valid, zero findings",
+    "affected_document_checks": "passed",
+    "whole_molten_octet": "clean, zero findings",
+    "whole_molten_core_octet": "warning-only, 985 findings; not a clean pass"
+  },
+  "active_worktree_changes": 52,
+  "pending_tasks_for_this_change": [
+    [
+      "done",
+      11
+    ],
+    [
+      "in_progress",
+      0
+    ],
+    [
+      "todo",
+      3
+    ],
+    [
+      "total",
+      14
+    ],
+    [
+      "unmarked",
+      0
+    ]
+  ],
+  "acceptance_conflict": "The change design permits the bounded actual-source nominal Nix harness; governing documentation also lists the whole-core check, which is warning-only. Resolve that scope explicitly before proceeding.",
+  "agreed_stop_condition": "Ambiguous or conflicting acceptance requirements / a mandatory gate blocking acceptance-only completion.",
+  "frozen_or_historical_evidence_modified": false,
+  "unrelated_existing_root_input_closures_changed": false,
+  "molten_integration_or_remote_push_performed": false,
+  "change_synced_or_archived": false,
+  "remaining_cairn_work_started_after_blocker": false,
+  "immediate_outcome": "Immutable nominal enforcement is exercised; lifecycle closeout remains correctly blocked.",
+  "durable_capability": "Repeatable actual-source positive and negative nominal-policy checks from a published exact provider cohort without invalidating historical verifier replay.",
+  "maintenance_owner": "Molten nominal-reference and build maintainers; Octet owns the embedded catalog and lint implementation.",
+  "repeatability_evidence": [
+    "pinned-runtime-proof.json",
+    "lock-closure-review.json",
+    "full-library-gate-conflict.json",
+    "current-runtime-compatibility.json",
+    "current-design-gate.json",
+    "current-strict-native-validation.json",
+    "current-active-changes.json",
+    "current-document-checks.json",
+    "frozen-replay-byte-equality.json"
+  ]
+}

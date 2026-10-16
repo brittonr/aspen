@@ -9,12 +9,12 @@ pub(super) fn write_install(
     manifest_value: &preserves::IOValue,
     install: &molten::protocol_session::ProtocolInstallReceipt,
 ) -> Outcome<()> {
-    std::fs::create_dir_all(out).map_err(molten::error::MoltenError::from)?;
+    std::fs::create_dir_all(out).map_err(molten::error::Failure::from)?;
     write_file(out.join("manifest.preserves"), &molten::preserves_rail::to_text(manifest_value)?)?;
     write_file(out.join("install-receipt.preserves"), &molten::preserves_rail::to_text(&install.value)?)?;
     write_file(out.join("summary.txt"), &molten::protocol_session::protocol_summary(&install.value)?)?;
     let endpoints_dir = out.join("endpoints");
-    std::fs::create_dir_all(&endpoints_dir).map_err(molten::error::MoltenError::from)?;
+    std::fs::create_dir_all(&endpoints_dir).map_err(molten::error::Failure::from)?;
     write_indexed_values(
         &endpoints_dir,
         "endpoint",
@@ -73,7 +73,7 @@ pub(super) fn emit_named_receipt(path: Option<&FilePath>, label: &str, receipt: 
 }
 
 pub(super) fn read_preserves_file(path: &std::path::Path) -> Outcome<preserves::IOValue> {
-    let text = std::fs::read_to_string(path).map_err(molten::error::MoltenError::from)?;
+    let text = std::fs::read_to_string(path).map_err(molten::error::Failure::from)?;
     molten::preserves_rail::parse_text(&text)
 }
 
@@ -88,7 +88,7 @@ fn read_indexed_values(dir: &std::path::Path, prefix: &str) -> Outcome<Vec<prese
     }
     let overflow_path = dir.join(format!("{prefix}-{LIFECYCLE_INDEX_LIMIT}.preserves"));
     if overflow_path.exists() {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "protocol lifecycle {prefix} evidence exceeds index limit"
         )));
     }
@@ -105,7 +105,7 @@ fn write_indexed_values(out: &std::path::Path, prefix: &str, values: &[preserves
 fn write_file(path: impl AsRef<std::path::Path>, contents: &str) -> Outcome<()> {
     let path = path.as_ref();
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(molten::error::MoltenError::from)?;
+        std::fs::create_dir_all(parent).map_err(molten::error::Failure::from)?;
     }
-    std::fs::write(path, contents).map_err(molten::error::MoltenError::from)
+    std::fs::write(path, contents).map_err(molten::error::Failure::from)
 }

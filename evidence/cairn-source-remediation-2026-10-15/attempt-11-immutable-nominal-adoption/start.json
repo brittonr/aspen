@@ -1,0 +1,18 @@
+{
+  "attempt": "11/20",
+  "change": "adopt-octet-nominal-domain-enforcement",
+  "provider": {
+    "upstream": "git@github.com:OnixResearch/octet.git",
+    "reviewed_available_revision": "3f7abb641ee604f54629da415bc7686f89662065",
+    "source_commit": "82a6f01a15cfbfda7ed9b37e03605d0c052391c4",
+    "native_change_archived": "./.cairn/archive/1970-01-01-adopt-molten-nominal-reference-domains"
+  },
+  "authorized_change": "Coordinated immutable Octet proof-tool input and generated Nix lock update, then actual pinned nominal positive/negative and compatibility/combined acceptance with unchanged native gates.",
+  "boundaries": [
+    "No unrelated Cargo/release dependency or toolchain pin changes.",
+    "No Molten remote push.",
+    "No local source override as immutable adoption evidence.",
+    "Preserve frozen fixtures and historical receipts."
+  ],
+  "status": "entered before consumer pin mutation"
+}

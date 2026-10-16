@@ -1,0 +1,11 @@
+{
+  "removed_task_owned_binary": "/tmp/molten-f14-current-run-16-restored-se51n6m8/traceability17",
+  "released_tmp_bytes": 950039952,
+  "retained": [
+    "execution-drivers.json exact executed Rust/Python sources",
+    "native-traceability-consumer-compile.json actual compile command/result",
+    "native-consumer-library-provenance.json exact library/binary/source binding",
+    "All canonical observations, native verification receipts and original attempt-16 failed-before states"
+  ],
+  "scope": "Only the newly compiled attempt-17 external helper was removed; no unrelated files, processes, old evidence or failed-before roots were touched."
+}

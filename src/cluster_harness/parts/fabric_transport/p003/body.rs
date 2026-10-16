@@ -82,10 +82,10 @@ fn parent_run_value(
         cleanup,
     } = artifacts;
     if listener.handoff_ref != client.handoff_ref {
-        return Err(crate::error::MoltenError::invalid_harness("participant handoff refs do not match"));
+        return Err(crate::error::Failure::invalid_harness("participant handoff refs do not match"));
     }
     if listener.drain_reason == NOT_APPLICABLE || client.drain_reason != NOT_APPLICABLE {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "participant drain reason does not match its listener/client role",
         ));
     }
@@ -263,20 +263,20 @@ fn read_cleanup(path: &std::path::Path) -> crate::error::Result<CleanupArtifact>
     })
 }
 
-fn read_endpoint_handoff(path: &std::path::Path) -> crate::error::Result<CanonicalCrossProcessEndpoint> {
-    parse_canonical_cross_process_endpoint(&read_preserves(path)?)
+fn read_endpoint_handoff(path: &std::path::Path) -> crate::error::Result<Endpoint> {
+    parse_endpoint(&read_preserves(path)?)
 }
 
 fn read_preserves(path: &std::path::Path) -> crate::error::Result<preserves::IOValue> {
     ensure_regular_file(path)?;
-    let bytes = std::fs::read(path).map_err(crate::error::MoltenError::from)?;
+    let bytes = std::fs::read(path).map_err(crate::error::Failure::from)?;
     crate::preserves_rail::parse_canonical_bytes(&bytes)
 }
 
 fn write_preserves(path: &std::path::Path, value: &preserves::IOValue) -> crate::error::Result<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(crate::error::MoltenError::from)?;
+        std::fs::create_dir_all(parent).map_err(crate::error::Failure::from)?;
     }
     let bytes = crate::preserves_rail::canonical_bytes(value)?;
-    std::fs::write(path, bytes).map_err(crate::error::MoltenError::from)
+    std::fs::write(path, bytes).map_err(crate::error::Failure::from)
 }

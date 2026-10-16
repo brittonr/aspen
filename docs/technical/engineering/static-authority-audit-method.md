@@ -6,7 +6,7 @@ Molten uses structural scans to make authority-sensitive code review more repeat
 
 A useful scan asks where code acquires or reacquires authority, not simply whether a file contains I/O. Public shells may legitimately bootstrap a capability. Inner operations are expected to carry the resulting authority object rather than reconstruct it from an ambient path. Test setup may intentionally create hostile filesystem state, while production descendant I/O belongs behind capability-aware adapters.
 
-This makes path scope part of the rule's meaning. The inspected [node-state root-reacquisition rule](../../../tools/ast-grep/runtime-authority/rules/node-state-root-reacquisition.yml) is `error` severity with blocking posture, lists specific converted daemon, identity, and job pages, and ignores `**/tests/**`. Its patterns cover qualified and unqualified `NodeStateRoot::open`, namespace reopening, and ambient directory acquisition. That is not equivalent to banning these operations everywhere in the repository.
+This makes path scope part of the rule's meaning. The inspected [node-state root-reacquisition rule](../../../tools/ast-grep/runtime-authority/rules/node-state-root-reacquisition.yml) is `error` severity with blocking posture, lists specific converted daemon, identity, and job pages, and ignores `**/tests/**`. Its patterns cover qualified and unqualified `DirectoryRoot::open`, namespace reopening, and ambient directory acquisition. That is not equivalent to banning these operations everywhere in the repository.
 
 A no-finding result therefore means no configured pattern matched the supplied scanned surface under the tool's interpretation. It does not imply that every path to authority has been eliminated. Aliases, helper indirection, unsupported syntax, omitted files, or a newly relocated implementation can all change coverage without changing the intended architectural boundary.
 
@@ -20,7 +20,7 @@ The inspected validator checks that those fixture references are present. It doe
 
 ## Binding an observation without overclaiming it
 
-`AstGrepScanInput` carries the profile, tool-version string, rule-bundle hash, scan-scope hash, evidence-gate run reference, and findings. The [receipt-check implementation](../../../src/audit/parts/ast_grep/p001/body.rs) checks profile validity, tool-prefix shape, content-reference forms, known finding rule identifiers, absence of findings for declared blocking rules, and required non-claims.
+`ast_grep_runtime_authority_core::ScanInput` carries the profile, tool-version string, rule-bundle hash, scan-scope hash, evidence-gate run reference, and findings. The [receipt-check implementation](../../../src/audit/parts/ast_grep/p001/body.rs) checks profile validity, tool-prefix shape, content-reference forms, known finding rule identifiers, absence of findings for declared blocking rules, and required non-claims.
 
 Those are checks over supplied observations. They do not attest that a named executable actually ran or independently recompute source-file measurements. `requires_fresh_scan` compares the receipt's rule-bundle reference with a supplied current reference; it does not itself execute a fresh scan.
 
@@ -34,7 +34,7 @@ The inspected metadata-hash helper alone may remain unchanged in this scenario b
 
 ## A second scoped source discrepancy
 
-The governing guide lists node-state adapter coverage and two node-state blocking rules. The inspected YAML rule exists with blocking posture, but `runtime_authority_profile()` builds its default rule list from `inventory_rules()`, which currently adds only the store, test-workspace, and materialization blocking rules. Its required/default surfaces also omit `node-state-adapters` while including `filesystem-materializers`.
+The governing guide lists node-state adapter coverage and two node-state blocking rules. The inspected YAML rule exists with blocking posture, but `ast_grep_runtime_authority_core::profile()` builds its default rule list from `inventory_rules()`, which currently adds only the store, test-workspace, and materialization blocking rules. Its required/default surfaces also omit `node-state-adapters` while including `filesystem-materializers`.
 
 Thus the existence of the YAML rule does not establish that the default Rust receipt profile declares it. Because receipt checks require findings to reference known rules, callers cannot assume those two representations are interchangeable. This discrepancy is left explicit rather than repaired or silently normalized in documentation.
 

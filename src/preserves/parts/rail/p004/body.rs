@@ -177,7 +177,7 @@ pub struct BoundarySchemaValidation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BoundaryCodecReport {
+pub struct BoundaryReport {
     pub family: String,
     pub schema_ref: ContentRef,
     pub input_bytes_ref: ContentRef,

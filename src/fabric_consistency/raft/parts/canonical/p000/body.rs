@@ -18,14 +18,14 @@ const SNAPSHOT_RESPONSE_ARITY: usize = 6;
 const MAX_WIRE_IDENTIFIER_BYTES: usize = 256;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalReplicaMessage {
+pub struct ReplicaMessage {
     pub envelope_ref: String,
     pub value: preserves::IOValue,
     pub bytes: Vec<u8>,
 }
 
 // r[impl molten.fabric_consistency.live_raft]
-pub fn canonical_replica_message(envelope: &ReplicaMessageEnvelope) -> crate::error::Result<CanonicalReplicaMessage> {
+pub fn replica_message(envelope: &ReplicaMessageEnvelope) -> crate::error::Result<ReplicaMessage> {
     validate_envelope_shape(envelope)?;
     let value = crate::preserves_rail::record("raft-message-envelope-v1", vec![
         crate::preserves_rail::string(RAFT_MESSAGE_ENVELOPE_SCHEMA),
@@ -37,7 +37,7 @@ pub fn canonical_replica_message(envelope: &ReplicaMessageEnvelope) -> crate::er
     ]);
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     let envelope_ref = crate::preserves_rail::content_ref_from_bytes(&bytes);
-    Ok(CanonicalReplicaMessage {
+    Ok(ReplicaMessage {
         envelope_ref,
         value,
         bytes,
@@ -45,12 +45,12 @@ pub fn canonical_replica_message(envelope: &ReplicaMessageEnvelope) -> crate::er
 }
 
 // r[impl molten.fabric_consistency.live_raft]
-pub fn parse_canonical_replica_message(bytes: &[u8]) -> crate::error::Result<ReplicaMessageEnvelope> {
+pub fn parse_replica_message(bytes: &[u8]) -> crate::error::Result<ReplicaMessageEnvelope> {
     let decoded = crate::preserves_rail::strict_canonical_decode(bytes)?;
     let fields = required_record(&decoded.value, "raft-message-envelope-v1", ENVELOPE_ARITY)?;
     let schema = required_string(&fields[0], "Raft envelope schema")?;
     if schema != RAFT_MESSAGE_ENVELOPE_SCHEMA {
-        return Err(crate::error::MoltenError::invalid_harness("unsupported canonical Raft envelope schema"));
+        return Err(crate::error::Failure::invalid_harness("unsupported canonical Raft envelope schema"));
     }
     let envelope = ReplicaMessageEnvelope {
         group_binding_ref: required_string(&fields[1], "Raft group binding ref")?,
@@ -63,24 +63,24 @@ pub fn parse_canonical_replica_message(bytes: &[u8]) -> crate::error::Result<Rep
     Ok(envelope)
 }
 
-fn message_value(message: &RaftMessage) -> crate::error::Result<preserves::IOValue> {
+fn message_value(message: &Message) -> crate::error::Result<preserves::IOValue> {
     match message {
-        message @ (RaftMessage::RequestVote { .. } | RaftMessage::VoteResponse { .. }) => vote_message_value(message),
-        message @ (RaftMessage::AppendEntries { .. } | RaftMessage::AppendResponse { .. }) => {
+        message @ (Message::RequestVote { .. } | Message::VoteResponse { .. }) => vote_message_value(message),
+        message @ (Message::AppendEntries { .. } | Message::AppendResponse { .. }) => {
             append_message_value(message)
         }
-        message @ (RaftMessage::ReadProbe { .. } | RaftMessage::ReadAcknowledgement { .. }) => {
+        message @ (Message::ReadProbe { .. } | Message::ReadAcknowledgement { .. }) => {
             read_message_value(message)
         }
-        message @ (RaftMessage::InstallSnapshot { .. } | RaftMessage::SnapshotResponse { .. }) => {
+        message @ (Message::InstallSnapshot { .. } | Message::SnapshotResponse { .. }) => {
             snapshot_message_value(message)
         }
     }
 }
 
-fn vote_message_value(message: &RaftMessage) -> crate::error::Result<preserves::IOValue> {
+fn vote_message_value(message: &Message) -> crate::error::Result<preserves::IOValue> {
     Ok(match message {
-        RaftMessage::RequestVote {
+        Message::RequestVote {
             term,
             candidate_id,
             last_log_index,
@@ -95,7 +95,7 @@ fn vote_message_value(message: &RaftMessage) -> crate::error::Result<preserves::
             crate::preserves_rail::u64_value(*config_epoch),
             crate::preserves_rail::u64_value(*fencing_epoch),
         ]),
-        RaftMessage::VoteResponse {
+        Message::VoteResponse {
             term,
             voter_id,
             granted,
@@ -108,13 +108,13 @@ fn vote_message_value(message: &RaftMessage) -> crate::error::Result<preserves::
             crate::preserves_rail::u64_value(*config_epoch),
             crate::preserves_rail::u64_value(*fencing_epoch),
         ]),
-        _ => return Err(crate::error::MoltenError::invalid_harness("vote encoding admitted a non-vote message")),
+        _ => return Err(crate::error::Failure::invalid_harness("vote encoding admitted a non-vote message")),
     })
 }
 
-fn append_message_value(message: &RaftMessage) -> crate::error::Result<preserves::IOValue> {
+fn append_message_value(message: &Message) -> crate::error::Result<preserves::IOValue> {
     Ok(match message {
-        RaftMessage::AppendEntries {
+        Message::AppendEntries {
             term,
             leader_id,
             prev_log_index,
@@ -133,7 +133,7 @@ fn append_message_value(message: &RaftMessage) -> crate::error::Result<preserves
             crate::preserves_rail::u64_value(*config_epoch),
             crate::preserves_rail::u64_value(*fencing_epoch),
         ]),
-        RaftMessage::AppendResponse {
+        Message::AppendResponse {
             term,
             follower_id,
             success,
@@ -152,13 +152,13 @@ fn append_message_value(message: &RaftMessage) -> crate::error::Result<preserves
             crate::preserves_rail::u64_value(*config_epoch),
             crate::preserves_rail::u64_value(*fencing_epoch),
         ]),
-        _ => return Err(crate::error::MoltenError::invalid_harness("append encoding admitted a non-append message")),
+        _ => return Err(crate::error::Failure::invalid_harness("append encoding admitted a non-append message")),
     })
 }
 
-fn read_message_value(message: &RaftMessage) -> crate::error::Result<preserves::IOValue> {
+fn read_message_value(message: &Message) -> crate::error::Result<preserves::IOValue> {
     Ok(match message {
-        RaftMessage::ReadProbe {
+        Message::ReadProbe {
             term,
             leader_id,
             request_ref,
@@ -173,7 +173,7 @@ fn read_message_value(message: &RaftMessage) -> crate::error::Result<preserves::
             crate::preserves_rail::u64_value(*config_epoch),
             crate::preserves_rail::u64_value(*fencing_epoch),
         ]),
-        RaftMessage::ReadAcknowledgement {
+        Message::ReadAcknowledgement {
             term,
             follower_id,
             request_ref,
@@ -186,13 +186,13 @@ fn read_message_value(message: &RaftMessage) -> crate::error::Result<preserves::
             crate::preserves_rail::u64_value(*config_epoch),
             crate::preserves_rail::u64_value(*fencing_epoch),
         ]),
-        _ => return Err(crate::error::MoltenError::invalid_harness("read encoding admitted a non-read message")),
+        _ => return Err(crate::error::Failure::invalid_harness("read encoding admitted a non-read message")),
     })
 }
 
-fn snapshot_message_value(message: &RaftMessage) -> crate::error::Result<preserves::IOValue> {
+fn snapshot_message_value(message: &Message) -> crate::error::Result<preserves::IOValue> {
     Ok(match message {
-        RaftMessage::InstallSnapshot {
+        Message::InstallSnapshot {
             term,
             leader_id,
             snapshot,
@@ -205,7 +205,7 @@ fn snapshot_message_value(message: &RaftMessage) -> crate::error::Result<preserv
             crate::preserves_rail::u64_value(*config_epoch),
             crate::preserves_rail::u64_value(*fencing_epoch),
         ]),
-        RaftMessage::SnapshotResponse {
+        Message::SnapshotResponse {
             term,
             follower_id,
             snapshot_index,
@@ -221,7 +221,7 @@ fn snapshot_message_value(message: &RaftMessage) -> crate::error::Result<preserv
             crate::preserves_rail::u64_value(*fencing_epoch),
         ]),
         _ => {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "snapshot encoding admitted a non-snapshot message",
             ));
         }
@@ -239,9 +239,9 @@ fn entry_value(entry: &ReplicatedEntry) -> preserves::IOValue {
     ])
 }
 
-fn parse_message(value: &preserves::Value<preserves::IOValue>) -> crate::error::Result<RaftMessage> {
+fn parse_message(value: &preserves::Value<preserves::IOValue>) -> crate::error::Result<Message> {
     if let Some(fields) = value.collect_simple_record("request-vote", Some(REQUEST_VOTE_ARITY)) {
-        return Ok(RaftMessage::RequestVote {
+        return Ok(Message::RequestVote {
             term: required_u64(&fields[0], "Raft vote term")?,
             candidate_id: required_string(&fields[1], "Raft candidate id")?,
             last_log_index: required_u64(&fields[2], "Raft candidate last log index")?,
@@ -251,7 +251,7 @@ fn parse_message(value: &preserves::Value<preserves::IOValue>) -> crate::error::
         });
     }
     if let Some(fields) = value.collect_simple_record("vote-response", Some(VOTE_RESPONSE_ARITY)) {
-        return Ok(RaftMessage::VoteResponse {
+        return Ok(Message::VoteResponse {
             term: required_u64(&fields[0], "Raft vote response term")?,
             voter_id: required_string(&fields[1], "Raft voter id")?,
             granted: required_bool(&fields[2], "Raft vote decision")?,

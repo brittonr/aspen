@@ -8,13 +8,13 @@ const _: () = assert!(MAX_NODE_STATE_PATH_BYTES > 0);
 const _: () = assert!(MAX_NODE_STATE_PATH_BYTES <= MAX_REASONABLE_NODE_STATE_BOUND);
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct NodeStatePath {
+pub struct RelativePath {
     relative: std::path::PathBuf,
 }
 
-impl NodeStatePath {
+impl RelativePath {
     pub fn parse(value: &str) -> crate::error::Result<Self> {
-        validate_node_state_locator(value)?;
+        validate(value)?;
         let mut relative = std::path::PathBuf::new();
         let mut component_count = 0usize;
         for component in std::path::Path::new(value).components() {
@@ -77,7 +77,7 @@ impl NodeStatePath {
     }
 }
 
-pub(super) fn join_scope(scope: &std::path::Path, suffix: &NodeStatePath) -> crate::error::Result<std::path::PathBuf> {
+pub(super) fn join_scope(scope: &std::path::Path, suffix: &RelativePath) -> crate::error::Result<std::path::PathBuf> {
     let component_count = scope
         .components()
         .count()
@@ -93,7 +93,7 @@ pub(super) fn join_scope(scope: &std::path::Path, suffix: &NodeStatePath) -> cra
     Ok(joined)
 }
 
-fn validate_node_state_locator(value: &str) -> crate::error::Result<()> {
+fn validate(value: &str) -> crate::error::Result<()> {
     if value.is_empty() {
         return Err(super::invalid("node state path cannot be empty"));
     }

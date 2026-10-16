@@ -1,5 +1,5 @@
 
-pub fn validate_materialization_receipt(receipt: &MaterializationReceipt) -> crate::error::Result<()> {
+pub fn validate_receipt(receipt: &Receipt) -> crate::error::Result<()> {
     // r[impl molten.filesystem_materialization.receipt]
     if receipt.decision != DECISION_PASS || !receipt.diagnostics.is_empty() {
         return Err(invalid("materialization receipt is not a passing receipt"));
@@ -13,7 +13,7 @@ pub fn validate_materialization_receipt(receipt: &MaterializationReceipt) -> cra
     if crate::preserves_rail::canonical_hash(&receipt.plan_value)? != receipt.plan_ref {
         return Err(invalid("materialization receipt embedded plan identity mismatch"));
     }
-    let embedded_plan = parse_materialization_plan_value(&receipt.plan_value)?;
+    let embedded_plan = parse_plan_value(&receipt.plan_value)?;
     let embedded_member_refs = embedded_plan
         .members
         .iter()
@@ -32,7 +32,7 @@ pub fn validate_materialization_receipt(receipt: &MaterializationReceipt) -> cra
     }
     let mut previous = None;
     for (path, reference) in &receipt.member_refs {
-        MaterializationPath::parse_within(path, HARD_MAX_MATERIALIZATION_PATH_BYTES)?;
+        Path::parse_within(path, HARD_MAX_MATERIALIZATION_PATH_BYTES)?;
         crate::preserves_rail::validate_content_ref(reference)?;
         if previous.as_ref().is_some_and(|previous: &&String| *previous >= path) {
             return Err(invalid("materialization receipt members are not uniquely sorted"));
@@ -43,7 +43,7 @@ pub fn validate_materialization_receipt(receipt: &MaterializationReceipt) -> cra
     if receipt.non_claims != expected_non_claims {
         return Err(invalid("materialization receipt non-claims are incomplete or reordered"));
     }
-    let expected_value = materialization_receipt_value(&MaterializationReceiptValueInput {
+    let expected_value = receipt_value(&ReceiptValueInput {
         decision: &receipt.decision,
         profile: &receipt.profile,
         plan_ref: &receipt.plan_ref,
@@ -65,7 +65,7 @@ pub fn validate_materialization_receipt(receipt: &MaterializationReceipt) -> cra
     Ok(())
 }
 
-pub fn parse_materialization_receipt(value: &preserves::IOValue) -> crate::error::Result<MaterializationReceipt> {
+pub fn parse_receipt(value: &preserves::IOValue) -> crate::error::Result<Receipt> {
     let record = value
         .collect_simple_record("filesystem-materialization-receipt-v1", Some(MATERIALIZATION_RECEIPT_FIELD_COUNT))
         .ok_or_else(|| invalid("expected filesystem materialization receipt"))?;
@@ -110,7 +110,7 @@ pub fn parse_materialization_receipt(value: &preserves::IOValue) -> crate::error
     let total_bytes = required_preserves_u64(total_bytes_field, "materialization receipt total bytes")?;
     let diagnostics = parse_named_string_sequence(diagnostics_field, "diagnostics")?;
     let non_claims = parse_named_string_sequence(non_claims_field, "non-claims")?;
-    let receipt = MaterializationReceipt {
+    let receipt = Receipt {
         receipt_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         profile,
@@ -125,11 +125,11 @@ pub fn parse_materialization_receipt(value: &preserves::IOValue) -> crate::error
         non_claims,
         value: value.clone(),
     };
-    validate_materialization_receipt(&receipt)?;
+    validate_receipt(&receipt)?;
     Ok(receipt)
 }
 
-fn parse_materialization_plan_value(value: &preserves::IOValue) -> crate::error::Result<MaterializationPlan> {
+fn parse_plan_value(value: &preserves::IOValue) -> crate::error::Result<Plan> {
     let record = value
         .collect_simple_record("filesystem-materialization-plan-v1", Some(MATERIALIZATION_PLAN_FIELD_COUNT))
         .ok_or_else(|| invalid("expected filesystem materialization plan"))?;
@@ -170,7 +170,7 @@ fn parse_materialization_plan_value(value: &preserves::IOValue) -> crate::error:
     else {
         return Err(invalid("materialization plan bounds field count changed after parsing"));
     };
-    let policy = MaterializationPolicy {
+    let policy = Policy {
         profile,
         replacement,
         max_members: required_preserves_usize(max_members_field, "materialization plan maximum members")?,
@@ -179,7 +179,7 @@ fn parse_materialization_plan_value(value: &preserves::IOValue) -> crate::error:
         max_path_bytes: required_preserves_usize(max_path_bytes_field, "materialization plan maximum path bytes")?,
         reserved_top_level_names,
     };
-    let plan = plan_materialization(&policy, &inputs)?;
+    let plan = plan(&policy, &inputs)?;
     if plan.members.len() != summary_count || plan.total_bytes != summary_bytes || plan.value != *value {
         return Err(invalid("materialization plan summary or canonical value is inconsistent"));
     }
@@ -188,7 +188,7 @@ fn parse_materialization_plan_value(value: &preserves::IOValue) -> crate::error:
 
 fn parse_plan_members(
     members_field: &preserves::Value<preserves::IOValue>,
-) -> crate::error::Result<Vec<MaterializationMemberInput>> {
+) -> crate::error::Result<Vec<MemberInput>> {
     let member_fields = required_record_fields(members_field, "members", 1)?;
     let member_values = member_fields[0]
         .collect_sequence()
@@ -207,12 +207,12 @@ fn parse_plan_members(
             return Err(invalid("materialization plan member field count changed after parsing"));
         };
         let kind = required_preserves_string(kind_field, "materialization plan member kind")?;
-        if kind != MaterializationMemberKind::RegularFile.as_str() {
+        if kind != MemberKind::RegularFile.as_str() {
             return Err(invalid(format!("unsupported materialization plan member kind {kind}")));
         }
-        inputs.push(MaterializationMemberInput {
+        inputs.push(MemberInput {
             logical_path: required_preserves_string(path_field, "materialization plan member path")?,
-            kind: MaterializationMemberKind::RegularFile,
+            kind: MemberKind::RegularFile,
             expected_content_ref: required_preserves_string(
                 content_ref_field,
                 "materialization plan member content ref",

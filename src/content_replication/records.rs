@@ -120,9 +120,7 @@ pub fn canonical_operator_status(view: &OperatorStatusView) -> crate::error::Res
 pub fn canonical_receipt(receipt: &ExecutionReceipt) -> crate::error::Result<CanonicalReplicationRecord> {
     let expected = NON_CLAIMS.iter().map(ToString::to_string).collect::<Vec<_>>();
     if receipt.non_claims != expected {
-        return Err(crate::error::MoltenError::invalid_harness(
-            "content-replication receipt non-claims are incomplete",
-        ));
+        return Err(crate::error::Failure::invalid_harness("content-replication receipt non-claims are incomplete"));
     }
     canonical(
         "receipt",
@@ -183,7 +181,7 @@ fn canonical(kind: &str, value: preserves::IOValue) -> crate::error::Result<Cano
     let mut hasher = blake3::Hasher::new_derive_key(RECORD_IDENTITY_CONTEXT);
     update(&mut hasher, kind)?;
     let length = u64::try_from(bytes.len())
-        .map_err(|_| crate::error::MoltenError::invalid_harness("replication record length exceeds u64"))?;
+        .map_err(|_| crate::error::Failure::invalid_harness("replication record length exceeds u64"))?;
     hasher.update(&length.to_be_bytes());
     hasher.update(&bytes);
     Ok(CanonicalReplicationRecord {
@@ -195,7 +193,7 @@ fn canonical(kind: &str, value: preserves::IOValue) -> crate::error::Result<Cano
 
 fn update(hasher: &mut blake3::Hasher, value: &str) -> crate::error::Result<()> {
     let length = u64::try_from(value.len())
-        .map_err(|_| crate::error::MoltenError::invalid_harness("replication identity field length exceeds u64"))?;
+        .map_err(|_| crate::error::Failure::invalid_harness("replication identity field length exceeds u64"))?;
     hasher.update(&length.to_be_bytes());
     hasher.update(value.as_bytes());
     Ok(())
@@ -224,7 +222,7 @@ fn boolean(value: bool) -> preserves::IOValue {
 fn count(value: usize) -> crate::error::Result<preserves::IOValue> {
     u64::try_from(value)
         .map(number)
-        .map_err(|_| crate::error::MoltenError::invalid_harness("replication count exceeds u64"))
+        .map_err(|_| crate::error::Failure::invalid_harness("replication count exceeds u64"))
 }
 
 fn field(label: &'static str, value: preserves::IOValue) -> preserves::IOValue {

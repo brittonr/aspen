@@ -67,7 +67,7 @@
     #[test]
     fn passing_vm_evidence_validates_semantically() {
         let (topology, nodes, run, child_refs) = fixture("pass");
-        let validation = validate_nixos_vm_evidence(&NixosVmEvidenceValidationInput {
+        let validation = validate_nixos_vm_evidence(&NixosVmEvidenceInput {
             topology_value: &topology,
             node_evidence_values: &nodes,
             test_run_value: &run,
@@ -89,7 +89,7 @@
         let wrong_topology_ref = local_ref("wrong-topology");
         let node_refs = canonical_refs(&nodes).expect("node refs");
         let run = test_run(&wrong_topology_ref, &node_refs, &child_refs, "pass");
-        let validation = validate_nixos_vm_evidence(&NixosVmEvidenceValidationInput {
+        let validation = validate_nixos_vm_evidence(&NixosVmEvidenceInput {
             topology_value: &topology,
             node_evidence_values: &nodes,
             test_run_value: &run,
@@ -108,7 +108,7 @@
     #[test]
     fn deny_receipt_cannot_be_overridden_by_logs() {
         let (topology, nodes, run, child_refs) = fixture("deny");
-        let validation = validate_nixos_vm_evidence(&NixosVmEvidenceValidationInput {
+        let validation = validate_nixos_vm_evidence(&NixosVmEvidenceInput {
             topology_value: &topology,
             node_evidence_values: &nodes,
             test_run_value: &run,
@@ -157,7 +157,7 @@
             peer_id: None,
             operation_id: None,
         }];
-        let validation = validate_nixos_vm_evidence(&NixosVmEvidenceValidationInput {
+        let validation = validate_nixos_vm_evidence(&NixosVmEvidenceInput {
             topology_value: &topology,
             node_evidence_values: &nodes,
             test_run_value: &run,
@@ -174,7 +174,7 @@
     }
 
     #[test]
-    fn duplicate_or_undeclared_child_refs_deny_vm_validation() {
+    fn duplicate_or_undeclared_child_refs_deny_vm() {
         let (topology, nodes, _, _) = fixture("pass");
         let topology_ref = crate::preserves_rail::canonical_hash(&topology).expect("topology ref");
         let node_refs = canonical_refs(&nodes).expect("node refs");
@@ -182,7 +182,7 @@
         let child_refs = vec![shard.shard_ref.clone(), shard.shard_ref.clone()];
         let expected_child_refs = vec![local_ref("different-child")];
         let run = test_run(&topology_ref, &node_refs, &child_refs, "pass");
-        let validation = validate_nixos_vm_evidence(&NixosVmEvidenceValidationInput {
+        let validation = validate_nixos_vm_evidence(&NixosVmEvidenceInput {
             topology_value: &topology,
             node_evidence_values: &nodes,
             test_run_value: &run,
@@ -201,7 +201,7 @@
     }
 
     #[test]
-    fn mismatched_child_receipt_semantics_deny_vm_validation() {
+    fn mismatched_child_receipt_semantics_deny_vm() {
         let (topology, nodes, _, _) = fixture("pass");
         let topology_ref = crate::preserves_rail::canonical_hash(&topology).expect("topology ref");
         let node_refs = canonical_refs(&nodes).expect("node refs");
@@ -216,7 +216,7 @@
             peer_id: None,
             operation_id: None,
         }];
-        let validation = validate_nixos_vm_evidence(&NixosVmEvidenceValidationInput {
+        let validation = validate_nixos_vm_evidence(&NixosVmEvidenceInput {
             topology_value: &topology,
             node_evidence_values: &nodes,
             test_run_value: &run,

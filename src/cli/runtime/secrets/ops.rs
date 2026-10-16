@@ -1,6 +1,7 @@
 pub(super) fn run_fixture(out: std::path::PathBuf) -> molten::error::Result<()> {
-    let run = molten::secrets::run_secrets_fixture()?;
-    std::fs::create_dir_all(&out).map_err(molten::error::MoltenError::from)?;
+    let scratch = tempfile::Builder::new().prefix("molten-secrets-retention-").tempdir()?;
+    let run = molten::secrets::run_secrets_fixture(scratch.path())?;
+    std::fs::create_dir_all(&out).map_err(molten::error::Failure::from)?;
     super::io::write_file(&out.join("report.preserves"), &molten::preserves_rail::to_text(&run.value)?)?;
     super::io::write_file(&out.join("secret.preserves"), &molten::preserves_rail::to_text(&run.secret.value)?)?;
     super::io::write_file(

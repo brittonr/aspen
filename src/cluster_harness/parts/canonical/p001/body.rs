@@ -1,9 +1,9 @@
 
 // r[impl molten.testing.receipt_first_cluster_harness.cli_receipt_surface]
 // r[impl molten.testing.fixture_driven_cluster_execution.observation_gate]
-pub fn build_cluster_harness_parent(
-    input: &ClusterHarnessParentInput,
-) -> crate::error::Result<ClusterHarnessParentReceipt> {
+pub fn build_parent(
+    input: &ParentInput,
+) -> crate::error::Result<ParentReceipt> {
     let bound_refs = [
         &input.fixture_ref,
         &input.command_plan_ref,
@@ -59,7 +59,7 @@ pub fn build_cluster_harness_parent(
         ]),
     ]);
     let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(ClusterHarnessParentReceipt {
+    Ok(ParentReceipt {
         decision,
         diagnostics,
         receipt_ref,
@@ -67,7 +67,7 @@ pub fn build_cluster_harness_parent(
     })
 }
 
-fn parent_diagnostics(input: &ClusterHarnessParentInput) -> Vec<String> {
+fn parent_diagnostics(input: &ParentInput) -> Vec<String> {
     let mut diagnostics = input.diagnostics.clone();
     if input.unsupported_pass_claim {
         diagnostics.push("cluster-run-unsupported-pass-claim".to_string());
@@ -87,10 +87,10 @@ fn parent_diagnostics(input: &ClusterHarnessParentInput) -> Vec<String> {
 
 // r[impl molten.testing.receipt_first_cluster_harness.run_artifact_directory]
 // r[impl molten.testing.receipt_first_cluster_harness.failure_triage]
-pub fn cluster_run_verification_value(
+pub fn run_verification_value(
     index_ref: &str,
     assessment: &molten_core::cluster_harness::RunDirectoryAssessment,
-) -> crate::error::Result<ClusterRunVerificationReceipt> {
+) -> crate::error::Result<RunVerificationReceipt> {
     crate::preserves_rail::validate_content_ref(index_ref)?;
     let divergence = first_divergence_value(assessment.first_divergence.as_ref());
     let value = crate::preserves_rail::record("cluster-run-verification-v1", vec![
@@ -106,7 +106,7 @@ pub fn cluster_run_verification_value(
         ]),
     ]);
     let verification_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(ClusterRunVerificationReceipt {
+    Ok(RunVerificationReceipt {
         decision: assessment.decision.clone(),
         diagnostics: assessment.diagnostics.clone(),
         verification_ref,
@@ -163,7 +163,7 @@ fn strings_sequence(values: &[String]) -> IoValue {
 fn validate_refs(label: &str, refs: &[String]) -> crate::error::Result<()> {
     for reference in refs {
         crate::preserves_rail::validate_content_ref(reference).map_err(|error| {
-            crate::error::MoltenError::invalid_harness(format!("invalid {label} ref {reference}: {error}"))
+            crate::error::Failure::invalid_harness(format!("invalid {label} ref {reference}: {error}"))
         })?;
     }
     Ok(())
@@ -171,10 +171,10 @@ fn validate_refs(label: &str, refs: &[String]) -> crate::error::Result<()> {
 
 fn validate_non_empty_strings(label: &str, values: &[String]) -> crate::error::Result<()> {
     if values.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness(format!("{label} values must not be empty")));
+        return Err(crate::error::Failure::invalid_harness(format!("{label} values must not be empty")));
     }
     if values.iter().any(|value| value.trim().is_empty() || value.trim() != value) {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "{label} values must be non-empty and unpadded"
         )));
     }

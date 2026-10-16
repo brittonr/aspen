@@ -27,7 +27,7 @@ const SEMANTIC_SURFACE_NAMES: [&str; molten_core::live_binding::SEMANTIC_SURFACE
 ];
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum AdoptionArtifactKind {
+pub enum ArtifactKind {
     BindingRecord,
     BindingSnapshot,
     ResolutionReceipt,
@@ -39,7 +39,7 @@ pub enum AdoptionArtifactKind {
     SemanticOperationBinding,
 }
 
-impl AdoptionArtifactKind {
+impl ArtifactKind {
     pub const fn label(self) -> &'static str {
         match self {
             Self::BindingRecord => "binding-record-v1",
@@ -76,8 +76,8 @@ pub struct CanonicalField {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct AdoptionArtifact {
-    pub kind: AdoptionArtifactKind,
+pub struct Artifact {
+    pub kind: ArtifactKind,
     pub artifact_ref: String,
     pub fields: Vec<CanonicalField>,
     pub non_claims: Vec<String>,
@@ -86,12 +86,12 @@ pub struct AdoptionArtifact {
 
 fn validate_field(field: &CanonicalField) -> crate::error::Result<()> {
     if field.name.is_empty() || field.value.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "adoption artifact field name and value must not be empty",
         ));
     }
     if !field.name.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-') {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "adoption artifact field name must be a lowercase token",
         ));
     }
@@ -105,14 +105,14 @@ fn normalize_fields(fields: &[CanonicalField]) -> crate::error::Result<Vec<Canon
     }
     normalized.sort();
     if normalized.windows(2).any(|pair| pair[0].name == pair[1].name) {
-        return Err(crate::error::MoltenError::invalid_harness("adoption artifact contains a duplicate field"));
+        return Err(crate::error::Failure::invalid_harness("adoption artifact contains a duplicate field"));
     }
     Ok(normalized)
 }
 
 fn normalize_non_claims(non_claims: &[String]) -> crate::error::Result<Vec<String>> {
     if non_claims.is_empty() || non_claims.iter().any(String::is_empty) {
-        return Err(crate::error::MoltenError::invalid_harness("adoption artifact requires non-empty non-claims"));
+        return Err(crate::error::Failure::invalid_harness("adoption artifact requires non-empty non-claims"));
     }
     let mut normalized = non_claims.to_vec();
     normalized.sort();
@@ -120,7 +120,7 @@ fn normalize_non_claims(non_claims: &[String]) -> crate::error::Result<Vec<Strin
     Ok(normalized)
 }
 
-fn artifact_value(kind: AdoptionArtifactKind, fields: &[CanonicalField], non_claims: &[String]) -> preserves::IOValue {
+fn artifact_value(kind: ArtifactKind, fields: &[CanonicalField], non_claims: &[String]) -> preserves::IOValue {
     crate::preserves_rail::record(kind.label(), vec![
         crate::preserves_rail::string(kind.schema()),
         crate::preserves_rail::record("fields", vec![crate::preserves_rail::sequence(
@@ -143,15 +143,15 @@ fn artifact_value(kind: AdoptionArtifactKind, fields: &[CanonicalField], non_cla
 // r[impl molten.artifacts.live_binding.cutover]
 // r[impl molten.retirement.trace_report]
 // r[impl molten.retirement.deploy_diagnostics]
-pub fn build_adoption_artifact(
-    kind: AdoptionArtifactKind,
+pub fn build_artifact(
+    kind: ArtifactKind,
     fields: &[CanonicalField],
     non_claims: &[String],
-) -> crate::error::Result<AdoptionArtifact> {
+) -> crate::error::Result<Artifact> {
     let fields = normalize_fields(fields)?;
     let non_claims = normalize_non_claims(non_claims)?;
     let value = artifact_value(kind, &fields, &non_claims);
-    Ok(AdoptionArtifact {
+    Ok(Artifact {
         kind,
         artifact_ref: crate::preserves_rail::canonical_hash(&value)?,
         fields,
@@ -166,12 +166,12 @@ fn semantic_identity_text(identity: &kamacite_core::Identity) -> String {
 
 // r[impl molten.effects.semantic_operation_identity]
 // r[impl molten.effects.semantic_handler_matching]
-pub fn build_strict_semantic_operation_binding(
+pub fn build_strict_semantic_operation(
     declared_operation: &kamacite_core::Identity,
     surfaces: &molten_core::live_binding::SemanticSurfaceBindings,
-) -> crate::error::Result<AdoptionArtifact> {
+) -> crate::error::Result<Artifact> {
     molten_core::live_binding::validate_semantic_surfaces(declared_operation, surfaces).map_err(|error| {
-        crate::error::MoltenError::invalid_harness(format!("strict semantic operation binding denied: {error:?}"))
+        crate::error::Failure::invalid_harness(format!("strict semantic operation binding denied: {error:?}"))
     })?;
     let mut fields = Vec::with_capacity(molten_core::live_binding::SEMANTIC_SURFACE_COUNT + 1);
     fields.push(CanonicalField {
@@ -184,8 +184,8 @@ pub fn build_strict_semantic_operation_binding(
             value: semantic_identity_text(identity),
         });
     }
-    build_adoption_artifact(
-        AdoptionArtifactKind::SemanticOperationBinding,
+    build_artifact(
+        ArtifactKind::SemanticOperationBinding,
         &fields,
         &molten_core::live_binding::SEMANTIC_NON_CLAIMS
             .iter()
@@ -198,23 +198,23 @@ fn required_string(value: &preserves::Value<preserves::IOValue>, field: &str) ->
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected string for {field}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected string for {field}")))
 }
 
 fn parse_fields(value: &preserves::Value<preserves::IOValue>) -> crate::error::Result<Vec<CanonicalField>> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let record = value
         .collect_simple_record("fields", Some(1))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("expected adoption fields record"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected adoption fields record"))?;
     let values = record[0]
         .collect_sequence()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("expected adoption field sequence"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected adoption field sequence"))?;
     let mut fields = Vec::with_capacity(values.len());
     for value in values.iter() {
         let value = crate::preserves_rail::value_to_iovalue(value);
         let field = value
             .collect_simple_record("field", Some(FIELD_ARITY))
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("expected adoption field record"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("expected adoption field record"))?;
         fields.push(CanonicalField {
             name: required_string(&field[0], "adoption field name")?,
             value: required_string(&field[1], "adoption field value")?,
@@ -227,10 +227,10 @@ fn parse_non_claims(value: &preserves::Value<preserves::IOValue>) -> crate::erro
     let value = crate::preserves_rail::value_to_iovalue(value);
     let record = value
         .collect_simple_record("non-claims", Some(1))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("expected non-claims record"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected non-claims record"))?;
     let values = record[0]
         .collect_sequence()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("expected non-claims sequence"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected non-claims sequence"))?;
     let mut non_claims = Vec::with_capacity(values.len());
     for value in values.iter() {
         non_claims.push(required_string(value, "adoption non-claim")?);
@@ -238,21 +238,21 @@ fn parse_non_claims(value: &preserves::Value<preserves::IOValue>) -> crate::erro
     normalize_non_claims(&non_claims)
 }
 
-pub fn parse_adoption_artifact(
-    kind: AdoptionArtifactKind,
+pub fn parse_artifact(
+    kind: ArtifactKind,
     value: &preserves::IOValue,
-) -> crate::error::Result<AdoptionArtifact> {
+) -> crate::error::Result<Artifact> {
     let record = value
         .collect_simple_record(kind.label(), Some(ADOPTION_ARTIFACT_ARITY))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("unexpected adoption artifact label or arity"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("unexpected adoption artifact label or arity"))?;
     let schema = required_string(&record[0], "adoption artifact schema")?;
     if schema != kind.schema() {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported adoption schema {schema}; expected {}",
             kind.schema()
         )));
     }
-    Ok(AdoptionArtifact {
+    Ok(Artifact {
         kind,
         artifact_ref: crate::preserves_rail::canonical_hash(value)?,
         fields: parse_fields(&record[1])?,

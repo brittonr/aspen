@@ -120,7 +120,7 @@ fn index_set_manifest_chunk_availability(
         }
     }
     if let Some(receipt_value) = receipt_value {
-        store_receipt_in_tx(&write_txn, receipt_value)?;
+        receipt_in_tx(&write_txn, receipt_value)?;
     }
     write_txn.commit().map_err(index_error)
 }
@@ -161,7 +161,7 @@ fn index_set_pin(
         }
     }
     if let Some(receipt_value) = receipt_value {
-        store_receipt_in_tx(&write_txn, receipt_value)?;
+        receipt_in_tx(&write_txn, receipt_value)?;
     }
     write_txn.commit().map_err(index_error)
 }
@@ -198,21 +198,21 @@ fn index_apply_gc(input: &IndexApplyGcInput<'_>) -> Result<()> {
             }
         }
     }
-    store_receipt_in_tx(&write_txn, input.receipt_value)?;
+    receipt_in_tx(&write_txn, input.receipt_value)?;
     if let Some(tombstone_receipt) = input.tombstone_receipt {
-        store_receipt_in_tx(&write_txn, tombstone_receipt)?;
+        receipt_in_tx(&write_txn, tombstone_receipt)?;
     }
     write_txn.commit().map_err(index_error)
 }
 
-fn store_receipt(root: &CapabilityChunkRoot, receipt_value: &IoValue) -> Result<()> {
+fn receipt(root: &CapabilityChunkRoot, receipt_value: &IoValue) -> Result<()> {
     let db = ensure_index_tables(root)?;
     let write_txn = db.begin_write().map_err(index_error)?;
-    store_receipt_in_tx(&write_txn, receipt_value)?;
+    receipt_in_tx(&write_txn, receipt_value)?;
     write_txn.commit().map_err(index_error)
 }
 
-fn store_receipt_in_tx(write_txn: &redb::WriteTransaction, receipt_value: &IoValue) -> Result<()> {
+fn receipt_in_tx(write_txn: &redb::WriteTransaction, receipt_value: &IoValue) -> Result<()> {
     let parsed = parse_receipt_value(receipt_value, None)?;
     let receipt_bytes = canonical_bytes(receipt_value)?;
     let mut receipts = write_txn.open_table(INDEX_RECEIPTS).map_err(index_error)?;
@@ -221,7 +221,7 @@ fn store_receipt_in_tx(write_txn: &redb::WriteTransaction, receipt_value: &IoVal
 }
 
 fn ensure_index_tables(root: &CapabilityChunkRoot) -> Result<Database> {
-    let database_file = root.root().open_database_file(&store_path(INDEX_FILE)?)?;
+    let database_file = root.root().open_database_file(&path(INDEX_FILE)?)?;
     let db = Database::builder().create_file(database_file).map_err(index_error)?;
     let write_txn = db.begin_write().map_err(index_error)?;
     {

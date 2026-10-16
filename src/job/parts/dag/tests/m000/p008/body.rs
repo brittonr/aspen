@@ -212,10 +212,10 @@
 
     #[test]
     fn capability_node_runner_fails_closed_for_typed_storage_without_losing_chunk_authority() {
-        let workspace = crate::test_support::TestWorkspace::new("job-capability-typed-storage-deny")
+        let workspace = crate::test_support::Workspace::new("job-capability-typed-storage-deny")
             .expect("test workspace");
         let state = workspace.state().expect("state root");
-        let root = crate::node_state::NodeStateRoot::from_dir(state.dir().try_clone().expect("clone state root"));
+        let root = crate::node_state::DirectoryRoot::from_dir(state.dir().try_clone().expect("clone state root"));
         root.create_layout().expect("node layout");
         let chunk_root = root.chunk_store().expect("chunk root");
         let options = CapabilityJobRunOptions { chunk_root: &chunk_root };

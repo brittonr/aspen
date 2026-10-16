@@ -1,0 +1,274 @@
+{
+  "command": "Read each registered Molten UI source and actual stderr snapshot after the unblessed hermetic UI rail; no snapshot was blessed or rewritten.",
+  "ui_replay": {
+    "command": [
+      "nix",
+      "build",
+      ".#checks.x86_64-linux.ui",
+      "--no-link",
+      "--print-out-paths",
+      "-L"
+    ],
+    "exit_code": 0,
+    "derivation": "/nix/store/w7drw2q6j5wibsfzslh6kk0w7s4gkbil-octet-ui-0.1.0.drv",
+    "output": "/nix/store/l4hhdk0rmcndaph3wg2wizad4baj7bd8-octet-ui-0.1.0",
+    "unblessed": true,
+    "cargo_test_extra_args": "--test ui -- --ignored --nocapture",
+    "observed_test_result": "4 passed; 0 failed; 0 ignored",
+    "raw_full_tool_output": "artifact://553",
+    "retained_native_build_log": "provider-ui-replay-log.json"
+  },
+  "fixtures": [
+    {
+      "fixture": "molten_nominal_raw_alias",
+      "source": "#![deny(primitive_domain_alias, raw_domain_value)]\n\n// Every alias is an exact declared Molten domain; String must be rejected.\ntype PrincipalRef = String;\ntype NodeRef = String;\ntype ActorRef = String;\ntype ServiceRef = String;\ntype SessionRef = String;\ntype AuthorityContextRef = String;\ntype DelegationRef = String;\ntype RevocationRef = String;\ntype KeyRef = String;\ntype PolicyRef = String;\ntype ResourceRef = String;\ntype EvidenceRef = String;\ntype ArtifactRef = String;\ntype OperationRef = String;\ntype ReceiptRef = String;\n\nfn main() {}\n",
+      "stderr": "error: domain alias `PrincipalRef` resolves to primitive storage declared by `molten.nominal-reference.principal`\n  --> $DIR/molten_nominal_raw_alias.rs:4:6\n   |\nLL | type PrincipalRef = String;\n   |      ^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\nnote: the lint level is defined here\n  --> $DIR/molten_nominal_raw_alias.rs:1:9\n   |\nLL | #![deny(primitive_domain_alias, raw_domain_value)]\n   |         ^^^^^^^^^^^^^^^^^^^^^^\n   = note: `#[deny(tigerstyle::primitive_domain_alias)]` implied by `#[deny(primitive_domain_alias)]`\n\nerror: domain alias `NodeRef` resolves to primitive storage declared by `molten.nominal-reference.node`\n  --> $DIR/molten_nominal_raw_alias.rs:5:6\n   |\nLL | type NodeRef = String;\n   |      ^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `ActorRef` resolves to primitive storage declared by `molten.nominal-reference.actor`\n  --> $DIR/molten_nominal_raw_alias.rs:6:6\n   |\nLL | type ActorRef = String;\n   |      ^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `ServiceRef` resolves to primitive storage declared by `molten.nominal-reference.service`\n  --> $DIR/molten_nominal_raw_alias.rs:7:6\n   |\nLL | type ServiceRef = String;\n   |      ^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `SessionRef` resolves to primitive storage declared by `molten.nominal-reference.session`\n  --> $DIR/molten_nominal_raw_alias.rs:8:6\n   |\nLL | type SessionRef = String;\n   |      ^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `AuthorityContextRef` resolves to primitive storage declared by `molten.nominal-reference.authority-context`\n  --> $DIR/molten_nominal_raw_alias.rs:9:6\n   |\nLL | type AuthorityContextRef = String;\n   |      ^^^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `DelegationRef` resolves to primitive storage declared by `molten.nominal-reference.delegation`\n  --> $DIR/molten_nominal_raw_alias.rs:10:6\n   |\nLL | type DelegationRef = String;\n   |      ^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `RevocationRef` resolves to primitive storage declared by `molten.nominal-reference.revocation`\n  --> $DIR/molten_nominal_raw_alias.rs:11:6\n   |\nLL | type RevocationRef = String;\n   |      ^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `KeyRef` resolves to primitive storage declared by `molten.nominal-reference.key`\n  --> $DIR/molten_nominal_raw_alias.rs:12:6\n   |\nLL | type KeyRef = String;\n   |      ^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `PolicyRef` resolves to primitive storage declared by `molten.nominal-reference.policy`\n  --> $DIR/molten_nominal_raw_alias.rs:13:6\n   |\nLL | type PolicyRef = String;\n   |      ^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `ResourceRef` resolves to primitive storage declared by `molten.nominal-reference.resource`\n  --> $DIR/molten_nominal_raw_alias.rs:14:6\n   |\nLL | type ResourceRef = String;\n   |      ^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `EvidenceRef` resolves to primitive storage declared by `molten.nominal-reference.evidence`\n  --> $DIR/molten_nominal_raw_alias.rs:15:6\n   |\nLL | type EvidenceRef = String;\n   |      ^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `ArtifactRef` resolves to primitive storage declared by `molten.nominal-reference.artifact`\n  --> $DIR/molten_nominal_raw_alias.rs:16:6\n   |\nLL | type ArtifactRef = String;\n   |      ^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `OperationRef` resolves to primitive storage declared by `molten.nominal-reference.operation`\n  --> $DIR/molten_nominal_raw_alias.rs:17:6\n   |\nLL | type OperationRef = String;\n   |      ^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `ReceiptRef` resolves to primitive storage declared by `molten.nominal-reference.receipt`\n  --> $DIR/molten_nominal_raw_alias.rs:18:6\n   |\nLL | type ReceiptRef = String;\n   |      ^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: aborting due to 15 previous errors\n\n",
+      "alias_diagnostics": [
+        [
+          "PrincipalRef",
+          "molten.nominal-reference.principal"
+        ],
+        [
+          "NodeRef",
+          "molten.nominal-reference.node"
+        ],
+        [
+          "ActorRef",
+          "molten.nominal-reference.actor"
+        ],
+        [
+          "ServiceRef",
+          "molten.nominal-reference.service"
+        ],
+        [
+          "SessionRef",
+          "molten.nominal-reference.session"
+        ],
+        [
+          "AuthorityContextRef",
+          "molten.nominal-reference.authority-context"
+        ],
+        [
+          "DelegationRef",
+          "molten.nominal-reference.delegation"
+        ],
+        [
+          "RevocationRef",
+          "molten.nominal-reference.revocation"
+        ],
+        [
+          "KeyRef",
+          "molten.nominal-reference.key"
+        ],
+        [
+          "PolicyRef",
+          "molten.nominal-reference.policy"
+        ],
+        [
+          "ResourceRef",
+          "molten.nominal-reference.resource"
+        ],
+        [
+          "EvidenceRef",
+          "molten.nominal-reference.evidence"
+        ],
+        [
+          "ArtifactRef",
+          "molten.nominal-reference.artifact"
+        ],
+        [
+          "OperationRef",
+          "molten.nominal-reference.operation"
+        ],
+        [
+          "ReceiptRef",
+          "molten.nominal-reference.receipt"
+        ]
+      ],
+      "field_diagnostics": [],
+      "success_snapshot_empty": false
+    },
+    {
+      "fixture": "molten_nominal_macro_raw_alias",
+      "source": "#![deny(primitive_domain_alias, raw_domain_value)]\n\n// Resolve local macro aliases at their core callsite, not the macro definition.\nmacro_rules! domains {\n    ($($name:ident),+ $(,)?) => { $(type $name = String;)+ };\n}\n\ndomains!(PrincipalRef);\ndomains!(NodeRef);\ndomains!(ActorRef);\ndomains!(ServiceRef);\ndomains!(SessionRef);\ndomains!(AuthorityContextRef);\ndomains!(DelegationRef);\ndomains!(RevocationRef);\ndomains!(KeyRef);\ndomains!(PolicyRef);\ndomains!(ResourceRef);\ndomains!(EvidenceRef);\ndomains!(ArtifactRef);\ndomains!(OperationRef);\ndomains!(ReceiptRef);\n\nfn main() {}\n",
+      "stderr": "error: domain alias `PrincipalRef` resolves to primitive storage declared by `molten.nominal-reference.principal`\n  --> $DIR/molten_nominal_macro_raw_alias.rs:8:1\n   |\nLL | domains!(PrincipalRef);\n   | ^^^^^^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\nnote: the lint level is defined here\n  --> $DIR/molten_nominal_macro_raw_alias.rs:1:9\n   |\nLL | #![deny(primitive_domain_alias, raw_domain_value)]\n   |         ^^^^^^^^^^^^^^^^^^^^^^\n   = note: `#[deny(tigerstyle::primitive_domain_alias)]` implied by `#[deny(primitive_domain_alias)]`\n\nerror: domain alias `NodeRef` resolves to primitive storage declared by `molten.nominal-reference.node`\n  --> $DIR/molten_nominal_macro_raw_alias.rs:9:1\n   |\nLL | domains!(NodeRef);\n   | ^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `ActorRef` resolves to primitive storage declared by `molten.nominal-reference.actor`\n  --> $DIR/molten_nominal_macro_raw_alias.rs:10:1\n   |\nLL | domains!(ActorRef);\n   | ^^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `ServiceRef` resolves to primitive storage declared by `molten.nominal-reference.service`\n  --> $DIR/molten_nominal_macro_raw_alias.rs:11:1\n   |\nLL | domains!(ServiceRef);\n   | ^^^^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `SessionRef` resolves to primitive storage declared by `molten.nominal-reference.session`\n  --> $DIR/molten_nominal_macro_raw_alias.rs:12:1\n   |\nLL | domains!(SessionRef);\n   | ^^^^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `AuthorityContextRef` resolves to primitive storage declared by `molten.nominal-reference.authority-context`\n  --> $DIR/molten_nominal_macro_raw_alias.rs:13:1\n   |\nLL | domains!(AuthorityContextRef);\n   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `DelegationRef` resolves to primitive storage declared by `molten.nominal-reference.delegation`\n  --> $DIR/molten_nominal_macro_raw_alias.rs:14:1\n   |\nLL | domains!(DelegationRef);\n   | ^^^^^^^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `RevocationRef` resolves to primitive storage declared by `molten.nominal-reference.revocation`\n  --> $DIR/molten_nominal_macro_raw_alias.rs:15:1\n   |\nLL | domains!(RevocationRef);\n   | ^^^^^^^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `KeyRef` resolves to primitive storage declared by `molten.nominal-reference.key`\n  --> $DIR/molten_nominal_macro_raw_alias.rs:16:1\n   |\nLL | domains!(KeyRef);\n   | ^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `PolicyRef` resolves to primitive storage declared by `molten.nominal-reference.policy`\n  --> $DIR/molten_nominal_macro_raw_alias.rs:17:1\n   |\nLL | domains!(PolicyRef);\n   | ^^^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `ResourceRef` resolves to primitive storage declared by `molten.nominal-reference.resource`\n  --> $DIR/molten_nominal_macro_raw_alias.rs:18:1\n   |\nLL | domains!(ResourceRef);\n   | ^^^^^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `EvidenceRef` resolves to primitive storage declared by `molten.nominal-reference.evidence`\n  --> $DIR/molten_nominal_macro_raw_alias.rs:19:1\n   |\nLL | domains!(EvidenceRef);\n   | ^^^^^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `ArtifactRef` resolves to primitive storage declared by `molten.nominal-reference.artifact`\n  --> $DIR/molten_nominal_macro_raw_alias.rs:20:1\n   |\nLL | domains!(ArtifactRef);\n   | ^^^^^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `OperationRef` resolves to primitive storage declared by `molten.nominal-reference.operation`\n  --> $DIR/molten_nominal_macro_raw_alias.rs:21:1\n   |\nLL | domains!(OperationRef);\n   | ^^^^^^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: domain alias `ReceiptRef` resolves to primitive storage declared by `molten.nominal-reference.receipt`\n  --> $DIR/molten_nominal_macro_raw_alias.rs:22:1\n   |\nLL | domains!(ReceiptRef);\n   | ^^^^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered primitive domain aliases with private nominal wrappers and checked constructors Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: aborting due to 15 previous errors\n\n",
+      "alias_diagnostics": [
+        [
+          "PrincipalRef",
+          "molten.nominal-reference.principal"
+        ],
+        [
+          "NodeRef",
+          "molten.nominal-reference.node"
+        ],
+        [
+          "ActorRef",
+          "molten.nominal-reference.actor"
+        ],
+        [
+          "ServiceRef",
+          "molten.nominal-reference.service"
+        ],
+        [
+          "SessionRef",
+          "molten.nominal-reference.session"
+        ],
+        [
+          "AuthorityContextRef",
+          "molten.nominal-reference.authority-context"
+        ],
+        [
+          "DelegationRef",
+          "molten.nominal-reference.delegation"
+        ],
+        [
+          "RevocationRef",
+          "molten.nominal-reference.revocation"
+        ],
+        [
+          "KeyRef",
+          "molten.nominal-reference.key"
+        ],
+        [
+          "PolicyRef",
+          "molten.nominal-reference.policy"
+        ],
+        [
+          "ResourceRef",
+          "molten.nominal-reference.resource"
+        ],
+        [
+          "EvidenceRef",
+          "molten.nominal-reference.evidence"
+        ],
+        [
+          "ArtifactRef",
+          "molten.nominal-reference.artifact"
+        ],
+        [
+          "OperationRef",
+          "molten.nominal-reference.operation"
+        ],
+        [
+          "ReceiptRef",
+          "molten.nominal-reference.receipt"
+        ]
+      ],
+      "field_diagnostics": [],
+      "success_snapshot_empty": false
+    },
+    {
+      "fixture": "molten_nominal_raw_core",
+      "source": "#![deny(primitive_domain_alias, raw_domain_value)]\n\n// Registered direct and Option-wrapped core String fields must be rejected.\nstruct AuthorityReferenceSet {\n    holder: String,\n    session: Option<String>,\n    context: String,\n    delegation: String,\n    revocation: String,\n    key: String,\n    policy: String,\n    resource: String,\n    evidence: String,\n}\n\nstruct ExecutionReferenceSet {\n    node: String,\n    actor: String,\n    service: String,\n    session: Option<String>,\n    resource: String,\n    operation: String,\n}\n\nstruct ArtifactReferenceSet {\n    evidence: String,\n    artifact: String,\n    operation: String,\n    receipt: String,\n}\n\nstruct HistoricalReferenceSet {\n    evidence: String,\n    artifact: String,\n    receipt: String,\n}\n\nfn main() {}\n",
+      "stderr": "error: registered domain value `AuthorityReferenceSet::holder` uses raw `string` storage in core scope `molten.nominal-reference.principal`\n  --> $DIR/molten_nominal_raw_core.rs:5:5\n   |\nLL |     holder: String,\n   |     ^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\nnote: the lint level is defined here\n  --> $DIR/molten_nominal_raw_core.rs:1:33\n   |\nLL | #![deny(primitive_domain_alias, raw_domain_value)]\n   |                                 ^^^^^^^^^^^^^^^^\n   = note: `#[deny(tigerstyle::raw_domain_value)]` implied by `#[deny(raw_domain_value)]`\n\nerror: registered domain value `AuthorityReferenceSet::session` uses raw `string` storage in core scope `molten.nominal-reference.session`\n  --> $DIR/molten_nominal_raw_core.rs:6:5\n   |\nLL |     session: Option<String>,\n   |     ^^^^^^^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `AuthorityReferenceSet::context` uses raw `string` storage in core scope `molten.nominal-reference.authority-context`\n  --> $DIR/molten_nominal_raw_core.rs:7:5\n   |\nLL |     context: String,\n   |     ^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `AuthorityReferenceSet::delegation` uses raw `string` storage in core scope `molten.nominal-reference.delegation`\n  --> $DIR/molten_nominal_raw_core.rs:8:5\n   |\nLL |     delegation: String,\n   |     ^^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `AuthorityReferenceSet::revocation` uses raw `string` storage in core scope `molten.nominal-reference.revocation`\n  --> $DIR/molten_nominal_raw_core.rs:9:5\n   |\nLL |     revocation: String,\n   |     ^^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `AuthorityReferenceSet::key` uses raw `string` storage in core scope `molten.nominal-reference.key`\n  --> $DIR/molten_nominal_raw_core.rs:10:5\n   |\nLL |     key: String,\n   |     ^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `AuthorityReferenceSet::policy` uses raw `string` storage in core scope `molten.nominal-reference.policy`\n  --> $DIR/molten_nominal_raw_core.rs:11:5\n   |\nLL |     policy: String,\n   |     ^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `AuthorityReferenceSet::resource` uses raw `string` storage in core scope `molten.nominal-reference.resource`\n  --> $DIR/molten_nominal_raw_core.rs:12:5\n   |\nLL |     resource: String,\n   |     ^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `AuthorityReferenceSet::evidence` uses raw `string` storage in core scope `molten.nominal-reference.evidence`\n  --> $DIR/molten_nominal_raw_core.rs:13:5\n   |\nLL |     evidence: String,\n   |     ^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `ExecutionReferenceSet::node` uses raw `string` storage in core scope `molten.nominal-reference.node`\n  --> $DIR/molten_nominal_raw_core.rs:17:5\n   |\nLL |     node: String,\n   |     ^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `ExecutionReferenceSet::actor` uses raw `string` storage in core scope `molten.nominal-reference.actor`\n  --> $DIR/molten_nominal_raw_core.rs:18:5\n   |\nLL |     actor: String,\n   |     ^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `ExecutionReferenceSet::service` uses raw `string` storage in core scope `molten.nominal-reference.service`\n  --> $DIR/molten_nominal_raw_core.rs:19:5\n   |\nLL |     service: String,\n   |     ^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `ExecutionReferenceSet::session` uses raw `string` storage in core scope `molten.nominal-reference.session`\n  --> $DIR/molten_nominal_raw_core.rs:20:5\n   |\nLL |     session: Option<String>,\n   |     ^^^^^^^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `ExecutionReferenceSet::resource` uses raw `string` storage in core scope `molten.nominal-reference.resource`\n  --> $DIR/molten_nominal_raw_core.rs:21:5\n   |\nLL |     resource: String,\n   |     ^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `ExecutionReferenceSet::operation` uses raw `string` storage in core scope `molten.nominal-reference.operation`\n  --> $DIR/molten_nominal_raw_core.rs:22:5\n   |\nLL |     operation: String,\n   |     ^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `ArtifactReferenceSet::evidence` uses raw `string` storage in core scope `molten.nominal-reference.evidence`\n  --> $DIR/molten_nominal_raw_core.rs:26:5\n   |\nLL |     evidence: String,\n   |     ^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `ArtifactReferenceSet::artifact` uses raw `string` storage in core scope `molten.nominal-reference.artifact`\n  --> $DIR/molten_nominal_raw_core.rs:27:5\n   |\nLL |     artifact: String,\n   |     ^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `ArtifactReferenceSet::operation` uses raw `string` storage in core scope `molten.nominal-reference.operation`\n  --> $DIR/molten_nominal_raw_core.rs:28:5\n   |\nLL |     operation: String,\n   |     ^^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `ArtifactReferenceSet::receipt` uses raw `string` storage in core scope `molten.nominal-reference.receipt`\n  --> $DIR/molten_nominal_raw_core.rs:29:5\n   |\nLL |     receipt: String,\n   |     ^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `HistoricalReferenceSet::evidence` uses raw `string` storage in core scope `molten.nominal-reference.evidence`\n  --> $DIR/molten_nominal_raw_core.rs:33:5\n   |\nLL |     evidence: String,\n   |     ^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `HistoricalReferenceSet::artifact` uses raw `string` storage in core scope `molten.nominal-reference.artifact`\n  --> $DIR/molten_nominal_raw_core.rs:34:5\n   |\nLL |     artifact: String,\n   |     ^^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: registered domain value `HistoricalReferenceSet::receipt` uses raw `string` storage in core scope `molten.nominal-reference.receipt`\n  --> $DIR/molten_nominal_raw_core.rs:35:5\n   |\nLL |     receipt: String,\n   |     ^^^^^^^^^^^^^^^\n   |\n   = help: Tiger Style (Nominal Domain Types): replace registered raw core values with nominal domain types and decode raw values at compatibility boundaries Example: pub struct UnitId(String);\n   = note: see Tiger Style guide: Explicit Interfaces\n\nerror: aborting due to 22 previous errors\n\n",
+      "alias_diagnostics": [],
+      "field_diagnostics": [
+        [
+          "AuthorityReferenceSet::holder",
+          "molten.nominal-reference.principal"
+        ],
+        [
+          "AuthorityReferenceSet::session",
+          "molten.nominal-reference.session"
+        ],
+        [
+          "AuthorityReferenceSet::context",
+          "molten.nominal-reference.authority-context"
+        ],
+        [
+          "AuthorityReferenceSet::delegation",
+          "molten.nominal-reference.delegation"
+        ],
+        [
+          "AuthorityReferenceSet::revocation",
+          "molten.nominal-reference.revocation"
+        ],
+        [
+          "AuthorityReferenceSet::key",
+          "molten.nominal-reference.key"
+        ],
+        [
+          "AuthorityReferenceSet::policy",
+          "molten.nominal-reference.policy"
+        ],
+        [
+          "AuthorityReferenceSet::resource",
+          "molten.nominal-reference.resource"
+        ],
+        [
+          "AuthorityReferenceSet::evidence",
+          "molten.nominal-reference.evidence"
+        ],
+        [
+          "ExecutionReferenceSet::node",
+          "molten.nominal-reference.node"
+        ],
+        [
+          "ExecutionReferenceSet::actor",
+          "molten.nominal-reference.actor"
+        ],
+        [
+          "ExecutionReferenceSet::service",
+          "molten.nominal-reference.service"
+        ],
+        [
+          "ExecutionReferenceSet::session",
+          "molten.nominal-reference.session"
+        ],
+        [
+          "ExecutionReferenceSet::resource",
+          "molten.nominal-reference.resource"
+        ],
+        [
+          "ExecutionReferenceSet::operation",
+          "molten.nominal-reference.operation"
+        ],
+        [
+          "ArtifactReferenceSet::evidence",
+          "molten.nominal-reference.evidence"
+        ],
+        [
+          "ArtifactReferenceSet::artifact",
+          "molten.nominal-reference.artifact"
+        ],
+        [
+          "ArtifactReferenceSet::operation",
+          "molten.nominal-reference.operation"
+        ],
+        [
+          "ArtifactReferenceSet::receipt",
+          "molten.nominal-reference.receipt"
+        ],
+        [
+          "HistoricalReferenceSet::evidence",
+          "molten.nominal-reference.evidence"
+        ],
+        [
+          "HistoricalReferenceSet::artifact",
+          "molten.nominal-reference.artifact"
+        ],
+        [
+          "HistoricalReferenceSet::receipt",
+          "molten.nominal-reference.receipt"
+        ]
+      ],
+      "success_snapshot_empty": false
+    },
+    {
+      "fixture": "molten_nominal_typed",
+      "source": "#![deny(primitive_domain_alias, raw_domain_value)]\n\nuse std::marker::PhantomData;\n\n// A nominal generic wrapper stops raw-container traversal.\nstruct EntityRef<D> {\n    value: String,\n    domain: PhantomData<D>,\n}\nstruct CanonicalRef<D> {\n    value: String,\n    domain: PhantomData<D>,\n}\n\nmacro_rules! domains {\n    ($wrapper:ident; $($name:ident => $domain:ident),+ $(,)?) => {\n        $(enum $domain {}\n        type $name = $wrapper<$domain>;)+\n    };\n}\n\ndomains!(EntityRef;\n    PrincipalRef => PrincipalRefDomain,\n    NodeRef => NodeRefDomain,\n    ActorRef => ActorRefDomain,\n    ServiceRef => ServiceRefDomain,\n    SessionRef => SessionRefDomain,\n    AuthorityContextRef => AuthorityContextRefDomain,\n    OperationRef => OperationRefDomain,\n);\n\ndomains!(CanonicalRef;\n    DelegationRef => DelegationRefDomain,\n    RevocationRef => RevocationRefDomain,\n    KeyRef => KeyRefDomain,\n    PolicyRef => PolicyRefDomain,\n    ResourceRef => ResourceRefDomain,\n    EvidenceRef => EvidenceRefDomain,\n    ArtifactRef => ArtifactRefDomain,\n    ReceiptRef => ReceiptRefDomain,\n);\n\nstruct AuthorityReferenceSet {\n    holder: PrincipalRef,\n    session: SessionRef,\n    context: AuthorityContextRef,\n    delegation: DelegationRef,\n    revocation: RevocationRef,\n    key: KeyRef,\n    policy: PolicyRef,\n    resource: ResourceRef,\n    evidence: EvidenceRef,\n}\n\nstruct ExecutionReferenceSet {\n    node: NodeRef,\n    actor: ActorRef,\n    service: ServiceRef,\n    session: SessionRef,\n    resource: ResourceRef,\n    operation: OperationRef,\n}\n\nstruct ArtifactReferenceSet {\n    evidence: EvidenceRef,\n    artifact: ArtifactRef,\n    operation: OperationRef,\n    receipt: ReceiptRef,\n}\n\nstruct HistoricalReferenceSet {\n    evidence: EvidenceRef,\n    artifact: ArtifactRef,\n    receipt: ReceiptRef,\n}\n\n// Display text and private wrapper storage are intentionally not domain fields.\nstruct ReferenceError { role: String }\n\nfn main() {}\n",
+      "stderr": "",
+      "alias_diagnostics": [],
+      "field_diagnostics": [],
+      "success_snapshot_empty": true
+    },
+    {
+      "fixture": "molten_nominal_compat",
+      "source": "#![deny(primitive_domain_alias, raw_domain_value)]\n\n// Exact declared compatibility admits the same raw alias/field shapes.\nmacro_rules! domains {\n    ($($name:ident),+ $(,)?) => { $(type $name = String;)+ };\n}\n\ndomains!(PrincipalRef);\ndomains!(NodeRef);\ndomains!(ActorRef);\ndomains!(ServiceRef);\ndomains!(SessionRef);\ndomains!(AuthorityContextRef);\ndomains!(DelegationRef);\ndomains!(RevocationRef);\ndomains!(KeyRef);\ndomains!(PolicyRef);\ndomains!(ResourceRef);\ndomains!(EvidenceRef);\ndomains!(ArtifactRef);\ndomains!(OperationRef);\ndomains!(ReceiptRef);\n\nstruct AuthorityReferenceSet {\n    holder: String,\n    session: Option<String>,\n    context: String,\n    delegation: String,\n    revocation: String,\n    key: String,\n    policy: String,\n    resource: String,\n    evidence: String,\n}\n\nstruct ExecutionReferenceSet {\n    node: String,\n    actor: String,\n    service: String,\n    session: Option<String>,\n    resource: String,\n    operation: String,\n}\n\nstruct ArtifactReferenceSet {\n    evidence: String,\n    artifact: String,\n    operation: String,\n    receipt: String,\n}\n\nstruct HistoricalReferenceSet {\n    evidence: String,\n    artifact: String,\n    receipt: String,\n}\n\nfn main() {}\n",
+      "stderr": "",
+      "alias_diagnostics": [],
+      "field_diagnostics": [],
+      "success_snapshot_empty": true
+    }
+  ]
+}

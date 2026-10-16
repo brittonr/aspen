@@ -1,0 +1,150 @@
+{
+  "attempt": "14/20",
+  "change": "fix-node-shutdown-admission",
+  "date": "2026-10-16",
+  "result": "Recorded acceptance passes; native review, sync, and archive remain separate until matching receipts exist.",
+  "authority": {
+    "implementation_and_local_lifecycle": "Authorized bounded Cairn completion campaign; prior proposal-only text is not the current authorization state.",
+    "molten_remote_publication": false
+  },
+  "immediate_outcome": "Denied direct/queued shutdown admission precedes protected local lifecycle effects; the admitted file-backed node stop still succeeds.",
+  "durable_capability": "One shared pure shutdown admission boundary and canonical local denial evidence, preserving lifecycle artifacts on rejection.",
+  "maintenance_owner": "Molten node-runtime maintainers; node-host maintainers own capability-relative filesystem mechanics. F14 owns current-run stopped observations.",
+  "execution_records": "evidence/cairn-source-remediation-2026-10-15/attempt-14-shutdown-admission-acceptance",
+  "source_binding": {
+    "record": "reviewed-f01-source-content-hashes.json",
+    "paths": [
+      "src/node/parts/runtime/p005/body.rs",
+      "src/node/parts/daemon/p018/body.rs",
+      "src/node/parts/daemon/p053/body.rs",
+      "src/node/parts/runtime/tests/m000/p002/body.rs",
+      "src/node/parts/daemon/tests/m000/p014/body.rs"
+    ],
+    "product_source_changed_in_attempt_14": false,
+    "reuse_basis": "Attempt 13 exercised this same product Rust source; subsequent edits were lifecycle specifications and documentation. Attempt 14 adds real CLI observations and current native checks, not a claimed rerun of the shared test matrix."
+  },
+  "prior_failing_before_passing_after": "evidence/verification.md retains the original pre-change empty-authority failure and post-change normal-suite results unchanged.",
+  "normal_suite": {
+    "reused_attempt": "13/20",
+    "records": [
+      "cargo-workspace-all-targets-and-doc.txt",
+      "cargo-explicit-compatible-feature-cohorts.txt"
+    ],
+    "scope": {
+      "passed": 2095,
+      "failed": 0,
+      "record": "cargo-workspace-all-targets-and-doc.txt"
+    },
+    "doctests": {
+      "passed": 7,
+      "failed": 0,
+      "record": "cargo-workspace-all-targets-and-doc.txt"
+    },
+    "compatible_features": {
+      "passed": 4209,
+      "failed": 0,
+      "ignored": 1,
+      "enabled": [
+        "doltlite-oracle",
+        "executable-extents",
+        "profiler-perf",
+        "profiler-alloc",
+        "world-snapshot-vm-cohort"
+      ],
+      "disabled": [
+        "profiler-disabled"
+      ],
+      "record": "cargo-explicit-compatible-feature-cohorts.txt"
+    },
+    "f01_cases_present_in_default_and_both_explicit_cohorts": [
+      "admitted_shutdown_closes_adapters_in_reverse_start_order",
+      "direct_stop_without_active_lock_denies_and_preserves_state",
+      "shutdown_effect_error_cannot_become_success",
+      "shutdown_dispatch_without_authority_denies_before_effects",
+      "shutdown_denials_preserve_lifecycle_state_across_rejection_cases",
+      "local_node_init_run_status_stop_and_restart_recovery_are_receipted"
+    ]
+  },
+  "source_and_nix_acceptance": {
+    "reused_attempt": "13/20",
+    "record_directory": "evidence/cairn-source-remediation-2026-10-15/attempt-13-retry-arithmetic-acceptance",
+    "configured_octet": {
+      "workspace": "clean, zero findings",
+      "library": "clean, zero findings",
+      "configured_workspace_scope": [
+        "molten",
+        "molten-node-host"
+      ],
+      "targets": "workspace metadata all-targets; second producer molten --lib",
+      "unchanged_gate": "strict-ci",
+      "canonical_gate_receipt": "blake3:6e7ee8961b4e805d94aedbd4c8c7740905b6dfa7683600bddecd8f6b7ebf841e",
+      "artifact_import": "blake3:f31ea3e591ef61a52549d23d260865e10fd1be657177c63bac3a66d3d07c1ebc",
+      "imported_artifacts": 6,
+      "remediation_plan": "blake3:70046c44ddc91019d9ee642f1f2ae9188342f45010b5dd751efc7429e99f26dd"
+    },
+    "clippy_and_format": {
+      "result": "pass",
+      "scope": "workspace all-targets default, explicit enabled cohort, profiler-disabled cohort; -D warnings; cargo fmt --all --check",
+      "record": "clippy-all-cohorts-and-format.txt"
+    },
+    "nix": {
+      "result": "pass",
+      "target": "x86_64-linux",
+      "reported_checks": 674,
+      "hermetic_nextest_passed": 1693,
+      "record": "nix-flake-check.txt"
+    },
+    "node_state_check": "checks.x86_64-linux.node-state-authority; derivation /nix/store/xbygrfncwdbphdby6ksbq9bh4a3dr2w4-molten-node-state-authority.drv, included in the passing recorded nix flake check.",
+    "system_limit": "x86_64-linux only; no all-systems, optional ignored external-cohort, or arbitrary live-adapter claim."
+  },
+  "real_cli": {
+    "binary": "e08242384fb614807d965eacd33e47e3a517f62e65357a91b1166d89b3a56d5d  /home/brittonr/.cargo-target/debug/molten",
+    "startup": "init.json and run.json",
+    "denied_requests": [
+      "dispatch-missing-authority.json",
+      "missing-policy-dispatch.json",
+      "missing-resource-dispatch.json"
+    ],
+    "canonical_denial_values": [
+      "missing-authority-dispatch.preserves",
+      "missing-policy-dispatch.preserves",
+      "missing-resource-dispatch.preserves"
+    ],
+    "missing_authority_shape": "Real CLI smoke omitted authority, policy, and resource refs together; the normal repository regression isolates missing authority with otherwise supplied policy/resource refs. Missing-policy and missing-resource CLI cases isolate their respective missing field.",
+    "protected_artifacts": {
+      "count": 14,
+      "comparison": "Exact b3sum output equal before all denials and after all denials.",
+      "scope": "startup-receipt.preserves, control/node.lock.preserves, and twelve adapter-start receipts; no new adapter lifecycle receipt paths after denial.",
+      "records": [
+        "protected-lifecycle-before-denial.json",
+        "protected-lifecycle-after-denial.json",
+        "protected-lifecycle-after-all-denials.json"
+      ]
+    },
+    "after_denial": "status-after-denials.json reports running",
+    "admitted_stop": "admitted-stop.json and admitted-shutdown.preserves report pass",
+    "after_stop": "status-after-stop.json reports stopped",
+    "unavailable_previous_nix_cli": "cli-selection.json retains the unavailable realized output observation; the actual Cargo-built binary was used and content-bound."
+  },
+  "review": {
+    "requirements": [
+      "molten.audit_f01.admission",
+      "molten.audit_f01.preserve_state",
+      "molten.audit_f01.observed_effects",
+      "molten.audit_f01.validation"
+    ],
+    "pure_boundary": "admit_node_shutdown has no ambient/effect access; denial has no plan.",
+    "direct_path": "stop_local_node_with_request admits before execute_shutdown_plan.",
+    "queued_path": "dispatch_shutdown_request now physically lives in src/node/parts/daemon/p053/body.rs; denial supplies an empty effect-subreceipt slice before the diagnostic operation is finalized.",
+    "receipt_distinction": "The outer canonical denial control receipt can reference one diagnostic operation receipt; this is not a completed shutdown subreceipt.",
+    "effect_failure": "The normal regression blocks shutdown publication with a directory and checks the active lock remains and no successful control-stop receipt is published.",
+    "order": "The normal file-backed node test checks reversed adapter receipt order and corresponding persisted adapter-shutdown receipts; this is not an observation of arbitrary external adapter shutdown.",
+    "compatibility": "Existing v1 request/receipt shapes retained. A prior successful shutdown file remains unchanged on denied repeated direct stop. Historical F14 interpretation remains outside this correction.",
+    "current_native_validation": "pre-closeout-strict-validation.json valid; pre-closeout-live-guard.json verdict=pass, zero dangling refs, exactly the unchanged inherited-debt baseline."
+  },
+  "non_claims": [
+    "No remote authentication or permission follows from identity/nonempty refs.",
+    "No complete external adapter shutdown, crash atomicity, live-node correctness, F02 startup source-gate repair, or F14 current-run observation repair is proved.",
+    "No release eligibility, completion of other Cairns, mainline integration, or Molten remote push is claimed."
+  ]
+}

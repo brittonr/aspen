@@ -3,7 +3,7 @@ use molten_core::coordination_delivery::*;
 pub const DELIVERY_HOST_BINDING_SCHEMA: &str = "molten.coordination-delivery-host-binding.v1";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DeliveryHostBindingFacts {
+pub struct BindingFacts {
     pub schema: String,
     pub system_extension_manifest_ref: String,
     pub extension_id: String,
@@ -14,12 +14,12 @@ pub struct DeliveryHostBindingFacts {
 }
 
 // r[impl molten.coordination_delivery.consistency_durability]
-pub fn project_delivery_host_binding(
-    admitted: &crate::system_extension::CanonicalAdmittedSystemExtensionManifest,
+pub fn project_binding(
+    admitted: &crate::system_extension::AdmittedManifest,
     active_generation: u64,
     lifecycle_running: bool,
     delivery: &DeliveryManifest,
-) -> Result<DeliveryHostBindingFacts, DeliveryIssue> {
+) -> Result<BindingFacts, DeliveryIssue> {
     let system = admitted.manifest();
     let admitted_binding_refs = admitted
         .required_port_bindings()
@@ -34,7 +34,7 @@ pub fn project_delivery_host_binding(
     {
         return Err(DeliveryIssue::HostBindingMismatch);
     }
-    let facts = DeliveryHostBindingFacts {
+    let facts = BindingFacts {
         schema: DELIVERY_HOST_BINDING_SCHEMA.to_string(),
         system_extension_manifest_ref: admitted.manifest_ref().to_string(),
         extension_id: system.extension_id.clone(),
@@ -43,14 +43,11 @@ pub fn project_delivery_host_binding(
         lifecycle_running,
         port_bindings: delivery.port_bindings.clone(),
     };
-    validate_delivery_host_binding(&facts, delivery)?;
+    validate_binding(&facts, delivery)?;
     Ok(facts)
 }
 
-pub fn validate_delivery_host_binding(
-    facts: &DeliveryHostBindingFacts,
-    delivery: &DeliveryManifest,
-) -> Result<(), DeliveryIssue> {
+pub fn validate_binding(facts: &BindingFacts, delivery: &DeliveryManifest) -> Result<(), DeliveryIssue> {
     if facts.schema != DELIVERY_HOST_BINDING_SCHEMA
         || facts.system_extension_manifest_ref.is_empty()
         || facts.extension_id != delivery.extension_id

@@ -5,7 +5,7 @@ const SATURATING_ATTEMPT: u64 = 63;
 const DEADLINE_EVENT: usize = 0;
 const DELAY_EVENT: usize = 1;
 
-fn input<'a>(profile: &CanonicalTimeProfile, recorded: &'a [CanonicalTimeEvent]) -> FixtureRetryInput<'a> {
+fn input<'a>(profile: &Profile, recorded: &'a [Event]) -> FixtureRetryInput<'a> {
     FixtureRetryInput {
         now: TimeValue::Virtual(VirtualInstant {
             profile_ref: profile.profile.profile_ref.clone(),
@@ -24,7 +24,7 @@ fn input<'a>(profile: &CanonicalTimeProfile, recorded: &'a [CanonicalTimeEvent])
     }
 }
 
-fn events(profile: &CanonicalTimeProfile) -> Vec<CanonicalTimeEvent> {
+fn events(profile: &Profile) -> Vec<Event> {
     let request = input(profile, &[]);
     crate::fabric_time::fixture::retry_events(profile, &request.now, request.attempt, request.policy, request.jitter)
         .expect("admitted fixture")
@@ -56,18 +56,18 @@ fn accepts_matching_saturated_and_fixed_observations() {
 fn rejects_wrapped_history_without_rewriting_it() {
     let profile = simulation_profile();
     let mut recorded = events(&profile);
-    recorded[DEADLINE_EVENT] = canonical_named_event(EventHeader {
+    recorded[DEADLINE_EVENT] = named_event(EventHeader {
         profile_ref: &profile.profile_ref,
-        kind: CanonicalTimeEventKind::Deadline,
+        kind: EventKind::Deadline,
         generation: GENERATION,
         subject: "fixture-retry",
         action: "retry-planned",
         ticks: TIMER_DEADLINE,
     })
     .expect("historical deadline");
-    recorded[DELAY_EVENT] = canonical_named_event(EventHeader {
+    recorded[DELAY_EVENT] = named_event(EventHeader {
         profile_ref: &profile.profile_ref,
-        kind: CanonicalTimeEventKind::Deadline,
+        kind: EventKind::Deadline,
         generation: GENERATION,
         subject: "fixture-retry",
         action: "retry-delay",
@@ -110,9 +110,9 @@ fn rejects_each_changed_event_with_valid_canonical_identity() {
     let recorded = events(&profile);
     for (index, status) in [(DEADLINE_EVENT, "retry-planned"), (DELAY_EVENT, "retry-delay")] {
         let mut changed = recorded.clone();
-        changed[index] = canonical_named_event(EventHeader {
+        changed[index] = named_event(EventHeader {
             profile_ref: &profile.profile_ref,
-            kind: CanonicalTimeEventKind::Deadline,
+            kind: EventKind::Deadline,
             generation: GENERATION,
             subject: "fixture-retry",
             action: status,

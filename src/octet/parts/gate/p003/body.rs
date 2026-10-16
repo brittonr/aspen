@@ -143,7 +143,7 @@ pub fn check_octet_warning_baseline(input: &OctetBaselineCheckInput) -> Result<O
     let baseline = parse_warning_baseline(&input.baseline_value)?;
     let mut checks = Vec::new();
     let mut diagnostics = Vec::new();
-    let run = load_current_octet_run(&input.artifacts_dir, &mut checks, &mut diagnostics)?;
+    let run = load_current_octet_run(&input.artifacts_dir, &capture_workspace(), &mut checks, &mut diagnostics)?;
     let reviews = parse_review_manifests(&input.review_values)?;
     let review_refs = reviews.iter().map(|review| review.review_ref.clone()).collect::<Vec<_>>();
     let facts = BaselineFacts {

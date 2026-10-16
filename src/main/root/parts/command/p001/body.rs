@@ -123,7 +123,7 @@ mod tests {
     }
 
     #[test]
-    fn world_authority_effect_command_requires_denial_receipt_path() {
+    fn world_authority_effect_requires_denial_receipt_path() {
         let result = <super::Cli as clap::Parser>::try_parse_from([
             "molten",
             "world-authority",

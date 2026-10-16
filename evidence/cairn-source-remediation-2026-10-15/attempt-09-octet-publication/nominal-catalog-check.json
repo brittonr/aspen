@@ -1,0 +1,20 @@
+{
+  "attempt": "9/20",
+  "command": [
+    "nix",
+    "build",
+    ".#checks.x86_64-linux.nominal-domain-catalog",
+    "--no-link",
+    "--print-out-paths",
+    "-L"
+  ],
+  "exit_code": 0,
+  "derivation": "/nix/store/1v83mfnhlh3f0yr98k5zbpfsvbrlzsbn-octet-nominal-domain-catalog-check.drv",
+  "output": "/nix/store/n7jzjxyxr1xi9g04b8qkg31lsd62ynbs-octet-nominal-domain-catalog-check",
+  "checks": [
+    "Nickel catalog typechecking",
+    "exact source export/checked-in JSON equality",
+    "all valid catalog fixtures admitted",
+    "all invalid catalog fixtures rejected"
+  ]
+}

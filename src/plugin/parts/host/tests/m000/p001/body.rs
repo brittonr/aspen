@@ -90,12 +90,12 @@
     }
 
     #[test]
-    fn extension_contract_artifacts_parse_and_are_classified() {
-        let contract = storage_extension_contract(PLUGIN_PROFILE_PRODUCTION, "1.0.0");
+    fn contract_artifacts_parse_and_are_classified() {
+        let contract = storage_contract(PLUGIN_PROFILE_PRODUCTION, "1.0.0");
         assert_eq!(crate::ledger::artifact_kind(&contract.value), "plugin-extension-contract");
         assert_eq!(contract.extension_id, "plugin-extension:storage");
         assert!(contract.production_profile);
-        let manifest = manifest_with_extension_refs(std::slice::from_ref(&contract.contract_ref), &test_ref("effect-extension"));
+        let manifest = manifest_with_refs(std::slice::from_ref(&contract.contract_ref), &test_ref("effect-extension"));
         assert!(manifest.extension_contract_refs.contains(&contract.contract_ref));
     }
 
@@ -134,9 +134,9 @@
 
     #[test]
     fn contract_aware_hostcall_requires_descriptor_specific_evidence() {
-        let contract = storage_extension_contract(PLUGIN_PROFILE_PRODUCTION, "1.0.0");
+        let contract = storage_contract(PLUGIN_PROFILE_PRODUCTION, "1.0.0");
         let descriptor = &contract.hostcall_descriptors[0];
-        let manifest_value = manifest_value_with_extension_refs(
+        let manifest_value = manifest_value_with_refs(
             std::slice::from_ref(&contract.contract_ref),
             &descriptor.effect_manifest_refs[0],
         );
@@ -182,9 +182,9 @@
 
     #[test]
     fn capability_grants_parse_classify_and_deny_mismatches() {
-        let contract = storage_extension_contract(PLUGIN_PROFILE_PRODUCTION, "1.0.0");
+        let contract = storage_contract(PLUGIN_PROFILE_PRODUCTION, "1.0.0");
         let descriptor = &contract.hostcall_descriptors[0];
-        let manifest_value = manifest_value_with_extension_refs(
+        let manifest_value = manifest_value_with_refs(
             std::slice::from_ref(&contract.contract_ref),
             &descriptor.effect_manifest_refs[0],
         );

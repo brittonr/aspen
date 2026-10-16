@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "node",
+    "serve",
+    "--help"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T18:27:34.952371+00:00",
+  "elapsed_seconds": 0.012,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "Usage: molten node serve [OPTIONS] --state-root <STATE_ROOT>\n\nOptions:\n      --state-root <STATE_ROOT>                        \n      --topic <TOPIC>                                  [default: node-control]\n      --max-ticks <MAX_TICKS>                          [default: 1]\n      --max-requests-per-tick <MAX_REQUESTS_PER_TICK>  [default: 64]\n      --live-iroh                                      \n      --live-max-events <LIVE_MAX_EVENTS>              [default: 1]\n      --live-event-timeout-ms <LIVE_EVENT_TIMEOUT_MS>  [default: 250]\n      --service-receipt-out <SERVICE_RECEIPT_OUT>      \n      --live-ticket-out <LIVE_TICKET_OUT>              \n      --supervisor-policy <SUPERVISOR_POLICY>          \n      --receipt-out <RECEIPT_OUT>                      \n  -h, --help                                           Print help\n",
+  "stderr": ""
+}

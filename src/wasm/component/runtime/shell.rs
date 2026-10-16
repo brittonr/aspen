@@ -1,51 +1,43 @@
-pub struct ComponentExecutionRequest<'a> {
-    pub profile: &'a super::super::model::ComponentRuntimeProfile,
+pub struct ExecutionRequest<'a> {
+    pub profile: &'a super::super::model::RuntimeProfile,
     pub requested_profile: super::super::model::RequestedExecutionProfile,
     pub evidence_scope: super::super::model::EvidenceScope,
-    pub source: super::super::evidence::materialization::ComponentArtifactSource<'a>,
-    pub facts: &'a super::super::admission::ComponentArtifactFacts,
+    pub source: super::super::evidence::materialization::ArtifactSource<'a>,
+    pub facts: &'a super::super::admission::ArtifactFacts,
     pub import_manifest: &'a super::super::imports::surface::DeclaredManifest,
-    pub import_grants: &'a [super::super::admission::ComponentImportGrant],
+    pub import_grants: &'a [super::super::admission::ImportGrant],
     pub input: &'a preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ComponentExecutionOutcome {
-    pub decision: super::super::evidence::receipt::ComponentReceiptDecision,
+pub struct ExecutionOutcome {
+    pub decision: super::super::evidence::receipt::Decision,
     pub output: Option<preserves::IOValue>,
-    pub receipts: Vec<super::super::evidence::receipt::ComponentReceipt>,
+    pub receipts: Vec<super::super::evidence::receipt::ExecutionRecord>,
     pub diagnostics: Vec<String>,
 }
 
-impl ComponentExecutionOutcome {
+impl ExecutionOutcome {
     pub fn is_pass(&self) -> bool {
-        self.decision == super::super::evidence::receipt::ComponentReceiptDecision::Pass
+        self.decision == super::super::evidence::receipt::Decision::Pass
     }
 }
 
-pub fn execute_component(request: &ComponentExecutionRequest<'_>) -> ComponentExecutionOutcome {
-    match execute_component_inner(request) {
+pub fn execute(request: &ExecutionRequest<'_>) -> ExecutionOutcome {
+    match execute_inner(request) {
         Ok(outcome) => outcome,
         Err(denial) => super::denial::denied_outcome(request, denial),
     }
 }
 
-fn execute_component_inner(
-    request: &ComponentExecutionRequest<'_>,
-) -> super::super::model::ComponentResult<ComponentExecutionOutcome> {
-    super::super::profile::validate_component_profile(request.profile)?;
+fn execute_inner(request: &ExecutionRequest<'_>) -> super::super::model::Result<ExecutionOutcome> {
+    super::super::profile::validate_runtime(request.profile)?;
     super::super::migration::classify_for_profile(request.requested_profile, request.source.component_bytes())?;
-    let materialization = super::super::evidence::materialization::verify_materialization(
-        request.profile,
-        request.evidence_scope,
-        request.source,
-    )?;
-    super::super::admission::inspection::verify_component_artifact_facts(
-        request.source.component_bytes(),
-        request.facts,
-    )?;
+    let materialization =
+        super::super::evidence::materialization::verify(request.profile, request.evidence_scope, request.source)?;
+    super::super::admission::inspection::verify_artifact_facts(request.source.component_bytes(), request.facts)?;
     admit_observed_import_surface(request, &materialization)?;
-    let plan = super::super::admission::plan_component_execution(
+    let plan = super::super::admission::plan_execution(
         request.profile,
         materialization,
         request.import_manifest,
@@ -53,61 +45,59 @@ fn execute_component_inner(
         request.import_grants,
     )?;
     let input_bytes = crate::preserves_rail::canonical_bytes(request.input).map_err(|error| {
-        super::super::model::ComponentDenial::classified(
-            super::super::model::ComponentDenialClass::InvalidPreservesPayload,
+        super::super::model::Denial::classified(
+            super::super::model::DenialClass::InvalidPreservesPayload,
             format!("component input is not canonical Preserves: {error}"),
         )
     })?;
     let input_length = u64::try_from(input_bytes.len()).map_err(|error| {
-        super::super::model::ComponentDenial::classified(
-            super::super::model::ComponentDenialClass::ResourceDenial,
+        super::super::model::Denial::classified(
+            super::super::model::DenialClass::ResourceDenial,
             format!("component input length is unsupported: {error}"),
         )
     })?;
     if input_length > request.profile.resources.max_hostcall_bytes {
-        return Err(super::super::model::ComponentDenial::classified(
-            super::super::model::ComponentDenialClass::ResourceDenial,
+        return Err(super::super::model::Denial::classified(
+            super::super::model::DenialClass::ResourceDenial,
             "component input exceeds the admitted canonical payload bound",
         ));
     }
-    let input_ref = crate::preserves_rail::canonical_hash(request.input).map_err(|error| {
-        super::super::model::ComponentDenial::new(format!("component input identity failed: {error}"))
-    })?;
-    execute_admitted_component(request, &plan, &input_bytes, input_ref)
+    let input_ref = crate::preserves_rail::canonical_hash(request.input)
+        .map_err(|error| super::super::model::Denial::new(format!("component input identity failed: {error}")))?;
+    execute_admitted(request, &plan, &input_bytes, input_ref)
 }
 
-fn execute_admitted_component(
-    request: &ComponentExecutionRequest<'_>,
-    plan: &super::super::admission::ComponentExecutionPlan,
+fn execute_admitted(
+    request: &ExecutionRequest<'_>,
+    plan: &super::super::admission::ExecutionPlan,
     input_bytes: &[u8],
     input_ref: String,
-) -> super::super::model::ComponentResult<ComponentExecutionOutcome> {
+) -> super::super::model::Result<ExecutionOutcome> {
     let inspection = plan_receipt(request, PlanReceiptInput {
         plan,
-        stage: super::super::evidence::receipt::ComponentReceiptStage::Inspection,
+        stage: super::super::evidence::receipt::Stage::Inspection,
         input_ref: None,
         output_ref: None,
         fuel_limit: None,
         fuel_remaining: None,
         parent_refs: Vec::new(),
     })?;
-    let mut session =
-        match super::instantiate_component(request.profile, request.source.component_bytes(), request.facts) {
-            Ok(session) => session,
-            Err(denial) => {
-                return super::denial::plan_denied_outcome(request, plan, denial, vec![inspection], Some(input_ref));
-            }
-        };
+    let mut session = match super::instantiate(request.profile, request.source.component_bytes(), request.facts) {
+        Ok(session) => session,
+        Err(denial) => {
+            return super::denial::plan_denied_outcome(request, plan, denial, vec![inspection], Some(input_ref));
+        }
+    };
     let instantiation = plan_receipt(request, PlanReceiptInput {
         plan,
-        stage: super::super::evidence::receipt::ComponentReceiptStage::Instantiation,
+        stage: super::super::evidence::receipt::Stage::Instantiation,
         input_ref: None,
         output_ref: None,
         fuel_limit: None,
         fuel_remaining: None,
         parent_refs: vec![inspection.receipt_ref.clone()],
     })?;
-    let runtime = match super::invoke_component(&mut session, input_bytes) {
+    let runtime = match super::invoke(&mut session, input_bytes) {
         Ok(runtime) => runtime,
         Err(denial) => {
             return super::denial::plan_denied_outcome(
@@ -119,7 +109,7 @@ fn execute_admitted_component(
             );
         }
     };
-    let (output, output_ref) = match decode_component_output(request.profile, &runtime.output_bytes) {
+    let (output, output_ref) = match decode_output(request.profile, &runtime.output_bytes) {
         Ok(output) => output,
         Err(denial) => {
             return super::denial::plan_denied_outcome(
@@ -133,52 +123,51 @@ fn execute_admitted_component(
     };
     let execution = plan_receipt(request, PlanReceiptInput {
         plan,
-        stage: super::super::evidence::receipt::ComponentReceiptStage::Execution,
+        stage: super::super::evidence::receipt::Stage::Execution,
         input_ref: Some(input_ref),
         output_ref: Some(output_ref),
         fuel_limit: Some(request.profile.resources.fuel),
         fuel_remaining: Some(runtime.fuel_remaining),
         parent_refs: vec![instantiation.receipt_ref.clone()],
     })?;
-    Ok(ComponentExecutionOutcome {
-        decision: super::super::evidence::receipt::ComponentReceiptDecision::Pass,
+    Ok(ExecutionOutcome {
+        decision: super::super::evidence::receipt::Decision::Pass,
         output: Some(output),
         receipts: vec![inspection, instantiation, execution],
         diagnostics: Vec::new(),
     })
 }
 
-fn decode_component_output(
-    profile: &super::super::model::ComponentRuntimeProfile,
+fn decode_output(
+    profile: &super::super::model::RuntimeProfile,
     output_bytes: &[u8],
-) -> super::super::model::ComponentResult<(preserves::IOValue, String)> {
+) -> super::super::model::Result<(preserves::IOValue, String)> {
     let output_length = u64::try_from(output_bytes.len()).map_err(|error| {
-        super::super::model::ComponentDenial::classified(
-            super::super::model::ComponentDenialClass::ResourceDenial,
+        super::super::model::Denial::classified(
+            super::super::model::DenialClass::ResourceDenial,
             format!("component output length is unsupported: {error}"),
         )
     })?;
     if output_length > profile.resources.max_result_bytes {
-        return Err(super::super::model::ComponentDenial::classified(
-            super::super::model::ComponentDenialClass::ResourceDenial,
+        return Err(super::super::model::Denial::classified(
+            super::super::model::DenialClass::ResourceDenial,
             "component output exceeds the admitted canonical result bound",
         ));
     }
     let output = crate::preserves_rail::parse_canonical_bytes(output_bytes).map_err(|error| {
-        super::super::model::ComponentDenial::classified(
-            super::super::model::ComponentDenialClass::InvalidPreservesPayload,
+        super::super::model::Denial::classified(
+            super::super::model::DenialClass::InvalidPreservesPayload,
             format!("component output is not canonical Preserves: {error}"),
         )
     })?;
-    let output_ref = crate::preserves_rail::canonical_hash(&output).map_err(|error| {
-        super::super::model::ComponentDenial::new(format!("component output identity failed: {error}"))
-    })?;
+    let output_ref = crate::preserves_rail::canonical_hash(&output)
+        .map_err(|error| super::super::model::Denial::new(format!("component output identity failed: {error}")))?;
     Ok((output, output_ref))
 }
 
 struct PlanReceiptInput<'a> {
-    plan: &'a super::super::admission::ComponentExecutionPlan,
-    stage: super::super::evidence::receipt::ComponentReceiptStage,
+    plan: &'a super::super::admission::ExecutionPlan,
+    stage: super::super::evidence::receipt::Stage,
     input_ref: Option<String>,
     output_ref: Option<String>,
     fuel_limit: Option<u64>,
@@ -187,9 +176,9 @@ struct PlanReceiptInput<'a> {
 }
 
 fn plan_receipt(
-    request: &ComponentExecutionRequest<'_>,
+    request: &ExecutionRequest<'_>,
     input: PlanReceiptInput<'_>,
-) -> super::super::model::ComponentResult<super::super::evidence::receipt::ComponentReceipt> {
+) -> super::super::model::Result<super::super::evidence::receipt::ExecutionRecord> {
     let PlanReceiptInput {
         plan,
         stage,
@@ -199,9 +188,9 @@ fn plan_receipt(
         fuel_remaining,
         parent_refs,
     } = input;
-    super::super::evidence::receipt::build_component_receipt(super::super::evidence::receipt::ComponentReceiptInput {
+    super::super::evidence::receipt::build(super::super::evidence::receipt::Input {
         stage,
-        decision: super::super::evidence::receipt::ComponentReceiptDecision::Pass,
+        decision: super::super::evidence::receipt::Decision::Pass,
         evidence_scope: request.evidence_scope,
         consumer: plan.materialization.consumer,
         component_ref: plan.component_ref.clone(),
@@ -229,9 +218,9 @@ fn plan_receipt(
 }
 
 fn admit_observed_import_surface(
-    request: &ComponentExecutionRequest<'_>,
-    materialization: &super::super::evidence::materialization::MaterializationAdmission,
-) -> super::super::model::ComponentResult<()> {
+    request: &ExecutionRequest<'_>,
+    materialization: &super::super::evidence::materialization::Admission,
+) -> super::super::model::Result<()> {
     let world = super::super::imports::surface::declared_world(request.profile);
     let observation = super::super::imports::observation::observe_artifact_surface(
         &request.facts.declared_world,
@@ -240,7 +229,7 @@ fn admit_observed_import_surface(
     )?;
     let admission = super::super::imports::surface::admit_declared(request.import_manifest, &world, &observation)?;
     if !admission.is_admitted {
-        return Err(super::super::model::ComponentDenial::from_blockers(admission.blockers));
+        return Err(super::super::model::Denial::from_blockers(admission.blockers));
     }
     Ok(())
 }

@@ -6,33 +6,33 @@ mod model;
 mod profile;
 mod runtime;
 
+pub use admission::ArtifactFacts;
 pub use admission::COMPONENT_INVOKE_EXPORT;
-pub use admission::ComponentArtifactFacts;
-pub use admission::ComponentExecutionPlan;
-pub use admission::ComponentGrowthFacts;
-pub use admission::ComponentImportGrant;
-pub use admission::plan_component_execution;
+pub use admission::ExecutionPlan;
+pub use admission::GrowthFacts;
+pub use admission::ImportGrant;
+pub use admission::plan_execution;
+pub use evidence::Admission;
+pub use evidence::AdmissionEnvelope;
+pub use evidence::ArtifactSource;
 pub use evidence::COMPONENT_ADMISSION_ENVELOPE_SCHEMA;
 pub use evidence::COMPONENT_RECEIPT_SCHEMA;
-pub use evidence::ComponentAdmissionEnvelope;
-pub use evidence::ComponentArtifactSource;
-pub use evidence::ComponentReceipt;
-pub use evidence::ComponentReceiptDecision;
-pub use evidence::ComponentReceiptInput;
-pub use evidence::ComponentReceiptStage;
+pub use evidence::Decision;
+pub use evidence::ExecutionRecord;
+pub use evidence::Input;
 pub use evidence::MANTLE_COMPONENT_BUNDLE_SCHEMA;
-pub use evidence::MantleComponentBundle;
-pub use evidence::MaterializationAdmission;
+pub use evidence::MantleBundle;
 pub use evidence::MaterializedObjectIdentity;
-pub use evidence::build_component_receipt;
-pub use evidence::component_receipt_summary;
-pub use evidence::component_receipt_value;
+pub use evidence::Stage;
+pub use evidence::build;
 pub use evidence::mantle_bundle_ref;
 pub use evidence::replay_receipts_match;
-pub use evidence::validate_component_receipt;
-pub use evidence::validate_component_receipt_against;
-pub use evidence::validate_component_receipt_chain;
-pub use evidence::verify_materialization;
+pub use evidence::summary;
+pub use evidence::validate;
+pub use evidence::validate_against;
+pub use evidence::validate_chain;
+pub use evidence::value;
+pub use evidence::verify;
 pub use imports::ADMISSION_EVIDENCE_SCHEMA;
 pub use imports::ADMISSION_NON_CLAIMS;
 pub use imports::ADMISSION_VERIFIER;
@@ -58,50 +58,50 @@ pub use imports::observe_artifact_surface;
 pub use imports::record_surface_admission;
 pub use imports::validate_admission_evidence;
 pub use imports::validate_non_claims;
+pub use migration::classify_artifact;
 pub use migration::classify_for_profile;
-pub use migration::classify_wasm_artifact;
-pub use model::ComponentConsumer;
-pub use model::ComponentDenial;
-pub use model::ComponentDenialClass;
-pub use model::ComponentDeterminismProfile;
-pub use model::ComponentFeatureCohort;
-pub use model::ComponentProfileExport;
-pub use model::ComponentResourceLimits;
-pub use model::ComponentResult;
-pub use model::ComponentRuntimeProfile;
-pub use model::ComponentToolchainCohort;
-pub use model::ComponentWitCohort;
+pub use model::ArtifactKind;
+pub use model::Consumer;
+pub use model::Denial;
+pub use model::DenialClass;
+pub use model::DeterminismProfile;
 pub use model::EvidenceScope;
+pub use model::FeatureCohort;
 pub use model::GrowthStrategy;
+pub use model::ProfileExport;
 pub use model::RequestedExecutionProfile;
-pub use model::WasmArtifactKind;
+pub use model::ResourceLimits;
+pub use model::Result;
+pub use model::RuntimeProfile;
+pub use model::ToolchainCohort;
+pub use model::WitCohort;
 pub use profile::COMPONENT_NON_CLAIMS;
 pub use profile::COMPONENT_PROFILE_ID;
 pub use profile::COMPONENT_WIT_PACKAGE;
 pub use profile::COMPONENT_WIT_SOURCE_REF;
 pub use profile::COMPONENT_WIT_WORLD;
-pub use profile::component_profile_ref;
-pub use profile::supported_component_profile;
-pub use profile::validate_component_profile;
-pub use runtime::ComponentExecutionOutcome;
-pub use runtime::ComponentExecutionRequest;
-pub use runtime::execute_component;
+pub use profile::r#ref;
+pub use profile::supported;
+pub use profile::validate_runtime;
+pub use runtime::ExecutionOutcome;
+pub use runtime::ExecutionRequest;
+pub use runtime::execute;
 
 #[cfg(test)]
-pub(crate) fn test_identity_component_bytes() -> Vec<u8> {
-    tests::support::identity_component_bytes()
+pub(crate) fn test_identity_bytes() -> Vec<u8> {
+    tests::support::identity_bytes()
 }
 
 #[cfg(test)]
-pub(crate) fn test_alternate_component_bytes() -> Vec<u8> {
-    tests::support::invalid_output_component_bytes()
+pub(crate) fn test_alternate_bytes() -> Vec<u8> {
+    tests::support::invalid_output_bytes()
 }
 
 #[cfg(test)]
-pub(crate) fn test_precompiled_component_bytes() -> Vec<u8> {
-    let profile = supported_component_profile().expect("supported component profile");
-    let component_bytes = test_identity_component_bytes();
-    runtime::test_precompile_component(&profile, &component_bytes).expect("precompiled component test fixture")
+pub(crate) fn test_precompiled_bytes() -> Vec<u8> {
+    let profile = supported().expect("supported component profile");
+    let component_bytes = test_identity_bytes();
+    runtime::test_precompile(&profile, &component_bytes).expect("precompiled component test fixture")
 }
 
 #[cfg(test)]

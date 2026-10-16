@@ -6,7 +6,7 @@ pub(super) fn write_service_runtime_run(
     suite_value: &preserves::IOValue,
     run: &molten::service_runtime::Run,
 ) -> Outcome<()> {
-    std::fs::create_dir_all(out).map_err(molten::error::MoltenError::from)?;
+    std::fs::create_dir_all(out).map_err(molten::error::Failure::from)?;
     write_file(&out.join("suite.preserves"), &molten::preserves_rail::to_text(suite_value)?)?;
     write_file(&out.join("report.preserves"), &molten::preserves_rail::to_text(&run.value)?)?;
     write_file(&out.join("summary.txt"), &molten::service_runtime::summary(&run.value)?)?;
@@ -22,7 +22,7 @@ pub(super) fn write_service_supervision_run(
     suite_value: &preserves::IOValue,
     run: &molten::service_supervision::ServiceSupervisionRun,
 ) -> Outcome<()> {
-    std::fs::create_dir_all(out).map_err(molten::error::MoltenError::from)?;
+    std::fs::create_dir_all(out).map_err(molten::error::Failure::from)?;
     write_file(&out.join("suite.preserves"), &molten::preserves_rail::to_text(suite_value)?)?;
     write_file(&out.join("report.preserves"), &molten::preserves_rail::to_text(&run.value)?)?;
     write_file(&out.join("summary.txt"), &molten::service_supervision::service_supervision_summary(&run.value)?)?;
@@ -45,7 +45,7 @@ fn write_indexed_values(out: &std::path::Path, prefix: &str, values: &[preserves
 }
 
 pub(super) fn read_preserves_file(path: &std::path::Path) -> Outcome<preserves::IOValue> {
-    let text = std::fs::read_to_string(path).map_err(molten::error::MoltenError::from)?;
+    let text = std::fs::read_to_string(path).map_err(molten::error::Failure::from)?;
     molten::preserves_rail::parse_text(&text)
 }
 
@@ -64,7 +64,7 @@ pub(super) fn emit_named_receipt(path: Option<&FilePath>, label: &str, receipt: 
 
 fn write_file(path: &std::path::Path, contents: &str) -> Outcome<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(molten::error::MoltenError::from)?;
+        std::fs::create_dir_all(parent).map_err(molten::error::Failure::from)?;
     }
-    std::fs::write(path, contents).map_err(molten::error::MoltenError::from)
+    std::fs::write(path, contents).map_err(molten::error::Failure::from)
 }

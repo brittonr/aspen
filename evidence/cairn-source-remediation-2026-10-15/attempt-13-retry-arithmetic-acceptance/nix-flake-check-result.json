@@ -1,0 +1,17 @@
+{
+  "command": [
+    "nix",
+    "flake",
+    "check",
+    "--no-update-lock-file",
+    "-L"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "result": "pass",
+  "original_job": "bg_17",
+  "original_full_artifact": "artifact://628",
+  "full_log": "nix-flake-check.txt",
+  "reported_checks": 674,
+  "nextest_summary": "1693 tests run: 1693 passed (1 slow), 0 skipped",
+  "scope": "x86_64-linux; incompatible aarch64-darwin, aarch64-linux, x86_64-darwin omitted by Nix; no all-systems claim."
+}

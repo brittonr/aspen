@@ -1,5 +1,5 @@
 
-fn run_effect_exchange(input: ExchangeInput<'_>) -> crate::error::Result<CrossProcessFrameEvidence> {
+fn run_exchange(input: ExchangeInput<'_>) -> crate::error::Result<FrameEvidence> {
     let ExchangeInput {
         profile,
         protocol,
@@ -8,7 +8,7 @@ fn run_effect_exchange(input: ExchangeInput<'_>) -> crate::error::Result<CrossPr
         request_ref,
         payload,
     } = input;
-    let input = IrohCrossProcessClientInput {
+    let input = ClientInput {
         profile: profile.clone(),
         protocol: protocol.clone(),
         capability: client.capability.clone(),
@@ -23,16 +23,16 @@ fn run_effect_exchange(input: ExchangeInput<'_>) -> crate::error::Result<CrossPr
     let timeout = client.timeout;
     std::thread::spawn(move || {
         let runtime = tokio::runtime::Runtime::new().map_err(|error| {
-            crate::error::MoltenError::invalid_harness(format!("cross-process effect runtime creation failed: {error}"))
+            crate::error::Failure::invalid_harness(format!("cross-process effect runtime creation failed: {error}"))
         })?;
-        runtime.block_on(exchange_cross_process_frame(input, &payload, timeout))
+        runtime.block_on(exchange_frame(input, &payload, timeout))
     })
     .join()
-    .map_err(|_| crate::error::MoltenError::invalid_harness("cross-process effect worker panicked"))?
+    .map_err(|_| crate::error::Failure::invalid_harness("cross-process effect worker panicked"))?
 }
 
 fn matching_exchange_evidence(
-    evidence: &CrossProcessFrameEvidence,
+    evidence: &FrameEvidence,
     request_ref: &str,
     payload_ref: &str,
     payload_bytes: u64,
@@ -48,11 +48,11 @@ fn matching_exchange_evidence(
 }
 
 fn fail_canonical_session(
-    adapter: &mut IrohTransportAdapter,
+    adapter: &mut IrohAdapter,
     operation_id: &str,
     session_id: &ScopedTransportId,
     class: TransportFailureClass,
-) -> std::result::Result<CanonicalTransportTransition, String> {
+) -> std::result::Result<Transition, String> {
     adapter
         .execute_command(&TransportCommand::FailSession {
             operation_id: operation_id.to_string(),
@@ -63,7 +63,7 @@ fn fail_canonical_session(
         .map_err(|error| error.to_string())
 }
 
-fn effect_output(
+fn output(
     effect: &crate::system_extension::TypedEffectRequest,
     output_ref: String,
 ) -> crate::system_extension::PortEffectOutput {

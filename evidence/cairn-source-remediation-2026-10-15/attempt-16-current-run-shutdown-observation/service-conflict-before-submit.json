@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "node",
+    "control-submit",
+    "/tmp/molten-f14-current-run-16-restored-se51n6m8/service-before-request.preserves",
+    "--state-root",
+    "/tmp/molten-f14-current-run-16-restored-se51n6m8/unresolved-service-before"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T18:28:40.456512+00:00",
+  "elapsed_seconds": 0.013,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "<node-control-queue-receipt-v1 \"molten.node.control-queue-receipt.v1\" <decision \"pass\"> <phase \"enqueue\"> <operation \"shutdown\"> <request \"blake3:76346c59b3e425ec512e67ddd7f6c80e4778aaff5632f59ee7577d7dc2a5629f\"> <profile \"local-preserves-control-file-v1\"> <location \"blake3:4c78be9ce6c9ba0d52a8129a10449e9513cc1d92f69e6b32e7eea302382703b4\"> <diagnostics []> <checks [<check \"canonical-request-ref\" \"pass\">, <check \"durable-control-profile\" \"pass\">, <check \"explicit-state-root\" \"pass\">]>>\nnode control submit request=blake3:76346c59b3e425ec512e67ddd7f6c80e4778aaff5632f59ee7577d7dc2a5629f queue_receipt=blake3:c6ca2a6c056ede5ac17373f4c78f602c69e4103d2faa4d1e8d035610df575426 inbox=/tmp/molten-f14-current-run-16-restored-se51n6m8/unresolved-service-before/control/inbox/blake3-76346c59b3e425ec512e67ddd7f6c80e4778aaff5632f59ee7577d7dc2a5629f.preserves\n",
+  "stderr": "node control queue receipt blake3:c6ca2a6c056ede5ac17373f4c78f602c69e4103d2faa4d1e8d035610df575426\n"
+}

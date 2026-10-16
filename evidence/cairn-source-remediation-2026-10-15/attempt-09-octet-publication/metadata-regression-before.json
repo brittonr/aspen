@@ -1,0 +1,32 @@
+{
+  "attempt": "9/20",
+  "command": [
+    "nix",
+    "develop",
+    "--no-update-lock-file",
+    "-c",
+    "cargo",
+    "test",
+    "-p",
+    "octet-lint-metadata",
+    "identity::tests::frozen_pilot_receipts_are_valid_and_reviewed",
+    "--locked",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "exit_code": 101,
+  "tests": {
+    "passed": 0,
+    "failed": 1,
+    "filtered_out": 12
+  },
+  "observed_assertion": {
+    "file": "crates/octet-lint-metadata/src/identity/tests.rs",
+    "line": 173,
+    "historical_receipt_policy": "76b82ab58db137a1b3d0172faea971ff37564435fa8b6cefa95b483f9fff834c",
+    "current_embedded_catalog_policy": "ad99023d6112096e2042f0b11e20432ef8a3f8de8a33357296ee379ea4d02072"
+  },
+  "correction": "Delete the incidental frozen-vs-live catalog identity assertion and static fixture-shape echoes; retain actual receipt-validator admission for both historical cases. Do not edit historical receipts or repin their expected identity.",
+  "prerequisite": "The existing immutable Valence dependency was fetched successfully without changing manifests or locks."
+}

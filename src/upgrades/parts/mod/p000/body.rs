@@ -1,6 +1,6 @@
 type BtreeSet<T> = std::collections::BTreeSet<T>;
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Path = std::path::Path;
 type PathBuf = std::path::PathBuf;
 type Record<T> = preserves::Record<T>;

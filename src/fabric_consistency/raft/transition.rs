@@ -1,15 +1,18 @@
 mod client;
 mod election;
 mod message;
+#[path = "transition/message/read.rs"]
 mod read;
+#[path = "transition/message/replication.rs"]
 mod replication;
+#[path = "transition/message/snapshot.rs"]
 mod snapshot;
 mod support;
 mod validation;
 
 use super::*;
 
-pub(super) struct MessageTransition {
+pub(super) struct MessagePlan {
     pub next: ReplicaState,
     pub effects: Vec<ReplicaEffect>,
     pub persist_hard_state: bool,
@@ -20,7 +23,7 @@ pub(super) struct MessageTransition {
 pub fn apply_replica_event(state: &ReplicaState, event: ReplicaEvent) -> crate::error::Result<ReplicaTransition> {
     validation::validate_replica_state(state)?;
     let transition = match event {
-        ReplicaEvent::ElectionTimeout { timer_ref } => election::handle_election_timeout(state, timer_ref)?,
+        ReplicaEvent::ElectionTimeout { timer_ref } => election::handle_timeout(state, timer_ref)?,
         ReplicaEvent::HeartbeatTimeout => election::handle_heartbeat_timeout(state)?,
         ReplicaEvent::Message { envelope } => handle_message(state, envelope)?,
         ReplicaEvent::Propose {
@@ -35,7 +38,7 @@ pub fn apply_replica_event(state: &ReplicaState, event: ReplicaEvent) -> crate::
         ReplicaEvent::BeginDrain => client::handle_begin_drain(state)?,
         ReplicaEvent::Stop => client::handle_stop(state)?,
     };
-    validation::validate_transition(&transition)?;
+    validation::validate(&transition)?;
     Ok(transition)
 }
 
@@ -43,17 +46,17 @@ fn handle_message(state: &ReplicaState, envelope: ReplicaMessageEnvelope) -> cra
     validation::ensure_running(state)?;
     validation::validate_message_envelope(state, &envelope)?;
     let message = envelope.message;
-    let mut transition = MessageTransition {
+    let mut transition = MessagePlan {
         next: state.clone(),
         effects: Vec::new(),
         persist_hard_state: false,
     };
     observe_higher_term(&mut transition, message.term());
     message::dispatch(&mut transition, envelope.from, message)?;
-    finish_message_transition(transition)
+    finish_message(transition)
 }
 
-fn observe_higher_term(transition: &mut MessageTransition, term: u64) {
+fn observe_higher_term(transition: &mut MessagePlan, term: u64) {
     if term <= transition.next.current_term {
         return;
     }
@@ -69,7 +72,7 @@ fn observe_higher_term(transition: &mut MessageTransition, term: u64) {
     transition.persist_hard_state = true;
 }
 
-fn finish_message_transition(mut transition: MessageTransition) -> crate::error::Result<ReplicaTransition> {
+fn finish_message(mut transition: MessagePlan) -> crate::error::Result<ReplicaTransition> {
     let current_timer_ref = election_timer_ref(
         &transition.next.profile.group_binding_ref,
         &transition.next.node_id,
@@ -87,13 +90,10 @@ fn finish_message_transition(mut transition: MessageTransition) -> crate::error:
             voted_for: transition.next.voted_for.clone(),
         });
     }
-    finish_transition(transition.next, transition.effects)
+    finish(transition.next, transition.effects)
 }
 
-pub(super) fn finish_transition(
-    next: ReplicaState,
-    effects: Vec<ReplicaEffect>,
-) -> crate::error::Result<ReplicaTransition> {
+pub(super) fn finish(next: ReplicaState, effects: Vec<ReplicaEffect>) -> crate::error::Result<ReplicaTransition> {
     Ok(ReplicaTransition { next, effects })
 }
 

@@ -1,0 +1,23 @@
+{
+  "argv": [
+    "/tmp/molten-attempts-6-7-l6bgn98w/cairn-provider/bin/cairn",
+    "gate",
+    "tasks",
+    "bind-shutdown-observations-to-current-node-run",
+    "--root",
+    ".",
+    "--policy",
+    "/home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T21:53:07.809692+00:00",
+  "elapsed_seconds": 0.011,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\n  \"acceptance_ids\": [],\n  \"change\": \"bind-shutdown-observations-to-current-node-run\",\n  \"evidence_summary\": {\n    \"docs_only\": 0,\n    \"fixture\": 0,\n    \"formal\": 0,\n    \"mode\": \"advisory\",\n    \"model\": 0,\n    \"probe\": 0,\n    \"property\": 0\n  },\n  \"input_hash\": \"d1a4ee33a23e18de1bfc00d71fa32eb02923d43979195d2b26b1206cd157e08d\",\n  \"issues\": [],\n  \"layout\": \"cairn\",\n  \"non_claims\": [\n    \"workflow state proves only the selected policy graph and observed structural artifact facts\",\n    \"workflow instructions do not prove artifact truth, review quality, or implementation correctness\",\n    \"workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates\",\n    \"workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts\"\n  ],\n  \"policy\": \"cairn-default\",\n  \"policy_hash\": \"c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d\",\n  \"policy_selection\": {\n    \"blake3\": \"7a67802377005c18ebded42899e7f564f5d87087b6c14ca70464b35886f340a9\",\n    \"installation_receipt\": false,\n    \"locator\": \"/home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json\",\n    \"source\": \"explicit\"\n  },\n  \"probe_evidence\": {\n    \"declarations_present\": false,\n    \"probes\": []\n  },\n  \"profile_identity_hash\": \"e5be18c871bf10954b6d6582430fde34a929acb4567a475d5e8f371aff5a8234\",\n  \"receipt_hash\": \"9cf32c8b49dc5a00b74561a743a7cffc3819dca2a9efa45d725279ee7fe65c1e\",\n  \"review_receipt_hashes\": [],\n  \"spec_effect\": \"delta\",\n  \"stage\": \"tasks\",\n  \"substance\": [\n    {\n      \"checkbox_tasks\": 0,\n      \"kind\": \"design\",\n      \"malformed_dependency_markers\": 0,\n      \"path\": \"./.cairn/changes/bind-shutdown-observations-to-current-node-run/design.md\",\n      \"requirement_blocks\": 0,\n      \"scenario_blocks\": 0,\n      \"substantive_lines\": 58,\n      \"substantive_requirement_blocks\": 0,\n      \"substantive_tasks\": 0,\n      \"task_done\": 0,\n      \"task_in_progress\": 0,\n      \"task_todo\": 0\n    },\n    {\n      \"checkbox_tasks\": 0,\n      \"kind\": \"proposal\",\n      \"malformed_dependency_markers\": 0,\n      \"path\": \"./.cairn/changes/bind-shutdown-observations-to-current-node-run/proposal.md\",\n      \"requirement_blocks\": 0,\n      \"scenario_blocks\": 0,\n      \"substantive_lines\": 14,\n      \"substantive_requirement_blocks\": 0,\n      \"substantive_tasks\": 0,\n      \"task_done\": 0,\n      \"task_in_progress\": 0,\n      \"task_todo\": 0\n    },\n    {\n      \"checkbox_tasks\": 0,\n      \"kind\": \"delta_spec\",\n      \"malformed_dependency_markers\": 0,\n      \"path\": \"./.cairn/changes/bind-shutdown-observations-to-current-node-run/specs/node-runtime/spec.md\",\n      \"requirement_blocks\": 4,\n      \"scenario_blocks\": 8,\n      \"substantive_lines\": 28,\n      \"substantive_requirement_blocks\": 4,\n      \"substantive_tasks\": 0,\n      \"task_done\": 0,\n      \"task_in_progress\": 0,\n      \"task_todo\": 0\n    },\n    {\n      \"checkbox_tasks\": 10,\n      \"kind\": \"tasks\",\n      \"malformed_dependency_markers\": 0,\n      \"path\": \"./.cairn/changes/bind-shutdown-observations-to-current-node-run/tasks.md\",\n      \"requirement_blocks\": 0,\n      \"scenario_blocks\": 0,\n      \"substantive_lines\": 11,\n      \"substantive_requirement_blocks\": 0,\n      \"substantive_tasks\": 10,\n      \"task_done\": 9,\n      \"task_in_progress\": 0,\n      \"task_todo\": 1\n    }\n  ],\n  \"task_ordering\": {\n    \"active\": false,\n    \"edges\": [],\n    \"issues\": [],\n    \"nodes\": [],\n    \"order\": [],\n    \"ready_tasks\": [],\n    \"valid\": true\n  },\n  \"valid\": true,\n  \"verdict\": \"PASS\",\n  \"workflow_profile\": \"spec-driven\",\n  \"workflow_profile_compatibility_fallback\": false,\n  \"workflow_profile_source\": \"change_create\",\n  \"workflow_profile_version\": 1\n}\n",
+  "stderr": "",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

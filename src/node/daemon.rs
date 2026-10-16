@@ -50,6 +50,7 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/daemon/p032/body.r
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/daemon/p033/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/daemon/p034/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/daemon/p055/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/daemon/p058/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/daemon/p035/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/daemon/p056/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/daemon/p036/body.rs"));

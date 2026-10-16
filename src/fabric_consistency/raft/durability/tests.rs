@@ -17,7 +17,7 @@ fn redb_replica_port_makes_hard_state_and_flushed_entries_durable() {
         crate::fabric_durability::tests::descriptor(),
     )
     .expect("Redb adapter");
-    let mut port = RedbReplicaDurabilityPort::new(
+    let mut port = RedbReplicaPort::new(
         adapter,
         super::tests::test_ref("Redb-durable-log"),
         super::tests::test_ref("Redb-snapshot-store"),
@@ -68,7 +68,7 @@ fn durable_installed_snapshot_establishes_its_recovery_commit_boundary() {
         crate::fabric_durability::tests::descriptor(),
     )
     .expect("Redb adapter");
-    let mut port = RedbReplicaDurabilityPort::new(adapter, durable_log_ref.clone(), snapshot_store_ref.clone())
+    let mut port = RedbReplicaPort::new(adapter, durable_log_ref.clone(), snapshot_store_ref.clone())
         .expect("Redb replica durability port");
     port.persist_hard_state(TERM, None).expect("snapshot hard state");
     let mut snapshot = ReplicaSnapshot {
@@ -92,8 +92,8 @@ fn durable_installed_snapshot_establishes_its_recovery_commit_boundary() {
         crate::fabric_durability::tests::descriptor(),
     )
     .expect("reopened Redb adapter");
-    let reopened = RedbReplicaDurabilityPort::new(reopened, durable_log_ref, snapshot_store_ref)
-        .expect("reopened replica durability port");
+    let reopened =
+        RedbReplicaPort::new(reopened, durable_log_ref, snapshot_store_ref).expect("reopened replica durability port");
     let recovery = reopened.plan_recovery(recovery_start_plan(&group, initial)).expect("snapshot-only recovery");
     assert_eq!(recovery.durable_commit_index, ENTRY_INDEX);
     assert_eq!(recovery.start_plan.state.commit_index, ENTRY_INDEX);
@@ -116,7 +116,7 @@ fn redb_recovery_restores_snapshot_and_replays_only_committed_suffix() {
         crate::fabric_durability::tests::descriptor(),
     )
     .expect("Redb adapter");
-    let mut port = RedbReplicaDurabilityPort::new(adapter, durable_log_ref.clone(), snapshot_store_ref.clone())
+    let mut port = RedbReplicaPort::new(adapter, durable_log_ref.clone(), snapshot_store_ref.clone())
         .expect("Redb replica durability port");
     port.persist_hard_state(TERM, Some(super::tests::NODE_A)).expect("hard state");
     let entries = vec![
@@ -147,8 +147,8 @@ fn redb_recovery_restores_snapshot_and_replays_only_committed_suffix() {
         crate::fabric_durability::tests::descriptor(),
     )
     .expect("reopened Redb adapter");
-    let reopened = RedbReplicaDurabilityPort::new(reopened, durable_log_ref, snapshot_store_ref)
-        .expect("reopened replica durability port");
+    let reopened =
+        RedbReplicaPort::new(reopened, durable_log_ref, snapshot_store_ref).expect("reopened replica durability port");
     let recovery = reopened.plan_recovery(recovery_start_plan(&group, initial)).expect("recovery plan");
 
     assert!(recovery.recovery_ref.starts_with("blake3:"));
@@ -180,7 +180,7 @@ fn redb_recovery_denies_commit_boundary_beyond_durable_log() {
         crate::fabric_durability::tests::descriptor(),
     )
     .expect("Redb adapter");
-    let mut port = RedbReplicaDurabilityPort::new(
+    let mut port = RedbReplicaPort::new(
         adapter,
         super::tests::test_ref("invalid-recovery-durable-log"),
         super::tests::test_ref("invalid-recovery-snapshot-store"),
@@ -208,7 +208,7 @@ fn redb_replica_port_rejects_over_bound_entry_batch_without_mutation() {
         crate::fabric_durability::tests::descriptor(),
     )
     .expect("Redb adapter");
-    let mut port = RedbReplicaDurabilityPort::new(
+    let mut port = RedbReplicaPort::new(
         adapter,
         super::tests::test_ref("Redb-negative-durable-log"),
         super::tests::test_ref("Redb-negative-snapshot-store"),
@@ -227,10 +227,7 @@ fn redb_replica_port_rejects_over_bound_entry_batch_without_mutation() {
     assert!(port.adapter().state().durable_log.is_empty());
 }
 
-fn recovery_start_plan(
-    group: &crate::fabric_consistency::ConsistencyGroupBinding,
-    state: ReplicaState,
-) -> ReplicaStartPlan {
+fn recovery_start_plan(group: &crate::fabric_consistency::Group, state: ReplicaState) -> ReplicaStartPlan {
     ReplicaStartPlan {
         state,
         service_id: group.service_id.clone(),

@@ -56,7 +56,7 @@ const REQUIRED_NON_CLAIMS: &[&str] = &[
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AstGrepAuditProfile {
+pub struct AuditProfile {
     pub id: String,
     pub surfaces: Vec<AuditSurface>,
     pub rules: Vec<AuditRule>,
@@ -107,7 +107,7 @@ pub struct AuditProfileValidation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AstGrepFinding {
+pub struct Finding {
     pub rule_id: String,
     pub surface: String,
     pub path: String,
@@ -115,17 +115,17 @@ pub struct AstGrepFinding {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AstGrepScanInput {
-    pub profile: AstGrepAuditProfile,
+pub struct ScanInput {
+    pub profile: AuditProfile,
     pub ast_grep_version: String,
     pub rule_bundle_hash: String,
     pub scan_scope_hash: String,
     pub evidence_gate_run_ref: String,
-    pub findings: Vec<AstGrepFinding>,
+    pub findings: Vec<Finding>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AstGrepAuditReceipt {
+pub struct AuditReceipt {
     pub profile_id: String,
     pub ast_grep_version: String,
     pub rule_bundle_hash: String,
@@ -139,7 +139,7 @@ pub struct AstGrepAuditReceipt {
     pub checks: Vec<ReceiptCheck>,
 }
 
-impl AstGrepAuditReceipt {
+impl AuditReceipt {
     pub fn valid(&self) -> bool {
         self.checks.iter().all(|check| check.passed)
     }
@@ -152,10 +152,10 @@ pub struct ReceiptCheck {
     pub diagnostic: String,
 }
 
-pub fn runtime_authority_profile() -> AstGrepAuditProfile {
+pub fn profile() -> AuditProfile {
     // r[impl aspen.ast_grep_runtime_authority_audits.profile]
     // r[impl aspen.ast_grep_runtime_authority_audits.inventory]
-    AstGrepAuditProfile {
+    AuditProfile {
         id: AST_GREP_PROFILE_ID.to_string(),
         surfaces: required_surfaces(),
         rules: inventory_rules(),
@@ -163,7 +163,7 @@ pub fn runtime_authority_profile() -> AstGrepAuditProfile {
     }
 }
 
-pub fn validate_ast_grep_profile(profile: &AstGrepAuditProfile) -> AuditProfileValidation {
+pub fn validate_profile(profile: &AuditProfile) -> AuditProfileValidation {
     // r[impl aspen.ast_grep_runtime_authority_audits.profile]
     // r[impl aspen.ast_grep_runtime_authority_audits.fixtures]
     let mut diagnostics = Vec::new();
@@ -207,7 +207,7 @@ pub fn validate_ast_grep_profile(profile: &AstGrepAuditProfile) -> AuditProfileV
     }
 }
 
-pub fn rule_bundle_hash(profile: &AstGrepAuditProfile) -> String {
+pub fn rule_bundle_hash(profile: &AuditProfile) -> String {
     // r[impl aspen.ast_grep_runtime_authority_audits.identity]
     let mut lines = vec![format!("profile:{}", profile.id)];
     for surface in &profile.surfaces {
@@ -243,13 +243,13 @@ pub fn scan_scope_hash(surface_ids: &[String]) -> String {
     format!("{CONTENT_REF_PREFIX}{digest}")
 }
 
-pub fn build_ast_grep_audit_receipt(input: AstGrepScanInput) -> AstGrepAuditReceipt {
+pub fn build_audit_receipt(input: ScanInput) -> AuditReceipt {
     // r[impl aspen.ast_grep_runtime_authority_audits.identity]
     // r[impl aspen.ast_grep_runtime_authority_audits.evidence_gates]
     let finding_rule_ids = finding_rule_ids(&input.findings);
     let checks = audit_checks(&input);
     let is_valid = checks.iter().all(|candidate| candidate.passed);
-    AstGrepAuditReceipt {
+    AuditReceipt {
         profile_id: input.profile.id,
         ast_grep_version: input.ast_grep_version,
         rule_bundle_hash: input.rule_bundle_hash,

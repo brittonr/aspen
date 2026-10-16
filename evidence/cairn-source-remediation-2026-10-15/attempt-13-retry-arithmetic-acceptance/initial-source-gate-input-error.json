@@ -1,0 +1,11 @@
+{
+  "cause": "The generated current corpus was written only into retained evidence, not the documented <artifacts>/object-corpus-receipt.json location.",
+  "preserved_initial_results": [
+    "artifact-import.json",
+    "artifact-ledger-receipt.preserves",
+    "strict-ci-gate.json",
+    "strict-ci-gate-receipt.preserves"
+  ],
+  "correction": "Run the unchanged real corpus producer at the documented artifact location; re-run import/gate with distinct output receipts. The gate and policies are not changed or bypassed.",
+  "attempt": "13/20; invocation correction inside the same recorded acceptance cycle, no implementation change."
+}

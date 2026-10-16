@@ -1,0 +1,12 @@
+{
+  "attempt": "9/20",
+  "status": "behavioral/provider review and native acceptance passed; required focused formatting failed; no publication or consumer pin yet",
+  "outcome": "Formatting correction and final publication move to attempt 10/20.",
+  "metadata_passed": 13,
+  "library_passed": 154,
+  "ui_rails_passed": 4,
+  "catalog_check_passed": true,
+  "provider_bound_native_gates_passed": true,
+  "formatting_passed": false,
+  "historical_receipts_preserved": true
+}

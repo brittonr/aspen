@@ -20,7 +20,7 @@ For cross-process effects, the [registered port](../../../src/fabric_transport/c
 
 ## Replay denial has a concrete scope
 
-`RegisteredCrossProcessTransportEffectPort` maintains `routed_requests`. It rejects a previously routed request reference before execution. After its control port successfully evaluates the registered command, it inserts the request reference into this set. For a backpressured send, it removes the queued payload and returns the backpressure transition; that request has nevertheless crossed this local consumption boundary. Attempting the identical reference again is not an implicit wait-for-credit mechanism.
+`Registered` maintains `routed_requests`. It rejects a previously routed request reference before execution. After its control port successfully evaluates the registered command, it inserts the request reference into this set. For a backpressured send, it removes the queued payload and returns the backpressure transition; that request has nevertheless crossed this local consumption boundary. Attempting the identical reference again is not an implicit wait-for-credit mechanism.
 
 This is an in-memory shell property. It does not establish a durable, fleet-wide deduplication registry, survive arbitrary process replacement by itself, or reconcile an application effect that may already have occurred remotely. A different request reference does not make re-executing an application action safe.
 

@@ -1,5 +1,5 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConsistencyGroupBindingInput {
+pub struct GroupInput {
     pub group_id: String,
     pub extension_id: String,
     pub service_id: String,
@@ -15,13 +15,13 @@ pub struct ConsistencyGroupBindingInput {
     pub resource_profile_ref: String,
     pub policy_refs: Vec<String>,
     pub non_claims: Vec<String>,
-    pub supported_read_modes: Vec<super::ConsistencyReadMode>,
+    pub supported_read_modes: Vec<super::ReadMode>,
     pub max_command_bytes: u64,
     pub max_in_flight_operations: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConsistencyGroupBinding {
+pub struct Group {
     pub binding_ref: String,
     pub group_id: String,
     pub extension_id: String,
@@ -38,23 +38,21 @@ pub struct ConsistencyGroupBinding {
     pub resource_profile_ref: String,
     pub policy_refs: Vec<String>,
     pub non_claims: Vec<String>,
-    pub supported_read_modes: Vec<super::ConsistencyReadMode>,
+    pub supported_read_modes: Vec<super::ReadMode>,
     pub max_command_bytes: u64,
     pub max_in_flight_operations: u32,
-    pub lifecycle: super::ConsistencyGroupLifecycle,
+    pub lifecycle: super::GroupLifecycle,
     pub value: preserves::IOValue,
 }
 
 // r[impl molten.fabric_consistency.extension_port]
 // r[impl molten.fabric_consistency.group_isolation]
-pub fn canonical_consistency_group_binding(
-    input: ConsistencyGroupBindingInput,
-) -> crate::error::Result<ConsistencyGroupBinding> {
-    validate_binding_input(&input)?;
-    let lifecycle = super::ConsistencyGroupLifecycle::Declared;
+pub fn canonical_group(input: GroupInput) -> crate::error::Result<Group> {
+    validate_input(&input)?;
+    let lifecycle = super::GroupLifecycle::Declared;
     let value = super::canonical::binding_value(&input, lifecycle);
     let binding_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(ConsistencyGroupBinding {
+    Ok(Group {
         binding_ref,
         group_id: input.group_id,
         extension_id: input.extension_id,
@@ -81,20 +79,20 @@ pub fn canonical_consistency_group_binding(
 
 pub(super) fn validate_identifier(value: &str, label: &str) -> crate::error::Result<()> {
     if value.is_empty() || value.len() > super::MAX_CONSISTENCY_IDENTIFIER_BYTES {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "{label} must be non-empty and at most {} bytes",
             super::MAX_CONSISTENCY_IDENTIFIER_BYTES
         )));
     }
     if !value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':')) {
-        return Err(crate::error::MoltenError::invalid_harness(format!("{label} contains unsupported characters")));
+        return Err(crate::error::Failure::invalid_harness(format!("{label} contains unsupported characters")));
     }
     Ok(())
 }
 
 pub(super) fn validate_content_ref(value: &str, label: &str) -> crate::error::Result<()> {
     crate::preserves_rail::validate_content_ref(value)
-        .map_err(|error| crate::error::MoltenError::invalid_harness(format!("invalid {label}: {error}")))
+        .map_err(|error| crate::error::Failure::invalid_harness(format!("invalid {label}: {error}")))
 }
 
 pub(super) fn validate_content_refs(
@@ -104,22 +102,22 @@ pub(super) fn validate_content_refs(
     require_non_empty: bool,
 ) -> crate::error::Result<()> {
     if require_non_empty && refs.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness(format!("{label} must not be empty")));
+        return Err(crate::error::Failure::invalid_harness(format!("{label} must not be empty")));
     }
     if refs.len() > maximum {
-        return Err(crate::error::MoltenError::invalid_harness(format!("{label} exceeds maximum count {maximum}")));
+        return Err(crate::error::Failure::invalid_harness(format!("{label} exceeds maximum count {maximum}")));
     }
     let mut unique = std::collections::BTreeSet::new();
     for reference in refs {
         validate_content_ref(reference, label)?;
         if !unique.insert(reference.as_str()) {
-            return Err(crate::error::MoltenError::invalid_harness(format!("{label} contains a duplicate")));
+            return Err(crate::error::Failure::invalid_harness(format!("{label} contains a duplicate")));
         }
     }
     Ok(())
 }
 
-fn validate_binding_input(input: &ConsistencyGroupBindingInput) -> crate::error::Result<()> {
+fn validate_input(input: &GroupInput) -> crate::error::Result<()> {
     for (value, label) in [
         (&input.group_id, "consistency group id"),
         (&input.extension_id, "consistency extension id"),
@@ -133,7 +131,7 @@ fn validate_binding_input(input: &ConsistencyGroupBindingInput) -> crate::error:
         || input.config_epoch < super::INITIAL_CONSISTENCY_EPOCH
         || input.fencing_epoch < super::INITIAL_CONSISTENCY_EPOCH
     {
-        return Err(crate::error::MoltenError::invalid_harness("consistency generations and epochs must be positive"));
+        return Err(crate::error::Failure::invalid_harness("consistency generations and epochs must be positive"));
     }
     for (reference, label) in [
         (&input.application_manifest_ref, "application manifest ref"),
@@ -148,14 +146,14 @@ fn validate_binding_input(input: &ConsistencyGroupBindingInput) -> crate::error:
     validate_non_claims(&input.non_claims)?;
     validate_read_modes(&input.supported_read_modes)?;
     if input.max_command_bytes == 0 || input.max_command_bytes > super::MAX_CONSISTENCY_COMMAND_BYTES {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "consistency command byte bound is outside the admitted range",
         ));
     }
     if input.max_in_flight_operations == 0
         || input.max_in_flight_operations > super::MAX_CONSISTENCY_IN_FLIGHT_OPERATIONS
     {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "consistency in-flight operation bound is outside the admitted range",
         ));
     }
@@ -164,33 +162,33 @@ fn validate_binding_input(input: &ConsistencyGroupBindingInput) -> crate::error:
 
 fn validate_non_claims(non_claims: &[String]) -> crate::error::Result<()> {
     if non_claims.is_empty() || non_claims.len() > super::MAX_CONSISTENCY_NON_CLAIMS {
-        return Err(crate::error::MoltenError::invalid_harness("consistency non-claims must be non-empty and bounded"));
+        return Err(crate::error::Failure::invalid_harness("consistency non-claims must be non-empty and bounded"));
     }
     let mut unique = std::collections::BTreeSet::new();
     for non_claim in non_claims {
         if non_claim.is_empty() || non_claim.len() > super::MAX_CONSISTENCY_NON_CLAIM_BYTES {
-            return Err(crate::error::MoltenError::invalid_harness("consistency non-claim is empty or over-bound"));
+            return Err(crate::error::Failure::invalid_harness("consistency non-claim is empty or over-bound"));
         }
         if !unique.insert(non_claim.as_str()) {
-            return Err(crate::error::MoltenError::invalid_harness("consistency non-claims contain a duplicate"));
+            return Err(crate::error::Failure::invalid_harness("consistency non-claims contain a duplicate"));
         }
     }
     Ok(())
 }
 
-fn validate_read_modes(read_modes: &[super::ConsistencyReadMode]) -> crate::error::Result<()> {
+fn validate_read_modes(read_modes: &[super::ReadMode]) -> crate::error::Result<()> {
     if read_modes.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness("consistency read modes must not be empty"));
+        return Err(crate::error::Failure::invalid_harness("consistency read modes must not be empty"));
     }
     let mut unique = std::collections::BTreeSet::new();
     for mode in read_modes {
-        if *mode == super::ConsistencyReadMode::Lease {
-            return Err(crate::error::MoltenError::invalid_harness(
+        if *mode == super::ReadMode::Lease {
+            return Err(crate::error::Failure::invalid_harness(
                 "lease reads are not admitted by the initial consistency port",
             ));
         }
         if !unique.insert(mode.as_str()) {
-            return Err(crate::error::MoltenError::invalid_harness("consistency read modes contain a duplicate"));
+            return Err(crate::error::Failure::invalid_harness("consistency read modes contain a duplicate"));
         }
     }
     Ok(())

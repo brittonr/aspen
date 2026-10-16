@@ -1,6 +1,6 @@
 type IoValue = preserves::IOValue;
 type Result<T> = crate::error::Result<T>;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 
 const SERVICE_FSM_SCHEMA: &str = "molten.node.service-fsm-transition.v1";
 const DECISION_PASS: &str = "pass";
@@ -38,7 +38,7 @@ const MAX_DIAGNOSTICS: usize = 256;
 const MAX_REFS: usize = 128;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ServiceFsmState {
+pub struct State {
     pub state_name: String,
     pub state_ref: String,
     pub startup_ref: Option<String>,
@@ -49,7 +49,7 @@ pub struct ServiceFsmState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ServiceFsmEvent {
+pub struct Event {
     pub event_name: String,
     pub startup_ref: Option<String>,
     pub service_lock_ref: Option<String>,
@@ -68,11 +68,11 @@ pub struct ServiceFsmEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ServiceFsmTransition {
+pub struct Transition {
     pub decision: String,
     pub prior_state_ref: String,
     pub next_state_ref: String,
-    pub next_state: ServiceFsmState,
+    pub next_state: State,
     pub shell_intents: Vec<String>,
     pub diagnostics: Vec<String>,
     pub value: IoValue,
@@ -82,7 +82,7 @@ pub struct ServiceFsmTransition {
 // r[impl molten.node_runtime.service_fsm_model]
 // r[impl molten.node_runtime.service_fsm_receipts]
 // r[impl molten.node_runtime.service_fsm_lock_recovery]
-pub fn evaluate_service_transition(state: &ServiceFsmState, event: &ServiceFsmEvent) -> Result<ServiceFsmTransition> {
+pub fn evaluate_transition(state: &State, event: &Event) -> Result<Transition> {
     validate_state(state)?;
     validate_event(event)?;
     let mut diagnostics = transition_diagnostics(state, event);
@@ -113,7 +113,7 @@ pub fn evaluate_service_transition(state: &ServiceFsmState, event: &ServiceFsmEv
         diagnostics: &diagnostics,
     })?;
     let transition_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(ServiceFsmTransition {
+    Ok(Transition {
         decision: decision.to_string(),
         prior_state_ref: state.state_ref.clone(),
         next_state_ref: next_state.state_ref.clone(),
@@ -125,7 +125,7 @@ pub fn evaluate_service_transition(state: &ServiceFsmState, event: &ServiceFsmEv
     })
 }
 
-fn transition_diagnostics(state: &ServiceFsmState, event: &ServiceFsmEvent) -> Vec<String> {
+fn transition_diagnostics(state: &State, event: &Event) -> Vec<String> {
     let mut diagnostics = Vec::new();
     match (state.state_name.as_str(), event.event_name.as_str()) {
         (STATE_UNINITIALIZED, EVENT_INIT) => {}
@@ -184,7 +184,7 @@ fn transition_diagnostics(state: &ServiceFsmState, event: &ServiceFsmEvent) -> V
 }
 
 /// Evidence every event must carry regardless of the state it arrives in.
-fn push_event_evidence_diagnostics(event: &ServiceFsmEvent, diagnostics: &mut impl crate::bounded::VecSink<String>) {
+fn push_event_evidence_diagnostics(event: &Event, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if event.event_name != EVENT_INIT && event.startup_ref.is_none() {
         diagnostics.push_item("missing-startup-evidence".to_string());
     }
@@ -202,15 +202,15 @@ fn push_event_evidence_diagnostics(event: &ServiceFsmEvent, diagnostics: &mut im
     }
 }
 
-fn require_startup(event: &ServiceFsmEvent, diagnostics: &mut impl crate::bounded::VecSink<String>) {
+fn require_startup(event: &Event, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if event.startup_ref.is_none() {
         diagnostics.push_item("missing-startup-evidence".to_string());
     }
 }
 
 fn require_startup_match(
-    state: &ServiceFsmState,
-    event: &ServiceFsmEvent,
+    state: &State,
+    event: &Event,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) {
     require_startup(event, diagnostics);
@@ -220,8 +220,8 @@ fn require_startup_match(
 }
 
 fn require_lock_match(
-    state: &ServiceFsmState,
-    event: &ServiceFsmEvent,
+    state: &State,
+    event: &Event,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) {
     require_startup_match(state, event, diagnostics);
@@ -230,7 +230,7 @@ fn require_lock_match(
     }
 }
 
-fn next_state(state: &ServiceFsmState, event: &ServiceFsmEvent) -> Result<ServiceFsmState> {
+fn next_state(state: &State, event: &Event) -> Result<State> {
     let state_name = match event.event_name.as_str() {
         EVENT_INIT => STATE_INITIALIZED,
         EVENT_STARTUP => STATE_STARTUP_LOCKED,
@@ -262,14 +262,14 @@ fn next_state(state: &ServiceFsmState, event: &ServiceFsmEvent) -> Result<Servic
     } else {
         state.restart_count
     };
-    let state_ref = service_state_ref(
+    let state_ref = state_ref(
         state_name,
         startup_ref.as_deref(),
         service_lock_ref.as_deref(),
         heartbeat_count,
         restart_count,
     )?;
-    Ok(ServiceFsmState {
+    Ok(State {
         state_name: state_name.to_string(),
         state_ref,
         startup_ref,

@@ -28,10 +28,10 @@ fn validate_simulation_input(input: &ConsensusSimulationInput) -> Result<()> {
 
 fn simulation_diagnostics(input: &ConsensusSimulationInput) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
-    let quorum = majority_quorum_count(input.membership_refs.len())?;
+    let quorum = majority_count(input.membership_refs.len())?;
     let has_quorum = input.connected_replicas >= quorum;
     match input.scenario.as_str() {
-        SCENARIO_MAJORITY_PROGRESS => require_quorum(has_quorum, quorum, &mut diagnostics),
+        SCENARIO_MAJORITY_PROGRESS => require(has_quorum, quorum, &mut diagnostics),
         SCENARIO_MINORITY_DENIAL => {
             if has_quorum {
                 diagnostics.push("minority-denial scenario unexpectedly has majority reachability".to_string());
@@ -40,7 +40,7 @@ fn simulation_diagnostics(input: &ConsensusSimulationInput) -> Result<Vec<String
         SCENARIO_STALE_READ_CLASSIFICATION => stale_read_diagnostics(input, &mut diagnostics),
         SCENARIO_LEADERLESS_NON_LEADER_PROGRESS => {
             require_leaderless_experimental(input, &mut diagnostics);
-            require_quorum(has_quorum, quorum, &mut diagnostics);
+            require(has_quorum, quorum, &mut diagnostics);
             if input.proposer_ref.is_none() {
                 diagnostics.push("leaderless scenario requires proposer ref".to_string());
             }
@@ -54,7 +54,7 @@ fn simulation_diagnostics(input: &ConsensusSimulationInput) -> Result<Vec<String
             }
         }
         SCENARIO_CONCURRENT_PROPOSAL_RESOLUTION => {
-            require_quorum(has_quorum, quorum, &mut diagnostics);
+            require(has_quorum, quorum, &mut diagnostics);
             if input.operation_ids.is_empty() {
                 diagnostics.push("concurrent proposal simulation requires operation ids".to_string());
             }
@@ -84,7 +84,7 @@ fn require_leaderless_experimental(input: &ConsensusSimulationInput, diagnostics
     }
 }
 
-fn require_quorum(has_quorum: bool, quorum: usize, diagnostics: &mut impl crate::bounded::VecSink<String>) {
+fn require(has_quorum: bool, quorum: usize, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     if !has_quorum {
         diagnostics.push_item(format!("missing majority quorum of {quorum} replicas"));
     }
@@ -141,7 +141,7 @@ fn validate_algorithm_name(value: &str) -> Result<()> {
     }
 }
 
-fn majority_quorum_count(member_count: usize) -> Result<usize> {
+fn majority_count(member_count: usize) -> Result<usize> {
     member_count
         .checked_div(MAJORITY_QUORUM_DIVISOR)
         .and_then(|value| value.checked_add(MAJORITY_QUORUM_OFFSET))

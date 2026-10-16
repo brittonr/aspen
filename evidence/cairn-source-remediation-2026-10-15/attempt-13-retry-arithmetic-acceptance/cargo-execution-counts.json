@@ -1,0 +1,22 @@
+{
+  "counts": [
+    {
+      "scope": "default-all-targets-and-doc",
+      "passed": 2102,
+      "failed": 0,
+      "ignored": 0,
+      "test_binaries": 22
+    },
+    {
+      "scope": "explicit-feature-cohorts",
+      "passed": 4209,
+      "failed": 0,
+      "ignored": 1,
+      "test_binaries": 37
+    }
+  ],
+  "default_all_targets_passed": 2095,
+  "workspace_doctests_passed": 7,
+  "optional_external_ignored": 1,
+  "non_claim": "These are observed Cargo counts, not proof that ignored DoltLite/KVM/live backend obligations executed."
+}

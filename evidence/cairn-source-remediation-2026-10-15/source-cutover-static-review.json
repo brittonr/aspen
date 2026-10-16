@@ -1,0 +1,22 @@
+{
+  "record_kind": "parent-retained delivered static review results",
+  "checks_run_by_reviewers": false,
+  "allocation_review": {
+    "agent": "ReviewExplicitAllocation",
+    "findings": [],
+    "scope": "secrets allocation lifetime, transcript allocation precedence/persistence, native HOME denial, Octet workspace snapshot inputs"
+  },
+  "audit_review": {
+    "agent": "ReviewAuditCutover",
+    "accepted_findings": [
+      {
+        "priority": "P2",
+        "path": "Cargo.toml",
+        "lines": "49-58",
+        "related": "flake.nix:690",
+        "finding": "Pinned unit2nix/buildRustCrate hermetic test discovery does not honor nested explicit Cargo test paths. Preserve discovery of content_replication, fabric_simulation_boundary and feature-gated executable_extent, retaining executable-extents gating.",
+        "state": "unrepaired; source writes blocked by exhausted checkout quota"
+      }
+    ]
+  }
+}

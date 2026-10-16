@@ -1,0 +1,11 @@
+{
+  "revision": "3f7abb641ee604f54629da415bc7686f89662065",
+  "expected_package": "/nix/store/i0njyjw82syb1dbzby3gafl5chfk1swm-cargo-octet-0.1.0",
+  "realized_out_link": "/tmp/molten-f14-current-run-16-restored-se51n6m8/catalogued-octet",
+  "expected_matches_actual": true,
+  "record": "catalogued-octet-local-realization.json",
+  "exit_code": 0,
+  "elapsed_seconds": 1910.314,
+  "earlier_failure_preserved": "rooted-current-dev-shell.json",
+  "non_claim": "Package realization alone is not source-gate acceptance."
+}

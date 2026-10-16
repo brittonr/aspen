@@ -104,15 +104,12 @@ pub(crate) fn export_failure(
     Ok(())
 }
 
-fn materialization_payload(
-    logical_path: &str,
-    contents: impl AsRef<[u8]>,
-) -> molten::materialization::MaterializationPayload {
-    molten::materialization::MaterializationPayload::new(logical_path, contents.as_ref().to_vec())
+fn materialization_payload(logical_path: &str, contents: impl AsRef<[u8]>) -> molten::materialization::Payload {
+    molten::materialization::Payload::new(logical_path, contents.as_ref().to_vec())
 }
 
 fn push_optional_payload(
-    payloads: &mut impl Extend<molten::materialization::MaterializationPayload>,
+    payloads: &mut impl Extend<molten::materialization::Payload>,
     logical_path: &str,
     value: Option<&preserves::IOValue>,
 ) -> molten::error::Result<()> {
@@ -129,16 +126,16 @@ fn push_optional_payload(
 pub(super) fn materialize_repro_payloads(
     out: &std::path::Path,
     profile: &str,
-    payloads: &[molten::materialization::MaterializationPayload],
+    payloads: &[molten::materialization::Payload],
 ) -> molten::error::Result<()> {
     // r[impl molten.filesystem_materialization.root]
     // r[impl molten.filesystem_materialization.commit]
-    let policy = molten::materialization::MaterializationPolicy::bounded(
+    let policy = molten::materialization::Policy::bounded(
         profile,
         molten::materialization::ReplacementPolicy::ReplaceRegularFiles,
     )?;
     let receipt = molten::materialization::materialize_path(out, &policy, payloads)?;
-    let receipt_policy = molten::materialization::MaterializationPolicy::bounded(
+    let receipt_policy = molten::materialization::Policy::bounded(
         "repro-materialization-receipt-v1",
         molten::materialization::ReplacementPolicy::ReplaceRegularFiles,
     )?;

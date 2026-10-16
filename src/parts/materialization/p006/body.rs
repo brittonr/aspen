@@ -1,5 +1,5 @@
 
-fn validate_materialization_path(value: &str, max_path_bytes: usize) -> crate::error::Result<()> {
+fn validate_path(value: &str, max_path_bytes: usize) -> crate::error::Result<()> {
     if value.is_empty() {
         return Err(invalid("materialization member path cannot be empty"));
     }
@@ -32,7 +32,7 @@ fn validate_materialization_path(value: &str, max_path_bytes: usize) -> crate::e
     Ok(())
 }
 
-fn stage_path(plan: &MaterializationPlan) -> crate::error::Result<std::path::PathBuf> {
+fn stage_path(plan: &Plan) -> crate::error::Result<std::path::PathBuf> {
     let token = plan
         .plan_ref
         .strip_prefix("blake3:")
@@ -42,12 +42,12 @@ fn stage_path(plan: &MaterializationPlan) -> crate::error::Result<std::path::Pat
 
 fn create_staging_root(dir: &cap_std::fs::Dir, stage_path: &std::path::Path) -> crate::error::Result<()> {
     match entry_kind(dir, std::path::Path::new(STAGING_DIRECTORY))? {
-        None => dir.create_dir(STAGING_DIRECTORY).map_err(crate::error::MoltenError::from)?,
-        Some(MaterializationMemberKind::Directory) => {}
+        None => dir.create_dir(STAGING_DIRECTORY).map_err(crate::error::Failure::from)?,
+        Some(MemberKind::Directory) => {}
         Some(_) => return Err(invalid("materialization staging root must be a real directory")),
     }
     ensure_no_symlink_components(dir, stage_path.parent())?;
-    dir.create_dir(stage_path).map_err(crate::error::MoltenError::from)?;
+    dir.create_dir(stage_path).map_err(crate::error::Failure::from)?;
     create_directory_tree(dir, Some(&stage_path.join(STAGING_TREE_DIRECTORY)))?;
     Ok(())
 }
@@ -63,8 +63,8 @@ fn create_directory_tree(dir: &cap_std::fs::Dir, path: Option<&std::path::Path>)
         };
         current.push(component);
         match entry_kind(dir, &current)? {
-            None => dir.create_dir(&current).map_err(crate::error::MoltenError::from)?,
-            Some(MaterializationMemberKind::Directory) => {}
+            None => dir.create_dir(&current).map_err(crate::error::Failure::from)?,
+            Some(MemberKind::Directory) => {}
             Some(_) => return Err(invalid("materialization parent is a symlink or non-directory entry")),
         }
     }
@@ -87,10 +87,10 @@ fn create_directory_tree_recording(
         current.push(component);
         match entry_kind(dir, &current)? {
             None => {
-                dir.create_dir(&current).map_err(crate::error::MoltenError::from)?;
+                dir.create_dir(&current).map_err(crate::error::Failure::from)?;
                 created.push_item(current.clone());
             }
-            Some(MaterializationMemberKind::Directory) => {}
+            Some(MemberKind::Directory) => {}
             Some(_) => return Err(invalid("materialization parent is a symlink or non-directory entry")),
         }
     }
@@ -109,7 +109,7 @@ fn ensure_no_symlink_components(dir: &cap_std::fs::Dir, path: Option<&std::path:
         current.push(component);
         match entry_kind(dir, &current)? {
             None => return Ok(()),
-            Some(MaterializationMemberKind::Directory) => {}
+            Some(MemberKind::Directory) => {}
             Some(_) => return Err(invalid("materialization parent is a symlink or non-directory entry")),
         }
     }
@@ -119,29 +119,29 @@ fn ensure_no_symlink_components(dir: &cap_std::fs::Dir, path: Option<&std::path:
 fn entry_kind(
     dir: &cap_std::fs::Dir,
     path: &std::path::Path,
-) -> crate::error::Result<Option<MaterializationMemberKind>> {
+) -> crate::error::Result<Option<MemberKind>> {
     match dir.symlink_metadata(path) {
         Ok(metadata) => Ok(Some(member_kind(&metadata.file_type()))),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(crate::error::MoltenError::from(error)),
+        Err(error) => Err(crate::error::Failure::from(error)),
     }
 }
 
-fn member_kind(file_type: &cap_std::fs::FileType) -> MaterializationMemberKind {
+fn member_kind(file_type: &cap_std::fs::FileType) -> MemberKind {
     if file_type.is_file() {
-        MaterializationMemberKind::RegularFile
+        MemberKind::RegularFile
     } else if file_type.is_dir() {
-        MaterializationMemberKind::Directory
+        MemberKind::Directory
     } else {
         link_kind(file_type)
     }
 }
 
-fn link_kind(file_type: &cap_std::fs::FileType) -> MaterializationMemberKind {
+fn link_kind(file_type: &cap_std::fs::FileType) -> MemberKind {
     if file_type.is_symlink() {
-        MaterializationMemberKind::Symlink
+        MemberKind::Symlink
     } else {
-        MaterializationMemberKind::Special
+        MemberKind::Special
     }
 }
 
@@ -149,9 +149,9 @@ fn write_create_new(dir: &cap_std::fs::Dir, path: &std::path::Path, bytes: &[u8]
     ensure_no_symlink_components(dir, path.parent())?;
     let mut options = cap_std::fs::OpenOptions::new();
     options.write(true).create_new(true).follow(cap_fs_ext::FollowSymlinks::No);
-    let mut file = dir.open_with(path, &options).map_err(crate::error::MoltenError::from)?;
-    file.write_all(bytes).map_err(crate::error::MoltenError::from)?;
-    file.flush().map_err(crate::error::MoltenError::from)
+    let mut file = dir.open_with(path, &options).map_err(crate::error::Failure::from)?;
+    file.write_all(bytes).map_err(crate::error::Failure::from)?;
+    file.flush().map_err(crate::error::Failure::from)
 }
 
 fn read_regular_file_bounded(
@@ -160,19 +160,19 @@ fn read_regular_file_bounded(
     max_bytes: u64,
 ) -> crate::error::Result<Vec<u8>> {
     ensure_no_symlink_components(dir, path.parent())?;
-    if entry_kind(dir, path)? != Some(MaterializationMemberKind::RegularFile) {
+    if entry_kind(dir, path)? != Some(MemberKind::RegularFile) {
         return Err(invalid("materialization read target must be a regular file"));
     }
     let mut options = cap_std::fs::OpenOptions::new();
     options.read(true).follow(cap_fs_ext::FollowSymlinks::No);
-    let mut file = dir.open_with(path, &options).map_err(crate::error::MoltenError::from)?;
+    let mut file = dir.open_with(path, &options).map_err(crate::error::Failure::from)?;
     read_bounded(&mut file, max_bytes)
 }
 
 fn read_bounded(reader: &mut impl Read, max_bytes: u64) -> crate::error::Result<Vec<u8>> {
     let read_limit = max_bytes.checked_add(1).ok_or_else(|| invalid("materialization read bound overflow"))?;
     let mut bytes = Vec::new();
-    reader.take(read_limit).read_to_end(&mut bytes).map_err(crate::error::MoltenError::from)?;
+    reader.take(read_limit).read_to_end(&mut bytes).map_err(crate::error::Failure::from)?;
     if u64::try_from(bytes.len()).map_err(|_| invalid("materialization read size does not fit u64"))? > max_bytes {
         return Err(invalid("materialization read exceeded configured byte bound"));
     }
@@ -189,14 +189,14 @@ fn restore_current_backup(dir: &cap_std::fs::Dir, state: &PublicationState) -> c
     let Some(backup) = state.backup_path.as_ref() else {
         return Ok(());
     };
-    dir.rename(backup, dir, &state.final_path).map_err(crate::error::MoltenError::from)
+    dir.rename(backup, dir, &state.final_path).map_err(crate::error::Failure::from)
 }
 
 fn setup_failure(
     dir: &cap_std::fs::Dir,
     created_directories: &[std::path::PathBuf],
-    primary: crate::error::MoltenError,
-) -> crate::error::MoltenError {
+    primary: crate::error::Failure,
+) -> crate::error::Failure {
     match rollback_created_directories(dir, created_directories) {
         Ok(()) => primary,
         Err(rollback) => invalid(format!(
@@ -210,8 +210,8 @@ fn publication_failure(
     current: &PublicationState,
     prior: &[PublicationState],
     created_directories: &[std::path::PathBuf],
-    primary: crate::error::MoltenError,
-) -> crate::error::MoltenError {
+    primary: crate::error::Failure,
+) -> crate::error::Failure {
     let current_result = restore_current_backup(dir, current);
     let prior_result = rollback_publication(dir, prior);
     let directory_result = rollback_created_directories(dir, created_directories);
@@ -227,8 +227,8 @@ fn rollback_failure(
     dir: &cap_std::fs::Dir,
     states: &[PublicationState],
     created_directories: &[std::path::PathBuf],
-    primary: crate::error::MoltenError,
-) -> crate::error::MoltenError {
+    primary: crate::error::Failure,
+) -> crate::error::Failure {
     let publication_result = rollback_publication(dir, states);
     let directory_result = rollback_created_directories(dir, created_directories);
     match (publication_result, directory_result) {
@@ -283,6 +283,6 @@ fn rollback_publication(dir: &cap_std::fs::Dir, states: &[PublicationState]) -> 
     }
 }
 
-fn invalid(message: impl Into<String>) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(message.into())
+fn invalid(message: impl Into<String>) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(message.into())
 }

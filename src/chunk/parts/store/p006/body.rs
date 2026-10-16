@@ -1,7 +1,7 @@
 
-fn finish_incoming(input: FinishIncoming<'_>) -> Result<ChunkStoreIrohFetch> {
+fn finish_incoming(input: FinishIncoming<'_>) -> Result<ChunkIrohFetch> {
     verify_manifest_with_root(input.dest_root, &input.manifest.manifest_ref)?;
-    let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
+    let receipt_value = receipt_value(ChunkReceiptValueInput {
         operation: "iroh-fetch",
         decision: "pass",
         manifest_ref: Some(&input.manifest.manifest_ref),
@@ -37,7 +37,7 @@ fn finish_incoming(input: FinishIncoming<'_>) -> Result<ChunkStoreIrohFetch> {
         &input.missing_before,
         &input.fetched_chunks,
     )?;
-    Ok(ChunkStoreIrohFetch {
+    Ok(ChunkIrohFetch {
         ticket: input.ticket_text.to_string(),
         manifest_ref: input.manifest.manifest_ref,
         manifest_blob_ref: input.parsed_ticket.manifest_blob_ref,
@@ -52,7 +52,7 @@ pub fn publish_iroh_blobs(
     iroh_root: &Path,
     manifest_ref: &str,
     node: &str,
-) -> Result<ChunkStoreIrohPublish> {
+) -> Result<ChunkIrohPublish> {
     let store_root = open_capability_chunk_root(store_root)?;
     let iroh_root = open_capability_chunk_root(iroh_root)?;
     publish_iroh_blobs_with_roots(&store_root, &iroh_root, manifest_ref, node)
@@ -63,7 +63,7 @@ pub fn publish_iroh_blobs_with_roots(
     iroh_root: &CapabilityChunkRoot,
     manifest_ref: &str,
     node: &str,
-) -> Result<ChunkStoreIrohPublish> {
+) -> Result<ChunkIrohPublish> {
     ensure_dirs(store_root)?;
     ensure_iroh_dirs(iroh_root)?;
     let manifest = match read_manifest_with_root(store_root, manifest_ref) {
@@ -73,7 +73,7 @@ pub fn publish_iroh_blobs_with_roots(
                 ("manifest-ref-binding", "fail"),
                 ("deny-missing-or-invalid-manifest", "pass"),
             ]);
-            store_receipt(store_root, &receipt_value)?;
+            receipt(store_root, &receipt_value)?;
             return Err(error);
         }
     };
@@ -84,7 +84,7 @@ pub fn publish_iroh_blobs_with_roots(
                 ("transform-mode", "fail"),
                 ("deny-unsupported-transform", "pass"),
             ]);
-        store_receipt(store_root, &receipt_value)?;
+        receipt(store_root, &receipt_value)?;
         return Err(MoltenError::invalid_harness(message));
     }
 
@@ -121,7 +121,7 @@ pub fn fetch_iroh_blobs(
     ticket: &str,
     expected_manifest_ref: Option<&str>,
     peer: &str,
-) -> Result<ChunkStoreIrohFetch> {
+) -> Result<ChunkIrohFetch> {
     let iroh_root = open_capability_chunk_root(iroh_root)?;
     let dest_root = open_capability_chunk_root(dest_root)?;
     fetch_iroh_blobs_with_roots(&iroh_root, &dest_root, ticket, expected_manifest_ref, peer)
@@ -133,7 +133,7 @@ pub fn fetch_iroh_blobs_with_roots(
     ticket: &str,
     expected_manifest_ref: Option<&str>,
     peer: &str,
-) -> Result<ChunkStoreIrohFetch> {
+) -> Result<ChunkIrohFetch> {
     ensure_dirs(dest_root)?;
     ensure_iroh_dirs(iroh_root)?;
     let advertised_manifest_ref = claim_manifest(dest_root, ticket, expected_manifest_ref)?;
@@ -146,7 +146,7 @@ pub fn fetch_iroh_blobs_with_roots(
                 ("transform-mode", "fail"),
                 ("deny-unsupported-transform", "pass"),
             ]);
-        store_receipt(dest_root, &receipt_value)?;
+        receipt(dest_root, &receipt_value)?;
         return Err(MoltenError::invalid_harness(message));
     }
 
@@ -177,17 +177,17 @@ pub fn fetch_iroh_blobs_with_roots(
     })
 }
 
-pub fn pin_manifest(root: &Path, manifest_ref: &str) -> Result<ChunkStorePin> {
+pub fn pin_manifest(root: &Path, manifest_ref: &str) -> Result<ChunkPin> {
     let root = open_capability_chunk_root(root)?;
     pin_manifest_with_root(&root, manifest_ref)
 }
 
-pub fn pin_manifest_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) -> Result<ChunkStorePin> {
+pub fn pin_manifest_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) -> Result<ChunkPin> {
     ensure_dirs(root)?;
     let manifest = read_manifest_with_root(root, manifest_ref)?;
     root.root().write(&manifest_pin_path(manifest_ref)?, manifest_ref.as_bytes())?;
     let chunk_refs = manifest.chunks.iter().map(|chunk| chunk.chunk_ref.clone()).collect::<Vec<_>>();
-    let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
+    let receipt_value = receipt_value(ChunkReceiptValueInput {
         operation: "pin",
         decision: "pass",
         manifest_ref: Some(manifest_ref),
@@ -196,7 +196,7 @@ pub fn pin_manifest_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) ->
         details: vec![record("pin-kind", vec![string("manifest")])],
     });
     index_set_pin(root, "manifest", manifest_ref, true, Some(&receipt_value))?;
-    Ok(ChunkStorePin {
+    Ok(ChunkPin {
         kind: "manifest".to_string(),
         reference: manifest_ref.to_string(),
         pinned: true,
@@ -204,18 +204,18 @@ pub fn pin_manifest_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) ->
     })
 }
 
-pub fn unpin_manifest(root: &Path, manifest_ref: &str) -> Result<ChunkStorePin> {
+pub fn unpin_manifest(root: &Path, manifest_ref: &str) -> Result<ChunkPin> {
     let root = open_capability_chunk_root(root)?;
     unpin_manifest_with_root(&root, manifest_ref)
 }
 
-pub fn unpin_manifest_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) -> Result<ChunkStorePin> {
+pub fn unpin_manifest_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) -> Result<ChunkPin> {
     ensure_dirs(root)?;
     let pin_path = manifest_pin_path(manifest_ref)?;
     if root.root().try_exists(&pin_path)? {
         root.root().remove_file(&pin_path)?;
     }
-    let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
+    let receipt_value = receipt_value(ChunkReceiptValueInput {
         operation: "unpin",
         decision: "pass",
         manifest_ref: Some(manifest_ref),
@@ -224,7 +224,7 @@ pub fn unpin_manifest_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) 
         details: vec![record("pin-kind", vec![string("manifest")])],
     });
     index_set_pin(root, "manifest", manifest_ref, false, Some(&receipt_value))?;
-    Ok(ChunkStorePin {
+    Ok(ChunkPin {
         kind: "manifest".to_string(),
         reference: manifest_ref.to_string(),
         pinned: false,
@@ -232,16 +232,16 @@ pub fn unpin_manifest_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) 
     })
 }
 
-pub fn pin_chunk(root: &Path, chunk_ref: &str) -> Result<ChunkStorePin> {
+pub fn pin_chunk(root: &Path, chunk_ref: &str) -> Result<ChunkPin> {
     let root = open_capability_chunk_root(root)?;
     pin_chunk_with_root(&root, chunk_ref)
 }
 
-pub fn pin_chunk_with_root(root: &CapabilityChunkRoot, chunk_ref: &str) -> Result<ChunkStorePin> {
+pub fn pin_chunk_with_root(root: &CapabilityChunkRoot, chunk_ref: &str) -> Result<ChunkPin> {
     ensure_dirs(root)?;
     let path = chunk_path(chunk_ref)?;
     if !root.root().try_exists(&path)? {
-        let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
+        let receipt_value = receipt_value(ChunkReceiptValueInput {
             operation: "pin",
             decision: "deny",
             manifest_ref: None,
@@ -249,11 +249,11 @@ pub fn pin_chunk_with_root(root: &CapabilityChunkRoot, chunk_ref: &str) -> Resul
             checks: vec![("chunk-exists", "fail"), ("deny-missing-chunk-pin", "pass")],
             details: vec![record("pin-kind", vec![string("chunk")])],
         });
-        store_receipt(root, &receipt_value)?;
+        receipt(root, &receipt_value)?;
         return Err(MoltenError::invalid_harness(format!("cannot pin missing chunk {chunk_ref}")));
     }
     root.root().write(&chunk_pin_path(chunk_ref)?, chunk_ref.as_bytes())?;
-    let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
+    let receipt_value = receipt_value(ChunkReceiptValueInput {
         operation: "pin",
         decision: "pass",
         manifest_ref: None,
@@ -262,7 +262,7 @@ pub fn pin_chunk_with_root(root: &CapabilityChunkRoot, chunk_ref: &str) -> Resul
         details: vec![record("pin-kind", vec![string("chunk")])],
     });
     index_set_pin(root, "chunk", chunk_ref, true, Some(&receipt_value))?;
-    Ok(ChunkStorePin {
+    Ok(ChunkPin {
         kind: "chunk".to_string(),
         reference: chunk_ref.to_string(),
         pinned: true,
@@ -270,7 +270,7 @@ pub fn pin_chunk_with_root(root: &CapabilityChunkRoot, chunk_ref: &str) -> Resul
     })
 }
 
-pub fn unpin_chunk(root: &Path, chunk_ref: &str) -> Result<ChunkStorePin> {
+pub fn unpin_chunk(root: &Path, chunk_ref: &str) -> Result<ChunkPin> {
     let root = open_capability_chunk_root(root)?;
     unpin_chunk_with_root(&root, chunk_ref)
 }

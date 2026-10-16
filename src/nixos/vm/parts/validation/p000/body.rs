@@ -1,5 +1,5 @@
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 type Record<T> = preserves::Record<T>;
 type Value<T> = preserves::Value<T>;
@@ -80,7 +80,7 @@ const UNKNOWN_CHILD_DECISION: &str = "unknown";
 const _: () = assert!(MAX_VM_VALIDATION_ITEMS > 0);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NixosVmEvidenceValidationInput<'a> {
+pub struct NixosVmEvidenceInput<'a> {
     pub topology_value: &'a IoValue,
     pub node_evidence_values: &'a [IoValue],
     pub test_run_value: &'a IoValue,
@@ -103,7 +103,7 @@ pub struct NixosVmExpectedChildReceipt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NixosVmEvidenceValidation {
+pub struct NixosVmEvidence {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub topology_ref: String,
@@ -115,14 +115,14 @@ pub struct NixosVmEvidenceValidation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NixosVmFaultEvidenceValidationInput<'a> {
+pub struct NixosVmFaultEvidenceInput<'a> {
     pub topology_value: &'a IoValue,
     pub descriptor_values: &'a [IoValue],
     pub receipt_values: &'a [IoValue],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NixosVmFaultEvidenceValidation {
+pub struct NixosVmFaultEvidence {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub topology_ref: String,
@@ -236,7 +236,7 @@ struct ParsedFaultReceipt {
     caveats: Vec<String>,
 }
 
-pub fn validate_nixos_vm_evidence(input: &NixosVmEvidenceValidationInput<'_>) -> Result<NixosVmEvidenceValidation> {
+pub fn validate_nixos_vm_evidence(input: &NixosVmEvidenceInput<'_>) -> Result<NixosVmEvidence> {
     let topology = parse_topology(input.topology_value)?;
     let topology_ref = crate::preserves_rail::canonical_hash(input.topology_value)?;
     let parsed_nodes = parse_node_evidence_values(input.node_evidence_values)?;
@@ -247,7 +247,7 @@ pub fn validate_nixos_vm_evidence(input: &NixosVmEvidenceValidationInput<'_>) ->
     let prod_soak_refs = canonical_refs(input.prod_soak_values)?;
     let child_artifacts = parse_child_receipts(input.child_artifact_values)?;
     let child_artifact_refs = child_artifacts.iter().map(|artifact| artifact.child_ref.clone()).collect::<Vec<_>>();
-    let diagnostics = validation_diagnostics(ValidationContext {
+    let diagnostics = diagnostics(Context {
         topology: &topology,
         topology_ref: &topology_ref,
         nodes: &parsed_nodes,
@@ -261,7 +261,7 @@ pub fn validate_nixos_vm_evidence(input: &NixosVmEvidenceValidationInput<'_>) ->
         expected_child_receipts: input.expected_child_receipts,
     })?;
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" }.to_string();
-    let value = vm_evidence_validation_value(ValidationValueInput {
+    let value = vm_evidence_value(ValueInput {
         decision: &decision,
         diagnostics: &diagnostics,
         topology_ref: &topology_ref,
@@ -271,7 +271,7 @@ pub fn validate_nixos_vm_evidence(input: &NixosVmEvidenceValidationInput<'_>) ->
         child_artifact_refs: &child_artifact_refs,
     })?;
     let validation_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(NixosVmEvidenceValidation {
+    Ok(NixosVmEvidence {
         decision,
         diagnostics,
         topology_ref,

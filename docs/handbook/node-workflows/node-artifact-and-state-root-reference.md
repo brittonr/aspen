@@ -6,7 +6,7 @@ Use this reference when inventorying an isolated node or assembling an evidence 
 
 ## Root lifecycle artifacts
 
-The names are declared by the [daemon constants](../../../src/node/parts/daemon/p000/body.rs). Publication belongs to the daemon shell, while canonical values come from the profile, identity, and runtime modules.
+The root names are declared by the [daemon constants](../../../src/node/parts/daemon/p000/body.rs); current-run names and observation reads belong to the [run-observation shell](../../../src/node/parts/daemon/p058/body.rs). Publication belongs to the daemon shell, while canonical values come from the profile, identity, and runtime modules.
 
 | Relative path | Publishing owner | Operational meaning and limit |
 | --- | --- | --- |
@@ -16,16 +16,25 @@ The names are declared by the [daemon constants](../../../src/node/parts/daemon/
 | `identity-receipt.preserves` | Identity resolution, published by daemon init | Source selection, public endpoint, permission and rotation evidence; no secret bytes. |
 | `startup-receipt.preserves` | Runtime startup through daemon | Startup decision and linked adapter evidence; can exist even when startup denies before lock installation. |
 | `health-receipt.preserves` | Status and restart paths | Latest written local health observation; not an append-only history or process-liveness oracle. |
-| `shutdown-receipt.preserves` | Admitted shutdown path | Shutdown evidence tied to startup; removed by the clean restart path after passing restart-health evaluation. |
+| `shutdown-receipt.preserves` | Admitted shutdown path | Startup-bound shutdown evidence; not sufficient by itself to prove current-run completion. Removed by a clean restart. |
 | `status-control-receipt.preserves` | Direct status path | Control evidence for the local status request; status is therefore not read-only. |
 | `stop-control-receipt.preserves` | Direct stop and denial paths | May record denial rather than completed shutdown. Read the decision and result bindings. |
-| `control/node.lock.preserves` | Passing startup, removed after shutdown effects | Startup-bound control lock; existence alone is not proof of a live operating-system process. |
+| `control/node.lock.preserves` | Passing startup, removed after shutdown effects | Current startup-and-run-bound control lock; existence alone is not proof of a live operating-system process. |
+| `control/current-run.preserves` | Passing startup and restart | Canonical state-root/startup/previous-run binding. The previous-run chain distinguishes runs with identical startup content. |
+| `control/current-run-shutdown.preserves` | Admitted current shutdown | Exact run/startup/shutdown/control linkage; the referenced immutable control receipt establishes completion, not a later mutable denial file. Removed by a clean restart. |
 
 Optional CLI outputs are copies selected by the caller, not alternate roots used by the daemon. For example, `--startup-out`, `--health-out`, and `--shutdown-out` export their respective values, while status/stop `--receipt-out` exports control evidence. The [CLI declarations](../../../src/cli/ops/node/command/base.rs) and [lifecycle shell](../../../src/cli/ops/node/parts/lifecycle/p001/body.rs) own those options. Use distinct export names when preserving multiple observations.
 
+Current stopped readback requires matching run and completion records, passing shutdown
+and control receipts, and no current active lock. Exact duplicate requests keep their
+original outbox result without gaining a new run binding or causing shutdown effects.
+After restart, such a duplicate leaves a consistent current run active. Legacy receipts
+remain readable history but cannot establish current stopped state or reset missing run
+lineage. Preserve their bytes rather than manufacturing completion records.
+
 ## Namespace and store ownership
 
-The physical mapping is defined by `NodeStateNamespaceKind::as_str` in [molten-node-host](../../../crates/molten-node-host/src/node/state/authority.rs).
+The physical mapping is defined by `NamespaceKind::as_str` in [molten-node-host](../../../crates/molten-node-host/src/node/state/authority.rs).
 
 | Capability view | Physical relative directory | Review boundary |
 | --- | --- | --- |
@@ -59,9 +68,9 @@ Do not derive trust from a basename. Resolve the actual canonical value and comp
 
 ## Worked inventory failure
 
-Suppose an inventory finds startup, health, and a lock, but no shutdown. That fits the classifier's running combination only if configuration and identity receipt also exist. It does not prove a process is alive. A previous interruption can leave the same combination, and restart rejects an existing startup without clean shutdown evidence.
+Suppose an inventory finds startup, health, and a lock, but no shutdown. The presence-only inspector's running combination also requires configuration and identity receipt; current status additionally validates the exact run/startup/lock binding and absence of conflicting completion. Neither observation proves a process is alive. An interrupted run can leave the same files, and restart requires clean current-run completion.
 
-Conversely, a directory containing startup and shutdown but still containing the lock is inconsistent under the classifier. Do not normalize it by deleting files. Record each presence observation, artifact decision, canonical binding, and collection boundary. The compatibility inspection helper can return `Empty` when it cannot open the root, so distinguish inaccessible from genuinely absent state in operator reports.
+Conversely, startup and shutdown alongside an active lock are inconsistent current-run observations. Missing or unreadable run records also reject status/restart rather than proving stopped state. Do not normalize the root by deleting files. Record each artifact decision, canonical binding, read error and collection boundary. The compatibility inspection helper can return `Empty` when it cannot open the root, so distinguish inaccessible from genuinely absent state.
 
 Canonical identity comes from Preserves and BLAKE3, not host paths, in-memory pointer identity, Rust layout, or directory enumeration order. Scoped filesystem containment does not prove crash atomicity, distributed consistency, peer trust, or release readiness.
 
@@ -74,3 +83,5 @@ Canonical identity comes from Preserves and BLAKE3, not host paths, in-memory po
 - [Root and namespace ownership](../../../crates/molten-node-host/src/node/state/authority.rs)
 - [Lifecycle classifier and restart](../../../src/node/parts/daemon/p036/body.rs)
 - [Publication ordering](../../../src/node/parts/daemon/p018/body.rs)
+- [Canonical run and completion records](../../../src/node/parts/runtime/p009/body.rs)
+- [Current-run observation and immutable receipt readback](../../../src/node/parts/daemon/p058/body.rs)

@@ -55,6 +55,25 @@ Every transition into ready - a new wake, a blocked wake, and yield - passes the
 
 Deterministic profiles order by admitted FIFO or priority/FIFO policy and record every choice. Recorded-choice profiles require an eligible recorded choice during replay. A fairness claim exists only when the selected profile includes a finite fairness bound. Otherwise, canonical evidence preserves `does-not-prove-fairness`. Bounded fairness promotes the longest-waiting overdue runnable before ordinary priority ordering.
 
+### Adapter regression evidence and limits
+
+The scheduler adapter regressions exercise both admitted profile kinds through
+`ExtensionTimeContext`, canonical accepted/denied action translation, blocked
+resume and Yield at the active limit, both overload policies, complete rejected
+state equality, fresh FIFO/priority/wait accounting, stale generations, and
+sequence exhaustion. Accepted live transitions also execute and observe the
+real thread-unpark adapter; a registered target rejects denied transitions.
+
+These checks do not establish a combined scheduler/capacity/effect executor.
+`ExtensionTimeContext::apply_scheduler_command` returns a transition, while
+`capacity::Runtime` owns separate reservation/accounting operations. The
+deterministic profile and pure simulation event fixtures do not supply an
+independent simulated wake-effect dispatcher. End-to-end reservation/effect
+ordering remains an open F09/F10 acceptance obligation, owned by Molten
+fabric-time maintainers; neither the regression tests nor standalone capacity
+tests close it or establish liveness, performance, or whole-runtime allocation
+claims.
+
 ## Scheduler capacity activation
 
 The capacity core derives one plan from the admitted profile and active generation.
@@ -99,6 +118,11 @@ Do not rewrite historical receipts or treat cross-cohort output as an exact repl
 The fixture records both `retry-planned` target ticks and `retry-delay` ticks after successful admission.
 Rejected plans append no retry observations. These fixture observations do not prove timer execution or safe application retries.
 
+The correction is natively synced and archived with its
+[executed acceptance and review](../.cairn/archive/1970-01-01-saturate-exponential-retry-arithmetic/evidence/2026-10-16-acceptance.json).
+The record distinguishes the saturated public-API smoke, ordinary CLI fixture,
+canonical strict source gate, feature cohorts, and bounded non-claims.
+
 `replay_fixture_retry` recomputes the fixture observations from explicit time, policy, attempt, and jitter inputs.
 It requires the exact canonical deadline and delay events in their original order.
 Missing, extra, altered, or historical wrapped events produce a `retry replay diverged` diagnostic.
@@ -109,7 +133,7 @@ Lease decisions are local observations unless the request names a reviewed fence
 
 ## System-extension integration
 
-`ExtensionTimeContext` snapshots the admitted system-extension service id, active lifecycle generation, timer/runnable/concurrency/byte envelopes, and capability refs from `SystemExtensionHost`. It rejects cross-service timer/runnable identities, stale generations, exhausted timer or scheduler resources, over-budget entropy requests, and unadmitted entropy capabilities. Retired generations are cancelled through the same pure cleanup laws.
+`ExtensionTimeContext` snapshots the admitted system-extension service id, active lifecycle generation, timer/runnable/concurrency/byte envelopes, and capability refs from `system_extension::Dispatcher`. It rejects cross-service timer/runnable identities, stale generations, exhausted timer or scheduler resources, over-budget entropy requests, and unadmitted entropy capabilities. Retired generations are cancelled through the same pure cleanup laws.
 
 Every timer, scheduler, entropy, deadline, lease, clock-anomaly, fault, and conformance event carries a non-zero generation and canonical profile ref. A receipt cannot reactivate stale work or substitute for current manifest, capability, resource, policy, provenance, or port admission.
 

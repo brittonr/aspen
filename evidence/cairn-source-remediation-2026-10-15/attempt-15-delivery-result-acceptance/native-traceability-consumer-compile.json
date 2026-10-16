@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "/nix/store/c7qcfda063a1d95gfprn2xlhcvrpp1fl-rust-default-1.98.0-nightly-2026-05-26/bin/rustc",
+    "--edition=2024",
+    "/tmp/molten-f08-durable-api-15-kzg63rm5/traceability.rs",
+    "--extern",
+    "molten=/home/brittonr/.cargo-target/debug/deps/libmolten-630cfac42a3e1cbf.rlib",
+    "-L",
+    "dependency=/home/brittonr/.cargo-target/debug/deps",
+    "-o",
+    "/tmp/molten-f08-durable-api-15-kzg63rm5/traceability"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T17:37:25.830613+00:00",
+  "elapsed_seconds": 3.333,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": ""
+}

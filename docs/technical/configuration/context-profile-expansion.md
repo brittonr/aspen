@@ -4,7 +4,7 @@ Operator context profiles package explicit references for a named operation. Exp
 
 ## Profiles as structured inputs
 
-The [context core](../../../src/operator/context/parts/profile/p000/body.rs) defines `ContextRefSet` with policy, capability, authority, resource, evidence, redaction, and retention reference vectors. `ContextProfileInput` adds a profile identifier, tier, allowed operations, and caveats. Supported tiers are `local`, `pilot`, and `release`; recognition of a tier is not a release eligibility decision.
+The [context core](../../../src/operator/context/parts/profile/p000/body.rs) defines `RefSet` with policy, capability, authority, resource, evidence, redaction, and retention reference vectors. `context_profile_core::Input` adds a profile identifier, tier, allowed operations, and caveats. Supported tiers are `local`, `pilot`, and `release`; recognition of a tier is not a release eligibility decision.
 
 `OperationRequirements` supplies the requested operation and booleans indicating whether policy, authority, resource, evidence, and retention references are required. There are no corresponding capability or redaction requirement booleans in this structure. Callers should not infer those additional checks from the fact that the profile can carry those categories.
 
@@ -12,7 +12,7 @@ Building the profile artifact validates text, collection bounds, reference synta
 
 ## Expansion mechanics
 
-`expand_context_profile` first constructs the profile artifact and carries its diagnostics forward. It validates the operation and overrides, checks exact membership in `allowed_operations`, merges references, and checks required categories for emptiness. Diagnostics are sorted and deduplicated; their absence selects `pass`. The [serialized expansion](../../../src/operator/context/parts/profile/p001/body.rs) binds the profile reference, operation, requirement booleans, supplied overrides, expanded references, diagnostics, and evidence-only caveat.
+`expand` first constructs the profile artifact and carries its diagnostics forward. It validates the operation and overrides, checks exact membership in `allowed_operations`, merges references, and checks required categories for emptiness. Diagnostics are sorted and deduplicated; their absence selects `pass`. The [serialized expansion](../../../src/operator/context/parts/profile/p001/body.rs) binds the profile reference, operation, requirement booleans, supplied overrides, expanded references, diagnostics, and evidence-only caveat.
 
 The override behavior is category-specific rather than a generic last-writer-wins merge:
 
@@ -41,7 +41,7 @@ These cases correspond to [existing context tests](../../../src/operator/context
 
 Suggested verification, not executed here, is the existing `context_profile` library and CLI coverage named in the proof workflow. Review both decisions and expanded values, and inspect set equality separately from artifact identity: comparison ignores order for conflict purposes, but serialized vectors are not universally normalized.
 
-`evaluate_context_profile_authorization_use` always denies profile-as-authority use, even when expanded authority references are provided. Downstream gates still interpret those references. Expansion does not fetch proofs, establish freshness, enforce runtime hard caps, grant retention clearance, perform an installation, or establish production readiness. [Runtime-limit admission](../../runtime-limit-profiles.md), for example, remains a separate pure decision over limits and hard-cap descriptors.
+`evaluate_authorization_use` always denies profile-as-authority use, even when expanded authority references are provided. Downstream gates still interpret those references. Expansion does not fetch proofs, establish freshness, enforce runtime hard caps, grant retention clearance, perform an installation, or establish production readiness. [Runtime-limit admission](../../runtime-limit-profiles.md), for example, remains a separate pure decision over limits and hard-cap descriptors.
 
 ## Sources
 

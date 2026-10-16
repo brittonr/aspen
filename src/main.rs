@@ -25,7 +25,7 @@ mod block_port;
 mod cli_chunk {
     pub(crate) use super::block_port::*;
 }
-#[path = "cli/ops/cluster.rs"]
+#[path = "cli/ops/cluster/mod.rs"]
 mod cluster_port;
 mod cli_cluster {
     pub(crate) use super::cluster_port::*;
@@ -70,7 +70,7 @@ mod workload_port;
 mod cli_job {
     pub(crate) use super::workload_port::*;
 }
-#[path = "cli/ops/ledger.rs"]
+#[path = "cli/ops/ledger/mod.rs"]
 mod journal_port;
 mod cli_ledger {
     pub(crate) use super::journal_port::*;
@@ -85,7 +85,7 @@ mod kernel_shell;
 mod cli_node {
     pub(crate) use super::kernel_shell::*;
 }
-#[path = "cli/ops/octet.rs"]
+#[path = "cli/ops/octet/mod.rs"]
 mod quality_port;
 mod cli_octet {
     pub(crate) use super::quality_port::*;
@@ -95,7 +95,7 @@ mod peer_port;
 mod cli_peer {
     pub(crate) use super::peer_port::*;
 }
-#[path = "cli/ops/plugin.rs"]
+#[path = "cli/ops/plugin/mod.rs"]
 mod extension_port;
 mod cli_plugin {
     pub(crate) use super::extension_port::*;
@@ -115,7 +115,7 @@ mod lineage_port;
 mod cli_provenance {
     pub(crate) use super::lineage_port::*;
 }
-#[path = "cli/runtime/raft.rs"]
+#[path = "cli/runtime/raft/mod.rs"]
 mod quorum_port;
 mod cli_raft {
     pub(crate) use super::quorum_port::*;
@@ -140,7 +140,7 @@ mod display_port;
 mod cli_report {
     pub(crate) use super::display_port::*;
 }
-#[path = "cli/runtime/repro.rs"]
+#[path = "cli/runtime/repro/mod.rs"]
 mod bundle_port;
 mod cli_repro {
     pub(crate) use super::bundle_port::*;
@@ -150,7 +150,7 @@ mod custody_port;
 mod cli_retention {
     pub(crate) use super::custody_port::*;
 }
-#[path = "cli/runtime/rewrite.rs"]
+#[path = "cli/runtime/rewrite/mod.rs"]
 mod transform_port;
 mod cli_rewrite {
     pub(crate) use super::transform_port::*;
@@ -165,27 +165,27 @@ mod format_port;
 mod cli_schema {
     pub(crate) use super::format_port::*;
 }
-#[path = "cli/runtime/secrets.rs"]
+#[path = "cli/runtime/secrets/mod.rs"]
 mod vault_port;
 mod cli_secrets {
     pub(crate) use super::vault_port::*;
 }
-#[path = "cli/runtime/service.rs"]
+#[path = "cli/runtime/service/mod.rs"]
 mod worker_port;
 mod cli_service {
     pub(crate) use super::worker_port::*;
 }
-#[path = "cli/runtime/fabric_time.rs"]
+#[path = "cli/runtime/fabric_time/mod.rs"]
 mod fabric_time_port;
 mod cli_fabric_time {
     pub(crate) use super::fabric_time_port::*;
 }
-#[path = "cli/runtime/fabric_simulation.rs"]
+#[path = "cli/runtime/fabric_simulation/mod.rs"]
 mod fabric_simulation_port;
 mod cli_fabric_simulation {
     pub(crate) use super::fabric_simulation_port::*;
 }
-#[path = "cli/runtime/system_extension.rs"]
+#[path = "cli/runtime/system_extension/mod.rs"]
 mod system_extension_port;
 mod cli_system_extension {
     pub(crate) use super::system_extension_port::*;
@@ -200,7 +200,7 @@ mod world_snapshot_port;
 mod cli_world_snapshot {
     pub(crate) use super::world_snapshot_port::*;
 }
-#[path = "cli/runtime/worldauthority.rs"]
+#[path = "cli/runtime/worldauthority/mod.rs"]
 mod world_authority_port;
 mod cli_world_authority {
     pub(crate) use super::world_authority_port::*;
@@ -240,17 +240,17 @@ mod narrative_port;
 mod cli_transcript {
     pub(crate) use super::narrative_port::*;
 }
-#[path = "cli/ops/traceability.rs"]
+#[path = "cli/ops/traceability/mod.rs"]
 mod trace_port;
 mod cli_traceability {
     pub(crate) use super::trace_port::*;
 }
-#[path = "cli/runtime/upgrade.rs"]
+#[path = "cli/runtime/upgrade/mod.rs"]
 mod migration_port;
 mod cli_upgrade {
     pub(crate) use super::migration_port::*;
 }
-#[path = "cli/runtime/vat.rs"]
+#[path = "cli/runtime/vat/mod.rs"]
 mod actor_port;
 mod cli_vat {
     pub(crate) use super::actor_port::*;

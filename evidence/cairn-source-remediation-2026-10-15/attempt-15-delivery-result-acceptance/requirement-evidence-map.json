@@ -1,0 +1,113 @@
+{
+  "scope": "Exactly the four native F08 requirements; no whole-repository or release coverage claim.",
+  "observed_runs": {
+    "positive": "public-consumer-positive-current-library.json",
+    "negative": "public-consumer-expected-deny-current-library.json"
+  },
+  "receipts": [
+    {
+      "requirement": "molten.audit_f08.original_binding",
+      "kind": "positive",
+      "target": "crates/molten-core/src/coordination_delivery/transition/support.rs",
+      "cases": [
+        "immediate-replay",
+        "reclaimed-a-replay"
+      ],
+      "path": "evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/verification-runs/original_binding-positive.preserves",
+      "actual_run_exit": 0,
+      "native_emission": "verification-run receipt=blake3:cc17cb5c40ab1df3bc4008ffe5c196cb52bb47f0dea037343b8d5412a5db4086 decision=pass requirement=molten.audit_f08.original_binding kind=positive"
+    },
+    {
+      "requirement": "molten.audit_f08.original_binding",
+      "kind": "negative",
+      "target": "crates/molten-core/src/coordination_delivery/transition/support.rs",
+      "cases": [
+        "conflicting-duplicate"
+      ],
+      "path": "evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/verification-runs/original_binding-negative.preserves",
+      "actual_run_exit": 1,
+      "native_emission": "verification-run receipt=blake3:2adee6316fb589a46698cb45ec7ee6658b620e50759bdc466b7e1b6abbfb3151 decision=deny requirement=molten.audit_f08.original_binding kind=negative"
+    },
+    {
+      "requirement": "molten.audit_f08.unavailable_result",
+      "kind": "positive",
+      "target": "crates/molten-core/src/coordination_delivery/transition/support.rs",
+      "cases": [
+        "reclaimed-a-replay",
+        "completed-a-replay",
+        "extended-original-replay"
+      ],
+      "path": "evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/verification-runs/unavailable_result-positive.preserves",
+      "actual_run_exit": 0,
+      "native_emission": "verification-run receipt=blake3:8f670068ffb20776a3188c46be62f1cd575df4e6968ac300435718db04bbf73a decision=pass requirement=molten.audit_f08.unavailable_result kind=positive"
+    },
+    {
+      "requirement": "molten.audit_f08.unavailable_result",
+      "kind": "negative",
+      "target": "crates/molten-core/src/coordination_delivery/transition/support.rs",
+      "cases": [
+        "old-token-after-reclaim",
+        "terminal-token-denied",
+        "pre-extension-token-denied"
+      ],
+      "path": "evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/verification-runs/unavailable_result-negative.preserves",
+      "actual_run_exit": 1,
+      "native_emission": "verification-run receipt=blake3:65f3cdf443240d0dd2779c9e1813bb4c8ba5c644130b93d391a9fa5bafb13d56 decision=deny requirement=molten.audit_f08.unavailable_result kind=negative"
+    },
+    {
+      "requirement": "molten.audit_f08.state_authority",
+      "kind": "positive",
+      "target": "src/coordination_delivery/service.rs",
+      "cases": [
+        "delegated-completion",
+        "immediate-replay"
+      ],
+      "path": "evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/verification-runs/state_authority-positive.preserves",
+      "actual_run_exit": 0,
+      "native_emission": "verification-run receipt=blake3:4d4b5aa35e446dfeb316414ff8e7c2b92f2930624ef2589462590045b9b1a30d decision=pass requirement=molten.audit_f08.state_authority kind=positive"
+    },
+    {
+      "requirement": "molten.audit_f08.state_authority",
+      "kind": "negative",
+      "target": "src/coordination_delivery/service.rs",
+      "cases": [
+        "wrong-owner",
+        "stale-fence",
+        "replay-does-not-authorize",
+        "evidence-does-not-authorize"
+      ],
+      "path": "evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/verification-runs/state_authority-negative.preserves",
+      "actual_run_exit": 1,
+      "native_emission": "verification-run receipt=blake3:3d0bab2246e2ac258953c33d95bcc07d0860a6fe137744ec2c27dbdd6db615c2 decision=deny requirement=molten.audit_f08.state_authority kind=negative"
+    },
+    {
+      "requirement": "molten.audit_f08.validation_claims",
+      "kind": "positive",
+      "target": "src/coordination_delivery/tests/contracts/records.rs",
+      "cases": [
+        "extension-replay",
+        "completed-b-replay"
+      ],
+      "path": "evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/verification-runs/validation_claims-positive.preserves",
+      "actual_run_exit": 0,
+      "native_emission": "verification-run receipt=blake3:b01aeb1a1b6a41cca276f420fdfa9a3df25b95a00572ed386f72e998c1e591de decision=pass requirement=molten.audit_f08.validation_claims kind=positive"
+    },
+    {
+      "requirement": "molten.audit_f08.validation_claims",
+      "kind": "negative",
+      "target": "src/coordination_delivery/tests/contracts/records.rs",
+      "cases": [
+        "expired-completion",
+        "conflicting-duplicate"
+      ],
+      "path": "evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/verification-runs/validation_claims-negative.preserves",
+      "actual_run_exit": 1,
+      "native_emission": "verification-run receipt=blake3:146c03206ebd8bd68a31b0573f796bc6f240b420def6a366694cf0ed624d6a2f decision=deny requirement=molten.audit_f08.validation_claims kind=negative"
+    }
+  ],
+  "identity_roles": "Native receipt ids use the product receipt domain; independent canonical-packed content refs identify saved result bytes. Profile/toolchain/stdout/stderr refs are BLAKE3 of actual saved inputs/outputs.",
+  "trusted_assumptions": [
+    "Supplied fixture manifest/host/profile facts; not proof of an installed system-extension or authority discovery.",
+    "Transparent counted Local adapter delegates real durable Redb operations; timer/status ports are controlled observations."
+  ]
+}

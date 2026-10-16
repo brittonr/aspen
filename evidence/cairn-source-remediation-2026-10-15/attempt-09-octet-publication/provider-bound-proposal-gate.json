@@ -1,0 +1,68 @@
+{
+  "command": [
+    "/nix/store/ynjawpza9ci9i8ha7f3ywaqwbd60m83k-cairn-0.1.0/bin/cairn",
+    "gate",
+    "proposal",
+    "adopt-molten-nominal-reference-domains",
+    "--root",
+    ".",
+    "--policy",
+    "/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015/cairn-policy/generated/cairn-policy.json"
+  ],
+  "cwd": "/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015",
+  "exit_code": 0,
+  "stdout": "{\n  \"acceptance_ids\": [],\n  \"change\": \"adopt-molten-nominal-reference-domains\",\n  \"evidence_summary\": {\n    \"docs_only\": 0,\n    \"fixture\": 0,\n    \"formal\": 0,\n    \"mode\": \"advisory\",\n    \"model\": 0,\n    \"probe\": 0,\n    \"property\": 0\n  },\n  \"input_hash\": \"6ef0ab60e3cbb6c0b73a4d870468b8ab9b9e9be1dfeecf30f734f0ce817ed5c3\",\n  \"issues\": [],\n  \"layout\": \"cairn\",\n  \"non_claims\": [\n    \"workflow state proves only the selected policy graph and observed structural artifact facts\",\n    \"workflow instructions do not prove artifact truth, review quality, or implementation correctness\",\n    \"workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates\",\n    \"workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts\"\n  ],\n  \"policy\": \"octet-default\",\n  \"policy_hash\": \"62e40f642e798bfaf5a68a495a7456bcf4e9fd8106ae2f52a24100967b39df5d\",\n  \"probe_evidence\": null,\n  \"profile_identity_hash\": \"5b5467ca44e5099cb3ceb57183e13a123476f86cb17bbc3a127924956084e9ad\",\n  \"receipt_hash\": \"991ceb54539e17f8933c5ceb4ff7c6c830a3dfaba2b4776f4e435f1c62f02b54\",\n  \"review_receipt_hashes\": [],\n  \"spec_effect\": \"delta\",\n  \"stage\": \"proposal\",\n  \"substance\": [\n    {\n      \"checkbox_tasks\": 0,\n      \"kind\": \"proposal\",\n      \"malformed_dependency_markers\": 0,\n      \"path\": \"./.cairn/changes/adopt-molten-nominal-reference-domains/proposal.md\",\n      \"requirement_blocks\": 0,\n      \"scenario_blocks\": 0,\n      \"substantive_lines\": 30,\n      \"substantive_requirement_blocks\": 0,\n      \"substantive_tasks\": 0,\n      \"task_done\": 0,\n      \"task_in_progress\": 0,\n      \"task_todo\": 0\n    }\n  ],\n  \"valid\": true,\n  \"verdict\": \"PASS\",\n  \"workflow_profile\": \"spec-driven\",\n  \"workflow_profile_compatibility_fallback\": false,\n  \"workflow_profile_source\": \"change_create\",\n  \"workflow_profile_version\": 1\n}\n",
+  "stderr": "",
+  "result": {
+    "acceptance_ids": [],
+    "change": "adopt-molten-nominal-reference-domains",
+    "evidence_summary": {
+      "docs_only": 0,
+      "fixture": 0,
+      "formal": 0,
+      "mode": "advisory",
+      "model": 0,
+      "probe": 0,
+      "property": 0
+    },
+    "input_hash": "6ef0ab60e3cbb6c0b73a4d870468b8ab9b9e9be1dfeecf30f734f0ce817ed5c3",
+    "issues": [],
+    "layout": "cairn",
+    "non_claims": [
+      "workflow state proves only the selected policy graph and observed structural artifact facts",
+      "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+      "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+      "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+    ],
+    "policy": "octet-default",
+    "policy_hash": "62e40f642e798bfaf5a68a495a7456bcf4e9fd8106ae2f52a24100967b39df5d",
+    "probe_evidence": null,
+    "profile_identity_hash": "5b5467ca44e5099cb3ceb57183e13a123476f86cb17bbc3a127924956084e9ad",
+    "receipt_hash": "991ceb54539e17f8933c5ceb4ff7c6c830a3dfaba2b4776f4e435f1c62f02b54",
+    "review_receipt_hashes": [],
+    "spec_effect": "delta",
+    "stage": "proposal",
+    "substance": [
+      {
+        "checkbox_tasks": 0,
+        "kind": "proposal",
+        "malformed_dependency_markers": 0,
+        "path": "./.cairn/changes/adopt-molten-nominal-reference-domains/proposal.md",
+        "requirement_blocks": 0,
+        "scenario_blocks": 0,
+        "substantive_lines": 30,
+        "substantive_requirement_blocks": 0,
+        "substantive_tasks": 0,
+        "task_done": 0,
+        "task_in_progress": 0,
+        "task_todo": 0
+      }
+    ],
+    "valid": true,
+    "verdict": "PASS",
+    "workflow_profile": "spec-driven",
+    "workflow_profile_compatibility_fallback": false,
+    "workflow_profile_source": "change_create",
+    "workflow_profile_version": 1
+  }
+}

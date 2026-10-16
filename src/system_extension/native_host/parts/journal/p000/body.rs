@@ -12,7 +12,7 @@ const OPERATION_FIELD_COUNT: u64 = 8;
 const MAX_INSTANCE_COLLECTION_ITEMS: usize = 1_024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalNativeInstanceRecord {
+pub struct CanonicalInstanceRecord {
     pub record_ref: String,
     pub record: NativeInstanceRecord,
     pub value: preserves::IOValue,
@@ -20,7 +20,7 @@ pub struct CanonicalNativeInstanceRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum NativeJournalError {
+pub enum Error {
     InvalidRecord(String),
     Storage(String),
     Poisoned,
@@ -30,42 +30,42 @@ pub trait NativeHostJournal {
     fn save_instance(
         &mut self,
         record: &NativeInstanceRecord,
-    ) -> Result<CanonicalNativeInstanceRecord, NativeJournalError>;
+    ) -> Result<CanonicalInstanceRecord, Error>;
 
-    fn latest_instance(&self, instance_id: &str) -> Result<Option<NativeInstanceRecord>, NativeJournalError>;
+    fn latest_instance(&self, instance_id: &str) -> Result<Option<NativeInstanceRecord>, Error>;
 
-    fn history(&self, instance_id: &str) -> Result<Vec<NativeInstanceRecord>, NativeJournalError>;
+    fn history(&self, instance_id: &str) -> Result<Vec<NativeInstanceRecord>, Error>;
 }
 
 #[derive(Debug, Clone)]
-pub struct InMemoryNativeHostJournal {
-    records: Vec<CanonicalNativeInstanceRecord>,
+pub struct InMemory {
+    records: Vec<CanonicalInstanceRecord>,
 }
 
-impl InMemoryNativeHostJournal {
+impl InMemory {
     /// A journal with no saved instance records.
     pub const fn empty() -> Self {
         Self { records: Vec::new() }
     }
 }
 
-impl Default for InMemoryNativeHostJournal {
+impl Default for InMemory {
     fn default() -> Self {
         Self::empty()
     }
 }
 
-impl NativeHostJournal for InMemoryNativeHostJournal {
+impl NativeHostJournal for InMemory {
     fn save_instance(
         &mut self,
         record: &NativeInstanceRecord,
-    ) -> Result<CanonicalNativeInstanceRecord, NativeJournalError> {
-        let canonical = canonical_native_instance_record(record).map_err(journal_invalid)?;
+    ) -> Result<CanonicalInstanceRecord, Error> {
+        let canonical = canonical_instance_record(record).map_err(invalid)?;
         self.records.push(canonical.clone());
         Ok(canonical)
     }
 
-    fn latest_instance(&self, instance_id: &str) -> Result<Option<NativeInstanceRecord>, NativeJournalError> {
+    fn latest_instance(&self, instance_id: &str) -> Result<Option<NativeInstanceRecord>, Error> {
         Ok(self
             .records
             .iter()
@@ -74,7 +74,7 @@ impl NativeHostJournal for InMemoryNativeHostJournal {
             .map(|record| record.record.clone()))
     }
 
-    fn history(&self, instance_id: &str) -> Result<Vec<NativeInstanceRecord>, NativeJournalError> {
+    fn history(&self, instance_id: &str) -> Result<Vec<NativeInstanceRecord>, Error> {
         Ok(self
             .records
             .iter()
@@ -84,11 +84,11 @@ impl NativeHostJournal for InMemoryNativeHostJournal {
     }
 }
 
-pub struct DurableNativeHostJournal {
+pub struct Durable {
     adapter: crate::fabric_durability::RedbDurableStateAdapter,
 }
 
-impl DurableNativeHostJournal {
+impl Durable {
     pub fn new(adapter: crate::fabric_durability::RedbDurableStateAdapter) -> Self {
         Self { adapter }
     }
@@ -99,18 +99,18 @@ impl DurableNativeHostJournal {
 }
 
 // r[impl molten.system_extension.native_host.durability]
-impl NativeHostJournal for DurableNativeHostJournal {
+impl NativeHostJournal for Durable {
     fn save_instance(
         &mut self,
         record: &NativeInstanceRecord,
-    ) -> Result<CanonicalNativeInstanceRecord, NativeJournalError> {
-        let canonical = canonical_native_instance_record(record).map_err(journal_invalid)?;
+    ) -> Result<CanonicalInstanceRecord, Error> {
+        let canonical = canonical_instance_record(record).map_err(invalid)?;
         let descriptor = &self.adapter.state().descriptor;
         let expected_sequence = self
             .adapter
             .state()
             .next_log_sequence()
-            .map_err(|error| NativeJournalError::Storage(format!("native journal sequence: {error:?}")))?;
+            .map_err(|error| Error::Storage(format!("native journal sequence: {error:?}")))?;
         self.adapter
             .append(&crate::fabric_durability::AppendRequest {
                 adapter_id: descriptor.adapter_id.clone(),
@@ -121,13 +121,13 @@ impl NativeHostJournal for DurableNativeHostJournal {
                 value_ref: canonical.record_ref.clone(),
                 durability: crate::fabric_durability::DurabilityLevel::MachineLoss,
             })
-            .map_err(|error| NativeJournalError::Storage(error.to_string()))?;
+            .map_err(|error| Error::Storage(error.to_string()))?;
         Ok(canonical)
     }
 
-    fn latest_instance(&self, instance_id: &str) -> Result<Option<NativeInstanceRecord>, NativeJournalError> {
+    fn latest_instance(&self, instance_id: &str) -> Result<Option<NativeInstanceRecord>, Error> {
         for record in self.adapter.state().durable_log.iter().rev() {
-            let decoded = decode_native_instance_record(&record.value).map_err(journal_invalid)?;
+            let decoded = decode_instance_record(&record.value).map_err(invalid)?;
             if decoded.instance_id == instance_id {
                 return Ok(Some(decoded));
             }
@@ -135,27 +135,27 @@ impl NativeHostJournal for DurableNativeHostJournal {
         Ok(None)
     }
 
-    fn history(&self, instance_id: &str) -> Result<Vec<NativeInstanceRecord>, NativeJournalError> {
+    fn history(&self, instance_id: &str) -> Result<Vec<NativeInstanceRecord>, Error> {
         self.adapter
             .state()
             .durable_log
             .iter()
-            .filter_map(|record| match decode_native_instance_record(&record.value) {
+            .filter_map(|record| match decode_instance_record(&record.value) {
                 Ok(decoded) if decoded.instance_id != instance_id => None,
-                decoded => Some(decoded.map_err(journal_invalid)),
+                decoded => Some(decoded.map_err(invalid)),
             })
             .collect()
     }
 }
 
 // r[impl molten.system_extension.native_host.durability]
-pub fn canonical_native_instance_record(
+pub fn canonical_instance_record(
     record_input: &NativeInstanceRecord,
-) -> crate::error::Result<CanonicalNativeInstanceRecord> {
-    let value = native_instance_value(record_input);
+) -> crate::error::Result<CanonicalInstanceRecord> {
+    let value = instance_value(record_input);
     let record_ref = crate::preserves_rail::canonical_hash(&value)?;
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
-    Ok(CanonicalNativeInstanceRecord {
+    Ok(CanonicalInstanceRecord {
         record_ref,
         record: record_input.clone(),
         value,
@@ -164,12 +164,12 @@ pub fn canonical_native_instance_record(
 }
 
 // r[impl molten.system_extension.native_host.durability]
-pub fn decode_native_instance_record(bytes: &[u8]) -> crate::error::Result<NativeInstanceRecord> {
+pub fn decode_instance_record(bytes: &[u8]) -> crate::error::Result<NativeInstanceRecord> {
     let decoded = crate::preserves_rail::strict_canonical_decode(bytes)?;
     let fields = crate::preserves_rail::simple_record_fields(&decoded.value, INSTANCE_RECORD, INSTANCE_FIELD_COUNT)?;
     let schema = crate::preserves_rail::required_string_field(&fields[0], "native instance schema")?;
     if schema != NATIVE_INSTANCE_STATE_SCHEMA {
-        return Err(crate::error::MoltenError::invalid_harness("native instance schema mismatch"));
+        return Err(crate::error::Failure::invalid_harness("native instance schema mismatch"));
     }
     Ok(NativeInstanceRecord {
         schema,
@@ -194,7 +194,7 @@ pub fn decode_native_instance_record(bytes: &[u8]) -> crate::error::Result<Nativ
     })
 }
 
-fn native_instance_value(instance: &NativeInstanceRecord) -> preserves::IOValue {
+fn instance_value(instance: &NativeInstanceRecord) -> preserves::IOValue {
     crate::preserves_rail::record(INSTANCE_RECORD, vec![
         crate::preserves_rail::string(&instance.schema),
         crate::preserves_rail::string(&instance.instance_id),

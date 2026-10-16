@@ -1,6 +1,6 @@
 type BtreeSet<T> = std::collections::BTreeSet<T>;
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Path = std::path::Path;
 type Result<T> = crate::error::Result<T>;
 type RuntimeAssertion = crate::runtime::RuntimeAssertion;
@@ -14,7 +14,7 @@ mod chunk_store {
         ticket: &str,
         expected_manifest_ref: Option<&str>,
         peer: &str,
-    ) -> super::Result<crate::chunk_store::ChunkStoreIrohFetch> {
+    ) -> super::Result<crate::chunk_store::ChunkIrohFetch> {
         crate::chunk_store::fetch_iroh_blobs(iroh_root, dest_root, ticket, expected_manifest_ref, peer)
     }
 
@@ -24,7 +24,7 @@ mod chunk_store {
         iroh_root: &super::Path,
         manifest_ref: &str,
         node: &str,
-    ) -> super::Result<crate::chunk_store::ChunkStoreIrohPublish> {
+    ) -> super::Result<crate::chunk_store::ChunkIrohPublish> {
         crate::chunk_store::publish_iroh_blobs(store_root, iroh_root, manifest_ref, node)
     }
 
@@ -34,7 +34,7 @@ mod chunk_store {
         object_kind: &str,
         bytes: &[u8],
         chunk_size: u64,
-    ) -> super::Result<crate::chunk_store::ChunkStorePut> {
+    ) -> super::Result<crate::chunk_store::ChunkPut> {
         crate::chunk_store::put_bytes(root, object_kind, bytes, chunk_size)
     }
 
@@ -42,7 +42,7 @@ mod chunk_store {
     pub(super) fn read_object(
         root: &super::Path,
         manifest_ref: &str,
-    ) -> super::Result<crate::chunk_store::ChunkStoreRead> {
+    ) -> super::Result<crate::chunk_store::ChunkRead> {
         crate::chunk_store::read_object(root, manifest_ref)
     }
 }

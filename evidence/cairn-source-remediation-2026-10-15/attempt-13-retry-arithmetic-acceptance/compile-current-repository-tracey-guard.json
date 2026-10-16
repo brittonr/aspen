@@ -1,0 +1,21 @@
+{
+  "argv": [
+    "nix",
+    "develop",
+    "--no-update-lock-file",
+    "-c",
+    "rustc",
+    "--edition=2024",
+    "tools/tracey/inherited_debt_guard.rs",
+    "-O",
+    "-o",
+    "/tmp/molten-current-tracey-guard-uynhmg2f/tracey-guard"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T16:41:35.103183+00:00",
+  "elapsed_seconds": 300.422,
+  "exit_code": 1,
+  "timed_out": true,
+  "stdout": "",
+  "stderr": "\rshutting down\u001b[Kerror: interrupted by the user\n"
+}

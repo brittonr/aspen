@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "b3sum",
+    "/home/brittonr/.cargo-target/debug/molten"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T16:53:00.653799+00:00",
+  "elapsed_seconds": 0.076,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "e08242384fb614807d965eacd33e47e3a517f62e65357a91b1166d89b3a56d5d  /home/brittonr/.cargo-target/debug/molten\n",
+  "stderr": ""
+}

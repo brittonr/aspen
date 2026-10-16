@@ -14,7 +14,7 @@ fn send_command(
     payload: &[u8],
 ) -> Result<TransportCommand> {
     let payload_bytes = u64::try_from(payload.len())
-        .map_err(|_| MoltenError::invalid_harness("DAG transport payload length exceeds u64"))?;
+        .map_err(|_| Failure::invalid_harness("DAG transport payload length exceeds u64"))?;
     Ok(TransportCommand::SendFrame {
         operation_id: DAG_TRANSPORT_OPERATION_REF.to_string(),
         session_id: session_id.clone(),
@@ -27,7 +27,7 @@ fn send_command(
 
 fn observed_tick(sequence: usize) -> Result<u64> {
     let sequence =
-        u64::try_from(sequence).map_err(|_| MoltenError::invalid_harness("DAG request sequence exceeds u64"))?;
+        u64::try_from(sequence).map_err(|_| Failure::invalid_harness("DAG request sequence exceeds u64"))?;
     Ok(DAG_TRANSPORT_INITIAL_TICK.saturating_add(sequence))
 }
 

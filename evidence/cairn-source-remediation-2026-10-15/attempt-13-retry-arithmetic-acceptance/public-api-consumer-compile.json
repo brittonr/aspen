@@ -1,0 +1,24 @@
+{
+  "argv": [
+    "nix",
+    "develop",
+    "--no-update-lock-file",
+    "-c",
+    "rustc",
+    "--edition=2024",
+    "/tmp/molten-f12-api-smoke-ngw5ds_b/main.rs",
+    "--extern",
+    "molten_core=/home/brittonr/.cargo-target/debug/libmolten_core.rlib",
+    "-L",
+    "dependency=/home/brittonr/.cargo-target/debug",
+    "-o",
+    "/tmp/molten-f12-api-smoke-ngw5ds_b/smoke"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T16:24:29.237995+00:00",
+  "elapsed_seconds": 0.519,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "error[E0463]: can't find crate for `molten_core`\n --> /tmp/molten-f12-api-smoke-ngw5ds_b/main.rs:1:5\n  |\n1 | use molten_core::fabric_time::*;\n  |     ^^^^^^^^^^^ can't find crate\n\nerror: aborting due to 1 previous error\n\nFor more information about this error, try `rustc --explain E0463`.\n"
+}

@@ -10,13 +10,13 @@ fn verify_chaos_descriptor(
         .components
         .iter()
         .find(|component| component.kind == SnapshotComponentKind::MachineDescriptor)
-        .ok_or_else(|| MoltenError::invalid_harness("opaque machine descriptor is missing"))?;
+        .ok_or_else(|| Failure::invalid_harness("opaque machine descriptor is missing"))?;
     if chaos_observation.descriptor_ref != machine_descriptor.identity
         || chaos_observation.cohort_ref != destination.cohort_ref.as_str()
         || !chaos_observation.available
         || !chaos_observation.identity_verified
     {
-        return Err(MoltenError::invalid_harness("ChaosControl descriptor observation is unavailable or drifted"));
+        return Err(Failure::invalid_harness("ChaosControl descriptor observation is unavailable or drifted"));
     }
     Ok(())
 }
@@ -26,7 +26,7 @@ fn validate_opaque_restore(restored: &[SnapshotStepObservation]) -> Result<()> {
         || restored.len() > MAX_SNAPSHOT_COMPONENTS
         || restored.iter().any(|observation| observation.step != SnapshotRestoreStep::RestoreOpaqueMachine)
     {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "ChaosControl restore observations are empty, overbound, or use the wrong step",
         ));
     }
@@ -50,12 +50,12 @@ fn materialize_complete_inventory<M: SnapshotMaterializationPort>(
             || !observation.available
             || !observation.identity_verified
         {
-            return Err(MoltenError::invalid_harness(
+            return Err(Failure::invalid_harness(
                 "snapshot component materialization is unavailable or unverified",
             ));
         }
         if observations.insert(component.kind, observation).is_some() {
-            return Err(MoltenError::invalid_harness("snapshot component materialization was duplicated"));
+            return Err(Failure::invalid_harness("snapshot component materialization was duplicated"));
         }
     }
     Ok(observations)
@@ -67,7 +67,7 @@ fn materialization_for(
 ) -> Result<&SnapshotMaterializationObservation> {
     observations
         .get(&kind)
-        .ok_or_else(|| MoltenError::invalid_harness("snapshot materialization observation is missing"))
+        .ok_or_else(|| Failure::invalid_harness("snapshot materialization observation is missing"))
 }
 
 fn validate_admission(
@@ -85,14 +85,14 @@ fn validate_admission(
         || observation.cohort_ref != destination.cohort_ref.as_str()
         || is_stale
     {
-        return Err(MoltenError::invalid_harness("snapshot current admission denied, drifted, or became stale"));
+        return Err(Failure::invalid_harness("snapshot current admission denied, drifted, or became stale"));
     }
     Ok(())
 }
 
 fn validate_ref(reference: &str, field: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference)
-        .map_err(|_| MoltenError::invalid_harness(format!("{field} is not a canonical content reference")))
+        .map_err(|_| Failure::invalid_harness(format!("{field} is not a canonical content reference")))
 }
 
 const fn component_for_step(step: SnapshotRestoreStep) -> Option<SnapshotComponentKind> {

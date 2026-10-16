@@ -4,13 +4,13 @@ Molten tests use one reviewed temporary-root shell and capability-derived role r
 
 ## Workspace acquisition and lifetime
 
-r[impl molten.testing.cap_std_workspace] `TestWorkspace::new` validates a logical label, asks `cap-tempfile` for a collision-resistant RAII directory, and creates the fixed role directories through its `cap_std::fs::Dir`. Callers do not select or pre-delete a host temporary path. The last workspace guard owns best-effort cleanup; normal test startup never scans `std::env::temp_dir()` for `molten-*` entries.
+r[impl molten.testing.cap_std_workspace] `Workspace::new` validates a logical label, asks `cap-tempfile` for a collision-resistant RAII directory, and creates the fixed role directories through its `cap_std::fs::Dir`. Callers do not select or pre-delete a host temporary path. The last workspace guard owns best-effort cleanup; normal test startup never scans `std::env::temp_dir()` for `molten-*` entries.
 
 Abrupt process termination can still leave host residue. Residue maintenance requires a separate operator command, explicit temporary-root authority, and an age/ownership policy; another test process must not infer deletion authority from a filename prefix.
 
 ## Typed role roots
 
-r[impl molten.testing.cap_std_subroots] A workspace exposes distinct `TestRoot` marker types for:
+r[impl molten.testing.cap_std_subroots] A workspace exposes distinct `Root` marker types for:
 
 - state;
 - input;

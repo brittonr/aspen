@@ -14,7 +14,7 @@ fn claim_manifest(
                 "unsupported Iroh chunk ticket; expected iroh-local-chunk:<manifest-ref>",
                 vec![("ticket-shape", "fail"), ("deny-unsupported-ticket", "pass")],
             );
-            store_receipt(dest_root, &receipt_value)?;
+            receipt(dest_root, &receipt_value)?;
             return Err(MoltenError::invalid_harness(
                 "unsupported Iroh chunk ticket; expected iroh-local-chunk:<manifest-ref>",
             ));
@@ -28,7 +28,7 @@ fn claim_manifest(
             ("ticket-manifest-binding", "fail"),
             ("deny-wrong-manifest", "pass"),
         ]);
-        store_receipt(dest_root, &receipt_value)?;
+        receipt(dest_root, &receipt_value)?;
         return Err(MoltenError::invalid_harness(message));
     }
     Ok(advertised_manifest_ref.to_string())

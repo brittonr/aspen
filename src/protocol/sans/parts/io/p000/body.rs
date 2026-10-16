@@ -1,6 +1,6 @@
-type IoValue = preserves::IOValue;
+type Value = preserves::IOValue;
 type Result<T> = crate::error::Result<T>;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 
 const SANS_IO_TRANSITION_SCHEMA: &str = "molten.runtime-patterns.sans-io-transition.v1";
 const SANS_IO_SHELL_DRAIN_SCHEMA: &str = "molten.runtime-patterns.sans-io-shell-drain.v1";
@@ -18,7 +18,7 @@ const MAX_DIAGNOSTICS: usize = 512;
 const MAX_SEQUENCE_ADVANCE: u64 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProtocolCoreState {
+pub struct State {
     pub protocol_id: String,
     pub phase: String,
     pub state_ref: String,
@@ -26,7 +26,7 @@ pub struct ProtocolCoreState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProtocolCoreEvent {
+pub struct Event {
     pub event_kind: String,
     pub message_ref: String,
     pub freshness_ref: String,
@@ -38,7 +38,7 @@ pub struct ProtocolCoreEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProtocolCoreFacts {
+pub struct Facts {
     pub limit_profile_ref: String,
     pub authority_refs: Vec<String>,
     pub policy_refs: Vec<String>,
@@ -48,14 +48,14 @@ pub struct ProtocolCoreFacts {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProtocolCoreInput {
-    pub state: ProtocolCoreState,
-    pub event: ProtocolCoreEvent,
-    pub facts: ProtocolCoreFacts,
+pub struct Input {
+    pub state: State,
+    pub event: Event,
+    pub facts: Facts,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProtocolCoreTransition {
+pub struct Transition {
     pub decision: String,
     pub before_state_ref: String,
     pub after_state_ref: String,
@@ -63,13 +63,13 @@ pub struct ProtocolCoreTransition {
     pub outbound_envelope_refs: Vec<String>,
     pub effect_intent_refs: Vec<String>,
     pub diagnostics: Vec<String>,
-    pub receipt_facts_value: IoValue,
+    pub receipt_facts_value: Value,
     pub transition_ref: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShellDrainInput {
-    pub transition: ProtocolCoreTransition,
+    pub transition: Transition,
     pub transport_admission_refs: Vec<String>,
     pub authority_admission_refs: Vec<String>,
     pub policy_admission_refs: Vec<String>,
@@ -82,14 +82,14 @@ pub struct ShellDrainInput {
 pub struct ShellDrainDecision {
     pub decision: String,
     pub diagnostics: Vec<String>,
-    pub value: IoValue,
+    pub value: Value,
     pub decision_ref: String,
 }
 
 // r[impl molten.runtime_patterns.sans_io_protocol_core]
 // r[impl molten.runtime_patterns.sans_io_explicit_inputs]
 // r[impl molten.runtime_patterns.sans_io_transition_outputs]
-pub fn evaluate_protocol_transition(input: &ProtocolCoreInput) -> Result<ProtocolCoreTransition> {
+pub fn evaluate_transition(input: &Input) -> Result<Transition> {
     validate_input(input)?;
     let mut diagnostics = transition_diagnostics(input);
     diagnostics.sort();
@@ -128,7 +128,7 @@ pub fn evaluate_protocol_transition(input: &ProtocolCoreInput) -> Result<Protoco
         diagnostics: &diagnostics,
     })?;
     let transition_ref = crate::preserves_rail::canonical_hash(&receipt_facts_value)?;
-    Ok(ProtocolCoreTransition {
+    Ok(Transition {
         decision: decision.to_string(),
         before_state_ref: input.state.state_ref.clone(),
         after_state_ref,
@@ -195,11 +195,11 @@ pub fn drain_shell_outputs_after_gates(input: &ShellDrainInput) -> Result<ShellD
 }
 
 // r[impl molten.runtime_patterns.sans_io_replay_binding]
-pub fn sans_io_replay_fixture_value(
-    input: &ProtocolCoreInput,
-    transition: &ProtocolCoreTransition,
+pub fn replay_fixture_value(
+    input: &Input,
+    transition: &Transition,
     shell_decision: &ShellDrainDecision,
-) -> Result<IoValue> {
+) -> Result<Value> {
     Ok(record("sans-io-replay-fixture-v1", vec![
         string(SANS_IO_REPLAY_SCHEMA),
         field_string("protocol", &input.state.protocol_id),
@@ -214,7 +214,7 @@ pub fn sans_io_replay_fixture_value(
     ]))
 }
 
-fn validate_input(input: &ProtocolCoreInput) -> Result<()> {
+fn validate_input(input: &Input) -> Result<()> {
     validate_text("protocol id", &input.state.protocol_id)?;
     validate_phase(&input.state.phase)?;
     validate_ref(&input.state.state_ref, "protocol state ref")?;
@@ -229,7 +229,7 @@ fn validate_input(input: &ProtocolCoreInput) -> Result<()> {
     validate_refs(&input.facts.effect_response_refs, "protocol effect response ref")
 }
 
-fn transition_diagnostics(input: &ProtocolCoreInput) -> Vec<String> {
+fn transition_diagnostics(input: &Input) -> Vec<String> {
     let mut diagnostics = Vec::new();
     if input.event.malformed {
         diagnostics.push("malformed-protocol-message".to_string());
@@ -255,7 +255,7 @@ fn transition_diagnostics(input: &ProtocolCoreInput) -> Vec<String> {
     diagnostics
 }
 
-fn state_delta_ref(input: &ProtocolCoreInput) -> Result<String> {
+fn state_delta_ref(input: &Input) -> Result<String> {
     let next_phase = match input.event.event_kind.as_str() {
         EVENT_OPEN | EVENT_MESSAGE => PHASE_ACTIVE,
         EVENT_CLOSE => PHASE_CLOSED,
@@ -281,7 +281,7 @@ fn output_ref(kind: &str, message_ref: &str) -> Result<String> {
 
 struct TransitionFactsValueInput<'a> {
     decision: &'a str,
-    input: &'a ProtocolCoreInput,
+    input: &'a Input,
     after_state_ref: &'a str,
     state_delta_ref: Option<&'a str>,
     outbound_envelope_refs: &'a [String],

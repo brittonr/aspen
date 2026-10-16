@@ -1,0 +1,16 @@
+{
+  "attempt": "8/20",
+  "change": "support-active-delta-traceability-before-sync",
+  "previous_checkpoint": "evidence/cairn-source-remediation-2026-10-15/attempts-6-7-checkpoint.json",
+  "authorization": {
+    "lifecycle": "User selected Restructure the lifecycle checklist; retain actual matching-plan native sync/archive and receipts as mandatory post-checklist completion actions.",
+    "provider": "User selected Authorize Octet publication and pinning; scope is only the reviewed provider cohort and coordinated immutable Molten adoption.",
+    "molten_remote_push": false,
+    "attempt_cap": 20
+  },
+  "status": "entered; implementation and acceptance pending",
+  "prior_evidence_preserved": true,
+  "non_claims": [
+    "Starting a cycle does not establish acceptance, lifecycle completion, publication, or integration."
+  ]
+}

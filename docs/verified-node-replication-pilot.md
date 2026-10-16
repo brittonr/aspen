@@ -13,6 +13,8 @@ The typed source of truth is [`verification/verified-node-replication-pilot/prof
 - bounded probe timeout and saved-log size;
 - trusted-boundary counts, promotion criteria, and non-claims.
 
+The dedicated `verified-node-replication-octet` flake input preserves this exact historical provider and its complete locked dependency closure. Current linting uses the independent `octet-toolchain` input; advancing that cohort does not rebind or relabel the frozen verifier replay. Neither input is a fallback for the other.
+
 Run the reproducible pilot with:
 
 ```bash
@@ -29,7 +31,7 @@ The current decision is `blocked-verifier-internal-error`:
 3. The source contains 33 `#[verus::trusted]` markers, nine external-body markers, and one `assume` site. The trusted set includes the three top-level refinement theorems and public `Dispatch` and `NodeReplicatedT` traits.
 4. No Molten Cargo manifest or lockfile admits the upstream crate.
 
-The refreshed normalized diagnostics, marker inventories, Octet profile bytes, canonical decision payload, and BLAKE3-bound decision are saved under [`cairn/archive/2026-07-11-consume-octet-verus-toolchain/evidence/`](../cairn/archive/2026-07-11-consume-octet-verus-toolchain/evidence/). The original pilot archive remains historical evidence from before central package consumption.
+The refreshed normalized diagnostics, marker inventories, Octet profile bytes, canonical decision payload, and BLAKE3-bound decision are saved under [`.cairn/archive/2026-07-11-consume-octet-verus-toolchain/evidence/`](../.cairn/archive/2026-07-11-consume-octet-verus-toolchain/evidence/). The original pilot archive remains historical evidence from before central package consumption.
 
 ## Promotion gate
 

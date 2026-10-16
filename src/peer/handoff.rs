@@ -7,28 +7,28 @@ const PEER_HANDOFF_VERIFY_SCHEMA: &str = "molten.peer-handoff-verify-receipt.v1"
 const DIAGNOSTICS_PER_BUNDLE_MEMBER: usize = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PeerHandoffMember {
+pub struct PeerMember {
     pub name: String,
     pub member_ref: String,
     pub scope: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PeerHandoffBundle {
+pub struct PeerBundle {
     pub peer_ref: String,
     pub node_ref: String,
     pub topic: String,
     pub scope: String,
     pub expires_at_tick: u64,
-    pub members: Vec<PeerHandoffMember>,
+    pub members: Vec<PeerMember>,
     pub authority_refs: Vec<String>,
     pub policy_refs: Vec<String>,
     pub resource_refs: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PeerHandoffVerifyInput {
-    pub bundle: PeerHandoffBundle,
+pub struct PeerVerifyInput {
+    pub bundle: PeerBundle,
     pub expected_peer_ref: String,
     pub expected_scope: String,
     pub at_tick: u64,
@@ -36,7 +36,7 @@ pub struct PeerHandoffVerifyInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PeerHandoffReceipt {
+pub struct TransferReceipt {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub imported_member_refs: Vec<String>,
@@ -44,7 +44,7 @@ pub struct PeerHandoffReceipt {
     pub receipt_ref: String,
 }
 
-pub fn peer_handoff_bundle_value(bundle: &PeerHandoffBundle) -> IoValue {
+pub fn peer_bundle_value(bundle: &PeerBundle) -> IoValue {
     crate::preserves_rail::record("peer-handoff-bundle-v1", vec![
         string(PEER_HANDOFF_BUNDLE_SCHEMA),
         field("peer-ref", &bundle.peer_ref),
@@ -61,7 +61,7 @@ pub fn peer_handoff_bundle_value(bundle: &PeerHandoffBundle) -> IoValue {
     ])
 }
 
-pub fn verify_peer_handoff(input: &PeerHandoffVerifyInput) -> Result<PeerHandoffReceipt> {
+pub fn verify_peer(input: &PeerVerifyInput) -> Result<TransferReceipt> {
     let mut diagnostics = Vec::new();
     if input.bundle.peer_ref != input.expected_peer_ref {
         diagnostics.push("wrong peer binding".to_string());
@@ -95,7 +95,7 @@ pub fn verify_peer_handoff(input: &PeerHandoffVerifyInput) -> Result<PeerHandoff
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let value = receipt_value(decision, &diagnostics, &imported_member_refs, &input.bundle);
     let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(PeerHandoffReceipt {
+    Ok(TransferReceipt {
         decision: decision.to_string(),
         diagnostics,
         imported_member_refs,
@@ -104,7 +104,7 @@ pub fn verify_peer_handoff(input: &PeerHandoffVerifyInput) -> Result<PeerHandoff
     })
 }
 
-pub fn handoff_as_authority_denial(bundle_ref: &str, operation: &str) -> Result<PeerHandoffReceipt> {
+pub fn as_authority_denial(bundle_ref: &str, operation: &str) -> Result<TransferReceipt> {
     crate::preserves_rail::validate_content_ref(bundle_ref)?;
     let diagnostics = vec![format!(
         "handoff bundle {bundle_ref} is not authority, provenance, source-gate, retention, execution, or resource trust for {operation}"
@@ -117,7 +117,7 @@ pub fn handoff_as_authority_denial(bundle_ref: &str, operation: &str) -> Result<
         field("evidence-only", "handoff-import-does-not-grant-operation-authority"),
     ]);
     let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(PeerHandoffReceipt {
+    Ok(TransferReceipt {
         decision: "deny".to_string(),
         diagnostics,
         imported_member_refs: Vec::new(),
@@ -126,7 +126,7 @@ pub fn handoff_as_authority_denial(bundle_ref: &str, operation: &str) -> Result<
     })
 }
 
-fn receipt_value(decision: &str, diagnostics: &[String], refs: &[String], bundle: &PeerHandoffBundle) -> IoValue {
+fn receipt_value(decision: &str, diagnostics: &[String], refs: &[String], bundle: &PeerBundle) -> IoValue {
     crate::preserves_rail::record("peer-handoff-verify-receipt-v1", vec![
         string(PEER_HANDOFF_VERIFY_SCHEMA),
         field("decision", decision),
@@ -138,7 +138,7 @@ fn receipt_value(decision: &str, diagnostics: &[String], refs: &[String], bundle
     ])
 }
 
-fn members_field(members: &[PeerHandoffMember]) -> IoValue {
+fn members_field(members: &[PeerMember]) -> IoValue {
     crate::preserves_rail::record("members", vec![crate::preserves_rail::sequence(
         members
             .iter()
@@ -173,18 +173,18 @@ mod tests {
     const STALE_TICK: u64 = 6;
 
     #[test]
-    fn handoff_verifies_expected_members() {
+    fn verifies_expected_members() {
         let input = verify_input(bundle(vec![member("ticket"), member("authority")]), CURRENT_TICK);
-        let receipt = verify_peer_handoff(&input).expect("verify handoff");
+        let receipt = verify_peer(&input).expect("verify handoff");
         assert_eq!(receipt.decision, "pass");
         assert_eq!(receipt.imported_member_refs.len(), input.required_member_names.len());
     }
 
     #[test]
-    fn handoff_denies_missing_duplicate_stale_and_wrong_scope() {
+    fn denies_missing_duplicate_stale_and_wrong_scope() {
         let mut bundle = bundle(vec![member("ticket"), member("ticket")]);
         bundle.members[0].scope = "wrong".to_string();
-        let receipt = verify_peer_handoff(&verify_input(bundle, STALE_TICK)).expect("verify handoff");
+        let receipt = verify_peer(&verify_input(bundle, STALE_TICK)).expect("verify handoff");
         assert_eq!(receipt.decision, "deny");
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("duplicate")));
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("stale")));
@@ -193,14 +193,14 @@ mod tests {
     }
 
     #[test]
-    fn handoff_bundle_is_not_authority() {
-        let receipt = handoff_as_authority_denial(&test_ref("bundle"), "retention-delete").expect("denial");
+    fn bundle_is_not_authority() {
+        let receipt = as_authority_denial(&test_ref("bundle"), "retention-delete").expect("denial");
         assert_eq!(receipt.decision, "deny");
         assert!(receipt.diagnostics[0].contains("not authority"));
     }
 
-    fn verify_input(bundle: PeerHandoffBundle, at_tick: u64) -> PeerHandoffVerifyInput {
-        PeerHandoffVerifyInput {
+    fn verify_input(bundle: PeerBundle, at_tick: u64) -> PeerVerifyInput {
+        PeerVerifyInput {
             bundle,
             expected_peer_ref: test_ref("peer"),
             expected_scope: "node-control".to_string(),
@@ -209,8 +209,8 @@ mod tests {
         }
     }
 
-    fn bundle(members: Vec<PeerHandoffMember>) -> PeerHandoffBundle {
-        PeerHandoffBundle {
+    fn bundle(members: Vec<PeerMember>) -> PeerBundle {
+        PeerBundle {
             peer_ref: test_ref("peer"),
             node_ref: test_ref("node"),
             topic: "node-control".to_string(),
@@ -223,8 +223,8 @@ mod tests {
         }
     }
 
-    fn member(name: &str) -> PeerHandoffMember {
-        PeerHandoffMember {
+    fn member(name: &str) -> PeerMember {
+        PeerMember {
             name: name.to_string(),
             member_ref: test_ref(name),
             scope: "node-control".to_string(),

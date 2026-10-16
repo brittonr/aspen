@@ -1,7 +1,7 @@
 type ActorDecl = super::schema::ActorDecl;
 type ActorExecutorConfig = super::schema::ActorExecutorConfig;
 type ActorKind = super::schema::ActorKind;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

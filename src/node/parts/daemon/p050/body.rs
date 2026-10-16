@@ -1,6 +1,6 @@
 
 pub fn control_live_workflow_receipt(input: &ControlLiveWorkflowInput<'_>) -> Result<ControlLiveWorkflowReceipt> {
-    let state_root = input.state_root.map(crate::node_state::NodeStateRoot::open).transpose()?;
+    let state_root = input.state_root.map(crate::node_state::DirectoryRoot::open).transpose()?;
     if let Some(path) = input.state_root {
         validate_state_root(path)?;
     }

@@ -23,7 +23,7 @@ fn copy_incoming(input: IncomingInput<'_>) -> Result<Vec<String>> {
                     ("deny-corrupt-chunk-blob", "pass"),
                 ],
             );
-            store_receipt(input.dest_root, &receipt_value)?;
+            receipt(input.dest_root, &receipt_value)?;
             return Err(error);
         }
         input.dest_root.root().write(&chunk_path(&part.chunk_ref)?, &bytes)?;

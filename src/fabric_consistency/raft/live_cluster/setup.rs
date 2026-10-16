@@ -12,45 +12,45 @@ enum NodeStartupMode {
 }
 
 pub(in crate::fabric_consistency::raft) async fn build_node(
-    group: &crate::fabric_consistency::ConsistencyGroupBinding,
+    group: &crate::fabric_consistency::Group,
     node_id: &str,
-    listener: crate::fabric_transport::IrohCrossProcessListener,
-    endpoints: &std::collections::BTreeMap<String, crate::fabric_transport::CanonicalCrossProcessEndpoint>,
-) -> crate::error::Result<LiveNode> {
+    listener: crate::fabric_transport::Listener,
+    endpoints: &std::collections::BTreeMap<String, crate::fabric_transport::Endpoint>,
+) -> crate::error::Result<Node> {
     let root = crate::test_support::process_workspace(&format!("live-cluster-{node_id}"))?;
     let root_owner = root.clone();
     build_node_with_root(group, node_id, listener, endpoints, &root, Some(root_owner), NodeStartupMode::Fresh).await
 }
 
 pub(in crate::fabric_consistency::raft) async fn build_node_at_root(
-    group: &crate::fabric_consistency::ConsistencyGroupBinding,
+    group: &crate::fabric_consistency::Group,
     node_id: &str,
-    listener: crate::fabric_transport::IrohCrossProcessListener,
-    endpoints: &std::collections::BTreeMap<String, crate::fabric_transport::CanonicalCrossProcessEndpoint>,
+    listener: crate::fabric_transport::Listener,
+    endpoints: &std::collections::BTreeMap<String, crate::fabric_transport::Endpoint>,
     durability_root: &std::path::Path,
-) -> crate::error::Result<LiveNode> {
+) -> crate::error::Result<Node> {
     build_node_with_root(group, node_id, listener, endpoints, durability_root, None, NodeStartupMode::Fresh).await
 }
 
 pub(in crate::fabric_consistency::raft) async fn recover_node_at_root(
-    group: &crate::fabric_consistency::ConsistencyGroupBinding,
+    group: &crate::fabric_consistency::Group,
     node_id: &str,
-    listener: crate::fabric_transport::IrohCrossProcessListener,
-    endpoints: &std::collections::BTreeMap<String, crate::fabric_transport::CanonicalCrossProcessEndpoint>,
+    listener: crate::fabric_transport::Listener,
+    endpoints: &std::collections::BTreeMap<String, crate::fabric_transport::Endpoint>,
     durability_root: &std::path::Path,
-) -> crate::error::Result<LiveNode> {
+) -> crate::error::Result<Node> {
     build_node_with_root(group, node_id, listener, endpoints, durability_root, None, NodeStartupMode::Recover).await
 }
 
 async fn build_node_with_root(
-    group: &crate::fabric_consistency::ConsistencyGroupBinding,
+    group: &crate::fabric_consistency::Group,
     node_id: &str,
-    listener: crate::fabric_transport::IrohCrossProcessListener,
-    endpoints: &std::collections::BTreeMap<String, crate::fabric_transport::CanonicalCrossProcessEndpoint>,
+    listener: crate::fabric_transport::Listener,
+    endpoints: &std::collections::BTreeMap<String, crate::fabric_transport::Endpoint>,
     durability_root: &std::path::Path,
     workspace: Option<crate::test_support::ProcessWorkspace>,
     startup_mode: NodeStartupMode,
-) -> crate::error::Result<LiveNode> {
+) -> crate::error::Result<Node> {
     let protocol_ref = super::super::tests::test_ref("live-cluster-protocol");
     let timer = crate::fabric_time::tests::live_profile().profile;
     let timer_profile_ref = timer.profile_ref.clone();
@@ -92,9 +92,9 @@ async fn build_node_with_root(
         application,
         control,
     };
-    let ports = assemble_scoped_concrete_replica_ports(identity, adapters)?;
-    let service = ScopedLiveReplicaService::start(plan, ports, inbox).await?;
-    Ok(LiveNode {
+    let ports = assemble_scoped_concrete_replica(identity, adapters)?;
+    let service = ScopedLiveReplica::start(plan, ports, inbox).await?;
+    Ok(Node {
         service,
         listener: Some(listener),
         session_ref,
@@ -122,7 +122,7 @@ fn bind_state_profile(
 }
 
 fn runtime_identity(
-    group: &crate::fabric_consistency::ConsistencyGroupBinding,
+    group: &crate::fabric_consistency::Group,
     state: &ReplicaState,
     fabric_binding_refs: Vec<String>,
 ) -> ReplicaRuntimePortIdentity {
@@ -146,7 +146,7 @@ fn runtime_identity(
 }
 
 fn start_plan(
-    group: &crate::fabric_consistency::ConsistencyGroupBinding,
+    group: &crate::fabric_consistency::Group,
     state: ReplicaState,
     port_binding_refs: Vec<String>,
 ) -> ReplicaStartPlan {
@@ -169,9 +169,9 @@ fn start_plan(
 
 fn transport_for(
     node_id: &str,
-    endpoints: &std::collections::BTreeMap<String, crate::fabric_transport::CanonicalCrossProcessEndpoint>,
+    endpoints: &std::collections::BTreeMap<String, crate::fabric_transport::Endpoint>,
     protocol_ref: String,
-) -> crate::error::Result<(IrohReplicaTransportPort, String)> {
+) -> crate::error::Result<(ReplicaTransportPort, String)> {
     let peers = endpoints
         .iter()
         .filter(|(peer_id, _endpoint)| peer_id.as_str() != node_id)
@@ -183,8 +183,8 @@ fn transport_for(
         .values()
         .next()
         .map(|input| input.session_ref.clone())
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("live test node has no peers"))?;
-    Ok((IrohReplicaTransportPort::new(protocol_ref, peers, live_timeout())?, session_ref))
+        .ok_or_else(|| crate::error::Failure::invalid_harness("live test node has no peers"))?;
+    Ok((ReplicaTransportPort::new(protocol_ref, peers, timeout())?, session_ref))
 }
 
 fn durability_for_root(
@@ -192,7 +192,7 @@ fn durability_for_root(
     durable_log_ref: String,
     snapshot_store_ref: String,
     root: &std::path::Path,
-) -> crate::error::Result<RedbReplicaDurabilityPort> {
+) -> crate::error::Result<RedbReplicaPort> {
     let mut namespace = crate::fabric_durability::tests::descriptor();
     namespace.adapter_id = format!("live-cluster-{node_id}-adapter");
     namespace.namespace_id = format!("live-cluster-{node_id}-namespace");
@@ -203,16 +203,16 @@ fn durability_for_root(
         crate::fabric_durability::tests::profile(crate::fabric_durability::DurableAdapterKind::LiveRedb),
         namespace,
     )?;
-    RedbReplicaDurabilityPort::new(adapter, durable_log_ref, snapshot_store_ref)
+    RedbReplicaPort::new(adapter, durable_log_ref, snapshot_store_ref)
 }
 
 fn time_for(
-    group: &crate::fabric_consistency::ConsistencyGroupBinding,
+    group: &crate::fabric_consistency::Group,
     node_id: &str,
     time_profile: crate::fabric_time::AdmittedTimeProfile,
     entropy_binding_ref: String,
 ) -> crate::error::Result<(
-    TokioReplicaTimePort<crate::fabric_time::OperatingSystemEntropySource>,
+    TokioReplicaPort<crate::fabric_time::OperatingSystemEntropySource>,
     tokio::sync::mpsc::Receiver<ReplicaEvent>,
 )> {
     // The replica inbox is the time profile's scheduler queue: its admitted depth bounds undrained
@@ -222,10 +222,10 @@ fn time_for(
         .ok()
         .filter(|capacity| *capacity > 0)
         .ok_or_else(|| {
-            crate::error::MoltenError::invalid_harness("live Raft inbox needs a positive admitted queue depth")
+            crate::error::Failure::invalid_harness("live Raft inbox needs a positive admitted queue depth")
         })?;
     let (sender, receiver) = tokio::sync::mpsc::channel(capacity);
-    let config = TokioReplicaTimeConfig {
+    let config = TokioReplicaConfig {
         profile: time_profile,
         generation: group.service_generation,
         service_id: format!("{}-{node_id}", group.service_id),
@@ -236,14 +236,14 @@ fn time_for(
         election_min_ticks: LIVE_ELECTION_MIN_TICKS,
         election_max_ticks: LIVE_ELECTION_MAX_TICKS,
     };
-    Ok((TokioReplicaTimePort::new_operating_system(config, sender)?, receiver))
+    Ok((TokioReplicaPort::new_operating_system(config, sender)?, receiver))
 }
 
 fn application_for(
-    group: &crate::fabric_consistency::ConsistencyGroupBinding,
-) -> crate::error::Result<AdmittedReplicaApplicationPort<LiveApplicationHandler>> {
-    AdmittedReplicaApplicationPort::new(
-        ReplicaApplicationConfig {
+    group: &crate::fabric_consistency::Group,
+) -> crate::error::Result<AdmittedReplicaPort<ApplicationHandler>> {
+    AdmittedReplicaPort::new(
+        ServiceReplicaConfig {
             group_binding_ref: group.binding_ref.clone(),
             application_manifest_ref: group.application_manifest_ref.clone(),
             handler_ref: super::super::tests::test_ref("live-cluster-application-handler"),
@@ -252,17 +252,17 @@ fn application_for(
             )]),
             initial_applied_index: INITIAL_COMMIT_INDEX,
         },
-        LiveApplicationHandler::default(),
+        ApplicationHandler::default(),
     )
 }
 
 fn control_for(
-    group: &crate::fabric_consistency::ConsistencyGroupBinding,
+    group: &crate::fabric_consistency::Group,
     supervision_ref: String,
-) -> crate::error::Result<(ChannelReplicaControlPort, tokio::sync::mpsc::Receiver<ReplicaControlObservation>)> {
+) -> crate::error::Result<(ChannelReplicaPort, tokio::sync::mpsc::Receiver<ReplicaObservation>)> {
     let (sender, receiver) = tokio::sync::mpsc::channel(LIVE_CONTROL_OBSERVATION_CAPACITY);
-    let port = ChannelReplicaControlPort::new(
-        ReplicaControlConfig {
+    let port = ChannelReplicaPort::new(
+        ReplicaConfig {
             service_id: group.service_id.clone(),
             service_generation: group.service_generation,
             supervision_ref,
@@ -272,8 +272,8 @@ fn control_for(
     Ok((port, receiver))
 }
 
-pub(in crate::fabric_consistency::raft) async fn close_node(node: LiveNode) {
-    let LiveNode {
+pub(in crate::fabric_consistency::raft) async fn close_node(node: Node) {
+    let Node {
         service,
         listener,
         session_ref: _,

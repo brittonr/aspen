@@ -1,7 +1,4 @@
-pub(super) fn binding_value(
-    input: &super::ConsistencyGroupBindingInput,
-    lifecycle: super::ConsistencyGroupLifecycle,
-) -> preserves::IOValue {
+pub(super) fn binding_value(input: &super::GroupInput, lifecycle: super::GroupLifecycle) -> preserves::IOValue {
     record("fabric-consistency-group-binding-v1", vec![
         field("schema", string(super::CONSISTENCY_GROUP_BINDING_SCHEMA)),
         field("group-id", string(&input.group_id)),
@@ -30,11 +27,11 @@ pub(super) fn binding_value(
 }
 
 pub(super) struct PlanValueInput<'a> {
-    pub binding: &'a super::ConsistencyGroupBinding,
-    pub command: &'a super::ConsistencyPortCommandInput,
-    pub decision: super::ConsistencyPlanDecision,
-    pub lifecycle_before: super::ConsistencyGroupLifecycle,
-    pub lifecycle_after: super::ConsistencyGroupLifecycle,
+    pub binding: &'a super::Group,
+    pub command: &'a super::PortCommandInput,
+    pub decision: super::PlanDecision,
+    pub lifecycle_before: super::GroupLifecycle,
+    pub lifecycle_after: super::GroupLifecycle,
     pub diagnostics: &'a [String],
 }
 
@@ -72,9 +69,9 @@ pub(super) fn plan_value(input: PlanValueInput<'_>) -> preserves::IOValue {
 
 pub(super) fn outcome_value(
     plan_ref: &str,
-    binding: &super::ConsistencyGroupBinding,
-    input: &super::ConsistencyOutcomeInput,
-    outcome_kind: super::ConsistencyOutcomeKind,
+    binding: &super::Group,
+    input: &super::Input,
+    outcome_kind: super::Kind,
 ) -> preserves::IOValue {
     record("fabric-consistency-operation-outcome-v1", vec![
         field("schema", string(super::CONSISTENCY_PORT_OUTCOME_SCHEMA)),
@@ -93,10 +90,10 @@ pub(super) fn outcome_value(
     ])
 }
 
-fn operation_value(operation: &super::ConsistencyOperation) -> preserves::IOValue {
+fn operation_value(operation: &super::Request) -> preserves::IOValue {
     match operation {
-        super::ConsistencyOperation::Open { mode } => record("open", vec![field("mode", string(mode.as_str()))]),
-        super::ConsistencyOperation::Propose {
+        super::Request::Open { mode } => record("open", vec![field("mode", string(mode.as_str()))]),
+        super::Request::Propose {
             command_ref,
             command_schema_ref,
             estimated_command_bytes,
@@ -105,25 +102,25 @@ fn operation_value(operation: &super::ConsistencyOperation) -> preserves::IOValu
             field("command-schema-ref", string(command_schema_ref)),
             field("estimated-command-bytes", u64_value(*estimated_command_bytes)),
         ]),
-        super::ConsistencyOperation::Read { query_ref, mode } => record("read", vec![
+        super::Request::Read { query_ref, mode } => record("read", vec![
             field("query-ref", string(query_ref)),
             field("mode", string(mode.as_str())),
         ]),
-        super::ConsistencyOperation::Snapshot { snapshot_policy_ref } => {
+        super::Request::Snapshot { snapshot_policy_ref } => {
             record("snapshot", vec![field("snapshot-policy-ref", string(snapshot_policy_ref))])
         }
-        super::ConsistencyOperation::Recover {
+        super::Request::Recover {
             snapshot_ref,
             durable_boundary_ref,
         } => record("recover", vec![
             field("snapshot-ref", string(snapshot_ref)),
             field("durable-boundary-ref", string(durable_boundary_ref)),
         ]),
-        super::ConsistencyOperation::Configure { transition } => configuration_value(transition),
-        super::ConsistencyOperation::Health => record("health", Vec::new()),
-        super::ConsistencyOperation::Drain => record("drain", Vec::new()),
-        super::ConsistencyOperation::Status => record("status", Vec::new()),
-        super::ConsistencyOperation::Remove => record("remove", Vec::new()),
+        super::Request::Configure { transition } => configuration_value(transition),
+        super::Request::Health => record("health", Vec::new()),
+        super::Request::Drain => record("drain", Vec::new()),
+        super::Request::Status => record("status", Vec::new()),
+        super::Request::Remove => record("remove", Vec::new()),
     }
 }
 

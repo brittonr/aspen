@@ -26,7 +26,7 @@ const _: () = assert!(MAX_CLUSTER_LIFECYCLE_ITEMS > 0);
 const MAX_CLUSTER_MANIFEST_NODES: usize = MAX_CLUSTER_LIFECYCLE_ITEMS;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClusterNodePlan {
+pub struct NodePlan {
     pub requested_node: String,
     pub node_id: String,
     pub path_component: String,
@@ -34,36 +34,36 @@ pub struct ClusterNodePlan {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClusterPlan {
+pub struct Plan {
     pub state_root: std::path::PathBuf,
-    pub nodes: Vec<ClusterNodePlan>,
+    pub nodes: Vec<NodePlan>,
 }
 
-pub fn cluster_manifest_path(state_root: &std::path::Path) -> std::path::PathBuf {
+pub fn manifest_path(state_root: &std::path::Path) -> std::path::PathBuf {
     state_root.join(CLUSTER_MANIFEST_FILE)
 }
 
-pub fn plan_cluster(state_root: &std::path::Path, node_names: &[String]) -> crate::error::Result<ClusterPlan> {
-    validate_cluster_state_root(state_root)?;
+pub fn plan(state_root: &std::path::Path, node_names: &[String]) -> crate::error::Result<Plan> {
+    validate_state_root(state_root)?;
     if node_names.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness("cluster requires at least one --node"));
+        return Err(crate::error::Failure::invalid_harness("cluster requires at least one --node"));
     }
     let mut seen_node_ids = std::collections::BTreeSet::new();
     let mut nodes = Vec::with_capacity(node_names.len());
     for node_name in node_names {
         let node = plan_node(state_root, node_name)?;
         if !seen_node_ids.insert(node.node_id.clone()) {
-            return Err(crate::error::MoltenError::invalid_harness(format!("duplicate cluster node {}", node.node_id)));
+            return Err(crate::error::Failure::invalid_harness(format!("duplicate cluster node {}", node.node_id)));
         }
         nodes.push(node);
     }
-    Ok(ClusterPlan {
+    Ok(Plan {
         state_root: state_root.to_path_buf(),
         nodes,
     })
 }
 
-pub fn render_cluster_manifest(plan: &ClusterPlan) -> String {
+pub fn render_manifest(plan: &Plan) -> String {
     let mut rendered = String::from(CLUSTER_MANIFEST_HEADER);
     rendered.push('\n');
     for node in &plan.nodes {
@@ -73,18 +73,18 @@ pub fn render_cluster_manifest(plan: &ClusterPlan) -> String {
     rendered
 }
 
-pub fn parse_cluster_manifest(source: &str) -> crate::error::Result<Vec<String>> {
+pub fn parse_manifest(source: &str) -> crate::error::Result<Vec<String>> {
     let mut lines = source.lines();
     let header = lines
         .next()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("cluster manifest is empty"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("cluster manifest is empty"))?;
     if header != CLUSTER_MANIFEST_HEADER {
-        return Err(crate::error::MoltenError::invalid_harness("cluster manifest has unsupported header"));
+        return Err(crate::error::Failure::invalid_harness("cluster manifest has unsupported header"));
     }
     let mut nodes = Vec::new();
     for line in lines {
         if !line.is_empty() {
-            crate::bounded::push_bounded(
+            crate::bounded::push(
                 &mut nodes,
                 line.to_string(),
                 MAX_CLUSTER_MANIFEST_NODES,
@@ -93,33 +93,33 @@ pub fn parse_cluster_manifest(source: &str) -> crate::error::Result<Vec<String>>
         }
     }
     if nodes.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness("cluster manifest has no nodes"));
+        return Err(crate::error::Failure::invalid_harness("cluster manifest has no nodes"));
     }
     Ok(nodes)
 }
 
-fn validate_cluster_state_root(state_root: &std::path::Path) -> crate::error::Result<()> {
+fn validate_state_root(state_root: &std::path::Path) -> crate::error::Result<()> {
     if state_root.as_os_str().is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness("cluster requires explicit state root"));
+        return Err(crate::error::Failure::invalid_harness("cluster requires explicit state root"));
     }
     if state_root == std::path::Path::new(CURRENT_DIR_COMPONENT)
         || state_root == std::path::Path::new(PARENT_DIR_COMPONENT)
     {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "cluster state root must not be ambient current or parent directory",
         ));
     }
     Ok(())
 }
 
-fn plan_node(state_root: &std::path::Path, requested_node: &str) -> crate::error::Result<ClusterNodePlan> {
+fn plan_node(state_root: &std::path::Path, requested_node: &str) -> crate::error::Result<NodePlan> {
     let path_component = node_path_component(requested_node)?;
     let node_id = if requested_node.starts_with(NODE_ID_PREFIX) {
         requested_node.to_string()
     } else {
         format!("{NODE_ID_PREFIX}{requested_node}")
     };
-    Ok(ClusterNodePlan {
+    Ok(NodePlan {
         requested_node: requested_node.to_string(),
         node_id,
         state_root: state_root.join(&path_component),
@@ -129,22 +129,22 @@ fn plan_node(state_root: &std::path::Path, requested_node: &str) -> crate::error
 
 fn node_path_component(requested_node: &str) -> crate::error::Result<String> {
     if requested_node.is_empty() || requested_node.trim() != requested_node {
-        return Err(crate::error::MoltenError::invalid_harness("cluster node name must be non-empty and unpadded"));
+        return Err(crate::error::Failure::invalid_harness("cluster node name must be non-empty and unpadded"));
     }
     let component = requested_node.strip_prefix(NODE_ID_PREFIX).unwrap_or(requested_node);
     if component.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness("cluster node path component must be non-empty"));
+        return Err(crate::error::Failure::invalid_harness("cluster node path component must be non-empty"));
     }
     if component == CURRENT_DIR_COMPONENT || component == PARENT_DIR_COMPONENT {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "cluster node path component must not be relative syntax",
         ));
     }
     if component.contains(NODE_ID_SEPARATOR) {
-        return Err(crate::error::MoltenError::invalid_harness("cluster node path component must not contain ':'"));
+        return Err(crate::error::Failure::invalid_harness("cluster node path component must not contain ':'"));
     }
     if !component.chars().all(is_safe_node_path_character) {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "cluster node path component must contain only ASCII letters, digits, '-' or '_'",
         ));
     }
@@ -156,14 +156,14 @@ fn is_safe_node_path_character(character: char) -> bool {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClusterLifecyclePhaseObservation {
+pub struct LifecyclePhaseObservation {
     pub phase: String,
     pub decision: String,
     pub receipt_refs: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClusterLifecycleNodeSummary {
+pub struct LifecycleNodeSummary {
     pub node_id: String,
     pub manifest_ref: String,
     pub config_ref: String,
@@ -179,12 +179,12 @@ pub struct ClusterLifecycleNodeSummary {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClusterLifecycleRunInput {
+pub struct LifecycleRunInput {
     pub workflow_id: String,
     pub manifest_ref: String,
     pub ordered_node_ids: Vec<String>,
-    pub phases: Vec<ClusterLifecyclePhaseObservation>,
-    pub node_summaries: Vec<ClusterLifecycleNodeSummary>,
+    pub phases: Vec<LifecyclePhaseObservation>,
+    pub node_summaries: Vec<LifecycleNodeSummary>,
     pub already_running_refs: Vec<String>,
     pub stop_order: Vec<String>,
     pub diagnostics: Vec<String>,
@@ -192,7 +192,7 @@ pub struct ClusterLifecycleRunInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClusterLifecycleRunReceipt {
+pub struct LifecycleRunReceipt {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub receipt_ref: String,
@@ -201,16 +201,16 @@ pub struct ClusterLifecycleRunReceipt {
 
 // r[impl molten.testing.cluster_lifecycle_receipt.run_receipt]
 // r[impl molten.testing.cluster_lifecycle_receipt.fail_closed_validation]
-pub fn build_cluster_lifecycle_run_receipt(
-    input: &ClusterLifecycleRunInput,
-) -> crate::error::Result<ClusterLifecycleRunReceipt> {
-    let mut diagnostics = cluster_lifecycle_run_diagnostics(input)?;
+pub fn build_lifecycle_run_receipt(
+    input: &LifecycleRunInput,
+) -> crate::error::Result<LifecycleRunReceipt> {
+    let mut diagnostics = lifecycle_run_diagnostics(input)?;
     diagnostics.sort();
     diagnostics.dedup();
-    let decision = cluster_lifecycle_decision(&diagnostics).to_string();
-    let value = cluster_lifecycle_run_value(input, &decision, &diagnostics)?;
+    let decision = lifecycle_decision(&diagnostics).to_string();
+    let value = lifecycle_run_value(input, &decision, &diagnostics)?;
     let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(ClusterLifecycleRunReceipt {
+    Ok(LifecycleRunReceipt {
         decision,
         diagnostics,
         receipt_ref,
@@ -220,8 +220,8 @@ pub fn build_cluster_lifecycle_run_receipt(
 
 // r[impl molten.testing.cluster_lifecycle_summary_drift.receipt_summary]
 // r[impl molten.testing.cluster_lifecycle_summary_drift.negatives]
-pub fn cluster_lifecycle_drift_summary(
-    input: &ClusterLifecycleRunInput,
+pub fn lifecycle_drift_summary(
+    input: &LifecycleRunInput,
 ) -> crate::error::Result<crate::drift_core::EvidenceSummary> {
     let mut fields = Vec::new();
     push_lifecycle_summary_field(&mut fields, "workflow-id", &input.workflow_id, false)?;

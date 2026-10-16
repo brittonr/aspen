@@ -1,18 +1,18 @@
 
-impl ExtensionMembershipPlacementContext {
+impl ExtensionPlacementContext {
     pub fn from_host<E: SystemExtensionExecutor>(
-        host: &crate::system_extension::SystemExtensionHost<E>,
-        profile: &CanonicalMembershipProfile,
+        host: &crate::system_extension::Dispatcher<E>,
+        profile: &Profile,
     ) -> crate::error::Result<Self> {
         let mut bound_ports = Vec::with_capacity(MEMBERSHIP_PORT_COUNT);
-        for port_id in membership_port_ids() {
+        for port_id in port_ids() {
             let key = crate::fabric::FabricPortKey {
                 port_id: port_id.to_string(),
                 version: FABRIC_MEMBERSHIP_PORT_VERSION.to_string(),
             };
             if let Some(binding) = host.manifest().binding_for(&key) {
                 if binding.binding.implementation_profile != profile.profile.profile_id {
-                    return Err(crate::error::MoltenError::invalid_harness(format!(
+                    return Err(crate::error::Failure::invalid_harness(format!(
                         "system-extension membership profile {} does not match {}",
                         binding.binding.implementation_profile, profile.profile.profile_id
                     )));
@@ -21,7 +21,7 @@ impl ExtensionMembershipPlacementContext {
             }
         }
         if bound_ports.is_empty() {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "system extension has no admitted membership or placement fabric port binding",
             ));
         }
@@ -38,7 +38,7 @@ impl ExtensionMembershipPlacementContext {
     pub(crate) fn from_test_snapshot(
         service_id: &str,
         generation: u64,
-        profile: &CanonicalMembershipProfile,
+        profile: &Profile,
         bound_ports: Vec<String>,
     ) -> Self {
         Self {
@@ -52,14 +52,14 @@ impl ExtensionMembershipPlacementContext {
 
     pub fn admit_plan(
         &self,
-        profile: &CanonicalMembershipProfile,
-        view: &CanonicalMembershipView,
+        profile: &Profile,
+        view: &View,
         service_id: &str,
         generation: u64,
     ) -> crate::error::Result<()> {
         self.admit_scope(profile, FABRIC_PLACEMENT_PORT_ID, service_id, generation)?;
         if view.admitted.profile.profile_ref != self.source_profile_ref {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "placement view uses a substituted membership source profile",
             ));
         }
@@ -68,7 +68,7 @@ impl ExtensionMembershipPlacementContext {
 
     pub fn admit_assignment(
         &self,
-        profile: &CanonicalMembershipProfile,
+        profile: &Profile,
         assignment: &RoleAssignment,
     ) -> crate::error::Result<()> {
         self.admit_scope(profile, FABRIC_ASSIGNMENT_PORT_ID, &assignment.service_id, assignment.service_generation)?;
@@ -81,24 +81,24 @@ impl ExtensionMembershipPlacementContext {
 
     fn admit_scope(
         &self,
-        profile: &CanonicalMembershipProfile,
+        profile: &Profile,
         port_id: &str,
         service_id: &str,
         generation: u64,
     ) -> crate::error::Result<()> {
         if self.profile_id != profile.profile.profile_id {
-            return Err(crate::error::MoltenError::invalid_harness("membership profile substitution denied"));
+            return Err(crate::error::Failure::invalid_harness("membership profile substitution denied"));
         }
         if !self.bound_ports.iter().any(|bound| bound == port_id) {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "membership or placement port {port_id} is not bound to the system extension"
             )));
         }
         if self.service_id != service_id {
-            return Err(crate::error::MoltenError::invalid_harness("membership service identity mismatch"));
+            return Err(crate::error::Failure::invalid_harness("membership service identity mismatch"));
         }
         if self.generation != generation {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "membership or placement operation uses a stale service generation",
             ));
         }
@@ -107,8 +107,8 @@ impl ExtensionMembershipPlacementContext {
 }
 
 // r[impl molten.fabric_membership.live_sim_parity]
-pub fn fabric_membership_port_descriptors(
-    profile: &CanonicalMembershipProfile,
+pub fn port_descriptors(
+    profile: &Profile,
 ) -> Vec<crate::fabric::FabricPortDescriptor> {
     let (provider_determinism, provider_replay) = provider_replay_classes(profile.profile.provider_kind);
     let definitions = membership_port_definitions(provider_determinism, provider_replay);
@@ -234,7 +234,7 @@ fn membership_port_definitions(
     ]
 }
 
-fn membership_port_ids() -> [&'static str; MEMBERSHIP_PORT_COUNT] {
+fn port_ids() -> [&'static str; MEMBERSHIP_PORT_COUNT] {
     [
         FABRIC_MEMBERSHIP_PORT_ID,
         FABRIC_FAILURE_OBSERVATION_PORT_ID,

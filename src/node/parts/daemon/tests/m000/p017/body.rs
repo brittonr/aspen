@@ -41,7 +41,7 @@
             max_requests: 1,
         })
         .expect("dispatch request");
-        let state_root = crate::node_state::NodeStateRoot::open(&seed.root).expect("open node state root");
+        let state_root = crate::node_state::DirectoryRoot::open(&seed.root).expect("open node state root");
         let queue_value = read_preserves(
             &state_root,
             &queue_receipt_path(&delivered.request_ref).expect("queue receipt path"),

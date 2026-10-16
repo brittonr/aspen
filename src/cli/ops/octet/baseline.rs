@@ -77,7 +77,7 @@ pub(super) fn run(command: Command) -> molten::error::Result<()> {
                 })?;
             super::io::emit_named_receipt(receipt_out.as_ref(), "octet baseline receipt", &evaluation.receipt_value)?;
             if evaluation.decision != "pass" {
-                return Err(molten::error::MoltenError::invalid_harness(format!(
+                return Err(molten::error::Failure::invalid_harness(format!(
                     "octet baseline denied receipt={} artifacts={}",
                     evaluation.receipt_ref,
                     artifacts.display()

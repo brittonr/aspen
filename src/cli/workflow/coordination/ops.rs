@@ -105,7 +105,7 @@ fn request(command: Command) -> Outcome<()> {
 
 fn run_fixture(out: FilePath) -> Outcome<()> {
     let run = molten::coordination::run_coordination_fixture()?;
-    std::fs::create_dir_all(&out).map_err(molten::error::MoltenError::from)?;
+    std::fs::create_dir_all(&out).map_err(molten::error::Failure::from)?;
     super::io::write_file(&out.join("report.preserves"), &molten::preserves_rail::to_text(&run.report_value)?)?;
     super::io::write_indexed_values(&out, "evidence", &run.evidence_values)?;
     println!(
@@ -128,9 +128,7 @@ fn show(artifact: FilePath) -> Outcome<()> {
 
 fn run_apply(manifest: FilePath, requests: Vec<FilePath>, out: FilePath) -> Outcome<()> {
     if requests.is_empty() {
-        return Err(molten::error::MoltenError::invalid_harness(
-            "coordination apply requires at least one --request file",
-        ));
+        return Err(molten::error::Failure::invalid_harness("coordination apply requires at least one --request file"));
     }
     let manifest_value = super::io::read_preserves_file(&manifest)?;
     let mut runtime = molten::coordination::new_coordination_runtime(&manifest_value)?;
@@ -174,7 +172,7 @@ fn run_apply(manifest: FilePath, requests: Vec<FilePath>, out: FilePath) -> Outc
             assertion_refs: &assertion_refs,
             evidence_refs: &evidence_refs,
         })?;
-    std::fs::create_dir_all(&out).map_err(molten::error::MoltenError::from)?;
+    std::fs::create_dir_all(&out).map_err(molten::error::Failure::from)?;
     super::io::write_file(&out.join("report.preserves"), &molten::preserves_rail::to_text(&report_value)?)?;
     super::io::write_indexed_values(&out, "evidence", &evidence_values)?;
     println!(
@@ -190,6 +188,6 @@ fn run_apply(manifest: FilePath, requests: Vec<FilePath>, out: FilePath) -> Outc
     Ok(())
 }
 
-fn wrong_handler(name: &str) -> molten::error::MoltenError {
-    molten::error::MoltenError::invalid_harness(format!("coordination {name} handler called with another command"))
+fn wrong_handler(name: &str) -> molten::error::Failure {
+    molten::error::Failure::invalid_harness(format!("coordination {name} handler called with another command"))
 }

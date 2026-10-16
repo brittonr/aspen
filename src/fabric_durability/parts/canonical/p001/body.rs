@@ -1,18 +1,18 @@
 
-impl ExtensionDurabilityContext {
+impl ExtensionContext {
     pub fn from_host<E: SystemExtensionExecutor>(
-        host: &crate::system_extension::SystemExtensionHost<E>,
-        profile: &CanonicalDurableProfile,
+        host: &crate::system_extension::Dispatcher<E>,
+        profile: &DurableProfile,
     ) -> crate::error::Result<Self> {
         let mut bound_ports = Vec::with_capacity(DURABILITY_PORT_COUNT);
-        for port_id in durability_port_ids() {
+        for port_id in port_ids() {
             let key = crate::fabric::FabricPortKey {
                 port_id: port_id.to_string(),
                 version: FABRIC_DURABILITY_PORT_VERSION.to_string(),
             };
             if let Some(binding) = host.manifest().binding_for(&key) {
                 if binding.binding.implementation_profile != profile.profile.profile_id {
-                    return Err(crate::error::MoltenError::invalid_harness(format!(
+                    return Err(crate::error::Failure::invalid_harness(format!(
                         "system-extension durability profile {} does not match {}",
                         binding.binding.implementation_profile, profile.profile.profile_id
                     )));
@@ -21,7 +21,7 @@ impl ExtensionDurabilityContext {
             }
         }
         if bound_ports.is_empty() {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "system extension has no admitted durable-state fabric port binding",
             ));
         }
@@ -38,7 +38,7 @@ impl ExtensionDurabilityContext {
     pub(crate) fn from_test_snapshot(
         service_id: &str,
         generation: u64,
-        profile: &CanonicalDurableProfile,
+        profile: &DurableProfile,
         bound_ports: Vec<String>,
     ) -> Self {
         Self {
@@ -52,30 +52,30 @@ impl ExtensionDurabilityContext {
 
     pub fn admit_operation(
         &self,
-        profile: &CanonicalDurableProfile,
+        profile: &DurableProfile,
         port_id: &str,
         service_id: &str,
         generation: u64,
         operation_bytes: u64,
     ) -> crate::error::Result<()> {
         if self.profile_id != profile.profile.profile_id {
-            return Err(crate::error::MoltenError::invalid_harness("durability profile substitution denied"));
+            return Err(crate::error::Failure::invalid_harness("durability profile substitution denied"));
         }
         if !self.bound_ports.iter().any(|bound| bound == port_id) {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "durability port {port_id} is not bound to the system extension"
             )));
         }
         if self.service_id != service_id {
-            return Err(crate::error::MoltenError::invalid_harness("durability service identity mismatch"));
+            return Err(crate::error::Failure::invalid_harness("durability service identity mismatch"));
         }
         if self.generation != generation {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "durability operation uses a stale service generation",
             ));
         }
         if operation_bytes > self.max_operation_bytes {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "durability operation bytes {operation_bytes} exceed {}",
                 self.max_operation_bytes
             )));
@@ -109,7 +109,7 @@ fn durable_profile_value(profile: &DurableStateProfile) -> preserves::IOValue {
     ])
 }
 
-fn durability_port_ids() -> [&'static str; DURABILITY_PORT_COUNT] {
+fn port_ids() -> [&'static str; DURABILITY_PORT_COUNT] {
     [
         FABRIC_DURABLE_LOG_PORT_ID,
         FABRIC_ORDERED_STORE_PORT_ID,
@@ -138,9 +138,9 @@ fn optional_u64(value: Option<u64>) -> preserves::IOValue {
 }
 
 fn count(value: usize) -> crate::error::Result<u64> {
-    u64::try_from(value).map_err(|_| crate::error::MoltenError::invalid_harness("durability collection count overflow"))
+    u64::try_from(value).map_err(|_| crate::error::Failure::invalid_harness("durability collection count overflow"))
 }
 
-fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(format!("{label} validation denied: {issues:?}"))
+fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("{label} validation denied: {issues:?}"))
 }

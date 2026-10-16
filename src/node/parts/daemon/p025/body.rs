@@ -5,7 +5,7 @@ struct EndpointIdentityInput<'a> {
     bound_endpoint_id: &'a str,
 }
 
-async fn serve_node_control_live_listener_with_topic(state_root: &crate::node_state::NodeStateRoot, input: &ControlLiveServeInput<'_>, receiver: &mut iroh_gossip::api::GossipTopic, endpoint: EndpointIdentityInput<'_>) -> Result<ControlLiveServe> {
+async fn serve_node_control_live_listener_with_topic(state_root: &crate::node_state::DirectoryRoot, input: &ControlLiveServeInput<'_>, receiver: &mut iroh_gossip::api::GossipTopic, endpoint: EndpointIdentityInput<'_>) -> Result<ControlLiveServe> {
     let EndpointIdentityInput { node_id, logical_endpoint_id, bound_endpoint_id } = endpoint;
     validate_listener_event_limit(input.max_events)?;
     validate_loop_request_limit(input.max_requests_per_tick)?;
@@ -59,7 +59,7 @@ async fn serve_node_control_live_listener_with_topic(state_root: &crate::node_st
 }
 
 async fn receive_first_live_ingress_event(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::DirectoryRoot,
     receiver: &mut iroh_gossip::api::GossipTopic,
     topic: &str,
     receiver_node: &str,
@@ -80,11 +80,11 @@ async fn receive_first_live_ingress_event(
 }
 
 fn stable_live_endpoint_secret(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::DirectoryRoot,
     identity: &crate::node_identity::Identity,
 ) -> Result<iroh::SecretKey> {
     let identity_namespace = state_root.identity()?;
-    crate::fabric_crypto_identity::load_transport_secret_for_identity(
+    crate::fabric_crypto_identity::load_transport_secret_for(
         &identity_namespace,
         &identity.endpoint_id,
         &identity.secret_ref,
@@ -101,7 +101,7 @@ fn live_ticket_address_refs(addr: &iroh::EndpointAddr) -> Vec<String> {
 }
 
 fn live_ticket_for_bound_endpoint(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::DirectoryRoot,
     identity: &crate::node_identity::Identity,
     topic: &str,
     addr: &iroh::EndpointAddr,
@@ -148,7 +148,7 @@ fn live_send_ticket_diagnostics(input: &ControlLiveSendInput<'_>, ticket: &Contr
 }
 
 fn live_send_state_root_evidence_diagnostics(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::DirectoryRoot,
     input: &ControlLiveSendInput<'_>,
     envelope: &ControlIngressEnvelope,
 ) -> Result<Vec<String>> {
@@ -189,7 +189,7 @@ fn live_send_state_root_evidence_diagnostics(
 }
 
 fn live_send_authority_grant_diagnostics(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::DirectoryRoot,
     envelope: &ControlIngressEnvelope,
 ) -> Result<Vec<String>> {
     let mut diagnostics = Vec::with_capacity(envelope.authority_refs.len().saturating_add(2));

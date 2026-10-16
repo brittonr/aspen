@@ -13,14 +13,14 @@ const CRYPTO_STATUS_RECORD: &str = "fabric-crypto-status-v1";
 const FABRIC_CRYPTO_PORT_COUNT: usize = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalCryptoProfile {
+pub struct Profile {
     pub profile: CryptoAdapterProfile,
     pub admission_ref: String,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalSignatureDomain {
+pub struct DomainEnvelope {
     pub domain: SignatureDomain,
     pub domain_ref: String,
     pub value: preserves::IOValue,
@@ -28,13 +28,13 @@ pub struct CanonicalSignatureDomain {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalKeyHandle {
+pub struct KeyHandle {
     pub handle: OpaqueKeyHandle,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalSignatureOutcome {
+pub struct SignatureOutcome {
     pub metadata: SignatureMetadata,
     pub signature: Vec<u8>,
     pub outcome_ref: String,
@@ -42,14 +42,14 @@ pub struct CanonicalSignatureOutcome {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalVerificationOutcome {
+pub struct VerificationOutcome {
     pub decision: VerificationDecision,
     pub outcome_ref: String,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CryptoStatusReadback {
+pub struct StatusReadback {
     pub status: RedactedAdapterStatus,
     pub status_ref: String,
     pub value: preserves::IOValue,
@@ -57,7 +57,7 @@ pub struct CryptoStatusReadback {
 
 // r[impl molten.crypto_identity.adapter_contract]
 // r[impl molten.crypto_identity.fixture_profile_boundary]
-pub fn canonical_crypto_profile(profile: &CryptoAdapterProfile) -> crate::error::Result<CanonicalCryptoProfile> {
+pub fn profile(profile: &CryptoAdapterProfile) -> crate::error::Result<Profile> {
     let issues = validate_crypto_profile(profile);
     if !issues.is_empty() {
         return Err(validation_error("crypto adapter profile", &issues));
@@ -84,7 +84,7 @@ pub fn canonical_crypto_profile(profile: &CryptoAdapterProfile) -> crate::error:
         ]),
     ]);
     let admission_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalCryptoProfile {
+    Ok(Profile {
         profile: profile.clone(),
         admission_ref,
         value,
@@ -93,10 +93,10 @@ pub fn canonical_crypto_profile(profile: &CryptoAdapterProfile) -> crate::error:
 
 // r[impl molten.crypto_identity.canonical_signature_binding]
 // r[impl molten.crypto_identity.purpose_domain_separation]
-pub fn canonical_signature_domain(
-    profile: &CanonicalCryptoProfile,
+pub fn signature_domain(
+    profile: &Profile,
     domain: &SignatureDomain,
-) -> crate::error::Result<CanonicalSignatureDomain> {
+) -> crate::error::Result<DomainEnvelope> {
     let issues = validate_signature_domain(&profile.profile, domain);
     if !issues.is_empty() {
         return Err(validation_error("signature domain", &issues));
@@ -121,7 +121,7 @@ pub fn canonical_signature_domain(
     ]);
     let domain_ref = crate::preserves_rail::canonical_hash(&value)?;
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
-    Ok(CanonicalSignatureDomain {
+    Ok(DomainEnvelope {
         domain: domain.clone(),
         domain_ref,
         value,
@@ -130,7 +130,7 @@ pub fn canonical_signature_domain(
 }
 
 pub struct KeyHandleInput<'a> {
-    pub profile: &'a CanonicalCryptoProfile,
+    pub profile: &'a Profile,
     pub purpose: KeyPurpose,
     pub generation: u64,
     pub public_key_ref: &'a str,
@@ -141,7 +141,7 @@ pub struct KeyHandleInput<'a> {
 }
 
 // r[impl molten.crypto_identity.adapter_contract]
-pub fn canonical_key_handle(input: KeyHandleInput<'_>) -> crate::error::Result<CanonicalKeyHandle> {
+pub fn key_handle(input: KeyHandleInput<'_>) -> crate::error::Result<KeyHandle> {
     let KeyHandleInput {
         profile,
         purpose,
@@ -197,20 +197,20 @@ pub fn canonical_key_handle(input: KeyHandleInput<'_>) -> crate::error::Result<C
         policy_ref: currentness_evidence_ref.to_string(),
     };
     plan_sign(&profile.profile, &request).map_err(|issues| validation_error("canonical key handle", &issues))?;
-    Ok(CanonicalKeyHandle { handle, value })
+    Ok(KeyHandle { handle, value })
 }
 
 // r[impl molten.crypto_identity.canonical_signature_binding]
-pub fn canonical_signature_outcome(
-    profile: &CanonicalCryptoProfile,
+pub fn signature_outcome(
+    profile: &Profile,
     plan: &SignPlan,
-    domain: &CanonicalSignatureDomain,
+    domain: &DomainEnvelope,
     signature: Vec<u8>,
-) -> crate::error::Result<CanonicalSignatureOutcome> {
+) -> crate::error::Result<SignatureOutcome> {
     let signature_bytes = u64::try_from(signature.len())
-        .map_err(|_| crate::error::MoltenError::invalid_harness("signature length does not fit u64"))?;
+        .map_err(|_| crate::error::Failure::invalid_harness("signature length does not fit u64"))?;
     if signature_bytes == 0 || signature_bytes > profile.profile.max_signature_bytes {
-        return Err(crate::error::MoltenError::invalid_harness("signature length exceeds admitted profile"));
+        return Err(crate::error::Failure::invalid_harness("signature length exceeds admitted profile"));
     }
     let signature_ref = crate::preserves_rail::content_ref_from_bytes(&signature);
     let metadata = SignatureMetadata {
@@ -225,9 +225,9 @@ pub fn canonical_signature_outcome(
         signature_ref: signature_ref.clone(),
         signature_bytes,
     };
-    let value = canonical_signature_value(&metadata, &signature);
+    let value = signature_value(&metadata, &signature);
     let outcome_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalSignatureOutcome {
+    Ok(SignatureOutcome {
         metadata,
         signature,
         outcome_ref,
@@ -235,7 +235,7 @@ pub fn canonical_signature_outcome(
     })
 }
 
-pub(crate) fn canonical_signature_value(metadata: &SignatureMetadata, signature: &[u8]) -> preserves::IOValue {
+pub(crate) fn signature_value(metadata: &SignatureMetadata, signature: &[u8]) -> preserves::IOValue {
     crate::preserves_rail::record(SIGNATURE_OUTCOME_RECORD, vec![
         crate::preserves_rail::string(CRYPTO_OUTCOME_SCHEMA),
         field("profile-ref", crate::preserves_rail::string(&metadata.profile_ref)),
@@ -258,9 +258,9 @@ pub(crate) fn canonical_signature_value(metadata: &SignatureMetadata, signature:
 }
 
 // r[impl molten.crypto_identity.canonical_signature_binding]
-pub fn canonical_verification_outcome(
+pub fn verification_outcome(
     decision: VerificationDecision,
-) -> crate::error::Result<CanonicalVerificationOutcome> {
+) -> crate::error::Result<VerificationOutcome> {
     let value = crate::preserves_rail::record(VERIFICATION_OUTCOME_RECORD, vec![
         crate::preserves_rail::string(CRYPTO_OUTCOME_SCHEMA),
         field("decision", crate::preserves_rail::string(decision.kind.as_str())),
@@ -276,7 +276,7 @@ pub fn canonical_verification_outcome(
         ]),
     ]);
     let outcome_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalVerificationOutcome {
+    Ok(VerificationOutcome {
         decision,
         outcome_ref,
         value,

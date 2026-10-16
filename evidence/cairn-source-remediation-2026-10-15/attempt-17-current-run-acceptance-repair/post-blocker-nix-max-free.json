@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "nix",
+    "config",
+    "show",
+    "max-free"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T21:50:03.041650+00:00",
+  "elapsed_seconds": 0.014,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "137438953472\n",
+  "stderr": "",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

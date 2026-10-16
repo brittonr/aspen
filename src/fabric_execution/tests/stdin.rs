@@ -8,7 +8,7 @@ const PIPE_OVERFLOW_INPUT_BYTES: u64 = 262_144;
 pub(super) fn canonical_request_without_input(
     kind: ExecutionProfileKind,
     arguments: Vec<String>,
-) -> (CanonicalExecutionProfile, CanonicalExecutionRequest) {
+) -> (Profile, Request) {
     canonicalize_request(kind, request_without_input(arguments))
 }
 
@@ -32,14 +32,14 @@ fn live_adapter_keeps_unconsumed_oversized_input_unknown_without_completion_clai
     let mut oversized_descriptor = descriptor(ExecutionProfileKind::LiveBoundedProcess);
     oversized_descriptor.max_stdin_bytes = PIPE_OVERFLOW_INPUT_BYTES;
     let (profile, request) = canonicalize_request_with_descriptor(&oversized_descriptor, oversized_request);
-    let mut adapter = LiveExecutionAdapter::new(profile, MemoryPublisher::default()).expect("live adapter");
+    let mut adapter = Adapter::new(profile, MemoryPublisher::default()).expect("live adapter");
     let input = vec![0_u8; usize::try_from(PIPE_OVERFLOW_INPUT_BYTES).expect("fixture input fits the host")];
     let failure = adapter
         .execute(&request, &resolved(Some(input)), None)
         .expect_err("unconsumed oversized input is not a completion");
-    assert_eq!(failure.kind, ExecutionPortFailureKind::UnknownAfterStart);
+    assert_eq!(failure.kind, PortFailureKind::UnknownAfterStart);
     assert!(failure.process_observation.is_none());
     assert!(failure.receipt.is_none());
     assert!(adapter.publisher().published.is_empty());
-    assert_eq!(adapter.reconcile(HASH_B, GENERATION), ExecutionReconciliationStatus::UnknownRequiresReconciliation);
+    assert_eq!(adapter.reconcile(HASH_B, GENERATION), ReconciliationStatus::UnknownRequiresReconciliation);
 }

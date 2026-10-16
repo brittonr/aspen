@@ -1,0 +1,14 @@
+{
+  "failed_execution": "bg_43",
+  "original_driver_source": "ordered-acceptance-driver.json",
+  "original_driver_blake3": "d436353e555148b339ba6d12a9ba6d85e003deefa04f180bd9d5f31ff4bb53d9",
+  "failure": "RuntimeError: Strict source gate did not report a passing decision",
+  "cause": "Temporary orchestration incorrectly expected the incidental stdout spelling decision=pass; actual native command reports octet gate pass receipt=... .",
+  "actual_source_gate": "ordered-strict-ci-gate.json",
+  "actual_canonical_receipt": "ordered-strict-ci-gate.preserves",
+  "actual_receipt_decision": "pass",
+  "actual_receipt_ref": "blake3:86f47838ce053951a24f9ac82eb1e73d397c3d9c99ec2ac5737d5afda5faf66c",
+  "product_or_gate_implementation_changed": false,
+  "producers_gate_or_import_rerun": false,
+  "continuation": "Resume with remediation and remaining unexecuted acceptance commands; preserve all original records and the failing driver source."
+}

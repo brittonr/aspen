@@ -1,7 +1,7 @@
 type Path = std::path::Path;
 type PathBuf = std::path::PathBuf;
 type IoValue = preserves::IOValue;
-type MoltenError = molten::error::MoltenError;
+type MoltenError = molten::error::Failure;
 type Result<T> = molten::error::Result<T>;
 
 fn failure_value(phase: &str, error: &MoltenError, diagnostics: Vec<IoValue>) -> IoValue {

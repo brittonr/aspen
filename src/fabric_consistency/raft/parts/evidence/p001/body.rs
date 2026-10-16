@@ -1,12 +1,12 @@
 
-impl ReplicaEvidenceLedger {
+impl ReplicaLedger {
     pub fn new(plan: &ReplicaStartPlan) -> crate::error::Result<Self> {
         Self::with_capacity(plan, MAX_REPLICA_EVIDENCE_RECORDS)
     }
 
     pub(super) fn with_capacity(plan: &ReplicaStartPlan, capacity: usize) -> crate::error::Result<Self> {
         if capacity == 0 || capacity > MAX_REPLICA_EVIDENCE_RECORDS {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "live Raft evidence capacity is outside its static bound",
             ));
         }
@@ -23,13 +23,13 @@ impl ReplicaEvidenceLedger {
             diagnostic: None,
         };
         ledger.record(
-            ReplicaEvidenceKind::GroupAdmission,
+            ReplicaKind::GroupAdmission,
             plan.state.current_term,
             INITIAL_COMMIT_INDEX,
             plan.state.profile.group_binding_ref.clone(),
         )?;
         ledger.record(
-            ReplicaEvidenceKind::Configuration,
+            ReplicaKind::Configuration,
             plan.state.profile.fencing_epoch,
             plan.state.membership.config_epoch,
             plan.state.membership.membership_ref.clone(),
@@ -43,7 +43,7 @@ impl ReplicaEvidenceLedger {
                 .as_ref()
                 .map_or_else(|| plan.state.profile.group_binding_ref.clone(), |snapshot| snapshot.snapshot_ref.clone());
             ledger.record(
-                ReplicaEvidenceKind::Recovery,
+                ReplicaKind::Recovery,
                 plan.state.current_term,
                 plan.state.commit_index,
                 source_ref,
@@ -52,7 +52,7 @@ impl ReplicaEvidenceLedger {
         Ok(ledger)
     }
 
-    pub fn records(&self) -> &[ReplicaEvidenceRecord] {
+    pub fn records(&self) -> &[ReplicaRecord] {
         &self.records
     }
 
@@ -86,7 +86,7 @@ impl ReplicaEvidenceLedger {
         }
         if matches!(event, ReplicaEvent::HeartbeatTimeout) && self.records.len() == records_before {
             self.suppressed_heartbeat_count = self.suppressed_heartbeat_count.checked_add(1).ok_or_else(|| {
-                crate::error::MoltenError::invalid_harness("live Raft suppressed heartbeat count overflow")
+                crate::error::Failure::invalid_harness("live Raft suppressed heartbeat count overflow")
             })?;
         }
         Ok(())
@@ -100,7 +100,7 @@ impl ReplicaEvidenceLedger {
         &self,
         state: &ReplicaState,
         production_admitted: bool,
-    ) -> crate::error::Result<ReplicaAggregateHealthEvidence> {
+    ) -> crate::error::Result<ReplicaAggregateHealth> {
         health::aggregate(self, state, production_admitted)
     }
 
@@ -112,9 +112,9 @@ impl ReplicaEvidenceLedger {
     ) -> crate::error::Result<()> {
         if executed.next.commit_index > before.commit_index && executed.next.role == ReplicaRole::Leader {
             let source_ref = required_observation_ref(&executed.observations, ReplicaEffectKind::PersistCommit)?;
-            let quorum = commit_quorum_evidence(&executed.next, source_ref.clone())?;
+            let quorum = commit_quorum(&executed.next, source_ref.clone())?;
             self.record_with_quorum(
-                ReplicaEvidenceKind::Commit,
+                ReplicaKind::Commit,
                 executed.next.current_term,
                 executed.next.commit_index,
                 source_ref,
@@ -128,12 +128,12 @@ impl ReplicaEvidenceLedger {
                 .snapshot
                 .as_ref()
                 .ok_or_else(|| {
-                    crate::error::MoltenError::invalid_harness("live Raft snapshot evidence lost its snapshot")
+                    crate::error::Failure::invalid_harness("live Raft snapshot evidence lost its snapshot")
                 })?
                 .snapshot_ref
                 .clone();
             self.record(
-                ReplicaEvidenceKind::Snapshot,
+                ReplicaKind::Snapshot,
                 executed.next.current_term,
                 executed.next.last_applied,
                 source_ref,
@@ -151,11 +151,11 @@ impl ReplicaEvidenceLedger {
         let Some(source_ref) = observation_ref(&executed.observations, ReplicaEffectKind::ReadOutcome) else {
             return Ok(());
         };
-        let Some((read_index, quorum)) = read_quorum_evidence(before, event, source_ref.clone())? else {
+        let Some((read_index, quorum)) = read_quorum(before, event, source_ref.clone())? else {
             return Ok(());
         };
         self.record_with_quorum(
-            ReplicaEvidenceKind::ReadCurrentness,
+            ReplicaKind::ReadCurrentness,
             executed.next.current_term,
             read_index,
             source_ref,
@@ -169,12 +169,12 @@ impl ReplicaEvidenceLedger {
                 crate::preserves_rail::string(class),
                 crate::preserves_rail::string(diagnostic),
             ]))?;
-        self.record(ReplicaEvidenceKind::Failure, state.current_term, state.commit_index, source_ref)
+        self.record(ReplicaKind::Failure, state.current_term, state.commit_index, source_ref)
     }
 
     fn record(
         &mut self,
-        kind: ReplicaEvidenceKind,
+        kind: ReplicaKind,
         term: u64,
         index: u64,
         source_ref: String,
@@ -184,11 +184,11 @@ impl ReplicaEvidenceLedger {
 
     fn record_with_quorum(
         &mut self,
-        kind: ReplicaEvidenceKind,
+        kind: ReplicaKind,
         term: u64,
         index: u64,
         source_ref: String,
-        quorum: Option<ValidatedReplicaQuorumEvidence>,
+        quorum: Option<ValidatedReplicaQuorum>,
     ) -> crate::error::Result<()> {
         crate::preserves_rail::validate_content_ref(&source_ref)?;
         if self.records.len() == self.capacity {
@@ -215,7 +215,7 @@ impl ReplicaEvidenceLedger {
                 quorum_value,
                 crate::preserves_rail::sequence(quorum_members.iter().map(crate::preserves_rail::string).collect()),
             ]))?;
-        self.records.push(ReplicaEvidenceRecord {
+        self.records.push(ReplicaRecord {
             sequence,
             kind,
             term,
@@ -228,7 +228,7 @@ impl ReplicaEvidenceLedger {
         self.next_sequence = self
             .next_sequence
             .checked_add(1)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("live Raft evidence sequence overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("live Raft evidence sequence overflow"))?;
         Ok(())
     }
 }
@@ -245,14 +245,14 @@ fn required_observation_ref(
     kind: ReplicaEffectKind,
 ) -> crate::error::Result<String> {
     observation_ref(observations, kind).ok_or_else(|| {
-        crate::error::MoltenError::invalid_harness("live Raft selected evidence lacks its effect observation")
+        crate::error::Failure::invalid_harness("live Raft selected evidence lacks its effect observation")
     })
 }
 
-fn commit_quorum_evidence(
+fn commit_quorum(
     state: &ReplicaState,
     source_ref: String,
-) -> crate::error::Result<ValidatedReplicaQuorumEvidence> {
+) -> crate::error::Result<ValidatedReplicaQuorum> {
     let acknowledgement_members = state
         .membership
         .voters
@@ -263,8 +263,8 @@ fn commit_quorum_evidence(
         })
         .cloned()
         .collect();
-    validate_replica_quorum_evidence(&ReplicaQuorumEvidence {
-        boundary: ReplicaQuorumEvidenceBoundary::Commit,
+    validate_replica_quorum(&ReplicaQuorum {
+        boundary: ReplicaQuorumBoundary::Commit,
         group_binding_ref: state.profile.group_binding_ref.clone(),
         membership_ref: state.membership.membership_ref.clone(),
         config_epoch: state.membership.config_epoch,

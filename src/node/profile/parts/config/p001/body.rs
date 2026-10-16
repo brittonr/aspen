@@ -1,6 +1,6 @@
 
 fn collect_override_diagnostic(
-    profile: &CheckedNodeProfile,
+    profile: &Checked,
     field: &str,
     value: &str,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
@@ -13,7 +13,7 @@ fn collect_override_diagnostic(
     }
 }
 
-fn effective_profile(profile: &CheckedNodeProfile, overrides: &NodeProfileOverrides) -> CheckedNodeProfile {
+fn effective(profile: &Checked, overrides: &Overrides) -> Checked {
     let mut effective = profile.clone();
     if profile.tier != TIER_RELEASE {
         if let Some(state_root_ref) = overrides.state_root_ref.as_ref()
@@ -49,7 +49,7 @@ struct FinishResolutionInput<'a> {
     caveats: Vec<String>,
 }
 
-fn finish_resolution(input: FinishResolutionInput<'_>) -> Result<ResolvedNodeConfig> {
+fn finish_resolution(input: FinishResolutionInput<'_>) -> Result<Resolved> {
     let FinishResolutionInput {
         identity_ref,
         profile_ref,
@@ -94,7 +94,7 @@ fn finish_resolution(input: FinishResolutionInput<'_>) -> Result<ResolvedNodeCon
     })?;
     let resolution_ref = crate::preserves_rail::canonical_hash(&resolution_value)?;
     let profile_metadata_refs = vec![profile_ref.to_string(), resolution_ref.clone()];
-    Ok(ResolvedNodeConfig {
+    Ok(Resolved {
         decision: decision.to_string(),
         diagnostics,
         accepted_overrides,

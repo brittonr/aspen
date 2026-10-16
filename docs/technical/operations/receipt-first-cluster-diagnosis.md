@@ -20,7 +20,7 @@ The directory scan also detects unindexed files, with explicit exceptions for th
 
 ## The verification companion prevents stale summaries
 
-`verify_cluster_run_directory` reads the index and computes an assessment from the current directory. It then derives the expected verification receipt. When the indexed assessment passes, the existing `verification.preserves` companion must parse and equal that expected value. A missing or mismatched companion changes the decision to deny and records a diagnostic-only first divergence. See the [offline verification implementation](../../../src/cluster_harness/parts/runner/p002/body.rs).
+`verify_run_directory` reads the index and computes an assessment from the current directory. It then derives the expected verification receipt. When the indexed assessment passes, the existing `verification.preserves` companion must parse and equal that expected value. A missing or mismatched companion changes the decision to deny and records a diagnostic-only first divergence. See the [offline verification implementation](../../../src/cluster_harness/parts/runner/p002/body.rs).
 
 This avoids treating yesterday's verification summary as evidence about today's files. It also means diagnosis should preserve the original directory rather than editing a suspicious artifact until the display looks right. A successful regeneration is a new evidence event, not a retroactive correction of the historical run.
 

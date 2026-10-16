@@ -1,0 +1,26 @@
+{
+  "attempt": "10/20",
+  "status": "provider implementation, acceptance, review, native sync/archive, scoped commit and publication complete",
+  "upstream": "git@github.com:OnixResearch/octet.git",
+  "reference": "refs/heads/cairn/molten-nominal-adoption-20261015",
+  "source_implementation_commit": "82a6f01a15cfbfda7ed9b37e03605d0c052391c4",
+  "completed_lifecycle_commit": "3f7abb641ee604f54629da415bc7686f89662065",
+  "exact_upstream_head_observed": true,
+  "provider_change_archive": "./.cairn/archive/1970-01-01-adopt-molten-nominal-reference-domains",
+  "metadata_tests_passed": 13,
+  "library_tests_passed": 154,
+  "ignored_ui_rails_passed": 4,
+  "named_ui_fixtures_replayed": 163,
+  "nominal_catalog_check_passed": true,
+  "formatting_passed": true,
+  "strict_native_validation_findings": [],
+  "review_findings_remaining": [],
+  "immediate_outcome": "A reviewed immutable Octet cohort with all fifteen Molten domains and actual local-macro denial is upstream available.",
+  "durable_capability": "The existing producer-owned embedded policy enforces exact registered local macro aliases and checked generic wrapper policy without a duplicate consumer checker.",
+  "maintenance_owner": "Octet nominal-domain policy and lint maintainers; Molten maintains its adoption inventory and exact source scopes",
+  "repeatability_evidence": "/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015/.cairn/archive/1970-01-01-adopt-molten-nominal-reference-domains/evidence",
+  "non_claims": [
+    "No default-branch update, release tag, pull request, unrelated provider change completion, or Molten remote push.",
+    "Molten pin adoption and its acceptance remain pending."
+  ]
+}

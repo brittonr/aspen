@@ -1,4 +1,4 @@
-type Error = molten::error::MoltenError;
+type Error = molten::error::Failure;
 type Outcome<T> = molten::error::Result<T>;
 type Path = std::path::Path;
 type PathBuf = std::path::PathBuf;

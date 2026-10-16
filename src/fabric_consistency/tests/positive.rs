@@ -3,50 +3,47 @@ use super::*;
 #[test]
 // r[verify molten.fabric_consistency.extension_port]
 // r[verify molten.fabric_consistency.group_isolation]
-fn fabric_consistency_binding_open_and_attach_are_canonical() {
+fn binding_open_and_attach_are_canonical() {
     let left = declared_binding();
     let right = declared_binding();
     assert_eq!(left, right);
-    assert_eq!(left.lifecycle, ConsistencyGroupLifecycle::Declared);
+    assert_eq!(left.lifecycle, GroupLifecycle::Declared);
 
-    let create = plan_consistency_operation(
+    let create = plan(
         &left,
-        command_for(&left, ConsistencyOperation::Open {
+        command_for(&left, Request::Open {
             mode: GroupOpenMode::Create,
         }),
     )
     .expect("create plan");
     assert!(create.admitted());
-    assert_eq!(create.lifecycle_after, ConsistencyGroupLifecycle::Active);
-    assert_eq!(
-        normalized_success(&left, &create, ConsistencyOutcomeKind::Opened).kind,
-        ConsistencyOutcomeKind::Opened
-    );
+    assert_eq!(create.lifecycle_after, GroupLifecycle::Active);
+    assert_eq!(normalized_success(&left, &create, Kind::Opened).kind, Kind::Opened);
 
     let attached_source = declared_binding();
-    let attach = plan_consistency_operation(
+    let attach = plan(
         &attached_source,
-        command_for(&attached_source, ConsistencyOperation::Open {
+        command_for(&attached_source, Request::Open {
             mode: GroupOpenMode::Attach,
         }),
     )
     .expect("attach plan");
     assert!(attach.admitted());
-    let attach_outcome = normalized_success(&attached_source, &attach, ConsistencyOutcomeKind::Opened);
-    let attached = apply_consistency_outcome(&attached_source, &attach, &attach_outcome).expect("attached");
-    assert_eq!(attached.lifecycle, ConsistencyGroupLifecycle::Active);
+    let attach_outcome = normalized_success(&attached_source, &attach, Kind::Opened);
+    let attached = apply_outcome(&attached_source, &attach, &attach_outcome).expect("attached");
+    assert_eq!(attached.lifecycle, GroupLifecycle::Active);
     assert_ne!(attached.binding_ref, attached_source.binding_ref);
 }
 
 #[test]
 // r[verify molten.fabric_consistency.extension_port]
 // r[verify molten.fabric_consistency.group_isolation]
-fn fabric_consistency_active_port_normalizes_proposals_and_reads() {
+fn active_port_normalizes_proposals_and_reads() {
     let binding = active_binding();
 
-    let propose = plan_consistency_operation(
+    let propose = plan(
         &binding,
-        command_for(&binding, ConsistencyOperation::Propose {
+        command_for(&binding, Request::Propose {
             command_ref: test_ref("command"),
             command_schema_ref: test_ref("command-schema"),
             estimated_command_bytes: COMMAND_BYTES,
@@ -54,69 +51,60 @@ fn fabric_consistency_active_port_normalizes_proposals_and_reads() {
     )
     .expect("propose");
     assert!(propose.admitted());
-    assert_eq!(
-        normalized_success(&binding, &propose, ConsistencyOutcomeKind::Committed).kind,
-        ConsistencyOutcomeKind::Committed
-    );
+    assert_eq!(normalized_success(&binding, &propose, Kind::Committed).kind, Kind::Committed);
 
-    let linearizable = plan_consistency_operation(
+    let linearizable = plan(
         &binding,
-        command_for(&binding, ConsistencyOperation::Read {
+        command_for(&binding, Request::Read {
             query_ref: test_ref("linearizable-query"),
-            mode: ConsistencyReadMode::Linearizable,
+            mode: ReadMode::Linearizable,
         }),
     )
     .expect("linearizable read");
     assert!(linearizable.admitted());
-    assert_eq!(
-        normalized_success(&binding, &linearizable, ConsistencyOutcomeKind::ReadCurrent,).kind,
-        ConsistencyOutcomeKind::ReadCurrent
-    );
+    assert_eq!(normalized_success(&binding, &linearizable, Kind::ReadCurrent,).kind, Kind::ReadCurrent);
 
-    let local = plan_consistency_operation(
+    let local = plan(
         &binding,
-        command_for(&binding, ConsistencyOperation::Read {
+        command_for(&binding, Request::Read {
             query_ref: test_ref("local-query"),
-            mode: ConsistencyReadMode::LocalStale,
+            mode: ReadMode::LocalStale,
         }),
     )
     .expect("local read");
     assert!(local.admitted());
-    assert_eq!(
-        normalized_success(&binding, &local, ConsistencyOutcomeKind::ReadLocal).kind,
-        ConsistencyOutcomeKind::ReadLocal
-    );
+    assert_eq!(normalized_success(&binding, &local, Kind::ReadLocal).kind, Kind::ReadLocal);
 }
 
 #[test]
 // r[verify molten.fabric_consistency.extension_port]
 // r[verify molten.fabric_consistency.group_isolation]
-fn fabric_consistency_active_port_handles_maintenance_operations() {
+fn active_port_handles_maintenance_operations() {
     let binding = active_binding();
-    let snapshot = plan_consistency_operation(
+    let snapshot = plan(
         &binding,
-        command_for(&binding, ConsistencyOperation::Snapshot {
+        command_for(&binding, Request::Snapshot {
             snapshot_policy_ref: test_ref("snapshot-policy"),
         }),
     )
     .expect("snapshot");
     assert!(snapshot.admitted());
-    normalized_success(&binding, &snapshot, ConsistencyOutcomeKind::SnapshotCreated);
+    normalized_success(&binding, &snapshot, Kind::SnapshotCreated);
 
-    let recover = plan_consistency_operation(
+    let recover = plan(
         &binding,
-        command_for(&binding, ConsistencyOperation::Recover {
+        command_for(&binding, Request::Recover {
             snapshot_ref: test_ref("snapshot"),
             durable_boundary_ref: test_ref("durable-boundary"),
         }),
     )
     .expect("recover");
     assert!(recover.admitted());
-    normalized_success(&binding, &recover, ConsistencyOutcomeKind::Recovered);
+    normalized_success(&binding, &recover, Kind::Recovered);
 
-    let configure = plan_consistency_operation(
+    let configure = plan(
         &binding,
-        command_for(&binding, ConsistencyOperation::Configure {
+        command_for(&binding, Request::Configure {
             transition: ConfigurationTransition::StaticMembershipRefresh {
                 next_membership_ref: test_ref("next-membership"),
                 next_config_epoch: NEXT_CONFIG_EPOCH,
@@ -125,42 +113,37 @@ fn fabric_consistency_active_port_handles_maintenance_operations() {
     )
     .expect("configure");
     assert!(configure.admitted());
-    let configuration_outcome = normalized_success(&binding, &configure, ConsistencyOutcomeKind::ConfigurationApplied);
-    let configured =
-        apply_consistency_outcome(&binding, &configure, &configuration_outcome).expect("configured binding");
+    let configuration_outcome = normalized_success(&binding, &configure, Kind::ConfigurationApplied);
+    let configured = apply_outcome(&binding, &configure, &configuration_outcome).expect("configured binding");
     assert_eq!(configured.config_epoch, NEXT_CONFIG_EPOCH);
     assert_eq!(configured.membership_ref, test_ref("next-membership"));
 
-    let health =
-        plan_consistency_operation(&binding, command_for(&binding, ConsistencyOperation::Health)).expect("health");
+    let health = plan(&binding, command_for(&binding, Request::Health)).expect("health");
     assert!(health.admitted());
-    normalized_success(&binding, &health, ConsistencyOutcomeKind::HealthObserved);
+    normalized_success(&binding, &health, Kind::HealthObserved);
 
-    let status =
-        plan_consistency_operation(&binding, command_for(&binding, ConsistencyOperation::Status)).expect("status");
+    let status = plan(&binding, command_for(&binding, Request::Status)).expect("status");
     assert!(status.admitted());
-    normalized_success(&binding, &status, ConsistencyOutcomeKind::StatusObserved);
+    normalized_success(&binding, &status, Kind::StatusObserved);
 }
 
 #[test]
 // r[verify molten.fabric_consistency.extension_port]
-fn fabric_consistency_lifecycle_drains_and_removes_without_hidden_mutation() {
+fn lifecycle_drains_and_removes_without_hidden_mutation() {
     let active = active_binding();
-    let drain = plan_consistency_operation(&active, command_for(&active, ConsistencyOperation::Drain)).expect("drain");
+    let drain = plan(&active, command_for(&active, Request::Drain)).expect("drain");
     assert!(drain.admitted());
-    let drain_outcome = normalized_success(&active, &drain, ConsistencyOutcomeKind::Drained);
-    let draining = apply_consistency_outcome(&active, &drain, &drain_outcome).expect("draining");
-    assert_eq!(draining.lifecycle, ConsistencyGroupLifecycle::Draining);
+    let drain_outcome = normalized_success(&active, &drain, Kind::Drained);
+    let draining = apply_outcome(&active, &drain, &drain_outcome).expect("draining");
+    assert_eq!(draining.lifecycle, GroupLifecycle::Draining);
 
-    let remove =
-        plan_consistency_operation(&draining, command_for(&draining, ConsistencyOperation::Remove)).expect("remove");
+    let remove = plan(&draining, command_for(&draining, Request::Remove)).expect("remove");
     assert!(remove.admitted());
-    let remove_outcome = normalized_success(&draining, &remove, ConsistencyOutcomeKind::Removed);
-    let removed = apply_consistency_outcome(&draining, &remove, &remove_outcome).expect("removed");
-    assert_eq!(removed.lifecycle, ConsistencyGroupLifecycle::Removed);
+    let remove_outcome = normalized_success(&draining, &remove, Kind::Removed);
+    let removed = apply_outcome(&draining, &remove, &remove_outcome).expect("removed");
+    assert_eq!(removed.lifecycle, GroupLifecycle::Removed);
 
-    let status = plan_consistency_operation(&removed, command_for(&removed, ConsistencyOperation::Status))
-        .expect("removed status");
+    let status = plan(&removed, command_for(&removed, Request::Status)).expect("removed status");
     assert!(status.admitted());
-    normalized_success(&removed, &status, ConsistencyOutcomeKind::StatusObserved);
+    normalized_success(&removed, &status, Kind::StatusObserved);
 }

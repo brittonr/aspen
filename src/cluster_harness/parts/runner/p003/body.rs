@@ -1,7 +1,7 @@
 
 fn finalize_child_execution(
-    input: &ClusterHarnessExecutionInput,
-    node: &crate::cluster::ClusterNodePlan,
+    input: &ExecutionInput,
+    node: &crate::cluster::NodePlan,
     phase: &str,
     observation: ChildProcessObservation,
 ) -> crate::error::Result<ChildExecution> {
@@ -17,12 +17,12 @@ fn finalize_child_execution(
     );
     let log_path = input.output_directory.join(format!("logs/{phase}-{}.log", node.path_component));
     if let Some(parent) = log_path.parent() {
-        std::fs::create_dir_all(parent).map_err(crate::error::MoltenError::from)?;
+        std::fs::create_dir_all(parent).map_err(crate::error::Failure::from)?;
     }
-    std::fs::write(&log_path, &log).map_err(crate::error::MoltenError::from)?;
+    std::fs::write(&log_path, &log).map_err(crate::error::Failure::from)?;
     let diagnostic_log_ref = content_ref_for_text(TEXT_ARTIFACT_DOMAIN, &log);
     let command_profile_ref = content_ref_for_text(COMMAND_PROFILE_DOMAIN, &format!("{phase}:{}", node.node_id));
-    let value = child_process_value(&ClusterHarnessChildProcessInput {
+    let value = child_process_value(&ChildProcessInput {
         node_id: node.node_id.clone(),
         phase: phase.to_string(),
         command_profile_ref,
@@ -55,7 +55,7 @@ fn collect_child_diagnostics(executions: &[ChildExecution], diagnostics: &mut im
 }
 
 fn capture_node_artifacts(
-    node: &crate::cluster::ClusterNodePlan,
+    node: &crate::cluster::NodePlan,
     artifacts: &mut impl crate::bounded::VecSink<PreparedArtifact>,
     child_receipt_refs: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<NodeArtifacts> {
@@ -156,7 +156,7 @@ fn build_lifecycle_artifacts(input: LifecycleArtifactsInput<'_>) -> crate::error
     } = input;
     let is_complete = phases_passed && nodes.len() == node_ids.len() && nodes.iter().all(NodeArtifacts::complete);
     let (lifecycle_value, drift_summary) = if is_complete {
-        let phase = |name: &str| crate::cluster::ClusterLifecyclePhaseObservation {
+        let phase = |name: &str| crate::cluster::LifecyclePhaseObservation {
             phase: name.to_string(),
             decision: molten_core::cluster_harness::RUN_DIRECTORY_PASS.to_string(),
             receipt_refs: child_executions
@@ -165,7 +165,7 @@ fn build_lifecycle_artifacts(input: LifecycleArtifactsInput<'_>) -> crate::error
                 .map(|child| child.process_ref.clone())
                 .collect(),
         };
-        let input = crate::cluster::ClusterLifecycleRunInput {
+        let input = crate::cluster::LifecycleRunInput {
             workflow_id: WORKFLOW_ID.to_string(),
             manifest_ref: fixture_ref.to_string(),
             ordered_node_ids: node_ids.to_vec(),
@@ -182,14 +182,14 @@ fn build_lifecycle_artifacts(input: LifecycleArtifactsInput<'_>) -> crate::error
             diagnostics: diagnostics.to_vec(),
             caveats: caveats.to_vec(),
         };
-        let lifecycle = crate::cluster::build_cluster_lifecycle_run_receipt(&input)?;
-        (lifecycle.value, crate::cluster::cluster_lifecycle_drift_summary(&input)?)
+        let lifecycle = crate::cluster::build_lifecycle_run_receipt(&input)?;
+        (lifecycle.value, crate::cluster::lifecycle_drift_summary(&input)?)
     } else {
         let mut unavailable = diagnostics.to_vec();
         unavailable.push("cluster-harness-lifecycle-evidence-incomplete".to_string());
         unavailable.sort();
         unavailable.dedup();
-        let lifecycle = unavailable_cluster_lifecycle_value(fixture_ref, node_ids, &unavailable, caveats)?;
+        let lifecycle = unavailable_lifecycle_value(fixture_ref, node_ids, &unavailable, caveats)?;
         let summary = crate::drift_core::EvidenceSummary {
             workflow: WORKFLOW_ID.to_string(),
             fields: vec![crate::drift_core::EvidenceField {
@@ -215,7 +215,7 @@ fn lifecycle_node_summaries(
     fixture_ref: &str,
     node_ids: &[String],
     nodes: &[NodeArtifacts],
-) -> crate::error::Result<Vec<crate::cluster::ClusterLifecycleNodeSummary>> {
+) -> crate::error::Result<Vec<crate::cluster::LifecycleNodeSummary>> {
     node_ids
         .iter()
         .zip(nodes)
@@ -223,8 +223,8 @@ fn lifecycle_node_summaries(
             let config_ref = node
                 .config_ref
                 .clone()
-                .ok_or_else(|| crate::error::MoltenError::invalid_harness("complete cluster node has no config ref"))?;
-            Ok(crate::cluster::ClusterLifecycleNodeSummary {
+                .ok_or_else(|| crate::error::Failure::invalid_harness("complete cluster node has no config ref"))?;
+            Ok(crate::cluster::LifecycleNodeSummary {
                 node_id: node_id.clone(),
                 manifest_ref: fixture_ref.to_string(),
                 config_ref,
@@ -248,7 +248,7 @@ struct CleanupObservation {
     succeeded: bool,
 }
 
-fn cleanup_state_roots(plan: &crate::cluster::ClusterPlan) -> crate::error::Result<CleanupObservation> {
+fn cleanup_state_roots(plan: &crate::cluster::Plan) -> crate::error::Result<CleanupObservation> {
     let mut ticket_paths = Vec::new();
     for node in &plan.nodes {
         collect_ticket_paths(&node.state_root, &node.state_root, &mut ticket_paths)?;

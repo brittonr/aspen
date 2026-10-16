@@ -28,7 +28,7 @@ pub trait SystemExtensionExecutor {
 pub trait FabricEffectPort {
     fn route(
         &mut self,
-        binding: &crate::fabric::CanonicalFabricPortBinding,
+        binding: &crate::fabric::CanonicalPortBinding,
         effect: &super::TypedEffectRequest,
     ) -> crate::fabric::FabricPortResult<super::PortEffectOutput>;
 }
@@ -55,15 +55,15 @@ impl<T: SystemExtensionExecutor + ?Sized> SystemExtensionExecutor for Box<T> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum HostEvidence {
-    Lifecycle(super::CanonicalLifecycleReceipt),
-    Callback(super::CanonicalCallbackReceipt),
-    EffectCompletion(super::CanonicalEffectCompletion),
-    Migration(super::CanonicalStateMigrationReceipt),
-    Readiness(super::CanonicalServiceReadiness),
+pub enum Evidence {
+    Lifecycle(super::LifecycleReceipt),
+    Callback(super::CallbackReceipt),
+    EffectCompletion(super::EffectCompletion),
+    Migration(super::StateMigrationReceipt),
+    Readiness(super::ServiceReadiness),
 }
 
-impl HostEvidence {
+impl Evidence {
     pub fn evidence_ref(&self) -> &str {
         match self {
             Self::Lifecycle(receipt) => &receipt.receipt_ref,
@@ -76,9 +76,9 @@ impl HostEvidence {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum HostDispatchResult {
+pub enum DispatchResult {
     Executed {
-        receipt: super::CanonicalCallbackReceipt,
+        receipt: super::CallbackReceipt,
         outcome: super::CallbackOutcome,
         approved_effects: Vec<super::TypedEffectRequest>,
     },
@@ -87,22 +87,22 @@ pub enum HostDispatchResult {
         usage: super::ResourceUsage,
     },
     Failed {
-        receipt: super::CanonicalCallbackReceipt,
-        lifecycle: super::CanonicalLifecycleReceipt,
+        receipt: super::CallbackReceipt,
+        lifecycle: super::LifecycleReceipt,
     },
 }
 
-impl HostDispatchResult {
+impl DispatchResult {
     pub fn require_executed(
         self,
         label: &str,
-    ) -> crate::error::Result<(super::CanonicalCallbackReceipt, super::CallbackOutcome)> {
+    ) -> crate::error::Result<(super::CallbackReceipt, super::CallbackOutcome)> {
         match self {
             Self::Executed { receipt, outcome, .. } => Ok((receipt, outcome)),
-            Self::Deferred { decision, .. } => Err(crate::error::MoltenError::invalid_harness(format!(
+            Self::Deferred { decision, .. } => Err(crate::error::Failure::invalid_harness(format!(
                 "system-extension {label} callback was deferred: {decision:?}"
             ))),
-            Self::Failed { receipt, lifecycle } => Err(crate::error::MoltenError::invalid_harness(format!(
+            Self::Failed { receipt, lifecycle } => Err(crate::error::Failure::invalid_harness(format!(
                 "system-extension {label} callback failed: callback={} lifecycle={}",
                 receipt.receipt_ref, lifecycle.receipt_ref
             ))),
@@ -112,22 +112,22 @@ impl HostDispatchResult {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActivationArtifacts {
-    pub lifecycle_receipts: Vec<super::CanonicalLifecycleReceipt>,
-    pub callback_receipts: Vec<super::CanonicalCallbackReceipt>,
-    pub status: super::CanonicalOperatorStatus,
+    pub lifecycle_receipts: Vec<super::LifecycleReceipt>,
+    pub callback_receipts: Vec<super::CallbackReceipt>,
+    pub status: super::OperatorStatusRecord,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GenerationReplacementArtifacts {
-    pub begin: super::CanonicalLifecycleReceipt,
-    pub migration: super::CanonicalStateMigrationReceipt,
-    pub callback: super::CanonicalCallbackReceipt,
-    pub completion: super::CanonicalLifecycleReceipt,
-    pub status: super::CanonicalOperatorStatus,
+    pub begin: super::LifecycleReceipt,
+    pub migration: super::StateMigrationReceipt,
+    pub callback: super::CallbackReceipt,
+    pub completion: super::LifecycleReceipt,
+    pub status: super::OperatorStatusRecord,
 }
 
-pub struct SystemExtensionHost<E: SystemExtensionExecutor> {
-    admitted: super::CanonicalAdmittedSystemExtensionManifest,
+pub struct Dispatcher<E: SystemExtensionExecutor> {
+    admitted: super::AdmittedManifest,
     executor: E,
     state: super::LifecycleState,
     usage: super::ResourceUsage,
@@ -136,7 +136,7 @@ pub struct SystemExtensionHost<E: SystemExtensionExecutor> {
     semantic_state_ref: Option<String>,
     observations: std::collections::BTreeMap<super::CallbackKind, u64>,
     execution_binding_refs: Vec<String>,
-    evidence: Vec<HostEvidence>,
+    evidence: Vec<Evidence>,
     last_lifecycle_ref: Option<String>,
 }
 

@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "node",
+    "run-loop",
+    "--state-root",
+    "/tmp/molten-f14-current-run-16-restored-se51n6m8/state",
+    "--max-requests",
+    "1",
+    "--receipt-out",
+    "/tmp/molten-f14-current-run-16-restored-se51n6m8/duplicate-loop-before.preserves"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T17:52:13.439360+00:00",
+  "elapsed_seconds": 0.017,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "node control loop receipt blake3:11ecf03bb8408898182d156cb10c06cdc29f8d6df1892bd7ee1cc6a7ee0f53ce written to /tmp/molten-f14-current-run-16-restored-se51n6m8/duplicate-loop-before.preserves\nnode run-loop loop_receipt=blake3:11ecf03bb8408898182d156cb10c06cdc29f8d6df1892bd7ee1cc6a7ee0f53ce heartbeat=blake3:de45efd53fb434287d73b8c28001aa4494f478e6fdf255ccb68016ae978e5044 processed=1 stopped=yes\n",
+  "stderr": ""
+}

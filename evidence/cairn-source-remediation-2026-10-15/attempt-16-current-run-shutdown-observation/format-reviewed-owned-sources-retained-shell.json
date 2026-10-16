@@ -1,0 +1,25 @@
+{
+  "argv": [
+    "rustfmt",
+    "--edition",
+    "2024",
+    "src/node/parts/runtime/p008/body.rs",
+    "src/node/parts/runtime/p009/body.rs",
+    "src/node/parts/runtime/tests/m000/p003/body.rs",
+    "src/node/parts/runtime/tests/m000/p004/body.rs",
+    "src/node/parts/runtime/tests/m000/p005/body.rs",
+    "src/node/parts/daemon/p058/body.rs",
+    "src/node/parts/daemon/tests/m000/p023/body.rs"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T18:40:23.822415+00:00",
+  "elapsed_seconds": 0.035,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

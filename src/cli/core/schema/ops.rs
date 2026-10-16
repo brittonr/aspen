@@ -154,5 +154,5 @@ fn local_unique_schema_identity(schema_ref: &str) -> molten::error::Result<molte
 }
 
 fn dispatch_mismatch(command: &str) -> molten::error::Result<()> {
-    Err(molten::error::MoltenError::invalid_harness(format!("schema {command} dispatch mismatch")))
+    Err(molten::error::Failure::invalid_harness(format!("schema {command} dispatch mismatch")))
 }

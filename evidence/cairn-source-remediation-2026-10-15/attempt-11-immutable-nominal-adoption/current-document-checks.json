@@ -1,0 +1,43 @@
+{
+  "method": "Throwaway Python local-link, fragment, and Markdown-fence check; no permanent source-text tests added.",
+  "new_or_changed_local_links": [
+    {
+      "source": "README.md",
+      "target": "docs/nominal-authority-references.md#result-and-adoption-status",
+      "exists": true,
+      "fragment_resolves": true
+    },
+    {
+      "source": "README.md",
+      "target": "docs/verified-node-replication-pilot.md#exact-inputs",
+      "exists": true,
+      "fragment_resolves": true
+    },
+    {
+      "source": "docs/nominal-authority-references.md",
+      "target": "../.cairn/changes/adopt-octet-nominal-domain-enforcement/evidence/2026-10-16-pinned-runtime-proof.json",
+      "exists": true,
+      "fragment_resolves": null
+    },
+    {
+      "source": "docs/nominal-authority-references.md",
+      "target": "../.cairn/changes/adopt-octet-nominal-domain-enforcement/evidence/2026-10-16-runtime-compatibility.json",
+      "exists": true,
+      "fragment_resolves": null
+    },
+    {
+      "source": "docs/verified-node-replication-pilot.md",
+      "target": "../.cairn/archive/2026-07-11-consume-octet-verus-toolchain/evidence/",
+      "exists": true,
+      "fragment_resolves": null
+    }
+  ],
+  "balanced_fence_files": [
+    "README.md",
+    "docs/nominal-authority-references.md",
+    "docs/verified-node-replication-pilot.md",
+    ".cairn/changes/adopt-octet-nominal-domain-enforcement/design.md",
+    ".cairn/changes/adopt-octet-nominal-domain-enforcement/tasks.md"
+  ],
+  "result": "passed"
+}

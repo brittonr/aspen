@@ -1,5 +1,5 @@
 
-impl MaterializationRoot {
+impl Root {
     pub fn open(destination: &std::path::Path) -> crate::error::Result<Self> {
         // r[impl molten.filesystem_materialization.root]
         match std::fs::symlink_metadata(destination) {
@@ -8,27 +8,27 @@ impl MaterializationRoot {
             }
             Ok(_) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                std::fs::create_dir_all(destination).map_err(crate::error::MoltenError::from)?;
+                std::fs::create_dir_all(destination).map_err(crate::error::Failure::from)?;
             }
-            Err(error) => return Err(crate::error::MoltenError::from(error)),
+            Err(error) => return Err(crate::error::Failure::from(error)),
         }
         let dir = cap_std::fs::Dir::open_ambient_dir(destination, cap_std::ambient_authority())
-            .map_err(crate::error::MoltenError::from)?;
+            .map_err(crate::error::Failure::from)?;
         Ok(Self::from_dir(dir))
     }
 
     pub fn from_dir(dir: cap_std::fs::Dir) -> Self {
         Self {
-            inner: std::sync::Arc::new(MaterializationRootInner { dir }),
+            inner: std::sync::Arc::new(RootInner { dir }),
         }
     }
 
     pub fn stage(
         &self,
-        plan: &MaterializationPlan,
-        payloads: &[MaterializationPayload],
-    ) -> crate::error::Result<StagedMaterialization> {
-        validate_materialization_plan(plan)?;
+        plan: &Plan,
+        payloads: &[Payload],
+    ) -> crate::error::Result<Staged> {
+        validate_plan(plan)?;
         let payload_map = validate_payloads(plan, payloads)?;
         let stage_path = stage_path(plan)?;
         let stage_result = self.stage_inner(plan, &payload_map, &stage_path);
@@ -41,7 +41,7 @@ impl MaterializationRoot {
                 ))),
             };
         }
-        Ok(StagedMaterialization {
+        Ok(Staged {
             root: std::sync::Arc::clone(&self.inner),
             plan_ref: plan.plan_ref.clone(),
             stage_path,
@@ -50,20 +50,20 @@ impl MaterializationRoot {
 
     pub fn commit(
         &self,
-        plan: &MaterializationPlan,
-        staged: &StagedMaterialization,
-    ) -> crate::error::Result<MaterializationReceipt> {
+        plan: &Plan,
+        staged: &Staged,
+    ) -> crate::error::Result<Receipt> {
         self.commit_inner(plan, staged, None)
     }
 
     fn commit_inner(
         &self,
-        plan: &MaterializationPlan,
-        staged: &StagedMaterialization,
+        plan: &Plan,
+        staged: &Staged,
         fail_after_publications: Option<usize>,
-    ) -> crate::error::Result<MaterializationReceipt> {
+    ) -> crate::error::Result<Receipt> {
         // r[impl molten.filesystem_materialization.commit]
-        validate_materialization_plan(plan)?;
+        validate_plan(plan)?;
         if !std::sync::Arc::ptr_eq(&self.inner, &staged.root) {
             return Err(invalid("staged materialization belongs to a different destination root"));
         }
@@ -117,14 +117,14 @@ impl MaterializationRoot {
                         invalid("no-replace materialization target appeared during publication"),
                     ));
                 }
-                (ReplacementPolicy::ReplaceRegularFiles, Some(MaterializationMemberKind::RegularFile)) => {
+                (ReplacementPolicy::ReplaceRegularFiles, Some(MemberKind::RegularFile)) => {
                     if let Err(error) = self.inner.dir.rename(&final_path, &self.inner.dir, &backup_path) {
                         return Err(publication_failure(
                             &self.inner.dir,
                             &state,
                             &states,
                             &created_final_directories,
-                            crate::error::MoltenError::from(error),
+                            crate::error::Failure::from(error),
                         ));
                     }
                     state.backup_path = Some(backup_path);
@@ -146,7 +146,7 @@ impl MaterializationRoot {
                     &state,
                     &states,
                     &created_final_directories,
-                    crate::error::MoltenError::from(error),
+                    crate::error::Failure::from(error),
                 ));
             }
             state.published = true;
@@ -156,7 +156,7 @@ impl MaterializationRoot {
                     &self.inner.dir,
                     &states,
                     &created_final_directories,
-                    crate::error::MoltenError::from(error),
+                    crate::error::Failure::from(error),
                 ));
             }
             if fail_after_publications.is_some_and(|limit| states.len() == limit) {
@@ -172,10 +172,10 @@ impl MaterializationRoot {
             return Err(rollback_failure(&self.inner.dir, &states, &created_final_directories, error));
         }
         remove_tree_if_present(&self.inner.dir, &staged.stage_path)?;
-        build_materialization_receipt(plan)
+        build_receipt(plan)
     }
 
-    pub fn abort(&self, staged: &StagedMaterialization) -> crate::error::Result<()> {
+    pub fn abort(&self, staged: &Staged) -> crate::error::Result<()> {
         if !std::sync::Arc::ptr_eq(&self.inner, &staged.root) {
             return Err(invalid("cannot abort a stage owned by another materialization root"));
         }
@@ -184,9 +184,9 @@ impl MaterializationRoot {
 
     pub fn materialize(
         &self,
-        plan: &MaterializationPlan,
-        payloads: &[MaterializationPayload],
-    ) -> crate::error::Result<MaterializationReceipt> {
+        plan: &Plan,
+        payloads: &[Payload],
+    ) -> crate::error::Result<Receipt> {
         let staged = self.stage(plan, payloads)?;
         match self.commit(plan, &staged) {
             Ok(receipt) => Ok(receipt),
@@ -202,14 +202,14 @@ impl MaterializationRoot {
         }
     }
 
-    pub fn read(&self, path: &MaterializationPath) -> crate::error::Result<Vec<u8>> {
+    pub fn read(&self, path: &Path) -> crate::error::Result<Vec<u8>> {
         read_regular_file_bounded(&self.inner.dir, path.as_path(), DEFAULT_MAX_MATERIALIZATION_MEMBER_BYTES)
     }
 
     fn stage_inner(
         &self,
-        plan: &MaterializationPlan,
-        payloads: &std::collections::BTreeMap<MaterializationPath, &[u8]>,
+        plan: &Plan,
+        payloads: &std::collections::BTreeMap<Path, &[u8]>,
         stage_path: &std::path::Path,
     ) -> crate::error::Result<()> {
         create_staging_root(&self.inner.dir, stage_path)?;
@@ -225,13 +225,13 @@ impl MaterializationRoot {
         Ok(())
     }
 
-    fn preflight_publication(&self, plan: &MaterializationPlan) -> crate::error::Result<()> {
+    fn preflight_publication(&self, plan: &Plan) -> crate::error::Result<()> {
         for member in &plan.members {
             let final_path = member.logical_path.as_path();
             ensure_no_symlink_components(&self.inner.dir, final_path.parent())?;
             match entry_kind(&self.inner.dir, final_path)? {
                 None => {}
-                Some(MaterializationMemberKind::RegularFile)
+                Some(MemberKind::RegularFile)
                     if plan.replacement == ReplacementPolicy::ReplaceRegularFiles => {}
                 Some(kind) if plan.replacement == ReplacementPolicy::ReplaceRegularFiles => {
                     return Err(invalid(format!(
@@ -252,13 +252,13 @@ impl MaterializationRoot {
     }
 }
 
-pub struct StagedMaterialization {
-    root: std::sync::Arc<MaterializationRootInner>,
+pub struct Staged {
+    root: std::sync::Arc<RootInner>,
     plan_ref: String,
     stage_path: std::path::PathBuf,
 }
 
-impl std::fmt::Debug for StagedMaterialization {
+impl std::fmt::Debug for Staged {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("StagedMaterialization")

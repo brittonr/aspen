@@ -1,0 +1,26 @@
+{
+  "text": "{\n  \"confidence\": 0.98,\n  \"explanation\": \"The corrected historical-receipt test resolves the reported regression while preserving real receipt admission and frozen evidence; no remaining must-fix code findings were found in the correction or existing macro/catalog/admission changes. Separate acceptance obligations already established by the package are focused root-library coverage under tasks.md:11 (particularly src/lib.rs:1339 and :1407, which metadata tests and the ignored UI integration rail do not run), provider-pinned lifecycle validation/stage gates and matching-plan mutation receipts under tasks.md:13 and cairn-policy/upstream-default.ncl:673-674,1581-1589, and retained fixture-named UI output plus displayed snapshots under AGENTS.md:26,37 (the direct message's :36 citation should be :37). No additional unconditional provider gate missing from the native package was identified; pre-tag release gates and unrelated Valence rails should not be imposed on this untagged cohort, and no checks or edits were performed during this review.\",\n  \"findings\": [],\n  \"overall_correctness\": \"correct\"\n}",
+  "details": {
+    "resolvedPath": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-aspen/2026-10-15T17-47-46-479Z_01a140ad-5faf-7599-8f93-cc88719aa0a6/ProviderReview.md",
+    "contentType": "text/markdown",
+    "totalLines": 6,
+    "displayContent": {
+      "text": "{\n  \"confidence\": 0.98,\n  \"explanation\": \"The corrected historical-receipt test resolves the reported regression while preserving real receipt admission and frozen evidence; no remaining must-fix code findings were found in the correction or existing macro/catalog/admission changes. Separate acceptance obligations already established by the package are focused root-library coverage under tasks.md:11 (particularly src/lib.rs:1339 and :1407, which metadata tests and the ignored UI integration rail do not run), provider-pinned lifecycle validation/stage gates and matching-plan mutation receipts under tasks.md:13 and cairn-policy/upstream-default.ncl:673-674,1581-1589, and retained fixture-named UI output plus displayed snapshots under AGENTS.md:26,37 (the direct message's :36 citation should be :37). No additional unconditional provider gate missing from the native package was identified; pre-tag release gates and unrelated Valence rails should not be imposed on this untagged cohort, and no checks or edits were performed during this review.\",\n  \"findings\": [],\n  \"overall_correctness\": \"correct\"\n}",
+      "startLine": 1,
+      "lineNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    "meta": {
+      "source": {
+        "type": "internal",
+        "value": "agent://ProviderReview"
+      }
+    }
+  }
+}

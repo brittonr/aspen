@@ -1,0 +1,12 @@
+{
+  "record_kind": "parent-retained executed command summary",
+  "source": "completed job bg_70 result delivered in this conversation",
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "command": "env TMPDIR=/home/brittonr/.cache/molten-guided-goal-69fuhbc2/tmp nix develop -c cargo test --workspace --doc --offline --locked --no-fail-fast",
+  "exit_code": 0,
+  "molten_core_compile_fail_passed": 7,
+  "other_workspace_doc_tests": 0,
+  "failed": 0,
+  "ignored": 0,
+  "scope": "compile-time nominal reference contracts only; not whole-system behavior"
+}

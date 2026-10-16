@@ -251,6 +251,9 @@ fn send_summary(value: &IoValue) -> Result<Option<String>> {
 }
 
 fn state_summary(value: &IoValue) -> Result<Option<String>> {
+    if let Some(summary) = run_state_summary(value)? {
+        return Ok(Some(summary));
+    }
     if let Ok(health) = crate::node_runtime::parse_node_health_receipt(value) {
         return Ok(Some(format!(
             "node health decision={} receipt={} replay={}",

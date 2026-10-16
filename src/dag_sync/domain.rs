@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 
 use molten_core::dag_sync::*;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const JOB_NODE_CONTEXT: &str = "onixresearch.molten.dag-sync.job-node.v1";
@@ -23,9 +23,9 @@ pub fn project_job_dag(dag: &crate::workload::JobDag) -> Result<DagGraph> {
     for edge in &dag.edges {
         let source = node_refs
             .get(&edge.from_node)
-            .ok_or_else(|| MoltenError::invalid_harness("job DAG edge source is unknown"))?;
+            .ok_or_else(|| Failure::invalid_harness("job DAG edge source is unknown"))?;
         if !node_refs.contains_key(&edge.to_node) {
-            return Err(MoltenError::invalid_harness("job DAG edge destination is unknown"));
+            return Err(Failure::invalid_harness("job DAG edge destination is unknown"));
         }
         reverse_edges.entry(edge.to_node.clone()).or_default().push(DagEdge {
             kind: DagEdgeKind::Dependency,
@@ -38,7 +38,7 @@ pub fn project_job_dag(dag: &crate::workload::JobDag) -> Result<DagGraph> {
         .map(|node| {
             let bytes = crate::preserves_rail::canonical_bytes(&node.config)?;
             let encoded_bytes =
-                u64::try_from(bytes.len()).map_err(|_| MoltenError::invalid_harness("job node bytes exceed u64"))?;
+                u64::try_from(bytes.len()).map_err(|_| Failure::invalid_harness("job node bytes exceed u64"))?;
             let payload_ref = node
                 .stage_artifact_ref
                 .as_ref()
@@ -50,7 +50,7 @@ pub fn project_job_dag(dag: &crate::workload::JobDag) -> Result<DagGraph> {
             Ok(DagNode {
                 node_ref: node_refs
                     .get(&node.id)
-                    .ok_or_else(|| MoltenError::invalid_harness("job node identity is missing"))?
+                    .ok_or_else(|| Failure::invalid_harness("job node identity is missing"))?
                     .clone(),
                 schema_ref: schema_ref.clone(),
                 payload_ref,
@@ -64,7 +64,7 @@ pub fn project_job_dag(dag: &crate::workload::JobDag) -> Result<DagGraph> {
         .iter()
         .map(|output| {
             let node_ref =
-                node_refs.get(output).ok_or_else(|| MoltenError::invalid_harness("job output root is unknown"))?;
+                node_refs.get(output).ok_or_else(|| Failure::invalid_harness("job output root is unknown"))?;
             Ok(DagRoot {
                 root_ref: derived_root(JOB_ROOT_CONTEXT, &[dag.job_ref.as_str(), output.as_str()])?,
                 domain: "molten-job-dag".to_string(),
@@ -82,9 +82,7 @@ pub fn project_artifact_closure(
     edges: &[crate::objects::ArtifactDependencyEdge],
 ) -> Result<DagGraph> {
     if !closure.missing_refs.is_empty() {
-        return Err(MoltenError::invalid_harness(
-            "incomplete artifact closure cannot become a completed DAG projection",
-        ));
+        return Err(Failure::invalid_harness("incomplete artifact closure cannot become a completed DAG projection"));
     }
     let members = closure.closure_refs.iter().cloned().collect::<BTreeSet<_>>();
     let schema_ref = derived_schema(ARTIFACT_SCHEMA_CONTEXT, &["artifact-dependency-v1".to_string()])?;
@@ -108,7 +106,7 @@ pub fn project_artifact_closure(
                 schema_ref: schema_ref.clone(),
                 payload_ref: Some(DagContentRef::new(reference.clone()).map_err(dag_reference_error)?),
                 encoded_bytes: u64::try_from(reference.len())
-                    .map_err(|_| MoltenError::invalid_harness("artifact reference length exceeds u64"))?,
+                    .map_err(|_| Failure::invalid_harness("artifact reference length exceeds u64"))?,
                 edges: node_edges,
             })
         })
@@ -118,7 +116,7 @@ pub fn project_artifact_closure(
         .iter()
         .map(|reference| {
             if !members.contains(reference) {
-                return Err(MoltenError::invalid_harness("artifact closure root is not a closure member"));
+                return Err(Failure::invalid_harness("artifact closure root is not a closure member"));
             }
             Ok(DagRoot {
                 root_ref: DagRootRef::new(reference.clone()).map_err(dag_reference_error)?,
@@ -147,14 +145,14 @@ fn derived_schema(context: &'static str, fields: &[String]) -> Result<DagSchemaR
 fn derived(context: &'static str, fields: &[&str]) -> Result<String> {
     let mut hasher = blake3::Hasher::new_derive_key(context);
     for field in fields {
-        let length = u64::try_from(field.len())
-            .map_err(|_| MoltenError::invalid_harness("DAG domain field length exceeds u64"))?;
+        let length =
+            u64::try_from(field.len()).map_err(|_| Failure::invalid_harness("DAG domain field length exceeds u64"))?;
         hasher.update(&length.to_be_bytes());
         hasher.update(field.as_bytes());
     }
     Ok(format!("blake3:{}", hasher.finalize().to_hex()))
 }
 
-fn dag_reference_error(error: DagReferenceError) -> MoltenError {
-    MoltenError::invalid_harness(format!("DAG domain projection reference is invalid: {error:?}"))
+fn dag_reference_error(error: DagReferenceError) -> Failure {
+    Failure::invalid_harness(format!("DAG domain projection reference is invalid: {error:?}"))
 }

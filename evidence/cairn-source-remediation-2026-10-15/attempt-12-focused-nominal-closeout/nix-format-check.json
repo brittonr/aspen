@@ -1,0 +1,18 @@
+{
+  "command": [
+    "nix",
+    "shell",
+    "--inputs-from",
+    ".",
+    "nixpkgs#nixfmt",
+    "--no-update-lock-file",
+    "-c",
+    "nixfmt",
+    "--check",
+    "flake.nix"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "this path will be fetched (798.7 KiB download, 5.0 MiB unpacked):\n  /nix/store/01945jlqwsgq7a9nbw00y0p0x6027yy3-nixfmt-1.2.0\ncopying path '/nix/store/01945jlqwsgq7a9nbw00y0p0x6027yy3-nixfmt-1.2.0' from 'https://cache.nixos.org'...\n"
+}

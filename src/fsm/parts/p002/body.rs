@@ -160,7 +160,7 @@ fn checks_value(checks: &[&str]) -> IoValue {
 }
 
 fn push_peer_diagnostic(diagnostics: &mut impl crate::bounded::VecSink<String>, diagnostic: &str) -> Result<()> {
-    crate::bounded::push_bounded(
+    crate::bounded::push(
         diagnostics,
         diagnostic.to_string(),
         MAX_PEER_SESSION_DIAGNOSTICS,
@@ -170,7 +170,7 @@ fn push_peer_diagnostic(diagnostics: &mut impl crate::bounded::VecSink<String>, 
 
 fn push_peer_guard_ref(guard_refs: &mut impl crate::bounded::VecSink<String>, reference: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(reference)?;
-    crate::bounded::push_bounded(
+    crate::bounded::push(
         guard_refs,
         reference.to_string(),
         MAX_PEER_SESSION_GUARD_REFS,

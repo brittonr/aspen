@@ -64,7 +64,7 @@ pub struct DeclaredVerdict {
 }
 
 /// Build the declared world surface pinned by the supported profile.
-pub fn declared_world(profile: &super::super::model::ComponentRuntimeProfile) -> DeclaredWorld {
+pub fn declared_world(profile: &super::super::model::RuntimeProfile) -> DeclaredWorld {
     DeclaredWorld {
         profile_id: profile.profile_id.clone(),
         wit_package: profile.wit.package.clone(),
@@ -76,10 +76,10 @@ pub fn declared_world(profile: &super::super::model::ComponentRuntimeProfile) ->
 }
 
 /// Build a typed import manifest, validating shape and binding its identity.
-pub fn build_manifest(input: ManifestInput) -> super::super::model::ComponentResult<DeclaredManifest> {
+pub fn build_manifest(input: ManifestInput) -> super::super::model::Result<DeclaredManifest> {
     let blockers = manifest_shape_blockers(&input);
     if !blockers.is_empty() {
-        return Err(super::super::model::ComponentDenial::from_blockers(blockers));
+        return Err(super::super::model::Denial::from_blockers(blockers));
     }
     let mut manifest = DeclaredManifest {
         schema_id: MANIFEST_SCHEMA.to_string(),
@@ -111,7 +111,7 @@ pub fn admit_declared(
     manifest: &DeclaredManifest,
     world: &DeclaredWorld,
     observation: &DeclaredObservation,
-) -> super::super::model::ComponentResult<DeclaredVerdict> {
+) -> super::super::model::Result<DeclaredVerdict> {
     let mut blockers = world_drift_blockers(manifest, world);
     blockers.extend(observation_drift_blockers(manifest, observation));
     if manifest.manifest_ref != manifest_identity(manifest)? {
@@ -135,10 +135,7 @@ pub fn admit_declared(
 }
 
 /// Derive the plan-side observation from declared artifact facts.
-pub fn facts_observation(
-    component_ref: &str,
-    facts: &super::super::admission::ComponentArtifactFacts,
-) -> DeclaredObservation {
+pub fn facts_observation(component_ref: &str, facts: &super::super::admission::ArtifactFacts) -> DeclaredObservation {
     DeclaredObservation {
         extraction_tool: super::expected_extraction_tool(),
         verifier: super::ADMISSION_VERIFIER.to_string(),
@@ -232,10 +229,9 @@ fn observation_drift_blockers(manifest: &DeclaredManifest, observation: &Declare
     blockers
 }
 
-fn manifest_identity(manifest: &DeclaredManifest) -> super::super::model::ComponentResult<String> {
-    crate::preserves_rail::canonical_hash(&manifest_value(manifest)).map_err(|error| {
-        super::super::model::ComponentDenial::new(format!("component import manifest hashing failed: {error}"))
-    })
+fn manifest_identity(manifest: &DeclaredManifest) -> super::super::model::Result<String> {
+    crate::preserves_rail::canonical_hash(&manifest_value(manifest))
+        .map_err(|error| super::super::model::Denial::new(format!("component import manifest hashing failed: {error}")))
 }
 
 fn strings(values: &[String]) -> preserves::IOValue {

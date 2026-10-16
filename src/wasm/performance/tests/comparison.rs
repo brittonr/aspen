@@ -1,22 +1,18 @@
 use super::super::*;
 
-fn comparison_fixture()
--> (PerformanceProfile, BenchmarkSuite, MaterializedPerformanceArtifact, MaterializedPerformanceArtifact) {
-    let profile = supported_performance_profile().expect("supported performance profile");
+fn fixture() -> (Profile, BenchmarkSuite, MaterializedArtifact, MaterializedArtifact) {
+    let profile = supported().expect("supported performance profile");
     let source_bytes = super::support::fixture_component_bytes();
     let source_ref = super::support::fixture_bytes_ref(&source_bytes);
     let baseline_bundle =
-        super::support::fixture_bundle(PerformanceArtifactKind::PortableComponent, &source_bytes, source_ref.clone());
+        super::support::fixture_bundle(ArtifactKind::PortableComponent, &source_bytes, source_ref.clone());
     let candidate_bytes = super::support::fixture_alternate_component_bytes();
-    let candidate_bundle =
-        super::support::fixture_bundle(PerformanceArtifactKind::WizerComponent, &candidate_bytes, source_ref);
+    let candidate_bundle = super::support::fixture_bundle(ArtifactKind::WizerComponent, &candidate_bytes, source_ref);
     let mut suite = profile.fast.clone();
     suite.materialization_bundle_refs = vec![baseline_bundle.bundle_ref.clone(), candidate_bundle.bundle_ref.clone()];
     suite.materialization_bundle_refs.sort();
-    let baseline =
-        verify_performance_materialization(&suite, &baseline_bundle, &source_bytes).expect("baseline materialization");
-    let candidate = verify_performance_materialization(&suite, &candidate_bundle, &candidate_bytes)
-        .expect("candidate materialization");
+    let baseline = verify(&suite, &baseline_bundle, &source_bytes).expect("baseline materialization");
+    let candidate = verify(&suite, &candidate_bundle, &candidate_bytes).expect("candidate materialization");
     (profile, suite, baseline, candidate)
 }
 
@@ -24,7 +20,7 @@ fn comparison_fixture()
 fn compatible_runs_produce_deterministic_effect_confidence_and_regression_classes() {
     // r[verify molten.wasm_performance.comparison]
     // r[verify molten.wasm_performance.functional_core]
-    let (profile, suite, baseline_artifact, candidate_artifact) = comparison_fixture();
+    let (profile, suite, baseline_artifact, candidate_artifact) = fixture();
     let baseline =
         super::support::fixture_run(&profile, &suite, &baseline_artifact, super::support::BASELINE_SAMPLE_COUNTS);
     let improved =
@@ -66,7 +62,7 @@ fn compatible_runs_produce_deterministic_effect_confidence_and_regression_classe
 fn incompatible_host_runtime_suite_and_undersampled_runs_are_never_ranked() {
     // r[verify molten.wasm_performance.comparison]
     // r[verify molten.wasm_performance.validation]
-    let (profile, suite, baseline_artifact, candidate_artifact) = comparison_fixture();
+    let (profile, suite, baseline_artifact, candidate_artifact) = fixture();
     let baseline =
         super::support::fixture_run(&profile, &suite, &baseline_artifact, super::support::BASELINE_SAMPLE_COUNTS);
     let mut incompatible = super::support::fixture_run(

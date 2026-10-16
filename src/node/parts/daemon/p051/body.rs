@@ -5,7 +5,7 @@ fn control_live_topic_id(topic: &str) -> iroh_gossip::TopicId {
 }
 
 fn denied_live_ingress_delivery(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::DirectoryRoot,
     envelope: &ControlIngressEnvelope,
     diagnostics: &[String],
 ) -> Result<ControlIngressDeliver> {

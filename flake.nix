@@ -21,6 +21,7 @@
       url = "github:oxalica/rust-overlay/6cddd512fa2bf7231f098d3a2f92f6e4cff71e0a";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # r[impl molten.onixpkgs_kache.source]
     onixpkgs = {
       url = "git+ssh://git@github.com/OnixResearch/onixpkgs.git?rev=56a93169f4ace2394dc4c474c6d28911c24c35e7";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -77,7 +78,9 @@
       url = "github:OnixResearch/octet/4367300e10740ecc99ba4b2171ace561b4787327";
       flake = false;
     };
-    octet-toolchain.url = "github:OnixResearch/octet?rev=fc38f59330b626961d166febfdf1a5aa6575460f";
+    octet-toolchain.url = "github:OnixResearch/octet?rev=3f7abb641ee604f54629da415bc7686f89662065";
+    # The frozen verifier pilot replays its original cohort, not the current lint provider.
+    verified-node-replication-octet.url = "github:OnixResearch/octet?rev=fc38f59330b626961d166febfdf1a5aa6575460f";
     valence-src = {
       url = "github:OnixResearch/valence/5f1c2ba5072c6f9622fa59b1af20502985f569fd";
       flake = false;
@@ -121,6 +124,7 @@
       hegel-src,
       octet-cutover-src,
       octet-toolchain,
+      verified-node-replication-octet,
       valence-src,
       schema-identity-src,
       schema-migration-core-src,
@@ -130,6 +134,7 @@
     flake-utils.lib.eachDefaultSystem (
       system:
       let
+        # r[impl molten.onixpkgs_kache.isolation]
         pkgsBase = import nixpkgs {
           localSystem = system;
           overlays = [
@@ -947,7 +952,7 @@
         '';
         verifiedNodeReplicationPilot = import ./nix/verified-node-replication-pilot.nix {
           inherit pkgs;
-          octetPackages = octet-toolchain.packages.${system};
+          octetPackages = verified-node-replication-octet.packages.${system};
           octetRevision = "fc38f59330b626961d166febfdf1a5aa6575460f";
           profileDir = ./verification/verified-node-replication-pilot;
           workspaceSource = sourceForConfigChecks;
@@ -2093,6 +2098,7 @@
                   runtime_spine_preserves_boundary_repairs_generated=evidence/tracey/runtime-spine-preserves-boundary-direct-repairs.json
                   expected_runtime_spine_preserves_boundary_candidate_count=9
 
+                  # r[verify molten.project.inherited_tracey_debt.active_delta_validation]
                   rustc --edition=2024 --test "$guard_source" -o "$TMPDIR/guard-tests"
                   "$TMPDIR/guard-tests"
                   rustc --edition=2024 "$guard_source" -o "$TMPDIR/guard"
@@ -3197,40 +3203,119 @@
                   fi
                 '';
 
+            # r[impl molten.authority.nominal_references.octet]
             # r[verify molten.authority.nominal_references.inventory.complete]
             nominal-reference-domains =
+              let
+                provider = octet-toolchain.packages.${system};
+                toolchain = pkgs.rust-bin.fromRustupToolchainFile "${octet-toolchain}/rust-toolchain.toml";
+              in
               pkgs.runCommand "molten-nominal-reference-domains"
                 {
                   nativeBuildInputs = [
+                    toolchain
                     pkgs.jq
                     pkgs.nickel
-                    pkgs.ripgrep
+                    pkgs.python3
+                    pkgs.diffutils
                   ];
                   src = sourceForConfigChecks;
                 }
                 ''
                   set -euo pipefail
-                  cd "$src"
+                  mkdir -p "$out" "$PWD/home" "$PWD/library"
+                  export HOME="$PWD/home"
                   profile=config/nominal-reference-domains.ncl
                   core=crates/molten-core/src/nominal.rs
-                  expected_domains=15
+                  compatibility=src/authority/nominal.rs
 
-                  nickel typecheck "$profile"
-                  nickel export --format json "$profile" > "$TMPDIR/profile.json"
-                  test "$(jq '.domains | length' "$TMPDIR/profile.json")" = "$expected_domains"
-                  jq -e '.canonical_algorithm == "blake3" and .wire_authority == "preserves"' "$TMPDIR/profile.json"
-                  jq -e '.constructor_non_claims | index("typed-reference-is-not-authority") != null' "$TMPDIR/profile.json"
+                  # r[impl molten.authority.nominal_references.octet.catalog]
+                  # r[verify molten.authority.nominal_references.octet.catalog]
+                  nickel typecheck "$src/$profile"
+                  nickel export --format json "$src/$profile" > "$out/profile.json"
+                  jq '[.domains[].catalog] | sort_by(.domain_id)' "$out/profile.json" > "$out/consumer-catalog.json"
+                  jq --arg core "$core" --arg compatibility "$compatibility" '
+                    [.domains[] | select(.domain_id | startswith("molten.nominal-reference."))
+                      | .core_scopes = [.core_scopes[] | select(. == $core)]
+                      | .compatibility_scopes = [.compatibility_scopes[] | select(. == $compatibility)]]
+                    | sort_by(.domain_id)
+                  ' ${octet-toolchain}/standards/nominal-domains/generated/catalog.json > "$out/provider-catalog.json"
+                  diff -u "$out/consumer-catalog.json" "$out/provider-catalog.json"
 
-                  rg -q 'SessionDomain, SessionRef' "$core"
-                  rg -q 'AuthorityContextDomain, AuthorityContextRef' "$core"
-                  rg -q 'ArtifactDomain, ArtifactRef' "$core"
-                  rg -q 'ReceiptDomain, ReceiptRef' "$core"
-                  rg -q '```compile_fail' "$core"
-                  if rg -n 'pub [a-zA-Z_][a-zA-Z0-9_]*: String' "$core"; then
-                    echo "migrated nominal core exposes a raw string field" >&2
-                    exit 1
-                  fi
-                  touch "$out"
+                  for fixture in positive raw-field raw-alias; do
+                    mkdir -p "$fixture/crates/molten-core/src/parts"
+                    cp "$src/$core" "$fixture/$core"
+                    cp -R "$src/crates/molten-core/src/parts/nominal" "$fixture/crates/molten-core/src/parts/nominal"
+                    cp "$src/dylint.toml" "$fixture/dylint.toml"
+                    chmod -R u+w "$fixture"
+                    printf '%s\n' '[package]' 'name = "molten-nominal-check"' \
+                      'version = "0.0.0"' 'edition = "2024"' '[lib]' \
+                      'path = "crates/molten-core/src/nominal.rs"' '[workspace]' \
+                      '[workspace.metadata.octet]' 'default_scope = ["-p", "molten-nominal-check"]' \
+                      'cargo_check_args = ["--lib", "--offline"]' > "$fixture/Cargo.toml"
+                    (
+                      cd "$fixture"
+                      export CARGO_HOME="$PWD/.cargo-home"
+                      cargo generate-lockfile --offline
+                    )
+                  done
+
+                  # Mutate existing fields and the real local macro, never shadow fixtures.
+                  # r[impl molten.authority.nominal_references.octet.alias]
+                  python3 - <<'PY'
+                  from pathlib import Path
+
+                  def replace_once(text, before, after):
+                      if text.count(before) != 1:
+                          raise SystemExit(f"nominal mutation anchor is not unique: {before}")
+                      return text.replace(before, after, 1)
+
+                  field = Path("raw-field/crates/molten-core/src/nominal.rs")
+                  field.write_text(replace_once(field.read_text(), "pub holder: PrincipalRef,", "pub holder: String,"))
+                  alias = Path("raw-alias/crates/molten-core/src/nominal.rs")
+                  text = replace_once(alias.read_text(), "macro_rules! domains {", """macro_rules! domains {
+                      (@alias PrincipalRef, $family:ident, $marker:ident) => { String };
+                      (@alias $alias:ident, $family:ident, $marker:ident) => { $family<$marker> };""")
+                  text = replace_once(text, "pub type $alias = $family<$marker>;",
+                                      "pub type $alias = domains!(@alias $alias, $family, $marker);")
+                  text = replace_once(text, "AdmittedReference::Principal(PrincipalRef::new(value)?)",
+                                      "AdmittedReference::Principal(String::from(value))")
+                  alias.write_text(text)
+                  PY
+
+                  # r[verify molten.authority.nominal_references.octet.validation]
+                  # r[impl molten.authority.nominal_references.octet.guard]
+                  # r[verify molten.authority.nominal_references.octet.guard]
+                  # r[verify molten.authority.nominal_references.octet.alias]
+                  for fixture in positive raw-field raw-alias; do
+                    if [ "$fixture" != positive ]; then
+                      mkdir -p "$out/$fixture-plain"
+                      rustc --edition=2024 --crate-type=lib --crate-name nominal_check \
+                        "$fixture/$core" --out-dir "$out/$fixture-plain"
+                    fi
+                    if (
+                      cd "$fixture"
+                      export CARGO_HOME="$PWD/.cargo-home" CARGO_TARGET_DIR="$PWD/target"
+                      unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER DYLINT_LIBS
+                      ${provider.cargo-octet}/bin/cargo-octet check --output-format json \
+                        --artifact-dir "$out/$fixture" -- --lib --offline
+                    ) > "$out/$fixture.stdout" 2> "$out/$fixture.stderr"; then
+                      status=0
+                    else
+                      status=$?
+                    fi
+                    if [ "$fixture" = positive ]; then
+                      test "$status" = 0
+                      jq -e '.status == "clean" and .total_findings == 0' "$out/$fixture/status.json"
+                    else
+                      test "$status" != 0
+                      lint=raw_domain_value
+                      if [ "$fixture" = raw-alias ]; then lint=primitive_domain_alias; fi
+                      jq -e -s --arg lint "$lint" --arg core "$core" 'any(.[];
+                        .lint == $lint and .severity == "error" and .file == $core)' \
+                        "$out/$fixture/results.jsonl"
+                    fi
+                  done
                 '';
 
             # r[impl molten.modularity.fabric_boundary.enforcement.adapter_trait]
@@ -3529,6 +3614,7 @@
                   touch "$out"
                 '';
 
+            # r[verify molten.onixpkgs_kache.contract]
             kache-nix-rust-wrapper-contract =
               let
                 missingCacheDiagnostic = "cache directory is not writable";

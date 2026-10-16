@@ -1,23 +1,23 @@
 
-impl<'a> IrohEd25519FileAdapter<'a> {
+impl<'a> IrohEd25519<'a> {
     pub fn new(
-        namespace: &'a crate::node_state::NodeStateNamespace,
-        profile: CanonicalCryptoProfile,
+        namespace: &'a crate::node_state::Scope,
+        profile: Profile,
         backend_ref: String,
     ) -> crate::error::Result<Self> {
         admit_profile_for_production(&profile.profile)
             .map_err(|issues| validation_error("production crypto profile", &issues))?;
         if !profile.profile.backend_classes.contains(&KeyBackendClass::CapabilityFile) {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "production crypto profile does not admit capability-file keys",
             ));
         }
         require_blake3_ref("crypto file backend", &backend_ref)?;
         match namespace.kind() {
-            crate::node_state::NodeStateNamespaceKind::Identity
-            | crate::node_state::NodeStateNamespaceKind::Secrets => {}
+            crate::node_state::NamespaceKind::Identity
+            | crate::node_state::NamespaceKind::Secrets => {}
             other => {
-                return Err(crate::error::MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "crypto file adapter requires identity or secrets namespace, got {other:?}"
                 )));
             }
@@ -29,7 +29,7 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         })
     }
 
-    pub fn profile(&self) -> &CanonicalCryptoProfile {
+    pub fn profile(&self) -> &Profile {
         &self.profile
     }
 
@@ -44,20 +44,20 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         require_not_revoked(self.namespace, purpose)?;
         let path = key_path(purpose)?;
         match self.namespace.observe_file(&path)? {
-            crate::node_state::NodeStateFileObservation::Missing => {
+            crate::node_state::FileObservation::Missing => {
                 if !permit_first_boot_generation {
-                    return Err(crate::error::MoltenError::invalid_harness(
+                    return Err(crate::error::Failure::invalid_harness(
                         "required production key is unavailable and replacement generation is disabled",
                     ));
                 }
                 self.generate_first_key(purpose, policy_ref, &path)
             }
-            crate::node_state::NodeStateFileObservation::NonRegular(kind) => {
-                Err(crate::error::MoltenError::invalid_harness(format!(
+            crate::node_state::FileObservation::NonRegular(kind) => {
+                Err(crate::error::Failure::invalid_harness(format!(
                     "production key leaf must be a regular file, got {kind:?}"
                 )))
             }
-            crate::node_state::NodeStateFileObservation::Regular(file) => {
+            crate::node_state::FileObservation::Regular(file) => {
                 let permission_status = permission_status(&file);
                 require_restricted_permission(permission_status)?;
                 let bytes = file.read_bounded(crate::node_state::MAX_NODE_SECRET_BYTES)?;
@@ -71,10 +71,10 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         &self,
         purpose: KeyPurpose,
         policy_ref: &str,
-        path: &crate::node_state::NodeStatePath,
+        path: &crate::node_state::RelativePath,
     ) -> crate::error::Result<ResolvedProductionKey> {
         let entropy_profile_ref = self.profile.profile.entropy_profile_ref.clone().ok_or_else(|| {
-            crate::error::MoltenError::invalid_harness("production crypto profile has no entropy profile")
+            crate::error::Failure::invalid_harness("production crypto profile has no entropy profile")
         })?;
         let request = KeyGenerationRequest {
             operation_id: format!("generate-{}", purpose.as_str()),
@@ -114,7 +114,7 @@ impl<'a> IrohEd25519FileAdapter<'a> {
             &public_key_ref,
             &self.backend_ref,
         )?;
-        let handle = canonical_key_handle(KeyHandleInput {
+        let handle = key_handle(KeyHandleInput {
             profile: &self.profile,
             purpose,
             generation: record.generation,
@@ -136,9 +136,9 @@ impl<'a> IrohEd25519FileAdapter<'a> {
     pub fn sign(
         &self,
         requested_handle: &OpaqueKeyHandle,
-        domain: &CanonicalSignatureDomain,
+        domain: &DomainEnvelope,
         policy_ref: &str,
-    ) -> crate::error::Result<CanonicalSignatureOutcome> {
+    ) -> crate::error::Result<SignatureOutcome> {
         require_canonical_domain(&self.profile, domain)?;
         let current = self.resolve_or_generate(requested_handle.purpose, policy_ref, false)?;
         let request = SignRequest {
@@ -153,13 +153,13 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         let plan = plan_sign(&self.profile.profile, &request)
             .map_err(|issues| validation_error("production signing", &issues))?;
         if domain.domain_ref != crate::preserves_rail::canonical_hash(&domain.value)? {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "signature domain ref does not match canonical value",
             ));
         }
         let record = self.load_current_record(requested_handle.purpose)?;
         let signature = record.secret_key.sign(&domain.bytes).to_bytes().to_vec();
-        canonical_signature_outcome(&self.profile, &plan, domain, signature)
+        signature_outcome(&self.profile, &plan, domain, signature)
     }
 
     // r[impl molten.artifact_auth_shell.exact_verification]
@@ -173,12 +173,12 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         let current = self.resolve_or_generate(requested_handle.purpose, policy_ref, false)?;
         require_current_handle(requested_handle, &current.handle.handle)?;
         if statement.scope.profile_id != self.profile.profile.profile_id {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "artifact-auth statement profile does not match the key profile",
             ));
         }
         if statement.scope.purpose != requested_handle.purpose.as_str() {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "artifact-auth statement purpose does not match the key purpose",
             ));
         }
@@ -186,12 +186,12 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         let public_key = record.secret_key.public();
         let key_identity = artifact_auth_ed25519::public_key_identity(public_key.as_bytes());
         if statement.key_identity != key_identity {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "artifact-auth statement full-key identity does not match the current key",
             ));
         }
         let statement_bytes = artifact_auth_core::canonical_statement_bytes(statement).map_err(|_| {
-            crate::error::MoltenError::invalid_harness("artifact-auth statement is not canonicalizable")
+            crate::error::Failure::invalid_harness("artifact-auth statement is not canonicalizable")
         })?;
         let signature_bytes = record.secret_key.sign(&statement_bytes).to_bytes().to_vec();
         debug_assert_eq!(public_key.as_bytes().len(), artifact_auth_ed25519::ED25519_PUBLIC_KEY_BYTES);
@@ -207,7 +207,7 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         &self,
         public_key: &str,
         input: VerificationInput<'_>,
-    ) -> crate::error::Result<CanonicalVerificationOutcome> {
+    ) -> crate::error::Result<VerificationOutcome> {
         let VerificationInput {
             expected_domain,
             signature,
@@ -219,7 +219,7 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         require_canonical_domain(&self.profile, expected_domain)?;
         require_canonical_signature(signature)?;
         let public_key = iroh::PublicKey::from_str(public_key)
-            .map_err(|_| crate::error::MoltenError::invalid_harness("verification public key is malformed"))?;
+            .map_err(|_| crate::error::Failure::invalid_harness("verification public key is malformed"))?;
         let public_key_ref = crate::preserves_rail::content_ref_from_bytes(public_key.as_bytes());
         let parsed_signature = iroh::Signature::try_from(signature.signature.as_slice()).ok();
         let is_crypto_passed = parsed_signature
@@ -239,7 +239,7 @@ impl<'a> IrohEd25519FileAdapter<'a> {
             signer_generation,
             policy_ref: policy_ref.to_string(),
         };
-        canonical_verification_outcome(evaluate_verification(&self.profile.profile, &request))
+        verification_outcome(evaluate_verification(&self.profile.profile, &request))
     }
 
     // r[impl molten.crypto_identity.rotation_revocation]
@@ -248,7 +248,7 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         handle: &OpaqueKeyHandle,
         revocation_evidence_ref: &str,
         policy_ref: &str,
-    ) -> crate::error::Result<CryptoStatusReadback> {
+    ) -> crate::error::Result<StatusReadback> {
         require_blake3_ref("revocation evidence", revocation_evidence_ref)?;
         require_blake3_ref("revocation policy", policy_ref)?;
         let current = self.resolve_or_generate(handle.purpose, policy_ref, false)?;

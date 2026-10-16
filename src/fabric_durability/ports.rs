@@ -60,5 +60,5 @@ impl DurablePortCommand {
 
 pub trait DurableCommandShell {
     fn profile_id(&self) -> &str;
-    fn execute_command(&mut self, command: &DurablePortCommand) -> FabricPortResult<CanonicalDurableTransition>;
+    fn execute_command(&mut self, command: &DurablePortCommand) -> FabricPortResult<TransitionEnvelope>;
 }

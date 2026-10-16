@@ -2,7 +2,7 @@
 pub fn validate_octet_source_gate(input: &OctetSourceGateValidationInput) -> Result<OctetSourceGateValidation> {
     let mut checks = Vec::new();
     let mut diagnostics = Vec::new();
-    let setup = prepare_source_validation(input, &mut checks, &mut diagnostics)?;
+    let setup = prepare_source_validation(input, &capture_workspace(), &mut checks, &mut diagnostics)?;
     let requirement_value = octet_source_gate_requirement_value(
         &input.consumer,
         &input.subject_ref,
@@ -64,6 +64,7 @@ fn normalized_source_scope(input: &OctetSourceGateValidationInput) -> Result<Vec
 
 fn prepare_source_validation(
     input: &OctetSourceGateValidationInput,
+    workspace: &std::result::Result<WorkspaceSnapshot, String>,
     checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<SourceSetup> {
@@ -86,7 +87,7 @@ fn prepare_source_validation(
             format!("source scope is outside configured Octet source-gate coverage: {}", source_scope.join(", ")),
         );
     }
-    let expected = expected_metadata_for_command(DEFAULT_GATE_COMMAND).ok();
+    let expected = expected_metadata_for_command(DEFAULT_GATE_COMMAND, workspace).ok();
     push_check(checks, "current-octet-metadata", expected.is_some());
     if expected.is_none() {
         push_diagnostic(diagnostics, "cannot derive current Octet workspace metadata".to_string());

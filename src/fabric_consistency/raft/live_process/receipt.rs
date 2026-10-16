@@ -3,7 +3,7 @@ use preserves::ValueImpl as _;
 use super::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct ProcessReceipt {
+pub(super) struct Observation {
     pub(super) node_id: String,
     pub(super) process_id: u64,
     pub(super) endpoint_identity: String,
@@ -31,7 +31,7 @@ pub(super) struct ProcessReceipt {
     pub(super) commit_quorum_members: Vec<String>,
 }
 
-pub(super) fn receipt_path(run_directory: &std::path::Path, node_id: &str) -> std::path::PathBuf {
+pub(super) fn path(run_directory: &std::path::Path, node_id: &str) -> std::path::PathBuf {
     run_directory.join(format!("{node_id}-terminal.preserves"))
 }
 
@@ -39,30 +39,30 @@ pub(super) fn checkpoint_path(run_directory: &std::path::Path, node_id: &str) ->
     run_directory.join(format!("{node_id}-checkpoint.preserves"))
 }
 
-pub(super) fn read_checkpoint_receipts(run_directory: &std::path::Path) -> [ProcessReceipt; STATIC_VOTER_COUNT] {
+pub(super) fn read_checkpoint_receipts(run_directory: &std::path::Path) -> [Observation; STATIC_VOTER_COUNT] {
     [
-        read_receipt(&checkpoint_path(run_directory, super::super::tests::NODE_A)).expect("node A checkpoint"),
-        read_receipt(&checkpoint_path(run_directory, super::super::tests::NODE_B)).expect("node B checkpoint"),
-        read_receipt(&checkpoint_path(run_directory, super::super::tests::NODE_C)).expect("node C checkpoint"),
+        read(&checkpoint_path(run_directory, super::super::tests::NODE_A)).expect("node A checkpoint"),
+        read(&checkpoint_path(run_directory, super::super::tests::NODE_B)).expect("node B checkpoint"),
+        read(&checkpoint_path(run_directory, super::super::tests::NODE_C)).expect("node C checkpoint"),
     ]
 }
 
-pub(super) fn read_terminal_receipts(run_directory: &std::path::Path) -> [ProcessReceipt; STATIC_VOTER_COUNT] {
+pub(super) fn read_terminal_receipts(run_directory: &std::path::Path) -> [Observation; STATIC_VOTER_COUNT] {
     [
-        read_receipt(&receipt_path(run_directory, super::super::tests::NODE_A)).expect("node A terminal receipt"),
-        read_receipt(&receipt_path(run_directory, super::super::tests::NODE_B)).expect("node B terminal receipt"),
-        read_receipt(&receipt_path(run_directory, super::super::tests::NODE_C)).expect("node C terminal receipt"),
+        read(&path(run_directory, super::super::tests::NODE_A)).expect("node A terminal receipt"),
+        read(&path(run_directory, super::super::tests::NODE_B)).expect("node B terminal receipt"),
+        read(&path(run_directory, super::super::tests::NODE_C)).expect("node C terminal receipt"),
     ]
 }
 
-fn read_receipt(path: &std::path::Path) -> crate::error::Result<ProcessReceipt> {
-    parse_receipt(&read_value(path)?)
+fn read(path: &std::path::Path) -> crate::error::Result<Observation> {
+    parse(&read_value(path)?)
 }
 
-pub(super) fn parse_receipt(value: &preserves::IOValue) -> crate::error::Result<ProcessReceipt> {
+pub(super) fn parse(value: &preserves::IOValue) -> crate::error::Result<Observation> {
     let fields = canonical::required_record(value, RECEIPT_SCHEMA, RECEIPT_FIELD_COUNT)
-        .map_err(|error| crate::error::MoltenError::invalid_harness(format!("invalid participant receipt: {error}")))?;
-    Ok(ProcessReceipt {
+        .map_err(|error| crate::error::Failure::invalid_harness(format!("invalid participant receipt: {error}")))?;
+    Ok(Observation {
         node_id: canonical::required_string(&fields[0], "receipt node")?,
         process_id: canonical::required_u64(&fields[1], "receipt process")?,
         endpoint_identity: canonical::required_string(&fields[2], "receipt endpoint")?,
@@ -97,9 +97,9 @@ fn parse_member_sequence(
 ) -> crate::error::Result<Vec<std::string::String>> {
     let members = value
         .collect_sequence()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected sequence for {label}")))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected sequence for {label}")))?;
     if members.len() > STATIC_VOTER_COUNT {
-        return Err(crate::error::MoltenError::invalid_harness(format!("{label} exceeds the static voter bound")));
+        return Err(crate::error::Failure::invalid_harness(format!("{label} exceeds the static voter bound")));
     }
     members.iter().map(|member| canonical::required_string(&member, label)).collect()
 }
@@ -108,24 +108,23 @@ fn parse_role(value: &preserves::Value<preserves::IOValue>) -> crate::error::Res
     match canonical::required_string(value, "receipt role")?.as_str() {
         "leader" => Ok(ReplicaRole::Leader),
         "follower" => Ok(ReplicaRole::Follower),
-        _ => Err(crate::error::MoltenError::invalid_harness("participant receipt has an invalid role")),
+        _ => Err(crate::error::Failure::invalid_harness("participant receipt has an invalid role")),
     }
 }
 
-pub(super) fn receipt_from_node(
+pub(super) fn from_node(
     node_id: &str,
     endpoint_identity: &str,
-    node: &crate::fabric_consistency::raft::live_cluster::LiveNode,
-) -> crate::error::Result<ProcessReceipt> {
+    node: &crate::fabric_consistency::raft::live_cluster::Node,
+) -> crate::error::Result<Observation> {
     let state = node.service.state();
     let application = node.service.ports().application.handler();
     let durability = node.service.ports().durability.adapter().state();
-    let commit_evidence =
-        node.service.evidence().records().iter().find(|record| record.kind == ReplicaEvidenceKind::Commit);
+    let commit_evidence = node.service.evidence().records().iter().find(|record| record.kind == ReplicaKind::Commit);
     let commit_effect_ref = commit_evidence.map_or_else(String::new, |record| record.source_ref.clone());
     let commit_quorum_ref = commit_evidence.and_then(|record| record.quorum_evidence_ref.clone()).unwrap_or_default();
     let commit_quorum_members = commit_evidence.map_or_else(Vec::new, |record| record.quorum_members.clone());
-    Ok(ProcessReceipt {
+    Ok(Observation {
         node_id: node_id.to_string(),
         process_id: u64::from(std::process::id()),
         endpoint_identity: endpoint_identity.to_string(),
@@ -135,7 +134,7 @@ pub(super) fn receipt_from_node(
         last_applied: state.last_applied,
         quorum_term: state.quorum_confirmed_term.unwrap_or(INITIAL_TERM),
         pending_read_count: u64::try_from(state.pending_reads.len())
-            .map_err(|_| crate::error::MoltenError::invalid_harness("pending read count overflow"))?,
+            .map_err(|_| crate::error::Failure::invalid_harness("pending read count overflow"))?,
         snapshot_ref: state.snapshot.as_ref().map_or_else(String::new, |snapshot| snapshot.snapshot_ref.clone()),
         request_completed: state.completed_requests.contains_key(&super::super::tests::test_ref(REQUEST_LABEL)),
         quorum_loss_request_uncommitted: !state
@@ -145,9 +144,9 @@ pub(super) fn receipt_from_node(
         application_restored: application.restored_application_state_ref
             == Some(super::super::tests::test_ref(APPLICATION_STATE_LABEL)),
         durable_record_count: u64::try_from(durability.durable_log.len())
-            .map_err(|_| crate::error::MoltenError::invalid_harness("durable record count overflow"))?,
+            .map_err(|_| crate::error::Failure::invalid_harness("durable record count overflow"))?,
         durable_snapshot_count: u64::try_from(durability.snapshots.len())
-            .map_err(|_| crate::error::MoltenError::invalid_harness("durable snapshot count overflow"))?,
+            .map_err(|_| crate::error::Failure::invalid_harness("durable snapshot count overflow"))?,
         clean_shutdown: false,
         recovery_ref: node.recovery_ref.clone().unwrap_or_default(),
         group_binding_ref: state.profile.group_binding_ref.clone(),
@@ -160,7 +159,7 @@ pub(super) fn receipt_from_node(
     })
 }
 
-pub(super) fn receipt_value(receipt: &ProcessReceipt) -> preserves::IOValue {
+pub(super) fn value(receipt: &Observation) -> preserves::IOValue {
     crate::preserves_rail::record(RECEIPT_SCHEMA, vec![
         crate::preserves_rail::string(&receipt.node_id),
         crate::preserves_rail::u64_value(receipt.process_id),
@@ -198,7 +197,7 @@ fn member_sequence_value(members: &[std::string::String]) -> preserves::IOValue 
     crate::preserves_rail::sequence(values)
 }
 
-pub(super) fn assert_active_process_receipts(receipts: &[ProcessReceipt; STATIC_VOTER_COUNT]) {
+pub(super) fn assert_active_receipts(receipts: &[Observation; STATIC_VOTER_COUNT]) {
     assert_distinct_identity(receipts);
     assert!(receipts.iter().all(|receipt| !receipt.clean_shutdown));
     assert!(receipts.iter().all(|receipt| receipt.recovery_ref.is_empty()));
@@ -212,7 +211,7 @@ pub(super) fn assert_active_process_receipts(receipts: &[ProcessReceipt; STATIC_
     assert!(leader.quorum_loss_request_uncommitted);
     assert!(leader.application_applied);
     assert!(leader.durable_record_count > 0);
-    let quorum_ref = validate_process_commit_quorum(leader).expect("offline process commit quorum evidence");
+    let quorum_ref = validate_commit_quorum(leader).expect("offline process commit quorum evidence");
     assert_eq!(quorum_ref, leader.commit_quorum_ref);
     assert_eq!(receipts[1].commit_index, INITIAL_LOG_INDEX);
     assert!(receipts[1].application_applied);
@@ -221,7 +220,7 @@ pub(super) fn assert_active_process_receipts(receipts: &[ProcessReceipt; STATIC_
     assert_eq!(receipts[2].durable_snapshot_count, 1);
 }
 
-pub(super) fn assert_recovery_receipts(receipts: &[ProcessReceipt; STATIC_VOTER_COUNT]) {
+pub(super) fn assert_recovery_receipts(receipts: &[Observation; STATIC_VOTER_COUNT]) {
     assert_distinct_identity(receipts);
     for receipt in receipts {
         assert!(receipt.clean_shutdown);
@@ -244,9 +243,9 @@ pub(super) fn assert_recovery_receipts(receipts: &[ProcessReceipt; STATIC_VOTER_
     assert_eq!(receipts[2].durable_snapshot_count, 1);
 }
 
-pub(super) fn validate_process_commit_quorum(receipt: &ProcessReceipt) -> crate::error::Result<String> {
-    let validated = validate_replica_quorum_evidence(&ReplicaQuorumEvidence {
-        boundary: ReplicaQuorumEvidenceBoundary::Commit,
+pub(super) fn validate_commit_quorum(receipt: &Observation) -> crate::error::Result<String> {
+    let validated = validate_replica_quorum(&ReplicaQuorum {
+        boundary: ReplicaQuorumBoundary::Commit,
         group_binding_ref: receipt.group_binding_ref.clone(),
         membership_ref: receipt.membership_ref.clone(),
         config_epoch: receipt.config_epoch,
@@ -257,14 +256,12 @@ pub(super) fn validate_process_commit_quorum(receipt: &ProcessReceipt) -> crate:
         source_ref: receipt.commit_effect_ref.clone(),
     })?;
     if validated.evidence_ref != receipt.commit_quorum_ref {
-        return Err(crate::error::MoltenError::invalid_harness(
-            "distinct-process commit quorum evidence binding mismatch",
-        ));
+        return Err(crate::error::Failure::invalid_harness("distinct-process commit quorum evidence binding mismatch"));
     }
     Ok(validated.evidence_ref)
 }
 
-fn assert_distinct_identity(receipts: &[ProcessReceipt; STATIC_VOTER_COUNT]) {
+fn assert_distinct_identity(receipts: &[Observation; STATIC_VOTER_COUNT]) {
     let process_ids = receipts.iter().map(|receipt| receipt.process_id).collect::<std::collections::BTreeSet<_>>();
     let endpoint_ids =
         receipts.iter().map(|receipt| &receipt.endpoint_identity).collect::<std::collections::BTreeSet<_>>();

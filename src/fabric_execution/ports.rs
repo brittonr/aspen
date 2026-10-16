@@ -1,5 +1,5 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ResolvedExecutionContext {
+pub struct ResolvedContext {
     pub executable_path: std::path::PathBuf,
     pub executable_artifact_ref: String,
     pub executable_identity_ref: String,
@@ -10,7 +10,7 @@ pub struct ResolvedExecutionContext {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExecutionObservedDisposition {
+pub enum ObservedDisposition {
     ExitPolicyAccepted,
     ExitPolicyRejected,
     OutputPolicyRejected,
@@ -18,7 +18,7 @@ pub enum ExecutionObservedDisposition {
     Cancelled,
 }
 
-impl ExecutionObservedDisposition {
+impl ObservedDisposition {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::ExitPolicyAccepted => "exit-policy-accepted",
@@ -31,7 +31,7 @@ impl ExecutionObservedDisposition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RetainedExecutionStream {
+pub struct RetainedStream {
     pub role: String,
     pub retained_bytes: Vec<u8>,
     pub observed_bytes: u64,
@@ -40,27 +40,27 @@ pub struct RetainedExecutionStream {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExecutionProcessObservation {
+pub struct ProcessObservation {
     pub lifecycle: super::ExecutionLifecycleState,
     pub start_observed: bool,
     pub terminal_observed: bool,
     pub teardown_observed: bool,
     pub exit_code: Option<i32>,
     pub signal: Option<i32>,
-    pub disposition: ExecutionObservedDisposition,
-    pub stdout: RetainedExecutionStream,
-    pub stderr: RetainedExecutionStream,
+    pub disposition: ObservedDisposition,
+    pub stdout: RetainedStream,
+    pub stderr: RetainedStream,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PublishedExecutionStream {
+pub struct PublishedStream {
     pub content_ref: String,
     pub publication_receipt_ref: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ExecutionStreamPublication {
-    Published(PublishedExecutionStream),
+pub enum StreamPublication {
+    Published(PublishedStream),
     Failed { diagnostic_code: &'static str },
 }
 
@@ -68,12 +68,12 @@ pub trait ExecutionOutputPublisher {
     fn publish(
         &mut self,
         operation_ref: &str,
-        stream: &RetainedExecutionStream,
-    ) -> Result<PublishedExecutionStream, ExecutionOutputPublicationError>;
+        stream: &RetainedStream,
+    ) -> Result<PublishedStream, OutputPublicationError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ExecutionOutputPublicationError {
+pub enum OutputPublicationError {
     Unavailable,
     Denied,
     Storage,
@@ -81,7 +81,7 @@ pub enum ExecutionOutputPublicationError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExecutionPortFailureKind {
+pub enum PortFailureKind {
     ProfileUnavailable,
     ResolutionDenied,
     RejectedBeforeStart,
@@ -91,20 +91,20 @@ pub enum ExecutionPortFailureKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExecutionPortFailure {
-    pub kind: ExecutionPortFailureKind,
+pub struct PortFailure {
+    pub kind: PortFailureKind,
     pub operation_ref: String,
     pub diagnostic_code: &'static str,
     pub detail: String,
-    pub process_observation: Option<ExecutionProcessObservation>,
-    pub receipt: Option<super::CanonicalExecutionReceipt>,
+    pub process_observation: Option<ProcessObservation>,
+    pub receipt: Option<super::Receipt>,
     pub non_claims: Vec<super::ExecutionNonClaim>,
 }
 
-pub type ExecutionPortResult<T> = Result<T, Box<ExecutionPortFailure>>;
+pub type PortResult<T> = Result<T, Box<PortFailure>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ExecutionReconciliationStatus {
+pub enum ReconciliationStatus {
     DefinitePreStartFailure,
     Terminal { receipt_ref: String },
     UnknownRequiresReconciliation,
@@ -113,14 +113,14 @@ pub enum ExecutionReconciliationStatus {
 
 // r[impl molten.fabric_execution.port_contract]
 pub trait ExecutionFabricPort {
-    fn profile(&self) -> &super::CanonicalExecutionProfile;
+    fn profile(&self) -> &super::Profile;
 
     fn execute(
         &mut self,
-        request: &super::CanonicalExecutionRequest,
-        resolved: &ResolvedExecutionContext,
+        request: &super::Request,
+        resolved: &ResolvedContext,
         cancellation: Option<&std::sync::atomic::AtomicBool>,
-    ) -> ExecutionPortResult<super::CanonicalExecutionReceipt>;
+    ) -> PortResult<super::Receipt>;
 
-    fn reconcile(&self, operation_ref: &str, generation: u64) -> ExecutionReconciliationStatus;
+    fn reconcile(&self, operation_ref: &str, generation: u64) -> ReconciliationStatus;
 }

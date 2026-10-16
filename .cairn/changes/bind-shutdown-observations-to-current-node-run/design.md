@@ -47,3 +47,54 @@ F01 first establishes shutdown admission where shared code needs ordering change
 ## Nonclaims
 
 Current-run receipt linkage does not prove physical process termination, crash durability, remote shutdown authority, or whole-system liveness. Static analysis remains static until normal tests execute. This package grants no implementation or publication authority.
+
+## Implemented representation and executed observations
+
+The selected representation is canonical `node-control-run-v1` over state-root,
+startup and previous-run refs, with a run-bound active lock and a separate
+`node-control-run-shutdown-v1` completion over run/startup/shutdown/control refs.
+The previous-run content link distinguishes otherwise identical startups without
+adding a clock or entropy read to the pure classifier. Legacy control and shutdown
+values keep their original schemas and bytes; missing lineage cannot be synthesized
+from historical success. No existing canonical loop fields were added or rewritten.
+
+`src/node/parts/runtime/p008/body.rs` owns allocation-free lifecycle classification;
+`p009/body.rs` owns the new canonical values. The daemon's `p058/body.rs` gathers
+capability-rooted observations and resolves the immutable control reference named
+by completion. Status/restart therefore survive a subsequent denied direct stop,
+while unreadable or conflicting observations reject before new shutdown effects.
+Service decision and current stopped state remain independent even when pending
+work denies the bounded loop after shutdown completed.
+
+Attempt 16 retains the original failing normal restart-duplicate regression, an
+actual pre-fix CLI reproduction, the review-discovered service-state reproduction,
+and passing current CLI/core/adapter observations under
+`evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/`.
+Its native pre-sync traceability manifest covers exactly the four F14 requirements
+from eight executed positive/expected-deny verification receipts. This bounded
+runtime evidence is not source-gate, lifecycle, remote-shutdown or release authority;
+the final task retains every required acceptance gate.
+
+## Attempt 17 acceptance checkpoint
+
+Attempt 17 replaced the Clippy-reported cloned one-element test slices with borrowed
+slices. Fresh default and compatible-feature workspace tests, all three denied-warning
+Clippy cohorts, formatting, configured workspace/library Octet producers and the
+unchanged strict source gate pass. Fresh actual CLI consumers exercised 15 scenarios
+through 89 node commands; eight native positive/expected-deny receipts cover exactly
+the four F14 requirements with no missing or stale coverage. Two bounded static
+reviews found no blocking core or daemon findings.
+
+Acceptance remains open: the required `node-state-authority` and `nextest` Nix build
+timed out after 3,500 seconds waiting for the global garbage-collector lock. It did
+not produce passing check results. Post-blocker native structural validation, the
+proposal/design/tasks gates and the inherited-debt guard pass, but do not replace
+that missing execution. No F14 sync or archive is authorized by this checkpoint.
+
+Exact commands, canonical artifacts, reviews and the blocked attempt result are
+retained under
+`evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/`.
+Node-runtime maintainers retain lifecycle semantics; node-host maintainers retain
+observation mechanics. The final acceptance task remains unchecked pending host GC
+remediation and the unchanged required checks.
+

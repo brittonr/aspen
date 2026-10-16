@@ -1,12 +1,12 @@
 
 // r[verify molten.fabric_consistency.live_service_ports]
 #[test]
-fn running_host_projects_exact_required_live_replica_ports() {
+fn running_host_projects_exact_required_replica_ports() {
     let mut host = host_without(None);
     host.activate(ACTIVATION_TICK).expect("active host");
     let group = active_group_for_host(&host);
     let plan =
-        plan_live_replica_start_for_host(&host, group.clone(), NODE_A.to_string(), membership(&group), profile(&group))
+        plan_replica_start_for_host(&host, group.clone(), NODE_A.to_string(), membership(&group), profile(&group))
             .expect("host-backed replica start plan");
 
     assert_eq!(plan.port_binding_refs.len(), REQUIRED_REPLICA_PORTS.len());
@@ -18,7 +18,7 @@ fn running_host_projects_exact_required_live_replica_ports() {
 fn host_start_denies_inactive_supervision_and_missing_durable_log() {
     let inactive = host_without(None);
     let inactive_group = active_group_for_host(&inactive);
-    let inactive_error = plan_live_replica_start_for_host(
+    let inactive_error = plan_replica_start_for_host(
         &inactive,
         inactive_group.clone(),
         NODE_A.to_string(),
@@ -31,7 +31,7 @@ fn host_start_denies_inactive_supervision_and_missing_durable_log() {
     let mut missing_log = host_without(Some(crate::fabric_durability::FABRIC_DURABLE_LOG_PORT_ID));
     missing_log.activate(ACTIVATION_TICK).expect("active incomplete host");
     let missing_log_group = active_group_for_host(&missing_log);
-    let missing_log_error = plan_live_replica_start_for_host(
+    let missing_log_error = plan_replica_start_for_host(
         &missing_log,
         missing_log_group.clone(),
         NODE_A.to_string(),
@@ -51,17 +51,17 @@ fn host_start_denies_group_policy_not_admitted_by_manifest() {
     policies.push(test_ref("unadmitted-policy"));
     let group = active_group_for_host_with_policies(&host, policies);
     let error =
-        plan_live_replica_start_for_host(&host, group.clone(), NODE_A.to_string(), membership(&group), profile(&group))
+        plan_replica_start_for_host(&host, group.clone(), NODE_A.to_string(), membership(&group), profile(&group))
             .expect_err("unadmitted group policy must deny");
     assert!(error.to_string().contains("policy refs are not admitted"));
 }
 
 #[derive(Debug, Default)]
-struct ServiceDurabilityPort {
+struct DurabilityPort {
     hard_state_writes: usize,
 }
 
-impl ReplicaDurabilityEffects for ServiceDurabilityPort {
+impl ReplicaDurabilityEffects for DurabilityPort {
     fn persist_hard_state(&mut self, _term: u64, _voted_for: Option<&str>) -> crate::error::Result<String> {
         self.hard_state_writes += 1;
         Ok(test_ref("service-hard-state"))
@@ -89,11 +89,11 @@ impl ReplicaDurabilityEffects for ServiceDurabilityPort {
 }
 
 #[derive(Debug, Default)]
-struct ServiceTransportPort {
+struct TransportPort {
     sent: usize,
 }
 
-impl ReplicaTransportEffects for ServiceTransportPort {
+impl ReplicaTransportEffects for TransportPort {
     fn send<'a>(&'a mut self, _envelope: &'a ReplicaMessageEnvelope) -> ReplicaTransportFuture<'a> {
         self.sent += 1;
         Box::pin(async { Ok(test_ref("service-transport")) })
@@ -101,12 +101,12 @@ impl ReplicaTransportEffects for ServiceTransportPort {
 }
 
 #[derive(Debug, Default)]
-struct ServiceTimePort {
+struct TimePort {
     election_timer_refs: Vec<String>,
     heartbeat_arms: usize,
 }
 
-impl ReplicaTimeEffects for ServiceTimePort {
+impl ReplicaTimeEffects for TimePort {
     fn arm_election_timer(&mut self, timer_ref: &str) -> crate::error::Result<String> {
         self.election_timer_refs.push(timer_ref.to_string());
         Ok(test_ref("service-election-timer"))
@@ -119,26 +119,26 @@ impl ReplicaTimeEffects for ServiceTimePort {
 }
 
 #[derive(Debug, Default)]
-struct ServiceApplicationHandler;
+struct ApplicationHandler;
 
-impl CommittedBatchHandler for ServiceApplicationHandler {
-    fn restore_snapshot(&mut self, _snapshot: &ApplicationSnapshotRestore) -> crate::error::Result<String> {
+impl CommittedBatchHandler for ApplicationHandler {
+    fn restore_snapshot(&mut self, _snapshot: &SnapshotRestore) -> crate::error::Result<String> {
         Ok(test_ref("service-application-snapshot-handler"))
     }
 
-    fn apply_batch(&mut self, _commands: &[ApplicationCommand]) -> crate::error::Result<String> {
+    fn apply_batch(&mut self, _commands: &[Command]) -> crate::error::Result<String> {
         Ok(test_ref("service-application-handler"))
     }
 }
 
 // r[verify molten.fabric_consistency.live_service_ports]
 #[tokio::test]
-async fn scoped_service_executes_startup_and_current_timer_through_separate_ports() {
+async fn scoped_executes_startup_and_current_timer_through_separate_ports() {
     let mut host = host_without(None);
     host.activate(ACTIVATION_TICK).expect("active host");
     let group = active_group_for_host(&host);
     let replica_profile = profile(&group);
-    let plan = plan_live_replica_start_for_host(
+    let plan = plan_replica_start_for_host(
         &host,
         group.clone(),
         NODE_A.to_string(),
@@ -152,8 +152,8 @@ async fn scoped_service_executes_startup_and_current_timer_through_separate_port
     let (event_sender, event_receiver) = tokio::sync::mpsc::channel(SERVICE_EVENT_CAPACITY);
     let (control_sender, _control_receiver) = tokio::sync::mpsc::channel(SERVICE_CONTROL_CAPACITY);
     let application = application_port_for(&group);
-    let control = ChannelReplicaControlPort::new(
-        ReplicaControlConfig {
+    let control = ChannelReplicaPort::new(
+        ReplicaConfig {
             service_id: group.service_id.clone(),
             service_generation: group.service_generation,
             supervision_ref: replica_profile.supervision_ref,
@@ -162,14 +162,14 @@ async fn scoped_service_executes_startup_and_current_timer_through_separate_port
     )
     .expect("control port");
     let ports = ReplicaPortBundle::new(runtime_identity, ReplicaAdapterSet {
-        durability: ServiceDurabilityPort::default(),
-        transport: ServiceTransportPort::default(),
-        time: ServiceTimePort::default(),
+        durability: DurabilityPort::default(),
+        transport: TransportPort::default(),
+        time: TimePort::default(),
         application,
         control,
     })
     .expect("bound runtime port bundle");
-    let mut service = ScopedLiveReplicaService::start(plan, ports, event_receiver).await.expect("scoped live service");
+    let mut service = ScopedLiveReplica::start(plan, ports, event_receiver).await.expect("scoped live service");
 
     assert!(!service.production_admitted());
     assert_eq!(service.startup_observations().len(), EXPECTED_STARTUP_OBSERVATIONS);
@@ -210,16 +210,16 @@ fn assert_substituted_identity_denied(runtime_identity: &ReplicaRuntimePortIdent
     assert!(mismatch.to_string().contains("does not match the admitted start plan"));
 }
 
-fn application_port_for(group: &ConsistencyGroupBinding) -> AdmittedReplicaApplicationPort<ServiceApplicationHandler> {
-    AdmittedReplicaApplicationPort::new(
-        ReplicaApplicationConfig {
+fn application_port_for(group: &Group) -> AdmittedReplicaPort<ApplicationHandler> {
+    AdmittedReplicaPort::new(
+        ServiceReplicaConfig {
             group_binding_ref: group.binding_ref.clone(),
             application_manifest_ref: group.application_manifest_ref.clone(),
             handler_ref: test_ref("service-application-binding"),
             command_schema_refs: std::collections::BTreeSet::from([test_ref("service-command-schema")]),
             initial_applied_index: INITIAL_COMMIT_INDEX,
         },
-        ServiceApplicationHandler,
+        ApplicationHandler,
     )
     .expect("application port")
 }

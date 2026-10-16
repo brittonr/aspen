@@ -18,7 +18,7 @@ use super::canonical_snapshot_compatibility;
 use super::canonical_snapshot_descriptor;
 use super::canonical_snapshot_receipt;
 use super::canonical_snapshot_restore_plan;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub struct LogicalSnapshotPorts<'a, M, A, H, R, P> {
@@ -69,7 +69,7 @@ where
     P: SnapshotReceiptPort,
 {
     if descriptor.class != SnapshotClass::Logical {
-        return Err(MoltenError::invalid_harness("logical snapshot restore rejects non-logical profiles"));
+        return Err(Failure::invalid_harness("logical snapshot restore rejects non-logical profiles"));
     }
     let canonical_descriptor = canonical_snapshot_descriptor(descriptor)?;
     let compatibility_report = validate_snapshot(descriptor, destination);
@@ -78,7 +78,7 @@ where
         ports.admission.observe_current(descriptor, &canonical_descriptor.artifact_ref, destination)?;
     validate_admission(&initial_admission, descriptor, destination, &canonical_descriptor.artifact_ref, None)?;
     let restore_plan = plan_restore(descriptor, destination, true)
-        .map_err(|report| MoltenError::invalid_harness(format!("snapshot restore denied: {:?}", report.issues)))?;
+        .map_err(|report| Failure::invalid_harness(format!("snapshot restore denied: {:?}", report.issues)))?;
     let canonical_plan = canonical_snapshot_restore_plan(&restore_plan)?;
     let materializations = materialize_complete_inventory(descriptor, ports.materialization)?;
     let mut observations = Vec::with_capacity(restore_plan.steps.len());
@@ -111,7 +111,7 @@ where
                 observed(*step, observation_ref)
             }
             SnapshotRestoreStep::RestoreOpaqueMachine => {
-                return Err(MoltenError::invalid_harness("logical snapshot plan contains an opaque restore step"));
+                return Err(Failure::invalid_harness("logical snapshot plan contains an opaque restore step"));
             }
             state_step => restore_state_component(ports.runtime, descriptor, &materializations, *state_step)?,
         };
@@ -157,13 +157,13 @@ where
     P: SnapshotReceiptPort,
 {
     if descriptor.class != SnapshotClass::Opaque {
-        return Err(MoltenError::invalid_harness("opaque snapshot restore rejects non-opaque profiles"));
+        return Err(Failure::invalid_harness("opaque snapshot restore rejects non-opaque profiles"));
     }
     let canonical_descriptor = canonical_snapshot_descriptor(descriptor)?;
     let compatibility_report = validate_snapshot(descriptor, destination);
     let canonical_compatibility = canonical_snapshot_compatibility(&compatibility_report)?;
     if compatibility_report.verdict != CompatibilityVerdict::Compatible {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(Failure::invalid_harness(format!(
             "opaque snapshot restore denied: {:?}",
             compatibility_report.issues
         )));
@@ -174,7 +174,7 @@ where
         ports.admission.observe_current(descriptor, &canonical_descriptor.artifact_ref, destination)?;
     validate_admission(&initial_admission, descriptor, destination, &canonical_descriptor.artifact_ref, None)?;
     let restore_plan = plan_restore(descriptor, destination, true).map_err(|report| {
-        MoltenError::invalid_harness(format!("opaque snapshot restore denied: {:?}", report.issues))
+        Failure::invalid_harness(format!("opaque snapshot restore denied: {:?}", report.issues))
     })?;
     let canonical_plan = canonical_snapshot_restore_plan(&restore_plan)?;
     let materializations = materialize_complete_inventory(descriptor, ports.materialization)?;
@@ -251,16 +251,16 @@ fn restore_state_component<R: LogicalSnapshotRestorePort>(
     state_step: SnapshotRestoreStep,
 ) -> Result<SnapshotStepObservation> {
     let kind = component_for_step(state_step)
-        .ok_or_else(|| MoltenError::invalid_harness("logical snapshot plan contains an unmapped restore step"))?;
+        .ok_or_else(|| Failure::invalid_harness("logical snapshot plan contains an unmapped restore step"))?;
     let component = descriptor
         .components
         .iter()
         .find(|component| component.kind == kind)
-        .ok_or_else(|| MoltenError::invalid_harness("logical snapshot component disappeared"))?;
+        .ok_or_else(|| Failure::invalid_harness("logical snapshot component disappeared"))?;
     let materialization = materialization_for(materializations, kind)?;
     let observation = runtime.restore_component(state_step, component, materialization)?;
     if observation.step != state_step {
-        return Err(MoltenError::invalid_harness(
+        return Err(Failure::invalid_harness(
             "logical snapshot adapter returned an observation for the wrong step",
         ));
     }

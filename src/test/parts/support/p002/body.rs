@@ -15,7 +15,7 @@ mod tests {
         let handles = (0..CONCURRENT_WORKSPACE_COUNT)
             .map(|index| {
                 std::thread::spawn(move || {
-                    let workspace = TestWorkspace::new(&format!("concurrent_{index}")).expect("workspace");
+                    let workspace = Workspace::new(&format!("concurrent_{index}")).expect("workspace");
                     assert_eq!(workspace.logical_label(), format!("concurrent_{index}"));
                     let state = workspace.state().expect("state root");
                     let input = workspace.input().expect("input root");
@@ -52,8 +52,8 @@ mod tests {
     #[tokio::test]
     async fn async_workspace_survives_yield_and_exports_selected_artifact() {
         // r[verify molten.testing.cap_std_validation]
-        let source_workspace = TestWorkspace::new("async_source").expect("source workspace");
-        let destination_workspace = TestWorkspace::new("async_destination").expect("destination workspace");
+        let source_workspace = Workspace::new("async_source").expect("source workspace");
+        let destination_workspace = Workspace::new("async_destination").expect("destination workspace");
         let state = source_workspace.state().expect("state root");
         let output = destination_workspace.output().expect("output root");
         let source_path = WorkspacePath::parse("receipts/run.preserves").expect("source path");
@@ -75,7 +75,7 @@ mod tests {
     #[test]
     fn process_bridge_runs_child_without_putting_host_path_in_evidence() {
         // r[verify molten.testing.cap_std_process_bridge]
-        let workspace = TestWorkspace::new("child_process").expect("workspace");
+        let workspace = Workspace::new("child_process").expect("workspace");
         let state = workspace.state().expect("state root");
         let plan = workspace.process_bridge().plan(&state).expect("process plan");
         let output = std::process::Command::new(std::env::current_exe().expect("current test executable"))
@@ -102,8 +102,8 @@ mod tests {
     #[test]
     fn wrong_workspace_and_invalid_export_are_denied() {
         // r[verify molten.testing.cap_std_validation]
-        let first = TestWorkspace::new("wrong_root_first").expect("first workspace");
-        let second = TestWorkspace::new("wrong_root_second").expect("second workspace");
+        let first = Workspace::new("wrong_root_first").expect("first workspace");
+        let second = Workspace::new("wrong_root_second").expect("second workspace");
         let second_state = second.state().expect("second state");
         let first_output = first.output().expect("first output");
         let bridge_error = first.process_bridge().plan(&second_state).expect_err("cross-workspace bridge denied");
@@ -118,9 +118,9 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn adversarial_symlink_corruption_replacement_and_mode_stay_in_test_shell() {
+    fn adversarial_symlink_corruption_replacement_and_mode_stay_in_shell() {
         // r[verify molten.testing.cap_std_validation]
-        let target_workspace = TestWorkspace::new("adversarial_target").expect("target workspace");
+        let target_workspace = Workspace::new("adversarial_target").expect("target workspace");
         let outside_workspace = ProcessWorkspace::new("adversarial_outside").expect("outside workspace");
         let state = target_workspace.state().expect("target state");
         let setup = target_workspace.adversarial_setup();
@@ -170,7 +170,7 @@ mod tests {
 
     #[test]
     fn logical_labels_and_paths_reject_ambient_or_traversing_inputs() {
-        assert!(TestWorkspace::new("../escape").is_err());
+        assert!(Workspace::new("../escape").is_err());
         assert!(WorkspacePath::parse("/absolute").is_err());
         assert!(WorkspacePath::parse("../parent").is_err());
         assert!(WorkspacePath::parse(r"C:\outside").is_err());

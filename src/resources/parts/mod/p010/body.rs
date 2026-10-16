@@ -200,7 +200,7 @@ fn push_limit_diagnostic(
     diagnostics: &mut impl crate::bounded::VecSink<String>,
     diagnostic: impl Into<String>,
 ) -> Result<()> {
-    crate::bounded::push_bounded(
+    crate::bounded::push(
         diagnostics,
         diagnostic.into(),
         LIMIT_DIAGNOSTIC_LIMIT,

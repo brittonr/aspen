@@ -3,7 +3,7 @@
 // r[verify molten.fabric_transport.final_validation]
 #[tokio::test]
 async fn live_iroh_loopback_exchanges_a_bounded_frame_without_leaking_adapter_handles() {
-    let mut adapter = IrohTransportAdapter::new(profile(TransportAdapterKind::IrohLive)).expect("Iroh adapter");
+    let mut adapter = IrohAdapter::new(profile(TransportAdapterKind::IrohLive)).expect("Iroh adapter");
     let _events = apply_setup(&mut adapter);
     let result = adapter
         .live_loopback_frame(LoopbackFrameInput {
@@ -29,7 +29,7 @@ async fn live_iroh_loopback_exchanges_a_bounded_frame_without_leaking_adapter_ha
 // r[verify molten.fabric_transport.final_validation]
 #[test]
 fn deterministic_partition_after_submission_reports_uncertainty_without_retry() {
-    let mut adapter = DeterministicTransportAdapter::new(profile(TransportAdapterKind::DeterministicSimulation))
+    let mut adapter = DeterministicAdapter::new(profile(TransportAdapterKind::DeterministicSimulation))
         .expect("simulated adapter");
     let _events = apply_setup(&mut adapter);
     let payload_ref = format!("blake3:{}", blake3::hash(PAYLOAD).to_hex());
@@ -44,7 +44,7 @@ fn deterministic_partition_after_submission_reports_uncertainty_without_retry() 
     let submitted = adapter.execute_command(&send).expect("submit frame");
     assert_eq!(submitted.events[0].event.delivery, DeliveryOutcome::Pending);
     let failed = adapter
-        .execute_with_fault(&send, Some(SimulatedTransportFault::Partition))
+        .execute_with_fault(&send, Some(SimulatedFault::Partition))
         .expect("partition evidence");
     assert_eq!(failed.events[0].event.delivery, DeliveryOutcome::Uncertain);
     assert_eq!(failed.events[0].event.retry, RetryDisposition::UnsafeWithoutReconciliation);
@@ -60,7 +60,7 @@ fn registered_effect_port_routes_only_exact_profile_generation_and_known_request
 
     let profile = profile(TransportAdapterKind::DeterministicSimulation);
     let descriptor = fabric_transport_port_descriptor(&profile);
-    let binding = crate::fabric::resolve_canonical_fabric_port_binding(
+    let binding = crate::fabric::resolve_canonical_port_binding(
         std::slice::from_ref(&descriptor),
         &crate::fabric::FabricPortRequirement {
             port_id: descriptor.port_id.clone(),
@@ -77,8 +77,8 @@ fn registered_effect_port_routes_only_exact_profile_generation_and_known_request
         },
     )
     .expect("transport binding");
-    let context = ExtensionTransportContext::from_test_snapshot("echo-service", GENERATION, &profile);
-    let adapter = DeterministicTransportAdapter::new(profile.clone()).expect("simulated adapter");
+    let context = ExtensionContext::from_test_snapshot("echo-service", GENERATION, &profile);
+    let adapter = DeterministicAdapter::new(profile.clone()).expect("simulated adapter");
     let mut port = RegisteredTransportEffectPort::new(adapter, context, profile).expect("registered port");
     port.register(REQUEST_REF.to_string(), setup_commands()[0].clone())
         .expect("register transport request");
@@ -108,7 +108,7 @@ fn registered_effect_port_routes_only_exact_profile_generation_and_known_request
 #[test]
 fn extension_context_and_outer_frame_validation_fail_closed() {
     let profile = profile(TransportAdapterKind::DeterministicSimulation);
-    let context = ExtensionTransportContext::from_test_snapshot("echo-service", GENERATION, &profile);
+    let context = ExtensionContext::from_test_snapshot("echo-service", GENERATION, &profile);
     let command = setup_commands()[0].clone();
     assert!(context.admit_command(&profile, &command, 0).is_ok());
 

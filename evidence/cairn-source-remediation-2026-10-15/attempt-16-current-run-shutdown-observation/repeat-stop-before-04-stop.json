@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "node",
+    "stop",
+    "--state-root",
+    "/tmp/molten-f14-current-run-16-restored-se51n6m8/repeated-stop-before"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T18:26:37.067054+00:00",
+  "elapsed_seconds": 0.015,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "error: invalid harness artifact: node shutdown denied: node shutdown admission requires an active node lock (denial receipt=blake3:276aa30682251e8e2dc1a206e6ef80aeea3c4e98ffabf6adfe6282b4a6dde8b3)\n"
+}

@@ -1,0 +1,13 @@
+{
+  "command": [
+    "/tmp/molten-nominal-adoption11-pp6_l8i4/tracey-guard",
+    "--root",
+    ".",
+    "--baseline",
+    "evidence/tracey/inherited-debt-baseline.txt"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "exit_code": 0,
+  "stdout": "pending_references=22\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\nrequirements=2802\nreferenced=878\nuncovered=1924\nbaseline_entries=1924\ndangling=0\nnon_claim=inherited requirements remain uncovered until direct evidence references them\nverdict=pass\n",
+  "stderr": ""
+}

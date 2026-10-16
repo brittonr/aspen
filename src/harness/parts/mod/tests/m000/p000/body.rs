@@ -1,6 +1,6 @@
     use super::*;
 
-    type MoltenError = crate::error::MoltenError;
+    type MoltenError = crate::error::Failure;
 
     fn canonical_bytes(value: &preserves::IOValue) -> crate::error::Result<Vec<u8>> {
         crate::preserves_rail::canonical_bytes(value)

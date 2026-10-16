@@ -38,7 +38,7 @@ fn raw_measurements_with_sampling(architecture: &str, processes: u32, iterations
 fn sightglass_raw_json_preserves_separate_bounded_phase_samples() {
     // r[verify molten.wasm_performance.phases]
     // r[verify molten.wasm_performance.validation]
-    let profile = supported_performance_profile().expect("supported performance profile");
+    let profile = supported().expect("supported performance profile");
     let phases = parse_sightglass_measurements(
         &profile,
         &profile.fast,
@@ -46,8 +46,8 @@ fn sightglass_raw_json_preserves_separate_bounded_phase_samples() {
         &raw_measurements(super::support::FIXTURE_ARCHITECTURE),
     )
     .expect("Sightglass measurements parse");
-    assert_eq!(phases.len(), PerformancePhase::ALL.len());
-    assert_eq!(phases.iter().map(|phase| phase.phase).collect::<Vec<_>>(), PerformancePhase::ALL);
+    assert_eq!(phases.len(), Phase::ALL.len());
+    assert_eq!(phases.iter().map(|phase| phase.phase).collect::<Vec<_>>(), Phase::ALL);
     assert!(phases.iter().all(|phase| phase.samples.len()
         == usize::try_from(profile.fast.sampling.min_samples_per_phase).expect("sampling count fits usize")));
     assert!(phases.iter().all(|phase| phase.event == super::support::FIXTURE_EVENT));
@@ -90,7 +90,7 @@ fn sightglass_raw_json_preserves_separate_bounded_phase_samples() {
 fn sightglass_process_ids_are_normalized_out_of_canonical_samples() {
     // r[verify molten.wasm_performance.evidence]
     // r[verify molten.wasm_performance.validation]
-    let profile = supported_performance_profile().expect("supported performance profile");
+    let profile = supported().expect("supported performance profile");
     let mut raw: Vec<serde_json::Value> = serde_json::from_slice(&raw_measurements_with_sampling(
         super::support::FIXTURE_ARCHITECTURE,
         profile.deep.sampling.processes,
@@ -119,7 +119,7 @@ fn sightglass_process_ids_are_normalized_out_of_canonical_samples() {
 fn process_shell_validates_profile_and_suite_before_spawning() {
     // r[verify molten.wasm_performance.phases]
     // r[verify molten.wasm_performance.functional_core]
-    let profile = supported_performance_profile().expect("supported performance profile");
+    let profile = supported().expect("supported performance profile");
     let mut invalid_suite = profile.fast.clone();
     invalid_suite.sampling.processes = profile.deep.sampling.processes;
     let missing_program = std::path::Path::new("/definitely-missing-sightglass");
@@ -154,12 +154,12 @@ fn process_shell_validates_profile_and_suite_before_spawning() {
 }
 
 #[test]
-fn process_shell_remeasures_runner_bytes_before_any_execution() {
+fn process_shell_remeasures_bytes_before_any_execution() {
     // r[verify molten.wasm_performance.materialization]
     // r[verify molten.wasm_performance.validation]
-    let profile = supported_performance_profile().expect("supported performance profile");
+    let profile = supported().expect("supported performance profile");
     let workspace =
-        crate::test_support::TestWorkspace::new("wasm-performance-runner-identity").expect("capability test workspace");
+        crate::test_support::Workspace::new("wasm-performance-runner-identity").expect("capability test workspace");
     let state = workspace.state().expect("state capability");
     let runner_locator = crate::test_support::WorkspacePath::parse("runner").expect("runner locator");
     state.write(&runner_locator, MUTABLE_RUNNER_BYTES).expect("write runner fixture");
@@ -198,7 +198,7 @@ fn process_shell_remeasures_runner_bytes_before_any_execution() {
 #[test]
 fn malformed_cross_architecture_missing_phase_and_wrong_event_outputs_deny() {
     // r[verify molten.wasm_performance.validation]
-    let profile = supported_performance_profile().expect("supported performance profile");
+    let profile = supported().expect("supported performance profile");
     assert!(
         parse_sightglass_measurements(&profile, &profile.fast, super::support::FIXTURE_ARCHITECTURE, b"not-json")
             .is_err()

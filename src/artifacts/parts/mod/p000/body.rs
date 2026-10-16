@@ -1,10 +1,10 @@
 use redb::ReadableDatabase;
 use redb::ReadableTable;
 
-type LocalStorePath = crate::local_store::LocalStorePath;
+type LocalStorePath = crate::local_store::Locator;
 type Path = std::path::Path;
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 type TableDef<'a, K, V> = redb::TableDefinition<'a, K, V>;

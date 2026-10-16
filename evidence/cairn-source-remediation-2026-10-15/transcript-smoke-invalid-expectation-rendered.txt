@@ -1,0 +1,19 @@
+# Transcript blake3:6b76969dd927f155edc28c8eeddaf6ebadb41bb32e1833dabfc41d1784b1ecfd
+
+```preserves
+<value "source-smoke">
+```
+decision: pass
+```preserves-output
+<value "source-smoke">
+```
+
+```expect
+<value "source-smoke">
+```
+decision: error
+diagnostics: invalid harness artifact: unsupported transcript expectation
+
+
+Final decision: deny
+Receipt: blake3:2a1f3e616dbdb5329c44f5bd7e6fcb85feaca12c5f7eba06516d1c1e1eb7e887

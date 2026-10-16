@@ -50,14 +50,14 @@ pub fn admit_iroh_endpoint_observation(facts: &IrohEndpointObservationFacts) -> 
 
 struct ResolutionInput<'a> {
     config: &'a Config,
-    root: &'a crate::node_state::NodeStateNamespace,
+    root: &'a crate::node_state::Scope,
     operation: &'a str,
     secret_record: &'a [u8],
     material: &'a EndpointMaterial,
     backend_ref: &'a str,
     source_metadata_ref: &'a str,
     permission_status: IrohSecretPermissionStatus,
-    endpoint_path: &'a crate::node_state::NodeStatePath,
+    endpoint_path: &'a crate::node_state::RelativePath,
     is_first_boot: bool,
 }
 
@@ -79,18 +79,18 @@ struct ReceiptValueInput<'a> {
 }
 
 pub fn resolve(config: &Config) -> Result<Resolution> {
-    let root = crate::node_state::NodeStateNamespace::open(
-        crate::node_state::NodeStateNamespaceKind::Identity,
+    let root = crate::node_state::Scope::open(
+        crate::node_state::NamespaceKind::Identity,
         &config.data_dir,
     )?;
     resolve_with_root(config, &root)
 }
 
-pub fn resolve_with_root(config: &Config, root: &crate::node_state::NodeStateNamespace) -> Result<Resolution> {
+pub fn resolve_with_root(config: &Config, root: &crate::node_state::Scope) -> Result<Resolution> {
     validate_config(config)?;
     validate_identity_namespace(root)?;
-    let secret_path = crate::node_state::NodeStatePath::parse(SECRET_FILE)?;
-    let endpoint_path = crate::node_state::NodeStatePath::parse(ENDPOINT_FILE)?;
+    let secret_path = crate::node_state::RelativePath::parse(SECRET_FILE)?;
+    let endpoint_path = crate::node_state::RelativePath::parse(ENDPOINT_FILE)?;
     let secret_observation = root.observe_file(&secret_path)?;
     let permission_status = secret_file_permission_status(&secret_observation);
     let source_decision = resolve_iroh_secret_source(&IrohSecretSourceFacts {
@@ -99,7 +99,7 @@ pub fn resolve_with_root(config: &Config, root: &crate::node_state::NodeStateNam
         managed_secret_required: config.require_secret_backend,
         persisted_file_present: !matches!(
             &secret_observation,
-            crate::node_state::NodeStateFileObservation::Missing
+            crate::node_state::FileObservation::Missing
         ),
         persisted_file_permission: permission_status,
         generation_allowed: config.allow_generate,

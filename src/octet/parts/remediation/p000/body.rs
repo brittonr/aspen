@@ -1,6 +1,6 @@
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Path = std::path::Path;
 type PathBuf = std::path::PathBuf;
 type Result<T> = crate::error::Result<T>;

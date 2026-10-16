@@ -88,13 +88,13 @@ fn finish_resolution(input: ResolutionInput<'_>) -> Result<Resolution> {
         return Err(MoltenError::invalid_harness("node endpoint key record must not be empty"));
     }
     let existing_endpoint = match input.root.observe_file(input.endpoint_path)? {
-        crate::node_state::NodeStateFileObservation::Missing => None,
-        crate::node_state::NodeStateFileObservation::NonRegular(kind) => {
+        crate::node_state::FileObservation::Missing => None,
+        crate::node_state::FileObservation::NonRegular(kind) => {
             return Err(MoltenError::invalid_harness(format!(
                 "node endpoint identity leaf must be a regular file, got {kind:?}"
             )));
         }
-        crate::node_state::NodeStateFileObservation::Regular(file) => {
+        crate::node_state::FileObservation::Regular(file) => {
             let bytes = file.read_bounded(crate::node_state::MAX_NODE_SECRET_BYTES)?;
             Some(
                 String::from_utf8(bytes)

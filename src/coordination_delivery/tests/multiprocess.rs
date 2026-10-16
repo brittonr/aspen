@@ -7,7 +7,7 @@ const CHILD_MODE_ENV: &str = "MOLTEN_COORDINATION_DELIVERY_CHILD_MODE";
 const CHILD_TOKEN_ENV: &str = "MOLTEN_COORDINATION_DELIVERY_CHILD_TOKEN";
 const CHILD_MODE_STALE_ACK: &str = "stale-ack";
 const CHILD_MODE_CURRENT_ACK: &str = "current-ack";
-const CHILD_TEST_NAME: &str = "coordination_delivery::tests::multiprocess::child_delivery_process";
+const CHILD_TEST_NAME: &str = "coordination_delivery::tests::multiprocess::child_process";
 const TEST_EXACT_ARGUMENT: &str = "--exact";
 const TEST_NOCAPTURE_ARGUMENT: &str = "--nocapture";
 const CHILD_SUCCESS: i32 = 0;
@@ -15,17 +15,15 @@ const CHILD_SUCCESS: i32 = 0;
 // r[verify molten.coordination_delivery.consistency_durability]
 // r[verify molten.coordination_delivery.final_validation]
 #[test]
-fn multiprocess_restart_recovers_claim_and_fences_stale_consumer() {
+fn restart_recovers_claim_and_fences_stale_consumer() {
     let workspace =
         crate::test_support::process_workspace("coordination-delivery-multiprocess").expect("process workspace");
     let workspace_path: &std::path::Path = workspace.as_ref();
     let directory = cap_std::fs::Dir::open_ambient_dir(workspace_path, cap_std::ambient_authority())
         .expect("open process workspace");
-    let root = molten_node_host::node_state::NodeStateRoot::from_dir(directory);
+    let root = molten_node_host::node_state::DirectoryRoot::from_dir(directory);
     root.create_layout().expect("node state layout");
-    let storage = root
-        .namespace(molten_node_host::node_state::NodeStateNamespaceKind::Storage)
-        .expect("storage namespace");
+    let storage = root.namespace(molten_node_host::node_state::NamespaceKind::Storage).expect("storage namespace");
     let policy = policy();
     let manifest = manifest(&policy);
     let time = time_profile(&manifest);
@@ -57,18 +55,18 @@ fn multiprocess_restart_recovers_claim_and_fences_stale_consumer() {
 
     let directory = cap_std::fs::Dir::open_ambient_dir(workspace_path, cap_std::ambient_authority())
         .expect("reopen process workspace");
-    let root = molten_node_host::node_state::NodeStateRoot::from_dir(directory);
+    let root = molten_node_host::node_state::DirectoryRoot::from_dir(directory);
     let storage = root
-        .namespace(molten_node_host::node_state::NodeStateNamespaceKind::Storage)
+        .namespace(molten_node_host::node_state::NamespaceKind::Storage)
         .expect("reopened storage namespace");
-    let store = LocalDeliveryStore::open(&storage, ENGINE_EPOCH).expect("reopened delivery store");
+    let store = Local::open(&storage, ENGINE_EPOCH).expect("reopened delivery store");
     let observed = store.load(QUEUE_ID).expect("read final delivery state").expect("final delivery state");
     assert!(observed.state.in_flight.is_empty());
     assert!(observed.state.completed.contains_key(&second_token.item_ref));
 }
 
 #[test]
-fn child_delivery_process() {
+fn child_process() {
     let Ok(mode) = std::env::var(CHILD_MODE_ENV) else {
         return;
     };
@@ -79,14 +77,14 @@ fn child_delivery_process() {
         cap_std::ambient_authority(),
     )
     .expect("open child root");
-    let root = molten_node_host::node_state::NodeStateRoot::from_dir(directory);
+    let root = molten_node_host::node_state::DirectoryRoot::from_dir(directory);
     let storage = root
-        .namespace(molten_node_host::node_state::NodeStateNamespaceKind::Storage)
+        .namespace(molten_node_host::node_state::NamespaceKind::Storage)
         .expect("child storage namespace");
     let policy = policy();
     let manifest = manifest(&policy);
     let time = time_profile(&manifest);
-    let mut store = LocalDeliveryStore::open(&storage, ENGINE_EPOCH).expect("child delivery store");
+    let mut store = Local::open(&storage, ENGINE_EPOCH).expect("child delivery store");
     let published = store.load(QUEUE_ID).expect("child state read").expect("child published state");
     let operation_id = if mode == CHILD_MODE_STALE_ACK { '6' } else { '7' };
     let tick = published
@@ -98,7 +96,7 @@ fn child_delivery_process() {
     let ack = request(&manifest, operation_id, tick, DeliveryOperation::Acknowledge { token });
     let mut timers = timer_port(false);
     let mut statuses = MemoryStatusPort::default();
-    let outcome = apply_delivery_request(&mut store, &mut timers, &mut statuses, &DeliveryServiceRequest {
+    let outcome = apply_request(&mut store, &mut timers, &mut statuses, &Request {
         manifest: &manifest,
         policy: &policy,
         time_profile: &time,
@@ -109,11 +107,11 @@ fn child_delivery_process() {
     .expect("child delivery outcome");
     match mode.as_str() {
         CHILD_MODE_STALE_ACK => {
-            assert_eq!(outcome.receipt.status, DeliveryServiceStatus::Denied);
+            assert_eq!(outcome.receipt.status, ServiceStatus::Denied);
             assert_eq!(outcome.transition.issue, Some(DeliveryIssue::TokenMismatch));
         }
         CHILD_MODE_CURRENT_ACK => {
-            assert_eq!(outcome.receipt.status, DeliveryServiceStatus::Applied);
+            assert_eq!(outcome.receipt.status, ServiceStatus::Applied);
             assert_eq!(outcome.transition.kind, DeliveryTransitionKind::Acknowledged);
         }
         other => panic!("unsupported child mode {other}"),
@@ -121,17 +119,17 @@ fn child_delivery_process() {
 }
 
 fn apply_local(
-    storage: &molten_node_host::node_state::NodeStateNamespace,
+    storage: &molten_node_host::node_state::Scope,
     timers: &mut MemoryTimerPort,
     statuses: &mut MemoryStatusPort,
     manifest: &DeliveryManifest,
     policy: &DeliveryPolicy,
     time: &molten_core::fabric_time::AdmittedTimeProfile,
-    expected: ExpectedDeliveryState,
+    expected: ExpectedState,
     request: &DeliveryRequest,
-) -> DeliveryServiceOutcome {
-    let mut store = LocalDeliveryStore::open(storage, ENGINE_EPOCH).expect("delivery store");
-    apply_delivery_request(&mut store, timers, statuses, &DeliveryServiceRequest {
+) -> Outcome {
+    let mut store = Local::open(storage, ENGINE_EPOCH).expect("delivery store");
+    apply_request(&mut store, timers, statuses, &Request {
         manifest,
         policy,
         time_profile: time,
@@ -142,8 +140,8 @@ fn apply_local(
     .expect("local delivery request")
 }
 
-fn expected_from_outcome(outcome: &DeliveryServiceOutcome) -> ExpectedDeliveryState {
-    ExpectedDeliveryState {
+fn expected_from_outcome(outcome: &Outcome) -> ExpectedState {
+    ExpectedState {
         state_ref: Some(outcome.transition.after_state_ref.clone()),
         revision: outcome.transition.next_state.revision,
     }

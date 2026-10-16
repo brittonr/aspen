@@ -11,23 +11,23 @@ pub mod error {
     use core::fmt;
 
     #[derive(Debug)]
-    pub struct MoltenError(String);
+    pub struct Failure(String);
 
-    impl MoltenError {
-        pub fn invalid_harness(message: impl Into<String>) -> Self {
-            Self(message.into())
+    impl Failure {
+            pub fn invalid_harness(message: impl Into<String>) -> Self {
+                Self(message.into())
+            }
         }
-    }
 
-    impl fmt::Display for MoltenError {
-        fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-            formatter.write_str(&self.0)
+    impl fmt::Display for Failure {
+            fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str(&self.0)
+            }
         }
-    }
 
-    impl std::error::Error for MoltenError {}
+    impl std::error::Error for Failure {}
 
-    pub type Result<T> = core::result::Result<T, MoltenError>;
+    pub type Result<T> = core::result::Result<T, Failure>;
 }
 
 pub mod preserves_rail {

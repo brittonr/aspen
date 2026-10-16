@@ -4,11 +4,11 @@ pub const CONTENT_REF_LENGTH: usize = BLAKE3_REF_PREFIX.len() + BLAKE3_HEX_LENGT
 pub const PERFORMANCE_PHASE_COUNT: usize = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PerformanceDenial {
+pub struct Denial {
     pub blockers: Vec<String>,
 }
 
-impl PerformanceDenial {
+impl Denial {
     pub fn new(blocker: impl Into<String>) -> Self {
         Self {
             blockers: vec![blocker.into()],
@@ -23,15 +23,15 @@ impl PerformanceDenial {
     }
 }
 
-impl std::fmt::Display for PerformanceDenial {
+impl std::fmt::Display for Denial {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(formatter, "{}", self.blockers.join("; "))
     }
 }
 
-impl std::error::Error for PerformanceDenial {}
+impl std::error::Error for Denial {}
 
-pub type PerformanceResult<T> = std::result::Result<T, PerformanceDenial>;
+pub type Result<T> = std::result::Result<T, Denial>;
 
 #[derive(
     Debug,
@@ -71,13 +71,13 @@ impl BenchmarkLane {
     serde::Deserialize
 )]
 #[serde(rename_all = "kebab-case")]
-pub enum PerformancePhase {
+pub enum Phase {
     Compilation,
     Instantiation,
     Execution,
 }
 
-impl PerformancePhase {
+impl Phase {
     pub const ALL: [Self; PERFORMANCE_PHASE_COUNT] = [Self::Compilation, Self::Instantiation, Self::Execution];
 
     pub const fn as_str(self) -> &'static str {
@@ -100,11 +100,11 @@ impl PerformancePhase {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum PerformanceEvidenceRole {
+pub enum EvidenceRole {
     RecordedOnly,
 }
 
-impl PerformanceEvidenceRole {
+impl EvidenceRole {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::RecordedOnly => "recorded-only",
@@ -128,10 +128,10 @@ pub struct SamplingProfile {
 }
 
 impl SamplingProfile {
-    pub fn expected_samples_per_phase(&self) -> PerformanceResult<u32> {
+    pub fn expected_samples_per_phase(&self) -> Result<u32> {
         self.processes
             .checked_mul(self.iterations_per_process)
-            .ok_or_else(|| PerformanceDenial::new("benchmark sampling process and iteration product overflowed"))
+            .ok_or_else(|| Denial::new("benchmark sampling process and iteration product overflowed"))
     }
 }
 
@@ -148,7 +148,7 @@ pub struct BenchmarkSuite {
     pub engine_cohort_ref: String,
     pub engine_artifact_ref: String,
     pub runner_artifact_ref: String,
-    pub phases: Vec<PerformancePhase>,
+    pub phases: Vec<Phase>,
     pub sampling: SamplingProfile,
 }
 
@@ -176,12 +176,12 @@ pub struct OptimizationLimits {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct PerformanceProfile {
+pub struct Profile {
     pub profile_id: String,
-    pub evidence_role: PerformanceEvidenceRole,
+    pub evidence_role: EvidenceRole,
     pub component_profile_id: String,
     pub sightglass: SightglassCohort,
-    pub phases: Vec<PerformancePhase>,
+    pub phases: Vec<Phase>,
     pub fast: BenchmarkSuite,
     pub deep: BenchmarkSuite,
     pub comparison: ComparisonProfile,
@@ -190,11 +190,11 @@ pub struct PerformanceProfile {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct PerformanceProfileExport {
+pub struct ProfileExport {
     pub schema_id: String,
     pub schema_version: u32,
     pub source_language: String,
-    pub profile: PerformanceProfile,
+    pub profile: Profile,
 }
 
 #[derive(
@@ -209,13 +209,13 @@ pub struct PerformanceProfileExport {
     serde::Deserialize
 )]
 #[serde(rename_all = "kebab-case")]
-pub enum PerformanceArtifactKind {
+pub enum ArtifactKind {
     PortableComponent,
     WizerComponent,
     PrecompiledComponent,
 }
 
-impl PerformanceArtifactKind {
+impl ArtifactKind {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::PortableComponent => "portable-component",
@@ -229,9 +229,9 @@ impl PerformanceArtifactKind {
 pub(crate) struct MaterializationAdmissionSeal;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MaterializedPerformanceArtifact {
-    pub(crate) kind: PerformanceArtifactKind,
-    pub(crate) consumer: crate::wasm_component::ComponentConsumer,
+pub struct MaterializedArtifact {
+    pub(crate) kind: ArtifactKind,
+    pub(crate) consumer: crate::wasm_component::Consumer,
     pub(crate) source_component_ref: String,
     pub(crate) artifact_ref: String,
     pub(crate) artifact_length: u64,

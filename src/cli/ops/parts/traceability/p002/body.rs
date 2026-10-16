@@ -2,8 +2,8 @@
 fn read_source_pin_records(
     root: &std::path::Path,
 ) -> Outcome<Vec<molten::project_config_portability::SourcePinRecord>> {
-    let cargo_lock = std::fs::read_to_string(root.join("Cargo.lock")).map_err(molten::error::MoltenError::from)?;
-    let flake = std::fs::read_to_string(root.join("flake.nix")).map_err(molten::error::MoltenError::from)?;
+    let cargo_lock = std::fs::read_to_string(root.join("Cargo.lock")).map_err(molten::error::Failure::from)?;
+    let flake = std::fs::read_to_string(root.join("flake.nix")).map_err(molten::error::Failure::from)?;
     let cargo_revisions = cargo_private_revisions(&cargo_lock);
     let nix_revisions = nix_private_revisions(&flake);
     let mut dependencies = std::collections::BTreeSet::new();
@@ -60,7 +60,7 @@ fn parse_source_dependency_revision(source: &str) -> Option<(String, String)> {
     Some((dependency.to_string(), revision))
 }
 
-fn render_config_lint_summary(report: &molten::project_config_portability::ConfigPortabilityReport) -> String {
+fn render_config_lint_summary(report: &molten::project_config_portability::Report) -> String {
     let diagnostics = if report.diagnostics.is_empty() {
         "none".to_string()
     } else {
@@ -77,8 +77,8 @@ fn render_config_lint_summary(report: &molten::project_config_portability::Confi
 
 fn run_effective_config(input: EffectiveConfigCommandInput) -> Outcome<()> {
     let sources = parse_effective_config_fields(input.fields)?;
-    let readback = molten::project_effective_config::build_effective_config_readback(
-        &molten::project_effective_config::EffectiveConfigInput {
+    let readback = molten::project_effective_config::build_readback(
+        &molten::project_effective_config::Input {
             profile_refs: input.profile_refs,
             sources,
             release_mode: input.release_mode,
@@ -88,13 +88,13 @@ fn run_effective_config(input: EffectiveConfigCommandInput) -> Outcome<()> {
     write_optional_preserves(input.out.as_ref(), &readback.value)?;
     write_optional_text(
         input.summary_out.as_ref(),
-        &molten::project_effective_config::explain_effective_config(&readback)?,
+        &molten::project_effective_config::explain(&readback)?,
     )?;
     eprintln!("effective-config ref={} decision={}", readback.fingerprint_ref, readback.decision);
     if readback.decision == "pass" {
         Ok(())
     } else {
-        Err(molten::error::MoltenError::invalid_harness(format!(
+        Err(molten::error::Failure::invalid_harness(format!(
             "effective config denied: {}",
             readback.diagnostics.join(DIAGNOSTIC_JOIN_SEPARATOR)
         )))
@@ -103,17 +103,17 @@ fn run_effective_config(input: EffectiveConfigCommandInput) -> Outcome<()> {
 
 fn parse_effective_config_fields(
     fields: Vec<String>,
-) -> Outcome<Vec<molten::project_effective_config::ConfigSourceInput>> {
+) -> Outcome<Vec<molten::project_effective_config::SourceInput>> {
     let mut output = Vec::with_capacity(fields.len());
     for field in fields {
         let parts = field.split(EFFECTIVE_CONFIG_FIELD_SEPARATOR).map(str::to_string).collect::<Vec<_>>();
         if parts.len() != EFFECTIVE_CONFIG_FIELD_PARTS {
-            return Err(molten::error::MoltenError::invalid_harness(format!(
+            return Err(molten::error::Failure::invalid_harness(format!(
                 "effective config field must have {EFFECTIVE_CONFIG_FIELD_PARTS} pipe-delimited parts"
             )));
         }
         if parts.iter().take(EFFECTIVE_CONFIG_FIELD_PARTS - 1).any(|part| part.trim().is_empty()) {
-            return Err(molten::error::MoltenError::invalid_harness("effective config field parts must not be empty"));
+            return Err(molten::error::Failure::invalid_harness("effective config field parts must not be empty"));
         }
         let caveats = if parts[4].trim().is_empty() {
             Vec::new()
@@ -125,7 +125,7 @@ fn parse_effective_config_fields(
                 .map(str::to_string)
                 .collect()
         };
-        output.push(molten::project_effective_config::ConfigSourceInput {
+        output.push(molten::project_effective_config::SourceInput {
             field: parts[0].clone(),
             value: parts[1].clone(),
             source_class: parts[2].clone(),
@@ -142,10 +142,10 @@ fn parse_effective_config_fields(
 }
 
 fn run_context_profile(input: ContextProfileCommandInput) -> Outcome<()> {
-    let profile = molten::operator_context_profile::ContextProfileInput {
+    let profile = molten::operator_context_profile::Input {
         profile_id: input.profile_id,
         profile_tier: input.profile_tier,
-        refs: molten::operator_context_profile::ContextRefSet {
+        refs: molten::operator_context_profile::RefSet {
             policy_refs: input.policy_refs,
             capability_refs: Vec::new(),
             authority_refs: input.authority_refs,
@@ -165,28 +165,28 @@ fn run_context_profile(input: ContextProfileCommandInput) -> Outcome<()> {
         require_evidence: input.require_evidence,
         require_retention: input.require_retention,
     };
-    let overrides = molten::operator_context_profile::ContextOverrideInput {
+    let overrides = molten::operator_context_profile::OverrideInput {
         policy_refs: Vec::new(),
         authority_refs: input.override_authority_refs,
         resource_refs: Vec::new(),
         evidence_refs: input.override_evidence_refs,
         retention_refs: Vec::new(),
     };
-    let expansion = molten::operator_context_profile::expand_context_profile(&profile, &requirements, &overrides)?;
+    let expansion = molten::operator_context_profile::expand(&profile, &requirements, &overrides)?;
     write_optional_preserves(input.out.as_ref(), &expansion.value)?;
     write_optional_text(input.summary_out.as_ref(), &render_context_profile_summary(&expansion))?;
     eprintln!("context-profile expansion={} decision={}", expansion.expansion_ref, expansion.decision);
     if expansion.decision == "pass" {
         Ok(())
     } else {
-        Err(molten::error::MoltenError::invalid_harness(format!(
+        Err(molten::error::Failure::invalid_harness(format!(
             "context profile expansion denied: {}",
             expansion.diagnostics.join(DIAGNOSTIC_JOIN_SEPARATOR)
         )))
     }
 }
 
-fn render_context_profile_summary(expansion: &molten::operator_context_profile::ContextExpansion) -> String {
+fn render_context_profile_summary(expansion: &molten::operator_context_profile::Expansion) -> String {
     let diagnostics = if expansion.diagnostics.is_empty() {
         "none".to_string()
     } else {
@@ -206,7 +206,7 @@ fn collect_spec_sources(root: &std::path::Path) -> Outcome<Vec<molten::requireme
 }
 
 fn raw_file_ref(path: &std::path::Path) -> Outcome<String> {
-    let bytes = std::fs::read(path).map_err(molten::error::MoltenError::from)?;
+    let bytes = std::fs::read(path).map_err(molten::error::Failure::from)?;
     Ok(molten::preserves_rail::content_ref_from_bytes(&bytes))
 }
 
@@ -217,7 +217,7 @@ fn parse_junit_counts(text: &str) -> Outcome<molten::testing_hardening::CiTestCo
     let skipped = junit_optional_attribute(text, JUNIT_SKIPPED_ATTRIBUTE)?;
     let failed = failures
         .checked_add(errors)
-        .ok_or_else(|| molten::error::MoltenError::invalid_harness("JUnit failure/error count overflow"))?;
+        .ok_or_else(|| molten::error::Failure::invalid_harness("JUnit failure/error count overflow"))?;
     Ok(molten::testing_hardening::CiTestCounts {
         total,
         passed: junit_passed_count(total, failed, skipped)?,
@@ -230,7 +230,7 @@ fn junit_passed_count(total: u64, failed: u64, skipped: u64) -> Outcome<u64> {
     total
         .checked_sub(failed)
         .and_then(|count| count.checked_sub(skipped))
-        .ok_or_else(|| molten::error::MoltenError::invalid_harness("JUnit passed count underflow"))
+        .ok_or_else(|| molten::error::Failure::invalid_harness("JUnit passed count underflow"))
 }
 
 fn junit_optional_attribute(text: &str, name: &str) -> Outcome<u64> {
@@ -242,7 +242,7 @@ fn junit_optional_attribute(text: &str, name: &str) -> Outcome<u64> {
 
 fn junit_attribute(text: &str, name: &str) -> Outcome<u64> {
     let Some(value) = junit_attribute_value(text, name)? else {
-        return Err(molten::error::MoltenError::invalid_harness(format!("JUnit missing {name} attribute")));
+        return Err(molten::error::Failure::invalid_harness(format!("JUnit missing {name} attribute")));
     };
     parse_junit_attribute_value(value, name)
 }
@@ -255,7 +255,7 @@ fn junit_attribute_value<'a>(text: &'a str, name: &str) -> Outcome<Option<&'a st
     };
     let rest = &text[start_index..];
     let Some(end_index) = rest.find(JUNIT_QUOTE) else {
-        return Err(molten::error::MoltenError::invalid_harness(format!("JUnit unterminated {name} attribute")));
+        return Err(molten::error::Failure::invalid_harness(format!("JUnit unterminated {name} attribute")));
     };
     Ok(Some(&rest[..end_index]))
 }
@@ -263,5 +263,5 @@ fn junit_attribute_value<'a>(text: &'a str, name: &str) -> Outcome<Option<&'a st
 fn parse_junit_attribute_value(value: &str, name: &str) -> Outcome<u64> {
     value
         .parse::<u64>()
-        .map_err(|error| molten::error::MoltenError::invalid_harness(format!("JUnit invalid {name} count: {error}")))
+        .map_err(|error| molten::error::Failure::invalid_harness(format!("JUnit invalid {name} count: {error}")))
 }

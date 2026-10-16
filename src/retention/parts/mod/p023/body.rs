@@ -157,7 +157,7 @@ where
         return Ok(refs);
     }
     for entry in root.root().list_entries(&directory)? {
-        if entry.kind != crate::local_store::LocalStoreEntryKind::File {
+        if entry.kind != crate::local_store::MemberKind::File {
             continue;
         }
         let value = read_store_value_with_root(root, &entry.path)?;

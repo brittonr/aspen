@@ -135,6 +135,16 @@ molten test prod-soak runbook-check \
 
 Review `startup-receipt.preserves`, `node.health.preserves`, `node.shutdown.preserves`, and `runbook.node-lifecycle.preserves`; do not treat stdout as pass evidence.
 
+Also retain `control/current-run.preserves` and, after completion,
+`control/current-run-shutdown.preserves`. The active lock and completion must match
+the exact current run, not merely identical startup content. A duplicate shutdown
+from an earlier run remains historical success; it neither executes again nor stops
+the current run. A new shutdown requires a distinct request and fresh admission.
+Missing, unreadable or conflicting run observations require investigation, not manual
+lock deletion or receipt synthesis. A service receipt can deny because bounded work
+remains while still recording `stopped=true`; denial alone does not mean no effects
+occurred. Follow the [restart and lock diagnosis](handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md).
+
 ## Evidence export and source-gate refresh
 
 ```sh

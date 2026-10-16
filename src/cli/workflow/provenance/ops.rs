@@ -184,6 +184,6 @@ fn show(artifact: FilePath) -> Outcome<()> {
     Ok(())
 }
 
-fn wrong_handler(name: &str) -> molten::error::MoltenError {
-    molten::error::MoltenError::invalid_harness(format!("provenance {name} handler called with another command"))
+fn wrong_handler(name: &str) -> molten::error::Failure {
+    molten::error::Failure::invalid_harness(format!("provenance {name} handler called with another command"))
 }

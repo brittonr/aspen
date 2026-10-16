@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "node",
+    "init",
+    "--help"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T17:49:54.171561+00:00",
+  "elapsed_seconds": 0.016,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "Usage: molten node init [OPTIONS] --state-root <STATE_ROOT>\n\nOptions:\n      --state-root <STATE_ROOT>\n          \n      --node-id <NODE_ID>\n          [default: node:local]\n      --config-out <CONFIG_OUT>\n          \n      --identity-receipt-out <IDENTITY_RECEIPT_OUT>\n          \n      --profile-resolution-out <PROFILE_RESOLUTION_OUT>\n          \n      --profile-ref <PROFILE_REF>\n          \n      --actual-profile-ref <ACTUAL_PROFILE_REF>\n          \n      --profile-source-kind <PROFILE_SOURCE_KIND>\n          [default: checked-export]\n      --profile-tier <PROFILE_TIER>\n          [default: pilot]\n      --profile-schema-id <PROFILE_SCHEMA_ID>\n          [default: molten.prod-ops.deployment-profile.v1]\n      --profile-schema-version <PROFILE_SCHEMA_VERSION>\n          [default: 1]\n      --profile-source-language <PROFILE_SOURCE_LANGUAGE>\n          [default: nickel]\n      --profile-identity <PROFILE_IDENTITY>\n          \n      --profile-state-root-ref <PROFILE_STATE_ROOT_REF>\n          \n      --adapter-profile <ADAPTER_PROFILES>\n          \n      --policy-ref <POLICY_REFS>\n          \n      --capability-ref <CAPABILITY_REFS>\n          \n      --resource-ref <RESOURCE_REFS>\n          \n      --effect-profile-ref <EFFECT_PROFILE_REFS>\n          \n      --overrideable-field <OVERRIDEABLE_FIELDS>\n          \n      --override-state-root-ref <OVERRIDE_STATE_ROOT_REF>\n          \n  -h, --help\n          Print help\n",
+  "stderr": ""
+}

@@ -1,0 +1,137 @@
+{
+  "attempt": "5/20",
+  "objective_complete": false,
+  "status": "blocked_pending_scope_decisions",
+  "supersedes_current_state_only": "blocked-capacity-checkpoint.md",
+  "historical_evidence_preserved": true,
+  "repository": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "immediate_outcome": "Clean pinned producers and a passing actual freshly built CLI source gate; final full acceptance remains incomplete.",
+  "source_gate": {
+    "producer_toolchain": "nightly-2026-03-21-x86_64-unknown-linux-gnu",
+    "provider_revision": "fc38f59330b626961d166febfdf1a5aa6575460f",
+    "workspace_status": "octet-workspace-07-status.json",
+    "library_status": "octet-library-07-status.json",
+    "workspace_and_library_findings": 0,
+    "submitted_rust_paths": 1890,
+    "object_count": 14013,
+    "object_bearing_paths": 1564,
+    "corpus_receipt": "object-corpus-07-receipt.json",
+    "cli_build_command": "env TMPDIR=<task-owned-temporary-directory> nix build .#default --no-update-lock-file --no-link --print-out-paths -L",
+    "actual_cli": "/nix/store/fh5zxhmbxacnadynnxa5hwr1mr3zj9vs-rust_molten-0.1.0/bin/molten",
+    "artifact_directory": "target/octet-guided-goal-remediation-20261015-workspace-07",
+    "library_artifact_directory": "target/octet-guided-goal-remediation-20261015-lib-07",
+    "artifact_import": {
+      "decision": "pass",
+      "imported_artifacts": 6,
+      "receipt": "artifact-ledger-hermetic-receipt.preserves",
+      "receipt_ref": "blake3:8bcf300a9216d9eb0e29e0ad640a8ed95d5395488649f963fdccc03efd6eea37",
+      "ledger": "target/octet-guided-goal-remediation-20261015-ledger-07-hermetic"
+    },
+    "strict_ci": {
+      "decision": "pass",
+      "receipt": "gate-hermetic-receipt.preserves",
+      "receipt_ref": "blake3:a4a5be2eca77151988f3448f9a8b0ae6dfc70635a0d456eac5170bcefa4f8f41"
+    },
+    "remediation_plan": {
+      "result": "generated",
+      "receipt": "remediation-hermetic-plan.preserves",
+      "receipt_ref": "blake3:3633dfec793b166945dab67a2665a018d00a486621e2e4bd082f19226a2bd452"
+    },
+    "full_ordered_cargo_sequence_complete": false,
+    "cargo_retry": {
+      "command": "env TMPDIR=<task-owned-temporary-directory> nix develop -c cargo run --offline --locked -- test octet artifacts import --artifacts target/octet-guided-goal-remediation-20261015-workspace-07 --ledger target/octet-guided-goal-remediation-20261015-ledger-07 --receipt-out target/octet-guided-goal-remediation-20261015-workspace-07/artifact-ledger-receipt.preserves",
+      "timeout_seconds": 45,
+      "observed_output": "Blocking waiting for file lock on package cache",
+      "import_executed": false,
+      "unrelated_process_terminated": false
+    }
+  },
+  "verification": {
+    "format": {
+      "command": "env TMPDIR=<task-owned-temporary-directory> nix develop -c cargo fmt --all --check",
+      "result": "pass"
+    },
+    "exported_nix_clippy": {
+      "command": "env TMPDIR=<task-owned-temporary-directory> nix build .#checks.x86_64-linux.clippy --no-update-lock-file --no-link --print-out-paths -L",
+      "result": "pass",
+      "output": "/nix/store/i0g5wb69q9z65j5ndj4pdfgb7n22ab4g-all-workspace-members-clippy",
+      "scope": "Exported unit2nix all-workspace-members check; not a completed compatible-feature Cargo all-targets command."
+    },
+    "retained_hermetic_execution": {
+      "summary": "hermetic-discovery-summary.json",
+      "passed": 1694,
+      "failed": 0,
+      "skipped": 0,
+      "restored_content_replication_cases": 12,
+      "restored_fabric_simulation_boundary_cases": 3
+    },
+    "retained_feature_extent_execution": {
+      "passed": 6,
+      "scope": "Separate prior Cargo executable-extents run, not default Nix execution."
+    },
+    "guard_behavior_tests": {
+      "summary": "tracey-guard-test-cleanup.json",
+      "passed": 4,
+      "failed": 0
+    },
+    "strict_cairn_structure": {
+      "valid": true,
+      "findings": 0,
+      "receipt_hash": "f93d2bd654ef964677ebbd5bef3125ee363ee7a64238addd1fbfc645585dd88f",
+      "output": "strict-cairn-after-final-probes.json",
+      "command": "env TMPDIR=<task-owned-temporary-directory> nix run --no-update-lock-file path:/home/brittonr/git/OnixResearch/cairn#cairn -- validate --root . --policy /home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json --strict"
+    }
+  },
+  "lifecycle": {
+    "native_readback": "active-changes-after-final-probes.json",
+    "active_changes": 51,
+    "unchecked_tasks": 540,
+    "new_archives_this_resume": 0,
+    "new_commits_this_resume": 0,
+    "integration_or_push_performed": false
+  },
+  "unresolved": [
+    {
+      "kind": "traceability_lifecycle_conflict",
+      "dangling_ids": 22,
+      "evidence": "tracey-identities-after-direct-repairs.json",
+      "constraint": "The guard admits accepted definitions only; these identities belong to still-active deltas. No markers suppressed or renamed to merely related accepted IDs, no baseline widened, and no incomplete delta synced."
+    },
+    {
+      "kind": "unavailable_pinned_policy",
+      "requirement": "molten.authority.nominal_references.octet.guard",
+      "evidence": "tracey-identities-after-direct-repairs.json",
+      "availability_document": "docs/nominal-authority-references.md:62-64",
+      "accepted_requirement": ".cairn/specs/authority-identity-revocation/spec.md:410-419",
+      "constraint": "The parent requirement is availability-conditioned; the current provider lacks the policy. Declaration and compile-fail type checks do not implement or prove Octet nominal-domain enforcement. Provider/pin changes or a reviewed availability resolution require an explicit scope decision."
+    },
+    {
+      "kind": "owner_implementation_not_finished",
+      "evidence": "consensus-tracey-ownership-review.json",
+      "scope": "Static review only; local consensus projection/attempt fixtures are not a real admitted committed-path/KVM consumer. Scheduler production composition and independent simulation dispatch also remain open as previously recorded."
+    },
+    {
+      "kind": "final_cargo_acceptance_incomplete",
+      "constraint": "The Cargo CLI retry timed out at a shared package-cache lock. Existing prior test evidence and successful Nix rails do not prove completion of the entire ordered Cargo/compatible-feature acceptance sequence."
+    }
+  ],
+  "storage": {
+    "repository_evidence_writes_restored": true,
+    "quota_changed_by_this_resume": false
+  },
+  "capability_contribution": "Maintainable naming/layout and explicit environment/allocation inputs, complete hermetic test discovery, real pinned CLI source-gate execution, and retained positive/negative evidence.",
+  "maintenance_owners": [
+    "Molten source-policy and affected subsystem maintainers",
+    "Molten Nix/test-discovery maintainers",
+    "Molten lifecycle/traceability maintainers; Octet provider maintainers for unavailable policy"
+  ],
+  "non_claims": [
+    "not zero active Cairns",
+    "not acceptance of incomplete behavioral packages",
+    "not a full nix flake check pass",
+    "not completion of every feature/backend or the live DoltLite cohort",
+    "not a self-contained source-gate ledger export",
+    "Nix store and worktree paths are local verification locators, not product runtime dependencies or release identities",
+    "not authorization to broaden guard policy, change provider pins, edit siblings, or publish"
+  ]
+}

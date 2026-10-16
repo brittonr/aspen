@@ -2,7 +2,7 @@ use super::*;
 
 type Path = std::path::Path;
 type PathBuf = std::path::PathBuf;
-type MoltenError = molten::error::MoltenError;
+type MoltenError = molten::error::Failure;
 type Result<T> = molten::error::Result<T>;
 type Top = crate::cli_chunk::Top;
 type CoordinationCommand = crate::cli_coordination::CoordinationCommand;

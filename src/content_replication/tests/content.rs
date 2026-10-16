@@ -21,15 +21,15 @@ pub struct SimulatedContent {
     descriptor: ContentManifestDescriptor,
     chunks: std::collections::BTreeMap<String, Vec<u8>>,
     inventory: Inventory,
-    fault: Option<SimulationFault>,
+    fault: Option<Fault>,
     events: Events,
 }
 
 impl SimulatedContent {
-    pub fn new(manifest: &Manifest, events: &Events, fault: Option<SimulationFault>) -> crate::error::Result<Self> {
+    pub fn new(manifest: &Manifest, events: &Events, fault: Option<Fault>) -> crate::error::Result<Self> {
         let bytes = content_bytes()?;
         let chunk_size = usize::try_from(CONTENT_BYTES)
-            .map_err(|_| crate::error::MoltenError::invalid_harness("content fixture size exceeds usize"))?;
+            .map_err(|_| crate::error::Failure::invalid_harness("content fixture size exceeds usize"))?;
         let chunk_ref = crate::chunk_store::hash_chunk(&bytes, chunk_size);
         let descriptor = descriptor(manifest, chunk_ref.clone());
         let profile = profile(manifest, ContentAdapterClass::DeterministicSimulation)?;
@@ -69,7 +69,7 @@ impl ContentPort for SimulatedContent {
             fault: self.fault,
         })?;
         if !content_is_available(&self.descriptor, &execution.state.artifact) {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "simulated replication content did not become verified",
             ));
         }
@@ -77,7 +77,7 @@ impl ContentPort for SimulatedContent {
     }
 
     fn cleanup(&mut self, _action: &Action, _admission: &CleanupObservation) -> crate::error::Result<String> {
-        Err(crate::error::MoltenError::invalid_harness("simulation conformance does not execute cleanup"))
+        Err(crate::error::Failure::invalid_harness("simulation conformance does not execute cleanup"))
     }
 }
 
@@ -93,9 +93,9 @@ pub struct LocalContent {
 
 impl LocalContent {
     pub fn new(manifest: &mut Manifest, events: &Events) -> crate::error::Result<Self> {
-        let temp = cap_tempfile::tempdir(cap_tempfile::ambient_authority()).map_err(crate::error::MoltenError::from)?;
+        let temp = cap_tempfile::tempdir(cap_tempfile::ambient_authority()).map_err(crate::error::Failure::from)?;
         let descriptor_path = std::path::PathBuf::from(format!("/proc/self/fd/{}", temp.as_raw_fd()));
-        let host_path = std::fs::read_link(descriptor_path).map_err(crate::error::MoltenError::from)?;
+        let host_path = std::fs::read_link(descriptor_path).map_err(crate::error::Failure::from)?;
         let root = crate::chunk_store::CapabilityChunkRoot::open(&host_path)?;
         let bytes = content_bytes()?;
         let stored = crate::chunk_store::put_bytes_with_root(&root, "replication-fixture", &bytes, CONTENT_BYTES)?;
@@ -130,22 +130,21 @@ impl ContentPort for LocalContent {
     ) -> crate::error::Result<VerificationObservation> {
         self.events.borrow_mut().push("local-content");
         let command = command(&self.profile, &self.descriptor, action)?;
-        let execution = execute_local_stream_get(&self.profile, &self.root, &command, GENERATION, None)?;
-        let assembled =
-            assemble_verified_content(&execution.manifest, &execution.state.artifact, &execution.verified_chunks)?;
+        let execution = execute_stream_get(&self.profile, &self.root, &command, GENERATION, None)?;
+        let assembled = assemble_verified(&execution.manifest, &execution.state.artifact, &execution.verified_chunks)?;
         if assembled != self.bytes {
-            return Err(crate::error::MoltenError::invalid_harness("local replication content readback drifted"));
+            return Err(crate::error::Failure::invalid_harness("local replication content readback drifted"));
         }
         verification(action, &self.descriptor, digest('2'))
     }
 
     fn cleanup(&mut self, _action: &Action, _admission: &CleanupObservation) -> crate::error::Result<String> {
-        Err(crate::error::MoltenError::invalid_harness("local conformance does not execute cleanup"))
+        Err(crate::error::Failure::invalid_harness("local conformance does not execute cleanup"))
     }
 }
 
 fn profile(manifest: &Manifest, class: ContentAdapterClass) -> crate::error::Result<ContentAdapterProfile> {
-    content_adapter_profile(
+    crate::content_store_adapter::profile(
         "content-replication-conformance-v1",
         manifest.content_profile_ref.clone(),
         class,
@@ -189,7 +188,7 @@ fn command(
     descriptor: &ContentManifestDescriptor,
     action: &Action,
 ) -> crate::error::Result<ContentCommand> {
-    content_command(profile, ContentCommandInput {
+    crate::content_store_adapter::command(profile, CommandInput {
         operation_ref: action.operation_id.clone(),
         operation: ContentOperation::Get,
         manifest: descriptor,
@@ -231,6 +230,6 @@ fn verification(
 
 fn content_bytes() -> crate::error::Result<Vec<u8>> {
     let length = usize::try_from(CONTENT_BYTES)
-        .map_err(|_| crate::error::MoltenError::invalid_harness("content fixture size exceeds usize"))?;
+        .map_err(|_| crate::error::Failure::invalid_harness("content fixture size exceeds usize"))?;
     Ok(vec![CONTENT_BYTES_VALUE; length])
 }

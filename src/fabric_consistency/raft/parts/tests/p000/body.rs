@@ -24,9 +24,9 @@ pub(super) fn test_ref(label: &str) -> String {
     .expect("test ref")
 }
 
-pub(super) fn active_group() -> crate::fabric_consistency::ConsistencyGroupBinding {
-    let declared = crate::fabric_consistency::canonical_consistency_group_binding(
-        crate::fabric_consistency::ConsistencyGroupBindingInput {
+pub(super) fn active_group() -> crate::fabric_consistency::Group {
+    let declared = crate::fabric_consistency::canonical_group(
+        crate::fabric_consistency::GroupInput {
             group_id: "group:live-raft".to_string(),
             extension_id: "extension-live-raft".to_string(),
             service_id: "service-live-raft".to_string(),
@@ -42,15 +42,15 @@ pub(super) fn active_group() -> crate::fabric_consistency::ConsistencyGroupBindi
             resource_profile_ref: test_ref("resources"),
             policy_refs: vec![test_ref("policy")],
             non_claims: vec!["live-startup-does-not-prove-production-consensus".to_string()],
-            supported_read_modes: vec![crate::fabric_consistency::ConsistencyReadMode::Linearizable],
+            supported_read_modes: vec![crate::fabric_consistency::ReadMode::Linearizable],
             max_command_bytes: COMMAND_BYTE_LIMIT,
             max_in_flight_operations: IN_FLIGHT_LIMIT,
         },
     )
     .expect("declared group");
-    let plan = crate::fabric_consistency::plan_consistency_operation(
+    let plan = crate::fabric_consistency::plan(
         &declared,
-        crate::fabric_consistency::ConsistencyPortCommandInput {
+        crate::fabric_consistency::PortCommandInput {
             request_ref: test_ref("open-request"),
             binding_ref: declared.binding_ref.clone(),
             group_id: declared.group_id.clone(),
@@ -69,32 +69,32 @@ pub(super) fn active_group() -> crate::fabric_consistency::ConsistencyGroupBindi
             policy_refs: declared.policy_refs.clone(),
             authority_refs: vec![test_ref("authority")],
             observed_in_flight_operations: 0,
-            operation: crate::fabric_consistency::ConsistencyOperation::Open {
+            operation: crate::fabric_consistency::Request::Open {
                 mode: crate::fabric_consistency::GroupOpenMode::Create,
             },
         },
     )
     .expect("open plan");
-    let outcome = crate::fabric_consistency::normalize_consistency_outcome(
+    let outcome = crate::fabric_consistency::normalize(
         &declared,
         &plan,
-        crate::fabric_consistency::ConsistencyOutcomeInput {
+        crate::fabric_consistency::Input {
             request_ref: plan.request_ref.clone(),
             binding_ref: declared.binding_ref.clone(),
             service_generation: declared.service_generation,
             config_epoch: declared.config_epoch,
             fencing_epoch: declared.fencing_epoch,
-            kind: crate::fabric_consistency::ConsistencyOutcomeKind::Opened,
+            kind: crate::fabric_consistency::Kind::Opened,
             result_ref: Some(test_ref("open-result")),
             evidence_refs: vec![test_ref("open-evidence")],
             diagnostics: Vec::new(),
         },
     )
     .expect("open outcome");
-    crate::fabric_consistency::apply_consistency_outcome(&declared, &plan, &outcome).expect("active group")
+    crate::fabric_consistency::apply_outcome(&declared, &plan, &outcome).expect("active group")
 }
 
-fn profile(group: &crate::fabric_consistency::ConsistencyGroupBinding) -> ReplicaProfile {
+fn profile(group: &crate::fabric_consistency::Group) -> ReplicaProfile {
     ReplicaProfile {
         profile_ref: test_ref("live-raft-profile"),
         group_binding_ref: group.binding_ref.clone(),
@@ -118,7 +118,7 @@ fn profile(group: &crate::fabric_consistency::ConsistencyGroupBinding) -> Replic
     }
 }
 
-fn membership(group: &crate::fabric_consistency::ConsistencyGroupBinding) -> StaticMembership {
+fn membership(group: &crate::fabric_consistency::Group) -> StaticMembership {
     StaticMembership {
         membership_ref: group.membership_ref.clone(),
         config_epoch: group.config_epoch,
@@ -252,7 +252,7 @@ fn live_replica_start_denies_duplicate_membership_and_unsafe_timer_bounds() {
     assert!(unsafe_timer.to_string().contains("heartbeat < election minimum"));
 }
 
-pub(super) fn started_state(group: &crate::fabric_consistency::ConsistencyGroupBinding, node_id: &str) -> ReplicaState {
+pub(super) fn started_state(group: &crate::fabric_consistency::Group, node_id: &str) -> ReplicaState {
     plan_live_replica_start(ReplicaStartInput {
         node_id: node_id.to_string(),
         membership: membership(group),

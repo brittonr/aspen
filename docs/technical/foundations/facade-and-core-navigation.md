@@ -16,7 +16,7 @@ The root library includes a [façade body](../../../src/parts/lib/p000/body.rs) 
 
 Thus `molten::deterministic_replay` and the internal root module `playback` lead to the same implementation surface, not competing replay engines. The old-looking domain alias is often exactly what existing source uses. A navigation search that insists API names must equal filenames can accidentally invent a second convention or overlook existing functionality.
 
-The same façade exposes `core_api` by re-exporting `molten_core::*`. Its root `prelude` adds `MoltenError` and `Result` alongside `core_api::prelude::*`. The pure crate's own [entrypoint](../../../crates/molten-core/src/lib.rs) explicitly exports selected planning, codec, policy, dependency, and other types and functions through its prelude. This is a preferred import surface, not evidence that every historical root module has been physically extracted into that crate.
+The same façade exposes `core_api` by re-exporting `molten_core::*`. Its root `prelude` adds `Failure` and `Result` alongside `core_api::prelude::*`. The pure crate's own [entrypoint](../../../crates/molten-core/src/lib.rs) explicitly exports selected planning, codec, policy, dependency, and other types and functions through its prelude. This is a preferred import surface, not evidence that every historical root module has been physically extracted into that crate.
 
 ## Following included source without losing context
 

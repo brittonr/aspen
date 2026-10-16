@@ -89,7 +89,7 @@ pub fn parse_control_ingress_envelope(value: &IoValue) -> Result<ControlIngressE
 }
 
 pub fn publish_control_ingress(input: &ControlIngressPublishInput<'_>) -> Result<ControlIngressPublish> {
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::DirectoryRoot::open(input.state_root)?;
     validate_state_root(input.state_root)?;
     ensure_state_layout(&state_root)?;
     let envelope = parse_control_ingress_envelope(input.envelope_value)?;
@@ -131,7 +131,7 @@ struct EnqueueOutcome {
 }
 
 fn apply_ingress_enqueue(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::DirectoryRoot,
     envelope: &ControlIngressEnvelope,
 ) -> Result<EnqueueOutcome> {
     let idempotency_evidence_refs = ingress_idempotency_evidence_refs(envelope);
@@ -183,13 +183,13 @@ fn apply_ingress_enqueue(
 }
 
 pub fn deliver_control_ingress(input: &ControlIngressDeliverInput<'_>) -> Result<ControlIngressDeliver> {
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::DirectoryRoot::open(input.state_root)?;
     validate_state_root(input.state_root)?;
     deliver_control_ingress_with_root(&state_root, input.topic, input.envelope_ref)
 }
 
 fn deliver_control_ingress_with_root(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::DirectoryRoot,
     topic: &str,
     envelope_ref: &str,
 ) -> Result<ControlIngressDeliver> {
@@ -243,7 +243,7 @@ fn deliver_control_ingress_with_root(
 }
 
 fn ingress_pre_enqueue_diagnostics(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::DirectoryRoot,
     topic: &str,
     envelope: &ControlIngressEnvelope,
 ) -> Result<Vec<String>> {
@@ -256,7 +256,7 @@ fn ingress_pre_enqueue_diagnostics(
     }
     let identity = crate::node_identity::parse_identity(&read_preserves(
         state_root,
-        &crate::node_state::NodeStatePath::parse(IDENTITY_FILE)?,
+        &crate::node_state::RelativePath::parse(IDENTITY_FILE)?,
     )?)?;
     if envelope.to_node != identity.node_id {
         diagnostics

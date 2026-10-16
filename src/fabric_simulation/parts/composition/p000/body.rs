@@ -34,13 +34,13 @@ const CRASH_ACK_MATERIAL: &str = "crash-recovery";
 const FIXTURE_FAILING_INVARIANT_ID: &str = "reference-fixture-failing-invariant";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReferenceSimulationFixtureRun {
-    pub world: CanonicalSimulatedWorld,
-    pub run: CanonicalSimulationRun,
-    pub bundle: CanonicalSimulationReproBundle,
-    pub observations: Vec<CanonicalSimulationObservation>,
-    pub port_events: Vec<CanonicalSimulationPortEvent>,
-    pub differential: CanonicalSimulationDifferential,
+pub struct ReferenceFixtureRun {
+    pub world: SimulatedWorld,
+    pub run: Run,
+    pub bundle: ReproBundle,
+    pub observations: Vec<Observation>,
+    pub port_events: Vec<PortEvent>,
+    pub differential: Differential,
     pub host_evidence_refs: Vec<String>,
     pub crash_recoveries: Vec<ReferenceCrashRecovery>,
     pub service_states: std::collections::BTreeMap<String, ReferenceServiceState>,
@@ -56,26 +56,26 @@ pub struct ReferenceCrashRecovery {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReferenceReplayResult {
     pub comparison: ReplayComparison,
-    pub replay: ReferenceSimulationFixtureRun,
+    pub replay: ReferenceFixtureRun,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReferenceShrinkFixture {
-    pub original_world: CanonicalSimulatedWorld,
-    pub shrunk_world: CanonicalSimulatedWorld,
-    pub shrink: CanonicalSimulationShrink,
+    pub original_world: SimulatedWorld,
+    pub shrunk_world: SimulatedWorld,
+    pub shrink: Shrink,
 }
 
 struct PreparedReferenceWorld {
-    world: CanonicalSimulatedWorld,
-    hosts: std::collections::BTreeMap<String, crate::system_extension::SystemExtensionHost<ReferenceServiceExecutor>>,
-    admissions: std::collections::BTreeMap<String, crate::system_extension::CanonicalAdmittedSystemExtensionManifest>,
+    world: SimulatedWorld,
+    hosts: std::collections::BTreeMap<String, crate::system_extension::Dispatcher<ServiceExecutor>>,
+    admissions: std::collections::BTreeMap<String, crate::system_extension::AdmittedManifest>,
     profiles: Vec<SimulatedPortProfile>,
     operations: Vec<(crate::fabric::ReferenceSystemKind, String, ReferenceServiceOperation)>,
 }
 
 #[derive(Debug)]
-struct DeterministicSimulationPortRouter {
+struct DeterministicPortRouter {
     profiles: std::collections::BTreeMap<String, SimulatedPortProfile>,
     faults: Vec<SimulationFaultAction>,
     current_choice_position: u64,
@@ -85,7 +85,7 @@ struct DeterministicSimulationPortRouter {
     next_submission_ordinal: u64,
     resource_units: u64,
     max_resource_units: u64,
-    events: Vec<CanonicalSimulationPortEvent>,
+    events: Vec<PortEvent>,
     transport: SimulatedTransportState,
     storage: SimulatedStorageState,
     opened_partition_faults: std::collections::BTreeSet<String>,

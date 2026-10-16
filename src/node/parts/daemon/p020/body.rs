@@ -47,9 +47,9 @@ fn deliver_service_ingress(input: &ServiceTickInput<'_>, run: &mut ServiceRunPar
 }
 
 fn process_service_loop(input: &ServiceTickInput<'_>, run: &mut ServiceRunParts) -> Result<bool> {
-    let lock_path = crate::node_state::NodeStatePath::parse(CONTROL_LOCK_FILE)?;
+    let lock_path = crate::node_state::RelativePath::parse(CONTROL_LOCK_FILE)?;
     if !input.state_root.try_exists(&lock_path)? {
-        run.has_stopped = true;
+        note_service_shutdown_observation(input, run);
         return Ok(true);
     }
     let loop_run = match run_control_loop_with_root(input.state_root, input.max_requests_per_tick) {
@@ -60,9 +60,19 @@ fn process_service_loop(input: &ServiceTickInput<'_>, run: &mut ServiceRunParts)
         }
     };
     run.processed_request_refs.extend(loop_run.processed_request_refs.iter().cloned());
+    if loop_run.is_denied {
+        run.diagnostics.push(format!("node control service loop denied receipt={}", loop_run.loop_receipt_ref));
+    }
     run.loop_receipt_refs.push(loop_run.loop_receipt_ref);
-    if loop_run.has_stopped || !input.state_root.try_exists(&lock_path)? {
+    if loop_run.has_stopped {
         run.has_stopped = true;
+        return Ok(true);
+    }
+    if loop_run.is_denied {
+        return Ok(true);
+    }
+    if !input.state_root.try_exists(&lock_path)? {
+        note_service_shutdown_observation(input, run);
         return Ok(true);
     }
     Ok(false)
@@ -151,7 +161,7 @@ fn finish_service_run(input: FinishServiceInput<'_>) -> Result<ControlServe> {
 }
 
 fn denied_duplicate_service_run(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::DirectoryRoot,
     input: &ControlServeInput<'_>,
     startup: &crate::node_runtime::NodeStartupReceipt,
     supervisor_policy: Option<&ControlSupervisorPolicy>,
@@ -159,7 +169,7 @@ fn denied_duplicate_service_run(
 ) -> Result<ControlServe> {
     let lock_value = read_preserves(
         state_root,
-        &crate::node_state::NodeStatePath::parse(CONTROL_SERVICE_LOCK_FILE)?,
+        &crate::node_state::RelativePath::parse(CONTROL_SERVICE_LOCK_FILE)?,
     )?;
     let service_lock_ref = crate::preserves_rail::canonical_hash(&lock_value)?;
     let diagnostics = vec!["node control service runner already active".to_string()];
@@ -213,18 +223,18 @@ fn denied_duplicate_service_run(
 }
 
 fn pending_ingress_envelope_refs(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::DirectoryRoot,
     topic: &str,
 ) -> Result<Vec<String>> {
     let ingress = state_root.control_ingress()?;
-    let topic = ingress.open_subdir(&crate::node_state::NodeStatePath::parse(topic)?)?;
+    let topic = ingress.open_subdir(&crate::node_state::RelativePath::parse(topic)?)?;
     let entries = topic.list_entries()?;
     if entries.len() > MAX_PENDING_CONTROL_REQUESTS {
         return Err(MoltenError::invalid_harness("node control ingress pending envelope bound exceeded"));
     }
     let mut envelope_refs = Vec::with_capacity(entries.len());
     for entry in entries {
-        if entry.kind != crate::node_state::NodeStateEntryKind::RegularFile {
+        if entry.kind != crate::node_state::EntryKind::RegularFile {
             continue;
         }
         let bytes = topic.read_entry(&entry, crate::node_state::MAX_NODE_STATE_FILE_BYTES)?;
@@ -239,15 +249,15 @@ fn pending_ingress_envelope_refs(
     Ok(envelope_refs)
 }
 
-fn has_pending_service_work(state_root: &crate::node_state::NodeStateRoot, topic: &str) -> Result<bool> {
+fn has_pending_service_work(state_root: &crate::node_state::DirectoryRoot, topic: &str) -> Result<bool> {
     if !pending_ingress_envelope_refs(state_root, topic)?.is_empty() {
         return Ok(true);
     }
     next_pending_control_request(state_root).map(|pending| pending.is_some())
 }
 
-fn remove_service_lock(state_root: &crate::node_state::NodeStateRoot, service_lock_ref: &str) -> Result<()> {
-    let path = crate::node_state::NodeStatePath::parse(CONTROL_SERVICE_LOCK_FILE)?;
+fn remove_service_lock(state_root: &crate::node_state::DirectoryRoot, service_lock_ref: &str) -> Result<()> {
+    let path = crate::node_state::RelativePath::parse(CONTROL_SERVICE_LOCK_FILE)?;
     if !state_root.try_exists(&path)? {
         return Ok(());
     }

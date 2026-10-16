@@ -21,7 +21,7 @@ fn retry_with_changed_identity_is_an_invalid_idempotency_input() {
         },
     ];
     let error = admit_proposal_attempts(&attempts).expect_err("changed identity is rejected");
-    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::Failure::InvalidHarness(_)));
 }
 
 // r[verify molten.consensus.chaoscontrol_operation_identity]
@@ -44,7 +44,7 @@ fn indefinite_outcome_cannot_become_definite_rejection() {
         },
     ];
     let error = admit_proposal_attempts(&attempts).expect_err("timeout cannot become definite non-execution evidence");
-    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::Failure::InvalidHarness(_)));
 }
 
 // r[verify molten.consensus.chaoscontrol_operation_identity]
@@ -67,5 +67,5 @@ fn acknowledged_retry_names_the_same_committed_index() {
         },
     ];
     let error = admit_proposal_attempts(&attempts).expect_err("one logical operation applies at most once");
-    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::Failure::InvalidHarness(_)));
 }

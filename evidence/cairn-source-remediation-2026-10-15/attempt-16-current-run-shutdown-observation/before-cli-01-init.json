@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "node",
+    "init",
+    "--state-root",
+    "/tmp/molten-f14-current-run-16-restored-se51n6m8/state",
+    "--node-id",
+    "node:f14-before"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T17:52:13.258890+00:00",
+  "elapsed_seconds": 0.052,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "node init config=blake3:b32fea6fe6ab63808919e732cf9e00488104556e9fbef9096f9a4d7f92b58aa3 identity=blake3:183b54b8b2867db41bc84a4cfafffde0c851ec3baea576f740ddedacdb6b958c identity_receipt=blake3:19dbd10bc55bb2eef1ea7fe414b30ec7520bf4d36d3511bc00e1ec60a5017928 profile_resolution=blake3:3d391cd7a7bf1a0ad9224f437c892d45cfec0c67fe3f841f4cea8adbc943b6be state_root=/tmp/molten-f14-current-run-16-restored-se51n6m8/state\n",
+  "stderr": ""
+}

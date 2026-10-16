@@ -1,6 +1,6 @@
 use super::super::*;
 
-fn fixture_record(fixture: &super::support::ComponentFixture) -> AdmissionRecord {
+fn fixture_record(fixture: &super::support::Fixture) -> AdmissionRecord {
     let component_ref = fixture.bundle.component.content_ref.clone();
     record_surface_admission(
         &fixture.profile,
@@ -16,7 +16,7 @@ fn exact_manifest_world_and_import_set_admit_without_instantiation() {
     // r[verify aspen.wasm_import_admission.manifest]
     // r[verify aspen.wasm_import_admission.surface]
     // r[verify aspen.wasm_import_admission.admission]
-    let fixture = super::support::ComponentFixture::new(ComponentConsumer::Actor);
+    let fixture = super::support::Fixture::new(Consumer::Actor);
     let record = fixture_record(&fixture);
     assert!(record.admission.is_admitted);
     assert_eq!(record.observation.imports, Vec::<String>::new());
@@ -31,7 +31,7 @@ fn exact_manifest_world_and_import_set_admit_without_instantiation() {
 fn identical_surface_admissions_replay_to_identical_receipts() {
     // r[verify aspen.wasm_import_admission.admission]
     // r[verify aspen.wasm_import_admission.evidence]
-    let fixture = super::support::ComponentFixture::new(ComponentConsumer::Actor);
+    let fixture = super::support::Fixture::new(Consumer::Actor);
     let left = fixture_record(&fixture);
     let right = fixture_record(&fixture);
     assert_eq!(left, right);
@@ -42,7 +42,7 @@ fn identical_surface_admissions_replay_to_identical_receipts() {
 fn drifting_world_partial_manifest_and_wasi_surface_fail_admission() {
     // r[verify aspen.wasm_import_admission.manifest]
     // r[verify aspen.wasm_import_admission.surface]
-    let fixture = super::support::ComponentFixture::new(ComponentConsumer::Actor);
+    let fixture = super::support::Fixture::new(Consumer::Actor);
     let world = declared_world(&fixture.profile);
 
     let mut drifting = fixture.import_manifest.clone();
@@ -80,7 +80,7 @@ fn drifting_world_partial_manifest_and_wasi_surface_fail_admission() {
 fn undeclared_observed_import_and_tool_drift_fail_admission() {
     // r[verify aspen.wasm_import_admission.surface]
     // r[verify aspen.wasm_import_admission.admission]
-    let fixture = super::support::ComponentFixture::new(ComponentConsumer::Actor);
+    let fixture = super::support::Fixture::new(Consumer::Actor);
     let world = declared_world(&fixture.profile);
     let mut undeclared = facts_observation(&fixture.bundle.component.content_ref, &fixture.facts);
     undeclared.imports.push("wasi:sockets/tcp@0.2.6".to_string());
@@ -98,7 +98,7 @@ fn undeclared_observed_import_and_tool_drift_fail_admission() {
 #[test]
 fn missing_manifest_unsorted_surface_and_tampered_identity_fail_closed() {
     // r[verify aspen.wasm_import_admission.manifest]
-    let fixture = super::support::ComponentFixture::new(ComponentConsumer::Actor);
+    let fixture = super::support::Fixture::new(Consumer::Actor);
     let component_ref = fixture.bundle.component.content_ref.clone();
     let missing =
         record_surface_admission(&fixture.profile, ManifestSource::Missing, &component_ref, &fixture.component_bytes);
@@ -126,7 +126,7 @@ fn missing_manifest_unsorted_surface_and_tampered_identity_fail_closed() {
 fn overclaim_labels_and_oversized_receipt_payloads_are_rejected() {
     // r[verify aspen.wasm_import_admission.evidence]
     // r[verify aspen.wasm_import_admission.nonclaims]
-    let fixture = super::support::ComponentFixture::new(ComponentConsumer::Actor);
+    let fixture = super::support::Fixture::new(Consumer::Actor);
     let record = fixture_record(&fixture);
     let mut overclaim_input = record.receipt.input.clone();
     overclaim_input.labels = vec!["sandbox-containment".to_string(), "component-correctness".to_string()];
@@ -158,13 +158,13 @@ fn overclaim_labels_and_oversized_receipt_payloads_are_rejected() {
 fn drifted_manifest_denies_execution_before_instantiation() {
     // r[verify aspen.wasm_import_admission.surface]
     // r[verify aspen.wasm_import_admission.fixtures]
-    let mut fixture = super::support::ComponentFixture::new(ComponentConsumer::Actor);
+    let mut fixture = super::support::Fixture::new(Consumer::Actor);
     fixture.import_manifest.world = "drifting-world".to_string();
     let input = super::support::input_value();
-    let outcome = execute_component(&fixture.request(&input));
+    let outcome = execute(&fixture.request(&input));
     assert!(!outcome.is_pass());
     assert_eq!(outcome.receipts.len(), 1);
-    assert_eq!(outcome.receipts[0].input.stage, ComponentReceiptStage::Denial);
+    assert_eq!(outcome.receipts[0].input.stage, Stage::Denial);
     assert_eq!(outcome.receipts[0].input.trap_class.as_deref(), Some("component-admission-denial"));
     assert!(outcome.diagnostics.iter().any(|diagnostic| diagnostic.contains("declared WIT world")));
 }

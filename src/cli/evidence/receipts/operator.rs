@@ -131,7 +131,7 @@ fn validate_value(value: &preserves::IOValue) -> molten::error::Result<String> {
                 step.receipt_ref.as_deref().unwrap_or("none")
             ))
         }
-        kind => Err(molten::error::MoltenError::invalid_harness(format!(
+        kind => Err(molten::error::Failure::invalid_harness(format!(
             "unsupported operator receipt kind {kind}; expected dogfood/operator receipt artifact"
         ))),
     }

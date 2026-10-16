@@ -181,7 +181,7 @@ fn entropy_evidence_omits_output_bytes() {
         EntropyValue::Bytes(bytes) => bytes.iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
         EntropyValue::Choice(_) => panic!("expected bytes"),
     };
-    let event = canonical_entropy_event(&entropy_evidence_metadata(&stream, &transition)).expect("canonical event");
+    let event = entropy_event(&entropy_evidence_metadata(&stream, &transition)).expect("canonical event");
     let encoded = crate::preserves_rail::to_text(&event.value).expect("encode event");
     assert!(!encoded.contains(&secret_hex));
     assert!(!encoded.contains(&SECRET_TEST_SEED.to_string()));
@@ -234,18 +234,18 @@ fn retry_observations_replay_exactly_and_differ_from_wrapped_history() {
         jitter: RetryJitter::None,
     };
     let events = super::fixture::retry_events(&profile, &now, AUDIT_ATTEMPT, policy, None).expect("retry evidence");
-    let expected_deadline = canonical_named_event(EventHeader {
+    let expected_deadline = named_event(EventHeader {
         profile_ref: &profile.profile_ref,
-        kind: CanonicalTimeEventKind::Deadline,
+        kind: EventKind::Deadline,
         generation: GENERATION,
         subject: "fixture-retry",
         action: "retry-planned",
         ticks: TIMER_DEADLINE + PROFILE_LIMIT,
     })
     .expect("deadline");
-    let expected_delay = canonical_named_event(EventHeader {
+    let expected_delay = named_event(EventHeader {
         profile_ref: &profile.profile_ref,
-        kind: CanonicalTimeEventKind::Deadline,
+        kind: EventKind::Deadline,
         generation: GENERATION,
         subject: "fixture-retry",
         action: "retry-delay",
@@ -255,9 +255,9 @@ fn retry_observations_replay_exactly_and_differ_from_wrapped_history() {
     assert_eq!(events, [expected_deadline.clone(), expected_delay]);
     let replay = super::fixture::retry_events(&profile, &now, AUDIT_ATTEMPT, policy, None).expect("retry replay");
     assert_eq!(events, replay);
-    let legacy = canonical_named_event(EventHeader {
+    let legacy = named_event(EventHeader {
         profile_ref: &profile.profile_ref,
-        kind: CanonicalTimeEventKind::Deadline,
+        kind: EventKind::Deadline,
         generation: GENERATION,
         subject: "fixture-retry",
         action: "retry-planned",

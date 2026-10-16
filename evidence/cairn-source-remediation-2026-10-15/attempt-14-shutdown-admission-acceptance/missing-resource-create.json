@@ -1,0 +1,22 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "node",
+    "control-request",
+    "--operation",
+    "shutdown",
+    "--out",
+    "/tmp/molten-shutdown-admission-14-8na4_8eo/missing-resource.preserves",
+    "--authority",
+    "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "--policy",
+    "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T16:55:30.670095+00:00",
+  "elapsed_seconds": 0.029,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "node control request blake3:75a40bf2ddb82c52ce8ad7c7503f607258aeef9b762d25ae86b2a65892bf1e02 written to /tmp/molten-shutdown-admission-14-8na4_8eo/missing-resource.preserves\n",
+  "stderr": ""
+}

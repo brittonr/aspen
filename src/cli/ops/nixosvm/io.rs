@@ -30,12 +30,12 @@ pub(super) fn raw_file_refs(paths: &[FilePath]) -> Outcome<Vec<String>> {
 }
 
 pub(super) fn raw_file_ref(path: &std::path::Path) -> Outcome<String> {
-    let bytes = std::fs::read(path).map_err(molten::error::MoltenError::from)?;
+    let bytes = std::fs::read(path).map_err(molten::error::Failure::from)?;
     Ok(molten::preserves_rail::content_ref_from_bytes(&bytes))
 }
 
 pub(super) fn read_preserves_file(path: &std::path::Path) -> Outcome<preserves::IOValue> {
-    let text = std::fs::read_to_string(path).map_err(molten::error::MoltenError::from)?;
+    let text = std::fs::read_to_string(path).map_err(molten::error::Failure::from)?;
     molten::preserves_rail::parse_text(&text)
 }
 
@@ -52,9 +52,9 @@ pub(super) fn write_optional_preserves(path: Option<&FilePath>, value: &preserve
 
 fn write_file(path: &std::path::Path, contents: &str) -> Outcome<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(molten::error::MoltenError::from)?;
+        std::fs::create_dir_all(parent).map_err(molten::error::Failure::from)?;
     }
-    std::fs::write(path, contents).map_err(molten::error::MoltenError::from)
+    std::fs::write(path, contents).map_err(molten::error::Failure::from)
 }
 
 pub(super) fn print_or_log_summary(is_written_to_file: bool, summary: &str) {

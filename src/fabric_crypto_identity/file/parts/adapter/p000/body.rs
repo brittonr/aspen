@@ -44,7 +44,7 @@ impl KeyPermissionStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedProductionKey {
-    pub handle: CanonicalKeyHandle,
+    pub handle: KeyHandle,
     pub public_key: String,
     pub generated: bool,
     pub permission_status: KeyPermissionStatus,
@@ -52,7 +52,7 @@ pub struct ResolvedProductionKey {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompletedProductionRotation {
-    pub handle: CanonicalKeyHandle,
+    pub handle: KeyHandle,
     pub outcome: KeyRotationOutcome,
 }
 
@@ -75,9 +75,9 @@ pub(crate) struct ExactArtifactAuthSignature {
     pub signature_bytes: Vec<u8>,
 }
 
-pub struct IrohEd25519FileAdapter<'a> {
-    namespace: &'a crate::node_state::NodeStateNamespace,
-    profile: CanonicalCryptoProfile,
+pub struct IrohEd25519<'a> {
+    namespace: &'a crate::node_state::Scope,
+    profile: Profile,
     backend_ref: String,
 }
 
@@ -85,8 +85,8 @@ pub struct IrohEd25519FileAdapter<'a> {
 /// against.
 #[derive(Clone, Copy)]
 pub struct VerificationInput<'a> {
-    pub expected_domain: &'a CanonicalSignatureDomain,
-    pub signature: &'a CanonicalSignatureOutcome,
+    pub expected_domain: &'a DomainEnvelope,
+    pub signature: &'a SignatureOutcome,
     pub signer_currentness: KeyCurrentness,
     pub signer_generation: u64,
     pub policy_ref: &'a str,

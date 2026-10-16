@@ -1,12 +1,12 @@
 
 // r[verify molten.fabric_consistency.live_raft]
 #[test]
-fn live_raft_completes_linearizable_reads_only_after_a_current_term_majority() {
+fn live_completes_linearizable_reads_only_after_a_current_term_majority() {
     let (leader, follower) = elect_node_a();
     let request_ref = test_ref("linearizable-read");
     let pending = apply_replica_event(&leader, ReplicaEvent::Read {
         request_ref: request_ref.clone(),
-        mode: crate::fabric_consistency::ConsistencyReadMode::Linearizable,
+        mode: crate::fabric_consistency::ReadMode::Linearizable,
     })
     .expect("linearizable read probe");
     assert!(pending.next.pending_reads.contains_key(&request_ref));
@@ -18,7 +18,7 @@ fn live_raft_completes_linearizable_reads_only_after_a_current_term_majority() {
     let acknowledgement = sent_envelope_to(&acknowledged, NODE_A);
     let mut unrelated = acknowledgement.clone();
     match &mut unrelated.message {
-        RaftMessage::ReadAcknowledgement { request_ref, .. } => *request_ref = test_ref("unrelated-read"),
+        Message::ReadAcknowledgement { request_ref, .. } => *request_ref = test_ref("unrelated-read"),
         other => panic!("expected read acknowledgement, got {other:?}"),
     }
     let ignored = apply_replica_event(&pending.next, ReplicaEvent::Message { envelope: unrelated })
@@ -39,7 +39,7 @@ fn live_raft_completes_linearizable_reads_only_after_a_current_term_majority() {
 
     let follower_read = apply_replica_event(&acknowledged.next, ReplicaEvent::Read {
         request_ref: test_ref("follower-linearizable-read"),
-        mode: crate::fabric_consistency::ConsistencyReadMode::Linearizable,
+        mode: crate::fabric_consistency::ReadMode::Linearizable,
     })
     .expect("follower read retry");
     assert!(follower_read.effects.iter().any(|effect| matches!(effect, ReplicaEffect::ReadOutcome {
@@ -50,7 +50,7 @@ fn live_raft_completes_linearizable_reads_only_after_a_current_term_majority() {
 
 // r[verify molten.fabric_consistency.live_raft]
 #[test]
-fn live_raft_ignores_out_of_order_append_failure_after_success() {
+fn live_ignores_out_of_order_append_failure_after_success() {
     let leader = committed_leader();
     assert_eq!(leader.next_index.get(NODE_B), Some(&NEXT_INDEX_AFTER_FIRST_ENTRY));
     let stale_failure = ReplicaMessageEnvelope {
@@ -58,7 +58,7 @@ fn live_raft_ignores_out_of_order_append_failure_after_success() {
         service_generation: leader.profile.service_generation,
         from: NODE_B.to_string(),
         to: NODE_A.to_string(),
-        message: RaftMessage::AppendResponse {
+        message: Message::AppendResponse {
             term: leader.current_term,
             follower_id: NODE_B.to_string(),
             success: false,

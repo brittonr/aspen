@@ -117,7 +117,7 @@
         assert_ne!(fs::read_to_string(unpacked.join("summary.txt")).expect("read summary"), "stale summary");
         let receipt = read_preserves_file(&unpacked.join("materialization-receipt.preserves"))
             .expect("read unpack materialization receipt");
-        let receipt = molten::materialization::parse_materialization_receipt(&receipt)
+        let receipt = molten::materialization::parse_receipt(&receipt)
             .expect("parse unpack materialization receipt");
         assert!(receipt.valid());
         assert!(receipt.member_refs.iter().any(|(path, _)| path == "report.preserves"));
@@ -145,7 +145,7 @@
         assert!(out.join("commands.txt").exists());
         let materialization_receipt = read_preserves_file(&out.join("materialization-receipt.preserves"))
             .expect("read repro materialization receipt");
-        let materialization_receipt = molten::materialization::parse_materialization_receipt(
+        let materialization_receipt = molten::materialization::parse_receipt(
             &materialization_receipt,
         )
         .expect("parse repro materialization receipt");

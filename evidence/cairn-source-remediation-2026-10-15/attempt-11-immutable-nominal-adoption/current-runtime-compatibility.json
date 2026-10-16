@@ -1,0 +1,40 @@
+{
+  "attempt": "11/20",
+  "provider_revision": "3f7abb641ee604f54629da415bc7686f89662065",
+  "cohort_override_used": false,
+  "nominal_and_schema_tests": {
+    "command": "nix develop --no-update-lock-file -c cargo test -p molten-core -p molten nominal --offline --locked",
+    "molten_passed": 7,
+    "molten_core_passed": 9,
+    "failed": 0
+  },
+  "frozen_fabric_boundary": {
+    "command": "nix develop --no-update-lock-file -c cargo test -p molten --test fabricboundarycompat --offline --locked",
+    "passed": 5,
+    "failed": 0,
+    "fixtures_modified": false
+  },
+  "clippy": {
+    "command": "nix develop --no-update-lock-file -c cargo clippy -p molten-core -p molten --lib --offline --locked -- -D warnings",
+    "observed_result": "passed"
+  },
+  "existing_type_separation_doctests": {
+    "command": "nix develop --no-update-lock-file -c cargo test -p molten-core --doc --offline --locked",
+    "passed": 7,
+    "failed": 0,
+    "source": "crates/molten-core/src/parts/nominal/p000/body.rs"
+  },
+  "nix_formatting": {
+    "command": "nix shell --inputs-from . nixpkgs#nixfmt-rfc-style --no-update-lock-file -c nixfmt --check flake.nix",
+    "observed_result": "passed",
+    "formatter_version": "1.2.0",
+    "observation": "nixpkgs emitted an alias-deprecation warning recommending its nixfmt attribute; the format check passed."
+  },
+  "combined_log": "2026-10-16-compatibility-output.txt",
+  "environment_observation": "Kache reported the existing index disk I/O error and disabled caching. All listed checks completed; no cache reconfiguration was performed.",
+  "non_claims": [
+    "Bounded default-feature tests and two selected libraries, not a full-workspace or optional-backend proof.",
+    "Doctests prove Rust category separation, not Octet enforcement.",
+    "This proof does not waive the warning-only full-core producer or complete lifecycle acceptance."
+  ]
+}

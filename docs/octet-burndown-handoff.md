@@ -4,7 +4,89 @@ Goal: reduce the no-disabled Octet finding count in `aspen` to zero without rela
 One slice per commit, each with a fresh probe, focused validation, and a record in
 `docs/octet-tigerstyle-remediation.md`.
 
-## Current state
+## Current source checkpoint
+
+Attempt 15/20 natively synced and archived
+`bind-delivery-duplicate-results-to-original-claims`. Its
+[completion record](../evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/completion.json)
+binds 26 real public-service outcomes over capability-rooted Redb storage,
+independent fresh-root positive/expected-deny runs with identical canonical
+results, and native receipt-backed coverage for all four F08 requirements.
+Timer/status ports remain controlled observations; live worker effects and
+whole-repository release coverage are not claimed.
+
+Attempt 14/20 natively synced and archived `fix-node-shutdown-admission` on
+2026-10-16. Its
+[completion record](../evidence/cairn-source-remediation-2026-10-15/attempt-14-shutdown-admission-acceptance/completion.json)
+binds three real CLI denial cases, fourteen unchanged protected lifecycle
+artifacts, and an admitted stop. The normal suite also covers isolated missing
+authority, prior shutdown-evidence preservation, adapter receipt order, and an
+effect-publication error.
+
+The unchanged product Rust source reuses the
+[attempt-13 ordered acceptance](../evidence/cairn-source-remediation-2026-10-15/attempt-13-retry-arithmetic-acceptance/completion.json):
+clean configured producers, the unchanged passing `strict-ci` receipt, 2,095
+workspace/all-target tests, seven doctests, both explicit compatible feature
+cohorts, Clippy with denied warnings, formatting, and the passing repository Nix
+gate on `x86_64-linux`. This is reuse of recorded execution, not a new matrix run.
+
+Current strict Cairn validation and the unchanged live traceability guard pass
+after archival; 48 active changes remain. This is local, unintegrated evidence,
+not completion of those changes, whole-core Octet warning-debt removal, arbitrary
+live-adapter shutdown, a release, or authorization for a Molten remote push.
+
+### Earlier source checkpoint (attempt 5/20)
+
+
+The 2026-10-15 bounded Cairn completion campaign's attempt 5/20 reached a clean
+configured workspace producer and a clean library producer in the dedicated
+`guided-goal-completion-20261015` worktree. This is local, unintegrated source
+evidence, not a release identity or completion authority for every active change.
+
+- `target/octet-guided-goal-remediation-20261015-workspace-07/status.json` and
+  `target/octet-guided-goal-remediation-20261015-lib-07/status.json` both report
+  `clean`, zero findings, zero warnings, and zero errors.
+- The pinned producer remains `nightly-2026-03-21`; no lint was disabled or
+  threshold relaxed. The complete object-corpus receipt covers all 1,890 Rust
+  files under `src/`, including any ignored or hidden inputs.
+- The freshly Nix-built Molten CLI passed artifact import, the unchanged
+  `strict-ci` gate, and remediation-plan generation. Gate receipt:
+  `blake3:a4a5be2eca77151988f3448f9a8b0ae6dfc70635a0d456eac5170bcefa4f8f41`.
+- Current `cargo fmt --all --check` and the exported Nix workspace Clippy
+  check passed. Final compatible-feature Cargo acceptance is not complete.
+  The node-state, capability-store, materialization, and optional VM-cohort
+  deny-all Octet Nix checks passed.
+
+The [post-recovery checkpoint](../evidence/cairn-source-remediation-2026-10-15/source-gate-after-recovery.json)
+records the retained receipts, 1,694 passing hermetic tests, and the remaining
+Tracey/lifecycle and unavailable nominal-domain-provider blockers. At that
+attempt-5 checkpoint, native Cairn readback reported 51 active changes. A Cargo CLI retry timed out waiting
+for the shared package-cache lock; the Nix-built CLI is real execution evidence,
+not a claim that the complete ordered Cargo source-gate sequence passed.
+
+Repeat the complete ordered source-gate sequence in the [development guide](../README.md#development),
+not an ambient `cargo-octet` or a producer exit code alone. Molten source-policy
+and affected subsystem maintainers own the clean naming/layout conventions,
+explicit environment/allocation inputs, and subsequent acceptance evidence.
+Package-specific runtime, feature, Nix, review, sync, and archive obligations
+remain separate. Historical counts and failed-attempt evidence below are not
+current pass claims.
+
+### Traceability lifecycle closure (attempt 8/20)
+
+The [attempt-8 completion receipt](../evidence/cairn-source-remediation-2026-10-15/attempt-08-traceability-closure/completion.json)
+records successful native sync and archive of `support-active-delta-traceability-before-sync`
+in the dedicated worktree. Strict Cairn validation has zero findings. The actual
+post-sync guard reports 2,799 accepted requirements, 875 referenced, exactly
+1,924 inherited gaps, 23 pending references, and zero dangling identities.
+Preview and execution preserve native input/policy/profile and planned merge
+identities; both mode-dependent envelope hashes and exact mutation manifests
+are retained. All nine archived files preserve their contents. Molten source-policy
+and traceability maintainers own this boundary and its reproducible guard command.
+The worktree now has 52 active changes; canonical integration, immutable Octet
+adoption, other change acceptance, and any Molten remote push are not claimed.
+
+## Historical burn-down snapshot
 
 - Repository: `/home/brittonr/git/OnixResearch/aspen`, branch `molten`, HEAD `de53ab3ba`.
 - Gate config: `dylint.toml` is `[octet] disabled_lints = []`, so every lint is active.
@@ -47,7 +129,7 @@ sed -n '/^Index:/,$p' target/octet-burndown/<slice>-0/summary.txt \
 | `ambient_env` | 14 | needs an env port |
 | `unbounded_channel` | 9 | production port uses an unbounded mpsc |
 | `no_recursion` | 2 | the structural Preserves scan |
-| `no_panic` | 1 | `tests/content_replication.rs` |
+| `no_panic` | 1 | `tests/content/replication.rs` |
 
 Cleared this session: `catch_all_on_enum` (was 8). Seventeen of the 72 lints in the Octet catalog still
 report findings; the rest report zero.
@@ -112,7 +194,7 @@ Run `cargo -q -Zscript scripts/octet-qualify-imports.rs --self-test` before and 
 
 Close a small family completely before starting a large one.
 
-1. `no_panic` (1) — `tests/content_replication.rs`. That file also holds 9 `no_unwrap` and 3
+1. `no_panic` (1) — `tests/content/replication.rs`. That file also holds 9 `no_unwrap` and 3
    `non_trait_imports` findings and a `#[path]` module the tool refuses, so treat it as one slice.
 2. `no_recursion` (2) — `src/preserves/parts/rail/p001/body.rs:1810`
    (`visit_structural_value`). It carries a path stack, a first-match result, and per-node and
@@ -120,10 +202,10 @@ Close a small family completely before starting a large one.
    the first bound failure. Do not change the scan semantics.
 3. `underscore_in_module_filename` (21) — 10 remaining `src` files plus three `tests/*.rs` targets.
    Follow the `x_y.rs` to `x/y.rs` pattern and keep the module name with
-   `#[path = "x/y.rs"]`. Files with real submodules (`src/fabric_crypto_identity/artifact_auth.rs`,
-   `src/cli/runtime/fabric_time.rs`, `src/cli/runtime/fabric_simulation.rs`,
-   `src/cli/runtime/system_extension.rs`, `src/audit/ast_grep.rs`) need their inner paths adjusted
-   too. The three `tests/*.rs` files need `Cargo.toml` test targets, or they should be left alone.
+   `#[path = "x/y.rs"]`. Files with real submodules (`src/fabric_crypto_identity/artifact_auth/mod.rs`,
+   `src/cli/runtime/fabric_time/mod.rs`, `src/cli/runtime/fabric_simulation/mod.rs`,
+   `src/cli/runtime/system_extension/mod.rs`, `src/audit/ast/grep.rs`) need their inner paths adjusted
+   too. The three relocated integration sources now have explicit `Cargo.toml` targets preserving their binary names.
    After any move, search for path consumers:
    ```sh
    git grep -n -F "<old/path>.rs"
@@ -134,7 +216,7 @@ Close a small family completely before starting a large one.
 4. `ambient_env` (14) and `ambient_clock` (17) — inject a port instead of reading the environment or
    the clock. This is a design change; keep the core pure and put the effect in the shell.
 5. `unbounded_channel` (9) — the Raft time port uses `tokio::sync::mpsc::unbounded_channel`. A
-   bounded channel changes backpressure behavior in `TokioReplicaTimePort`, so this needs a design
+   bounded channel changes backpressure behavior in `TokioReplicaPort`, so this needs a design
    decision plus tests for the denial path.
 6. `usize_in_public_api` (32) — change the public signature to `u64` and carry the conversion at the
    boundary. Sites are mostly single-file.
@@ -143,11 +225,11 @@ Close a small family completely before starting a large one.
    - `src/fabric/mod.rs` (16): a descendant re-imports `MoltenError` under a file-level allow, so
      the tool stops at the descendant check. A safe tool change is to skip that name in that
      descendant instead of refusing the parent repair.
-   - `tests/nativesystemextension.rs` (4) and `tests/content_replication.rs` (3): `#[path]` modules.
+   - `tests/nativesystemextension.rs` (4) and `tests/content/replication.rs` (3): `#[path]` modules.
    - `src/main/root/command.rs` (3): `use clap::Parser;` exists only for method resolution on
      `Cli::try_parse_from`, so no reference can be qualified.
    - `src/plugin/parts/host/p000/body.rs` (2): shared use group.
-   - `src/cli/runtime/fabric_time.rs` (2) and `src/cli/runtime/fabric_simulation.rs` (2): a
+   - `src/cli/runtime/fabric_time/mod.rs` (2) and `src/cli/runtime/fabric_simulation/mod.rs` (2): a
      `pub(crate) use` re-export feeds a glob re-export in `src/main.rs`, so it needs a module
      re-export instead.
    - `src/retention/parts/mod/tests/m000/p000/body.rs` (1): a part body shares one module scope.
@@ -160,7 +242,7 @@ Close a small family completely before starting a large one.
    `()` and would become `Result<()>`). Changing a parameter from `&mut Vec<String>` to
    `&mut impl <trait>` leaves call sites unchanged because `Vec<String>` implements the trait, but
    the push becomes fallible, which is why those six helpers need `Result`. A shared public sink
-   type is better than a copy per module; `crate::bounded` already holds `VecSink`, `push_bounded`,
+   type is better than a copy per module; `crate::bounded` already holds `VecSink`, `push`,
    and a `pub(crate)` `DiagnosticSink` struct. Watch `path_segment_repetition` when naming anything
    inside `src/bounded`: a name containing the word `bounded` adds a finding.
 10. `unbounded_collection_growth` (216), `function_length` (204), `too_many_parameters` (143),

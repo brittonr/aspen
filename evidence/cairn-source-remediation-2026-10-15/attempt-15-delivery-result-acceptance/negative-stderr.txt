@@ -1,0 +1,1 @@
+expected-deny: real conflict, owner, fence, expired, reclaimed and terminal-token denials observed; no mutation on each rejection

@@ -109,7 +109,7 @@ fn open_structural_frame(
     if children.is_empty() {
         return Ok(());
     }
-    crate::bounded::push_bounded(
+    crate::bounded::push(
         frames,
         children.into_iter(),
         state.limits.max_depth,

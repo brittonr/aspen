@@ -221,7 +221,7 @@ impl DiagnosticLog {
             .values
             .len()
             .checked_add(1)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("diagnostic count overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("diagnostic count overflow"))?;
         validate_bounded_value_count(next, MAX_DIAGNOSTICS, "diagnostic")?;
         self.values.push(diagnostic.into());
         Ok(())
@@ -243,7 +243,7 @@ impl DiagnosticSink for Vec<String> {
         let next = self
             .len()
             .checked_add(1)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("diagnostic count overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("diagnostic count overflow"))?;
         validate_bounded_value_count(next, MAX_DIAGNOSTICS, "diagnostic")?;
         self.push(diagnostic);
         Ok(())

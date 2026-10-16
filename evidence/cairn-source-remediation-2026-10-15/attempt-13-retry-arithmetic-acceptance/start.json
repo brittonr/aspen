@@ -1,0 +1,13 @@
+{
+  "attempt": "13/20",
+  "change": "saturate-exponential-retry-arithmetic",
+  "target": "Complete the two outstanding acceptance tasks without changing the implemented arithmetic or weakening source/Nix gates.",
+  "prerequisite_scope": "Existing workspace.metadata.octet configured scope is molten and molten-node-host, all targets; the focused nominal-only approval does not waive any F12 gate.",
+  "required": [
+    "Current focused core and adapter behavior plus actual CLI retry/replay smoke.",
+    "Full documented ordered producer/object-corpus/import/strict-ci/remediation/Cargo/Clippy/strict-Cairn sequence.",
+    "Required workspace/all-target/compatible-feature checks and relevant Nix checks, including the repository Nix gate.",
+    "Review and actual native sync/archive only after every required result passes."
+  ],
+  "status": "entered before new acceptance commands"
+}

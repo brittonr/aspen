@@ -1,5 +1,5 @@
 #[derive(Debug, clap::Subcommand)]
-pub(crate) enum FabricSimulationCommand {
+pub(crate) enum ScenarioAction {
     /// Validate the canonical reference world without running callbacks.
     Preflight,
     /// Run all reference services through deterministic fabric ports.

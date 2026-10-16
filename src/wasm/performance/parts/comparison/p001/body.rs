@@ -87,44 +87,44 @@ fn compatibility_blockers(
 }
 
 fn compare_phase(
-    profile: &super::model::PerformanceProfile,
+    profile: &super::model::Profile,
     baseline: &super::model::PhaseSamples,
     candidate: &super::model::PhaseSamples,
-) -> super::model::PerformanceResult<super::model::PhaseComparison> {
+) -> super::model::Result<super::model::PhaseComparison> {
     let scale = u128::from(profile.comparison.parts_per_million);
     let baseline_stats = summarize_samples(&baseline.samples, scale)?;
     let candidate_stats = summarize_samples(&candidate.samples, scale)?;
     if baseline_stats.mean_scaled == 0 {
-        return Err(super::model::PerformanceDenial::new("benchmark baseline mean cannot be zero"));
+        return Err(super::model::Denial::new("benchmark baseline mean cannot be zero"));
     }
     let ratio_ppm = candidate_stats
         .mean_scaled
         .checked_mul(scale)
         .and_then(|value| value.checked_div(baseline_stats.mean_scaled))
-        .ok_or_else(|| super::model::PerformanceDenial::new("benchmark effect-size ratio overflowed"))?;
+        .ok_or_else(|| super::model::Denial::new("benchmark effect-size ratio overflowed"))?;
     let combined_confidence = baseline_stats
         .confidence_half_width_scaled
         .checked_add(candidate_stats.confidence_half_width_scaled)
-        .ok_or_else(|| super::model::PerformanceDenial::new("benchmark confidence interval overflowed"))?;
+        .ok_or_else(|| super::model::Denial::new("benchmark confidence interval overflowed"))?;
     let ratio_confidence_ppm = combined_confidence
         .checked_mul(scale)
         .and_then(|value| value.checked_div(baseline_stats.mean_scaled))
-        .ok_or_else(|| super::model::PerformanceDenial::new("benchmark ratio confidence interval overflowed"))?;
+        .ok_or_else(|| super::model::Denial::new("benchmark ratio confidence interval overflowed"))?;
     let practical_delta = baseline_stats
         .mean_scaled
         .checked_mul(u128::from(profile.comparison.practical_threshold_ppm))
         .and_then(|value| value.checked_div(scale))
-        .ok_or_else(|| super::model::PerformanceDenial::new("benchmark practical threshold overflowed"))?;
+        .ok_or_else(|| super::model::Denial::new("benchmark practical threshold overflowed"))?;
     let baseline_lower = baseline_stats.mean_scaled.saturating_sub(baseline_stats.confidence_half_width_scaled);
     let baseline_upper = baseline_stats
         .mean_scaled
         .checked_add(baseline_stats.confidence_half_width_scaled)
-        .ok_or_else(|| super::model::PerformanceDenial::new("benchmark baseline confidence upper bound overflowed"))?;
+        .ok_or_else(|| super::model::Denial::new("benchmark baseline confidence upper bound overflowed"))?;
     let candidate_lower = candidate_stats.mean_scaled.saturating_sub(candidate_stats.confidence_half_width_scaled);
     let candidate_upper = candidate_stats
         .mean_scaled
         .checked_add(candidate_stats.confidence_half_width_scaled)
-        .ok_or_else(|| super::model::PerformanceDenial::new("benchmark candidate confidence upper bound overflowed"))?;
+        .ok_or_else(|| super::model::Denial::new("benchmark candidate confidence upper bound overflowed"))?;
     let class = if candidate_upper
         .checked_add(practical_delta)
         .is_some_and(|candidate_with_threshold| candidate_with_threshold < baseline_lower)
@@ -146,10 +146,10 @@ fn compare_phase(
         baseline_confidence_half_width_scaled: baseline_stats.confidence_half_width_scaled,
         candidate_confidence_half_width_scaled: candidate_stats.confidence_half_width_scaled,
         candidate_ratio_ppm: u64::try_from(ratio_ppm).map_err(|error| {
-            super::model::PerformanceDenial::new(format!("benchmark ratio is unsupported: {error}"))
+            super::model::Denial::new(format!("benchmark ratio is unsupported: {error}"))
         })?,
         ratio_confidence_half_width_ppm: u64::try_from(ratio_confidence_ppm).map_err(|error| {
-            super::model::PerformanceDenial::new(format!("benchmark ratio confidence is unsupported: {error}"))
+            super::model::Denial::new(format!("benchmark ratio confidence is unsupported: {error}"))
         })?,
         class,
     })
@@ -161,47 +161,47 @@ struct SampleSummary {
 }
 
 fn summarize_samples(
-    samples: &[super::model::PerformanceSample],
+    samples: &[super::model::Sample],
     scale: u128,
-) -> super::model::PerformanceResult<SampleSummary> {
+) -> super::model::Result<SampleSummary> {
     let count = u128::try_from(samples.len()).map_err(|error| {
-        super::model::PerformanceDenial::new(format!("benchmark sample count is unsupported: {error}"))
+        super::model::Denial::new(format!("benchmark sample count is unsupported: {error}"))
     })?;
     if samples.len() < MIN_STATISTICAL_SAMPLES {
-        return Err(super::model::PerformanceDenial::new("benchmark comparison requires at least two samples"));
+        return Err(super::model::Denial::new("benchmark comparison requires at least two samples"));
     }
     let sum = samples.iter().try_fold(0_u128, |total, sample| {
         total
             .checked_add(u128::from(sample.count))
-            .ok_or_else(|| super::model::PerformanceDenial::new("benchmark sample sum overflowed"))
+            .ok_or_else(|| super::model::Denial::new("benchmark sample sum overflowed"))
     })?;
     let mean_scaled = sum
         .checked_mul(scale)
         .and_then(|value| value.checked_div(count))
-        .ok_or_else(|| super::model::PerformanceDenial::new("benchmark scaled mean overflowed"))?;
+        .ok_or_else(|| super::model::Denial::new("benchmark scaled mean overflowed"))?;
     let squared_deviation_sum = samples.iter().try_fold(0_u128, |total, sample| {
         let scaled_sample = u128::from(sample.count)
             .checked_mul(scale)
-            .ok_or_else(|| super::model::PerformanceDenial::new("benchmark scaled sample overflowed"))?;
+            .ok_or_else(|| super::model::Denial::new("benchmark scaled sample overflowed"))?;
         let deviation = scaled_sample.abs_diff(mean_scaled);
         let squared = deviation
             .checked_mul(deviation)
-            .ok_or_else(|| super::model::PerformanceDenial::new("benchmark squared deviation overflowed"))?;
+            .ok_or_else(|| super::model::Denial::new("benchmark squared deviation overflowed"))?;
         total
             .checked_add(squared)
-            .ok_or_else(|| super::model::PerformanceDenial::new("benchmark deviation sum overflowed"))
+            .ok_or_else(|| super::model::Denial::new("benchmark deviation sum overflowed"))
     })?;
     let sample_variance = squared_deviation_sum
         .checked_div(count - 1)
-        .ok_or_else(|| super::model::PerformanceDenial::new("benchmark sample variance is undefined"))?;
+        .ok_or_else(|| super::model::Denial::new("benchmark sample variance is undefined"))?;
     let variance_of_mean = sample_variance
         .checked_div(count)
-        .ok_or_else(|| super::model::PerformanceDenial::new("benchmark mean variance is undefined"))?;
+        .ok_or_else(|| super::model::Denial::new("benchmark mean variance is undefined"))?;
     let standard_error = integer_sqrt(variance_of_mean);
     let confidence_half_width_scaled = standard_error
         .checked_mul(NORMAL_95_MULTIPLIER_MILLI)
         .and_then(|value| value.checked_div(MILLI_SCALE))
-        .ok_or_else(|| super::model::PerformanceDenial::new("benchmark confidence interval overflowed"))?;
+        .ok_or_else(|| super::model::Denial::new("benchmark confidence interval overflowed"))?;
     Ok(SampleSummary {
         mean_scaled,
         confidence_half_width_scaled,

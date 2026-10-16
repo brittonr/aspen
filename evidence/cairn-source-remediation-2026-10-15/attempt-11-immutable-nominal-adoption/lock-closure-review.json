@@ -1,0 +1,56 @@
+{
+  "attempt": "11/20",
+  "generator": "nix flake update octet-toolchain verified-node-replication-octet",
+  "updated_root_inputs": [
+    "octet-toolchain"
+  ],
+  "added_root_inputs": [
+    "verified-node-replication-octet"
+  ],
+  "unchanged_root_inputs": [
+    "artifact-src",
+    "basalt-src",
+    "bounded-exec-src",
+    "cairn-src",
+    "chaoscontrol-src",
+    "choregraph-src",
+    "doltlite-src",
+    "executable-extent-octet",
+    "executable-extent-src",
+    "flake-utils",
+    "flux-src",
+    "hegel-src",
+    "kamacite-src",
+    "mantle-executable-extent-src",
+    "nickel-cli",
+    "nixpkgs",
+    "octet-cutover-src",
+    "onixpkgs",
+    "rust-overlay",
+    "schema-identity-src",
+    "schema-migration-core-src",
+    "transactional-reconciliation-src",
+    "unit2nix",
+    "valence-src",
+    "vm-cohort-src"
+  ],
+  "changed_unrelated_root_inputs": [],
+  "frozen_replay_complete_input_closure_matches_old_tool_cohort": true,
+  "current_provider": {
+    "lastModified": 1792162384,
+    "narHash": "sha256-+3dC9y/XqMJqfdPt8E3ksdg0ioeCmZnZOQwfUPUFL+E=",
+    "owner": "OnixResearch",
+    "repo": "octet",
+    "rev": "3f7abb641ee604f54629da415bc7686f89662065",
+    "type": "github"
+  },
+  "frozen_provider": {
+    "lastModified": 1783822227,
+    "narHash": "sha256-O0jnGZ9cr7bsyZqYTmBEUY0TvRnvMalI19b7eGZu42I=",
+    "owner": "OnixResearch",
+    "repo": "octet",
+    "rev": "fc38f59330b626961d166febfdf1a5aa6575460f",
+    "type": "github"
+  },
+  "lock_hand_edited": false
+}

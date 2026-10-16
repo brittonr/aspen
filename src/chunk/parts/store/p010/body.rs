@@ -8,7 +8,7 @@ fn lineage_producer() -> Result<crate::evidence_chain::ChainProducer> {
 
 fn lineage_context_refs(
     manifest: &ChunkManifest,
-    receipt: &ChunkStoreReceipt,
+    receipt: &ChunkReceipt,
 ) -> Result<Vec<crate::evidence_chain::ChainContextRef>> {
     let mut refs = vec![
         crate::evidence_chain::ChainContextRef::new("manifest", manifest.manifest_ref.clone()),

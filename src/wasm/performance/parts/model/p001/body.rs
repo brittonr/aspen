@@ -1,10 +1,10 @@
 
-impl MaterializedPerformanceArtifact {
-    pub const fn kind(&self) -> PerformanceArtifactKind {
+impl MaterializedArtifact {
+    pub const fn kind(&self) -> ArtifactKind {
         self.kind
     }
 
-    pub const fn consumer(&self) -> crate::wasm_component::ComponentConsumer {
+    pub const fn consumer(&self) -> crate::wasm_component::Consumer {
         self.consumer
     }
 
@@ -66,7 +66,7 @@ pub struct BenchmarkHostFacts {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct PerformanceSample {
+pub struct Sample {
     pub process: u32,
     pub iteration: u32,
     pub count: u64,
@@ -74,9 +74,9 @@ pub struct PerformanceSample {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PhaseSamples {
-    pub phase: PerformancePhase,
+    pub phase: Phase,
     pub event: String,
-    pub samples: Vec<PerformanceSample>,
+    pub samples: Vec<Sample>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,7 +84,7 @@ pub struct BenchmarkRun {
     pub suite_ref: String,
     pub run_ref: String,
     pub benchmark_ref: String,
-    pub consumer: crate::wasm_component::ComponentConsumer,
+    pub consumer: crate::wasm_component::Consumer,
     pub source_component_ref: String,
     pub component_ref: String,
     pub component_profile_ref: String,
@@ -120,7 +120,7 @@ impl RegressionClass {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PhaseComparison {
-    pub phase: PerformancePhase,
+    pub phase: Phase,
     pub event: String,
     pub baseline_mean_scaled: u128,
     pub candidate_mean_scaled: u128,

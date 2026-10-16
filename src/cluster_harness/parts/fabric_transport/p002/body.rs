@@ -2,19 +2,19 @@
 fn prepare_run_directory(run_directory: &std::path::Path, force: bool) -> crate::error::Result<()> {
     if run_directory.exists() {
         if !force {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "distinct-process run directory already exists: {}",
                 run_directory.display()
             )));
         }
-        std::fs::remove_dir_all(run_directory).map_err(crate::error::MoltenError::from)?;
+        std::fs::remove_dir_all(run_directory).map_err(crate::error::Failure::from)?;
     }
-    std::fs::create_dir_all(run_directory).map_err(crate::error::MoltenError::from)
+    std::fs::create_dir_all(run_directory).map_err(crate::error::Failure::from)
 }
 
 fn validate_child_directory(run_directory: &std::path::Path) -> crate::error::Result<()> {
     if !run_directory.is_dir() {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "distinct-process child requires an existing run directory",
         ));
     }
@@ -33,12 +33,12 @@ fn wait_for_handoff(
         }
         if let Some(status) = child.try_wait()? {
             child.finished = true;
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "listener exited before endpoint handoff with {status}"
             )));
         }
         if deadline.is_expired()? {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "listener did not publish endpoint handoff before timeout",
             ));
         }
@@ -46,8 +46,8 @@ fn wait_for_handoff(
     }
 }
 
-fn fixture_profile() -> crate::error::Result<CanonicalTransportProfile> {
-    canonical_transport_profile(&TransportProfile {
+fn fixture_profile() -> crate::error::Result<Profile> {
+    profile(&TransportProfile {
         schema: TRANSPORT_PROFILE_SCHEMA.to_string(),
         profile_id: "iroh-distinct-process-v1".to_string(),
         profile_ref: PROFILE_REF.to_string(),
@@ -115,11 +115,11 @@ fn fixture_validity() -> EndpointValidityCohort {
     }
 }
 
-fn fixture_capability(secret_byte: u8, capability_ref: &str) -> crate::error::Result<IrohEndpointCapability> {
-    IrohEndpointCapability::from_secret_bytes([secret_byte; IROH_SECRET_KEY_BYTES_LOCAL], capability_ref.to_string())
+fn fixture_capability(secret_byte: u8, capability_ref: &str) -> crate::error::Result<EndpointCapability> {
+    EndpointCapability::from_secret_bytes([secret_byte; IROH_SECRET_KEY_BYTES_LOCAL], capability_ref.to_string())
 }
 
-fn expected_binding(endpoint: &CanonicalCrossProcessEndpoint) -> ExpectedEndpointBinding {
+fn expected_binding(endpoint: &Endpoint) -> ExpectedEndpointBinding {
     let descriptor = &endpoint.descriptor;
     ExpectedEndpointBinding {
         profile_id: descriptor.profile_id.clone(),
@@ -137,15 +137,15 @@ fn expected_binding(endpoint: &CanonicalCrossProcessEndpoint) -> ExpectedEndpoin
     }
 }
 
-fn validate_fixture_endpoint(endpoint: &CanonicalCrossProcessEndpoint) -> crate::error::Result<()> {
+fn validate_fixture_endpoint(endpoint: &Endpoint) -> crate::error::Result<()> {
     validate_cross_process_endpoint(&fixture_profile()?.profile, &fixture_protocol(), &endpoint.descriptor)
-        .map_err(|issues| crate::error::MoltenError::invalid_harness(format!("fixture endpoint denied: {issues:?}")))
+        .map_err(|issues| crate::error::Failure::invalid_harness(format!("fixture endpoint denied: {issues:?}")))
 }
 
 struct ParticipantInput<'a> {
     role: EndpointParticipantRole,
     invocation_ref: &'a str,
-    frame: &'a CrossProcessFrameEvidence,
+    frame: &'a FrameEvidence,
     endpoint_cleanup_ref: &'a str,
     drain_reason: Option<ListenerDrainReason>,
     profile: &'a TransportProfile,

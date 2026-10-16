@@ -1,0 +1,83 @@
+{
+  "attempt": "14/20",
+  "change": "fix-node-shutdown-admission",
+  "result": "Recorded acceptance passed; reviewed, natively synced and archived in the dedicated Molten worktree.",
+  "repository": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "archive": ".cairn/archive/1970-01-01-fix-node-shutdown-admission",
+  "acceptance": ".cairn/archive/1970-01-01-fix-node-shutdown-admission/evidence/2026-10-16-acceptance.json",
+  "real_cli": {
+    "binary": "e08242384fb614807d965eacd33e47e3a517f62e65357a91b1166d89b3a56d5d  /home/brittonr/.cargo-target/debug/molten",
+    "startup": "init.json and run.json",
+    "denied_requests": [
+      "dispatch-missing-authority.json",
+      "missing-policy-dispatch.json",
+      "missing-resource-dispatch.json"
+    ],
+    "canonical_denial_values": [
+      "missing-authority-dispatch.preserves",
+      "missing-policy-dispatch.preserves",
+      "missing-resource-dispatch.preserves"
+    ],
+    "missing_authority_shape": "Real CLI smoke omitted authority, policy, and resource refs together; the normal repository regression isolates missing authority with otherwise supplied policy/resource refs. Missing-policy and missing-resource CLI cases isolate their respective missing field.",
+    "protected_artifacts": {
+      "count": 14,
+      "comparison": "Exact b3sum output equal before all denials and after all denials.",
+      "scope": "startup-receipt.preserves, control/node.lock.preserves, and twelve adapter-start receipts; no new adapter lifecycle receipt paths after denial.",
+      "records": [
+        "protected-lifecycle-before-denial.json",
+        "protected-lifecycle-after-denial.json",
+        "protected-lifecycle-after-all-denials.json"
+      ]
+    },
+    "after_denial": "status-after-denials.json reports running",
+    "admitted_stop": "admitted-stop.json and admitted-shutdown.preserves report pass",
+    "after_stop": "status-after-stop.json reports stopped",
+    "unavailable_previous_nix_cli": "cli-selection.json retains the unavailable realized output observation; the actual Cargo-built binary was used and content-bound."
+  },
+  "shared_acceptance_reuse": {
+    "attempt": "13/20",
+    "reason": "Attempt 13 exercised this same product Rust source; subsequent edits were lifecycle specifications and documentation. Attempt 14 adds real CLI observations and current native checks, not a claimed rerun of the shared test matrix.",
+    "record": "../attempt-13-retry-arithmetic-acceptance/completion.json"
+  },
+  "native_sync": {
+    "preview": "sync-reviewed-plan.json",
+    "execution": "sync-execute.json",
+    "input_hash": "e7442bb369007651e8431167728835effd6c08147042b8c265ea2275d085f38a",
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "expected_mutation_hashes_match": true,
+    "accepted_before_hash": "c10ae156c05d34e426b36d96dbdc2d627ee4551edd3146bf41b608b830086eb1",
+    "accepted_after_hash": "0f8158ffd4275a55a9c2bd6cc3646b08eaa0726d46d46f70673409322e4907ef"
+  },
+  "native_archive": {
+    "preview": "archive-reviewed-plan.json",
+    "execution": "archive-execute.json",
+    "input_hash": "8a04e7220b2e81e1852ab8eb0081b67a1b38bb227fec42175d0be85821af3626",
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "profile_identity_hash": "26cde8ac0fda5f67fcbef524c9538fec882a3a404fd85ce67ebdf4bb27c3a111",
+    "mode_dependent_action_path_review": "archive-plan-identity-review.json",
+    "package_members": 7,
+    "independent_b3sum_and_native_manifest_match": true,
+    "active_source_path_absent": true,
+    "native_logical_date_note": "1970-01-01 is the unchanged native provider logical-time default; archive path was read from its executed receipt, not guessed or manually renamed."
+  },
+  "post_archive": {
+    "strict_cairn_valid": true,
+    "live_guard_verdict": "pass",
+    "dangling": 0,
+    "inherited_uncovered": 1924,
+    "remaining_active_changes": 49
+  },
+  "ownership_and_scope": {
+    "maintenance_owner": "Molten node-runtime maintainers; node-host maintainers own capability-relative filesystem mechanics. F14 owns current-run stopped observations.",
+    "outcome": "Denied direct/queued shutdown admission precedes protected local lifecycle effects; the admitted file-backed node stop still succeeds.",
+    "durable_capability": "One shared pure shutdown admission boundary and canonical local denial evidence, preserving lifecycle artifacts on rejection.",
+    "repeatability": "Saved exact CLI argv, canonical receipts, lifecycle-state BLAKE3 comparisons, source bindings, and native lifecycle manifests; normal repository positive/negative regressions are exercised in all three recorded compatible cohorts.",
+    "mainline_integration": false,
+    "molten_remote_push": false
+  },
+  "non_claims": [
+    "No remote authentication or permission follows from identity/nonempty refs.",
+    "No complete external adapter shutdown, crash atomicity, live-node correctness, F02 startup source-gate repair, or F14 current-run observation repair is proved.",
+    "No release eligibility, completion of other Cairns, mainline integration, or Molten remote push is claimed."
+  ]
+}

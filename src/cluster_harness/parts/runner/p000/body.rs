@@ -34,7 +34,7 @@ const WORKFLOW_ID: &str = "receipt-first-cluster-harness";
 const WORKFLOW_MAX_REQUESTS: &str = "1";
 
 #[derive(Debug, Clone)]
-pub struct ClusterHarnessExecutionInput {
+pub struct ExecutionInput {
     pub fixture_path: std::path::PathBuf,
     pub state_root: std::path::PathBuf,
     pub output_directory: std::path::PathBuf,
@@ -44,7 +44,7 @@ pub struct ClusterHarnessExecutionInput {
 }
 
 #[derive(Debug, Clone)]
-pub struct ClusterHarnessExecution {
+pub struct Execution {
     pub decision: String,
     pub parent_ref: String,
     pub verification_ref: String,
@@ -54,10 +54,10 @@ pub struct ClusterHarnessExecution {
 }
 
 #[derive(Debug, Clone)]
-pub struct ClusterRunDirectoryVerification {
+pub struct RunDirectoryVerification {
     pub decision: String,
     pub index_ref: String,
-    pub receipt: ClusterRunVerificationReceipt,
+    pub receipt: RunVerificationReceipt,
 }
 
 #[derive(Debug)]
@@ -95,7 +95,7 @@ struct PreparedArtifact {
 // r[impl molten.testing.receipt_first_cluster_harness.fixture_executable_runner]
 // r[impl molten.testing.fixture_driven_cluster_execution.fixture_source_of_truth]
 // r[impl molten.testing.local_multiprocess_cluster_tier.middle_tier]
-pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> crate::error::Result<ClusterHarnessExecution> {
+pub fn execute(input: &ExecutionInput) -> crate::error::Result<Execution> {
     validate_execution_input(input)?;
     prepare_output_roots(input)?;
     let planned = plan_run(input)?;
@@ -105,7 +105,7 @@ pub fn execute_cluster_harness(input: &ClusterHarnessExecutionInput) -> crate::e
 
 /// The cluster plan, fixture identity, and plan artifacts one harness run executes against.
 struct PlannedRun {
-    plan: crate::cluster::ClusterPlan,
+    plan: crate::cluster::Plan,
     node_ids: Vec<String>,
     fixture_ref: String,
     caveats: Vec<String>,
@@ -117,13 +117,13 @@ struct PlannedRun {
 
 /// Reads and plans the fixture, and prepares the fixture metadata, command plan, and local plan
 /// artifacts.
-fn plan_run(input: &ClusterHarnessExecutionInput) -> crate::error::Result<PlannedRun> {
-    let fixture_source = std::fs::read_to_string(&input.fixture_path).map_err(crate::error::MoltenError::from)?;
-    let node_names = crate::cluster::parse_cluster_manifest(&fixture_source)?;
-    let plan = crate::cluster::plan_cluster(&input.state_root, &node_names)?;
+fn plan_run(input: &ExecutionInput) -> crate::error::Result<PlannedRun> {
+    let fixture_source = std::fs::read_to_string(&input.fixture_path).map_err(crate::error::Failure::from)?;
+    let node_names = crate::cluster::parse_manifest(&fixture_source)?;
+    let plan = crate::cluster::plan(&input.state_root, &node_names)?;
     let node_ids = plan.nodes.iter().map(|node| node.node_id.clone()).collect::<Vec<_>>();
     let fixture_ref = content_ref_for_text(FIXTURE_DOMAIN, &fixture_source);
-    let caveats = cluster_harness_caveats();
+    let caveats = caveats();
     let expected_kinds = expected_artifact_kinds();
     let fixture_value = fixture_metadata_value(&fixture_ref, &node_ids, &caveats)?;
     let command_plan = command_plan_value(&fixture_ref, &node_ids, input.child_timeout_ms, &expected_kinds)?;
@@ -171,8 +171,8 @@ impl LifecyclePhases {
 /// Runs init, start, workflow, and status on every node in order, each only after the previous
 /// phase passed, then stops the started nodes in reverse order.
 fn run_lifecycle_phases(
-    input: &ClusterHarnessExecutionInput,
-    plan: &crate::cluster::ClusterPlan,
+    input: &ExecutionInput,
+    plan: &crate::cluster::Plan,
     artifacts: &mut impl crate::bounded::VecSink<PreparedArtifact>,
 ) -> crate::error::Result<LifecyclePhases> {
     let step = |phase| PhaseStep { input, plan, phase };
@@ -213,7 +213,7 @@ fn run_lifecycle_phases(
     })
 }
 
-fn init_node_args(node: &crate::cluster::ClusterNodePlan) -> Vec<std::ffi::OsString> {
+fn init_node_args(node: &crate::cluster::NodePlan) -> Vec<std::ffi::OsString> {
     vec![
         std::ffi::OsString::from("node"),
         std::ffi::OsString::from("init"),
@@ -224,7 +224,7 @@ fn init_node_args(node: &crate::cluster::ClusterNodePlan) -> Vec<std::ffi::OsStr
     ]
 }
 
-fn start_node_args(node: &crate::cluster::ClusterNodePlan) -> Vec<std::ffi::OsString> {
+fn start_node_args(node: &crate::cluster::NodePlan) -> Vec<std::ffi::OsString> {
     vec![
         std::ffi::OsString::from("node"),
         std::ffi::OsString::from("run"),
@@ -233,7 +233,7 @@ fn start_node_args(node: &crate::cluster::ClusterNodePlan) -> Vec<std::ffi::OsSt
     ]
 }
 
-fn workflow_node_args(node: &crate::cluster::ClusterNodePlan) -> Vec<std::ffi::OsString> {
+fn workflow_node_args(node: &crate::cluster::NodePlan) -> Vec<std::ffi::OsString> {
     vec![
         std::ffi::OsString::from("node"),
         std::ffi::OsString::from("run-loop"),
@@ -248,7 +248,7 @@ fn workflow_node_args(node: &crate::cluster::ClusterNodePlan) -> Vec<std::ffi::O
     ]
 }
 
-fn status_node_args(node: &crate::cluster::ClusterNodePlan) -> Vec<std::ffi::OsString> {
+fn status_node_args(node: &crate::cluster::NodePlan) -> Vec<std::ffi::OsString> {
     vec![
         std::ffi::OsString::from("node"),
         std::ffi::OsString::from("status"),
@@ -257,7 +257,7 @@ fn status_node_args(node: &crate::cluster::ClusterNodePlan) -> Vec<std::ffi::OsS
     ]
 }
 
-fn stop_node_args(node: &crate::cluster::ClusterNodePlan) -> Vec<std::ffi::OsString> {
+fn stop_node_args(node: &crate::cluster::NodePlan) -> Vec<std::ffi::OsString> {
     vec![
         std::ffi::OsString::from("node"),
         std::ffi::OsString::from("stop"),

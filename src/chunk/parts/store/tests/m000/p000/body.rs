@@ -54,7 +54,7 @@
 
         pin_manifest(&root, &first.manifest_ref).expect("pin manifest");
         let retention_evidence = retention_evidence(&root, "hegel-pinned");
-        gc(&root, ChunkStoreGcInput {
+        gc(&root, ChunkGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
             apply_refs: &[],
@@ -241,7 +241,7 @@
             &unpinned.chunk_refs,
             &retention_evidence,
         );
-        let gc = gc(&root, ChunkStoreGcInput {
+        let gc = gc(&root, ChunkGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
             apply_refs: &apply_refs,
@@ -275,7 +275,7 @@
         })
         .expect("retention pin");
         let retention_evidence = retention_evidence(&root, "retention-pin");
-        let gc = gc(&root, ChunkStoreGcInput {
+        let gc = gc(&root, ChunkGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
             apply_refs: &[],

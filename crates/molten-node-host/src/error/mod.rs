@@ -1,4 +1,4 @@
-pub type Result<T> = std::result::Result<T, MoltenError>;
+pub type Result<T> = std::result::Result<T, Failure>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HarnessDivergence {
@@ -28,14 +28,14 @@ impl HarnessDivergence {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MoltenError {
+pub enum Failure {
     Io(String),
     Preserves(String),
     InvalidHarness(String),
     HarnessDivergence(HarnessDivergence),
 }
 
-impl MoltenError {
+impl Failure {
     pub fn invalid_harness(message: impl Into<String>) -> Self {
         Self::InvalidHarness(message.into())
     }
@@ -45,13 +45,13 @@ impl MoltenError {
     }
 }
 
-impl std::fmt::Display for MoltenError {
+impl std::fmt::Display for Failure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MoltenError::Io(message) => write!(f, "io error: {message}"),
-            MoltenError::Preserves(message) => write!(f, "preserves error: {message}"),
-            MoltenError::InvalidHarness(message) => write!(f, "invalid harness artifact: {message}"),
-            MoltenError::HarnessDivergence(divergence) => {
+            Failure::Io(message) => write!(f, "io error: {message}"),
+            Failure::Preserves(message) => write!(f, "preserves error: {message}"),
+            Failure::InvalidHarness(message) => write!(f, "invalid harness artifact: {message}"),
+            Failure::HarnessDivergence(divergence) => {
                 if let Some(step) = divergence.step {
                     write!(
                         f,
@@ -70,9 +70,9 @@ impl std::fmt::Display for MoltenError {
     }
 }
 
-impl std::error::Error for MoltenError {}
+impl std::error::Error for Failure {}
 
-impl From<std::io::Error> for MoltenError {
+impl From<std::io::Error> for Failure {
     fn from(error: std::io::Error) -> Self {
         Self::Io(error.to_string())
     }

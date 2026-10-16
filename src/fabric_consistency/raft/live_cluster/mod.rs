@@ -15,38 +15,38 @@ const LIVE_FABRIC_BINDING_COUNT: usize = 7;
 const LIVE_TERM: u64 = 1;
 
 #[derive(Debug, Default)]
-pub(super) struct LiveApplicationHandler {
+pub(super) struct ApplicationHandler {
     pub(super) applied_request_refs: Vec<String>,
     pub(super) restored_application_state_ref: Option<String>,
 }
 
-impl CommittedBatchHandler for LiveApplicationHandler {
-    fn restore_snapshot(&mut self, snapshot: &ApplicationSnapshotRestore) -> crate::error::Result<String> {
+impl CommittedBatchHandler for ApplicationHandler {
+    fn restore_snapshot(&mut self, snapshot: &SnapshotRestore) -> crate::error::Result<String> {
         self.restored_application_state_ref = Some(snapshot.application_state_ref.clone());
         Ok(super::tests::test_ref("live-cluster-snapshot-restore"))
     }
 
-    fn apply_batch(&mut self, commands: &[ApplicationCommand]) -> crate::error::Result<String> {
+    fn apply_batch(&mut self, commands: &[Command]) -> crate::error::Result<String> {
         self.applied_request_refs.extend(commands.iter().map(|command| command.request_ref.clone()));
         Ok(super::tests::test_ref("live-cluster-application"))
     }
 }
 
-type LivePorts = ConcreteReplicaPortBundle<crate::fabric_time::OperatingSystemEntropySource, LiveApplicationHandler>;
-type LiveService = ScopedLiveReplicaService<LivePorts>;
+type Ports = ConcreteReplicaPortBundle<crate::fabric_time::OperatingSystemEntropySource, ApplicationHandler>;
+type Service = ScopedLiveReplica<Ports>;
 
-pub(super) struct LiveNode {
-    pub(super) service: LiveService,
-    pub(super) listener: Option<crate::fabric_transport::IrohCrossProcessListener>,
+pub(super) struct Node {
+    pub(super) service: Service,
+    pub(super) listener: Option<crate::fabric_transport::Listener>,
     pub(super) session_ref: String,
     pub(super) recovery_ref: Option<String>,
     _workspace: Option<crate::test_support::ProcessWorkspace>,
-    _control_receiver: tokio::sync::mpsc::Receiver<ReplicaControlObservation>,
+    _control_receiver: tokio::sync::mpsc::Receiver<ReplicaObservation>,
 }
 
 // r[verify molten.fabric_consistency.live_raft]
 #[tokio::test]
-async fn three_endpoint_live_services_elect_commit_read_and_catch_up() {
+async fn three_endpoint_services_elect_commit_read_and_catch_up() {
     let group = super::tests::active_group();
     let listener_a = crate::fabric_transport::cross_process::tests::listener_with_secret(NODE_A_SECRET_BYTE).await;
     let listener_b = crate::fabric_transport::cross_process::tests::listener_with_secret(NODE_B_SECRET_BYTE).await;
@@ -113,10 +113,10 @@ async fn three_endpoint_live_services_elect_commit_read_and_catch_up() {
 /// The leader records the selected milestone evidence and a healthy, unadmitted readback, and every
 /// replica keeps its durable log or snapshot.
 fn assert_selected_evidence_and_readback(
-    group: &crate::fabric_consistency::ConsistencyGroupBinding,
-    node_a: &LiveNode,
-    node_b: &LiveNode,
-    node_c: &LiveNode,
+    group: &crate::fabric_consistency::Group,
+    node_a: &Node,
+    node_b: &Node,
+    node_c: &Node,
 ) {
     let selected_evidence = node_a
         .service
@@ -126,11 +126,11 @@ fn assert_selected_evidence_and_readback(
         .map(|record| record.kind)
         .collect::<std::collections::BTreeSet<_>>();
     for kind in [
-        ReplicaEvidenceKind::GroupAdmission,
-        ReplicaEvidenceKind::Configuration,
-        ReplicaEvidenceKind::Commit,
-        ReplicaEvidenceKind::ReadCurrentness,
-        ReplicaEvidenceKind::Snapshot,
+        ReplicaKind::GroupAdmission,
+        ReplicaKind::Configuration,
+        ReplicaKind::Commit,
+        ReplicaKind::ReadCurrentness,
+        ReplicaKind::Snapshot,
     ] {
         assert!(selected_evidence.contains(&kind));
     }
@@ -139,8 +139,8 @@ fn assert_selected_evidence_and_readback(
     assert_eq!(health.status, "healthy");
     assert!(!health.production_admitted);
     crate::preserves_rail::validate_content_ref(&health.evidence_ref).expect("aggregate health ref");
-    let readback = crate::fabric_consistency::live_replica_operator_readback(group, &node_a.service)
-        .expect("live operator readback");
+    let readback =
+        crate::fabric_consistency::live_replica_readback(group, &node_a.service).expect("live operator readback");
     assert_eq!(readback.commit_index, INITIAL_LOG_INDEX);
     assert!(!readback.production_admitted);
     assert!(readback.selected_evidence_refs.len() <= crate::fabric_consistency::MAX_OPERATOR_EVIDENCE_REFS);
@@ -151,6 +151,6 @@ fn assert_selected_evidence_and_readback(
     assert!(node_c.service.ports().durability.adapter().state().snapshots.contains_key(node_c_snapshot_ref));
 }
 
-fn live_timeout() -> std::time::Duration {
+fn timeout() -> std::time::Duration {
     std::time::Duration::from_secs(LIVE_TIMEOUT_SECONDS)
 }

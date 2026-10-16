@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/tmp/molten-attempts-6-7-l6bgn98w/cairn-provider/bin/cairn",
+    "gate",
+    "design",
+    "adopt-molten-nominal-reference-domains",
+    "--root",
+    ".",
+    "--policy",
+    "/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015/cairn-policy/generated/cairn-policy.json"
+  ],
+  "cwd": "/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015",
+  "exit_code": 1,
+  "stdout": "",
+  "stderr": "error: failed to parse policy /home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015/cairn-policy/generated/cairn-policy.json: cairn.workflow.profile.registry at workflow_profile_policy.schemas: initial workflow profile is missing: outcome-machine\n"
+}

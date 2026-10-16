@@ -60,6 +60,8 @@ The highest-pressure ordinal `include!` shard selected for the first semantic sp
 
 Remaining ordinal shards are staged compatibility artifacts. They stay acceptable while generated or review-sized extractions still need path compatibility, and each future split must preserve public paths or provide an explicit compatibility package.
 
+Physical source groups also keep domain directories below eight sibling Rust files without adding lexical modules. Coordination-delivery profile and canonical-record tests live in `src/coordination_delivery/tests/contracts/`; Wasm performance profile and optimization code and their tests live in `src/wasm/performance/policy/` and `src/wasm/performance/tests/policy/`; world-benchmark port and canonical-record contracts live in `src/world_benchmark/contracts/`; and world-distribution catalog loading and synchronization execution live in `src/world_distribution/sync/`. Existing `mod.rs` loaders use `#[path]` to retain the original module names, visibility, and `super` relationships. Existing `include!` assemblies and their ordering remain unchanged.
+
 ## Chunk store semantic boundary
 
 Ownership split for the chunk store:
@@ -155,7 +157,7 @@ Preferred stable API for new boundary work:
 
 Current public root modules are classified as:
 
-- stable API: `prelude`, `core_api`, `MoltenError`, `Result`;
+- stable API: `prelude`, `core_api`, `Failure`, `Result`;
 - compatibility aliases: domain aliases created with `compat_module!`;
 - internal implementation compatibility: `#[doc(hidden)]` root modules that back aliases;
 - generated/test support: ordinal `parts/**` shards and `test_support`.

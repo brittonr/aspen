@@ -1,5 +1,5 @@
 
-fn shell_intents(event: &ServiceFsmEvent) -> Vec<String> {
+fn shell_intents(event: &Event) -> Vec<String> {
     match event.event_name.as_str() {
         EVENT_ACQUIRE_SERVICE_LOCK => vec![INTENT_ACQUIRE_LOCK.to_string()],
         EVENT_SERVE => vec![INTENT_SCAN_INGRESS.to_string()],
@@ -11,9 +11,9 @@ fn shell_intents(event: &ServiceFsmEvent) -> Vec<String> {
 }
 
 struct TransitionValueInput<'a> {
-    state: &'a ServiceFsmState,
-    event: &'a ServiceFsmEvent,
-    next: &'a ServiceFsmState,
+    state: &'a State,
+    event: &'a Event,
+    next: &'a State,
     decision: &'a str,
     shell_intents: &'a [String],
     diagnostics: &'a [String],
@@ -53,7 +53,7 @@ fn transition_value(input: TransitionValueInput<'_>) -> Result<IoValue> {
     ]))
 }
 
-fn service_state_ref(
+fn state_ref(
     state_name: &str,
     startup_ref: Option<&str>,
     service_lock_ref: Option<&str>,
@@ -70,7 +70,7 @@ fn service_state_ref(
     crate::preserves_rail::canonical_hash(&value)
 }
 
-fn validate_state(state: &ServiceFsmState) -> Result<()> {
+fn validate_state(state: &State) -> Result<()> {
     validate_state_name(&state.state_name)?;
     validate_ref(&state.state_ref, "service FSM state ref")?;
     validate_optional_ref(&state.startup_ref, "service FSM startup ref")?;
@@ -78,7 +78,7 @@ fn validate_state(state: &ServiceFsmState) -> Result<()> {
     validate_optional_ref(&state.supervisor_policy_ref, "service FSM supervisor policy ref")
 }
 
-fn validate_event(event: &ServiceFsmEvent) -> Result<()> {
+fn validate_event(event: &Event) -> Result<()> {
     validate_event_name(&event.event_name)?;
     validate_optional_ref(&event.startup_ref, "service FSM event startup ref")?;
     validate_optional_ref(&event.service_lock_ref, "service FSM event lock ref")?;

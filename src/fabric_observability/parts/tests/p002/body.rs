@@ -24,13 +24,13 @@ fn node_and_extension_health_project_to_scoped_canonical_readiness_and_operator_
         ),
         &extension_state,
     );
-    canonical_health_input(&profile, &extension, OBSERVED_TICK).expect("extension health");
+    health_input(&profile, &extension, OBSERVED_TICK).expect("extension health");
     let node = node_health_input(
         health_projection("node-a", &node_source_ref, &profile.profile_ref, &resource_ref, ClaimScope::LocalComponent),
         "pass",
     )
     .expect("node health");
-    canonical_health_input(&profile, &node, OBSERVED_TICK).expect("node health canonical");
+    health_input(&profile, &node, OBSERVED_TICK).expect("node health canonical");
 
     assert_failed_health_inputs(&profile, &extension_source_ref, &node_source_ref, &resource_ref);
 
@@ -43,10 +43,10 @@ fn node_and_extension_health_project_to_scoped_canonical_readiness_and_operator_
         allow_degraded: false,
         as_of_tick: OBSERVED_TICK,
     };
-    canonical_readiness_policy(&profile, &policy).expect("readiness policy");
+    readiness_policy(&profile, &policy).expect("readiness policy");
     let decision =
         evaluate_health_readiness(&profile, &policy, HealthState::Unavailable, std::slice::from_ref(&extension));
-    let canonical_decision = canonical_health_decision(&decision).expect("health decision");
+    let canonical_decision = health_decision(&decision).expect("health decision");
     assert_eq!(decision.readiness, ReadinessDecision::Pass);
 
     let operator = bounded_operator_snapshot(&profile, SnapshotBuildInput {
@@ -94,7 +94,7 @@ fn assert_failed_health_inputs(
     );
     assert_eq!(failed_extension.state, HealthState::Failed);
     assert_eq!(failed_extension.context.generation, GENERATION_TWO);
-    canonical_health_input(profile, &failed_extension, OBSERVED_TICK).expect("failed extension health");
+    health_input(profile, &failed_extension, OBSERVED_TICK).expect("failed extension health");
     assert!(
         node_health_input(
             health_projection(

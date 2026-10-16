@@ -11,7 +11,7 @@ pub const FABRIC_TIER_ADMISSION_SCHEMA: &str = "molten.fabric.tier-admission.v1"
 pub const FABRIC_REFERENCE_MATRIX_SUITE_SCHEMA: &str = "molten.fabric.reference-matrix-suite.v1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalFabricBoundary {
+pub struct CanonicalBoundary {
     pub report: FabricBoundaryReport,
     pub boundary_ref: String,
     pub value: preserves::IOValue,
@@ -25,7 +25,7 @@ pub struct CanonicalExtensionTierAdmission {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalFabricPortBinding {
+pub struct CanonicalPortBinding {
     pub binding: FabricPortBinding,
     pub descriptor_ref: String,
     pub registry_ref: String,
@@ -36,7 +36,7 @@ pub struct CanonicalFabricPortBinding {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalFabricEvidenceProfile {
+pub struct CanonicalEvidenceProfile {
     pub summary: FabricEvidenceProfileSummary,
     pub profile_ref: String,
     pub value: preserves::IOValue,
@@ -52,13 +52,13 @@ pub struct CanonicalReferenceMatrixSuite {
 // r[impl molten.fabric_boundary.fabric_identity]
 // r[impl molten.fabric_boundary.mechanism_semantics_separation]
 // r[impl molten.fabric_boundary.non_claims]
-pub fn canonical_fabric_boundary(
+pub fn canonical_boundary(
     descriptor: &FabricBoundaryDescriptor,
-) -> crate::error::Result<CanonicalFabricBoundary> {
+) -> crate::error::Result<CanonicalBoundary> {
     let report = validate_fabric_boundary(descriptor).map_err(|issues| validation_error("fabric boundary", &issues))?;
-    let value = fabric_boundary_value(&report);
+    let value = boundary_value(&report);
     let boundary_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalFabricBoundary {
+    Ok(CanonicalBoundary {
         report,
         boundary_ref,
         value,
@@ -80,41 +80,41 @@ pub fn canonical_extension_tier_admission(
 }
 
 // r[impl molten.fabric_boundary.port_registry]
-pub fn canonical_fabric_port_descriptor(
+pub fn canonical_port_descriptor(
     descriptor: &FabricPortDescriptor,
 ) -> crate::error::Result<(String, preserves::IOValue)> {
     let registry = build_fabric_port_registry(std::slice::from_ref(descriptor))
         .map_err(|issues| validation_error("fabric port descriptor", &issues))?;
     let Some(normalized) = registry.descriptors().first() else {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "fabric port descriptor validation produced an empty registry",
         ));
     };
-    let value = fabric_port_descriptor_value(normalized);
+    let value = port_descriptor_value(normalized);
     let descriptor_ref = crate::preserves_rail::canonical_hash(&value)?;
     Ok((descriptor_ref, value))
 }
 
 // r[impl molten.fabric_boundary.port_registry]
-pub fn resolve_canonical_fabric_port_binding(
+pub fn resolve_canonical_port_binding(
     descriptors: &[FabricPortDescriptor],
     requirement: &FabricPortRequirement,
-) -> crate::error::Result<CanonicalFabricPortBinding> {
+) -> crate::error::Result<CanonicalPortBinding> {
     let registry =
         build_fabric_port_registry(descriptors).map_err(|issues| validation_error("fabric port registry", &issues))?;
     let binding = resolve_fabric_port_binding(&registry, requirement)
         .map_err(|issues| validation_error("fabric port binding", &issues))?;
     let Some(descriptor) = registry.descriptors().iter().find(|descriptor| descriptor.key() == binding.key) else {
-        return Err(crate::error::MoltenError::invalid_harness("fabric port binding resolved without its descriptor"));
+        return Err(crate::error::Failure::invalid_harness("fabric port binding resolved without its descriptor"));
     };
 
-    let descriptor_value = fabric_port_descriptor_value(descriptor);
+    let descriptor_value = port_descriptor_value(descriptor);
     let descriptor_ref = crate::preserves_rail::canonical_hash(&descriptor_value)?;
-    let registry_value = fabric_port_registry_value(&registry)?;
+    let registry_value = port_registry_value(&registry)?;
     let registry_ref = crate::preserves_rail::canonical_hash(&registry_value)?;
     let binding_value = fabric_port_binding_value(&binding, &descriptor_ref, &registry_ref);
     let binding_ref = crate::preserves_rail::canonical_hash(&binding_value)?;
-    Ok(CanonicalFabricPortBinding {
+    Ok(CanonicalPortBinding {
         binding,
         descriptor_ref,
         registry_ref,
@@ -127,14 +127,14 @@ pub fn resolve_canonical_fabric_port_binding(
 
 // r[impl molten.fabric_boundary.evidence_granularity]
 // r[impl molten.fabric_boundary.non_claims]
-pub fn canonical_fabric_evidence_profile(
+pub fn canonical_evidence_profile(
     profile: &FabricEvidenceProfile,
-) -> crate::error::Result<CanonicalFabricEvidenceProfile> {
+) -> crate::error::Result<CanonicalEvidenceProfile> {
     let summary = validate_fabric_evidence_profile(profile)
         .map_err(|issues| validation_error("fabric evidence profile", &issues))?;
-    let value = fabric_evidence_profile_value(&summary);
+    let value = evidence_profile_value(&summary);
     let profile_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalFabricEvidenceProfile {
+    Ok(CanonicalEvidenceProfile {
         summary,
         profile_ref,
         value,
@@ -157,7 +157,7 @@ pub fn canonical_reference_matrix_suite(
     })
 }
 
-fn fabric_boundary_value(report: &FabricBoundaryReport) -> preserves::IOValue {
+fn boundary_value(report: &FabricBoundaryReport) -> preserves::IOValue {
     crate::preserves_rail::record("fabric-boundary-v1", vec![
         crate::preserves_rail::string(FABRIC_BOUNDARY_SCHEMA),
         field("identity", crate::preserves_rail::string(report.identity.as_str())),
@@ -193,7 +193,7 @@ fn extension_tier_admission_value(admission: &ExtensionTierAdmission) -> preserv
     ])
 }
 
-fn fabric_port_descriptor_value(descriptor: &FabricPortDescriptor) -> preserves::IOValue {
+fn port_descriptor_value(descriptor: &FabricPortDescriptor) -> preserves::IOValue {
     crate::preserves_rail::record("fabric-port-descriptor-v1", vec![
         crate::preserves_rail::string(FABRIC_PORT_DESCRIPTOR_SCHEMA),
         field("port-id", crate::preserves_rail::string(&descriptor.port_id)),
@@ -225,10 +225,10 @@ fn fabric_port_descriptor_value(descriptor: &FabricPortDescriptor) -> preserves:
     ])
 }
 
-fn fabric_port_registry_value(registry: &FabricPortRegistry) -> crate::error::Result<preserves::IOValue> {
+fn port_registry_value(registry: &FabricPortRegistry) -> crate::error::Result<preserves::IOValue> {
     let mut descriptor_refs = Vec::with_capacity(registry.descriptors().len());
     for descriptor in registry.descriptors() {
-        let descriptor_value = fabric_port_descriptor_value(descriptor);
+        let descriptor_value = port_descriptor_value(descriptor);
         descriptor_refs.push(crate::preserves_rail::canonical_hash(&descriptor_value)?);
     }
     Ok(crate::preserves_rail::record("fabric-port-registry-v1", vec![
@@ -262,7 +262,7 @@ fn fabric_port_binding_value(
     ])
 }
 
-fn fabric_evidence_profile_value(summary: &FabricEvidenceProfileSummary) -> preserves::IOValue {
+fn evidence_profile_value(summary: &FabricEvidenceProfileSummary) -> preserves::IOValue {
     let rules = summary
         .rules
         .iter()

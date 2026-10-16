@@ -44,7 +44,7 @@ fn bounds_value(bounds: &SimulationBounds) -> preserves::IOValue {
 
 fn choice_record_value(record_value: &SchedulerChoiceRecord) -> crate::error::Result<preserves::IOValue> {
     if record_value.semantic_output_ref.is_empty() || record_value.semantic_output_ref == PENDING_SEMANTIC_OUTPUT_REF {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "fabric simulation choice record lacks its executed semantic output ref",
         ));
     }
@@ -100,13 +100,13 @@ fn record_optional_divergence(value: &preserves::Value<preserves::IOValue>) -> c
     }
     let some = field_value
         .collect_simple_record("some", Some(1))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("expected optional simulation divergence"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected optional simulation divergence"))?;
     Ok(Some(crate::preserves_rail::canonical_hash((&some[0]).into())?))
 }
 
 fn validate_count(label: &str, actual: usize) -> crate::error::Result<()> {
     if actual > MAX_CANONICAL_SIMULATION_ITEMS {
-        Err(crate::error::MoltenError::invalid_harness(format!(
+        Err(crate::error::Failure::invalid_harness(format!(
             "fabric simulation {label} count {actual} exceeds {MAX_CANONICAL_SIMULATION_ITEMS}"
         )))
     } else {
@@ -124,7 +124,7 @@ fn validate_refs(label: &str, refs: &[String]) -> crate::error::Result<()> {
 
 fn u64_len(value: usize) -> crate::error::Result<preserves::IOValue> {
     let converted = u64::try_from(value)
-        .map_err(|_| crate::error::MoltenError::invalid_harness("fabric simulation collection length overflow"))?;
+        .map_err(|_| crate::error::Failure::invalid_harness("fabric simulation collection length overflow"))?;
     Ok(crate::preserves_rail::u64_value(converted))
 }
 
@@ -161,8 +161,8 @@ fn record_string_field(value: &preserves::Value<preserves::IOValue>, label: &str
 fn record_u64_field(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<u64> {
     named_field_value(value, label)?
         .as_u64()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected u64 for {label}")))?
-        .map_err(|error| crate::error::MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected u64 for {label}")))?
+        .map_err(|error| crate::error::Failure::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
 fn record_string_sequence_field(
@@ -172,7 +172,7 @@ fn record_string_sequence_field(
     let field_value = named_field_value(value, label)?;
     let sequence = field_value
         .as_sequence()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected sequence for {label}")))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected sequence for {label}")))?;
     sequence.map(|item| required_string(&item, label)).collect()
 }
 
@@ -182,7 +182,7 @@ fn named_field_value(
 ) -> crate::error::Result<preserves::Value<preserves::IOValue>> {
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected named field {label}")))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected named field {label}")))?;
     Ok(fields[0].clone())
 }
 
@@ -190,5 +190,5 @@ fn required_string(value: &preserves::Value<preserves::IOValue>, label: &str) ->
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected string for {label}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected string for {label}")))
 }

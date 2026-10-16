@@ -1,0 +1,8 @@
+{
+  "observation": "Native dry-run action.path names the active source; execute action.path names the archive destination. This is a mode-dependent path projection, not an input/policy/profile or action-kind change.",
+  "input_policy_profile_match": true,
+  "action_kind_description_match": true,
+  "preview_source_path": "./.cairn/changes/fix-node-shutdown-admission",
+  "execution_destination_path": "./.cairn/archive/1970-01-01-fix-node-shutdown-admission",
+  "initial_post_execution_assertion": "The overly broad action-list equality assertion failed after successful mutation. Native archive was not repeated. The saved executed receipt was inspected and all mutations are independently verified below."
+}

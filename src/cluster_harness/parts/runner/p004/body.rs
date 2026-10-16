@@ -10,16 +10,16 @@ fn collect_ticket_paths(
     let mut pending = vec![current.to_path_buf()];
     while let Some(next) = pending.pop() {
         if paths.item_count() >= MAX_TICKET_FILES {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "cluster harness ticket file count exceeds bound {MAX_TICKET_FILES} under {}",
                 root.display()
             )));
         }
         if next.is_dir() {
             let entries = std::fs::read_dir(&next)
-                .map_err(crate::error::MoltenError::from)?
+                .map_err(crate::error::Failure::from)?
                 .collect::<std::result::Result<Vec<_>, _>>()
-                .map_err(crate::error::MoltenError::from)?;
+                .map_err(crate::error::Failure::from)?;
             // Push in reverse so the stack keeps the depth-first order of the
             // earlier recursion.
             for entry in entries.into_iter().rev() {
@@ -66,7 +66,7 @@ fn write_prepared_artifacts(
 fn append_log_entries(
     output_directory: &std::path::Path,
     mut entries: Vec<molten_core::cluster_harness::RunArtifactIndexEntry>,
-    plan: &crate::cluster::ClusterPlan,
+    plan: &crate::cluster::Plan,
 ) -> crate::error::Result<Vec<molten_core::cluster_harness::RunArtifactIndexEntry>> {
     for phase in ["init", "start", "workflow", "status", "stop"] {
         for node in &plan.nodes {
@@ -75,7 +75,7 @@ fn append_log_entries(
             if !path.exists() {
                 continue;
             }
-            let text = std::fs::read_to_string(path).map_err(crate::error::MoltenError::from)?;
+            let text = std::fs::read_to_string(path).map_err(crate::error::Failure::from)?;
             entries.push(molten_core::cluster_harness::RunArtifactIndexEntry {
                 relative_path,
                 artifact_kind: DIAGNOSTIC_LOG_KIND.to_string(),
@@ -91,7 +91,7 @@ fn append_log_entries(
 fn child_log_ref(
     child: &ChildExecution,
     output_directory: &std::path::Path,
-    plan: &crate::cluster::ClusterPlan,
+    plan: &crate::cluster::Plan,
 ) -> crate::error::Result<String> {
     let component = plan
         .nodes
@@ -99,10 +99,10 @@ fn child_log_ref(
         .find(|node| node.node_id == child.node_id)
         .map(|node| node.path_component.as_str())
         .ok_or_else(|| {
-            crate::error::MoltenError::invalid_harness(format!("missing cluster plan node {}", child.node_id))
+            crate::error::Failure::invalid_harness(format!("missing cluster plan node {}", child.node_id))
         })?;
     let text = std::fs::read_to_string(output_directory.join(format!("logs/{}-{component}.log", child.phase)))
-        .map_err(crate::error::MoltenError::from)?;
+        .map_err(crate::error::Failure::from)?;
     Ok(content_ref_for_text(TEXT_ARTIFACT_DOMAIN, &text))
 }
 
@@ -128,9 +128,9 @@ pub(super) fn parse_run_index(
     let mut lines = source.lines();
     let header = lines
         .next()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("cluster run index is empty"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("cluster run index is empty"))?;
     if header != RUN_INDEX_HEADER {
-        return Err(crate::error::MoltenError::invalid_harness("cluster run index has unsupported header"));
+        return Err(crate::error::Failure::invalid_harness("cluster run index has unsupported header"));
     }
     let mut entries = Vec::new();
     for (line_index, line) in lines.enumerate() {
@@ -139,12 +139,12 @@ pub(super) fn parse_run_index(
         }
         let fields = line.split('\t').collect::<Vec<_>>();
         if fields.len() != RUN_INDEX_FIELD_COUNT {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "cluster run index line {} must have four tab-separated fields",
                 line_index.saturating_add(RUN_INDEX_ENTRY_LINE_OFFSET)
             )));
         }
-        crate::bounded::push_bounded(
+        crate::bounded::push(
             &mut entries,
             molten_core::cluster_harness::RunArtifactIndexEntry {
                 relative_path: fields[0].to_string(),

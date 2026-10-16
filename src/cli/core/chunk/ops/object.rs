@@ -169,7 +169,7 @@ pub(super) fn gc(command: super::super::Top) -> super::Outcome<()> {
         return super::wrong_handler("gc");
     };
     let retention_evidence = retention.into_retention_evidence();
-    let gc = molten::chunk_store::gc(&store, molten::chunk_store::ChunkStoreGcInput {
+    let gc = molten::chunk_store::gc(&store, molten::chunk_store::ChunkGcInput {
         dry_run,
         retention_evidence: &retention_evidence,
         apply_refs: &apply_refs,

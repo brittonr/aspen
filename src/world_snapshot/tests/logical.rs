@@ -7,7 +7,7 @@ use molten_core::world_commit::WorldRootRef;
 use molten_core::world_snapshot::*;
 
 use super::super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const DIGEST_HEX_LENGTH: usize = 64;
@@ -125,7 +125,7 @@ impl CurrentSnapshotAdmissionPort for Authority {
     ) -> Result<SnapshotAdmissionObservation> {
         self.observations
             .pop_front()
-            .ok_or_else(|| MoltenError::invalid_harness("missing authority observation"))
+            .ok_or_else(|| Failure::invalid_harness("missing authority observation"))
     }
 }
 

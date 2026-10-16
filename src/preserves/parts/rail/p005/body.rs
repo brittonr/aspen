@@ -184,13 +184,13 @@ pub fn boundary_schema_diagnostic_value(validation: &BoundarySchemaValidation) -
 // r[impl molten.preserves_boundary_codegen.typed_codecs]
 // r[impl molten.preserves_boundary_codegen.strict_decode]
 // r[impl molten.preserves_boundary_codegen.schema_ref_evidence]
-pub fn validate_boundary_bytes(bytes: &[u8], spec: &BoundarySchemaSpec) -> Result<BoundaryCodecReport> {
+pub fn validate_boundary_bytes(bytes: &[u8], spec: &BoundarySchemaSpec) -> Result<BoundaryReport> {
     let decoded = strict_canonical_decode(bytes)?;
     let schema_ref = boundary_schema_ref(spec)?;
     let input_bytes_ref = ContentRef::parse(content_ref_from_bytes(bytes))?;
     let typed_value_ref = boundary_typed_value_ref(spec, decoded.value_ref.as_str())?;
     match validate_boundary_schema(&decoded.value, spec) {
-        Ok(validation) => Ok(BoundaryCodecReport {
+        Ok(validation) => Ok(BoundaryReport {
             family: validation.family,
             schema_ref: validation.schema_ref,
             input_bytes_ref,
@@ -199,7 +199,7 @@ pub fn validate_boundary_bytes(bytes: &[u8], spec: &BoundarySchemaSpec) -> Resul
             decision: "pass".to_string(),
             diagnostics: Vec::new(),
         }),
-        Err(error) => Ok(BoundaryCodecReport {
+        Err(error) => Ok(BoundaryReport {
             family: spec.family.to_string(),
             schema_ref,
             input_bytes_ref,
@@ -211,7 +211,7 @@ pub fn validate_boundary_bytes(bytes: &[u8], spec: &BoundarySchemaSpec) -> Resul
     }
 }
 
-pub fn boundary_codec_report_value(report: &BoundaryCodecReport) -> IoValue {
+pub fn boundary_report_value(report: &BoundaryReport) -> IoValue {
     record("preserves-boundary-codec-report-v1", vec![
         record("family", vec![string(&report.family)]),
         record("schema-ref", vec![string(report.schema_ref.as_str())]),

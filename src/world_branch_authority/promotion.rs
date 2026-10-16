@@ -9,7 +9,7 @@ use molten_core::world_promotion::WorldReleaseReservationRef;
 use molten_core::world_promotion::WorldReleaseState;
 use molten_core::world_promotion::validate_reservation_set;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 // r[impl molten.world_branch_authority.activation]
@@ -22,7 +22,7 @@ pub fn bind_world_branch_promotion_reservation(
     let selected = committed_reservations
         .iter()
         .find(|reservation| &reservation.reservation_ref == selected_reservation_ref)
-        .ok_or_else(|| MoltenError::invalid_harness("promotion reservation observation is missing"))?;
+        .ok_or_else(|| Failure::invalid_harness("promotion reservation observation is missing"))?;
     let observed_refs = committed_reservations
         .iter()
         .map(|reservation| reservation.reservation_ref.clone())
@@ -46,7 +46,7 @@ pub fn bind_world_branch_promotion_reservation(
         dispatch_authorized: false,
     };
     plan_world_branch_promotion_admission(authority_plan, &facts).map_err(|diagnostic| {
-        MoltenError::invalid_harness(format!("promotion reservation admission denied: {diagnostic:?}"))
+        Failure::invalid_harness(format!("promotion reservation admission denied: {diagnostic:?}"))
     })
 }
 

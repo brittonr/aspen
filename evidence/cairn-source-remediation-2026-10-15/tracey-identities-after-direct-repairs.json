@@ -1,0 +1,59 @@
+{
+  "attempt": "5/20",
+  "kind": "diagnostic_only",
+  "implementation": "Unchanged private read_requirements/read_references/classify/read_baseline/compare_baseline functions from tools/tracey/inherited_debt_guard.rs, projected by a temporary harness; not a gate override.",
+  "requirements": 2795,
+  "referenced": 870,
+  "uncovered": 1925,
+  "baseline_entries": 1924,
+  "dangling_count": 22,
+  "dangling_ids": [
+    "molten.audit_f01.admission",
+    "molten.audit_f01.observed_effects",
+    "molten.audit_f01.preserve_state",
+    "molten.audit_f01.validation",
+    "molten.audit_f08.original_binding",
+    "molten.audit_f08.state_authority",
+    "molten.audit_f08.unavailable_result",
+    "molten.audit_f08.validation_claims",
+    "molten.audit_f09.ordering",
+    "molten.audit_f09.queue",
+    "molten.audit_f09.resume",
+    "molten.audit_f09.validation",
+    "molten.audit_f10.atomicity",
+    "molten.audit_f10.queue",
+    "molten.audit_f10.shared_admission",
+    "molten.audit_f10.validation",
+    "molten.audit_f12.bounds",
+    "molten.audit_f12.compatibility",
+    "molten.audit_f12.saturation",
+    "molten.audit_f12.validation",
+    "molten.consensus.chaoscontrol_chain_observation",
+    "molten.consensus.chaoscontrol_operation_identity"
+  ],
+  "unexpected_missing_ids": [
+    "molten.authority.nominal_references.octet.guard"
+  ],
+  "stale_baseline_ids": [],
+  "repaired_direct_evidence_ids": [
+    "molten.onixpkgs_kache.source",
+    "molten.onixpkgs_kache.isolation",
+    "molten.onixpkgs_kache.contract"
+  ],
+  "guard_baseline_and_accepted_specs_changed": false,
+  "policy_provider": {
+    "revision": "fc38f59330b626961d166febfdf1a5aa6575460f",
+    "source": "/nix/store/pp4l3in8gypmsgrnav4f4z6vq168hzpg-source",
+    "availability_document": "docs/nominal-authority-references.md:62-64",
+    "source_review": "No nominal-reference/domain policy hook found in the pinned src, cargo-octet/src, or standards; only unrelated Deref guidance matched."
+  },
+  "blockers": [
+    "Required pre-sync repository guard reads accepted definitions only, while 22 meaningful markers belong to still-active packages.",
+    "The one uncovered accepted nominal guard scenario has no policy implementation in the pinned provider; declaration or compile-fail type separation is not evidence of Octet enforcement."
+  ],
+  "non_claims": [
+    "not a Tracey gate pass",
+    "not active-change readiness",
+    "not authorization to sync, change provider pins, widen baseline, suppress markers, or relax policy"
+  ]
+}

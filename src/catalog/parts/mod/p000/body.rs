@@ -1,6 +1,6 @@
 type ArtifactPayloadRef = crate::artifacts::ArtifactPayloadRef;
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Path = std::path::Path;
 type PreservesRecord<T> = preserves::Record<T>;
 type PreservesValue<T> = preserves::Value<T>;

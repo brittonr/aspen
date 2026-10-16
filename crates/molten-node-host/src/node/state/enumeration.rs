@@ -1,24 +1,24 @@
-pub(super) fn entry_kind(file_type: &cap_std::fs::FileType) -> super::authority::NodeStateEntryKind {
+pub(super) fn entry_kind(file_type: &cap_std::fs::FileType) -> super::authority::EntryKind {
     if file_type.is_file() {
-        super::authority::NodeStateEntryKind::RegularFile
+        super::authority::EntryKind::RegularFile
     } else if file_type.is_dir() {
-        super::authority::NodeStateEntryKind::Directory
+        super::authority::EntryKind::Directory
     } else if file_type.is_symlink() {
-        super::authority::NodeStateEntryKind::Symlink
+        super::authority::EntryKind::Symlink
     } else {
-        super::authority::NodeStateEntryKind::Other
+        super::authority::EntryKind::Other
     }
 }
 
 pub(super) fn list_entries(
     dir: &cap_std::fs::Dir,
-    root: &std::sync::Arc<super::authority::NodeStateInner>,
-    namespace: super::authority::NodeStateNamespaceKind,
+    root: &std::sync::Arc<super::authority::Inner>,
+    namespace: super::authority::NamespaceKind,
     scope: &std::path::Path,
-) -> crate::error::Result<Vec<super::namespace::NodeStateEntry>> {
+) -> crate::error::Result<Vec<super::namespace::Entry>> {
     let mut entries = Vec::new();
-    for entry_result in dir.read_dir(".").map_err(crate::error::MoltenError::from)? {
-        let entry = entry_result.map_err(crate::error::MoltenError::from)?;
+    for entry_result in dir.read_dir(".").map_err(crate::error::Failure::from)? {
+        let entry = entry_result.map_err(crate::error::Failure::from)?;
         if entries.len() >= super::MAX_NODE_STATE_ENTRIES {
             return Err(super::invalid(format!(
                 "node state entry count exceeds maximum {}",
@@ -30,14 +30,14 @@ pub(super) fn list_entries(
             .to_str()
             .ok_or_else(|| super::invalid("node state entry name must be valid UTF-8"))?
             .to_string();
-        let path = super::locator::NodeStatePath::parse(&name)?;
-        entries.push(super::namespace::NodeStateEntry {
+        let path = super::locator::RelativePath::parse(&name)?;
+        entries.push(super::namespace::Entry {
             root: std::sync::Arc::clone(root),
             namespace,
             scope: scope.to_path_buf(),
             name,
             path,
-            kind: entry_kind(&entry.file_type().map_err(crate::error::MoltenError::from)?),
+            kind: entry_kind(&entry.file_type().map_err(crate::error::Failure::from)?),
         });
     }
     entries.sort_by(|left, right| left.name.cmp(&right.name));

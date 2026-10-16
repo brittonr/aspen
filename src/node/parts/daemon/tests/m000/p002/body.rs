@@ -30,7 +30,7 @@
         })
         .expect("dispatch ingress request");
         assert_eq!(loop_result.processed_request_refs.len(), 1);
-        let state_root = crate::node_state::NodeStateRoot::open(root).expect("open node state root");
+        let state_root = crate::node_state::DirectoryRoot::open(root).expect("open node state root");
         let control_value = read_preserves(
             &state_root,
             &control_outbox_receipt_path(&delivered.request_ref).expect("outbox receipt path"),
@@ -51,7 +51,7 @@
             envelope_value: &pair.first.value,
         })
         .expect("publish first");
-        let state_root = crate::node_state::NodeStateRoot::open(&pair.root).expect("open node state root");
+        let state_root = crate::node_state::DirectoryRoot::open(&pair.root).expect("open node state root");
         write_preserves(
             &state_root,
             &control_ingress_envelope_path(DEFAULT_CONTROL_INGRESS_TOPIC, &pair.first.envelope_ref)

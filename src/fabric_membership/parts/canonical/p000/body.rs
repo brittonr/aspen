@@ -16,35 +16,35 @@ const MEMBERSHIP_STATUS_RECORD: &str = "fabric-membership-status-v1";
 const MEMBERSHIP_PORT_COUNT: usize = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalMembershipProfile {
+pub struct Profile {
     pub profile: MembershipSourceProfile,
     pub admission_ref: String,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalMembershipView {
+pub struct View {
     pub admitted: AdmittedMembershipView,
     pub view_ref: String,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalFailureObservationSet {
+pub struct FailureObservationSet {
     pub observations_ref: String,
     pub observations: std::collections::BTreeMap<String, ReducedFailureObservation>,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalPlacementOutcome {
+pub struct PlacementEnvelope {
     pub outcome_ref: String,
     pub outcome: PlacementOutcome,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalAssignmentTransition {
+pub struct AssignmentEnvelope {
     pub transition_ref: String,
     pub transition: AssignmentTransition,
     pub intent_ref: String,
@@ -54,7 +54,7 @@ pub struct CanonicalAssignmentTransition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MembershipStatusReadback {
+pub struct StatusReadback {
     pub status_ref: String,
     pub view_ref: String,
     pub view_id: String,
@@ -72,9 +72,9 @@ pub struct MembershipStatusReadback {
 // r[impl molten.modularity.fabric_boundary.compatibility]
 // r[impl molten.fabric_membership.membership_views]
 // r[impl molten.fabric_membership.evidence]
-pub fn canonical_membership_profile(
+pub fn profile(
     profile: &MembershipSourceProfile,
-) -> crate::error::Result<CanonicalMembershipProfile> {
+) -> crate::error::Result<Profile> {
     let issues = validate_source_profile(profile);
     if !issues.is_empty() {
         return Err(validation_error("membership source profile", &issues));
@@ -97,7 +97,7 @@ pub fn canonical_membership_profile(
         ]),
     ]);
     let admission_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalMembershipProfile {
+    Ok(Profile {
         profile: profile.clone(),
         admission_ref,
         value,
@@ -109,12 +109,12 @@ pub fn canonical_membership_profile(
 // r[impl molten.fabric_membership.locality]
 // r[impl molten.fabric_membership.evidence]
 pub fn canonical_membership_view(
-    profile: &CanonicalMembershipProfile,
+    profile: &Profile,
     view: &MembershipView,
     descriptors: &[NodeDescriptor],
     now_ticks: u64,
     required_compatibility_ref: &str,
-) -> crate::error::Result<CanonicalMembershipView> {
+) -> crate::error::Result<View> {
     let admitted = validate_membership_view(&profile.profile, view, descriptors, now_ticks, required_compatibility_ref)
         .map_err(|issues| validation_error("membership view", &issues))?;
     let members = admitted
@@ -172,7 +172,7 @@ pub fn canonical_membership_view(
         ]),
     ]);
     let view_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalMembershipView {
+    Ok(View {
         admitted,
         view_ref,
         value,
@@ -181,12 +181,12 @@ pub fn canonical_membership_view(
 
 // r[impl molten.fabric_membership.failure_detector]
 // r[impl molten.fabric_membership.evidence]
-pub fn canonical_failure_observations(
-    view: &CanonicalMembershipView,
+pub fn failure_observations(
+    view: &View,
     profiles: &[FailureDetectorProfile],
     observations: &[FailureObservation],
     now_ticks: u64,
-) -> crate::error::Result<CanonicalFailureObservationSet> {
+) -> crate::error::Result<FailureObservationSet> {
     let reduced = reduce_failure_observations(&view.admitted, profiles, observations, now_ticks)
         .map_err(|issues| validation_error("failure observations", &issues))?;
     let values = reduced
@@ -246,7 +246,7 @@ pub fn canonical_failure_observations(
         ]),
     ]);
     let observations_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalFailureObservationSet {
+    Ok(FailureObservationSet {
         observations_ref,
         observations: reduced,
         value,

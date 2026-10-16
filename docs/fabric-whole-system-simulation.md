@@ -131,7 +131,7 @@ Retention cannot move past the replicated boundary.
 The extension owns jobs, leases, failover, and authoritative completion.
 A wrong lease owner or second authoritative completion fails closed.
 
-Every request enters `SystemExtensionHost` through the ordinary request callback.
+Every request enters `system_extension::Dispatcher` through the ordinary request callback.
 Every approved effect routes through all admitted deterministic fabric port bindings.
 No node-core branch matches a database, log, or scheduler operation.
 

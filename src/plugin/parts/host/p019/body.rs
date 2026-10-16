@@ -154,7 +154,7 @@ fn ensure_unique_descriptors(descriptors: &[PluginHostcallDescriptor]) -> Result
     Ok(())
 }
 
-fn validate_extension_id(value: &str) -> Result<()> {
+fn validate_id(value: &str) -> Result<()> {
     validate_non_empty(value, "plugin extension id")?;
     if !value.starts_with("plugin-extension:") {
         return Err(MoltenError::invalid_harness(format!(
@@ -170,7 +170,7 @@ fn validate_extension_id(value: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate_extension_version(value: &str) -> Result<()> {
+fn validate_version(value: &str) -> Result<()> {
     validate_non_empty(value, "plugin extension version")?;
     if !value
         .chars()
@@ -200,7 +200,7 @@ fn version_not_downgrade(new_version: &str, old_version: &str) -> Result<bool> {
 }
 
 fn semver_parts(version: &str) -> Result<Vec<u64>> {
-    validate_extension_version(version)?;
+    validate_version(version)?;
     let mut parts = Vec::new();
     for raw in version.split('.').take(PLUGIN_SEMVER_PARTS) {
         let numeric = raw

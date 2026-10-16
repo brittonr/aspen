@@ -43,13 +43,13 @@ fn crash_restart_preserves_claim_and_partitioned_ack_cannot_complete_it() {
     let partitioned_ack =
         request(&manifest, '3', INITIAL_TICK + 1, DeliveryOperation::Acknowledge { token: token.clone() });
     let valid_ack = request(&manifest, '4', INITIAL_TICK + 1, DeliveryOperation::Acknowledge { token });
-    let trace = run_delivery_simulation(&manifest, &policy, &time, state, &[
-        DeliverySimulationAction::CrashRestart,
-        DeliverySimulationAction::FaultedRequest {
+    let trace = run(&manifest, &policy, &time, state, &[
+        Action::CrashRestart,
+        Action::FaultedRequest {
             fault: molten_core::fabric_simulation::SimulationFaultKind::Partition,
             request: partitioned_ack,
         },
-        DeliverySimulationAction::Request(valid_ack),
+        Action::Request(valid_ack),
     ])
     .expect("simulation");
     assert_eq!(trace.transitions[0].issue, Some(DeliveryIssue::CurrentnessRequired));
@@ -67,12 +67,11 @@ fn duplicate_fault_reuses_the_same_core_operation_record() {
     let manifest = manifest(&policy);
     let time = time_profile(&manifest);
     let initial = DeliveryState::empty(QUEUE_ID, manifest.policy_ref.clone(), SERVICE_GENERATION, CONSISTENCY_EPOCH);
-    let trace =
-        run_delivery_simulation(&manifest, &policy, &time, initial, &[DeliverySimulationAction::FaultedRequest {
-            fault: molten_core::fabric_simulation::SimulationFaultKind::Duplicate,
-            request: enqueue_request(&manifest, '1'),
-        }])
-        .expect("duplicate simulation");
+    let trace = run(&manifest, &policy, &time, initial, &[Action::FaultedRequest {
+        fault: molten_core::fabric_simulation::SimulationFaultKind::Duplicate,
+        request: enqueue_request(&manifest, '1'),
+    }])
+    .expect("duplicate simulation");
     assert_eq!(trace.transitions.len(), DUPLICATE_TRANSITION_COUNT);
     assert_eq!(trace.transitions[1].decision, DeliveryDecisionKind::DuplicateReplay);
     assert_eq!(trace.final_state.ready.len(), 1);
@@ -84,13 +83,12 @@ fn unsupported_fault_is_a_bounded_error_not_a_private_scheduler() {
     let manifest = manifest(&policy);
     let time = time_profile(&manifest);
     let initial = DeliveryState::empty(QUEUE_ID, manifest.policy_ref.clone(), SERVICE_GENERATION, CONSISTENCY_EPOCH);
-    let result =
-        run_delivery_simulation(&manifest, &policy, &time, initial, &[DeliverySimulationAction::FaultedRequest {
-            fault: molten_core::fabric_simulation::SimulationFaultKind::Reorder,
-            request: enqueue_request(&manifest, '1'),
-        }]);
+    let result = run(&manifest, &policy, &time, initial, &[Action::FaultedRequest {
+        fault: molten_core::fabric_simulation::SimulationFaultKind::Reorder,
+        request: enqueue_request(&manifest, '1'),
+    }]);
     assert_eq!(
         result.expect_err("unsupported fault"),
-        DeliverySimulationError::UnsupportedFault(molten_core::fabric_simulation::SimulationFaultKind::Reorder)
+        ModelFailure::UnsupportedFault(molten_core::fabric_simulation::SimulationFaultKind::Reorder)
     );
 }

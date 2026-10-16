@@ -98,7 +98,7 @@ Unknown state blocks wake, delivery, and recovery work. An operator must supply 
 
 ## Storage and reconciliation
 
-`LocalActorStore` stores canonical actor state in `addressable-actor.redb` under a capability-rooted storage namespace. Compare-and-commit binds the expected state reference, revision, and engine epoch.
+`addressable_actor::Local` stores canonical actor state in `addressable-actor.redb` under a capability-rooted storage namespace. Compare-and-commit binds the expected state reference, revision, and engine epoch.
 
 If a commit result is unknown, the service reads the state back once. It classifies the result as applied, not applied, or unknown. It does not issue a blind retry.
 

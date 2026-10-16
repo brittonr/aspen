@@ -9,12 +9,12 @@ const FRAME_DOMAIN: &str = "molten.fabric.transport.cross-process-frame.v1";
 const CLEANUP_DOMAIN: &str = "molten.fabric.transport.cross-process-cleanup.v1";
 
 #[derive(Clone)]
-pub struct IrohEndpointCapability {
+pub struct EndpointCapability {
     secret_key: iroh::SecretKey,
     capability_ref: String,
 }
 
-impl IrohEndpointCapability {
+impl EndpointCapability {
     pub fn from_secret_bytes(
         secret_bytes: [u8; IROH_SECRET_KEY_BYTES],
         capability_ref: String,
@@ -31,7 +31,7 @@ impl IrohEndpointCapability {
     }
 }
 
-impl std::fmt::Debug for IrohEndpointCapability {
+impl std::fmt::Debug for EndpointCapability {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("IrohEndpointCapability")
@@ -42,10 +42,10 @@ impl std::fmt::Debug for IrohEndpointCapability {
 }
 
 #[derive(Debug)]
-pub struct IrohCrossProcessListenerInput {
-    pub profile: CanonicalTransportProfile,
+pub struct ListenerInput {
+    pub profile: Profile,
     pub protocol: ProtocolDescriptor,
-    pub capability: IrohEndpointCapability,
+    pub capability: EndpointCapability,
     pub bind_addr: std::net::SocketAddr,
     pub listener_identity_ref: String,
     pub expected_peer_context_ref: String,
@@ -57,12 +57,12 @@ pub struct IrohCrossProcessListenerInput {
 }
 
 #[derive(Debug, Clone)]
-pub struct IrohCrossProcessClientInput {
-    pub profile: CanonicalTransportProfile,
+pub struct ClientInput {
+    pub profile: Profile,
     pub protocol: ProtocolDescriptor,
-    pub capability: IrohEndpointCapability,
+    pub capability: EndpointCapability,
     pub bind_addr: std::net::SocketAddr,
-    pub endpoint: CanonicalCrossProcessEndpoint,
+    pub endpoint: Endpoint,
     pub expected: ExpectedEndpointBinding,
     pub admission: EndpointAdmissionState,
     pub session_ref: String,
@@ -70,7 +70,7 @@ pub struct IrohCrossProcessClientInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CrossProcessFrameEvidence {
+pub struct FrameEvidence {
     pub role: EndpointParticipantRole,
     pub descriptor_ref: String,
     pub session_ref: String,
@@ -86,12 +86,12 @@ pub struct CrossProcessFrameEvidence {
     pub cleanup_evidence_ref: String,
 }
 
-pub struct CrossProcessReceivedFrame {
+pub struct ReceivedFrame {
     pub payload: Vec<u8>,
-    pub evidence: CrossProcessFrameEvidence,
+    pub evidence: FrameEvidence,
 }
 
-impl std::fmt::Debug for CrossProcessReceivedFrame {
+impl std::fmt::Debug for ReceivedFrame {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("CrossProcessReceivedFrame")
@@ -104,7 +104,7 @@ impl std::fmt::Debug for CrossProcessReceivedFrame {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CrossProcessListenerCleanup {
+pub struct ListenerCleanup {
     pub listener_identity_ref: String,
     pub descriptor_ref: String,
     pub generation: u64,
@@ -113,17 +113,17 @@ pub struct CrossProcessListenerCleanup {
     pub cleanup_evidence_ref: String,
 }
 
-pub struct IrohCrossProcessListener {
+pub struct Listener {
     endpoint: iroh::Endpoint,
-    profile: CanonicalTransportProfile,
+    profile: Profile,
     protocol: ProtocolDescriptor,
     admission: EndpointAdmissionState,
-    endpoint_artifact: CanonicalCrossProcessEndpoint,
-    endpoint_status: CanonicalEndpointStatus,
+    endpoint_artifact: Endpoint,
+    endpoint_status: EndpointStatus,
     state: CrossProcessListenerState,
 }
 
-impl std::fmt::Debug for IrohCrossProcessListener {
+impl std::fmt::Debug for Listener {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("IrohCrossProcessListener")

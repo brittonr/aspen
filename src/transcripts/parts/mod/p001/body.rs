@@ -22,7 +22,14 @@ pub fn parse_transcript_stanza(value: &IoValue) -> Result<TranscriptStanza> {
     })
 }
 
-pub fn run_transcript(transcript: &TranscriptArtifact, input: &TranscriptRunInput) -> Result<TranscriptRun> {
+/// Runs against caller-admitted state allocation. The allocator is invoked only for a
+/// non-cached fresh run or save mode without an explicit save root; it must allocate a
+/// distinct writable root and preserve it when save mode returns the path to its caller.
+pub fn run_transcript(
+    transcript: &TranscriptArtifact,
+    input: &TranscriptRunInput,
+    allocate_state_root: impl FnOnce(&str) -> Result<PathBuf>,
+) -> Result<TranscriptRun> {
     if matches!(input.mode, TranscriptRunMode::ForkDenied | TranscriptRunMode::InPlaceDenied) {
         return denied_run(transcript, input);
     }
@@ -31,10 +38,10 @@ pub fn run_transcript(transcript: &TranscriptArtifact, input: &TranscriptRunInpu
     }
 
     let state_root = match input.mode {
-        TranscriptRunMode::Fresh => temp_state_root("fresh")?,
+        TranscriptRunMode::Fresh => allocate_state_root("fresh")?,
         TranscriptRunMode::Save => match input.save_root.clone() {
             Some(save_root) => save_root,
-            None => temp_state_root("save")?,
+            None => allocate_state_root("save")?,
         },
         TranscriptRunMode::ForkDenied | TranscriptRunMode::InPlaceDenied => {
             return Err(MoltenError::invalid_harness("denied transcript modes cannot allocate runner state"));

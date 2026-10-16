@@ -1,7 +1,7 @@
 use super::super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NativeValuePortFailureKind {
+pub enum ValuePortFailureKind {
     Missing,
     IdentityMismatch,
     BoundExceeded,
@@ -10,13 +10,13 @@ pub enum NativeValuePortFailureKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NativeValuePortFailure {
-    pub kind: NativeValuePortFailureKind,
+pub struct ValuePortFailure {
+    pub kind: ValuePortFailureKind,
     pub message: String,
 }
 
-impl NativeValuePortFailure {
-    pub fn new(kind: NativeValuePortFailureKind, message: impl Into<String>) -> Self {
+impl ValuePortFailure {
+    pub fn new(kind: ValuePortFailureKind, message: impl Into<String>) -> Self {
         Self {
             kind,
             message: message.into(),
@@ -24,52 +24,46 @@ impl NativeValuePortFailure {
     }
 
     pub const fn may_have_published(&self) -> bool {
-        matches!(self.kind, NativeValuePortFailureKind::UnknownAfterAcceptance)
+        matches!(self.kind, ValuePortFailureKind::UnknownAfterAcceptance)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NativeValuePublicationReceipt {
+pub struct ValuePublicationReceipt {
     pub value_ref: String,
     pub publication_ref: String,
     pub byte_count: u64,
 }
 
 pub trait NativeCallbackValuePort: Send {
-    fn materialize(
-        &mut self,
-        value_ref: &str,
-        maximum_bytes: u64,
-    ) -> Result<NativeCallbackValue, NativeValuePortFailure>;
+    fn materialize(&mut self, value_ref: &str, maximum_bytes: u64) -> Result<NativeCallbackValue, ValuePortFailure>;
 
     fn publish(
         &mut self,
         value: &NativeCallbackValue,
         maximum_bytes: u64,
-    ) -> Result<NativeValuePublicationReceipt, NativeValuePortFailure>;
+    ) -> Result<ValuePublicationReceipt, ValuePortFailure>;
 }
 
-pub type SharedNativeCallbackValuePort = std::sync::Arc<std::sync::Mutex<Box<dyn NativeCallbackValuePort>>>;
+pub type SharedCallbackValuePort = std::sync::Arc<std::sync::Mutex<Box<dyn NativeCallbackValuePort>>>;
 
-pub fn shared_native_callback_value_port(
-    port: impl NativeCallbackValuePort + 'static,
-) -> SharedNativeCallbackValuePort {
+pub fn shared_callback_value_port(port: impl NativeCallbackValuePort + 'static) -> SharedCallbackValuePort {
     std::sync::Arc::new(std::sync::Mutex::new(Box::new(port)))
 }
 
 #[derive(Debug)]
-pub struct InMemoryNativeCallbackValuePort {
+pub struct InMemoryCallbackValuePort {
     values: std::collections::BTreeMap<String, Vec<u8>>,
-    next_publication_failure: Option<NativeValuePortFailureKind>,
+    next_publication_failure: Option<ValuePortFailureKind>,
 }
 
-impl Default for InMemoryNativeCallbackValuePort {
+impl Default for InMemoryCallbackValuePort {
     fn default() -> Self {
         Self::empty()
     }
 }
 
-impl InMemoryNativeCallbackValuePort {
+impl InMemoryCallbackValuePort {
     /// A port with no stored values and no scheduled publication failure.
     pub const fn empty() -> Self {
         Self {
@@ -87,13 +81,13 @@ impl InMemoryNativeCallbackValuePort {
         port
     }
 
-    pub fn insert_exact(&mut self, value: NativeCallbackValue) -> Result<(), NativeValuePortFailure> {
-        admit_native_callback_value(&value, u64::MAX)?;
+    pub fn insert_exact(&mut self, value: NativeCallbackValue) -> Result<(), ValuePortFailure> {
+        admit_callback_value(&value, u64::MAX)?;
         if let Some(existing) = self.values.get(&value.value_ref)
             && existing != &value.bytes
         {
-            return Err(NativeValuePortFailure::new(
-                NativeValuePortFailureKind::IdentityMismatch,
+            return Err(ValuePortFailure::new(
+                ValuePortFailureKind::IdentityMismatch,
                 "native value reference already names different bytes",
             ));
         }
@@ -101,7 +95,7 @@ impl InMemoryNativeCallbackValuePort {
         Ok(())
     }
 
-    pub fn fail_next_publication(&mut self, kind: NativeValuePortFailureKind) {
+    pub fn fail_next_publication(&mut self, kind: ValuePortFailureKind) {
         self.next_publication_failure = Some(kind);
     }
 
@@ -110,20 +104,16 @@ impl InMemoryNativeCallbackValuePort {
     }
 }
 
-impl NativeCallbackValuePort for InMemoryNativeCallbackValuePort {
-    fn materialize(
-        &mut self,
-        value_ref: &str,
-        maximum_bytes: u64,
-    ) -> Result<NativeCallbackValue, NativeValuePortFailure> {
+impl NativeCallbackValuePort for InMemoryCallbackValuePort {
+    fn materialize(&mut self, value_ref: &str, maximum_bytes: u64) -> Result<NativeCallbackValue, ValuePortFailure> {
         let bytes = self.values.get(value_ref).cloned().ok_or_else(|| {
-            NativeValuePortFailure::new(NativeValuePortFailureKind::Missing, "native callback value is not available")
+            ValuePortFailure::new(ValuePortFailureKind::Missing, "native callback value is not available")
         })?;
         let value = NativeCallbackValue {
             value_ref: value_ref.to_string(),
             bytes,
         };
-        admit_native_callback_value(&value, maximum_bytes)?;
+        admit_callback_value(&value, maximum_bytes)?;
         Ok(value)
     }
 
@@ -131,30 +121,27 @@ impl NativeCallbackValuePort for InMemoryNativeCallbackValuePort {
         &mut self,
         value: &NativeCallbackValue,
         maximum_bytes: u64,
-    ) -> Result<NativeValuePublicationReceipt, NativeValuePortFailure> {
-        admit_native_callback_value(value, maximum_bytes)?;
+    ) -> Result<ValuePublicationReceipt, ValuePortFailure> {
+        admit_callback_value(value, maximum_bytes)?;
         if let Some(kind) = self.next_publication_failure.take() {
-            if kind == NativeValuePortFailureKind::UnknownAfterAcceptance {
+            if kind == ValuePortFailureKind::UnknownAfterAcceptance {
                 self.values.insert(value.value_ref.clone(), value.bytes.clone());
             }
-            return Err(NativeValuePortFailure::new(kind, "injected native value publication failure"));
+            return Err(ValuePortFailure::new(kind, "injected native value publication failure"));
         }
         if let Some(existing) = self.values.get(&value.value_ref)
             && existing != &value.bytes
         {
-            return Err(NativeValuePortFailure::new(
-                NativeValuePortFailureKind::IdentityMismatch,
+            return Err(ValuePortFailure::new(
+                ValuePortFailureKind::IdentityMismatch,
                 "native value reference already names different bytes",
             ));
         }
         self.values.insert(value.value_ref.clone(), value.bytes.clone());
         let byte_count = u64::try_from(value.bytes.len()).map_err(|_| {
-            NativeValuePortFailure::new(
-                NativeValuePortFailureKind::BoundExceeded,
-                "native value byte count does not fit u64",
-            )
+            ValuePortFailure::new(ValuePortFailureKind::BoundExceeded, "native value byte count does not fit u64")
         })?;
-        Ok(NativeValuePublicationReceipt {
+        Ok(ValuePublicationReceipt {
             value_ref: value.value_ref.clone(),
             publication_ref: native_identity_ref(&[
                 "native-value-publication-v2",
@@ -168,26 +155,20 @@ impl NativeCallbackValuePort for InMemoryNativeCallbackValuePort {
 
 // r[impl molten.system_extension.native_host.value_materialization]
 // r[impl molten.system_extension.native_host.value_publication]
-pub fn admit_native_callback_value(
-    value: &NativeCallbackValue,
-    maximum_bytes: u64,
-) -> Result<(), NativeValuePortFailure> {
+pub fn admit_callback_value(value: &NativeCallbackValue, maximum_bytes: u64) -> Result<(), ValuePortFailure> {
     let byte_count = u64::try_from(value.bytes.len()).map_err(|_| {
-        NativeValuePortFailure::new(
-            NativeValuePortFailureKind::BoundExceeded,
-            "native callback value byte count does not fit u64",
-        )
+        ValuePortFailure::new(ValuePortFailureKind::BoundExceeded, "native callback value byte count does not fit u64")
     })?;
     if byte_count > maximum_bytes {
-        return Err(NativeValuePortFailure::new(
-            NativeValuePortFailureKind::BoundExceeded,
+        return Err(ValuePortFailure::new(
+            ValuePortFailureKind::BoundExceeded,
             format!("native callback value exceeds {maximum_bytes} bytes"),
         ));
     }
     let observed_ref = crate::preserves_rail::content_ref_from_bytes(&value.bytes);
     if observed_ref != value.value_ref {
-        return Err(NativeValuePortFailure::new(
-            NativeValuePortFailureKind::IdentityMismatch,
+        return Err(ValuePortFailure::new(
+            ValuePortFailureKind::IdentityMismatch,
             "native callback value bytes do not match their reference",
         ));
     }

@@ -83,7 +83,7 @@ fn parse_prod_soak_run(value: &IoValue) -> Result<ParsedProdSoakRun> {
     })
 }
 
-fn vm_evidence_validation_value(input: ValidationValueInput<'_>) -> Result<IoValue> {
+fn vm_evidence_value(input: ValueInput<'_>) -> Result<IoValue> {
     crate::preserves_rail::validate_content_ref(input.topology_ref)?;
     crate::preserves_rail::validate_content_ref(input.test_run_ref)?;
     validate_ref_list("node evidence", input.node_evidence_refs)?;
@@ -110,7 +110,7 @@ fn vm_evidence_validation_value(input: ValidationValueInput<'_>) -> Result<IoVal
     ]))
 }
 
-fn vm_fault_validation_value(
+fn vm_fault_value(
     decision: &str,
     topology_ref: &str,
     descriptor_refs: &[String],

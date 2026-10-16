@@ -1,0 +1,11 @@
+{
+  "first_compile": "Missing Cargo dependency search directory; corrected from the Cargo compiler-artifact paths.",
+  "first_run": "Throwaway assertion expected the top-level Overflow variant instead of the existing Arithmetic(TimeArithmeticError::Overflow) deadline error.",
+  "permanent_api_changed": false,
+  "preserved_failures": [
+    "public-api-consumer-compile.json",
+    "public-api-consumer-run.json"
+  ],
+  "successful_observation": "public-api-consumer-run-final.json",
+  "scratch_removed": true
+}

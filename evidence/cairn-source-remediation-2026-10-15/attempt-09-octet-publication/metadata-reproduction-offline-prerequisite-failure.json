@@ -1,0 +1,23 @@
+{
+  "attempt": "9/20",
+  "command": [
+    "nix",
+    "develop",
+    "--no-update-lock-file",
+    "-c",
+    "cargo",
+    "test",
+    "-p",
+    "octet-lint-metadata",
+    "identity::tests::frozen_pilot_receipts_are_valid_and_reviewed",
+    "--offline",
+    "--locked",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "exit_code": 101,
+  "failure_class": "dependency cache missing under offline Cargo; metadata test did not execute",
+  "observed_error": "failed to get `valence-core` as a dependency of package `cargo-octet v0.1.0`; unable to update ssh://git@github.com/OnixResearch/valence.git?rev=7546a78b4eeef8686c6837e187aa12420f4f03bb#7546a78b; can't checkout from ssh://git@github.com/OnixResearch/valence.git: you are in the offline mode (--offline)",
+  "next_action": "Resolve the existing immutable dependency with normal authenticated Cargo access; preserve all pins and locks."
+}

@@ -1,0 +1,48 @@
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/fabricboundarycompat.rs (/home/brittonr/.cargo-target/debug/deps/fabricboundarycompat-86fbf38e23c1d8c6)
+
+running 5 tests
+test one_field_durability_mutations_change_the_projection_refs ... ok
+test tampered_or_truncated_fixtures_are_rejected ... ok
+test one_field_time_and_transport_mutations_change_the_projection_refs ... ok
+test one_field_membership_mutations_change_the_projection_refs ... ok
+test equal_explicit_inputs_reproduce_the_pre_migration_canonical_fixtures ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/fabricexecutionboundary.rs (/home/brittonr/.cargo-target/debug/deps/fabricexecutionboundary-90de841f9e5c02f0)
+
+running 2 tests
+test execution_boundary_uses_one_immutable_mechanism_and_application_owned_port ... FAILED
+test execution_adapters_do_not_bypass_bounded_exec_or_hide_profile_fallback ... FAILED
+
+failures:
+
+---- execution_boundary_uses_one_immutable_mechanism_and_application_owned_port stdout ----
+
+thread 'execution_boundary_uses_one_immutable_mechanism_and_application_owned_port' (2616102) panicked at tests/fabricexecutionboundary.rs:21:5:
+assertion failed: SYSTEM_EXTENSION_COMPOSITION.contains("compose_system_extension_execution_fabric")
+
+---- execution_adapters_do_not_bypass_bounded_exec_or_hide_profile_fallback stdout ----
+
+thread 'execution_adapters_do_not_bypass_bounded_exec_or_hide_profile_fallback' (2616101) panicked at tests/fabricexecutionboundary.rs:32:5:
+assertion failed: EXECUTION_PORTS.contains("ExecutionPortFailureKind")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    execution_adapters_do_not_bypass_bounded_exec_or_hide_profile_fallback
+    execution_boundary_uses_one_immutable_mechanism_and_application_owned_port
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p molten --test fabricexecutionboundary`
+
+
+Wall time: 199.27 seconds
+
+Command exited with code 101
+
+[Showing lines 1-315 and 1526-1840 of 1840; 1,210 middle lines (107.2KB) elided. Read artifact://286 for full output]

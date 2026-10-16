@@ -11,7 +11,7 @@ pub(super) fn run_fixture(
     profile: molten::system_extension::ExecutionProfile,
     out: std::path::PathBuf,
 ) -> molten::error::Result<()> {
-    let run = molten::system_extension::run_executable_system_extension_fixture(profile)?;
+    let run = molten::system_extension::run_executable(profile)?;
     let plan = plan_fixture_artifacts(&run)?;
     write_artifacts(&out, &plan)?;
     println!(
@@ -26,14 +26,14 @@ pub(super) fn run_fixture(
 }
 
 pub(super) fn show(status: std::path::PathBuf) -> molten::error::Result<()> {
-    let metadata = std::fs::metadata(&status).map_err(molten::error::MoltenError::from)?;
+    let metadata = std::fs::metadata(&status).map_err(molten::error::Failure::from)?;
     if metadata.len() > MAX_STATUS_ARTIFACT_BYTES {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "system-extension status artifact is {} bytes; maximum is {MAX_STATUS_ARTIFACT_BYTES}",
             metadata.len()
         )));
     }
-    let source = std::fs::read_to_string(&status).map_err(molten::error::MoltenError::from)?;
+    let source = std::fs::read_to_string(&status).map_err(molten::error::Failure::from)?;
     let value = molten::preserves_rail::parse_text(&source)?;
     let readback = molten::system_extension::parse_operator_status_readback(&value)?;
     println!(
@@ -53,7 +53,7 @@ pub(super) fn show(status: std::path::PathBuf) -> molten::error::Result<()> {
 }
 
 fn plan_fixture_artifacts(
-    run: &molten::system_extension::ExecutableSystemExtensionFixtureRun,
+    run: &molten::system_extension::ExecutableRun,
 ) -> molten::error::Result<Vec<PlannedArtifact>> {
     let mut artifacts = vec![
         planned("manifest.preserves", &run.manifest_value)?,
@@ -64,11 +64,11 @@ fn plan_fixture_artifacts(
     ];
     for (index, evidence) in run.evidence.iter().enumerate() {
         let (kind, value) = match evidence {
-            molten::system_extension::HostEvidence::Lifecycle(receipt) => ("lifecycle", &receipt.value),
-            molten::system_extension::HostEvidence::Callback(receipt) => ("callback", &receipt.value),
-            molten::system_extension::HostEvidence::EffectCompletion(receipt) => ("effect-completion", &receipt.value),
-            molten::system_extension::HostEvidence::Migration(receipt) => ("migration", &receipt.value),
-            molten::system_extension::HostEvidence::Readiness(receipt) => ("readiness", &receipt.value),
+            molten::system_extension::Evidence::Lifecycle(receipt) => ("lifecycle", &receipt.value),
+            molten::system_extension::Evidence::Callback(receipt) => ("callback", &receipt.value),
+            molten::system_extension::Evidence::EffectCompletion(receipt) => ("effect-completion", &receipt.value),
+            molten::system_extension::Evidence::Migration(receipt) => ("migration", &receipt.value),
+            molten::system_extension::Evidence::Readiness(receipt) => ("readiness", &receipt.value),
         };
         let filename = format!("evidence/{index:0width$}-{kind}.preserves", width = ARTIFACT_INDEX_WIDTH);
         artifacts.push(planned(filename, value)?);
@@ -87,13 +87,13 @@ fn planned(
 }
 
 fn write_artifacts(root: &std::path::Path, artifacts: &[PlannedArtifact]) -> molten::error::Result<()> {
-    std::fs::create_dir_all(root).map_err(molten::error::MoltenError::from)?;
+    std::fs::create_dir_all(root).map_err(molten::error::Failure::from)?;
     for artifact in artifacts {
         let path = root.join(&artifact.relative_path);
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(molten::error::MoltenError::from)?;
+            std::fs::create_dir_all(parent).map_err(molten::error::Failure::from)?;
         }
-        std::fs::write(path, artifact.content.as_bytes()).map_err(molten::error::MoltenError::from)?;
+        std::fs::write(path, artifact.content.as_bytes()).map_err(molten::error::Failure::from)?;
     }
     Ok(())
 }
@@ -107,10 +107,9 @@ mod tests {
     // r[verify molten.system_extension.operator_readback]
     #[test]
     fn fixture_plan_has_bounded_relative_paths_and_a_status_artifact() {
-        let run = molten::system_extension::run_executable_system_extension_fixture(
-            molten::system_extension::ExecutionProfile::SandboxedComponent,
-        )
-        .expect("fixture run");
+        let run =
+            molten::system_extension::run_executable(molten::system_extension::ExecutionProfile::SandboxedComponent)
+                .expect("fixture run");
         let plan = plan_fixture_artifacts(&run).expect("artifact plan");
 
         assert!(plan.iter().any(|artifact| artifact.relative_path == std::path::Path::new("status.preserves")));
@@ -124,19 +123,18 @@ mod tests {
     // r[verify molten.system_extension.operator_readback]
     #[test]
     fn status_parser_rejects_callback_receipts_as_operator_status() {
-        let run = molten::system_extension::run_executable_system_extension_fixture(
-            molten::system_extension::ExecutionProfile::SandboxedComponent,
-        )
-        .expect("fixture run");
+        let run =
+            molten::system_extension::run_executable(molten::system_extension::ExecutionProfile::SandboxedComponent)
+                .expect("fixture run");
         let callback = run
             .evidence
             .iter()
             .find_map(|evidence| match evidence {
-                molten::system_extension::HostEvidence::Callback(receipt) => Some(&receipt.value),
-                molten::system_extension::HostEvidence::EffectCompletion(_)
-                | molten::system_extension::HostEvidence::Lifecycle(_)
-                | molten::system_extension::HostEvidence::Migration(_)
-                | molten::system_extension::HostEvidence::Readiness(_) => None,
+                molten::system_extension::Evidence::Callback(receipt) => Some(&receipt.value),
+                molten::system_extension::Evidence::EffectCompletion(_)
+                | molten::system_extension::Evidence::Lifecycle(_)
+                | molten::system_extension::Evidence::Migration(_)
+                | molten::system_extension::Evidence::Readiness(_) => None,
             })
             .expect("callback receipt");
 

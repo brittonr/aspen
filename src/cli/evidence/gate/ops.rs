@@ -63,30 +63,29 @@ struct ReleaseProfileArgs {
 }
 
 fn run_release_profile(args: ReleaseProfileArgs) -> Outcome<()> {
-    let validation =
-        molten::prod_release_profile::validate_release_profile(&molten::prod_release_profile::ReleaseProfileInput {
-            profile_id: args.profile_id,
-            tier: args.tier,
-            candidate_ref: args.candidate_ref,
-            evidence_refs: molten::prod_release_profile::ReleaseEvidenceRefs {
-                source_gate_ref: args.source_gate_ref,
-                policy_ref: args.policy_ref,
-                octet_ref: args.octet_ref,
-                cairn_ref: args.cairn_ref,
-                stack_provenance_ref: args.stack_provenance_ref,
-                production_profile_ref: args.production_profile_ref,
-            },
-            freshness: molten::prod_release_profile::ReleaseProfileFreshness {
-                expected_generated_export_ref: args.expected_generated_export_ref,
-                actual_generated_export_ref: args.actual_generated_export_ref,
-            },
-            stack_provenance_required: args.stack_provenance_required,
-            accepted_valence_policy_hashes: args.accepted_valence_policy_hashes,
-            caveats: args.caveats,
-        })?;
+    let validation = molten::prod_release_profile::validate(&molten::prod_release_profile::Input {
+        profile_id: args.profile_id,
+        tier: args.tier,
+        candidate_ref: args.candidate_ref,
+        evidence_refs: molten::prod_release_profile::EvidenceRefs {
+            source_gate_ref: args.source_gate_ref,
+            policy_ref: args.policy_ref,
+            octet_ref: args.octet_ref,
+            cairn_ref: args.cairn_ref,
+            stack_provenance_ref: args.stack_provenance_ref,
+            production_profile_ref: args.production_profile_ref,
+        },
+        freshness: molten::prod_release_profile::Freshness {
+            expected_generated_export_ref: args.expected_generated_export_ref,
+            actual_generated_export_ref: args.actual_generated_export_ref,
+        },
+        stack_provenance_required: args.stack_provenance_required,
+        accepted_valence_policy_hashes: args.accepted_valence_policy_hashes,
+        caveats: args.caveats,
+    })?;
     super::io::emit_gate_receipt(args.out.as_ref(), &validation.value)?;
     if validation.decision == "deny" {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "release profile denied: {}",
             validation.diagnostics.join(",")
         )));

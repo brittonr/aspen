@@ -1,0 +1,68 @@
+{
+  "command": [
+    "/nix/store/ynjawpza9ci9i8ha7f3ywaqwbd60m83k-cairn-0.1.0/bin/cairn",
+    "archive",
+    "adopt-molten-nominal-reference-domains",
+    "--root",
+    ".",
+    "--policy",
+    "/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015/cairn-policy/generated/cairn-policy.json"
+  ],
+  "cwd": "/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015",
+  "exit_code": 0,
+  "stdout": "{\n  \"acceptance_ids\": [],\n  \"actions\": [\n    {\n      \"description\": \"move active change to archive: adopt-molten-nominal-reference-domains\",\n      \"kind\": \"archive_change\",\n      \"path\": \"./.cairn/changes/adopt-molten-nominal-reference-domains\"\n    }\n  ],\n  \"blocked\": false,\n  \"change\": \"adopt-molten-nominal-reference-domains\",\n  \"cross_repo_dependencies\": {\n    \"blocked_count\": 0,\n    \"dependency_count\": 0,\n    \"input_hash\": \"72693277ceb40c908b4efd1c81842c733b3f3c417f223e50b1138938ac6bc983\",\n    \"non_claims\": [\n      \"dependency satisfaction proves presented receipt linkage only\",\n      \"dependency satisfaction does not prove upstream correctness or remote trust\",\n      \"dependency satisfaction does not prove downstream integration correctness or release eligibility\"\n    ],\n    \"policy_hash\": \"62e40f642e798bfaf5a68a495a7456bcf4e9fd8106ae2f52a24100967b39df5d\",\n    \"receipt_hash\": \"3fbe945792d747652b6d8bd78074ba24bcacff8257966f91256ec3482443dc1b\",\n    \"rows\": [],\n    \"satisfied_count\": 0,\n    \"schema\": \"cairn.cross-repo-dependency-receipt.v1\",\n    \"valid\": true,\n    \"verdict\": \"PASS\"\n  },\n  \"cross_repo_evidence_issues\": [],\n  \"dry_run\": true,\n  \"input_hash\": \"33890c03bb6e01a447463f31bb93fc34848adbc2c8bb38490d494eb194c849f7\",\n  \"layout\": \"cairn\",\n  \"mutated\": false,\n  \"mutation_manifest\": null,\n  \"non_claims\": [\n    \"workflow state proves only the selected policy graph and observed structural artifact facts\",\n    \"workflow instructions do not prove artifact truth, review quality, or implementation correctness\",\n    \"workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates\",\n    \"workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts\"\n  ],\n  \"plan_hash\": \"04b23529f224f270bc96f6f5da80295a4abaee09528e1b71e2e0a4927d5f50c8\",\n  \"policy\": \"octet-default\",\n  \"policy_hash\": \"62e40f642e798bfaf5a68a495a7456bcf4e9fd8106ae2f52a24100967b39df5d\",\n  \"profile_identity_hash\": \"6021284e813cf175efd26bc476e754b09ed0c8c4ac6c7a941dbe1a64c49af97d\",\n  \"reasons\": [],\n  \"receipt_hash\": \"a66c2d0d9f0ee60b1f06d90898478741e5f0f25bd520f2112e595569c8a7a257\",\n  \"review_receipt_hashes\": [],\n  \"spec_effect\": \"delta\",\n  \"workflow_profile\": \"spec-driven\",\n  \"workflow_profile_compatibility_fallback\": false,\n  \"workflow_profile_source\": \"change_create\",\n  \"workflow_profile_version\": 1\n}\n",
+  "stderr": "",
+  "result": {
+    "acceptance_ids": [],
+    "actions": [
+      {
+        "description": "move active change to archive: adopt-molten-nominal-reference-domains",
+        "kind": "archive_change",
+        "path": "./.cairn/changes/adopt-molten-nominal-reference-domains"
+      }
+    ],
+    "blocked": false,
+    "change": "adopt-molten-nominal-reference-domains",
+    "cross_repo_dependencies": {
+      "blocked_count": 0,
+      "dependency_count": 0,
+      "input_hash": "72693277ceb40c908b4efd1c81842c733b3f3c417f223e50b1138938ac6bc983",
+      "non_claims": [
+        "dependency satisfaction proves presented receipt linkage only",
+        "dependency satisfaction does not prove upstream correctness or remote trust",
+        "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+      ],
+      "policy_hash": "62e40f642e798bfaf5a68a495a7456bcf4e9fd8106ae2f52a24100967b39df5d",
+      "receipt_hash": "3fbe945792d747652b6d8bd78074ba24bcacff8257966f91256ec3482443dc1b",
+      "rows": [],
+      "satisfied_count": 0,
+      "schema": "cairn.cross-repo-dependency-receipt.v1",
+      "valid": true,
+      "verdict": "PASS"
+    },
+    "cross_repo_evidence_issues": [],
+    "dry_run": true,
+    "input_hash": "33890c03bb6e01a447463f31bb93fc34848adbc2c8bb38490d494eb194c849f7",
+    "layout": "cairn",
+    "mutated": false,
+    "mutation_manifest": null,
+    "non_claims": [
+      "workflow state proves only the selected policy graph and observed structural artifact facts",
+      "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+      "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+      "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+    ],
+    "plan_hash": "04b23529f224f270bc96f6f5da80295a4abaee09528e1b71e2e0a4927d5f50c8",
+    "policy": "octet-default",
+    "policy_hash": "62e40f642e798bfaf5a68a495a7456bcf4e9fd8106ae2f52a24100967b39df5d",
+    "profile_identity_hash": "6021284e813cf175efd26bc476e754b09ed0c8c4ac6c7a941dbe1a64c49af97d",
+    "reasons": [],
+    "receipt_hash": "a66c2d0d9f0ee60b1f06d90898478741e5f0f25bd520f2112e595569c8a7a257",
+    "review_receipt_hashes": [],
+    "spec_effect": "delta",
+    "workflow_profile": "spec-driven",
+    "workflow_profile_compatibility_fallback": false,
+    "workflow_profile_source": "change_create",
+    "workflow_profile_version": 1
+  }
+}

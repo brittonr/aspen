@@ -1,0 +1,59 @@
+{
+  "result": "pass",
+  "scope": "Target-path existence for local Markdown links in affected documents; does not claim fragment or external-link validation.",
+  "documents": [
+    "docs/architecture.md",
+    "docs/octet-burndown-handoff.md",
+    ".cairn/archive/1970-01-01-fix-node-shutdown-admission/tasks.md"
+  ],
+  "links": [
+    {
+      "document": "docs/architecture.md",
+      "target": "distributed-system-fabric.md"
+    },
+    {
+      "document": "docs/architecture.md",
+      "target": "fabric-execution.md"
+    },
+    {
+      "document": "docs/architecture.md",
+      "target": "system-extension-runtime.md"
+    },
+    {
+      "document": "docs/architecture.md",
+      "target": "fabric-time-scheduler-runtime.md"
+    },
+    {
+      "document": "docs/architecture.md",
+      "target": "../.cairn/archive/1970-01-01-fix-node-shutdown-admission/evidence/2026-10-16-acceptance.json"
+    },
+    {
+      "document": "docs/octet-burndown-handoff.md",
+      "target": "../evidence/cairn-source-remediation-2026-10-15/attempt-14-shutdown-admission-acceptance/completion.json"
+    },
+    {
+      "document": "docs/octet-burndown-handoff.md",
+      "target": "../evidence/cairn-source-remediation-2026-10-15/attempt-13-retry-arithmetic-acceptance/completion.json"
+    },
+    {
+      "document": "docs/octet-burndown-handoff.md",
+      "target": "../evidence/cairn-source-remediation-2026-10-15/source-gate-after-recovery.json"
+    },
+    {
+      "document": "docs/octet-burndown-handoff.md",
+      "target": "../README.md"
+    },
+    {
+      "document": "docs/octet-burndown-handoff.md",
+      "target": "../evidence/cairn-source-remediation-2026-10-15/attempt-08-traceability-closure/completion.json"
+    },
+    {
+      "document": ".cairn/archive/1970-01-01-fix-node-shutdown-admission/tasks.md",
+      "target": "evidence/2026-10-16-acceptance.json"
+    },
+    {
+      "document": ".cairn/archive/1970-01-01-fix-node-shutdown-admission/tasks.md",
+      "target": "evidence/verification.md"
+    }
+  ]
+}

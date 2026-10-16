@@ -15,35 +15,31 @@ pub fn fixture_ref(label: &str) -> String {
 }
 
 pub fn fixture_component_bytes() -> Vec<u8> {
-    crate::wasm_component::test_identity_component_bytes()
+    crate::wasm_component::test_identity_bytes()
 }
 
 pub fn fixture_alternate_component_bytes() -> Vec<u8> {
-    crate::wasm_component::test_alternate_component_bytes()
+    crate::wasm_component::test_alternate_bytes()
 }
 
 pub fn fixture_precompiled_component_bytes() -> Vec<u8> {
-    crate::wasm_component::test_precompiled_component_bytes()
+    crate::wasm_component::test_precompiled_bytes()
 }
 
 pub fn fixture_component_profile_ref() -> String {
-    let profile = crate::wasm_component::supported_component_profile().expect("component profile");
-    crate::wasm_component::component_profile_ref(&profile)
+    let profile = crate::wasm_component::supported().expect("component profile");
+    crate::wasm_component::r#ref(&profile)
 }
 
-pub fn fixture_bundle(
-    kind: PerformanceArtifactKind,
-    artifact_bytes: &[u8],
-    source_component_ref: String,
-) -> PerformanceMaterializationBundle {
+pub fn fixture_bundle(kind: ArtifactKind, artifact_bytes: &[u8], source_component_ref: String) -> Bundle {
     let component_profile_ref = fixture_component_profile_ref();
     let artifact_ref = fixture_bytes_ref(artifact_bytes);
     let artifact_length = u64::try_from(artifact_bytes.len()).expect("bounded fixture artifact length");
-    let mut bundle = PerformanceMaterializationBundle {
+    let mut bundle = Bundle {
         schema_id: PERFORMANCE_MANTLE_BUNDLE_SCHEMA.to_string(),
         bundle_ref: String::new(),
         kind,
-        consumer: crate::wasm_component::ComponentConsumer::Actor,
+        consumer: crate::wasm_component::Consumer::Actor,
         source_component_ref,
         artifact_ref,
         artifact_length,
@@ -64,25 +60,24 @@ pub fn fixture_bundle(
         locally_produced_transform: false,
     };
     bundle.mantle_stage_receipt_refs.sort();
-    bundle.bundle_ref = performance_materialization_bundle_ref(&bundle);
+    bundle.bundle_ref = bundle_ref(&bundle);
     bundle
 }
 
 pub fn fixture_materialized(
-    profile: &PerformanceProfile,
-    kind: PerformanceArtifactKind,
+    profile: &Profile,
+    kind: ArtifactKind,
     artifact_bytes: &[u8],
     source_component_ref: String,
-) -> (BenchmarkSuite, PerformanceMaterializationBundle, MaterializedPerformanceArtifact) {
+) -> (BenchmarkSuite, Bundle, MaterializedArtifact) {
     let bundle = fixture_bundle(kind, artifact_bytes, source_component_ref);
     let mut suite = profile.fast.clone();
     suite.materialization_bundle_refs = vec![bundle.bundle_ref.clone()];
-    let admitted = verify_performance_materialization(&suite, &bundle, artifact_bytes)
-        .expect("fixture performance materialization");
+    let admitted = verify(&suite, &bundle, artifact_bytes).expect("fixture performance materialization");
     (suite, bundle, admitted)
 }
 
-pub fn fixture_host(suite: &BenchmarkSuite, materialized: &MaterializedPerformanceArtifact) -> BenchmarkHostFacts {
+pub fn fixture_host(suite: &BenchmarkSuite, materialized: &MaterializedArtifact) -> BenchmarkHostFacts {
     BenchmarkHostFacts {
         target: materialized.target.clone(),
         host_class_ref: suite.host_class_ref.clone(),
@@ -92,7 +87,7 @@ pub fn fixture_host(suite: &BenchmarkSuite, materialized: &MaterializedPerforman
 }
 
 pub fn phase_samples(counts: [u64; FIXTURE_SAMPLE_COUNT]) -> Vec<PhaseSamples> {
-    PerformancePhase::ALL
+    Phase::ALL
         .into_iter()
         .map(|phase| PhaseSamples {
             phase,
@@ -100,7 +95,7 @@ pub fn phase_samples(counts: [u64; FIXTURE_SAMPLE_COUNT]) -> Vec<PhaseSamples> {
             samples: counts
                 .iter()
                 .enumerate()
-                .map(|(iteration, count)| PerformanceSample {
+                .map(|(iteration, count)| Sample {
                     process: 0,
                     iteration: u32::try_from(iteration).expect("fixture iteration index"),
                     count: *count,
@@ -111,9 +106,9 @@ pub fn phase_samples(counts: [u64; FIXTURE_SAMPLE_COUNT]) -> Vec<PhaseSamples> {
 }
 
 pub fn fixture_run(
-    profile: &PerformanceProfile,
+    profile: &Profile,
     suite: &BenchmarkSuite,
-    materialized: &MaterializedPerformanceArtifact,
+    materialized: &MaterializedArtifact,
     counts: [u64; FIXTURE_SAMPLE_COUNT],
 ) -> BenchmarkRun {
     build_benchmark_run(BenchmarkRunInput {

@@ -67,7 +67,7 @@ impl ReplicaHistory {
 }
 
 #[derive(Debug)]
-pub struct ChaosControlObservationLedger {
+pub struct ChaosControlObservation {
     observation_mode: super::ChaosControlObservationMode,
     max_replicas: usize,
     max_dropped_events: u64,
@@ -76,7 +76,7 @@ pub struct ChaosControlObservationLedger {
     duplicates_suppressed: u64,
 }
 
-impl ChaosControlObservationLedger {
+impl ChaosControlObservation {
     pub fn new(observation_mode: super::ChaosControlObservationMode) -> Self {
         Self {
             observation_mode,
@@ -109,7 +109,7 @@ impl ChaosControlObservationLedger {
         crate::preserves_rail::validate_content_ref(&observation.prior_digest)?;
         crate::preserves_rail::validate_content_ref(&observation.next_digest)?;
         if !self.replicas.contains_key(&observation.replica_ref) && self.replicas.len() >= self.max_replicas {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "ChaosControl observation ledger replica bound exceeded",
             ));
         }
@@ -158,7 +158,7 @@ impl ChaosControlObservationLedger {
             let gap = observation.command_index - (highest + 1);
             let next_dropped = current_dropped.saturating_add(gap);
             if next_dropped > self.max_dropped_events {
-                return Err(crate::error::MoltenError::invalid_harness(
+                return Err(crate::error::Failure::invalid_harness(
                     "ChaosControl dropped-event accounting bound exceeded",
                 ));
             }

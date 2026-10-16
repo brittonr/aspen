@@ -29,14 +29,14 @@ pub(super) fn run(command: super::Top) -> Outcome<()> {
 }
 
 fn read_bytes(path: &std::path::Path) -> Outcome<Vec<u8>> {
-    std::fs::read(path).map_err(molten::error::MoltenError::from)
+    std::fs::read(path).map_err(molten::error::Failure::from)
 }
 
 fn write_bytes(path: &std::path::Path, bytes: &[u8]) -> Outcome<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(molten::error::MoltenError::from)?;
+        std::fs::create_dir_all(parent).map_err(molten::error::Failure::from)?;
     }
-    std::fs::write(path, bytes).map_err(molten::error::MoltenError::from)
+    std::fs::write(path, bytes).map_err(molten::error::Failure::from)
 }
 
 fn emit_named_receipt(path: Option<&FilePath>, label: &str, receipt: &preserves::IOValue) -> Outcome<()> {
@@ -53,7 +53,7 @@ fn emit_named_receipt(path: Option<&FilePath>, label: &str, receipt: &preserves:
 }
 
 fn wrong_handler(name: &'static str) -> Outcome<()> {
-    Err(molten::error::MoltenError::invalid_harness(format!(
+    Err(molten::error::Failure::invalid_harness(format!(
         "chunk {name} handler received a mismatched command"
     )))
 }

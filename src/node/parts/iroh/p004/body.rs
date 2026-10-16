@@ -176,7 +176,7 @@ fn validate_status(value: &str, allowed: &[&str], label: &str) -> crate::error::
     if allowed.iter().any(|allowed| allowed == &value) {
         Ok(())
     } else {
-        Err(crate::error::MoltenError::invalid_harness(format!("unsupported {label} {value}")))
+        Err(crate::error::Failure::invalid_harness(format!("unsupported {label} {value}")))
     }
 }
 
@@ -216,7 +216,7 @@ fn collect_ref_diagnostics(
 fn validate_optional_ref(value: Option<&str>, label: &str) -> crate::error::Result<()> {
     if let Some(reference) = value {
         crate::preserves_rail::validate_content_ref(reference).map_err(|error| {
-            crate::error::MoltenError::invalid_harness(format!("invalid {label} ref {reference}: {error}"))
+            crate::error::Failure::invalid_harness(format!("invalid {label} ref {reference}: {error}"))
         })?;
     }
     Ok(())
@@ -245,7 +245,7 @@ fn validate_bounded_value_count(actual: usize, maximum: usize, label: &str) -> c
     if actual <= maximum {
         Ok(())
     } else {
-        Err(crate::error::MoltenError::invalid_harness(format!(
+        Err(crate::error::Failure::invalid_harness(format!(
             "{label} count {actual} exceeds bound {maximum}"
         )))
     }

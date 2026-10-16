@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "b3sum",
+    ".cairn/changes/fix-node-shutdown-admission/tasks.md",
+    ".cairn/changes/fix-node-shutdown-admission/design.md",
+    ".cairn/changes/fix-node-shutdown-admission/proposal.md",
+    ".cairn/changes/fix-node-shutdown-admission/metadata.json",
+    ".cairn/changes/fix-node-shutdown-admission/evidence/2026-10-16-acceptance.json",
+    ".cairn/changes/fix-node-shutdown-admission/evidence/verification.md",
+    ".cairn/changes/fix-node-shutdown-admission/specs/node-runtime/spec.md"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T17:01:58.313666+00:00",
+  "elapsed_seconds": 0.002,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "5261deb7e76eb8f023589613049610a89b15f19c019c2532645459c3a4cea7a2  .cairn/changes/fix-node-shutdown-admission/tasks.md\nce23b94782b171012125b208b2c828cba70f2bd63cb829d1db33bfae637ef5de  .cairn/changes/fix-node-shutdown-admission/design.md\na4e5d1fb71b87fa4f5afb3d3662d6c874fd23c951a2499e30d7a87c21c7b8e39  .cairn/changes/fix-node-shutdown-admission/proposal.md\ndf8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db  .cairn/changes/fix-node-shutdown-admission/metadata.json\n28cbb2a4ef8c7526925df89512afebe170fda1722cb8be3a111bedbe5955dadd  .cairn/changes/fix-node-shutdown-admission/evidence/2026-10-16-acceptance.json\na3b8b29f0d8e45479be0e0c96748c261dc19d0e2a2d4fef966e21d7581a3a53d  .cairn/changes/fix-node-shutdown-admission/evidence/verification.md\ne6a57d7d058e6efb23fe28ddfb6eed1743b206aa3449169e23229521d5687d23  .cairn/changes/fix-node-shutdown-admission/specs/node-runtime/spec.md\n",
+  "stderr": ""
+}

@@ -1,6 +1,6 @@
 type IoValue = preserves::IOValue;
 type Result<T> = crate::error::Result<T>;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 
 const CLAIM_SELECTOR_SCHEMA: &str = "molten.claim-authority.subject-selector.v1";
 const AUTHORITY_CLAIM_SCHEMA: &str = "molten.claim-authority.claim.v1";
@@ -33,7 +33,7 @@ const MAX_DIAGNOSTICS: usize = 512;
 const MAX_CAVEATS: usize = 128;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClaimSubjectSelector {
+pub struct SubjectSelector {
     pub selector_kind: String,
     pub selector_value: String,
     pub subject_kind: String,
@@ -43,7 +43,7 @@ pub struct ClaimSubjectSelector {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AuthorityClaim {
+pub struct Statement {
     pub issuer_ref: String,
     pub holder_ref: String,
     pub session_ref: String,
@@ -61,9 +61,9 @@ pub struct AuthorityClaim {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClaimAdmissionInput {
-    pub selector: ClaimSubjectSelector,
-    pub claim: AuthorityClaim,
+pub struct AdmissionInput {
+    pub selector: SubjectSelector,
+    pub claim: Statement,
     pub at_tick: u64,
     pub capability_admission: Option<crate::capability_tokens::CapabilityAdmissionReceipt>,
     pub ucan_verification_refs: Vec<String>,
@@ -79,7 +79,7 @@ pub struct ClaimAdmissionInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClaimAdmission {
+pub struct Admission {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub claim_ref: String,
@@ -89,8 +89,8 @@ pub struct ClaimAdmission {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClaimUseInput {
-    pub admission: ClaimAdmission,
+pub struct UseInput {
+    pub admission: Admission,
     pub required_selector_ref: String,
     pub required_claim_kind: String,
     pub subject_ref: String,
@@ -101,7 +101,7 @@ pub struct ClaimUseInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClaimUseDecision {
+pub struct UseDecision {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub value: IoValue,
@@ -109,18 +109,18 @@ pub struct ClaimUseDecision {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PeerClaimDiagnosticInput {
+pub struct PeerDiagnosticInput {
     pub peer_ref: String,
     pub bootstrap_ref: Option<String>,
     pub session_ref: Option<String>,
     pub transport_refs: Vec<String>,
-    pub claim_admission: Option<ClaimAdmission>,
+    pub claim_admission: Option<Admission>,
     pub claim_kind: String,
     pub selector_ref: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PeerClaimDiagnostic {
+pub struct PeerDiagnostic {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub value: IoValue,
@@ -128,7 +128,7 @@ pub struct PeerClaimDiagnostic {
 }
 
 // r[impl molten.claim_authority.subject_selectors]
-pub fn claim_subject_selector_value(selector: &ClaimSubjectSelector) -> Result<IoValue> {
+pub fn subject_selector_value(selector: &SubjectSelector) -> Result<IoValue> {
     validate_selector(selector)?;
     Ok(record("claim-subject-selector-v1", vec![
         string(CLAIM_SELECTOR_SCHEMA),
@@ -143,8 +143,8 @@ pub fn claim_subject_selector_value(selector: &ClaimSubjectSelector) -> Result<I
 }
 
 // r[impl molten.claim_authority.claim_records]
-pub fn authority_claim_value(claim: &AuthorityClaim) -> Result<IoValue> {
-    validate_claim(claim)?;
+pub fn value(claim: &Statement) -> Result<IoValue> {
+    validate(claim)?;
     Ok(record("authority-claim-v1", vec![
         string(AUTHORITY_CLAIM_SCHEMA),
         field_string("issuer", &claim.issuer_ref),
@@ -177,7 +177,7 @@ pub struct RequestInput<'a> {
 }
 
 // r[impl molten.claim_authority.capability_profile]
-pub fn claim_capability_request(input: RequestInput<'_>) -> Result<crate::capability_tokens::CapabilityRequest> {
+pub fn capability_request(input: RequestInput<'_>) -> Result<crate::capability_tokens::CapabilityRequest> {
     let RequestInput {
         holder_ref,
         session_ref,
@@ -213,13 +213,13 @@ pub fn claim_capability_request(input: RequestInput<'_>) -> Result<crate::capabi
 // r[impl molten.claim_authority.claim_records]
 // r[impl molten.claim_authority.no_parallel_trust]
 // r[impl molten.claim_authority.peer_session_context]
-pub fn admit_authority_claim(input: &ClaimAdmissionInput) -> Result<ClaimAdmission> {
-    let selector_value = claim_subject_selector_value(&input.selector)?;
+pub fn admit(input: &AdmissionInput) -> Result<Admission> {
+    let selector_value = subject_selector_value(&input.selector)?;
     let selector_ref = canonical_hash(&selector_value)?;
     if input.claim.subject_selector_ref != selector_ref {
-        return denied_claim_admission(input, selector_ref, vec!["claim-selector-ref-mismatch".to_string()]);
+        return denied_admission(input, selector_ref, vec!["claim-selector-ref-mismatch".to_string()]);
     }
-    let claim_value = authority_claim_value(&input.claim)?;
+    let claim_value = value(&input.claim)?;
     let claim_ref = canonical_hash(&claim_value)?;
     let mut diagnostics = admission_diagnostics(input, &selector_ref)?;
     diagnostics.sort();
@@ -230,9 +230,9 @@ pub fn admit_authority_claim(input: &ClaimAdmissionInput) -> Result<ClaimAdmissi
     } else {
         DECISION_DENY
     };
-    let admission_value = claim_admission_value(input, decision, &diagnostics, &selector_ref, &claim_ref)?;
+    let admission_value = admission_value(input, decision, &diagnostics, &selector_ref, &claim_ref)?;
     let receipt_ref = canonical_hash(&admission_value)?;
-    Ok(ClaimAdmission {
+    Ok(Admission {
         decision: decision.to_string(),
         diagnostics,
         claim_ref,

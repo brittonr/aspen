@@ -1,0 +1,7 @@
+{
+  "attempt": "10/20",
+  "target": "Correct the one-line provider formatting defect, pass final formatting/UI/native checks, and publish only the reviewed provider cohort.",
+  "prior_attempt": "9/20",
+  "unchanged_authorization": "Validate, review, commit and publish only the reviewed provider cohort; then perform coordinated immutable consumer pin adoption. No Molten remote push.",
+  "status": "entered before formatting correction; no provider publication or consumer pin yet"
+}

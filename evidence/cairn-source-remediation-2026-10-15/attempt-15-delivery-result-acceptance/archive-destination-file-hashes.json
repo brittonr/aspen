@@ -1,0 +1,22 @@
+{
+  "argv": [
+    "b3sum",
+    ".cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/design.md",
+    ".cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/evidence/2026-10-15-gate-design.json",
+    ".cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/evidence/2026-10-15-gate-proposal.json",
+    ".cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/evidence/2026-10-15-gate-tasks.json",
+    ".cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/evidence/2026-10-15-verification.md",
+    ".cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/evidence/2026-10-16-acceptance.json",
+    ".cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/metadata.json",
+    ".cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/proposal.md",
+    ".cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/specs/delivery/spec.md",
+    ".cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/tasks.md"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T17:40:05.800539+00:00",
+  "elapsed_seconds": 0.002,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "1269f844fbe8d0ef08c79f9840acc0ffa04419c2c8e21122402c5e433ef5da99  .cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/design.md\n48c7867a7e1948276b17e1b9891c678bc01a23374f2538c002bdbf47e8756b49  .cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/evidence/2026-10-15-gate-design.json\nd18ce3c48e8f7cfaa1408d0edd1c60cb323e07f658610658172d56e675a0d233  .cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/evidence/2026-10-15-gate-proposal.json\n5876baca36f09ea0d903112a8885f0016de2c29681280f57020d12ddd597d6b5  .cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/evidence/2026-10-15-gate-tasks.json\n44b431fd9ea8252913b9e8f996ec3476826117b359ef2b3c808cde240d8d4483  .cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/evidence/2026-10-15-verification.md\n4058f5d939019ee6da9fdc00a159b69a314d934330afcac9bc013d9a515042ac  .cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/evidence/2026-10-16-acceptance.json\ndf8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db  .cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/metadata.json\n39f138814c3ab9c31d280145560a062b3da350af87db337e7066245badd8c4c8  .cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/proposal.md\nc8ca771cb9698125b6276ea28c775931cdbc6f9c9742ad153863b01c4c10dcbb  .cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/specs/delivery/spec.md\ne30ffe4764265ee2f86af94e1faa2bf030e09f22e1c8580fd1c9789388e6f2ff  .cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/tasks.md\n",
+  "stderr": ""
+}

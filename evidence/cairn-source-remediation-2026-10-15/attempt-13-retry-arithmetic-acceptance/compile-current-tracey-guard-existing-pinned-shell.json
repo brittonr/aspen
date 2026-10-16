@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "/nix/store/c7qcfda063a1d95gfprn2xlhcvrpp1fl-rust-default-1.98.0-nightly-2026-05-26/bin/rustc",
+    "--edition=2024",
+    "tools/tracey/inherited_debt_guard.rs",
+    "-O",
+    "-o",
+    "/tmp/molten-current-tracey-guard-uynhmg2f/tracey-guard"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T16:47:33.029780+00:00",
+  "elapsed_seconds": 0.469,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": ""
+}

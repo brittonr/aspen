@@ -4,18 +4,18 @@ use artifact_auth_core::ArtifactStatement;
 use molten_core::fabric_crypto_identity::KeyPurpose;
 use molten_core::world_head::WorldHeadPolicyRef;
 use molten_core::world_head::WorldHeadSignerRole;
-use molten_node_host::node_state::NodeStateNamespace;
+use molten_node_host::node_state::Scope;
 
 use super::WorldHeadPortError;
 use super::WorldHeadSignatureCarrier;
 use super::WorldHeadSignerIdentity;
 use super::WorldHeadSigningPort;
-use crate::fabric_crypto_identity::IrohEd25519FileAdapter;
-use crate::fabric_crypto_identity::canonical_crypto_profile;
+use crate::fabric_crypto_identity::IrohEd25519;
 use crate::fabric_crypto_identity::production_ed25519_profile;
+use crate::fabric_crypto_identity::profile;
 
 pub struct LocalWorldHeadSigningAdapter<'a> {
-    adapter: IrohEd25519FileAdapter<'a>,
+    adapter: IrohEd25519<'a>,
     producer_id: String,
     allow_generation: bool,
 }
@@ -30,7 +30,7 @@ pub struct SignerIdentity {
 }
 
 impl<'a> LocalWorldHeadSigningAdapter<'a> {
-    pub fn new(namespace: &'a NodeStateNamespace, identity: SignerIdentity) -> crate::error::Result<Self> {
+    pub fn new(namespace: &'a Scope, identity: SignerIdentity) -> crate::error::Result<Self> {
         let SignerIdentity {
             profile_ref,
             entropy_profile_ref,
@@ -38,8 +38,8 @@ impl<'a> LocalWorldHeadSigningAdapter<'a> {
             producer_id,
             allow_generation,
         } = identity;
-        let profile = canonical_crypto_profile(&production_ed25519_profile(profile_ref, entropy_profile_ref))?;
-        let adapter = IrohEd25519FileAdapter::new(namespace, profile, backend_ref)?;
+        let profile = profile(&production_ed25519_profile(profile_ref, entropy_profile_ref))?;
+        let adapter = IrohEd25519::new(namespace, profile, backend_ref)?;
         Ok(Self {
             adapter,
             producer_id,
@@ -98,6 +98,6 @@ impl WorldHeadSigningPort for LocalWorldHeadSigningAdapter<'_> {
     }
 }
 
-fn signing_error(error: crate::error::MoltenError) -> WorldHeadPortError {
+fn signing_error(error: crate::error::Failure) -> WorldHeadPortError {
     WorldHeadPortError::new("world-head-signing", error.to_string())
 }

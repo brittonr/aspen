@@ -23,7 +23,7 @@ The [runner constants](../../../src/cluster_harness/parts/runner/p000/body.rs) o
 | `failure-repro-bundle.preserves` | Optional unindexed failure companion | Denied-run finalizer: sealed diagnostic bundle |
 | `failure-repro-verification.preserves` | Optional unindexed failure companion | Failure-bundle verifier: separate diagnostic verification |
 
-The eight required indexed kinds are fixture metadata, command plan, local plan, local executable run, lifecycle, drift summary, cleanup, and parent. That required-kind list is owned by the [pure core assessment](../../../crates/molten-core/src/cluster_harness.rs). It is a directory-level minimum, not a declaration that eight files alone prove a complete two-node execution.
+The eight required indexed kinds are fixture metadata, command plan, local plan, local executable run, lifecycle, drift summary, cleanup, and parent. That required-kind list is owned by the [pure core assessment](../../../crates/molten-core/src/cluster/harness.rs). It is a directory-level minimum, not a declaration that eight files alone prove a complete two-node execution.
 
 ## Index record format
 
@@ -80,4 +80,4 @@ Only the index, verification companion, and two named failure companions are exe
 - [Filename and runner input definitions](../../../src/cluster_harness/parts/runner/p000/body.rs)
 - [Node artifact capture](../../../src/cluster_harness/parts/runner/p003/body.rs)
 - [Index serialization and observations](../../../src/cluster_harness/parts/runner/p004/body.rs)
-- [Core required kinds and assessment](../../../crates/molten-core/src/cluster_harness.rs)
+- [Core required kinds and assessment](../../../crates/molten-core/src/cluster/harness.rs)

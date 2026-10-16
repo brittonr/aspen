@@ -12,14 +12,20 @@ const EFFECT_INPUT_SCHEMA: &str = "molten.fixture.native.effect-input.v1";
 const EFFECT_OUTPUT_SCHEMA: &str = "molten.fixture.native.effect-output.v1";
 
 fn main() {
-    if let Err(error) = run() {
+    // Capture the child's actual environment through the argument/environment admission
+    // boundary. Fixed argv preserves this stdin-protocol fixture's ignored-args behavior.
+    let inputs = clap::Command::new("molten-native-extension-fixture")
+        .arg(clap::Arg::new("inherited-home").env("HOME").value_parser(clap::builder::OsStringValueParser::new()))
+        .get_matches_from(["molten-native-extension-fixture"]);
+    let has_inherited_home = inputs.get_one::<std::ffi::OsString>("inherited-home").is_some();
+    if let Err(error) = run(has_inherited_home) {
         eprintln!("native extension fixture failed: {error}");
         std::process::exit(1);
     }
 }
 
-fn run() -> Result<(), String> {
-    if std::env::var_os("HOME").is_some() {
+fn run(has_inherited_home: bool) -> Result<(), String> {
+    if has_inherited_home {
         return Err("inherited HOME is not admitted".to_string());
     }
     let mut bytes = Vec::new();
@@ -31,7 +37,7 @@ fn run() -> Result<(), String> {
     if byte_count > MAX_CALLBACK_BYTES {
         return Err("callback input exceeds fixture bound".to_string());
     }
-    let envelope = molten::system_extension::decode_native_callback_envelope(
+    let envelope = molten::system_extension::decode_callback_envelope(
         &bytes,
         MAX_CALLBACK_BYTES,
         MAX_VALUE_BYTES,
@@ -60,16 +66,15 @@ fn run() -> Result<(), String> {
     } else {
         Vec::new()
     };
-    let output = molten::system_extension::encode_native_callback_outcome(
-        &molten::system_extension::NativeMaterializedCallbackOutcome {
+    let output =
+        molten::system_extension::encode_callback_outcome(&molten::system_extension::MaterializedCallbackOutcome {
             outputs: vec![output],
             effects,
             state: Some(state),
             checkpoint,
             health: molten::system_extension::HealthState::Healthy,
-        },
-    )
-    .map_err(|error| error.to_string())?;
+        })
+        .map_err(|error| error.to_string())?;
     std::io::stdout().write_all(&output).map_err(|error| format!("write callback output: {error}"))?;
     std::io::stdout().flush().map_err(|error| format!("flush callback output: {error}"))
 }
@@ -77,12 +82,12 @@ fn run() -> Result<(), String> {
 /// The one fabric-port effect a request callback emits, keyed by the invocation's event ref and
 /// generation.
 fn effect_request(
-    envelope: &molten::system_extension::DecodedNativeCallbackEnvelope,
-) -> Result<molten::system_extension::NativeMaterializedEffectRequest, String> {
+    envelope: &molten::system_extension::DecodedCallbackEnvelope,
+) -> Result<molten::system_extension::MaterializedEffectRequest, String> {
     let request = value(format!("effect\0{}", envelope.invocation.event_ref).into_bytes());
     let accounted_bytes =
         u64::try_from(request.bytes.len()).map_err(|_| "effect request byte count does not fit u64".to_string())?;
-    Ok(molten::system_extension::NativeMaterializedEffectRequest {
+    Ok(molten::system_extension::MaterializedEffectRequest {
         effect: molten::system_extension::TypedEffectRequest {
             target: molten::system_extension::EffectTarget::FabricPort(molten::fabric::FabricPortKey {
                 port_id: EFFECT_PORT_ID.to_string(),

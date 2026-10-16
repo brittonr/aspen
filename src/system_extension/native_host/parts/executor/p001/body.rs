@@ -1,5 +1,5 @@
 
-impl<P, J> NativeProcessSystemExtensionExecutor<P, J>
+impl<P, J> Process<P, J>
 where
     P: ExecutionFabricPort,
     J: NativeHostJournal,
@@ -7,24 +7,24 @@ where
     pub fn new(
         port: P,
         journal: std::sync::Arc<std::sync::Mutex<J>>,
-        values: SharedNativeCallbackValuePort,
+        values: SharedCallbackValuePort,
         instance: std::sync::Arc<std::sync::Mutex<NativeInstanceRecord>>,
-        template: NativeExecutionTemplate,
-    ) -> Result<Self, NativeExecutorError> {
+        template: ExecutionTemplate,
+    ) -> Result<Self, CallbackFailure> {
         if template.request.profile_ref != port.profile().profile.descriptor.profile_ref {
-            return Err(NativeExecutorError::Admission(
+            return Err(CallbackFailure::Admission(
                 "native executor request profile differs from the selected execution port".to_string(),
             ));
         }
         if template.executable.executable.execution_profile_ref != template.host_profile.profile.execution_profile_ref {
-            return Err(NativeExecutorError::Admission(
+            return Err(CallbackFailure::Admission(
                 "native executable and host execution profiles differ".to_string(),
             ));
         }
         if template.admitted.manifest_ref() != template.executable.executable.manifest_ref
             || template.admitted.manifest_ref() != template.context.manifest_ref
         {
-            return Err(NativeExecutorError::Admission(
+            return Err(CallbackFailure::Admission(
                 "native executor manifest snapshot differs from executable or callback context".to_string(),
             ));
         }
@@ -39,7 +39,7 @@ where
         })
     }
 
-    pub fn observations(&self) -> &[NativeInvocationObservation] {
+    pub fn observations(&self) -> &[InvocationObservation] {
         &self.observations
     }
 
@@ -51,7 +51,7 @@ where
         &self.journal
     }
 
-    pub fn values(&self) -> &SharedNativeCallbackValuePort {
+    pub fn values(&self) -> &SharedCallbackValuePort {
         &self.values
     }
 
@@ -61,7 +61,7 @@ where
 
     // r[impl molten.system_extension.native_host.value_intent]
     // r[impl molten.system_extension.native_host.value_materialization]
-    pub fn invoke_native(&mut self, invocation: &CallbackInvocation) -> Result<CallbackOutcome, NativeExecutorError> {
+    pub fn invoke_native(&mut self, invocation: &CallbackInvocation) -> Result<CallbackOutcome, CallbackFailure> {
         let context = self.callback_context()?;
         let operation_ref = callback_operation_ref(&context, invocation);
         self.commit_callback_intent(&operation_ref, invocation)?;
@@ -84,10 +84,10 @@ where
                 return Err(error);
             }
         };
-        let envelope = canonical_native_callback_envelope(&context, invocation, &inputs)
-            .map_err(|error| NativeExecutorError::Wire(error.to_string()))?;
+        let envelope = canonical_callback_envelope(&context, invocation, &inputs)
+            .map_err(|error| CallbackFailure::Wire(error.to_string()))?;
         let maximum_values = self.maximum_materialized_values()?;
-        if let Err(error) = decode_native_callback_envelope(
+        if let Err(error) = decode_callback_envelope(
             &envelope.bytes,
             self.template.host_profile.profile.max_callback_input_bytes,
             self.template.host_profile.profile.max_materialized_value_bytes,
@@ -103,7 +103,7 @@ where
                 lifecycle: ExecutionLifecycleState::FailedBeforeStart,
                 diagnostic_code: Some(CALLBACK_WIRE_CODE),
             })?;
-            return Err(NativeExecutorError::Wire(error.to_string()));
+            return Err(CallbackFailure::Wire(error.to_string()));
         }
         let request = self.execution_request(&operation_ref, &envelope)?;
         let resolved = self.resolved_context(&envelope);
@@ -121,10 +121,10 @@ where
         parent_ref: &str,
         role: &str,
         value: &NativeCallbackValue,
-    ) -> Result<NativeValuePublicationReceipt, NativeExecutorError> {
-        admit_native_callback_value(value, self.template.host_profile.profile.max_materialized_value_bytes)
-            .map_err(NativeExecutorError::Value)?;
-        let generation = self.instance.lock().map_err(|_| NativeExecutorError::StatePoisoned)?.lifecycle.generation;
+    ) -> Result<ValuePublicationReceipt, CallbackFailure> {
+        admit_callback_value(value, self.template.host_profile.profile.max_materialized_value_bytes)
+            .map_err(CallbackFailure::Value)?;
+        let generation = self.instance.lock().map_err(|_| CallbackFailure::StatePoisoned)?.lifecycle.generation;
         let operation_ref = native_identity_ref(&[
             "native-value-publication-operation-v2",
             parent_ref,
@@ -142,14 +142,14 @@ where
             terminal_ref: None,
             is_retry_permitted: false,
         };
-        let current = self.instance.lock().map_err(|_| NativeExecutorError::StatePoisoned)?.clone();
+        let current = self.instance.lock().map_err(|_| CallbackFailure::StatePoisoned)?.clone();
         let next = commit_native_operation_intent(&self.template.host_profile, &current, operation)
-            .map_err(|issues| NativeExecutorError::Admission(format!("value publication intent denied: {issues:?}")))?;
+            .map_err(|issues| CallbackFailure::Admission(format!("value publication intent denied: {issues:?}")))?;
         self.replace_instance(next)?;
         let publication = self
             .values
             .lock()
-            .map_err(|_| NativeExecutorError::StatePoisoned)?
+            .map_err(|_| CallbackFailure::StatePoisoned)?
             .publish(value, self.template.host_profile.profile.max_materialized_value_bytes);
         match publication {
             Ok(receipt) => {
@@ -170,50 +170,50 @@ where
                 let terminal_ref = (!failure.may_have_published())
                     .then(|| native_identity_ref(&["native-value-publication-rejection-v2", &operation_ref]));
                 self.observe_operation(&operation_ref, state, terminal_ref)?;
-                Err(NativeExecutorError::Value(failure))
+                Err(CallbackFailure::Value(failure))
             }
         }
     }
 
-    fn callback_context(&self) -> Result<NativeCallbackContext, NativeExecutorError> {
-        let instance = self.instance.lock().map_err(|_| NativeExecutorError::StatePoisoned)?;
+    fn callback_context(&self) -> Result<CallbackContext, CallbackFailure> {
+        let instance = self.instance.lock().map_err(|_| CallbackFailure::StatePoisoned)?;
         let mut context = self.template.context.clone();
         context.state_ref.clone_from(&instance.state_ref);
         Ok(context)
     }
 
-    fn maximum_materialized_values(&self) -> Result<u64, NativeExecutorError> {
+    fn maximum_materialized_values(&self) -> Result<u64, CallbackFailure> {
         u64::try_from(self.template.host_profile.profile.max_materialized_values)
-            .map_err(|_| NativeExecutorError::Admission("native materialized value count does not fit u64".to_string()))
+            .map_err(|_| CallbackFailure::Admission("native materialized value count does not fit u64".to_string()))
     }
 
     fn materialize_inputs(
         &self,
-        context: &NativeCallbackContext,
+        context: &CallbackContext,
         invocation: &CallbackInvocation,
-    ) -> Result<NativeCallbackInputs, NativeExecutorError> {
-        let mut values = self.values.lock().map_err(|_| NativeExecutorError::StatePoisoned)?;
+    ) -> Result<CallbackInputs, CallbackFailure> {
+        let mut values = self.values.lock().map_err(|_| CallbackFailure::StatePoisoned)?;
         let maximum = self.template.host_profile.profile.max_materialized_value_bytes;
         let payload = invocation
             .payload_ref
             .as_deref()
             .map(|value_ref| values.materialize(value_ref, maximum))
             .transpose()
-            .map_err(NativeExecutorError::Value)?;
+            .map_err(CallbackFailure::Value)?;
         let state = context
             .state_ref
             .as_deref()
             .map(|value_ref| values.materialize(value_ref, maximum))
             .transpose()
-            .map_err(NativeExecutorError::Value)?;
-        Ok(NativeCallbackInputs { payload, state })
+            .map_err(CallbackFailure::Value)?;
+        Ok(CallbackInputs { payload, state })
     }
 
     fn commit_callback_intent(
         &mut self,
         operation_ref: &str,
         invocation: &CallbackInvocation,
-    ) -> Result<(), NativeExecutorError> {
+    ) -> Result<(), CallbackFailure> {
         let operation = NativeOperationRecord {
             schema: NATIVE_OPERATION_SCHEMA.to_string(),
             operation_ref: operation_ref.to_string(),
@@ -224,17 +224,17 @@ where
             terminal_ref: None,
             is_retry_permitted: false,
         };
-        let current = self.instance.lock().map_err(|_| NativeExecutorError::StatePoisoned)?.clone();
+        let current = self.instance.lock().map_err(|_| CallbackFailure::StatePoisoned)?.clone();
         let next = commit_native_operation_intent(&self.template.host_profile, &current, operation)
-            .map_err(|issues| NativeExecutorError::Admission(format!("callback intent denied: {issues:?}")))?;
+            .map_err(|issues| CallbackFailure::Admission(format!("callback intent denied: {issues:?}")))?;
         self.replace_instance(next)
     }
 
     fn execution_request(
         &self,
         operation_ref: &str,
-        envelope: &CanonicalNativeCallbackEnvelope,
-    ) -> Result<CanonicalExecutionRequest, NativeExecutorError> {
+        envelope: &CanonicalCallbackEnvelope,
+    ) -> Result<Request, CallbackFailure> {
         let mut request = self.template.request.clone();
         request.operation_ref = operation_ref.to_string();
         request.idempotency_ref = native_identity_ref(&[
@@ -266,17 +266,17 @@ where
         authority.service_id = request.service_id.clone();
         authority.generation = request.generation;
         authority.profile_ref = request.profile_ref.clone();
-        canonical_admit_execution_request(
+        admit_request(
             self.port.profile(),
             &request,
             &authority,
             self.template.resources,
             request.generation,
         )
-        .map_err(|error| NativeExecutorError::Admission(error.to_string()))
+        .map_err(|error| CallbackFailure::Admission(error.to_string()))
     }
 
-    fn resolved_context(&self, envelope: &CanonicalNativeCallbackEnvelope) -> ResolvedExecutionContext {
+    fn resolved_context(&self, envelope: &CanonicalCallbackEnvelope) -> ResolvedContext {
         let mut resolved = self.template.resolved.clone();
         resolved.executable_artifact_ref = self.template.executable.executable.executable_ref.clone();
         resolved.executable_identity_ref = self.template.executable.executable.executable_bytes_ref.clone();

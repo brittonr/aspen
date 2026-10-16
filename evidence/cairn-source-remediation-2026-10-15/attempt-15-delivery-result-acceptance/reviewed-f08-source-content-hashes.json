@@ -1,0 +1,30 @@
+{
+  "argv": [
+    "b3sum",
+    "src/lib.rs",
+    "src/parts/lib/p000/body.rs",
+    "src/coordination_delivery/mod.rs",
+    "src/coordination_delivery/service.rs",
+    "src/coordination_delivery/store.rs",
+    "src/coordination_delivery/ports.rs",
+    "src/coordination_delivery/records.rs",
+    "crates/molten-core/src/coordination_delivery/transition.rs",
+    "crates/molten-core/src/coordination_delivery/transition/support.rs",
+    "crates/molten-core/src/coordination_delivery/transition/completion.rs",
+    "crates/molten-core/src/coordination_delivery/identity.rs",
+    "src/coordination_delivery/tests/local.rs",
+    "src/coordination_delivery/tests/contracts/records.rs",
+    "crates/molten-core/src/coordination_delivery/tests.rs",
+    "Cargo.toml",
+    "Cargo.lock",
+    "flake.lock",
+    "rust-toolchain.toml"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T17:35:52.137845+00:00",
+  "elapsed_seconds": 0.008,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "9301b7ad54517f0b9a12c6efcdc01229fa8d7b38f3fee4438e876f53fee423f0  src/lib.rs\nb672beb11760c0d01c3911e983caca9abc0886512c26951ed309c74075a4d055  src/parts/lib/p000/body.rs\n65101d3a1f712643607fe735e4b3e138bf500d159f595b7755214aa6a1aeb026  src/coordination_delivery/mod.rs\nd5d4e640d3c3caae06776e3b18d31673dcadcf6d29a1c4a93d6de728996c40de  src/coordination_delivery/service.rs\nc4573df052073d03138d7d9ecf17babec284f4b696a55f87f1e3e9c255836b95  src/coordination_delivery/store.rs\n379137ab74ed09b0cbbd8d7b2eeacc0bbcfba2db39f523fa72f4a79c24d5bc89  src/coordination_delivery/ports.rs\n8fda4c6a8e698376efd6197e64de9fed2ba7f0e7b5242af1bba83858f16d75b2  src/coordination_delivery/records.rs\n0360963fefb6ef58c1ec93a4e70d34c23261fcc1e6ddec527e0362935e1acdf8  crates/molten-core/src/coordination_delivery/transition.rs\na0b81d01017000f844e5563fe8b047d47d8fb39d725bbfc5f9520e62aafcca65  crates/molten-core/src/coordination_delivery/transition/support.rs\nb9a3b1f4b04715974efc6cb20b971b881577a704ce1b8118f141da99b2e55c8f  crates/molten-core/src/coordination_delivery/transition/completion.rs\n49bcfe50e6e726cf4c85256aaba7349c3fe90bf314bcc547685d8b6d8ccc2488  crates/molten-core/src/coordination_delivery/identity.rs\n1466671a8674d8ea96f91e6617b9152ff3514a6c58a49522591cb50065da63ea  src/coordination_delivery/tests/local.rs\nc97dffc1480fc40b7d648d5cc107238dccb03a1a973464d342b3f3340912f65b  src/coordination_delivery/tests/contracts/records.rs\n95a79e68699941f244f3409c5382667c415b21d5df0fe9b1ca2cb087bed69a53  crates/molten-core/src/coordination_delivery/tests.rs\n4b85786c50122f352fcb87245634161779836dfb8e04e74e860cb5d2ec7109e7  Cargo.toml\nbbb09703b2b48f60488c9aa065b372c6d25aa01996072888e1fba6eeb9152e3e  Cargo.lock\n7dd741eefe7bd4adc08e999c0616367e51e6fb48402f343d466baa48933b144b  flake.lock\nf5429ff242fc2f826040428afd03560be5fbe595ee5e64acc53793ce41113d0b  rust-toolchain.toml\n",
+  "stderr": ""
+}

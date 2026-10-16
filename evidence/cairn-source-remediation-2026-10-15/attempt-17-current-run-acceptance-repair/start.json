@@ -1,0 +1,14 @@
+{
+  "attempt": "17/20",
+  "change": "bind-shutdown-observations-to-current-node-run",
+  "target": "Remove two avoidable cloned one-element slices reported by required denied-warning Clippy, then finish full F14 acceptance without weakening gates.",
+  "before_product_edits": true,
+  "previous_attempt": "16/20",
+  "previous_acceptance_failure": "../attempt-16-current-run-shutdown-observation/ordered-default-clippy.json",
+  "planned_source_changes": [
+    "src/node/parts/runtime/tests/m000/p003/body.rs:68",
+    "src/node/parts/runtime/tests/m000/p005/body.rs:9"
+  ],
+  "remaining_active_changes": 48,
+  "molten_remote_publication_authorized": false
+}

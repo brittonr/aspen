@@ -1,0 +1,10 @@
+{
+  "attempt": "16/20",
+  "change": "bind-shutdown-observations-to-current-node-run",
+  "target": "Separate historical duplicate shutdown provenance from current-run lifecycle observations, including equal startup content, without repeated effects or weakened F01 admission.",
+  "known_before": "Current loop sets has_stopped from any passing shutdown control receipt; current design requires a distinct run binding and pure active/stopped/unresolved classification.",
+  "before_product_edits": true,
+  "remaining_active_changes": 48,
+  "molten_remote_publication_authorized": false,
+  "environment": "The current immutable dev-shell derivation was freshly re-resolved offline after the earlier stale store path was invalid; required new source gates must still run, not reuse pre-edit execution."
+}

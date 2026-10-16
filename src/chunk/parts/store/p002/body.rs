@@ -1,5 +1,5 @@
 
-fn finish_put(input: FinalizeInput<'_>) -> Result<ChunkStorePut> {
+fn finish_put(input: FinalizeInput<'_>) -> Result<ChunkPut> {
     let Written {
         values,
         refs,
@@ -27,7 +27,7 @@ fn finish_put(input: FinalizeInput<'_>) -> Result<ChunkStorePut> {
         parse_canonical_bytes,
     )?;
     let receipt_chunk_refs = refs.iter().map(|chunk| chunk.chunk_ref.clone()).collect::<Vec<_>>();
-    let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
+    let receipt_value = receipt_value(ChunkReceiptValueInput {
         operation: "manifest-create",
         decision: "pass",
         manifest_ref: Some(&manifest_ref),
@@ -51,7 +51,7 @@ fn finish_put(input: FinalizeInput<'_>) -> Result<ChunkStorePut> {
     });
     index_put(input.root, &manifest_value, &refs, &receipt_value)?;
     note_reuse(input.root, &manifest_ref, &dedup_refs)?;
-    Ok(ChunkStorePut {
+    Ok(ChunkPut {
         manifest_ref,
         object_kind: input.object_kind.to_string(),
         total_len: input.total_len,
@@ -233,12 +233,12 @@ pub fn parse_chunk_ref_value(value: &IoValue, expected_chunk_size: u64) -> Resul
     })
 }
 
-pub fn verify_manifest(root: &Path, manifest_ref: &str) -> Result<ChunkStoreVerify> {
+pub fn verify_manifest(root: &Path, manifest_ref: &str) -> Result<ChunkVerify> {
     let root = open_capability_chunk_root(root)?;
     verify_manifest_with_root(&root, manifest_ref)
 }
 
-pub fn verify_manifest_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) -> Result<ChunkStoreVerify> {
+pub fn verify_manifest_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) -> Result<ChunkVerify> {
     let manifest = match read_manifest_with_root(root, manifest_ref) {
         Ok(manifest) => manifest,
         Err(error) => {
@@ -246,7 +246,7 @@ pub fn verify_manifest_with_root(root: &CapabilityChunkRoot, manifest_ref: &str)
                 ("manifest-ref-binding", "fail"),
                 ("deny-missing-or-invalid-manifest", "pass"),
             ]);
-            store_receipt(root, &receipt_value)?;
+            receipt(root, &receipt_value)?;
             return Err(error);
         }
     };
@@ -257,7 +257,7 @@ pub fn verify_manifest_with_root(root: &CapabilityChunkRoot, manifest_ref: &str)
                 ("transform-mode", "fail"),
                 ("deny-unsupported-transform", "pass"),
             ]);
-        store_receipt(root, &receipt_value)?;
+        receipt(root, &receipt_value)?;
         return Err(MoltenError::invalid_harness(message));
     }
     if let Err(error) = verify_manifest_chunks(root, &manifest) {
@@ -266,10 +266,10 @@ pub fn verify_manifest_with_root(root: &CapabilityChunkRoot, manifest_ref: &str)
                 ("chunk-hash-length", "fail"),
                 ("deny-corrupt-or-missing-chunk", "pass"),
             ]);
-        store_receipt(root, &receipt_value)?;
+        receipt(root, &receipt_value)?;
         return Err(error);
     }
-    let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
+    let receipt_value = receipt_value(ChunkReceiptValueInput {
         operation: "chunk-verify",
         decision: "pass",
         manifest_ref: Some(&manifest.manifest_ref),
@@ -284,7 +284,7 @@ pub fn verify_manifest_with_root(root: &CapabilityChunkRoot, manifest_ref: &str)
         details: vec![record("total-len", vec![u64_value(manifest.total_len)])],
     });
     index_manifest_available(root, &manifest, &receipt_value)?;
-    Ok(ChunkStoreVerify {
+    Ok(ChunkVerify {
         manifest_ref: manifest.manifest_ref,
         total_len: manifest.total_len,
         chunk_refs,

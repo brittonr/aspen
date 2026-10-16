@@ -5,7 +5,7 @@ fn ensure_store_tables(root: &std::path::Path) -> Result<redb::Database> {
 }
 
 fn ensure_store_tables_with_root(root: &crate::local_store::DeliveryStoreRoot) -> Result<redb::Database> {
-    let path = crate::local_store::LocalStorePath::parse(STORE_FILE)?;
+    let path = crate::local_store::Locator::parse(STORE_FILE)?;
     let file = root.root().open_database_file(&path)?;
     let db = redb::Database::builder().create_file(file).map_err(store_error)?;
     let write_txn = db.begin_write().map_err(store_error)?;

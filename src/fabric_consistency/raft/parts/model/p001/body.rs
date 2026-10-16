@@ -49,7 +49,7 @@ pub enum ReplicaEffect {
     },
     ReadOutcome {
         request_ref: String,
-        mode: crate::fabric_consistency::ConsistencyReadMode,
+        mode: crate::fabric_consistency::ReadMode,
         disposition: ReadDisposition,
         observed_index: u64,
     },

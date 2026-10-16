@@ -2,7 +2,7 @@
 /// Runs the node phases, then captures node artifacts, cleans up, and records the cleanup,
 /// lifecycle, drift, and local executable run artifacts in that order.
 fn record_run_evidence(
-    input: &ClusterHarnessExecutionInput,
+    input: &ExecutionInput,
     mut planned: PlannedRun,
 ) -> crate::error::Result<RunEvidence> {
     let mut phases = run_lifecycle_phases(input, &planned.plan, &mut planned.artifacts)?;
@@ -68,8 +68,8 @@ fn run_cleanup_input(
     phases: &LifecyclePhases,
     child_process_refs: Vec<String>,
     cleanup_observation: CleanupObservation,
-) -> ClusterHarnessCleanupInput {
-    ClusterHarnessCleanupInput {
+) -> CleanupInput {
+    CleanupInput {
         child_process_refs,
         stopped_node_ids: if phases.is_stop_passed {
             planned.plan.nodes.iter().rev().map(|node| node.node_id.clone()).collect()
@@ -92,7 +92,7 @@ fn run_cleanup_input(
 fn local_executable_run(
     planned: &PlannedRun,
     node_artifacts: &[NodeArtifacts],
-    cleanup_input: &ClusterHarnessCleanupInput,
+    cleanup_input: &CleanupInput,
     cleanup_ref: &str,
     phases: &LifecyclePhases,
 ) -> crate::error::Result<crate::multinode_core::LocalMultiprocessExecutableRunReceipt> {
@@ -120,9 +120,9 @@ fn local_executable_run(
 /// Builds and records the parent receipt, writes the artifacts, run index, and verification, and
 /// writes a failure repro bundle when the parent or the verification denies.
 fn finish_run(
-    input: &ClusterHarnessExecutionInput,
+    input: &ExecutionInput,
     evidence: RunEvidence,
-) -> crate::error::Result<ClusterHarnessExecution> {
+) -> crate::error::Result<Execution> {
     let RunEvidence {
         plan: mut planned,
         child_executions,
@@ -142,7 +142,7 @@ fn finish_run(
     let observed_kinds = observed_artifact_kinds(&planned.artifacts);
     diagnostics.sort();
     diagnostics.dedup();
-    let parent = build_cluster_harness_parent(&ClusterHarnessParentInput {
+    let parent = build_parent(&ParentInput {
         fixture_ref: planned.fixture_ref.clone(),
         command_plan_ref: planned.command_plan_ref.clone(),
         local_plan_ref: local_plan_ref.clone(),
@@ -184,7 +184,7 @@ fn finish_run(
     } else {
         molten_core::cluster_harness::RUN_DIRECTORY_DENY
     };
-    Ok(ClusterHarnessExecution {
+    Ok(Execution {
         decision: decision.to_string(),
         parent_ref: parent.receipt_ref,
         verification_ref: verification.verification_ref,
@@ -232,33 +232,33 @@ fn sealed_failure_bundle_defaults() -> crate::multinode_core::FailureReproBundle
         private_attachment_refs: Vec::new(),
         reveal_receipt_refs: Vec::new(),
         claimed_payload_ref: None,
-        caveats: cluster_harness_caveats(),
+        caveats: caveats(),
     }
 }
 
 /// Writes the prepared artifacts, appends their log entries, and writes the run index and its
 /// verification.
 fn write_run_index_and_verification(
-    input: &ClusterHarnessExecutionInput,
+    input: &ExecutionInput,
     artifacts: Vec<PreparedArtifact>,
-    plan: &crate::cluster::ClusterPlan,
-) -> crate::error::Result<ClusterRunVerificationReceipt> {
+    plan: &crate::cluster::Plan,
+) -> crate::error::Result<RunVerificationReceipt> {
     write_prepared_artifacts(&input.output_directory, &artifacts)?;
     let entries =
         append_log_entries(&input.output_directory, artifacts.into_iter().map(|item| item.entry).collect(), plan)?;
     let index_text = render_run_index(&entries);
     let index_path = input.output_directory.join(RUN_INDEX_FILE);
-    std::fs::write(&index_path, &index_text).map_err(crate::error::MoltenError::from)?;
+    std::fs::write(&index_path, &index_text).map_err(crate::error::Failure::from)?;
     let index_ref = content_ref_for_text(TEXT_ARTIFACT_DOMAIN, &index_text);
     let assessment = assess_indexed_run_directory(&input.output_directory, &entries);
-    let verification = cluster_run_verification_value(&index_ref, &assessment)?;
+    let verification = run_verification_value(&index_ref, &assessment)?;
     write_preserves_path(&input.output_directory.join(VERIFICATION_FILE), &verification.value)?;
     Ok(verification)
 }
 
 /// Builds, verifies, and writes the sealed diagnostic failure repro bundle, returning its ref.
 fn write_failure_bundle(
-    input: &ClusterHarnessExecutionInput,
+    input: &ExecutionInput,
     failure_input: &crate::multinode_core::FailureReproBundleInput,
 ) -> crate::error::Result<String> {
     let bundle = crate::multinode_core::build_failure_repro_bundle(failure_input)?;

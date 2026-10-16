@@ -5,7 +5,7 @@
 async fn verify_located_chunk<'a>(
     client: &iroh::Endpoint,
     input: StreamGetInput<'a>,
-    locator: &LiveChunkLocator,
+    locator: &ChunkLocator,
     state: &ContentPartialState,
 ) -> crate::error::Result<std::result::Result<VerifiedChunk<'a>, ChunkFailure>> {
     let StreamGetInput {
@@ -47,10 +47,10 @@ async fn verify_located_chunk<'a>(
         observed_content_ref: crate::chunk_store::hash_chunk(
             &bytes,
             usize::try_from(publication.manifest.chunk_size)
-                .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh chunk size does not fit usize"))?,
+                .map_err(|_| crate::error::Failure::invalid_harness("live Iroh chunk size does not fit usize"))?,
         ),
         observed_length: u64::try_from(bytes.len())
-            .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh chunk length does not fit u64"))?,
+            .map_err(|_| crate::error::Failure::invalid_harness("live Iroh chunk length does not fit u64"))?,
     };
     match apply_chunk_observation(profile, &publication.manifest, state, &observation) {
         Ok(next_state) => Ok(Ok(VerifiedChunk {
@@ -63,15 +63,15 @@ async fn verify_located_chunk<'a>(
     }
 }
 
-fn finish_live_execution(
+fn finish_execution(
     profile: &ContentAdapterProfile,
-    publication: &LiveIrohPublication,
+    publication: &Publication,
     state: ContentPartialState,
-    events: Vec<CanonicalContentArtifact<ContentEvent>>,
+    events: Vec<Artifact<ContentEvent>>,
     verified_chunks: Vec<VerifiedChunkPayload>,
-) -> crate::error::Result<LiveIrohContentExecution> {
-    Ok(LiveIrohContentExecution {
-        state: canonical_partial_state(profile, &publication.manifest, &state)?,
+) -> crate::error::Result<RemoteExecution> {
+    Ok(RemoteExecution {
+        state: partial_state(profile, &publication.manifest, &state)?,
         events,
         verified_chunks,
         backend_hint_ref: publication.backend_hint_ref.clone(),
@@ -84,13 +84,13 @@ fn terminal_event(
     manifest: &ContentManifestDescriptor,
     state: &ContentPartialState,
     chunk_ref: Option<String>,
-) -> crate::error::Result<CanonicalContentArtifact<ContentEvent>> {
+) -> crate::error::Result<Artifact<ContentEvent>> {
     let sequence = state
         .last_sequence
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("terminal live Iroh state lacks event sequence"))?;
-    canonical_content_event(
+        .ok_or_else(|| crate::error::Failure::invalid_harness("terminal live Iroh state lacks event sequence"))?;
+    bind_event(
         profile,
-        &content_event(EventInput {
+        &event(EventInput {
             command,
             sequence,
             terminal: state.terminal,
@@ -114,8 +114,8 @@ fn verification_failure(issues: &[ContentIssue]) -> ContentFailure {
     }
 }
 
-fn transition_error(issue: ContentIssue) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(format!("live Iroh transition denied: {issue:?}"))
+fn transition_error(issue: ContentIssue) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("live Iroh transition denied: {issue:?}"))
 }
 
 async fn receive_bounded_blob(
@@ -124,7 +124,7 @@ async fn receive_bounded_blob(
     maximum_bytes: u64,
 ) -> crate::error::Result<Vec<u8>> {
     let maximum = usize::try_from(maximum_bytes)
-        .map_err(|_| crate::error::MoltenError::invalid_harness("live Iroh receive bound does not fit usize"))?;
+        .map_err(|_| crate::error::Failure::invalid_harness("live Iroh receive bound does not fit usize"))?;
     let mut bytes = Vec::new();
     let mut progress = iroh_blobs::get::request::get_blob(connection, hash);
     loop {
@@ -133,9 +133,9 @@ async fn receive_bounded_blob(
                 let next_length = bytes
                     .len()
                     .checked_add(leaf.data.len())
-                    .ok_or_else(|| crate::error::MoltenError::invalid_harness("live Iroh receive length overflow"))?;
+                    .ok_or_else(|| crate::error::Failure::invalid_harness("live Iroh receive length overflow"))?;
                 if next_length > maximum {
-                    return Err(crate::error::MoltenError::invalid_harness(
+                    return Err(crate::error::Failure::invalid_harness(
                         "live Iroh blob exceeds admitted chunk bound",
                     ));
                 }
@@ -144,12 +144,12 @@ async fn receive_bounded_blob(
             Some(iroh_blobs::get::request::GetBlobItem::Item(bao_tree::io::BaoContentItem::Parent(_))) => {}
             Some(iroh_blobs::get::request::GetBlobItem::Done(_)) => break,
             Some(iroh_blobs::get::request::GetBlobItem::Error(error)) => {
-                return Err(crate::error::MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "live Iroh blob stream failed: {error}"
                 )));
             }
             None => {
-                return Err(crate::error::MoltenError::invalid_harness(
+                return Err(crate::error::Failure::invalid_harness(
                     "live Iroh blob stream ended without terminal item",
                 ));
             }
@@ -162,9 +162,9 @@ fn next_sequence(state: &ContentPartialState) -> crate::error::Result<u64> {
     state
         .last_sequence
         .map_or(Some(0), |sequence| sequence.checked_add(1))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("live Iroh event sequence overflow"))
+        .ok_or_else(|| crate::error::Failure::invalid_harness("live Iroh event sequence overflow"))
 }
 
-fn iroh_error(error: impl std::fmt::Display) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(format!("live Iroh content adapter failed: {error}"))
+fn error(error: impl std::fmt::Display) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("live Iroh content adapter failed: {error}"))
 }

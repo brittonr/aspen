@@ -54,7 +54,7 @@ repository dependencies before the patch is considered landed.
 ### Keep the pilot unenrolled
 
 The pilot keeps its own CLI, policy file, and database. It does not register in
-`SystemExtensionHost`, join the root Cargo workspace, change the ALPN registry, or emit
+`system_extension::Dispatcher`, join the root Cargo workspace, change the ALPN registry, or emit
 admission receipts. Its operator policy is a named standalone deployment profile, not a
 substitute for Basalt/Cairn admission. Any later enrollment is its own change.
 

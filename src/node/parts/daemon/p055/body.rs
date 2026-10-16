@@ -1,19 +1,19 @@
 
-fn control_service_heartbeat_path(heartbeat_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_service_heartbeat_path(heartbeat_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_SERVICE_DIR,
         &format!("{}.service-heartbeat.preserves", ref_file_stem(heartbeat_ref)),
     )
 }
 
-fn control_service_run_receipt_path(service_run_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_service_run_receipt_path(service_run_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_SERVICE_DIR,
         &format!("{}.service-run-receipt.preserves", ref_file_stem(service_run_ref)),
     )
 }
 
-fn control_supervisor_receipt_path(receipt_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_supervisor_receipt_path(receipt_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_SERVICE_DIR,
         &format!("{}.supervisor-receipt.preserves", ref_file_stem(receipt_ref)),
@@ -21,7 +21,7 @@ fn control_supervisor_receipt_path(receipt_ref: &str) -> Result<crate::node_stat
 }
 
 fn write_supervisor_receipt(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::DirectoryRoot,
     input: &SupervisorReceiptValueInput<'_>,
 ) -> Result<String> {
     let value = supervisor_receipt_value(input)?;
@@ -31,14 +31,14 @@ fn write_supervisor_receipt(
     Ok(receipt_ref)
 }
 
-fn control_ingress_envelope_path(topic: &str, envelope_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_ingress_envelope_path(topic: &str, envelope_ref: &str) -> Result<crate::node_state::RelativePath> {
     fixed_node_path(CONTROL_INGRESS_DIR)?
         .join_segment(topic)?
         .join_segment(&format!("{}.envelope.preserves", ref_file_stem(envelope_ref)))
 }
 
 fn write_ingress_envelope_and_verify(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::DirectoryRoot,
     topic: &str,
     envelope: &ControlIngressEnvelope,
 ) -> Result<()> {
@@ -55,7 +55,7 @@ fn write_ingress_envelope_and_verify(
     Ok(())
 }
 
-fn control_ingress_receipt_path(envelope_ref: &str, phase: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_ingress_receipt_path(envelope_ref: &str, phase: &str) -> Result<crate::node_state::RelativePath> {
     fixed_node_path(CONTROL_INGRESS_DIR)?
         .join("receipts")?
         .join_segment(&format!("{}.{}.receipt.preserves", ref_file_stem(envelope_ref), phase))

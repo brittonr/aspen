@@ -9,7 +9,7 @@ use super::WORLD_REPLAY_DIVERGENCE_RECORD;
 use super::WORLD_REPLAY_PLAN_RECORD;
 use super::WORLD_TRANSITION_TRACE_RECORD;
 use super::support::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 // r[impl molten.world_replay.transition_chain]
@@ -67,7 +67,7 @@ pub fn canonical_world_replay_plan(plan: &WorldReplayPlan) -> Result<CanonicalWo
 pub fn canonical_world_replay_divergence(divergence: &WorldReplayDivergence) -> Result<CanonicalWorldReplayRecord> {
     let identity = identify_world_replay_divergence(divergence).map_err(core_issue)?;
     if divergence.schema != WORLD_REPLAY_DIVERGENCE_SCHEMA || divergence.divergence_ref != identity {
-        return Err(MoltenError::invalid_harness("world replay divergence identity is invalid"));
+        return Err(Failure::invalid_harness("world replay divergence identity is invalid"));
     }
     canonical(
         "divergence",

@@ -88,6 +88,63 @@
     }
 
     #[test]
+    fn historical_shutdown_duplicate_preserves_current_active_run() {
+        // r[verify molten.audit_f14.duplicate_scope]
+        // r[verify molten.audit_f14.current_binding]
+        // r[verify molten.audit_f14.preserve_state]
+        // r[verify molten.audit_f14.validation]
+        let root = crate::test_support::process_workspace("node-shutdown-current-run")
+            .expect("create isolated node workspace");
+        init_local(&InitInput {
+            state_root: &root,
+            node_id: "node:shutdown-current-run",
+        })
+        .expect("init node");
+        run_local(&RunInput { state_root: &root }).expect("start first run");
+        let request = shutdown_request().expect("shutdown request");
+        submit_control_request(&ControlSubmitInput {
+            state_root: &root,
+            request_value: &request.value,
+        })
+        .expect("queue first shutdown");
+        let first = run_control_loop(&ControlLoopInput {
+            state_root: &root,
+            max_requests: 1,
+        })
+        .expect("shutdown first run");
+        assert!(first.has_stopped);
+        let adapter_paths = crate::node_runtime::REQUIRED_RUNTIME_ADAPTERS
+            .iter()
+            .map(|name| root.join(format!("receipts/adapter-shutdown-{name}.preserves")))
+            .collect::<Vec<_>>();
+        let adapter_receipts = adapter_paths
+            .iter()
+            .map(|path| std::fs::read(path).expect("first shutdown adapter receipt"))
+            .collect::<Vec<_>>();
+        run_local(&RunInput { state_root: &root }).expect("start second run");
+        let active_lock = std::fs::read(root.join(CONTROL_LOCK_FILE)).expect("second run lock");
+        submit_control_request(&ControlSubmitInput {
+            state_root: &root,
+            request_value: &request.value,
+        })
+        .expect("queue exact historical request");
+        let duplicate = run_control_loop(&ControlLoopInput {
+            state_root: &root,
+            max_requests: 1,
+        })
+        .expect("process historical duplicate");
+        assert!(!duplicate.has_stopped, "historical shutdown cannot stop the restarted run");
+        assert_eq!(duplicate.processed_request_refs, vec![request.request_ref]);
+        assert_eq!(duplicate.dispatch_receipt_refs, first.dispatch_receipt_refs);
+        assert_eq!(std::fs::read(root.join(CONTROL_LOCK_FILE)).expect("preserved active lock"), active_lock);
+        assert!(!root.join(SHUTDOWN_FILE).exists());
+        for (path, receipt) in adapter_paths.iter().zip(adapter_receipts.iter()) {
+            assert_eq!(&std::fs::read(path).expect("preserved shutdown adapter receipt"), receipt);
+        }
+        assert_eq!(status_local(&StatusInput { state_root: &root }).expect("current status").status, "running");
+    }
+
+    #[test]
     fn duplicate_request_with_conflicting_archive_fails_closed() {
         let root = temp_dir("node-control-duplicate-conflict");
         init_local(&InitInput {
@@ -107,7 +164,7 @@
             request_entry: Some(&submitted.inbox_entry),
         })
         .expect("dispatch status");
-        let state_root = crate::node_state::NodeStateRoot::open(&root).expect("open node state root");
+        let state_root = crate::node_state::DirectoryRoot::open(&root).expect("open node state root");
         write_preserves(
             &state_root,
             &control_outbox_request_path(&status_request.request_ref).expect("outbox request path"),

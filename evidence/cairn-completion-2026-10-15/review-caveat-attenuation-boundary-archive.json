@@ -1,0 +1,201 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: review-caveat-attenuation-boundary",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-10-15-review-caveat-attenuation-boundary"
+    }
+  ],
+  "blocked": false,
+  "change": "review-caveat-attenuation-boundary",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "d569e3616b8c002d582e71d5ac69c43f8642a754691b30ee82a97bf5d9bd7915",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "e5a53def4e1b054e7a59deb431383ab7777b037411e4f4c52a34d442bcc0783a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-15-review-caveat-attenuation-boundary/design.md"
+        },
+        {
+          "content_hash": "2a8002e3fe3d442594a2fbf77e2c7f83913bda201e15145f613a968adb1084d6",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-15-review-caveat-attenuation-boundary/evidence/2026-10-15-archive-preview.json"
+        },
+        {
+          "content_hash": "7d9144ef7844b34f2abcc9cfe3890b2b959ec310d241a12ed697cfa0a477281c",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-15-review-caveat-attenuation-boundary/evidence/2026-10-15-gate-design.json"
+        },
+        {
+          "content_hash": "1f81b1256a9ef0a6c361f065febc15f546a38f083a271199fa4fb71567cf02b6",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-15-review-caveat-attenuation-boundary/evidence/2026-10-15-gate-proposal.json"
+        },
+        {
+          "content_hash": "da35a0195b3338b3d0c9a6ec553922049a1a8479d95f9048021c29f858e3c1b3",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-15-review-caveat-attenuation-boundary/evidence/2026-10-15-gate-tasks.json"
+        },
+        {
+          "content_hash": "61bb90a0c1173b095c4de759e4b1d3de19787c670cc32c232d8f367c76f0df7f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-15-review-caveat-attenuation-boundary/evidence/2026-10-15-strict-validation.json"
+        },
+        {
+          "content_hash": "3b6f8221dd5e3e2062dce734ff92c5be719fbd7c7b4bd2019b18f00b9593dbd4",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-15-review-caveat-attenuation-boundary/evidence/2026-10-15-sync-execute.json"
+        },
+        {
+          "content_hash": "97a202d1b6a02f16466eba7b4f09dfc86d3741f4790e3e4ab3e056ede268178a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-15-review-caveat-attenuation-boundary/evidence/2026-10-15-sync-preview.json"
+        },
+        {
+          "content_hash": "4847e7834fdaafd98ecde6756284d89a7530c70680d00647cd0e3ecb66eaa1ee",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-15-review-caveat-attenuation-boundary/evidence/2026-10-15-verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-15-review-caveat-attenuation-boundary/metadata.json"
+        },
+        {
+          "content_hash": "bb4657fbbe7d75b548a63ecb70b339ee53294eacf967ac20cce210bcb124cbf6",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-15-review-caveat-attenuation-boundary/proposal.md"
+        },
+        {
+          "content_hash": "405bff2b7690ce9f12f167a227546116380c80bbe24f39a459e7da3f6a0a6f3d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-15-review-caveat-attenuation-boundary/specs/runtime-spine/spec.md"
+        },
+        {
+          "content_hash": "872998b3f37e40881d7d5d5a3d65a69c053c327c860147b908898cde9a299a97",
+          "exists": true,
+          "path": "./.cairn/archive/2026-10-15-review-caveat-attenuation-boundary/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/review-caveat-attenuation-boundary"
+        }
+      ],
+      "manifest_hash": "079a5b9ef7855a138cd65a197ff26fb28e8a43aeea9824057c682bd9633127af"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "e5a53def4e1b054e7a59deb431383ab7777b037411e4f4c52a34d442bcc0783a",
+          "exists": true,
+          "path": "./.cairn/changes/review-caveat-attenuation-boundary/design.md"
+        },
+        {
+          "content_hash": "2a8002e3fe3d442594a2fbf77e2c7f83913bda201e15145f613a968adb1084d6",
+          "exists": true,
+          "path": "./.cairn/changes/review-caveat-attenuation-boundary/evidence/2026-10-15-archive-preview.json"
+        },
+        {
+          "content_hash": "7d9144ef7844b34f2abcc9cfe3890b2b959ec310d241a12ed697cfa0a477281c",
+          "exists": true,
+          "path": "./.cairn/changes/review-caveat-attenuation-boundary/evidence/2026-10-15-gate-design.json"
+        },
+        {
+          "content_hash": "1f81b1256a9ef0a6c361f065febc15f546a38f083a271199fa4fb71567cf02b6",
+          "exists": true,
+          "path": "./.cairn/changes/review-caveat-attenuation-boundary/evidence/2026-10-15-gate-proposal.json"
+        },
+        {
+          "content_hash": "da35a0195b3338b3d0c9a6ec553922049a1a8479d95f9048021c29f858e3c1b3",
+          "exists": true,
+          "path": "./.cairn/changes/review-caveat-attenuation-boundary/evidence/2026-10-15-gate-tasks.json"
+        },
+        {
+          "content_hash": "61bb90a0c1173b095c4de759e4b1d3de19787c670cc32c232d8f367c76f0df7f",
+          "exists": true,
+          "path": "./.cairn/changes/review-caveat-attenuation-boundary/evidence/2026-10-15-strict-validation.json"
+        },
+        {
+          "content_hash": "3b6f8221dd5e3e2062dce734ff92c5be719fbd7c7b4bd2019b18f00b9593dbd4",
+          "exists": true,
+          "path": "./.cairn/changes/review-caveat-attenuation-boundary/evidence/2026-10-15-sync-execute.json"
+        },
+        {
+          "content_hash": "97a202d1b6a02f16466eba7b4f09dfc86d3741f4790e3e4ab3e056ede268178a",
+          "exists": true,
+          "path": "./.cairn/changes/review-caveat-attenuation-boundary/evidence/2026-10-15-sync-preview.json"
+        },
+        {
+          "content_hash": "4847e7834fdaafd98ecde6756284d89a7530c70680d00647cd0e3ecb66eaa1ee",
+          "exists": true,
+          "path": "./.cairn/changes/review-caveat-attenuation-boundary/evidence/2026-10-15-verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/review-caveat-attenuation-boundary/metadata.json"
+        },
+        {
+          "content_hash": "bb4657fbbe7d75b548a63ecb70b339ee53294eacf967ac20cce210bcb124cbf6",
+          "exists": true,
+          "path": "./.cairn/changes/review-caveat-attenuation-boundary/proposal.md"
+        },
+        {
+          "content_hash": "405bff2b7690ce9f12f167a227546116380c80bbe24f39a459e7da3f6a0a6f3d",
+          "exists": true,
+          "path": "./.cairn/changes/review-caveat-attenuation-boundary/specs/runtime-spine/spec.md"
+        },
+        {
+          "content_hash": "872998b3f37e40881d7d5d5a3d65a69c053c327c860147b908898cde9a299a97",
+          "exists": true,
+          "path": "./.cairn/changes/review-caveat-attenuation-boundary/tasks.md"
+        }
+      ],
+      "manifest_hash": "8998245139242640856672280c3916c43b097e20e760968d0af2b29c7131572e"
+    },
+    "kind": "archive",
+    "manifest_hash": "4710c2c94cc8768c22eec87438616ec8c0380af8d57fc2cc91414ace73808115"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "5d1d9fce3d7ce3485b97aee225a6a15d869a748836494c7780af03a609062854",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "6fa2d353b07ba6d3516a09da9b7550e22a31afefaa7b0dbcf0b190ab550dcb13",
+  "reasons": [],
+  "receipt_hash": "e5906b2e09d232432504b5fecb09160ea75a1d1a172cba5b6b3371bb2099069e",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

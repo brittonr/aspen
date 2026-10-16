@@ -15,6 +15,7 @@ pub(super) const CAPACITY: u32 = 8;
 pub(super) const METADATA_BYTES: u32 = 32;
 pub(super) const QUEUE_ID: &str = "queue:delivery";
 pub(super) const ACTOR_ID: &str = "consumer-a";
+pub(super) const OTHER_ACTOR_ID: &str = "consumer-b";
 pub(super) const BLAKE3_HEX_LENGTH: usize = 64;
 
 pub(super) fn reference(hex: char) -> String {
@@ -71,8 +72,8 @@ pub(super) fn manifest(policy: &DeliveryPolicy) -> DeliveryManifest {
     }
 }
 
-pub(super) fn host_binding(manifest: &DeliveryManifest) -> DeliveryHostBindingFacts {
-    DeliveryHostBindingFacts {
+pub(super) fn host_binding(manifest: &DeliveryManifest) -> BindingFacts {
+    BindingFacts {
         schema: DELIVERY_HOST_BINDING_SCHEMA.to_string(),
         system_extension_manifest_ref: reference('9'),
         extension_id: manifest.extension_id.clone(),
@@ -142,15 +143,15 @@ pub(super) fn enqueue_request(manifest: &DeliveryManifest, operation_id: char) -
     })
 }
 
-pub(super) fn empty_expected() -> ExpectedDeliveryState {
-    ExpectedDeliveryState {
+pub(super) fn empty_expected() -> ExpectedState {
+    ExpectedState {
         state_ref: None,
         revision: INITIAL_DELIVERY_REVISION,
     }
 }
 
-pub(super) fn expected(published: &PublishedDeliveryState) -> ExpectedDeliveryState {
-    ExpectedDeliveryState {
+pub(super) fn expected(published: &PublishedState) -> ExpectedState {
+    ExpectedState {
         state_ref: Some(published.state_ref.clone()),
         revision: published.revision,
     }
@@ -165,7 +166,7 @@ pub(super) enum CommitMode {
 }
 
 pub(super) struct MemoryCommitPort {
-    pub(super) head: Option<PublishedDeliveryState>,
+    pub(super) head: Option<PublishedState>,
     pub(super) mode: CommitMode,
     pub(super) compare_calls: u32,
 }
@@ -181,35 +182,34 @@ impl MemoryCommitPort {
 }
 
 impl DeliveryCommitPort for MemoryCommitPort {
-    fn load(&self, _queue_id: &str) -> DeliveryPortResult<Option<PublishedDeliveryState>> {
+    fn load(&self, _queue_id: &str) -> PortResult<Option<PublishedState>> {
         Ok(self.head.clone())
     }
 
-    fn compare_and_commit(&mut self, request: &DeliveryCommitRequest) -> DeliveryPortResult<DeliveryCommitObservation> {
+    fn compare_and_commit(&mut self, request: &CommitRequest) -> PortResult<CommitObservation> {
         self.compare_calls += 1;
         match self.mode {
             CommitMode::Apply => {
                 self.head = Some(request.next.clone());
-                Ok(commit_observation(DeliveryCommitDisposition::Applied, Some(request.next.state_ref.clone())))
+                Ok(commit_observation(CommitDisposition::Applied, Some(request.next.state_ref.clone())))
             }
-            CommitMode::UnknownBefore => Err(DeliveryPortError::new("scripted-unknown", "unknown before apply", true)),
+            CommitMode::UnknownBefore => Err(PortError::new("scripted-unknown", "unknown before apply", true)),
             CommitMode::UnknownAfter => {
                 self.head = Some(request.next.clone());
-                Err(DeliveryPortError::new("scripted-unknown", "unknown after apply", true))
+                Err(PortError::new("scripted-unknown", "unknown after apply", true))
             }
-            CommitMode::Stale => Ok(commit_observation(
-                DeliveryCommitDisposition::Stale,
-                self.head.as_ref().map(|head| head.state_ref.clone()),
-            )),
+            CommitMode::Stale => {
+                Ok(commit_observation(CommitDisposition::Stale, self.head.as_ref().map(|head| head.state_ref.clone())))
+            }
         }
     }
 }
 
-fn commit_observation(disposition: DeliveryCommitDisposition, state_ref: Option<String>) -> DeliveryCommitObservation {
-    DeliveryCommitObservation {
+fn commit_observation(disposition: CommitDisposition, state_ref: Option<String>) -> CommitObservation {
+    CommitObservation {
         disposition,
         currentness: DeliveryCurrentness::Linearizable,
-        durability: DeliveryDurabilityOutcome::Durable,
+        durability: DurabilityOutcome::Durable,
         engine_epoch: ENGINE_EPOCH,
         observed_state_ref: state_ref,
     }
@@ -221,13 +221,13 @@ pub(super) struct MemoryTimerPort {
 }
 
 impl DeliveryTimerPort for MemoryTimerPort {
-    fn apply_timer_intents(&mut self, intents: &[DeliveryTimerIntent]) -> DeliveryPortResult<DeliveryTimerObservation> {
+    fn apply_timer_intents(&mut self, intents: &[DeliveryTimerIntent]) -> PortResult<TimerObservation> {
         let refs = intents.iter().map(|intent| intent.timer_id.clone()).collect::<Vec<_>>();
         if self.fail {
-            return Err(DeliveryPortError::new("scripted-timer-failure", "timer scheduling failed", false));
+            return Err(PortError::new("scripted-timer-failure", "timer scheduling failed", false));
         }
         self.observed.extend(refs.clone());
-        Ok(DeliveryTimerObservation {
+        Ok(TimerObservation {
             accepted_timer_refs: refs,
             failed_timer_refs: Vec::new(),
             outcome_unknown: false,
@@ -241,11 +241,11 @@ pub(super) struct MemoryStatusPort {
 }
 
 impl DeliveryStatusPort for MemoryStatusPort {
-    fn publish_status(&mut self, status: &DeliveryStatus) -> DeliveryPortResult<DeliveryStatusObservation> {
-        let status_ref = identify_canonical_delivery_status(status)
-            .map_err(|error| DeliveryPortError::new("status", error.to_string(), false))?;
+    fn publish_status(&mut self, status: &DeliveryStatus) -> PortResult<StatusObservation> {
+        let status_ref =
+            identify_canonical_status(status).map_err(|error| PortError::new("status", error.to_string(), false))?;
         self.status_refs.push(status_ref.clone());
-        Ok(DeliveryStatusObservation {
+        Ok(StatusObservation {
             published_status_ref: Some(status_ref),
             outcome_unknown: false,
         })
@@ -257,4 +257,24 @@ pub(super) fn timer_port(fail: bool) -> MemoryTimerPort {
         fail,
         observed: Vec::new(),
     }
+}
+
+pub(super) fn apply_current_request(
+    commit: &mut impl DeliveryCommitPort,
+    timers: &mut MemoryTimerPort,
+    statuses: &mut MemoryStatusPort,
+    manifest: &DeliveryManifest,
+    policy: &DeliveryPolicy,
+    request: &DeliveryRequest,
+) -> Outcome {
+    let published = commit.load(QUEUE_ID).expect("load current delivery state");
+    apply_request(commit, timers, statuses, &Request {
+        manifest,
+        policy,
+        time_profile: &time_profile(manifest),
+        host_binding: &host_binding(manifest),
+        expected: published.as_ref().map_or_else(empty_expected, expected),
+        request,
+    })
+    .expect("delivery service outcome")
 }

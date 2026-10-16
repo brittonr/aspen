@@ -16,7 +16,7 @@ fn assert_tracing_event_export_only(profile: &ObservationProfile) {
             class: LabelClass::Public,
         }],
     };
-    let canonical_event = canonical_observation_event(profile, &event, OBSERVED_TICK).expect("canonical event");
+    let canonical_event = observation_event(profile, &event, OBSERVED_TICK).expect("canonical event");
     let event_request = AdapterDeliveryRequest {
         operation_ref: test_ref("event-export-operation"),
         adapter_ref: tracing_adapter.adapter_ref.clone(),
@@ -26,7 +26,7 @@ fn assert_tracing_event_export_only(profile: &ObservationProfile) {
         deadline_tick: OBSERVED_TICK + ADAPTER_TIMEOUT_TICKS,
     };
     let mut event_sink = success_sink();
-    let tracing_event = execute_event_export(
+    let tracing_event = execute_event(
         AdapterDelivery {
             profile,
             adapter: &tracing_adapter,
@@ -40,7 +40,7 @@ fn assert_tracing_event_export_only(profile: &ObservationProfile) {
     .expect("tracing event export");
     assert_eq!(tracing_event.payload, tracing_event.payload_ref.as_bytes());
     assert!(
-        execute_event_export(
+        execute_event(
             AdapterDelivery {
                 profile,
                 adapter: &adapter(ObservationAdapterClass::Prometheus),
@@ -62,9 +62,9 @@ fn exporter_unavailable_backpressure_and_sink_failure_are_terminal_without_hidde
     let profile = profile();
     let snapshot = snapshot();
     let adapter = adapter(ObservationAdapterClass::Prometheus);
-    let request = export_request(&adapter, &snapshot, ExportFormat::Prometheus);
+    let request = export_request(&adapter, &snapshot, Format::Prometheus);
     let mut sink = success_sink();
-    let unavailable = execute_snapshot_export(
+    let unavailable = execute_snapshot(
         AdapterDelivery {
             profile: &profile,
             adapter: &adapter,
@@ -73,7 +73,7 @@ fn exporter_unavailable_backpressure_and_sink_failure_are_terminal_without_hidde
             last_export_tick: None,
         },
         &snapshot,
-        ExportFormat::Prometheus,
+        Format::Prometheus,
         &mut sink,
     )
     .expect("unavailable outcome");
@@ -81,7 +81,7 @@ fn exporter_unavailable_backpressure_and_sink_failure_are_terminal_without_hidde
     assert_eq!(sink.calls, 0);
 
     let mut pressure_sink = success_sink();
-    let pressure = execute_snapshot_export(
+    let pressure = execute_snapshot(
         AdapterDelivery {
             profile: &profile,
             adapter: &adapter,
@@ -90,7 +90,7 @@ fn exporter_unavailable_backpressure_and_sink_failure_are_terminal_without_hidde
             last_export_tick: None,
         },
         &snapshot,
-        ExportFormat::Prometheus,
+        Format::Prometheus,
         &mut pressure_sink,
     )
     .expect("backpressure outcome");
@@ -106,7 +106,7 @@ fn exporter_unavailable_backpressure_and_sink_failure_are_terminal_without_hidde
         },
         payload: Vec::new(),
     };
-    let failed = execute_snapshot_export(
+    let failed = execute_snapshot(
         AdapterDelivery {
             profile: &profile,
             adapter: &adapter,
@@ -115,7 +115,7 @@ fn exporter_unavailable_backpressure_and_sink_failure_are_terminal_without_hidde
             last_export_tick: None,
         },
         &snapshot,
-        ExportFormat::Prometheus,
+        Format::Prometheus,
         &mut failed_sink,
     )
     .expect("failed outcome");
@@ -124,8 +124,8 @@ fn exporter_unavailable_backpressure_and_sink_failure_are_terminal_without_hidde
     assert!(failed.payload.is_empty());
 }
 
-fn shell_state(available: bool, queued_bytes: u64) -> ExportShellState {
-    ExportShellState {
+fn shell_state(available: bool, queued_bytes: u64) -> ShellState {
+    ShellState {
         available,
         queued_bytes,
         cancelled: false,
@@ -163,42 +163,42 @@ fn capability_rooted_durable_scan_detects_corruption_partial_and_overbound_witho
     let original = b"durable-record";
     let workspace = temp_dir("observability-durable-scan");
     let namespace =
-        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Ledger, &workspace)
+        crate::node_state::Scope::open(crate::node_state::NamespaceKind::Ledger, &workspace)
             .expect("ledger namespace");
-    let path = crate::node_state::NodeStatePath::parse("record.bin").expect("record path");
+    let path = crate::node_state::RelativePath::parse("record.bin").expect("record path");
     namespace.write(&path, original).expect("write record");
     let plan = integrity_plan(original);
-    let binding = DurableScanBinding {
+    let binding = DurableBinding {
         item_ref: plan.targets[0].item_ref.clone(),
         path: path.clone(),
     };
-    let control = ScanShellControl {
+    let control = ShellControl {
         max_items: MAX_SCAN_ITEMS,
         max_item_bytes: MAX_SCAN_BYTES,
         cancelled: false,
     };
-    let passed = scan_durable_namespace(&profile(), &plan, &namespace, std::slice::from_ref(&binding), &control)
+    let passed = durable_namespace(&profile(), &plan, &namespace, std::slice::from_ref(&binding), &control)
         .expect("scan pass");
     assert_eq!(passed.result.artifact.decision, IntegrityDecision::Pass);
     assert_eq!(namespace.read(&path, MAX_SCAN_BYTES).expect("readback"), original);
 
     let corrupt = b"corrupt-record";
     namespace.write(&path, corrupt).expect("write corruption fixture");
-    let failed = scan_durable_namespace(&profile(), &plan, &namespace, std::slice::from_ref(&binding), &control)
+    let failed = durable_namespace(&profile(), &plan, &namespace, std::slice::from_ref(&binding), &control)
         .expect("scan corruption");
     assert_eq!(failed.result.artifact.decision, IntegrityDecision::Fail);
     assert!(failed.result.artifact.findings.iter().any(|finding| finding.class == FindingClass::ContentMismatch));
     assert_eq!(namespace.read(&path, MAX_SCAN_BYTES).expect("corrupt readback"), corrupt);
 
     let cancelled =
-        scan_durable_namespace(&profile(), &plan, &namespace, std::slice::from_ref(&binding), &ScanShellControl {
+        durable_namespace(&profile(), &plan, &namespace, std::slice::from_ref(&binding), &ShellControl {
             cancelled: true,
             ..control.clone()
         })
         .expect("cancelled scan");
     assert_eq!(cancelled.result.artifact.decision, IntegrityDecision::Cancelled);
 
-    let overbound = scan_durable_namespace(&profile(), &plan, &namespace, &[binding], &ScanShellControl {
+    let overbound = durable_namespace(&profile(), &plan, &namespace, &[binding], &ShellControl {
         max_item_bytes: 1,
         ..control
     })
@@ -245,7 +245,7 @@ fn content_verification_and_simulation_sources_share_read_only_scan_semantics() 
     let source = FixtureContentSource {
         values: std::collections::BTreeMap::from([(plan.targets[0].item_ref.clone(), bytes.to_vec())]),
     };
-    let execution = scan_content_source(&profile(), &plan, &source, &ScanShellControl {
+    let execution = content_source(&profile(), &plan, &source, &ShellControl {
         max_items: MAX_SCAN_ITEMS,
         max_item_bytes: MAX_SCAN_BYTES,
         cancelled: false,

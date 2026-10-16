@@ -6,30 +6,30 @@ pub const COMPONENT_INVOKE_EXPORT: &str = "invoke";
 pub const WASI_IMPORT_PREFIX: &str = "wasi:";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ComponentGrowthFacts {
+pub struct GrowthFacts {
     pub initial: u64,
     pub maximum: Option<u64>,
     pub strategy: super::model::GrowthStrategy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ComponentArtifactFacts {
-    pub artifact_kind: super::model::WasmArtifactKind,
+pub struct ArtifactFacts {
+    pub artifact_kind: super::model::ArtifactKind,
     pub declared_profile_id: String,
     pub declared_cohort_ref: String,
     pub declared_world: String,
     pub imports: Vec<String>,
     pub exports: Vec<String>,
     pub enabled_features: Vec<String>,
-    pub memory: ComponentGrowthFacts,
-    pub table: ComponentGrowthFacts,
+    pub memory: GrowthFacts,
+    pub table: GrowthFacts,
     pub instances: u64,
     pub memories: u64,
     pub tables: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ComponentImportGrant {
+pub struct ImportGrant {
     pub import: String,
     pub capability: String,
     pub policy_ref: String,
@@ -39,7 +39,7 @@ pub struct ComponentImportGrant {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ComponentExecutionPlan {
+pub struct ExecutionPlan {
     pub component_ref: String,
     pub wit_ref: String,
     pub bundle_ref: Option<String>,
@@ -54,35 +54,35 @@ pub struct ComponentExecutionPlan {
     pub authority_refs: Vec<String>,
     pub resource_refs: Vec<String>,
     pub recorded_effect_refs: Vec<String>,
-    pub materialization: super::evidence::materialization::MaterializationAdmission,
+    pub materialization: super::evidence::materialization::Admission,
 }
 
-pub fn plan_component_execution(
-    profile: &super::model::ComponentRuntimeProfile,
-    materialization: super::evidence::materialization::MaterializationAdmission,
+pub fn plan_execution(
+    profile: &super::model::RuntimeProfile,
+    materialization: super::evidence::materialization::Admission,
     manifest: &super::imports::surface::DeclaredManifest,
-    facts: &ComponentArtifactFacts,
-    grants: &[ComponentImportGrant],
-) -> super::model::ComponentResult<ComponentExecutionPlan> {
-    super::profile::validate_component_profile(profile)?;
+    facts: &ArtifactFacts,
+    grants: &[ImportGrant],
+) -> super::model::Result<ExecutionPlan> {
+    super::profile::validate_runtime(profile)?;
     admit_declared_import_surface(profile, &materialization, manifest, facts)?;
     let mut blockers = Vec::new();
     validate_identity(profile, &materialization, facts, &mut blockers);
-    features::validate_features(profile, facts, &mut blockers);
+    features::validate(profile, facts, &mut blockers);
     validate_resources(profile, facts, &mut blockers);
     if !blockers.is_empty() {
-        return Err(super::model::ComponentDenial::from_blockers(blockers));
+        return Err(super::model::Denial::from_blockers(blockers));
     }
     let grant_plan = validate_imports(profile, facts, grants, &mut blockers);
     if !blockers.is_empty() {
-        return Err(super::model::ComponentDenial::from_blockers(blockers));
+        return Err(super::model::Denial::from_blockers(blockers));
     }
     let runtime_configuration_ref = identity::runtime_configuration_ref(profile, facts, &materialization, &grant_plan);
-    Ok(ComponentExecutionPlan {
+    Ok(ExecutionPlan {
         component_ref: materialization.component_ref.clone(),
         wit_ref: materialization.wit_ref.clone(),
         bundle_ref: materialization.bundle_ref.clone(),
-        profile_ref: super::profile::component_profile_ref(profile),
+        profile_ref: super::profile::r#ref(profile),
         runtime_configuration_ref,
         imports: super::model::sorted_unique(&facts.imports),
         capabilities: grant_plan.capabilities,
@@ -98,16 +98,16 @@ pub fn plan_component_execution(
 }
 
 fn admit_declared_import_surface(
-    profile: &super::model::ComponentRuntimeProfile,
-    materialization: &super::evidence::materialization::MaterializationAdmission,
+    profile: &super::model::RuntimeProfile,
+    materialization: &super::evidence::materialization::Admission,
     manifest: &super::imports::surface::DeclaredManifest,
-    facts: &ComponentArtifactFacts,
-) -> super::model::ComponentResult<()> {
+    facts: &ArtifactFacts,
+) -> super::model::Result<()> {
     let world = super::imports::surface::declared_world(profile);
     let observation = super::imports::surface::facts_observation(&materialization.component_ref, facts);
     let admission = super::imports::surface::admit_declared(manifest, &world, &observation)?;
     if !admission.is_admitted {
-        return Err(super::model::ComponentDenial::from_blockers(admission.blockers));
+        return Err(super::model::Denial::from_blockers(admission.blockers));
     }
     Ok(())
 }
@@ -136,12 +136,12 @@ impl GrantPlan {
 }
 
 fn validate_identity(
-    profile: &super::model::ComponentRuntimeProfile,
-    materialization: &super::evidence::materialization::MaterializationAdmission,
-    facts: &ComponentArtifactFacts,
+    profile: &super::model::RuntimeProfile,
+    materialization: &super::evidence::materialization::Admission,
+    facts: &ArtifactFacts,
     blockers: &mut impl crate::bounded::VecSink<String>,
 ) {
-    if facts.artifact_kind != super::model::WasmArtifactKind::Component {
+    if facts.artifact_kind != super::model::ArtifactKind::Component {
         blockers.push_item("component execution plan received a core module".to_string());
     }
     if facts.declared_profile_id != super::profile::COMPONENT_PROFILE_ID
@@ -149,8 +149,8 @@ fn validate_identity(
     {
         blockers.push_item("component artifact declared profile is stale or mismatched".to_string());
     }
-    if facts.declared_cohort_ref != super::profile::component_profile_ref(profile)
-        || materialization.profile_ref != super::profile::component_profile_ref(profile)
+    if facts.declared_cohort_ref != super::profile::r#ref(profile)
+        || materialization.profile_ref != super::profile::r#ref(profile)
     {
         blockers.push_item("component artifact or materialization cohort identity is stale".to_string());
     }
@@ -166,8 +166,8 @@ fn validate_identity(
 }
 
 fn validate_resources(
-    profile: &super::model::ComponentRuntimeProfile,
-    facts: &ComponentArtifactFacts,
+    profile: &super::model::RuntimeProfile,
+    facts: &ArtifactFacts,
     blockers: &mut impl crate::bounded::VecSink<String>,
 ) {
     validate_fixed_growth("memory", &facts.memory, profile.resources.max_memory_bytes, blockers);
@@ -200,7 +200,7 @@ fn validate_collection_bound(
 
 fn validate_fixed_growth(
     label: &str,
-    facts: &ComponentGrowthFacts,
+    facts: &GrowthFacts,
     maximum: u64,
     blockers: &mut impl crate::bounded::VecSink<String>,
 ) {
@@ -213,9 +213,9 @@ fn validate_fixed_growth(
 }
 
 fn validate_imports(
-    profile: &super::model::ComponentRuntimeProfile,
-    facts: &ComponentArtifactFacts,
-    grants: &[ComponentImportGrant],
+    profile: &super::model::RuntimeProfile,
+    facts: &ArtifactFacts,
+    grants: &[ImportGrant],
     blockers: &mut impl crate::bounded::VecSink<String>,
 ) -> GrantPlan {
     let mut plan = GrantPlan::with_capacity(facts.imports.len());

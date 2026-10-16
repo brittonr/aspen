@@ -3,7 +3,7 @@ pub const BLAKE3_HEX_LENGTH: usize = 64;
 pub const CONTENT_REF_LENGTH: usize = BLAKE3_REF_PREFIX.len() + BLAKE3_HEX_LENGTH;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ComponentDenialClass {
+pub enum DenialClass {
     FuelExhausted,
     InvalidPreservesPayload,
     ComponentCompilationDenied,
@@ -17,7 +17,7 @@ pub enum ComponentDenialClass {
     ComponentAdmissionDenial,
 }
 
-impl ComponentDenialClass {
+impl DenialClass {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::FuelExhausted => "fuel-exhausted",
@@ -53,17 +53,17 @@ impl ComponentDenialClass {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ComponentDenial {
+pub struct Denial {
     pub blockers: Vec<String>,
-    class: ComponentDenialClass,
+    class: DenialClass,
 }
 
-impl ComponentDenial {
+impl Denial {
     pub fn new(blocker: impl Into<String>) -> Self {
-        Self::classified(ComponentDenialClass::ComponentAdmissionDenial, blocker)
+        Self::classified(DenialClass::ComponentAdmissionDenial, blocker)
     }
 
-    pub fn classified(class: ComponentDenialClass, blocker: impl Into<String>) -> Self {
+    pub fn classified(class: DenialClass, blocker: impl Into<String>) -> Self {
         Self {
             blockers: vec![blocker.into()],
             class,
@@ -71,10 +71,10 @@ impl ComponentDenial {
     }
 
     pub fn from_blockers(blockers: impl IntoIterator<Item = String>) -> Self {
-        Self::from_classified_blockers(ComponentDenialClass::ComponentAdmissionDenial, blockers)
+        Self::from_classified_blockers(DenialClass::ComponentAdmissionDenial, blockers)
     }
 
-    pub fn from_classified_blockers(class: ComponentDenialClass, blockers: impl IntoIterator<Item = String>) -> Self {
+    pub fn from_classified_blockers(class: DenialClass, blockers: impl IntoIterator<Item = String>) -> Self {
         let mut blockers = blockers.into_iter().collect::<Vec<_>>();
         blockers.sort();
         blockers.dedup();
@@ -86,15 +86,15 @@ impl ComponentDenial {
     }
 }
 
-impl std::fmt::Display for ComponentDenial {
+impl std::fmt::Display for Denial {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(formatter, "{}", self.blockers.join("; "))
     }
 }
 
-impl std::error::Error for ComponentDenial {}
+impl std::error::Error for Denial {}
 
-pub type ComponentResult<T> = std::result::Result<T, ComponentDenial>;
+pub type Result<T> = std::result::Result<T, Denial>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -114,12 +114,12 @@ impl EvidenceScope {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum WasmArtifactKind {
+pub enum ArtifactKind {
     CoreModule,
     Component,
 }
 
-impl WasmArtifactKind {
+impl ArtifactKind {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::CoreModule => "core-module",
@@ -143,22 +143,22 @@ impl RequestedExecutionProfile {
         }
     }
 
-    pub const fn required_kind(self) -> WasmArtifactKind {
+    pub const fn required_kind(self) -> ArtifactKind {
         match self {
-            Self::LegacyCoreV1 => WasmArtifactKind::CoreModule,
-            Self::ComponentV1 => WasmArtifactKind::Component,
+            Self::LegacyCoreV1 => ArtifactKind::CoreModule,
+            Self::ComponentV1 => ArtifactKind::Component,
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum ComponentConsumer {
+pub enum Consumer {
     Actor,
     SystemExtension,
 }
 
-impl ComponentConsumer {
+impl Consumer {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Actor => "actor",
@@ -185,7 +185,7 @@ impl GrowthStrategy {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ComponentToolchainCohort {
+pub struct ToolchainCohort {
     pub wasmtime: String,
     pub wasm_tools: String,
     pub wasmparser: String,
@@ -196,7 +196,7 @@ pub struct ComponentToolchainCohort {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ComponentWitCohort {
+pub struct WitCohort {
     pub package: String,
     pub world: String,
     pub source_ref: String,
@@ -204,7 +204,7 @@ pub struct ComponentWitCohort {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ComponentFeatureCohort {
+pub struct FeatureCohort {
     pub component_model: bool,
     pub multi_value: bool,
     pub bulk_memory: bool,
@@ -226,7 +226,7 @@ pub struct ComponentFeatureCohort {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ComponentDeterminismProfile {
+pub struct DeterminismProfile {
     pub fuel_interruption: bool,
     pub nan_canonicalization: bool,
     pub relaxed_simd_deterministic: bool,
@@ -237,7 +237,7 @@ pub struct ComponentDeterminismProfile {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ComponentResourceLimits {
+pub struct ResourceLimits {
     pub fuel: u64,
     pub max_component_bytes: u64,
     pub max_wit_bytes: u64,
@@ -256,15 +256,15 @@ pub struct ComponentResourceLimits {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ComponentRuntimeProfile {
+pub struct RuntimeProfile {
     pub profile_id: String,
     pub evidence_scope: EvidenceScope,
     pub runtime_strategy: String,
-    pub toolchain: ComponentToolchainCohort,
-    pub wit: ComponentWitCohort,
-    pub features: ComponentFeatureCohort,
-    pub determinism: ComponentDeterminismProfile,
-    pub resources: ComponentResourceLimits,
+    pub toolchain: ToolchainCohort,
+    pub wit: WitCohort,
+    pub features: FeatureCohort,
+    pub determinism: DeterminismProfile,
+    pub resources: ResourceLimits,
     pub allowed_imports: Vec<String>,
     pub allowed_wasi_interfaces: Vec<String>,
     pub non_claims: Vec<String>,
@@ -272,11 +272,11 @@ pub struct ComponentRuntimeProfile {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ComponentProfileExport {
+pub struct ProfileExport {
     pub schema_id: String,
     pub schema_version: u32,
     pub source_language: String,
-    pub profile: ComponentRuntimeProfile,
+    pub profile: RuntimeProfile,
 }
 
 pub(crate) fn content_ref(bytes: &[u8]) -> String {

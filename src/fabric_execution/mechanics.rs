@@ -4,10 +4,7 @@ const STDOUT_ROLE: &str = "stdout-retained-prefix";
 const STDERR_ROLE: &str = "stderr-retained-prefix";
 pub(super) const PUBLICATION_FAILURE_CODE: &str = "execution-output-publication-failed";
 
-pub(super) fn validate_resolved_context(
-    request: &CanonicalExecutionRequest,
-    resolved: &ResolvedExecutionContext,
-) -> Result<(), String> {
+pub(super) fn validate_resolved_context(request: &Request, resolved: &ResolvedContext) -> Result<(), String> {
     let plan = &request.plan.resolution;
     if resolved.executable_artifact_ref != plan.executable_artifact_ref {
         return Err("resolved executable artifact identity differs from the admitted plan".to_string());
@@ -44,8 +41,8 @@ pub(super) fn validate_resolved_context(
 }
 
 pub(super) fn bounded_request(
-    request: &CanonicalExecutionRequest,
-    resolved: &ResolvedExecutionContext,
+    request: &Request,
+    resolved: &ResolvedContext,
 ) -> Result<bounded_exec::RunRequest, String> {
     let limits = request.plan.request.limits;
     let stdin_max_bytes = usize::try_from(limits.stdin_max_bytes)
@@ -92,22 +89,20 @@ pub(super) fn bounded_request(
     })
 }
 
-pub(super) fn process_observation(
-    output: bounded_exec::ExecutionOutput,
-) -> Result<ExecutionProcessObservation, String> {
+pub(super) fn process_observation(output: bounded_exec::ExecutionOutput) -> Result<ProcessObservation, String> {
     let lifecycle = match output.completion {
         bounded_exec::Completion::Exited => ExecutionLifecycleState::Exited,
         bounded_exec::Completion::TimedOut => ExecutionLifecycleState::TimedOut,
         bounded_exec::Completion::Cancelled => ExecutionLifecycleState::Cancelled,
     };
     let disposition = match output.disposition {
-        bounded_exec::Disposition::Succeeded => ExecutionObservedDisposition::ExitPolicyAccepted,
-        bounded_exec::Disposition::ExitFailed => ExecutionObservedDisposition::ExitPolicyRejected,
-        bounded_exec::Disposition::TimedOut => ExecutionObservedDisposition::TimedOut,
-        bounded_exec::Disposition::Cancelled => ExecutionObservedDisposition::Cancelled,
-        bounded_exec::Disposition::OutputLimitExceeded(_) => ExecutionObservedDisposition::OutputPolicyRejected,
+        bounded_exec::Disposition::Succeeded => ObservedDisposition::ExitPolicyAccepted,
+        bounded_exec::Disposition::ExitFailed => ObservedDisposition::ExitPolicyRejected,
+        bounded_exec::Disposition::TimedOut => ObservedDisposition::TimedOut,
+        bounded_exec::Disposition::Cancelled => ObservedDisposition::Cancelled,
+        bounded_exec::Disposition::OutputLimitExceeded(_) => ObservedDisposition::OutputPolicyRejected,
     };
-    Ok(ExecutionProcessObservation {
+    Ok(ProcessObservation {
         lifecycle,
         start_observed: true,
         terminal_observed: true,
@@ -120,12 +115,12 @@ pub(super) fn process_observation(
     })
 }
 
-fn retained_stream(role: &str, output: bounded_exec::CapturedOutput) -> Result<RetainedExecutionStream, String> {
+fn retained_stream(role: &str, output: bounded_exec::CapturedOutput) -> Result<RetainedStream, String> {
     let observed_bytes = u64::try_from(output.observed_bytes)
         .map_err(|_| "observed execution output byte count does not fit u64".to_string())?;
     let retained_byte_count = u64::try_from(output.bytes.len())
         .map_err(|_| "retained execution output byte count does not fit u64".to_string())?;
-    Ok(RetainedExecutionStream {
+    Ok(RetainedStream {
         role: role.to_string(),
         retained_bytes: output.bytes,
         observed_bytes,
@@ -137,11 +132,11 @@ fn retained_stream(role: &str, output: bounded_exec::CapturedOutput) -> Result<R
 pub(super) fn publish_stream<P: ExecutionOutputPublisher>(
     publisher: &mut P,
     operation_ref: &str,
-    stream: &RetainedExecutionStream,
-) -> ExecutionStreamPublication {
+    stream: &RetainedStream,
+) -> StreamPublication {
     match publisher.publish(operation_ref, stream) {
-        Ok(published) => ExecutionStreamPublication::Published(published),
-        Err(_) => ExecutionStreamPublication::Failed {
+        Ok(published) => StreamPublication::Published(published),
+        Err(_) => StreamPublication::Failed {
             diagnostic_code: PUBLICATION_FAILURE_CODE,
         },
     }
@@ -149,8 +144,8 @@ pub(super) fn publish_stream<P: ExecutionOutputPublisher>(
 
 /// Process and receipt evidence attached to an execution port failure, when the run got that far.
 pub(super) struct FailureEvidence {
-    pub(super) process_observation: Option<ExecutionProcessObservation>,
-    pub(super) receipt: Option<CanonicalExecutionReceipt>,
+    pub(super) process_observation: Option<ProcessObservation>,
+    pub(super) receipt: Option<Receipt>,
 }
 
 impl FailureEvidence {

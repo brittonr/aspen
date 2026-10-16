@@ -1,0 +1,39 @@
+{
+  "attempt": "5/20",
+  "onixpkgs_revision": "56a93169f4ace2394dc4c474c6d28911c24c35e7",
+  "fixed_source": "/nix/store/pwgbd5wvdf5adx9xrgn4lrib38asgajh-source",
+  "control": "Same Git-filtered flake source and helper library; replace only onixpkgs.overlays.default with a kache-only overlay using the same pinned kache package.",
+  "result": {
+    "checks": {
+      "count": 89,
+      "names_equal": true,
+      "differing_derivations": [],
+      "equal": true
+    },
+    "packages": {
+      "count": 10,
+      "names_equal": true,
+      "differing_derivations": [],
+      "equal": true
+    },
+    "dev_shells": {
+      "count": 1,
+      "names_equal": true,
+      "differing_derivations": [],
+      "equal": true
+    }
+  },
+  "wrapper_contract_command": "env TMPDIR=<task-owned-temporary-directory> nix build .#checks.x86_64-linux.kache-nix-rust-wrapper-contract --no-update-lock-file --no-link --print-out-paths -L",
+  "wrapper_contract_output": "/nix/store/99kr3zvwnsnkh1n7z02fzsgkz7vf9mj1-molten-kache-nix-rust-wrapper-contract",
+  "earlier_diagnostic_failures": [
+    "Initial harness incorrectly called the evaluated flake.outputs attribute; corrected by importing the flake definition.",
+    "Unfiltered path-flake control timed out at 180 seconds; the successful bounded retry used the actual Git-filtered source boundary."
+  ],
+  "historical_old_version_evidence": ".cairn/archive/2026-09-27-consume-onixpkgs-kache/evidence/verification.md",
+  "non_claims": [
+    "not a new kache 0.6.0 versus 0.16.0 comparison",
+    "not cache-hit or performance evidence",
+    "not a full flake-check pass",
+    "no provider or pin changed"
+  ]
+}

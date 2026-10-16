@@ -18,6 +18,31 @@ const MAX_VALUE_BYTES_USIZE: usize = 262_144;
 const OVERSIZED_VALUE_BYTES: usize = MAX_VALUE_BYTES_USIZE + 1;
 const EXPECTED_GENERIC_COMPLETIONS: usize = 1;
 
+#[test]
+fn native_fixture_rejects_present_home_before_reading_callback_input() -> TestResult<()> {
+    let mut homes = Vec::with_capacity(3);
+    homes.push(std::ffi::OsString::new());
+    homes.push(std::ffi::OsString::from("not-admitted"));
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStringExt;
+        homes.push(std::ffi::OsString::from_vec(vec![0xff]));
+    }
+    for home in homes {
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_molten-native-extension-fixture"))
+            .env_clear()
+            .env("HOME", home)
+            .arg("--previously-ignored")
+            .stdin(std::process::Stdio::null())
+            .output()
+            .or_fail("execute native fixture with forbidden HOME")?;
+        assert_eq!(output.status.code(), Some(1));
+        assert_eq!(output.stderr, b"native extension fixture failed: inherited HOME is not admitted\n");
+        assert!(output.stdout.is_empty(), "denied fixture must not emit a callback outcome");
+    }
+    Ok(())
+}
+
 // r[verify molten.system_extension.native_host.execution]
 // r[verify molten.system_extension.native_host.intent]
 // r[verify molten.system_extension.native_host.effects]
@@ -51,7 +76,7 @@ fn separate_process_service_runs_lifecycle_effect_restart_and_removal() -> TestR
     assert_eq!(service.host().executor().observations().len(), stale_observations);
 
     let accepted = {
-        let mut client = NativeServiceClient::new(&mut service);
+        let mut client = Client::new(&mut service);
         client
             .submit(&ingress(GENERATION, cohort.admitted.manifest_ref())?, REQUEST_TICK)
             .or_fail("accepted native ingress")?
@@ -84,20 +109,20 @@ fn separate_process_service_runs_lifecycle_effect_restart_and_removal() -> TestR
         .or_fail("effect completion callback")?;
 
     service.checkpoint(CHECKPOINT_TICK).or_fail("checkpoint native service")?;
-    let artifact_index = build_native_artifact_index(
+    let artifact_index = build_index(
         &service.instance().or_fail("indexed native instance")?,
         service.host().executor().observations(),
         std::slice::from_ref(&callback_receipt),
         &completions,
     )
     .or_fail("native artifact index")?;
-    verify_native_artifact_index(&artifact_index).or_fail("verify native artifact index")?;
-    assert!(artifact_index.members.iter().any(|member| member.role == NativeArtifactRole::Effect));
-    assert!(artifact_index.members.iter().any(|member| member.role == NativeArtifactRole::SemanticState));
-    assert!(artifact_index.members.iter().any(|member| member.role == NativeArtifactRole::ValuePublication));
+    verify_index(&artifact_index).or_fail("verify native artifact index")?;
+    assert!(artifact_index.members.iter().any(|member| member.role == Role::Effect));
+    assert!(artifact_index.members.iter().any(|member| member.role == Role::SemanticState));
+    assert!(artifact_index.members.iter().any(|member| member.role == Role::ValuePublication));
     let mut tampered_index = artifact_index.clone();
     tampered_index.members[0].parent_ref = HASH_F.to_string();
-    assert!(verify_native_artifact_index(&tampered_index).is_err());
+    assert!(verify_index(&tampered_index).is_err());
 
     assert_restart_recovers_and_removes(&cohort, service)
 }
@@ -148,7 +173,7 @@ fn callback_intent_precedes_publication(history: &[NativeInstanceRecord]) -> boo
 // r[verify molten.system_extension.native_host.effect_completion_value.compatibility]
 #[test]
 fn generic_system_extension_completion_can_remain_reference_only() -> TestResult<()> {
-    let run = run_executable_system_extension_fixture(ExecutionProfile::InProcessNative)
+    let run = run_executable(ExecutionProfile::InProcessNative)
         .or_fail("generic system extension fixture")?;
     assert_eq!(run.first_effect_completions.len(), EXPECTED_GENERIC_COMPLETIONS,);
     assert!(run.first_effect_completions.iter().all(|completion| completion.materialized_output.is_none()));
@@ -163,8 +188,8 @@ fn exact_profile_and_generation_fail_closed_without_hidden_fallback() -> TestRes
     let cohort = Cohort::new()?;
     let mut service = cohort.install()?;
     service.start(START_TICK).or_fail("start native service")?;
-    let failure = molten::fabric_execution::unavailable_execution_port_failure(HASH_A);
-    assert_eq!(failure.kind, molten::fabric_execution::ExecutionPortFailureKind::ProfileUnavailable);
+    let failure = molten::fabric_execution::unavailable_port_failure(HASH_A);
+    assert_eq!(failure.kind, molten::fabric_execution::PortFailureKind::ProfileUnavailable);
     assert!(failure.detail.contains("no fallback"));
 
     let mut wrong_transport = ingress(GENERATION, cohort.admitted.manifest_ref())?;
@@ -180,18 +205,18 @@ fn exact_profile_and_generation_fail_closed_without_hidden_fallback() -> TestRes
 fn uncertain_ingress_publication_blocks_callback_and_retry() -> TestResult<()> {
     let controlled = ControlledValuePort::default();
     let mut cohort = Cohort::new()?;
-    cohort.values = shared_native_callback_value_port(controlled.clone());
+    cohort.values = shared_callback_value_port(controlled.clone());
     let mut service = cohort.install()?;
     service.start(START_TICK).or_fail("start controlled native service")?;
     let observations = service.host().executor().observations().len();
-    controlled.fail_next(NativeValuePortFailureKind::UnknownAfterAcceptance)?;
+    controlled.fail_next(ValuePortFailureKind::UnknownAfterAcceptance)?;
 
     let failure = service
         .ingress(&ingress(GENERATION, cohort.admitted.manifest_ref())?, REQUEST_TICK)
         .expect_err("uncertain ingress publication must fail");
     assert!(matches!(
         failure,
-        NativeServiceError::Executor(NativeExecutorError::Value(ref value_failure))
+        Failure::Executor(CallbackFailure::Value(ref value_failure))
             if value_failure.may_have_published()
     ));
     assert_eq!(service.host().executor().observations().len(), observations);
@@ -212,16 +237,16 @@ fn uncertain_ingress_publication_blocks_callback_and_retry() -> TestResult<()> {
 fn uncertain_callback_publication_blocks_state_and_provider_effects() -> TestResult<()> {
     let controlled = ControlledValuePort::default();
     let mut cohort = Cohort::new()?;
-    cohort.values = shared_native_callback_value_port(controlled.clone());
+    cohort.values = shared_callback_value_port(controlled.clone());
     let mut service = cohort.install()?;
     service.start(START_TICK).or_fail("start controlled native service")?;
     let prior_state_ref = service.instance().or_fail("prior native instance")?.state_ref;
-    controlled.fail_after(1, NativeValuePortFailureKind::UnknownAfterAcceptance)?;
+    controlled.fail_after(1, ValuePortFailureKind::UnknownAfterAcceptance)?;
 
     let result = service
         .ingress(&ingress(GENERATION, cohort.admitted.manifest_ref())?, REQUEST_TICK)
         .or_fail("ingress classification")?;
-    assert!(matches!(result.dispatch, HostDispatchResult::Failed { .. }));
+    assert!(matches!(result.dispatch, DispatchResult::Failed { .. }));
     let instance = service.instance().or_fail("failed callback instance")?;
     assert_eq!(instance.state_ref, prior_state_ref);
     assert!(instance.unresolved.iter().any(|operation| {
@@ -243,7 +268,7 @@ fn restart_with_missing_state_bytes_fails_before_process_start() -> TestResult<(
     let expected_state_ref = restored.state_ref.clone();
     drop(service);
 
-    cohort.values = shared_native_callback_value_port(InMemoryNativeCallbackValuePort::empty());
+    cohort.values = shared_callback_value_port(InMemoryCallbackValuePort::empty());
     let mut recovered = cohort.recovered(restored)?;
     assert!(recovered.restart(RESTART_TICK).is_err());
     let observations = recovered.host().executor().observations();

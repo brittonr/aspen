@@ -1,8 +1,8 @@
 
 // r[impl molten.fabric_simulation.live_sim_differential]
-pub fn canonical_simulation_differential(
+pub fn differential(
     input: DifferentialInput<'_>,
-) -> crate::error::Result<CanonicalSimulationDifferential> {
+) -> crate::error::Result<Differential> {
     let DifferentialInput {
         simulation_profile_ref,
         live_profile_ref,
@@ -34,7 +34,7 @@ pub fn canonical_simulation_differential(
         ]),
     ]);
     let report_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalSimulationDifferential {
+    Ok(Differential {
         report_ref,
         simulation_profile_ref: simulation_profile_ref.to_string(),
         live_profile_ref: live_profile_ref.to_string(),
@@ -46,11 +46,11 @@ pub fn canonical_simulation_differential(
 }
 
 // r[impl molten.fabric_simulation.claim_ladder]
-pub fn canonical_claim_promotion(
+pub fn claim_promotion(
     current: SimulationClaimProfile,
     target: SimulationClaimProfile,
     evidence: &ClaimEvidence,
-) -> crate::error::Result<CanonicalClaimPromotion> {
+) -> crate::error::Result<ClaimPromotion> {
     let decision = evaluate_claim_promotion(current, target, evidence);
     let value = crate::preserves_rail::record("fabric-simulation-claim-profile-v1", vec![
         crate::preserves_rail::string(FABRIC_SIMULATION_CLAIM_SCHEMA),
@@ -66,7 +66,7 @@ pub fn canonical_claim_promotion(
         ]),
     ]);
     let decision_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalClaimPromotion {
+    Ok(ClaimPromotion {
         decision_ref,
         current,
         decision,
@@ -75,11 +75,11 @@ pub fn canonical_claim_promotion(
 }
 
 // r[impl molten.fabric_simulation.replay_shrink]
-pub fn canonical_simulation_shrink(
+pub fn shrink(
     original_world_ref: &str,
-    shrunk_world: &CanonicalSimulatedWorld,
+    shrunk_world: &SimulatedWorld,
     result: ShrinkResult,
-) -> crate::error::Result<CanonicalSimulationShrink> {
+) -> crate::error::Result<Shrink> {
     crate::preserves_rail::validate_content_ref(original_world_ref)?;
     let value = crate::preserves_rail::record("fabric-simulation-shrink-v1", vec![
         crate::preserves_rail::string(FABRIC_SIMULATION_SHRINK_SCHEMA),
@@ -95,7 +95,7 @@ pub fn canonical_simulation_shrink(
         ]),
     ]);
     let shrink_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalSimulationShrink {
+    Ok(Shrink {
         shrink_ref,
         original_world_ref: original_world_ref.to_string(),
         shrunk_world_ref: shrunk_world.world_ref.clone(),
@@ -105,13 +105,13 @@ pub fn canonical_simulation_shrink(
 }
 
 // r[impl molten.fabric_simulation.evidence]
-pub fn canonical_simulation_repro_bundle(
-    world: &CanonicalSimulatedWorld,
-    run: &CanonicalSimulationRun,
-    shrink: Option<&CanonicalSimulationShrink>,
-) -> crate::error::Result<CanonicalSimulationReproBundle> {
+pub fn repro_bundle(
+    world: &SimulatedWorld,
+    run: &Run,
+    shrink: Option<&Shrink>,
+) -> crate::error::Result<ReproBundle> {
     if run.world_ref != world.world_ref {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "simulation repro run does not bind the supplied world",
         ));
     }
@@ -130,7 +130,7 @@ pub fn canonical_simulation_repro_bundle(
         ]),
     ]);
     let bundle_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalSimulationReproBundle {
+    Ok(ReproBundle {
         bundle_ref,
         world_ref: world.world_ref.clone(),
         run_ref: run.run_ref.clone(),
@@ -140,32 +140,32 @@ pub fn canonical_simulation_repro_bundle(
 }
 
 // r[impl molten.fabric_simulation.operator_workflow]
-pub fn parse_simulation_run_readback(value: &preserves::IOValue) -> crate::error::Result<SimulationRunReadback> {
+pub fn parse_run_readback(value: &preserves::IOValue) -> crate::error::Result<RunReadback> {
     let fields = value
         .collect_simple_record("fabric-simulation-run-v1", Some(RUN_READBACK_FIELD_COUNT))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("expected canonical fabric-simulation run"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected canonical fabric-simulation run"))?;
     let schema = required_string(&fields[0], "simulation run schema")?;
     if schema != FABRIC_SIMULATION_RUN_SCHEMA {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "fabric-simulation run schema mismatch: {schema}"
         )));
     }
     let decision = record_string_field(&fields[RUN_DECISION_FIELD_INDEX], "decision")?;
     let profile = record_string_field(&fields[RUN_PROFILE_FIELD_INDEX], "profile")?;
     if !matches!(decision.as_str(), "pass" | "invariant-failed" | "diverged" | "bound-exceeded" | "denied") {
-        return Err(crate::error::MoltenError::invalid_harness(format!("unsupported simulation decision: {decision}")));
+        return Err(crate::error::Failure::invalid_harness(format!("unsupported simulation decision: {decision}")));
     }
     if !matches!(
         profile.as_str(),
         "pure-model" | "deterministic-whole-system" | "multi-process-live" | "host-chaos" | "vm-hardware"
     ) {
-        return Err(crate::error::MoltenError::invalid_harness(format!("unsupported simulation profile: {profile}")));
+        return Err(crate::error::Failure::invalid_harness(format!("unsupported simulation profile: {profile}")));
     }
     let world_ref = record_string_field(&fields[RUN_WORLD_REF_FIELD_INDEX], "world-ref")?;
     crate::preserves_rail::validate_content_ref(&world_ref)?;
     let final_state_refs = record_string_sequence_field(&fields[RUN_FINAL_STATE_REFS_FIELD_INDEX], "final-state-refs")?;
     validate_refs("readback final state", &final_state_refs)?;
-    Ok(SimulationRunReadback {
+    Ok(RunReadback {
         decision,
         profile,
         choice_count: record_u64_field(&fields[RUN_CHOICE_COUNT_FIELD_INDEX], "choice-count")?,

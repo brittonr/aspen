@@ -26,7 +26,7 @@ fn run_shard_run(input: super::command::ShardRunInput) -> Outcome<()> {
     if shard.decision == "pass" {
         Ok(())
     } else {
-        Err(molten::error::MoltenError::invalid_harness(format!(
+        Err(molten::error::Failure::invalid_harness(format!(
             "nixos VM shard denied: {}",
             shard.diagnostics.join(",")
         )))
@@ -67,7 +67,7 @@ fn run_aggregate(input: super::command::AggregateInput) -> Outcome<()> {
     if aggregate.decision == "pass" {
         Ok(())
     } else {
-        Err(molten::error::MoltenError::invalid_harness(format!(
+        Err(molten::error::Failure::invalid_harness(format!(
             "nixos VM aggregate denied: {}",
             aggregate.diagnostics.join(",")
         )))
@@ -102,10 +102,10 @@ fn parse_required_artifacts(items: &[String]) -> Outcome<Vec<molten::nixos_vm::V
     let mut artifacts = Vec::with_capacity(items.len());
     for item in items {
         let Some((kind, content_ref)) = item.split_once('=') else {
-            return Err(molten::error::MoltenError::invalid_harness("required artifact must use kind=ref syntax"));
+            return Err(molten::error::Failure::invalid_harness("required artifact must use kind=ref syntax"));
         };
         if kind.trim().is_empty() || content_ref.trim().is_empty() {
-            return Err(molten::error::MoltenError::invalid_harness(
+            return Err(molten::error::Failure::invalid_harness(
                 "required artifact kind and ref must not be empty",
             ));
         }
@@ -121,17 +121,17 @@ fn parse_key_value_fields(item: &str, label: &str) -> Outcome<std::collections::
     let mut fields = std::collections::BTreeMap::new();
     for pair in item.split(',') {
         let Some((key, value)) = pair.split_once('=') else {
-            return Err(molten::error::MoltenError::invalid_harness(format!(
+            return Err(molten::error::Failure::invalid_harness(format!(
                 "{label} must use comma-separated key=value fields"
             )));
         };
         if key.trim().is_empty() || value.trim().is_empty() {
-            return Err(molten::error::MoltenError::invalid_harness(format!(
+            return Err(molten::error::Failure::invalid_harness(format!(
                 "{label} key and value must not be empty"
             )));
         }
         if fields.insert(key.to_string(), value.to_string()).is_some() {
-            return Err(molten::error::MoltenError::invalid_harness(format!("{label} duplicate key {key}")));
+            return Err(molten::error::Failure::invalid_harness(format!("{label} duplicate key {key}")));
         }
     }
     Ok(fields)
@@ -141,7 +141,7 @@ fn required_key(fields: &std::collections::BTreeMap<String, String>, key: &str, 
     fields
         .get(key)
         .cloned()
-        .ok_or_else(|| molten::error::MoltenError::invalid_harness(format!("{label} missing required key {key}")))
+        .ok_or_else(|| molten::error::Failure::invalid_harness(format!("{label} missing required key {key}")))
 }
 
 fn required_any_key(
@@ -150,7 +150,7 @@ fn required_any_key(
     label: &str,
 ) -> Outcome<String> {
     required_any_key_optional(fields, keys).ok_or_else(|| {
-        molten::error::MoltenError::invalid_harness(format!("{label} missing required key {}", keys.join(" or ")))
+        molten::error::Failure::invalid_harness(format!("{label} missing required key {}", keys.join(" or ")))
     })
 }
 

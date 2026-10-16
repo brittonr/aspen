@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "node",
+    "status",
+    "--state-root",
+    "/tmp/molten-shutdown-admission-14-8na4_8eo/state",
+    "--health-out",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-14-shutdown-admission-acceptance/node-health-after-stop.preserves"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T16:55:30.889595+00:00",
+  "elapsed_seconds": 0.04,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "<node-control-receipt-v1 \"molten.node.control-receipt.v1\" <decision \"pass\"> <request \"blake3:3fb37ef2eabf8a8cbb4ed6fc9f8207f2c1df034e6b82fe0981989e47b6c68783\"> <startup \"blake3:9df36383c55bf3b6d02ca652cfbf6ea46dae289ee013a506337672289a606f2f\"> <authority [\"blake3:83bb3c44e0d14927bfc20b73ee57c4e655b1ac08003c93a2a618299997a38e9a\"]> <resource [\"blake3:fb82d256eced2cca892ff2e6c63a27fbbd7def43b92ad77d16c3b1ed26abde1f\"]> <subreceipts [\"blake3:84fc364748347c38f5ca9b88d6049c363f0392db8cd7ceae5124dd45c03526ff\"]> <diagnostics []> <checks [<check \"local-preserves-control\" \"pass\">, <check \"authority-gated\" \"pass\">, <check \"resource-gated\" \"pass\">, <check \"subreceipts-bound\" \"pass\">, <check \"canonical-receipt\" \"pass\">]>>\nnode status stopped health=blake3:84fc364748347c38f5ca9b88d6049c363f0392db8cd7ceae5124dd45c03526ff control_receipt=blake3:cd0678c5de209e18636e7a3a371c1852658c858b7c3765aabc09410ef37fe2c8\n",
+  "stderr": "node control receipt blake3:cd0678c5de209e18636e7a3a371c1852658c858b7c3765aabc09410ef37fe2c8\n"
+}

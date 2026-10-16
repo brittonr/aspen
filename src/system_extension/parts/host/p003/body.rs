@@ -1,9 +1,9 @@
 
-impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
+impl<E: SystemExtensionExecutor> Dispatcher<E> {
     fn replace_generation(
         &mut self,
         operation: super::MigrationOperation,
-        next: super::CanonicalAdmittedSystemExtensionManifest,
+        next: super::AdmittedManifest,
         next_executor: E,
         checkpoint_ref: &str,
         logical_tick: u64,
@@ -12,24 +12,24 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         if self.admitted.manifest().extension_id != next.manifest().extension_id
             || self.admitted.manifest().service_id != next.manifest().service_id
         {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "system-extension generation replacement changed extension or service identity",
             ));
         }
         if next_executor.execution_profile() != next.manifest().execution_profile {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "system-extension replacement profile mismatch: executor={} manifest={}",
                 next_executor.execution_profile().as_str(),
                 next.manifest().execution_profile.as_str()
             )));
         }
         if !next.manifest().declares_callback(super::CallbackKind::Recover) {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "system-extension replacement manifest must declare recover callback",
             ));
         }
         if self.state.checkpoint_ref.as_deref() != Some(checkpoint_ref) {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "system-extension replacement checkpoint does not match active state",
             ));
         }
@@ -43,7 +43,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
             .state
             .generation
             .checked_add(GENERATION_INCREMENT)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("system-extension generation overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("system-extension generation overflow"))?;
         let begin_kind = match operation {
             super::MigrationOperation::Upgrade => super::LifecycleEventKind::BeginUpgrade,
             super::MigrationOperation::Rollback => super::LifecycleEventKind::BeginRollback,
@@ -70,7 +70,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
             checkpoint_ref,
             generation: next_generation,
         })?;
-        self.record_evidence(HostEvidence::Migration(migration.clone()))?;
+        self.record_evidence(Evidence::Migration(migration.clone()))?;
         self.admitted = next;
         self.executor = next_executor;
         let (callback, _outcome) = self
@@ -91,7 +91,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         callback: super::CallbackKind,
         payload_ref: Option<&str>,
         logical_tick: u64,
-    ) -> crate::error::Result<HostDispatchResult> {
+    ) -> crate::error::Result<DispatchResult> {
         let event = self.build_event(callback, payload_ref, LIFECYCLE_CALLBACK_BYTES, logical_tick)?;
         self.dispatch(event)
     }
@@ -106,10 +106,10 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         let event_sequence = self
             .event_sequence
             .checked_add(1)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("system-extension event sequence overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("system-extension event sequence overflow"))?;
         let deadline_tick = logical_tick
             .checked_add(self.admitted.manifest().resources.callback_deadline_ticks)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("system-extension callback deadline overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("system-extension callback deadline overflow"))?;
         let value = super::callback_event_value(super::CallbackEventInput {
             callback,
             generation: self.state.generation,
@@ -132,7 +132,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         })
     }
 
-    fn fail_invocation(&mut self, input: InvocationFailureInput<'_>) -> crate::error::Result<HostDispatchResult> {
+    fn fail_invocation(&mut self, input: InvocationFailureInput<'_>) -> crate::error::Result<DispatchResult> {
         let InvocationFailureInput {
             invocation,
             accounted_bytes,
@@ -143,7 +143,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         } = input;
         self.usage = super::release_callback_resources(self.usage, accounted_bytes, 0)
             .map_err(|issues| validation_error("failed callback resource release", &issues))?;
-        let receipt = super::canonical_callback_receipt(super::CallbackReceiptInput {
+        let receipt = super::callback_receipt(super::CallbackReceiptInput {
             manifest_ref: self.admitted.manifest_ref(),
             extension_id: &self.admitted.manifest().extension_id,
             service_id: &self.admitted.manifest().service_id,
@@ -161,13 +161,13 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
             checkpoint_ref: None,
             failure_class: Some(failure_class),
         })?;
-        Ok(HostDispatchResult::Failed { receipt, lifecycle })
+        Ok(DispatchResult::Failed { receipt, lifecycle })
     }
 
     fn apply_simple_transition(
         &mut self,
         kind: super::LifecycleEventKind,
-    ) -> crate::error::Result<super::CanonicalLifecycleReceipt> {
+    ) -> crate::error::Result<super::LifecycleReceipt> {
         let generation = if kind == super::LifecycleEventKind::Install {
             self.admitted.manifest().initial_generation
         } else {
@@ -179,7 +179,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
     fn apply_transition(
         &mut self,
         event: super::LifecycleEvent,
-    ) -> crate::error::Result<super::CanonicalLifecycleReceipt> {
+    ) -> crate::error::Result<super::LifecycleReceipt> {
         self.ensure_evidence_capacity(TRANSITION_EVIDENCE_ITEMS)?;
         let previous = self.state.clone();
         let next = super::plan_lifecycle_transition(
@@ -189,7 +189,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
             self.admitted.manifest().resources.max_restart_attempts,
         )
         .map_err(|issues| validation_error("lifecycle transition", &issues))?;
-        let receipt = super::canonical_lifecycle_receipt(super::LifecycleReceiptInput {
+        let receipt = super::lifecycle_receipt(super::LifecycleReceiptInput {
             manifest_ref: self.admitted.manifest_ref(),
             extension_id: &self.admitted.manifest().extension_id,
             service_id: &self.admitted.manifest().service_id,
@@ -200,7 +200,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         })?;
         self.state = next;
         self.last_lifecycle_ref = Some(receipt.receipt_ref.clone());
-        self.record_evidence(HostEvidence::Lifecycle(receipt.clone()))?;
+        self.record_evidence(Evidence::Lifecycle(receipt.clone()))?;
         self.record_current_readiness(&receipt.receipt_ref)?;
         Ok(receipt)
     }
@@ -208,31 +208,31 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
     fn record_observed_invocation(&mut self, callback: super::CallbackKind) -> crate::error::Result<()> {
         let current = self.observations.get(&callback).copied().unwrap_or(0);
         let next = current.checked_add(1).ok_or_else(|| {
-            crate::error::MoltenError::invalid_harness("system-extension callback observation overflow")
+            crate::error::Failure::invalid_harness("system-extension callback observation overflow")
         })?;
         self.observations.insert(callback, next);
         Ok(())
     }
 
-    fn record_callback_receipt(&mut self, receipt: super::CanonicalCallbackReceipt) -> crate::error::Result<()> {
+    fn record_callback_receipt(&mut self, receipt: super::CallbackReceipt) -> crate::error::Result<()> {
         self.push_execution_binding_ref(receipt.execution_binding_ref.clone())?;
-        self.record_evidence(HostEvidence::Callback(receipt))
+        self.record_evidence(Evidence::Callback(receipt))
     }
 
     fn record_current_readiness(&mut self, boundary_ref: &str) -> crate::error::Result<()> {
-        let readiness = super::canonical_service_readiness(
+        let readiness = super::service_readiness(
             self.admitted.manifest_ref(),
             &self.admitted.manifest().extension_id,
             &self.admitted.manifest().service_id,
             &self.state,
             boundary_ref,
         )?;
-        self.record_evidence(HostEvidence::Readiness(readiness))
+        self.record_evidence(Evidence::Readiness(readiness))
     }
 
     fn push_execution_binding_ref(&mut self, execution_binding_ref: String) -> crate::error::Result<()> {
         if self.execution_binding_refs.len() >= MAX_HOST_EVIDENCE_ITEMS {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "system-extension execution binding count exceeds {MAX_HOST_EVIDENCE_ITEMS}"
             )));
         }
@@ -243,19 +243,19 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
     fn ensure_evidence_capacity(&self, additional: usize) -> crate::error::Result<()> {
         let total =
             self.evidence.len().checked_add(additional).ok_or_else(|| {
-                crate::error::MoltenError::invalid_harness("system-extension evidence count overflow")
+                crate::error::Failure::invalid_harness("system-extension evidence count overflow")
             })?;
         if total > MAX_HOST_EVIDENCE_ITEMS {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "system-extension evidence count {total} exceeds {MAX_HOST_EVIDENCE_ITEMS}"
             )));
         }
         Ok(())
     }
 
-    fn record_evidence(&mut self, evidence: HostEvidence) -> crate::error::Result<()> {
+    fn record_evidence(&mut self, evidence: Evidence) -> crate::error::Result<()> {
         if self.evidence.len() >= MAX_HOST_EVIDENCE_ITEMS {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "system-extension evidence count exceeds {MAX_HOST_EVIDENCE_ITEMS}"
             )));
         }
@@ -265,19 +265,19 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
 }
 
 fn collect_artifacts(
-    evidence: &[HostEvidence],
-) -> (Vec<super::CanonicalLifecycleReceipt>, Vec<super::CanonicalCallbackReceipt>) {
+    evidence: &[Evidence],
+) -> (Vec<super::LifecycleReceipt>, Vec<super::CallbackReceipt>) {
     let lifecycle = evidence
         .iter()
         .filter_map(|item| match item {
-            HostEvidence::Lifecycle(receipt) => Some(receipt.clone()),
+            Evidence::Lifecycle(receipt) => Some(receipt.clone()),
             _ => None,
         })
         .collect();
     let callbacks = evidence
         .iter()
         .filter_map(|item| match item {
-            HostEvidence::Callback(receipt) => Some(receipt.clone()),
+            Evidence::Callback(receipt) => Some(receipt.clone()),
             _ => None,
         })
         .collect();

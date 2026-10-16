@@ -104,7 +104,7 @@ fn different_seeds_explore_different_schedules_and_repeat_deterministically() {
 // r[verify molten.fabric_simulation.causal_exploration]
 #[test]
 fn replay_detects_a_changed_semantic_output_at_the_first_diverging_record() {
-    let fixture = run_reference_simulation_fixture().expect("reference simulation");
+    let fixture = run_reference_fixture().expect("reference simulation");
     let mut diverged = fixture.run.summary.choice_records.clone();
     diverged[1].semantic_output_ref = blake3_ref(b"replay-tampered-semantic-output");
 

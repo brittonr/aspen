@@ -1,0 +1,21 @@
+{
+  "argv": [
+    "nix",
+    "develop",
+    "--no-update-lock-file",
+    "-c",
+    "b3sum",
+    "crates/molten-core/src/fabric_time/lease.rs",
+    "crates/molten-core/src/fabric_time/tests.rs",
+    "src/fabric_time/parts/fixture/p002/body.rs",
+    "src/fabric_time/history/mod.rs",
+    "src/fabric_time/tests/replay.rs"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T16:27:37.394809+00:00",
+  "elapsed_seconds": 0.403,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "8dae53e0eddad26ec5335a5e484a1db246ad6849177cc518a109c7e448dbd9b4  crates/molten-core/src/fabric_time/lease.rs\n9bf0c23f8f89718a803ee734c931c674b6f9143de93e358aa2bc2c4ad578f3f1  crates/molten-core/src/fabric_time/tests.rs\nf08e406dd6f7365fe00bed40963bd3e591235f80c64dee02526fa149a256c1fc  src/fabric_time/parts/fixture/p002/body.rs\nc0e084278e11df2f2d7f8805cd1f208752c0860df2fa4d7b5f000d1acff10c6a  src/fabric_time/history/mod.rs\n2d980426b4eb2938c645661e62d650132b756657aaf44d727496fc11acf3cd42  src/fabric_time/tests/replay.rs\n",
+  "stderr": "running auto-GC to free 30411456512 bytes\nwaiting for the big garbage collector lock...\n"
+}

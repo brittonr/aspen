@@ -30,7 +30,7 @@ fn execution_profile_descriptor() -> ExecutionProfileDescriptor {
     }
 }
 
-fn native_profile(execution: &CanonicalExecutionProfile) -> NativeHostProfile {
+fn native_profile(execution: &Profile) -> NativeHostProfile {
     NativeHostProfile {
         schema: NATIVE_HOST_PROFILE_SCHEMA.to_string(),
         profile_id: "native-host-local-pilot-v2".to_string(),
@@ -55,8 +55,8 @@ fn native_profile(execution: &CanonicalExecutionProfile) -> NativeHostProfile {
 }
 
 fn executable_evidence(
-    admitted: &CanonicalAdmittedSystemExtensionManifest,
-    execution: &CanonicalExecutionProfile,
+    admitted: &AdmittedManifest,
+    execution: &Profile,
     executable_bytes_ref: &str,
 ) -> NativeExecutableEvidence {
     NativeExecutableEvidence {
@@ -82,13 +82,13 @@ fn executable_evidence(
 struct ExecutionTemplateInput<'a> {
     native_profile: &'a AdmittedNativeHostProfile,
     executable: &'a AdmittedNativeExecutable,
-    execution: &'a CanonicalExecutionProfile,
+    execution: &'a Profile,
     executable_path: std::path::PathBuf,
     instance_id: String,
-    admitted: &'a CanonicalAdmittedSystemExtensionManifest,
+    admitted: &'a AdmittedManifest,
 }
 
-fn execution_template(input: ExecutionTemplateInput<'_>) -> NativeExecutionTemplate {
+fn execution_template(input: ExecutionTemplateInput<'_>) -> ExecutionTemplate {
     let ExecutionTemplateInput {
         native_profile,
         executable,
@@ -97,7 +97,7 @@ fn execution_template(input: ExecutionTemplateInput<'_>) -> NativeExecutionTempl
         instance_id,
         admitted,
     } = input;
-    NativeExecutionTemplate {
+    ExecutionTemplate {
         host_profile: native_profile.clone(),
         executable: executable.clone(),
         admitted: admitted.clone(),
@@ -128,7 +128,7 @@ fn execution_template(input: ExecutionTemplateInput<'_>) -> NativeExecutionTempl
             concurrency_units: RESOURCE_UNITS,
             queue_units: QUEUE_UNITS,
         },
-        resolved: ResolvedExecutionContext {
+        resolved: ResolvedContext {
             executable_path,
             executable_artifact_ref: executable.executable.executable_ref.clone(),
             executable_identity_ref: executable.executable.executable_bytes_ref.clone(),
@@ -137,7 +137,7 @@ fn execution_template(input: ExecutionTemplateInput<'_>) -> NativeExecutionTempl
             stdin_ref: None,
             stdin_bytes: None,
         },
-        context: NativeCallbackContext {
+        context: CallbackContext {
             manifest_ref: admitted.manifest_ref().to_string(),
             executable_ref: executable.executable.executable_ref.clone(),
             instance_id,
@@ -155,8 +155,8 @@ fn execution_template(input: ExecutionTemplateInput<'_>) -> NativeExecutionTempl
 /// executable.
 fn execution_request(
     executable: &AdmittedNativeExecutable,
-    execution: &CanonicalExecutionProfile,
-    admitted: &CanonicalAdmittedSystemExtensionManifest,
+    execution: &Profile,
+    admitted: &AdmittedManifest,
 ) -> ExecutionRequest {
     ExecutionRequest {
         schema: EXECUTION_REQUEST_SCHEMA.to_string(),
@@ -197,7 +197,7 @@ fn execution_request(
     }
 }
 
-fn admitted_manifest() -> TestResult<CanonicalAdmittedSystemExtensionManifest> {
+fn admitted_manifest() -> TestResult<AdmittedManifest> {
     let tier = canonical_extension_tier_admission(&ExtensionTierRequest {
         tier: ExtensionTier::SystemExtension,
         requested_authorities: vec![
@@ -209,7 +209,7 @@ fn admitted_manifest() -> TestResult<CanonicalAdmittedSystemExtensionManifest> {
         admission_evidence: REQUIRED_SYSTEM_EXTENSION_EVIDENCE.to_vec(),
     })
     .or_fail("native extension tier")?;
-    canonical_admit_system_extension_manifest(
+    admit_manifest(
         &SystemExtensionManifestInput {
             schema: SYSTEM_EXTENSION_MANIFEST_SCHEMA.to_string(),
             extension_id: "molten.fixture.native".to_string(),

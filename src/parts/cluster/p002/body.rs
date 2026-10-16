@@ -1,6 +1,6 @@
 
-fn cluster_lifecycle_run_value(
-    input: &ClusterLifecycleRunInput,
+fn lifecycle_run_value(
+    input: &LifecycleRunInput,
     decision: &str,
     diagnostics: &[String],
 ) -> crate::error::Result<IoValue> {
@@ -10,8 +10,8 @@ fn cluster_lifecycle_run_value(
         record("workflow", vec![string(&input.workflow_id)]),
         record("manifest", vec![string(&input.manifest_ref)]),
         record("nodes", vec![strings_sequence(&input.ordered_node_ids)]),
-        record("phases", vec![sequence(cluster_lifecycle_phase_values(&input.phases)?)]),
-        record("node-summaries", vec![sequence(cluster_lifecycle_node_values(&input.node_summaries)?)]),
+        record("phases", vec![sequence(lifecycle_phase_values(&input.phases)?)]),
+        record("node-summaries", vec![sequence(lifecycle_node_values(&input.node_summaries)?)]),
         record("already-running", vec![refs_sequence(&input.already_running_refs)]),
         record("stop-order", vec![strings_sequence(&input.stop_order)]),
         record("diagnostics", vec![strings_sequence(diagnostics)]),
@@ -19,25 +19,25 @@ fn cluster_lifecycle_run_value(
         record("checks", vec![sequence(vec![
             check_value(
                 "manifest-bound",
-                cluster_lifecycle_decision_status(diagnostics, "cluster-lifecycle-stale-manifest"),
+                lifecycle_decision_status(diagnostics, "cluster-lifecycle-stale-manifest"),
             ),
             check_value(
                 "phase-receipts-bound",
-                cluster_lifecycle_decision_status(diagnostics, "cluster-lifecycle-missing-phase-receipts"),
+                lifecycle_decision_status(diagnostics, "cluster-lifecycle-missing-phase-receipts"),
             ),
             check_value(
                 "stdout-not-evidence",
-                cluster_lifecycle_decision_status(diagnostics, "cluster-lifecycle-stdout-only-evidence"),
+                lifecycle_decision_status(diagnostics, "cluster-lifecycle-stdout-only-evidence"),
             ),
             check_value(
                 "stop-order-bound",
-                cluster_lifecycle_decision_status(diagnostics, "cluster-lifecycle-stop-order-drift"),
+                lifecycle_decision_status(diagnostics, "cluster-lifecycle-stop-order-drift"),
             ),
         ])]),
     ]))
 }
 
-fn cluster_lifecycle_decision_status(diagnostics: &[String], prefix: &str) -> &'static str {
+fn lifecycle_decision_status(diagnostics: &[String], prefix: &str) -> &'static str {
     if diagnostics.iter().any(|diagnostic| diagnostic.starts_with(prefix)) {
         CLUSTER_LIFECYCLE_DENY
     } else {
@@ -45,9 +45,9 @@ fn cluster_lifecycle_decision_status(diagnostics: &[String], prefix: &str) -> &'
     }
 }
 
-fn cluster_lifecycle_phase_values(phases: &[ClusterLifecyclePhaseObservation]) -> crate::error::Result<Vec<IoValue>> {
+fn lifecycle_phase_values(phases: &[LifecyclePhaseObservation]) -> crate::error::Result<Vec<IoValue>> {
     if phases.len() > MAX_CLUSTER_LIFECYCLE_ITEMS {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "cluster lifecycle phase count {} exceeds bound {MAX_CLUSTER_LIFECYCLE_ITEMS}",
             phases.len()
         )));
@@ -64,9 +64,9 @@ fn cluster_lifecycle_phase_values(phases: &[ClusterLifecyclePhaseObservation]) -
         .collect())
 }
 
-fn cluster_lifecycle_node_values(summaries: &[ClusterLifecycleNodeSummary]) -> crate::error::Result<Vec<IoValue>> {
+fn lifecycle_node_values(summaries: &[LifecycleNodeSummary]) -> crate::error::Result<Vec<IoValue>> {
     if summaries.len() > MAX_CLUSTER_LIFECYCLE_ITEMS {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "cluster lifecycle node summary count {} exceeds bound {MAX_CLUSTER_LIFECYCLE_ITEMS}",
             summaries.len()
         )));
@@ -135,7 +135,7 @@ fn push_lifecycle_summary_field(
     is_ref: bool,
 ) -> crate::error::Result<()> {
     if fields.item_count() >= MAX_CLUSTER_LIFECYCLE_ITEMS {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "cluster lifecycle drift field count exceeds bound {MAX_CLUSTER_LIFECYCLE_ITEMS}"
         )));
     }

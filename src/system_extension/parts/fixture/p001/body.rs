@@ -2,7 +2,7 @@
 /// The admitted fixture manifest, its upgraded successor, and the rollback manifest, in that order.
 fn fixture_manifests(
     profile: super::ExecutionProfile,
-) -> crate::error::Result<[super::CanonicalAdmittedSystemExtensionManifest; 3]> {
+) -> crate::error::Result<[super::AdmittedManifest; 3]> {
     let tier = crate::fabric::canonical_extension_tier_admission(&crate::fabric::ExtensionTierRequest {
         tier: crate::fabric::ExtensionTier::SystemExtension,
         requested_authorities: vec![
@@ -15,39 +15,39 @@ fn fixture_manifests(
     })?;
     let descriptors = [port_descriptor()];
     let admitted =
-        super::canonical_admit_system_extension_manifest(&manifest_input(profile), &descriptors, &tier, &[profile])?;
+        super::admit_manifest(&manifest_input(profile), &descriptors, &tier, &[profile])?;
     let mut upgrade_input = manifest_input(profile);
     upgrade_input.implementation_ref = HASH_B.to_string();
     upgrade_input.state_schema = UPGRADED_STATE_SCHEMA.to_string();
     upgrade_input.compatible_state_schemas = vec![STATE_SCHEMA.to_string(), UPGRADED_STATE_SCHEMA.to_string()];
     let upgrade_manifest =
-        super::canonical_admit_system_extension_manifest(&upgrade_input, &descriptors, &tier, &[profile])?;
+        super::admit_manifest(&upgrade_input, &descriptors, &tier, &[profile])?;
     let mut rollback_input = manifest_input(profile);
     rollback_input.compatible_state_schemas = vec![STATE_SCHEMA.to_string(), UPGRADED_STATE_SCHEMA.to_string()];
     let rollback_manifest =
-        super::canonical_admit_system_extension_manifest(&rollback_input, &descriptors, &tier, &[profile])?;
+        super::admit_manifest(&rollback_input, &descriptors, &tier, &[profile])?;
     Ok([admitted, upgrade_manifest, rollback_manifest])
 }
 
 /// A retryable request fails the host into the failed phase, and a restart recovers it to running.
 fn fail_and_recover(
-    host: &mut super::SystemExtensionHost<EchoExecutor>,
-) -> crate::error::Result<super::CanonicalOperatorStatus> {
+    host: &mut super::Dispatcher<EchoExecutor>,
+) -> crate::error::Result<super::OperatorStatusRecord> {
     match host.dispatch_request(HASH_C, REQUEST_BYTES, FAILURE_TICK)? {
-        super::HostDispatchResult::Failed { .. } => {}
+        super::DispatchResult::Failed { .. } => {}
         other => {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "fixture retryable request did not fail: {other:?}"
             )));
         }
     }
     if host.state().phase != super::LifecyclePhase::Failed {
-        return Err(crate::error::MoltenError::invalid_harness("fixture retryable failure did not enter failed phase"));
+        return Err(crate::error::Failure::invalid_harness("fixture retryable failure did not enter failed phase"));
     }
     host.restart(RECOVERY_TICK)?;
     let recovered_status = host.operator_status()?;
     if recovered_status.status.phase != super::LifecyclePhase::Running {
-        return Err(crate::error::MoltenError::invalid_harness("fixture recovery did not return to running phase"));
+        return Err(crate::error::Failure::invalid_harness("fixture recovery did not return to running phase"));
     }
     host.dispatch_request(HASH_C, REQUEST_BYTES, POST_RECOVERY_TICK)?
         .require_executed("post-recovery request")?;
@@ -55,7 +55,7 @@ fn fail_and_recover(
 }
 
 fn validated_conformance(
-    host: &super::SystemExtensionHost<EchoExecutor>,
+    host: &super::Dispatcher<EchoExecutor>,
 ) -> crate::error::Result<super::ExecutableConformanceInput> {
     let required_callbacks = vec![
         super::CallbackKind::Initialize,
@@ -70,7 +70,7 @@ fn validated_conformance(
     let conformance = host.executable_conformance_input(required_callbacks);
     let issues = super::validate_executable_conformance(&conformance);
     if !issues.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "executable fixture conformance denied: {issues:?}"
         )));
     }
@@ -182,7 +182,7 @@ mod tests {
         .expect("tier admission");
         let descriptors = [port_descriptor()];
         let admitted =
-            super::super::canonical_admit_system_extension_manifest(&manifest_input(profile), &descriptors, &tier, &[
+            super::super::admit_manifest(&manifest_input(profile), &descriptors, &tier, &[
                 profile,
             ])
             .expect("initial manifest");
@@ -190,9 +190,9 @@ mod tests {
         upgrade_input.state_schema = UPGRADED_STATE_SCHEMA.to_string();
         upgrade_input.compatible_state_schemas = vec![STATE_SCHEMA.to_string(), UPGRADED_STATE_SCHEMA.to_string()];
         let upgrade =
-            super::super::canonical_admit_system_extension_manifest(&upgrade_input, &descriptors, &tier, &[profile])
+            super::super::admit_manifest(&upgrade_input, &descriptors, &tier, &[profile])
                 .expect("upgrade manifest");
-        let mut host = super::super::SystemExtensionHost::new(admitted, EchoExecutor::new(profile).expect("executor"))
+        let mut host = super::super::Dispatcher::new(admitted, EchoExecutor::new(profile).expect("executor"))
             .expect("extension host");
         host.activate(START_TICK).expect("activation");
         host.checkpoint(CHECKPOINT_TICK).expect("checkpoint");

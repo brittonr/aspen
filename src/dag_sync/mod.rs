@@ -22,4 +22,5 @@ pub use service::*;
 pub use status::*;
 
 #[cfg(test)]
+#[path = "parts/tests/mod.rs"]
 mod tests;

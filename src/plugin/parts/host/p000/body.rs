@@ -1,5 +1,5 @@
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 type Value<T> = preserves::Value<T>;
 
@@ -196,7 +196,7 @@ pub struct PluginLifecycleStateInput<'a> {
     pub health: Option<&'a PluginHealthReceipt>,
     pub removal: Option<&'a PluginRemovalReceipt>,
     pub upgrade: Option<&'a PluginUpgradeReceipt>,
-    pub negotiation: Option<&'a PluginExtensionNegotiationReceipt>,
+    pub negotiation: Option<&'a PluginNegotiationReceipt>,
     pub compatibility: Option<&'a PluginExtensionCompatibilityReceipt>,
     pub recovery_receipt_ref: Option<&'a str>,
 }

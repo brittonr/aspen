@@ -93,7 +93,7 @@ fn collect_bundle_artifact_sensitive_markers(
             continue;
         }
         for entry in bundle_root.root().list_entries(&group_dir)? {
-            if entry.kind != crate::local_store::LocalStoreEntryKind::File || !entry.name.ends_with(".preserves") {
+            if entry.kind != crate::local_store::MemberKind::File || !entry.name.ends_with(".preserves") {
                 continue;
             }
             let value = read_bundle_value(bundle_root, &entry.path)?;
@@ -193,7 +193,7 @@ fn write_candidate_bundle_redacted_view(
             continue;
         }
         for entry in bundle_root.root().list_entries(&group_dir)? {
-            if entry.kind != crate::local_store::LocalStoreEntryKind::File || !entry.name.ends_with(".preserves") {
+            if entry.kind != crate::local_store::MemberKind::File || !entry.name.ends_with(".preserves") {
                 continue;
             }
             let value = read_bundle_value(bundle_root, &entry.path)?;

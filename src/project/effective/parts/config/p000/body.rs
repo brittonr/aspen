@@ -1,6 +1,6 @@
 type IoValue = preserves::IOValue;
 type Result<T> = crate::error::Result<T>;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 
@@ -25,7 +25,7 @@ const SOURCE_PRECEDENCE_DEFAULT: u8 = 10;
 const EVIDENCE_ONLY_CAVEAT: &str = "effective-config readbacks are evidence-only diagnostics and do not grant authority, policy admission, provenance trust, source-gate acceptance, resource rights, retention clearance, transport correctness, execution permission, deployment trust, or release eligibility";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConfigSourceInput {
+pub struct SourceInput {
     pub field: String,
     pub value: String,
     pub source_class: String,
@@ -35,34 +35,34 @@ pub struct ConfigSourceInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EffectiveConfigInput {
+pub struct Input {
     pub profile_refs: Vec<String>,
-    pub sources: Vec<ConfigSourceInput>,
+    pub sources: Vec<SourceInput>,
     pub release_mode: bool,
     pub diagnostics: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EffectiveConfigField {
+pub struct Field {
     pub field: String,
     pub value: String,
     pub selected_source_class: String,
     pub selected_source_ref: Option<String>,
     pub caveats: Vec<String>,
-    pub traces: Vec<ConfigSourceInput>,
+    pub traces: Vec<SourceInput>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EffectiveConfigReadback {
+pub struct Readback {
     pub decision: String,
     pub diagnostics: Vec<String>,
-    pub fields: Vec<EffectiveConfigField>,
+    pub fields: Vec<Field>,
     pub fingerprint_ref: String,
     pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EffectiveConfigDiff {
+pub struct Diff {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub diff_ref: String,
@@ -70,7 +70,7 @@ pub struct EffectiveConfigDiff {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EffectiveConfigAuthorizationUse {
+pub struct AuthorizationUse {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub value: IoValue,
@@ -80,7 +80,7 @@ pub struct EffectiveConfigAuthorizationUse {
 // r[impl molten.project.effective_config_readback.source_trace]
 // r[impl molten.project.effective_config_readback.cli_core]
 // r[impl molten.project.effective_config_readback.evidence_only]
-pub fn build_effective_config_readback(input: &EffectiveConfigInput) -> Result<EffectiveConfigReadback> {
+pub fn build_readback(input: &Input) -> Result<Readback> {
     ensure_ref_bound(input.profile_refs.len(), "effective config profile refs")?;
     ensure_source_bound(input.sources.len(), "effective config sources")?;
     let mut diagnostics = input.diagnostics.clone();
@@ -88,7 +88,7 @@ pub fn build_effective_config_readback(input: &EffectiveConfigInput) -> Result<E
         validate_ref_with_diagnostics(profile_ref, "effective config profile", &mut diagnostics);
     }
     let grouped = group_sources(input, &mut diagnostics)?;
-    let fields = select_effective_fields(&grouped, input.release_mode, &mut diagnostics)?;
+    let fields = select_fields(&grouped, input.release_mode, &mut diagnostics)?;
     diagnostics.sort();
     diagnostics.dedup();
     ensure_diagnostic_bound(diagnostics.len())?;
@@ -97,9 +97,9 @@ pub fn build_effective_config_readback(input: &EffectiveConfigInput) -> Result<E
     } else {
         DECISION_DENY
     };
-    let value = effective_config_value(input, decision, &diagnostics, &fields)?;
+    let value = value(input, decision, &diagnostics, &fields)?;
     let fingerprint_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(EffectiveConfigReadback {
+    Ok(Readback {
         decision: decision.to_string(),
         diagnostics,
         fields,
@@ -108,7 +108,7 @@ pub fn build_effective_config_readback(input: &EffectiveConfigInput) -> Result<E
     })
 }
 
-pub fn explain_effective_config(readback: &EffectiveConfigReadback) -> Result<String> {
+pub fn explain(readback: &Readback) -> Result<String> {
     let mut lines = vec![format!(
         "effective-config ref={} decision={}",
         readback.fingerprint_ref, readback.decision
@@ -130,10 +130,10 @@ pub fn explain_effective_config(readback: &EffectiveConfigReadback) -> Result<St
     Ok(lines.join("\n"))
 }
 
-pub fn diff_effective_config_readbacks(
-    left: &EffectiveConfigReadback,
-    right: &EffectiveConfigReadback,
-) -> Result<EffectiveConfigDiff> {
+pub fn diff_readbacks(
+    left: &Readback,
+    right: &Readback,
+) -> Result<Diff> {
     let left_fields = field_map(&left.fields)?;
     let right_fields = field_map(&right.fields)?;
     let mut names = OrderedSet::new();
@@ -167,9 +167,9 @@ pub fn diff_effective_config_readbacks(
     } else {
         DECISION_DENY
     };
-    let value = effective_config_diff_value(left, right, decision, &diagnostics)?;
+    let value = diff_value(left, right, decision, &diagnostics)?;
     let diff_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(EffectiveConfigDiff {
+    Ok(Diff {
         decision: decision.to_string(),
         diagnostics,
         diff_ref,
@@ -181,7 +181,7 @@ pub fn evaluate_readback_authorization_use(
     readback_ref: &str,
     requested_gate: &str,
     subsystem_evidence_refs: &[String],
-) -> Result<EffectiveConfigAuthorizationUse> {
+) -> Result<AuthorizationUse> {
     validate_ref(readback_ref, "effective config readback")?;
     validate_text("requested gate", requested_gate)?;
     ensure_ref_bound(subsystem_evidence_refs.len(), "subsystem evidence refs")?;
@@ -204,7 +204,7 @@ pub fn evaluate_readback_authorization_use(
         field_sequence("diagnostics", string_values(&diagnostics)?),
         field_sequence("caveats", string_values(&[EVIDENCE_ONLY_CAVEAT.to_string()])?),
     ]);
-    Ok(EffectiveConfigAuthorizationUse {
+    Ok(AuthorizationUse {
         decision: DECISION_DENY.to_string(),
         diagnostics,
         value,
@@ -212,10 +212,10 @@ pub fn evaluate_readback_authorization_use(
 }
 
 fn group_sources(
-    input: &EffectiveConfigInput,
+    input: &Input,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
-) -> Result<OrderedMap<String, Vec<ConfigSourceInput>>> {
-    let mut grouped = OrderedMap::<String, Vec<ConfigSourceInput>>::new();
+) -> Result<OrderedMap<String, Vec<SourceInput>>> {
+    let mut grouped = OrderedMap::<String, Vec<SourceInput>>::new();
     for source in &input.sources {
         validate_source(source, diagnostics)?;
         grouped.entry(source.field.clone()).or_default().push(source.clone());
@@ -223,7 +223,7 @@ fn group_sources(
     Ok(grouped)
 }
 
-fn validate_source(source: &ConfigSourceInput, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
+fn validate_source(source: &SourceInput, diagnostics: &mut impl crate::bounded::VecSink<String>) -> Result<()> {
     validate_text("effective config field", &source.field)?;
     validate_text("effective config value", &source.value)?;
     validate_source_class(&source.source_class, diagnostics)?;
@@ -239,11 +239,11 @@ fn validate_source(source: &ConfigSourceInput, diagnostics: &mut impl crate::bou
     Ok(())
 }
 
-fn select_effective_fields(
-    grouped: &OrderedMap<String, Vec<ConfigSourceInput>>,
+fn select_fields(
+    grouped: &OrderedMap<String, Vec<SourceInput>>,
     release_mode: bool,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
-) -> Result<Vec<EffectiveConfigField>> {
+) -> Result<Vec<Field>> {
     ensure_field_bound(grouped.len(), "effective config fields")?;
     let mut fields = Vec::with_capacity(grouped.len());
     for (field, sources) in grouped {
@@ -252,7 +252,7 @@ fn select_effective_fields(
             diagnostics.push_item(format!("fixture-default-in-release:{field}"));
         }
         let caveats = merged_caveats(sources)?;
-        fields.push(EffectiveConfigField {
+        fields.push(Field {
             field: field.clone(),
             value: selected.value.clone(),
             selected_source_class: selected.source_class.clone(),

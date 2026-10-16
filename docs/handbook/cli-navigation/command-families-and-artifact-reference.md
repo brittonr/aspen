@@ -12,13 +12,13 @@ These rows are navigation keys, not runnable recipes. Family presence proves a p
 
 | Root family or group | CLI owner resolved by `main.rs` | Routing purpose |
 | --- | --- | --- |
-| `cluster`, `dogfood`, `receipts` | `cli/ops/cluster.rs`, `cli/ops/dogfood/mod.rs`, `cli/evidence/receipts.rs` | Cluster, operational rails, and receipt surfaces |
+| `cluster`, `dogfood`, `receipts` | `cli/ops/cluster/mod.rs`, `cli/ops/dogfood/mod.rs`, `cli/evidence/receipts.rs` | Cluster, operational rails, and receipt surfaces |
 | `node`, `peer` | `cli/ops/node.rs`, `cli/ops/peer.rs` | Node and peer operations |
 | `runtime config` | `main/root.rs` | Read an exported startup configuration and summarize it |
-| `fabric-time` | `cli/runtime/fabric_time.rs` | Executable time fixture and report readback |
+| `fabric-time` | `cli/runtime/fabric_time/mod.rs` | Executable time fixture and report readback |
 | `fabric-simulation`, `system-extension` | Corresponding modules under `cli/runtime/` | Simulation and extension surfaces |
 | `world` | `cli/runtime/world.rs` | Request planning and fail-closed standalone apply |
-| `world-commit`, `world-snapshot`, `world-authority`, `world-head` | `worldcommit.rs`, `worldsnapshot.rs`, `worldauthority.rs`, `worldhead.rs` under `cli/runtime/` | Component-owned world surfaces |
+| `world-commit`, `world-snapshot`, `world-authority`, `world-head` | `worldcommit.rs`, `worldsnapshot.rs`, `worldauthority/mod.rs`, `worldhead.rs` under `cli/runtime/` | Component-owned world surfaces |
 | `world-distribution`, `world-merge`, `world-promotion` | `worlddistribution.rs`, `worldmerge.rs`, `worldpromotion.rs` under `cli/runtime/` | Distribution, comparison, and promotion surfaces |
 | `test` | `run_test_command` in `main/root.rs` | Nested harness, artifact, workflow, runtime, and evidence routes |
 
@@ -32,7 +32,7 @@ The [test enum](../../../src/main/root/parts/command/p000/body.rs) declares posi
 
 ## Inspected leaf argument shapes
 
-Provenance for the table is [WorldCommand and argument structs](../../../src/cli/runtime/world.rs), [FabricTimeCommand](../../../src/cli/runtime/fabric_time/command.rs), and [root Runtime/Test declarations](../../../src/main/root/parts/command/p000/body.rs).
+Provenance for the table is [WorldCommand and argument structs](../../../src/cli/runtime/world.rs), [ClockAction](../../../src/cli/runtime/fabric_time/command.rs), and [root Runtime/Test declarations](../../../src/main/root/parts/command/p000/body.rs).
 
 | Route | Required inputs/destinations | Optional or bounded selections |
 | --- | --- | --- |

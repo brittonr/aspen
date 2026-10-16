@@ -32,8 +32,8 @@ use molten_core::world_head::WorldHeadState;
 use molten_core::world_head::WorldHeadStatementRef;
 use molten_core::world_head::WorldHeadTransitionPlan;
 use molten_core::world_head::plan_world_head_transition;
-use molten_node_host::node_state::NodeStateNamespaceKind;
-use molten_node_host::node_state::NodeStateRoot;
+use molten_node_host::node_state::NamespaceKind;
+use molten_node_host::node_state::DirectoryRoot;
 
 use super::*;
 
@@ -154,7 +154,7 @@ fn artifact_ref(profile: &str, label: &str) -> ArtifactRef {
 }
 
 fn signing_adapter<'a>(
-    secrets: &'a molten_node_host::node_state::NodeStateNamespace,
+    secrets: &'a molten_node_host::node_state::Scope,
 ) -> LocalWorldHeadSigningAdapter<'a> {
     LocalWorldHeadSigningAdapter::new(secrets, SignerIdentity {
         profile_ref: reference("crypto-profile"),

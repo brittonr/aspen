@@ -53,7 +53,7 @@ fn parse_adapter_receipt_args(
     args.iter()
         .map(|arg| {
             let (name, receipt_ref) = arg.split_once('=').ok_or_else(|| {
-                molten::error::MoltenError::invalid_harness(format!(
+                molten::error::Failure::invalid_harness(format!(
                     "node adapter receipt arg `{arg}` must be name=blake3:ref"
                 ))
             })?;

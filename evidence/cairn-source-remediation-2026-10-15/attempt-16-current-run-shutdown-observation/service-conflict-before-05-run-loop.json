@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "node",
+    "run-loop",
+    "--state-root",
+    "/tmp/molten-f14-current-run-16-restored-se51n6m8/unresolved-service-before",
+    "--max-requests",
+    "1"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T18:28:40.410508+00:00",
+  "elapsed_seconds": 0.024,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "<node-control-loop-receipt-v1 \"molten.node.control-loop-receipt.v1\" <decision \"pass\"> <startup \"blake3:649f1c935e8c41778344fe7c1c3e08281d084680573e498d292b37f9cc0fe97b\"> <heartbeat \"blake3:9332fadb46ddcadc01fad7471bae1caa99195a0f38d91385ad8b1f5888a901e2\"> <max-requests \"1\"> <processed-requests [\"blake3:76346c59b3e425ec512e67ddd7f6c80e4778aaff5632f59ee7577d7dc2a5629f\"]> <dispatch-receipts [\"blake3:812ca22e4029a8db676eb6ea7201be1f1b1f163b397f3d2a53583fc38b31dac7\"]> <stopped \"yes\"> <profile \"local-preserves-control-loop-v1\"> <diagnostics []> <checks [<check \"bounded-request-loop\" \"pass\">, <check \"deterministic-inbox-order\" \"pass\">, <check \"idempotent-request-dispatch\" \"pass\">, <check \"shutdown-stops-loop\" \"pass\">]>>\nnode run-loop loop_receipt=blake3:7711c6360606373669a2defed2ad9493ea6273a250de4e1ddcaaf86f3b77ee5c heartbeat=blake3:9332fadb46ddcadc01fad7471bae1caa99195a0f38d91385ad8b1f5888a901e2 processed=1 stopped=yes\n",
+  "stderr": "node control loop receipt blake3:7711c6360606373669a2defed2ad9493ea6273a250de4e1ddcaaf86f3b77ee5c\n"
+}

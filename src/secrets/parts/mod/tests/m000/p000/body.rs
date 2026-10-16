@@ -16,7 +16,8 @@
 
     #[test]
     fn canonical_confidentiality_records_roundtrip() {
-        let run = run_secrets_fixture().expect("fixture");
+        let retention_root = crate::test_support::process_workspace("secrets-retention").expect("retention workspace");
+        let run = run_secrets_fixture(retention_root.as_ref()).expect("fixture");
         assert_eq!(run.reveal_denied.decision, "deny");
         assert_eq!(run.reveal_pass.decision, "pass");
         assert_eq!(run.decrypt_denied.decision, "deny");
@@ -100,7 +101,8 @@
 
     #[test]
     fn reveal_and_decrypt_require_authority_not_ciphertext_possession() {
-        let run = run_secrets_fixture().expect("fixture");
+        let retention_root = crate::test_support::process_workspace("secrets-retention").expect("retention workspace");
+        let run = run_secrets_fixture(retention_root.as_ref()).expect("fixture");
         assert_eq!(run.reveal_denied.decision, "deny");
         assert!(run.reveal_denied.diagnostics.join(";").contains("authority"));
         assert_eq!(run.decrypt_denied.decision, "deny");
@@ -111,7 +113,8 @@
 
     #[test]
     fn exact_reveal_decrypt_binding_core_denies_mismatches() {
-        let run = run_secrets_fixture().expect("fixture");
+        let retention_root = crate::test_support::process_workspace("secrets-retention").expect("retention workspace");
+        let run = run_secrets_fixture(retention_root.as_ref()).expect("fixture");
         let exact = evaluate_secret_access_binding(SecretAccessBindingInput {
             secret: &run.secret,
             encrypted: &run.encrypted,
@@ -187,7 +190,8 @@
 
     #[test]
     fn redaction_gate_core_rejects_diagnostic_profiles() {
-        let run = run_secrets_fixture().expect("fixture");
+        let retention_root = crate::test_support::process_workspace("secrets-retention").expect("retention workspace");
+        let run = run_secrets_fixture(retention_root.as_ref()).expect("fixture");
         let gate = evaluate_secret_redaction_gate(SecretRedactionGateInput {
             transform: &run.transform,
             private_bundle: Some(&run.private_bundle),
@@ -230,7 +234,8 @@
     #[test]
     fn cleanup_admission_core_requires_bound_retention_evidence() {
         let core = fixture_core().expect("fixture core");
-        let retention = fixture_retention(&core).expect("fixture retention");
+        let retention_root = crate::test_support::process_workspace("secret-cleanup-retention").expect("retention workspace");
+        let retention = fixture_retention(&core, &retention_root).expect("fixture retention");
         let tombstone = retention.tombstone.as_ref().expect("retention tombstone");
         let admitted_input = SecretCleanupInput {
             secret_ref: core.secret.secret_ref.clone(),
@@ -260,7 +265,8 @@
 
     #[test]
     fn commitment_replay_and_private_bundle_profiles_are_receipted() {
-        let run = run_secrets_fixture().expect("fixture");
+        let retention_root = crate::test_support::process_workspace("secrets-retention").expect("retention workspace");
+        let run = run_secrets_fixture(retention_root.as_ref()).expect("fixture");
         assert_eq!(run.private_bundle.transform_receipt_ref, run.transform.receipt_ref);
         assert!(run.private_bundle.is_gate_preserving);
         let plaintext_required = commitment_replay_receipt_value(&CommitmentReplayInput {

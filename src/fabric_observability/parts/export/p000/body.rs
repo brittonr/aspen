@@ -6,7 +6,7 @@ const TRACING_MEDIA_TYPE: &str = "application/x-molten-tracing-ref";
 const OTLP_EVENT_MEDIA_TYPE: &str = "application/json; profile=molten-otel-event-v1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExportShellState {
+pub struct ShellState {
     pub available: bool,
     pub queued_bytes: u64,
     pub cancelled: bool,
@@ -24,15 +24,15 @@ pub trait ObservationSink {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExportExecution {
+pub struct Emission {
     pub media_type: String,
     pub payload: Vec<u8>,
     pub payload_ref: String,
-    pub outcome: CanonicalArtifact<AdapterOutcome>,
+    pub outcome: Artifact<AdapterOutcome>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExportFormat {
+pub enum Format {
     Prometheus,
     OpenTelemetryJson,
     TracingReference,
@@ -44,7 +44,7 @@ pub struct AdapterDelivery<'a> {
     pub profile: &'a ObservationProfile,
     pub adapter: &'a ObservationAdapterProfile,
     pub request: &'a AdapterDeliveryRequest,
-    pub state: &'a ExportShellState,
+    pub state: &'a ShellState,
     pub last_export_tick: Option<u64>,
 }
 
@@ -56,34 +56,34 @@ struct RenderedPayload<'a> {
 
 // r[impl molten.fabric_observability.adapter_contract]
 // r[impl molten.fabric_observability.failure_semantics]
-pub fn execute_snapshot_export(
+pub fn execute_snapshot(
     delivery: AdapterDelivery<'_>,
     snapshot: &ObservationSnapshot,
-    format: ExportFormat,
+    format: Format,
     sink: &mut dyn ObservationSink,
-) -> crate::error::Result<ExportExecution> {
+) -> crate::error::Result<Emission> {
     let AdapterDelivery {
         profile,
         adapter,
         request,
         ..
     } = delivery;
-    require_export_class(adapter.class, format)?;
-    let canonical = canonical_observation_snapshot(profile, snapshot, request.submitted_tick)?;
+    require_class(adapter.class, format)?;
+    let canonical = observation_snapshot(profile, snapshot, request.submitted_tick)?;
     let (media_type, payload) = render_snapshot(format, &canonical)?;
     let rendered = RenderedPayload {
         media_type,
         payload,
         payload_ref: canonical.artifact_ref,
     };
-    execute_rendered_export(delivery, rendered, sink)
+    execute_rendered(delivery, rendered, sink)
 }
 
-pub fn execute_event_export(
+pub fn execute_event(
     delivery: AdapterDelivery<'_>,
     event: &ObservationEvent,
     sink: &mut dyn ObservationSink,
-) -> crate::error::Result<ExportExecution> {
+) -> crate::error::Result<Emission> {
     let AdapterDelivery {
         profile,
         adapter,
@@ -96,25 +96,25 @@ pub fn execute_event_export(
             | ObservationAdapterClass::OpenTelemetry
             | ObservationAdapterClass::DeterministicSimulation
     ) {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "event export requires tracing, OpenTelemetry, or deterministic simulation adapter",
         ));
     }
-    let canonical = canonical_observation_event(profile, event, request.submitted_tick)?;
+    let canonical = observation_event(profile, event, request.submitted_tick)?;
     let (media_type, payload) = render_event(adapter.class, &canonical)?;
     let rendered = RenderedPayload {
         media_type,
         payload,
         payload_ref: canonical.artifact_ref,
     };
-    execute_rendered_export(delivery, rendered, sink)
+    execute_rendered(delivery, rendered, sink)
 }
 
-fn execute_rendered_export(
+fn execute_rendered(
     delivery: AdapterDelivery<'_>,
     rendered: RenderedPayload<'_>,
     sink: &mut dyn ObservationSink,
-) -> crate::error::Result<ExportExecution> {
+) -> crate::error::Result<Emission> {
     let AdapterDelivery {
         profile,
         adapter,
@@ -138,11 +138,11 @@ fn execute_rendered_export(
     };
     let preflight = evaluate_adapter_delivery(profile, adapter, request, &preflight_runtime, last_export_tick);
     if preflight.kind != AdapterOutcomeKind::Exported {
-        return Ok(ExportExecution {
+        return Ok(Emission {
             media_type: media_type.to_string(),
             payload: Vec::new(),
             payload_ref,
-            outcome: canonical_adapter_outcome(profile, adapter, &preflight)?,
+            outcome: adapter_outcome(profile, adapter, &preflight)?,
         });
     }
     let completion = sink.emit(media_type, &payload, &payload_ref);
@@ -160,17 +160,17 @@ fn execute_rendered_export(
     } else {
         Vec::new()
     };
-    Ok(ExportExecution {
+    Ok(Emission {
         media_type: media_type.to_string(),
         payload: exported_payload,
         payload_ref,
-        outcome: canonical_adapter_outcome(profile, adapter, &outcome)?,
+        outcome: adapter_outcome(profile, adapter, &outcome)?,
     })
 }
 
 fn render_event(
     class: ObservationAdapterClass,
-    canonical: &CanonicalArtifact<ObservationEvent>,
+    canonical: &Artifact<ObservationEvent>,
 ) -> crate::error::Result<(&'static str, Vec<u8>)> {
     if class == ObservationAdapterClass::Tracing {
         return Ok((TRACING_MEDIA_TYPE, canonical.artifact_ref.as_bytes().to_vec()));
@@ -191,7 +191,7 @@ fn render_event(
         "observed_tick": canonical.artifact.context.observed_tick,
     }))
     .map_err(|error| {
-        crate::error::MoltenError::invalid_harness(format!("OpenTelemetry event rendering failed: {error}"))
+        crate::error::Failure::invalid_harness(format!("OpenTelemetry event rendering failed: {error}"))
     })?;
     Ok((OTLP_EVENT_MEDIA_TYPE, payload))
 }
@@ -251,7 +251,7 @@ pub fn render_opentelemetry_snapshot(snapshot: &ObservationSnapshot) -> crate::e
                 "observed_tick": series.latest_observed_tick,
             }))
             .map_err(|error| {
-                crate::error::MoltenError::invalid_harness(format!("OpenTelemetry JSON rendering failed: {error}"))
+                crate::error::Failure::invalid_harness(format!("OpenTelemetry JSON rendering failed: {error}"))
             })?,
         );
     }
@@ -272,7 +272,7 @@ impl DeterministicSimulationSink {
     pub fn new(completion_tick: u64, max_records: u64) -> crate::error::Result<Self> {
         let max_records = crate::bounded::usize_from_u64(max_records, "deterministic observation sink record bound")?;
         if max_records == 0 {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "deterministic observation sink record bound must be positive",
             ));
         }

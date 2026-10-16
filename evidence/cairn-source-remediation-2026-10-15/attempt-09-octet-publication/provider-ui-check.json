@@ -1,0 +1,18 @@
+{
+  "command": [
+    "nix",
+    "build",
+    ".#checks.x86_64-linux.ui",
+    "--no-link",
+    "--print-out-paths",
+    "-L"
+  ],
+  "exit_code": 0,
+  "derivation": "/nix/store/w7drw2q6j5wibsfzslh6kk0w7s4gkbil-octet-ui-0.1.0.drv",
+  "output": "/nix/store/l4hhdk0rmcndaph3wg2wizad4baj7bd8-octet-ui-0.1.0",
+  "unblessed": true,
+  "cargo_test_extra_args": "--test ui -- --ignored --nocapture",
+  "observed_test_result": "4 passed; 0 failed; 0 ignored",
+  "raw_full_tool_output": "artifact://553",
+  "retained_native_build_log": "provider-ui-replay-log.json"
+}

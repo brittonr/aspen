@@ -181,7 +181,7 @@ struct EntryInput<'a> {
     manifest_ref: &'a str,
     root_ref: &'a str,
     link_values: &'a [IoValue],
-    receipts: &'a [ChunkStoreReceipt],
+    receipts: &'a [ChunkReceipt],
 }
 
 struct ParsedEntries {
@@ -233,7 +233,7 @@ struct LinkInput<'a> {
     position: usize,
     previous_ref: Option<&'a str>,
     value: &'a IoValue,
-    receipt: &'a ChunkStoreReceipt,
+    receipt: &'a ChunkReceipt,
 }
 
 struct CheckedEntry {

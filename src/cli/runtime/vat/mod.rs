@@ -1,0 +1,18 @@
+#[path = "command.rs"]
+pub(crate) mod command;
+#[path = "io.rs"]
+mod io;
+#[path = "ops.rs"]
+mod ops;
+
+pub(crate) type VatCommand = command::Top;
+
+// r[impl dev_profiling.placement]
+// r[impl dev_profiling.build_gating]
+#[cfg_attr(
+    any(feature = "profiler", feature = "profiler-disabled"),
+    flux_profiler::timed("molten_cli_vat_command")
+)]
+pub(crate) fn run_vat_command(command: VatCommand) -> molten::error::Result<()> {
+    ops::run(command)
+}

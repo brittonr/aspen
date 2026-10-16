@@ -6,8 +6,8 @@ mod tests {
     const MATCHING_REVISION: &str = "89675cd4f585f837323c049e4a25f7b94c903038";
     const DRIFT_REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
-    fn file(path: &str, contents: &str, release_scoped: bool) -> ConfigFileRecord {
-        ConfigFileRecord {
+    fn file(path: &str, contents: &str, release_scoped: bool) -> FileRecord {
+        FileRecord {
             path: path.to_string(),
             contents: contents.to_string(),
             release_scoped,
@@ -28,8 +28,8 @@ mod tests {
     // r[verify molten.project.config_portability.config_lint]
     // r[verify molten.project.config_portability.named_config_constants]
     #[test]
-    fn config_portability_accepts_relocatable_pinned_inputs() {
-        let report = build_config_portability_report(&ConfigPortabilityInput {
+    fn accepts_relocatable_pinned_inputs() {
+        let report = build_report(&Input {
             files: vec![
                 file("flake.nix", "url = \"path:../cairn\"\nprofile_block_context=16", true),
                 file("rust-toolchain.toml", "channel = \"nightly-2026-05-26\"", true),
@@ -42,8 +42,8 @@ mod tests {
     }
 
     #[test]
-    fn config_portability_denies_home_paths_floating_toolchain_and_pin_drift() {
-        let report = build_config_portability_report(&ConfigPortabilityInput {
+    fn denies_home_paths_floating_toolchain_and_pin_drift() {
+        let report = build_report(&Input {
             files: vec![
                 file(".pre-commit-config.yaml", "path:/home/brittonr/git/cairn", true),
                 file("rust-toolchain.toml", "channel = \"nightly\"", true),

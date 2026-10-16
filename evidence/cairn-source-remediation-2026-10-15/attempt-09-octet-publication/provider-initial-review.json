@@ -1,0 +1,36 @@
+{
+  "text": "{\n  \"confidence\": 0.99,\n  \"explanation\": \"The must-fix finding is restored below and was also delivered directly to Main with the consuming test, frozen fixture identities, and minimal correction. This is a static source deduction; no checks or edits were performed.\",\n  \"findings\": [\n    {\n      \"body\": \"The added domain rows change the JSON embedded at `crates/octet-lint-metadata/src/identity/admission.rs:4`, but `identity::tests::frozen_pilot_receipts_are_valid_and_reviewed` (`crates/octet-lint-metadata/src/identity/tests.rs:159-178`) still hashes that live JSON on line 169 and compares each historical receipt's policy hash against it on line 173. Both `.cairn/archive/1970-01-01-enforce-nominal-domain-types/evidence/pilots/mantle-dynamic-plan.json:11` and sibling `valence-shared-identity.json:11` retain the original cohort digest `76b82ab58db137a1b3d0172faea971ff37564435fa8b6cefa95b483f9fff834c`, so extending the catalog makes the required metadata test compare different cohorts and fail. Decouple this historical test from the mutable catalog: preserve both frozen fixtures byte-for-byte, retain their structural/review checks, and bind any policy-identity assertion to the original reviewed cohort's digest instead; keep current-catalog admission and freshness validation separate.\",\n      \"confidence\": 0.99,\n      \"file_path\": \"/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015/standards/nominal-domains/generated/catalog.json\",\n      \"line_end\": 86,\n      \"line_start\": 86,\n      \"priority\": 1,\n      \"title\": \"Validate frozen pilot receipts against their original policy cohort\"\n    }\n  ],\n  \"overall_correctness\": \"incorrect\"\n}",
+  "details": {
+    "resolvedPath": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-aspen/2026-10-15T17-47-46-479Z_01a140ad-5faf-7599-8f93-cc88719aa0a6/ProviderReview.md",
+    "contentType": "text/markdown",
+    "totalLines": 16,
+    "displayContent": {
+      "text": "{\n  \"confidence\": 0.99,\n  \"explanation\": \"The must-fix finding is restored below and was also delivered directly to Main with the consuming test, frozen fixture identities, and minimal correction. This is a static source deduction; no checks or edits were performed.\",\n  \"findings\": [\n    {\n      \"body\": \"The added domain rows change the JSON embedded at `crates/octet-lint-metadata/src/identity/admission.rs:4`, but `identity::tests::frozen_pilot_receipts_are_valid_and_reviewed` (`crates/octet-lint-metadata/src/identity/tests.rs:159-178`) still hashes that live JSON on line 169 and compares each historical receipt's policy hash against it on line 173. Both `.cairn/archive/1970-01-01-enforce-nominal-domain-types/evidence/pilots/mantle-dynamic-plan.json:11` and sibling `valence-shared-identity.json:11` retain the original cohort digest `76b82ab58db137a1b3d0172faea971ff37564435fa8b6cefa95b483f9fff834c`, so extending the catalog makes the required metadata test compare different cohorts and fail. Decouple this historical test from the mutable catalog: preserve both frozen fixtures byte-for-byte, retain their structural/review checks, and bind any policy-identity assertion to the original reviewed cohort's digest instead; keep current-catalog admission and freshness validation separate.\",\n      \"confidence\": 0.99,\n      \"file_path\": \"/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015/standards/nominal-domains/generated/catalog.json\",\n      \"line_end\": 86,\n      \"line_start\": 86,\n      \"priority\": 1,\n      \"title\": \"Validate frozen pilot receipts against their original policy cohort\"\n    }\n  ],\n  \"overall_correctness\": \"incorrect\"\n}",
+      "startLine": 1,
+      "lineNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ]
+    },
+    "meta": {
+      "source": {
+        "type": "internal",
+        "value": "agent://ProviderReview"
+      }
+    }
+  }
+}

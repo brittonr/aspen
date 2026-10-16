@@ -11,23 +11,23 @@ mod outcome;
 mod planner;
 pub mod raft;
 
-pub use binding::ConsistencyGroupBinding;
-pub use binding::ConsistencyGroupBindingInput;
-pub use binding::canonical_consistency_group_binding;
-pub use lifecycle::apply_consistency_outcome;
-pub use live_service::plan_live_replica_start_for_host;
+pub use binding::Group;
+pub use binding::GroupInput;
+pub use binding::canonical_group;
+pub use lifecycle::apply_outcome;
+pub use live_service::plan_replica_start_for_host;
 pub use operation::ConfigurationTransition;
-pub use operation::ConsistencyOperation;
-pub use operation::ConsistencyPlanDecision;
-pub use operation::ConsistencyPortCommandInput;
-pub use operation::ConsistencyPortPlan;
 pub use operation::GroupOpenMode;
-pub use operation::plan_consistency_operation;
+pub use operation::PlanDecision;
+pub use operation::PortCommandInput;
+pub use operation::PortPlan;
+pub use operation::Request;
+pub use operation::plan;
 pub use operator::*;
-pub use outcome::ConsistencyOutcomeInput;
-pub use outcome::ConsistencyOutcomeKind;
-pub use outcome::ConsistencyPortOutcome;
-pub use outcome::normalize_consistency_outcome;
+pub use outcome::Input;
+pub use outcome::Kind;
+pub use outcome::Port;
+pub use outcome::normalize;
 
 pub const CONSISTENCY_GROUP_BINDING_SCHEMA: &str = "molten.fabric-consistency.group-binding.v1";
 pub const CONSISTENCY_PORT_PLAN_SCHEMA: &str = "molten.fabric-consistency.operation-plan.v1";
@@ -46,14 +46,14 @@ pub const INITIAL_CONSISTENCY_EPOCH: u64 = 1;
 pub const NEXT_CONSISTENCY_EPOCH_STEP: u64 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConsistencyGroupLifecycle {
+pub enum GroupLifecycle {
     Declared,
     Active,
     Draining,
     Removed,
 }
 
-impl ConsistencyGroupLifecycle {
+impl GroupLifecycle {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Declared => "declared",
@@ -65,13 +65,13 @@ impl ConsistencyGroupLifecycle {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConsistencyReadMode {
+pub enum ReadMode {
     LocalStale,
     Linearizable,
     Lease,
 }
 
-impl ConsistencyReadMode {
+impl ReadMode {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::LocalStale => "local-stale",

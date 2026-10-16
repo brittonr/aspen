@@ -7,7 +7,7 @@ const ARTIFACT_INDEX_SCHEMA: &str = "molten.system-extension.native-artifact-ind
 const MAX_ARTIFACT_MEMBERS: usize = 1_024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum NativeArtifactRole {
+pub enum Role {
     Executable,
     CallbackEnvelope,
     CallbackReceipt,
@@ -20,7 +20,7 @@ pub enum NativeArtifactRole {
     LifecycleEvidence,
 }
 
-impl NativeArtifactRole {
+impl Role {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Executable => "executable",
@@ -38,70 +38,70 @@ impl NativeArtifactRole {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NativeArtifactMember {
-    pub role: NativeArtifactRole,
+pub struct Member {
+    pub role: Role,
     pub artifact_ref: String,
     pub parent_ref: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalNativeArtifactIndex {
+pub struct CanonicalIndex {
     pub index_ref: String,
     pub manifest_ref: String,
-    pub members: Vec<NativeArtifactMember>,
+    pub members: Vec<Member>,
     pub non_claims: Vec<NativeHostNonClaim>,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum NativeArtifactIndexIssue {
+pub enum IndexIssue {
     TooManyMembers { actual: usize, maximum: usize },
     DuplicateMember(String),
     MalformedRef { field: &'static str, value: String },
-    MissingRole(NativeArtifactRole),
+    MissingRole(Role),
     ParentNotIndexed { artifact_ref: String, parent_ref: String },
     IndexIdentityMismatch,
     MissingNonClaim(NativeHostNonClaim),
 }
 
 // r[impl molten.system_extension.native_host.validation]
-pub fn build_native_artifact_index(
+pub fn build_index(
     instance: &NativeInstanceRecord,
-    observations: &[NativeInvocationObservation],
-    callback_receipts: &[CanonicalCallbackReceipt],
-    effect_completions: &[CanonicalEffectCompletion],
-) -> crate::error::Result<CanonicalNativeArtifactIndex> {
-    let state = canonical_native_instance_record(instance)?;
+    observations: &[InvocationObservation],
+    callback_receipts: &[CallbackReceipt],
+    effect_completions: &[EffectCompletion],
+) -> crate::error::Result<CanonicalIndex> {
+    let state = canonical_instance_record(instance)?;
     let estimated = estimated_member_count(instance, observations, callback_receipts, effect_completions)?;
     let mut members = Vec::with_capacity(estimated);
-    members.push(member(NativeArtifactRole::Executable, &instance.executable_ref, &instance.manifest_ref));
-    members.push(member(NativeArtifactRole::InstanceState, &state.record_ref, &instance.manifest_ref));
+    members.push(member(Role::Executable, &instance.executable_ref, &instance.manifest_ref));
+    members.push(member(Role::InstanceState, &state.record_ref, &instance.manifest_ref));
     if let Some(state_ref) = &instance.state_ref {
-        members.push(member(NativeArtifactRole::SemanticState, state_ref, &state.record_ref));
+        members.push(member(Role::SemanticState, state_ref, &state.record_ref));
     }
     if let Some(checkpoint_ref) = &instance.checkpoint_ref {
-        members.push(member(NativeArtifactRole::Checkpoint, checkpoint_ref, &state.record_ref));
+        members.push(member(Role::Checkpoint, checkpoint_ref, &state.record_ref));
     }
     for observation in observations {
-        members.push(member(NativeArtifactRole::CallbackEnvelope, &observation.envelope_ref, &instance.manifest_ref));
+        members.push(member(Role::CallbackEnvelope, &observation.envelope_ref, &instance.manifest_ref));
         if let Some(receipt_ref) = &observation.execution_receipt_ref {
-            members.push(member(NativeArtifactRole::ExecutionReceipt, receipt_ref, &observation.envelope_ref));
+            members.push(member(Role::ExecutionReceipt, receipt_ref, &observation.envelope_ref));
         }
     }
     for receipt in callback_receipts {
-        members.push(member(NativeArtifactRole::CallbackReceipt, &receipt.receipt_ref, &instance.manifest_ref));
+        members.push(member(Role::CallbackReceipt, &receipt.receipt_ref, &instance.manifest_ref));
     }
     for completion in effect_completions {
-        members.push(member(NativeArtifactRole::Effect, &completion.completion_ref, &completion.callback_receipt_ref));
+        members.push(member(Role::Effect, &completion.completion_ref, &completion.callback_receipt_ref));
     }
     for operation in &instance.unresolved {
         let role = match operation.kind {
-            NativeOperationKind::Effect => Some(NativeArtifactRole::Effect),
-            NativeOperationKind::ValuePublication => Some(NativeArtifactRole::ValuePublication),
+            NativeOperationKind::Effect => Some(Role::Effect),
+            NativeOperationKind::ValuePublication => Some(Role::ValuePublication),
             NativeOperationKind::Callback | NativeOperationKind::Ingress => None,
         };
         if let Some(role) = role {
-            members.push(NativeArtifactMember {
+            members.push(Member {
                 role,
                 artifact_ref: operation.operation_ref.clone(),
                 parent_ref: state.record_ref.clone(),
@@ -112,34 +112,34 @@ pub fn build_native_artifact_index(
         if operation.kind == NativeOperationKind::ValuePublication
             && let Some(terminal_ref) = &operation.terminal_ref
         {
-            members.push(member(NativeArtifactRole::ValuePublication, terminal_ref, &state.record_ref));
+            members.push(member(Role::ValuePublication, terminal_ref, &state.record_ref));
         }
     }
     let mut represented_refs =
         members.iter().map(|member| member.artifact_ref.clone()).collect::<std::collections::BTreeSet<_>>();
     for evidence_ref in &instance.evidence_refs {
         if represented_refs.insert(evidence_ref.clone()) {
-            members.push(member(NativeArtifactRole::LifecycleEvidence, evidence_ref, &state.record_ref));
+            members.push(member(Role::LifecycleEvidence, evidence_ref, &state.record_ref));
         }
     }
     members.sort_by(|left, right| (left.role, &left.artifact_ref).cmp(&(right.role, &right.artifact_ref)));
-    let value = artifact_index_value(&instance.manifest_ref, &members, &REQUIRED_NATIVE_HOST_NON_CLAIMS);
+    let value = index_value(&instance.manifest_ref, &members, &REQUIRED_NATIVE_HOST_NON_CLAIMS);
     let index_ref = crate::preserves_rail::canonical_hash(&value)?;
-    let index = CanonicalNativeArtifactIndex {
+    let index = CanonicalIndex {
         index_ref,
         manifest_ref: instance.manifest_ref.clone(),
         members,
         non_claims: REQUIRED_NATIVE_HOST_NON_CLAIMS.to_vec(),
         value,
     };
-    verify_native_artifact_index(&index).map_err(|issues| {
-        crate::error::MoltenError::invalid_harness(format!("native artifact index denied: {issues:?}"))
+    verify_index(&index).map_err(|issues| {
+        crate::error::Failure::invalid_harness(format!("native artifact index denied: {issues:?}"))
     })?;
     Ok(index)
 }
 
-fn member(role: NativeArtifactRole, artifact_ref: &str, parent_ref: &str) -> NativeArtifactMember {
-    NativeArtifactMember {
+fn member(role: Role, artifact_ref: &str, parent_ref: &str) -> Member {
+    Member {
         role,
         artifact_ref: artifact_ref.to_string(),
         parent_ref: parent_ref.to_string(),
@@ -150,9 +150,9 @@ fn member(role: NativeArtifactRole, artifact_ref: &str, parent_ref: &str) -> Nat
 /// evidence ref, and four for the executable, instance state, semantic state, and checkpoint.
 fn estimated_member_count(
     instance: &NativeInstanceRecord,
-    observations: &[NativeInvocationObservation],
-    callback_receipts: &[CanonicalCallbackReceipt],
-    effect_completions: &[CanonicalEffectCompletion],
+    observations: &[InvocationObservation],
+    callback_receipts: &[CallbackReceipt],
+    effect_completions: &[EffectCompletion],
 ) -> crate::error::Result<usize> {
     observations
         .len()
@@ -163,16 +163,14 @@ fn estimated_member_count(
         .and_then(|value| value.checked_add(instance.completed_operations.len()))
         .and_then(|value| value.checked_add(instance.evidence_refs.len()))
         .and_then(|value| value.checked_add(4))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("native artifact index member count overflow"))
+        .ok_or_else(|| crate::error::Failure::invalid_harness("native artifact index member count overflow"))
 }
 
 // r[impl molten.system_extension.native_host.validation]
-pub fn verify_native_artifact_index(
-    index: &CanonicalNativeArtifactIndex,
-) -> std::result::Result<(), Vec<NativeArtifactIndexIssue>> {
+pub fn verify_index(index: &CanonicalIndex) -> std::result::Result<(), Vec<IndexIssue>> {
     let mut issues = Vec::new();
     if index.members.len() > MAX_ARTIFACT_MEMBERS {
-        issues.push(NativeArtifactIndexIssue::TooManyMembers {
+        issues.push(IndexIssue::TooManyMembers {
             actual: index.members.len(),
             maximum: MAX_ARTIFACT_MEMBERS,
         });
@@ -182,7 +180,7 @@ pub fn verify_native_artifact_index(
     issues.reserve(index.members.len());
     for member in &index.members {
         if !members.insert((member.role, member.artifact_ref.clone())) {
-            issues.push(NativeArtifactIndexIssue::DuplicateMember(member.artifact_ref.clone()));
+            issues.push(IndexIssue::DuplicateMember(member.artifact_ref.clone()));
         }
         refs.insert(member.artifact_ref.clone());
         validate_ref("artifact-ref", &member.artifact_ref, &mut issues);
@@ -190,17 +188,17 @@ pub fn verify_native_artifact_index(
     }
     validate_ref("manifest-ref", &index.manifest_ref, &mut issues);
     issues.extend(
-        [NativeArtifactRole::Executable, NativeArtifactRole::InstanceState]
+        [Role::Executable, Role::InstanceState]
             .into_iter()
             .filter(|role| !index.members.iter().any(|member| member.role == *role))
-            .map(NativeArtifactIndexIssue::MissingRole),
+            .map(IndexIssue::MissingRole),
     );
     issues.extend(
         index
             .members
             .iter()
             .filter(|member| member.parent_ref != index.manifest_ref && !refs.contains(&member.parent_ref))
-            .map(|member| NativeArtifactIndexIssue::ParentNotIndexed {
+            .map(|member| IndexIssue::ParentNotIndexed {
                 artifact_ref: member.artifact_ref.clone(),
                 parent_ref: member.parent_ref.clone(),
             }),
@@ -209,22 +207,18 @@ pub fn verify_native_artifact_index(
         REQUIRED_NATIVE_HOST_NON_CLAIMS
             .into_iter()
             .filter(|required| !index.non_claims.contains(required))
-            .map(NativeArtifactIndexIssue::MissingNonClaim),
+            .map(IndexIssue::MissingNonClaim),
     );
-    let expected_value = artifact_index_value(&index.manifest_ref, &index.members, &index.non_claims);
+    let expected_value = index_value(&index.manifest_ref, &index.members, &index.non_claims);
     if crate::preserves_rail::canonical_hash(&expected_value).ok().as_deref() != Some(&index.index_ref)
         || expected_value != index.value
     {
-        issues.push(NativeArtifactIndexIssue::IndexIdentityMismatch);
+        issues.push(IndexIssue::IndexIdentityMismatch);
     }
     if issues.is_empty() { Ok(()) } else { Err(issues) }
 }
 
-fn artifact_index_value(
-    manifest_ref: &str,
-    members: &[NativeArtifactMember],
-    non_claims: &[NativeHostNonClaim],
-) -> preserves::IOValue {
+fn index_value(manifest_ref: &str, members: &[Member], non_claims: &[NativeHostNonClaim]) -> preserves::IOValue {
     crate::preserves_rail::record(ARTIFACT_INDEX_RECORD, vec![
         crate::preserves_rail::string(ARTIFACT_INDEX_SCHEMA),
         crate::preserves_rail::string(manifest_ref),
@@ -246,9 +240,9 @@ fn artifact_index_value(
     ])
 }
 
-fn validate_ref(field: &'static str, value: &str, issues: &mut impl crate::bounded::VecSink<NativeArtifactIndexIssue>) {
+fn validate_ref(field: &'static str, value: &str, issues: &mut impl crate::bounded::VecSink<IndexIssue>) {
     if crate::preserves_rail::ContentRef::parse(value).is_err() {
-        issues.push_item(NativeArtifactIndexIssue::MalformedRef {
+        issues.push_item(IndexIssue::MalformedRef {
             field,
             value: value.to_string(),
         });

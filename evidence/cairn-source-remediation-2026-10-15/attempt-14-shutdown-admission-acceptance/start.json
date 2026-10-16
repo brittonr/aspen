@@ -1,0 +1,9 @@
+{
+  "attempt": "14/20",
+  "change": "fix-node-shutdown-admission",
+  "target": "Complete the one remaining all-target/compatible-feature/Nix acceptance task, then review and use native lifecycle receipts.",
+  "reuse_scope": "Attempt-13 full configured strict source gate, workspace/default/doc/explicit-feature/Clippy/format/Nix results cover the same unchanged product Rust source. F12 only changed lifecycle specifications and documentation afterward.",
+  "new_verification": "Exercise the real admitted and denied node lifecycle/control surfaces, retain focused source bindings, then current native gates and traceability.",
+  "status": "entered before new change-directed commands",
+  "molten_remote_publication_authorized": false
+}

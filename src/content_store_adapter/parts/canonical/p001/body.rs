@@ -36,9 +36,9 @@ fn issue_code(issue: &ContentIssue) -> &'static str {
     }
 }
 
-fn canonical_artifact<T>(artifact: T, value: preserves::IOValue) -> crate::error::Result<CanonicalContentArtifact<T>> {
+fn artifact<T>(artifact: T, value: preserves::IOValue) -> crate::error::Result<Artifact<T>> {
     let artifact_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalContentArtifact {
+    Ok(Artifact {
         artifact,
         artifact_ref,
         value,
@@ -49,7 +49,7 @@ fn require_valid(label: &str, issues: &[ContentIssue]) -> crate::error::Result<(
     if issues.is_empty() {
         Ok(())
     } else {
-        Err(crate::error::MoltenError::invalid_harness(format!("{label} denied: {issues:?}")))
+        Err(crate::error::Failure::invalid_harness(format!("{label} denied: {issues:?}")))
     }
 }
 

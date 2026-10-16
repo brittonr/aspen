@@ -2,32 +2,32 @@
 fn advance(state_root: &Path, claim_path: &Path, signature_path: &Path) -> Result<()> {
     let claim = parse_canonical_world_head_claim(&std::fs::read(claim_path)?)?;
     let signature: SignatureDocument = serde_json::from_slice(&std::fs::read(signature_path)?)
-        .map_err(|error| MoltenError::invalid_harness(format!("parse world-head signature: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("parse world-head signature: {error}")))?;
     let _ = bytes_from_hex(&signature.public_key_hex)?;
     let _ = bytes_from_hex(&signature.signature_hex)?;
-    let root = NodeStateRoot::open_existing(state_root)?;
-    let storage = root.namespace(NodeStateNamespaceKind::Storage)?;
+    let root = DirectoryRoot::open_existing(state_root)?;
+    let storage = root.namespace(NamespaceKind::Storage)?;
     let store = LocalWorldHeadStore::open(&storage)?;
     let observed = store
         .read_head(&claim.claim.branch_id)
-        .map_err(|error| MoltenError::invalid_harness(format!("read world head: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("read world head: {error}")))?;
     println!("claim_ref={}", claim.claim_ref);
     println!("observed_state={}", if observed.is_some() { "present" } else { "absent" });
     println!("decision=denied");
     println!("issue=current-authority-adapter-unavailable");
-    Err(MoltenError::invalid_harness(
+    Err(Failure::invalid_harness(
         "standalone world-head advance is disabled until a current authority adapter is composed",
     ))
 }
 
 fn conflicts(state_root: &Path, branch: &str, out_dir: Option<&Path>) -> Result<()> {
     let branch = WorldBranchId::new(branch).map_err(head_reference_error)?;
-    let root = NodeStateRoot::open_existing(state_root)?;
-    let storage = root.namespace(NodeStateNamespaceKind::Storage)?;
+    let root = DirectoryRoot::open_existing(state_root)?;
+    let storage = root.namespace(NamespaceKind::Storage)?;
     let store = LocalWorldHeadStore::open(&storage)?;
     let records = store
         .read_conflicts(&branch)
-        .map_err(|error| MoltenError::invalid_harness(format!("read world-head conflicts: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("read world-head conflicts: {error}")))?;
     println!("branch={branch}");
     println!("conflict_count={}", records.len());
     if let Some(out_dir) = out_dir {
@@ -60,22 +60,22 @@ fn bytes_to_hex(bytes: &[u8]) -> String {
 
 fn bytes_from_hex(value: &str) -> Result<Vec<u8>> {
     if !value.len().is_multiple_of(HEX_CHARACTERS_PER_BYTE) {
-        return Err(MoltenError::invalid_harness("hex value has an odd length"));
+        return Err(Failure::invalid_harness("hex value has an odd length"));
     }
     value
         .as_bytes()
         .chunks_exact(HEX_CHARACTERS_PER_BYTE)
         .map(|pair| {
-            let text = std::str::from_utf8(pair).map_err(|_| MoltenError::invalid_harness("hex value is not UTF-8"))?;
-            u8::from_str_radix(text, 16).map_err(|_| MoltenError::invalid_harness("hex value contains an invalid byte"))
+            let text = std::str::from_utf8(pair).map_err(|_| Failure::invalid_harness("hex value is not UTF-8"))?;
+            u8::from_str_radix(text, 16).map_err(|_| Failure::invalid_harness("hex value contains an invalid byte"))
         })
         .collect()
 }
 
-fn head_reference_error(error: molten_core::world_head::WorldHeadReferenceError) -> MoltenError {
-    MoltenError::invalid_harness(format!("invalid world-head reference: {error}"))
+fn head_reference_error(error: molten_core::world_head::WorldHeadReferenceError) -> Failure {
+    Failure::invalid_harness(format!("invalid world-head reference: {error}"))
 }
 
-fn commit_reference_error(error: molten_core::world_commit::WorldCommitReferenceError) -> MoltenError {
-    MoltenError::invalid_harness(format!("invalid world commit reference: {error:?}"))
+fn commit_reference_error(error: molten_core::world_commit::WorldCommitReferenceError) -> Failure {
+    Failure::invalid_harness(format!("invalid world commit reference: {error:?}"))
 }

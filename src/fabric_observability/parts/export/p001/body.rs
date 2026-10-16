@@ -44,30 +44,30 @@ impl ObservationSink for TracingReferenceSink {
 }
 
 fn render_snapshot(
-    format: ExportFormat,
-    canonical: &CanonicalArtifact<ObservationSnapshot>,
+    format: Format,
+    canonical: &Artifact<ObservationSnapshot>,
 ) -> crate::error::Result<(&'static str, Vec<u8>)> {
     match format {
-        ExportFormat::Prometheus => Ok((PROMETHEUS_MEDIA_TYPE, render_prometheus_snapshot(&canonical.artifact)?)),
-        ExportFormat::OpenTelemetryJson => {
+        Format::Prometheus => Ok((PROMETHEUS_MEDIA_TYPE, render_prometheus_snapshot(&canonical.artifact)?)),
+        Format::OpenTelemetryJson => {
             Ok((OTLP_JSON_MEDIA_TYPE, render_opentelemetry_snapshot(&canonical.artifact)?))
         }
-        ExportFormat::TracingReference => Ok((TRACING_MEDIA_TYPE, canonical.artifact_ref.as_bytes().to_vec())),
+        Format::TracingReference => Ok((TRACING_MEDIA_TYPE, canonical.artifact_ref.as_bytes().to_vec())),
     }
 }
 
-fn require_export_class(class: ObservationAdapterClass, format: ExportFormat) -> crate::error::Result<()> {
+fn require_class(class: ObservationAdapterClass, format: Format) -> crate::error::Result<()> {
     let is_matches = matches!(
         (class, format),
-        (ObservationAdapterClass::Prometheus, ExportFormat::Prometheus)
-            | (ObservationAdapterClass::OpenTelemetry, ExportFormat::OpenTelemetryJson)
-            | (ObservationAdapterClass::Tracing, ExportFormat::TracingReference)
+        (ObservationAdapterClass::Prometheus, Format::Prometheus)
+            | (ObservationAdapterClass::OpenTelemetry, Format::OpenTelemetryJson)
+            | (ObservationAdapterClass::Tracing, Format::TracingReference)
             | (ObservationAdapterClass::DeterministicSimulation, _)
     );
     if is_matches {
         Ok(())
     } else {
-        Err(crate::error::MoltenError::invalid_harness(
+        Err(crate::error::Failure::invalid_harness(
             "observation adapter class does not match requested exporter format",
         ))
     }
@@ -79,9 +79,9 @@ fn validate_request_binding(
     payload_len: usize,
 ) -> crate::error::Result<()> {
     let payload_bytes = u64::try_from(payload_len)
-        .map_err(|_| crate::error::MoltenError::invalid_harness("export payload length does not fit u64"))?;
+        .map_err(|_| crate::error::Failure::invalid_harness("export payload length does not fit u64"))?;
     if request.payload_ref != expected_payload_ref || request.payload_bytes != payload_bytes {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "export request does not bind the canonical snapshot ref and rendered byte length",
         ));
     }

@@ -20,7 +20,7 @@ Reference checks also have layers. The inspected Nickel candidate predicate reje
 
 ## Runtime resolution preserves what was admitted
 
-`CheckedNodeProfile` carries the profile and optional actual profile refs, source kind, tier, metadata, state-root ref, adapter bindings, and policy, capability, resource, and effect-profile refs. The resolver validates these inputs, collects mismatch and adapter diagnostics, applies admitted overrides, builds a configuration value, and produces configuration and resolution refs.
+`node_profile_config_core::Checked` carries the profile and optional actual profile refs, source kind, tier, metadata, state-root ref, adapter bindings, and policy, capability, resource, and effect-profile refs. The resolver validates these inputs, collects mismatch and adapter diagnostics, applies admitted overrides, builds a configuration value, and produces configuration and resolution refs.
 
 When an actual profile ref is supplied and differs from the expected ref, it records a mismatch. Absence of that optional field is not equivalent to independently observing matching bytes. Review should distinguish a caller-supplied reference assertion from the upstream process that calculated and reviewed it.
 

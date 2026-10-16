@@ -1,10 +1,6 @@
 use super::*;
 
-pub(super) fn preflight_ref(
-    action: ConsistencyOperatorAction,
-    dry_run: bool,
-    plan: &ConsistencyPortPlan,
-) -> crate::error::Result<String> {
+pub(super) fn preflight_ref(action: Action, dry_run: bool, plan: &PortPlan) -> crate::error::Result<String> {
     crate::preserves_rail::validate_content_ref(&plan.plan_ref)?;
     crate::preserves_rail::canonical_hash(&crate::preserves_rail::record(
         "fabric-consistency-operator-preflight-v1",
@@ -20,8 +16,8 @@ pub(super) fn preflight_ref(
 }
 
 pub(super) fn execution_ref(
-    preflight: &ConsistencyOperatorPreflight,
-    status: ConsistencyOperatorExecutionStatus,
+    preflight: &Preflight,
+    status: ExecutionStatus,
     effect_ref: Option<&str>,
 ) -> crate::error::Result<String> {
     let effect = match effect_ref {
@@ -43,11 +39,11 @@ pub(super) fn execution_ref(
 }
 
 pub(super) fn readback_ref(
-    binding: &ConsistencyGroupBinding,
-    replica: &ConsistencyOperatorReplicaState,
+    binding: &Group,
+    replica: &ReplicaState,
     evidence_refs: &[String],
     evidence_truncated: bool,
-    health: &crate::fabric_consistency::raft::ReplicaAggregateHealthEvidence,
+    health: &crate::fabric_consistency::raft::ReplicaAggregateHealth,
 ) -> crate::error::Result<String> {
     for reference in evidence_refs {
         crate::preserves_rail::validate_content_ref(reference)?;

@@ -12,7 +12,7 @@ You need authorized access to an already configured journal adapter or a preserv
 
 ## 1. Decide which artifact you actually have
 
-If you have canonical packed instance bytes, use the existing `decode_native_instance_record` boundary in an authorized application integration. It performs strict canonical decoding and expects the native instance schema. Do not treat a text rendering, callback frame, or generic status artifact as interchangeable input.
+If you have canonical packed instance bytes, use the existing `decode_instance_record` boundary in an authorized application integration. It performs strict canonical decoding and expects the native instance schema. Do not treat a text rendering, callback frame, or generic status artifact as interchangeable input.
 
 If you have a configured `NativeHostJournal`, its read operations are `latest_instance(instance_id)` and `history(instance_id)`. The durable implementation reads decoded records from the adapter's durable log; the in-memory implementation reads its vector. Neither interface is an instruction to invent adapter authority from a filesystem path.
 
@@ -69,6 +69,6 @@ Finish with one of: identities and observations consistent; additional named evi
 - [Recovery classification and removal laws](../../../crates/molten-core/src/system_extension/native_host/recovery.rs)
 - [Intent and publication ordering](../../../src/system_extension/native_host/parts/executor/p001/body.rs)
 - [Result admission and uncertainty propagation](../../../src/system_extension/native_host/parts/executor/p002/body.rs)
-- [Value-port uncertainty and journal tests](../../../src/system_extension/native_host/tests.rs)
+- [Value-port uncertainty and journal tests](../../../src/system_extension/native_host/tests/mod.rs)
 - [Provider-output denial cases](../../../tests/parts/nativesystemextension/p001/body.rs)
 - [Actual CLI surface](../../../src/cli/runtime/system_extension/command.rs)

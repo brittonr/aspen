@@ -6,9 +6,9 @@ const MAX_RECORDED_EFFECT_REFS: usize = 128;
 
 #[derive(Debug, Clone)]
 pub struct BenchmarkRunInput<'a> {
-    pub profile: &'a super::model::PerformanceProfile,
+    pub profile: &'a super::model::Profile,
     pub suite: &'a super::model::BenchmarkSuite,
-    pub materialized: &'a super::model::MaterializedPerformanceArtifact,
+    pub materialized: &'a super::model::MaterializedArtifact,
     pub host: &'a super::model::BenchmarkHostFacts,
     pub benchmark_ref: String,
     pub recorded_effect_refs: Vec<String>,
@@ -17,20 +17,20 @@ pub struct BenchmarkRunInput<'a> {
 
 pub fn build_benchmark_run(
     input: BenchmarkRunInput<'_>,
-) -> super::model::PerformanceResult<super::model::BenchmarkRun> {
-    super::profile::validate_performance_profile(input.profile)?;
+) -> super::model::Result<super::model::BenchmarkRun> {
+    super::profile::validate(input.profile)?;
     validate_suite_instance(input.profile, input.suite)?;
     validate_run_inputs(&input)?;
     let phases = normalize_phase_groups(input.profile, input.suite, input.phases)?;
     let mut run = super::model::BenchmarkRun {
-        suite_ref: super::profile::performance_suite_ref(input.suite),
+        suite_ref: super::profile::suite_ref(input.suite),
         run_ref: String::new(),
         benchmark_ref: input.benchmark_ref,
         consumer: input.materialized.consumer,
         source_component_ref: input.materialized.source_component_ref.clone(),
         component_ref: input.materialized.artifact_ref.clone(),
         component_profile_ref: input.materialized.component_profile_ref.clone(),
-        performance_profile_ref: super::profile::performance_profile_ref(input.profile),
+        performance_profile_ref: super::profile::r#ref(input.profile),
         engine_cohort_ref: input.suite.engine_cohort_ref.clone(),
         engine_artifact_ref: input.suite.engine_artifact_ref.clone(),
         runner_artifact_ref: input.suite.runner_artifact_ref.clone(),
@@ -46,7 +46,7 @@ pub fn build_benchmark_run(
     Ok(run)
 }
 
-pub fn validate_benchmark_run(run: &super::model::BenchmarkRun) -> super::model::PerformanceResult<()> {
+pub fn validate_benchmark_run(run: &super::model::BenchmarkRun) -> super::model::Result<()> {
     let mut blockers = [
         ("suite", run.suite_ref.as_str()),
         ("benchmark", run.benchmark_ref.as_str()),
@@ -81,16 +81,16 @@ pub fn validate_benchmark_run(run: &super::model::BenchmarkRun) -> super::model:
     if blockers.is_empty() {
         Ok(())
     } else {
-        Err(super::model::PerformanceDenial::from_blockers(blockers))
+        Err(super::model::Denial::from_blockers(blockers))
     }
 }
 
 pub fn compare_benchmark_runs(
-    profile: &super::model::PerformanceProfile,
+    profile: &super::model::Profile,
     baseline: &super::model::BenchmarkRun,
     candidate: &super::model::BenchmarkRun,
-) -> super::model::PerformanceResult<super::model::ComparisonDecision> {
-    super::profile::validate_performance_profile(profile)?;
+) -> super::model::Result<super::model::ComparisonDecision> {
+    super::profile::validate(profile)?;
     validate_benchmark_run(baseline)?;
     validate_benchmark_run(candidate)?;
     let blockers = compatibility_blockers(baseline, candidate);
@@ -108,7 +108,7 @@ pub fn compare_benchmark_runs(
         phases,
         comparison_ref: String::new(),
     };
-    comparison.comparison_ref = benchmark_comparison_ref(&comparison);
+    comparison.comparison_ref = benchmark_ref(&comparison);
     Ok(super::model::ComparisonDecision::Comparable(comparison))
 }
 
@@ -144,7 +144,7 @@ pub fn benchmark_run_ref(run: &super::model::BenchmarkRun) -> String {
     super::model::content_ref(lines.join("\n").as_bytes())
 }
 
-pub fn benchmark_comparison_ref(comparison: &super::model::BenchmarkComparison) -> String {
+pub fn benchmark_ref(comparison: &super::model::BenchmarkComparison) -> String {
     let mut lines = vec![
         format!("baseline-run-ref:{}", comparison.baseline_run_ref),
         format!("candidate-run-ref:{}", comparison.candidate_run_ref),
@@ -167,9 +167,9 @@ pub fn benchmark_comparison_ref(comparison: &super::model::BenchmarkComparison) 
 }
 
 pub fn validate_suite_instance(
-    profile: &super::model::PerformanceProfile,
+    profile: &super::model::Profile,
     suite: &super::model::BenchmarkSuite,
-) -> super::model::PerformanceResult<()> {
+) -> super::model::Result<()> {
     let template = match suite.lane {
         super::model::BenchmarkLane::Fast => &profile.fast,
         super::model::BenchmarkLane::Deep => &profile.deep,
@@ -198,11 +198,11 @@ pub fn validate_suite_instance(
     if blockers.is_empty() {
         Ok(())
     } else {
-        Err(super::model::PerformanceDenial::from_blockers(blockers))
+        Err(super::model::Denial::from_blockers(blockers))
     }
 }
 
-fn validate_run_inputs(input: &BenchmarkRunInput<'_>) -> super::model::PerformanceResult<()> {
+fn validate_run_inputs(input: &BenchmarkRunInput<'_>) -> super::model::Result<()> {
     let mut blockers = Vec::new();
     if !input
         .suite
@@ -232,15 +232,15 @@ fn validate_run_inputs(input: &BenchmarkRunInput<'_>) -> super::model::Performan
     if blockers.is_empty() {
         Ok(())
     } else {
-        Err(super::model::PerformanceDenial::from_blockers(blockers))
+        Err(super::model::Denial::from_blockers(blockers))
     }
 }
 
 fn normalize_phase_groups(
-    profile: &super::model::PerformanceProfile,
+    profile: &super::model::Profile,
     suite: &super::model::BenchmarkSuite,
     mut phases: Vec<super::model::PhaseSamples>,
-) -> super::model::PerformanceResult<Vec<super::model::PhaseSamples>> {
+) -> super::model::Result<Vec<super::model::PhaseSamples>> {
     for phase in &mut phases {
         phase.samples.sort_by_key(|sample| (sample.process, sample.iteration));
     }
@@ -253,7 +253,7 @@ fn normalize_phase_groups(
     blockers.reserve(phases.len().saturating_mul(BLOCKERS_PER_PHASE));
     for phase in &phases {
         let sample_count = u32::try_from(phase.samples.len()).map_err(|error| {
-            super::model::PerformanceDenial::new(format!("benchmark phase sample count is unsupported: {error}"))
+            super::model::Denial::new(format!("benchmark phase sample count is unsupported: {error}"))
         })?;
         if sample_count < suite.sampling.min_samples_per_phase
             || sample_count > suite.sampling.max_samples_per_phase
@@ -270,7 +270,7 @@ fn normalize_phase_groups(
         }
     }
     blockers.extend(
-        super::model::PerformancePhase::ALL
+        super::model::Phase::ALL
             .into_iter()
             .filter(|required| !phases.iter().any(|phase| phase.phase == *required))
             .map(|required| format!("benchmark run omits the {} phase", required.as_str())),
@@ -278,6 +278,6 @@ fn normalize_phase_groups(
     if blockers.is_empty() {
         Ok(phases)
     } else {
-        Err(super::model::PerformanceDenial::from_blockers(blockers))
+        Err(super::model::Denial::from_blockers(blockers))
     }
 }

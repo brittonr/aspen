@@ -177,13 +177,13 @@ fn success_sink() -> RecordingSink {
 fn export_request(
     adapter: &ObservationAdapterProfile,
     snapshot: &ObservationSnapshot,
-    format: ExportFormat,
+    format: Format,
 ) -> AdapterDeliveryRequest {
-    let canonical = canonical_observation_snapshot(&profile(), snapshot, OBSERVED_TICK).expect("snapshot");
+    let canonical = observation_snapshot(&profile(), snapshot, OBSERVED_TICK).expect("snapshot");
     let payload = match format {
-        ExportFormat::Prometheus => render_prometheus_snapshot(snapshot).expect("prometheus"),
-        ExportFormat::OpenTelemetryJson => render_opentelemetry_snapshot(snapshot).expect("otel"),
-        ExportFormat::TracingReference => canonical.artifact_ref.as_bytes().to_vec(),
+        Format::Prometheus => render_prometheus_snapshot(snapshot).expect("prometheus"),
+        Format::OpenTelemetryJson => render_opentelemetry_snapshot(snapshot).expect("otel"),
+        Format::TracingReference => canonical.artifact_ref.as_bytes().to_vec(),
     };
     AdapterDeliveryRequest {
         operation_ref: test_ref("export-operation"),
@@ -197,8 +197,8 @@ fn export_request(
 
 // r[verify molten.fabric_observability.adapter_contract]
 #[test]
-fn observability_and_integrity_ports_are_versioned_exact_and_non_authoritative() {
-    let descriptors = fabric_observability_port_descriptors(&profile().profile_ref);
+fn and_integrity_ports_are_versioned_exact_and_non_authoritative() {
+    let descriptors = port_descriptors(&profile().profile_ref);
     let registry = crate::fabric::build_fabric_port_registry(&descriptors).expect("observability port registry");
     assert_eq!(registry.descriptors().len(), OBSERVABILITY_PORT_COUNT);
     assert!(
@@ -221,9 +221,9 @@ fn prometheus_opentelemetry_and_tracing_shells_export_only_bounded_public_views(
     let profile = profile();
     let snapshot = snapshot();
     let exports = [
-        (ObservationAdapterClass::Prometheus, ExportFormat::Prometheus),
-        (ObservationAdapterClass::OpenTelemetry, ExportFormat::OpenTelemetryJson),
-        (ObservationAdapterClass::Tracing, ExportFormat::TracingReference),
+        (ObservationAdapterClass::Prometheus, Format::Prometheus),
+        (ObservationAdapterClass::OpenTelemetry, Format::OpenTelemetryJson),
+        (ObservationAdapterClass::Tracing, Format::TracingReference),
     ];
     let mut canonical_refs = Vec::with_capacity(exports.len());
     let mut prometheus_payload = Vec::new();
@@ -231,7 +231,7 @@ fn prometheus_opentelemetry_and_tracing_shells_export_only_bounded_public_views(
         let adapter = adapter(class);
         let request = export_request(&adapter, &snapshot, format);
         let mut sink = success_sink();
-        let execution = execute_snapshot_export(
+        let execution = execute_snapshot(
             AdapterDelivery {
                 profile: &profile,
                 adapter: &adapter,
@@ -248,7 +248,7 @@ fn prometheus_opentelemetry_and_tracing_shells_export_only_bounded_public_views(
         assert_eq!(sink.calls, 1);
         assert!(!sink.payload.windows("never-export".len()).any(|window| window == b"never-export"));
         canonical_refs.push(execution.payload_ref);
-        if format == ExportFormat::Prometheus {
+        if format == Format::Prometheus {
             prometheus_payload = sink.payload;
         }
     }
@@ -257,10 +257,10 @@ fn prometheus_opentelemetry_and_tracing_shells_export_only_bounded_public_views(
     assert_tracing_event_export_only(&profile);
 
     let simulation_adapter = adapter(ObservationAdapterClass::DeterministicSimulation);
-    let simulation_request = export_request(&simulation_adapter, &snapshot, ExportFormat::Prometheus);
+    let simulation_request = export_request(&simulation_adapter, &snapshot, Format::Prometheus);
     let mut simulation_sink =
         DeterministicSimulationSink::new(OBSERVED_TICK, SIMULATION_RECORD_LIMIT).expect("simulation sink");
-    let simulation = execute_snapshot_export(
+    let simulation = execute_snapshot(
         AdapterDelivery {
             profile: &profile,
             adapter: &simulation_adapter,
@@ -269,7 +269,7 @@ fn prometheus_opentelemetry_and_tracing_shells_export_only_bounded_public_views(
             last_export_tick: None,
         },
         &snapshot,
-        ExportFormat::Prometheus,
+        Format::Prometheus,
         &mut simulation_sink,
     )
     .expect("simulation export");

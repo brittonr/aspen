@@ -1,7 +1,7 @@
 
 fn validate_relative_artifact_path(path: &std::path::Path) -> molten::error::Result<()> {
     if path.as_os_str().is_empty() || path.is_absolute() {
-        return Err(molten::error::MoltenError::invalid_harness(
+        return Err(molten::error::Failure::invalid_harness(
             "fabric-simulation artifact path must be non-empty and relative",
         ));
     }
@@ -11,7 +11,7 @@ fn validate_relative_artifact_path(path: &std::path::Path) -> molten::error::Res
             std::path::Component::ParentDir | std::path::Component::RootDir | std::path::Component::Prefix(_)
         )
     }) {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "fabric-simulation artifact path escapes output root: {}",
             path.display()
         )));
@@ -20,26 +20,26 @@ fn validate_relative_artifact_path(path: &std::path::Path) -> molten::error::Res
 }
 
 fn write_artifacts(root: &std::path::Path, artifacts: &[PlannedArtifact]) -> molten::error::Result<()> {
-    std::fs::create_dir_all(root).map_err(molten::error::MoltenError::from)?;
+    std::fs::create_dir_all(root).map_err(molten::error::Failure::from)?;
     for artifact in artifacts {
         let path = root.join(&artifact.relative_path);
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(molten::error::MoltenError::from)?;
+            std::fs::create_dir_all(parent).map_err(molten::error::Failure::from)?;
         }
-        std::fs::write(path, artifact.content.as_bytes()).map_err(molten::error::MoltenError::from)?;
+        std::fs::write(path, artifact.content.as_bytes()).map_err(molten::error::Failure::from)?;
     }
     Ok(())
 }
 
 fn read_report(path: &std::path::Path) -> molten::error::Result<preserves::IOValue> {
-    let metadata = std::fs::metadata(path).map_err(molten::error::MoltenError::from)?;
+    let metadata = std::fs::metadata(path).map_err(molten::error::Failure::from)?;
     if metadata.len() > MAX_REPORT_ARTIFACT_BYTES {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "fabric-simulation report is {} bytes; maximum is {MAX_REPORT_ARTIFACT_BYTES}",
             metadata.len()
         )));
     }
-    let source = std::fs::read_to_string(path).map_err(molten::error::MoltenError::from)?;
+    let source = std::fs::read_to_string(path).map_err(molten::error::Failure::from)?;
     molten::preserves_rail::parse_text(&source)
 }
 
@@ -49,7 +49,7 @@ mod tests {
 
     #[test]
     fn run_and_export_plans_are_bounded_relative_and_secret_free() {
-        let fixture = molten::fabric_simulation::run_reference_simulation_fixture().expect("fixture");
+        let fixture = molten::fabric_simulation::run_reference_fixture().expect("fixture");
         let run = plan_run_artifacts(&fixture).expect("run plan");
         let export = plan_export_artifacts(&fixture).expect("export plan");
 

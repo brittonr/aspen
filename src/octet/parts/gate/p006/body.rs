@@ -226,6 +226,7 @@ fn validate_command(
 fn validate_metadata_binding(
     command: Option<&GateFile>,
     status: Option<&StatusArtifact>,
+    workspace: &std::result::Result<WorkspaceSnapshot, String>,
     checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> bool {
@@ -239,7 +240,7 @@ fn validate_metadata_binding(
         push_check(checks, "status-profile-current", false);
         return false;
     };
-    let expected = match expected_metadata_for_command(command.text.trim()) {
+    let expected = match expected_metadata_for_command(command.text.trim(), workspace) {
         Ok(expected) => expected,
         Err(message) => {
             push_check(checks, "status-config-current", false);
@@ -270,11 +271,14 @@ fn validate_metadata_binding(
     is_status_config_current && is_status_profile_current
 }
 
-fn expected_metadata_for_command(command: &str) -> std::result::Result<ExpectedMetadata, String> {
-    let workspace_root = std::env::current_dir().map_err(|error| format!("current_dir: {error}"))?;
-    let workspace_config = load_workspace_octet_config(&workspace_root)?;
+fn expected_metadata_for_command(
+    command: &str,
+    workspace: &std::result::Result<WorkspaceSnapshot, String>,
+) -> std::result::Result<ExpectedMetadata, String> {
+    let workspace = workspace.as_ref().map_err(Clone::clone)?;
+    let workspace_config = load_workspace_octet_config(&workspace.manifest, &workspace.manifest_path)?;
     let effective = parse_effective_command(command, &workspace_config)?;
-    let config_hash = current_config_hash(&workspace_root, &effective.scope_args, &effective.cargo_check_args)?;
+    let config_hash = current_config_hash(&workspace.files, &effective.scope_args, &effective.cargo_check_args)?;
     let profile_hash = current_profile_hash(
         &effective.scope_args,
         &effective.cargo_check_args,

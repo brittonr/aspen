@@ -1,0 +1,8 @@
+{
+  "initial_direct_rustc_record": "public-consumer-compile.json",
+  "observation": "The unhashed debug/libmolten.rlib did not resolve its crate graph for direct rustc. No product source defect was inferred.",
+  "decision": "Use the repository Nix-shell Cargo example runner so Cargo selects the actual complete dependency graph; do not guess among hashed libraries.",
+  "task_owned_example": "examples/f08_delivery_acceptance.rs",
+  "source_input": "public-consumer-source-input.json",
+  "permanent_product_change": false
+}

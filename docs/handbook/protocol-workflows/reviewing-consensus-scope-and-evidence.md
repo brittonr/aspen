@@ -31,7 +31,7 @@ The governing [architecture](../../architecture.md#consensus-layer-trellis-backe
 
 - [ ] **Is connectivity separated from membership admission?** Evidence: `peer_session_scope` is `raft-membership`, and the requested role is one of `voter`, `non-voter`, or `learner`. A connected peer alone is insufficient; the [connectivity companion](../../technical/membership/connectivity-versus-membership.md) explains the broader distinction.
 - [ ] **Who resolves the ten evidence categories?** Preflight checks nonempty authority, policy, resource, source-gate, provenance, compatibility, snapshot, replay, quorum-safety, and operator-evidence collections. Evidence: their legitimate producers and the caller's validation path. The helper's presence checks are not independent verification of their content or currentness.
-- [ ] **Is preflight bound to the intended commit externally?** In [membership source](../../../src/raft/membership.rs), `commit_raft_membership` checks the supplied preflight's decision, then constructs a receipt from the supplied request. It does not independently compare a stored preflight subject to that request. Record this limitation instead of describing the helper as a complete admission transaction.
+- [ ] **Is preflight bound to the intended commit externally?** In [membership source](../../../src/raft/membership.rs), `commit` checks the supplied preflight's decision, then constructs a receipt from the supplied request. It does not independently compare a stored preflight subject to that request. Record this limitation instead of describing the helper as a complete admission transaction.
 
 ## Worked review outcome
 

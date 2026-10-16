@@ -1,0 +1,17 @@
+{
+  "target": "x86_64-linux",
+  "default_workspace": "all workspace targets and workspace doctests",
+  "enabled_cohort": [
+    "doltlite-oracle",
+    "executable-extents",
+    "profiler-perf",
+    "profiler-alloc",
+    "world-snapshot-vm-cohort"
+  ],
+  "disabled_cohort": [
+    "profiler-disabled"
+  ],
+  "reason": "Exercise every declared optional selector without using profiler-disabled to disable the active profiling cohort. External DoltLite ignored tests are not selected; feature compilation/testing is not a live DoltLite or KVM claim.",
+  "required_clippy": "Workspace all targets, default and both explicit compatible cohorts, -D warnings.",
+  "status": "selected before execution"
+}

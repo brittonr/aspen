@@ -71,7 +71,7 @@ const MAX_ARTIFACT_BYTES: u64 = 1_048_576;
 const EXPECTED_MEMBER_COUNT: usize = 13;
 
 #[derive(Debug, Clone)]
-pub struct DistinctProcessTransportRunInput {
+pub struct DistinctProcessRunInput {
     pub run_directory: std::path::PathBuf,
     pub process_binary: std::path::PathBuf,
     pub child_timeout_ms: u64,
@@ -81,7 +81,7 @@ pub struct DistinctProcessTransportRunInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DistinctProcessTransportRun {
+pub struct DistinctProcessRun {
     pub decision: String,
     pub parent_ref: String,
     pub verification_ref: String,
@@ -90,7 +90,7 @@ pub struct DistinctProcessTransportRun {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DistinctProcessTransportVerification {
+pub struct DistinctProcessVerification {
     pub decision: String,
     pub parent_ref: String,
     pub verification_ref: String,
@@ -168,17 +168,17 @@ impl ReapingChild {
         log_path: &std::path::Path,
     ) -> crate::error::Result<Self> {
         if let Some(parent) = log_path.parent() {
-            std::fs::create_dir_all(parent).map_err(crate::error::MoltenError::from)?;
+            std::fs::create_dir_all(parent).map_err(crate::error::Failure::from)?;
         }
-        let stdout = std::fs::File::create(log_path).map_err(crate::error::MoltenError::from)?;
-        let stderr = stdout.try_clone().map_err(crate::error::MoltenError::from)?;
+        let stdout = std::fs::File::create(log_path).map_err(crate::error::Failure::from)?;
+        let stderr = stdout.try_clone().map_err(crate::error::Failure::from)?;
         let child = std::process::Command::new(binary)
             .args(["cluster", role_command, "--run-dir"])
             .arg(run_directory)
             .stdout(std::process::Stdio::from(stdout))
             .stderr(std::process::Stdio::from(stderr))
             .spawn()
-            .map_err(crate::error::MoltenError::from)?;
+            .map_err(crate::error::Failure::from)?;
         Ok(Self { child, finished: false })
     }
 
@@ -187,7 +187,7 @@ impl ReapingChild {
     }
 
     fn try_wait(&mut self) -> crate::error::Result<Option<std::process::ExitStatus>> {
-        self.child.try_wait().map_err(crate::error::MoltenError::from)
+        self.child.try_wait().map_err(crate::error::Failure::from)
     }
 
     fn wait_bounded(
@@ -205,7 +205,7 @@ impl ReapingChild {
                 let _kill = self.child.kill();
                 let _wait = self.child.wait();
                 self.finished = true;
-                return Err(crate::error::MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "distinct-process {label} child timed out"
                 )));
             }
@@ -226,9 +226,9 @@ impl Drop for ReapingChild {
 
 // r[impl molten.fabric_transport.distinct_process_evidence]
 // r[impl molten.fabric_transport.cross_process_validation]
-pub fn execute_distinct_process_transport_run(
-    input: &DistinctProcessTransportRunInput,
-) -> crate::error::Result<DistinctProcessTransportRun> {
+pub fn execute_distinct_process_run(
+    input: &DistinctProcessRunInput,
+) -> crate::error::Result<DistinctProcessRun> {
     validate_run_input(input)?;
     prepare_run_directory(&input.run_directory, input.force)?;
     match execute_prepared_distinct_process_transport_run(input) {

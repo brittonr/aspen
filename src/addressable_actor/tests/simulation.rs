@@ -7,25 +7,25 @@ const SIMULATION_EFFECT_COUNT: usize = 2;
 
 // r[verify molten.addressable_actor.verification]
 #[test]
-fn deterministic_simulation_replays_sleep_wake_lifecycle_exactly() {
+fn deterministic_replays_sleep_wake_lifecycle_exactly() {
     let profile = profile();
-    let actor_key = actor_key();
+    let actor_key = key();
     let reason = message_wake();
     let wake_ref = identify_actor_wake(&reason);
     let steps = vec![
-        ActorSimulationStep {
+        Step {
             operation_id: "wake-message".to_string(),
             logical_tick: INITIAL_TICK,
             operation: ActorOperation::Wake { reason },
         },
-        ActorSimulationStep {
+        Step {
             operation_id: "start-complete".to_string(),
             logical_tick: INITIAL_TICK,
             operation: ActorOperation::StartSucceeded { wake_ref },
         },
     ];
-    let script = vec![ActorEffectDisposition::Succeeded; SIMULATION_EFFECT_COUNT];
-    let first = simulate_actor_sequence(SequenceRunInput {
+    let script = vec![EffectDisposition::Succeeded; SIMULATION_EFFECT_COUNT];
+    let first = simulate_sequence(SequenceRunInput {
         profile: &profile,
         actor_key: &actor_key,
         system_extension_manifest_ref: &reference("system-extension-manifest"),
@@ -34,7 +34,7 @@ fn deterministic_simulation_replays_sleep_wake_lifecycle_exactly() {
         scripted_effects: &script,
     })
     .expect("first simulation");
-    let second = simulate_actor_sequence(SequenceRunInput {
+    let second = simulate_sequence(SequenceRunInput {
         profile: &profile,
         actor_key: &actor_key,
         system_extension_manifest_ref: &reference("system-extension-manifest"),
@@ -52,21 +52,21 @@ fn deterministic_simulation_replays_sleep_wake_lifecycle_exactly() {
 }
 
 #[test]
-fn simulation_preserves_unknown_effect_without_automatic_follow_up() {
+fn preserves_unknown_effect_without_automatic_follow_up() {
     let profile = profile();
-    let actor_key = actor_key();
-    let steps = [ActorSimulationStep {
+    let actor_key = key();
+    let steps = [Step {
         operation_id: "wake-message".to_string(),
         logical_tick: INITIAL_TICK,
         operation: ActorOperation::Wake { reason: message_wake() },
     }];
-    let report = simulate_actor_sequence(SequenceRunInput {
+    let report = simulate_sequence(SequenceRunInput {
         profile: &profile,
         actor_key: &actor_key,
         system_extension_manifest_ref: &reference("system-extension-manifest"),
         placement_ref: &reference("placement"),
         steps: &steps,
-        scripted_effects: &[ActorEffectDisposition::Unknown],
+        scripted_effects: &[EffectDisposition::Unknown],
     })
     .expect("unknown simulation");
 

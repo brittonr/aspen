@@ -33,10 +33,10 @@ fn canonical_claim_and_artifact_auth_statement_bind_exact_transition_bytes() {
 fn local_store_atomically_creates_advances_and_survives_restart() {
     // r[verify molten.world_heads.cas]
     let temporary = cap_tempfile::tempdir(cap_std::ambient_authority()).expect("temporary state root");
-    let root = NodeStateRoot::from_dir(temporary.try_clone().expect("clone temporary root"));
+    let root = DirectoryRoot::from_dir(temporary.try_clone().expect("clone temporary root"));
     root.create_layout().expect("node state layout");
-    let storage = root.namespace(NodeStateNamespaceKind::Storage).expect("storage namespace");
-    let secrets = root.namespace(NodeStateNamespaceKind::Secrets).expect("secrets namespace");
+    let storage = root.namespace(NamespaceKind::Storage).expect("storage namespace");
+    let secrets = root.namespace(NamespaceKind::Secrets).expect("secrets namespace");
     let mut signer = signing_adapter(&secrets);
     let mut store = LocalWorldHeadStore::open(&storage).expect("world-head store");
     let mut authority = TestAuthority {
@@ -67,9 +67,9 @@ fn local_store_atomically_creates_advances_and_survives_restart() {
 fn valid_signature_never_overrides_denied_authority_or_stale_state() {
     // r[verify molten.world_heads.authentication]
     let temporary = cap_tempfile::tempdir(cap_std::ambient_authority()).expect("temporary state root");
-    let root = NodeStateRoot::from_dir(temporary.try_clone().expect("clone temporary root"));
+    let root = DirectoryRoot::from_dir(temporary.try_clone().expect("clone temporary root"));
     root.create_layout().expect("node state layout");
-    let storage = root.namespace(NodeStateNamespaceKind::Storage).expect("storage namespace");
+    let storage = root.namespace(NamespaceKind::Storage).expect("storage namespace");
     let secrets = root.secrets().expect("secrets namespace");
     let mut signer = signing_adapter(&secrets);
     let mut store = LocalWorldHeadStore::open(&storage).expect("world-head store");
@@ -101,7 +101,7 @@ fn valid_signature_never_overrides_denied_authority_or_stale_state() {
 fn threshold_tamper_revocation_and_wrong_purpose_fail_closed() {
     // r[verify molten.world_heads.verification]
     let temporary = cap_tempfile::tempdir(cap_std::ambient_authority()).expect("temporary state root");
-    let root = NodeStateRoot::from_dir(temporary.try_clone().expect("clone temporary root"));
+    let root = DirectoryRoot::from_dir(temporary.try_clone().expect("clone temporary root"));
     root.create_layout().expect("node state layout");
     let secrets = root.secrets().expect("secrets namespace");
     let mut signer = signing_adapter(&secrets);
@@ -145,7 +145,7 @@ fn threshold_tamper_revocation_and_wrong_purpose_fail_closed() {
 fn uncertain_storage_outcome_enters_reconciliation_without_success_overclaim() {
     // r[verify molten.world_heads.rollback]
     let temporary = cap_tempfile::tempdir(cap_std::ambient_authority()).expect("temporary state root");
-    let root = NodeStateRoot::from_dir(temporary.try_clone().expect("clone temporary root"));
+    let root = DirectoryRoot::from_dir(temporary.try_clone().expect("clone temporary root"));
     root.create_layout().expect("node state layout");
     let secrets = root.secrets().expect("secrets namespace");
     let mut signer = signing_adapter(&secrets);
@@ -174,9 +174,9 @@ fn competing_plans_are_stored_as_a_stable_conflict_set() {
     let left = admitted_plan("left", "left-claim");
     let right = admitted_plan("right", "right-claim");
     let temporary = cap_tempfile::tempdir(cap_std::ambient_authority()).expect("temporary state root");
-    let root = NodeStateRoot::from_dir(temporary.try_clone().expect("clone temporary root"));
+    let root = DirectoryRoot::from_dir(temporary.try_clone().expect("clone temporary root"));
     root.create_layout().expect("node state layout");
-    let storage = root.namespace(NodeStateNamespaceKind::Storage).expect("storage namespace");
+    let storage = root.namespace(NamespaceKind::Storage).expect("storage namespace");
     let mut store = LocalWorldHeadStore::open(&storage).expect("world-head store");
 
     let (conflict, canonical) =
@@ -195,9 +195,9 @@ fn competing_plans_are_stored_as_a_stable_conflict_set() {
 #[test]
 fn conflict_reads_accept_the_record_limit_and_deny_one_past() {
     let temporary = cap_tempfile::tempdir(cap_std::ambient_authority()).expect("temporary state root");
-    let root = NodeStateRoot::from_dir(temporary.try_clone().expect("clone temporary root"));
+    let root = DirectoryRoot::from_dir(temporary.try_clone().expect("clone temporary root"));
     root.create_layout().expect("node state layout");
-    let storage = root.namespace(NodeStateNamespaceKind::Storage).expect("storage namespace");
+    let storage = root.namespace(NamespaceKind::Storage).expect("storage namespace");
     let mut store = LocalWorldHeadStore::open(&storage).expect("world-head store");
     let plans = [
         admitted_plan("left", "left-claim"),

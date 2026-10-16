@@ -48,13 +48,13 @@ fn descriptor(kind: TimeProfileKind, id: &str, profile_ref: &str) -> TimeProfile
     }
 }
 
-fn simulation_profile() -> CanonicalTimeProfile {
-    canonical_admit_time_profile(&descriptor(TimeProfileKind::DeterministicSimulation, "test-simulation", HASH_A))
+fn simulation_profile() -> Profile {
+    admit_profile(&descriptor(TimeProfileKind::DeterministicSimulation, "test-simulation", HASH_A))
         .expect("simulation profile")
 }
 
-pub(crate) fn live_profile() -> CanonicalTimeProfile {
-    canonical_admit_time_profile(&descriptor(TimeProfileKind::Live, "test-live", HASH_B)).expect("live profile")
+pub(crate) fn live_profile() -> Profile {
+    admit_profile(&descriptor(TimeProfileKind::Live, "test-live", HASH_B)).expect("live profile")
 }
 
 fn one_shot(profile: &AdmittedTimeProfile, generation: u64) -> TimerScheduleRequest {
@@ -80,7 +80,7 @@ fn one_shot(profile: &AdmittedTimeProfile, generation: u64) -> TimerScheduleRequ
 // r[impl molten.fabric_time.final_validation]
 #[test]
 fn executable_fixture_exercises_both_profiles_and_bounded_evidence() {
-    let run = run_executable_fabric_time_fixture(FabricTimeFixtureSelection::Both).expect("fabric time fixture");
+    let run = run_executable(Selection::Both).expect("fabric time fixture");
     assert_eq!(run.live_conformance.timer_action, TimerAction::Deliver);
     assert_eq!(run.simulation_conformance.timer_action, TimerAction::Deliver);
     assert_eq!(run.live_conformance.domain, TimeDomain::Monotonic);
@@ -93,31 +93,31 @@ fn executable_fixture_exercises_both_profiles_and_bounded_evidence() {
     assert_eq!(run.port_descriptor_refs.len(), EXPECTED_PORT_DESCRIPTOR_REFS);
     assert!(!run.events.is_empty());
     assert!(run.report.report.shared_conformance_passed);
-    let readback = parse_fabric_time_run_readback(&run.report.value).expect("report readback");
+    let readback = parse_run_readback(&run.report.value).expect("report readback");
     assert_eq!(readback.report_ref, run.report.report_ref);
-    assert!(parse_fabric_time_run_readback(&run.events[0].value).is_err());
+    assert!(parse_run_readback(&run.events[0].value).is_err());
     assert_eq!(run.production_entropy_source, "unix-dev-urandom");
 }
 
 #[test]
 fn deterministic_fixture_report_is_reproducible_despite_live_adapter_execution() {
-    let first = run_executable_fabric_time_fixture(FabricTimeFixtureSelection::DeterministicSimulation)
+    let first = run_executable(Selection::DeterministicSimulation)
         .expect("first deterministic fixture");
-    let second = run_executable_fabric_time_fixture(FabricTimeFixtureSelection::DeterministicSimulation)
+    let second = run_executable(Selection::DeterministicSimulation)
         .expect("second deterministic fixture");
     assert_eq!(first.report.report_ref, second.report.report_ref);
     assert_eq!(first.report.report.evidence_refs, second.report.report.evidence_refs);
 }
 
 #[test]
-fn canonical_time_values_and_durations_bind_domain_and_profile() {
+fn canonical_values_and_durations_bind_domain_and_profile() {
     let profile = simulation_profile();
     let time = TimeValue::Virtual(VirtualInstant {
         profile_ref: profile.profile.profile_ref.clone(),
         ticks: TIMER_DEADLINE,
     });
-    let canonical_time = canonical_time_value(&profile, &time).expect("canonical time");
-    let canonical_duration = canonical_duration(&profile, &CheckedDuration {
+    let canonical_time = value(&profile, &time).expect("canonical time");
+    let canonical_duration = duration(&profile, &CheckedDuration {
         profile_ref: profile.profile.profile_ref.clone(),
         domain: TimeDomain::Virtual,
         ticks: TIMER_DELAY,
@@ -137,14 +137,14 @@ fn canonical_time_values_and_durations_bind_domain_and_profile() {
 fn canonical_profile_rejects_missing_non_claim() {
     let mut invalid = descriptor(TimeProfileKind::DeterministicSimulation, "invalid-simulation", HASH_A);
     invalid.non_claims.pop();
-    let error = canonical_admit_time_profile(&invalid).expect_err("missing non-claim must fail");
+    let error = admit_profile(&invalid).expect_err("missing non-claim must fail");
     assert!(error.to_string().contains("MissingNonClaim"));
 }
 
 #[test]
 fn port_bindings_reject_silent_profile_substitution() {
     let profile = simulation_profile();
-    let descriptors = fabric_time_port_descriptors(&profile);
+    let descriptors = port_descriptors(&profile);
     let registry = crate::fabric::build_fabric_port_registry(&descriptors).expect("time registry");
     let clock = &descriptors[0];
     let mut requirement = crate::fabric::FabricPortRequirement {
@@ -171,7 +171,7 @@ fn virtual_faults_are_explicit_and_timer_faults_do_not_bypass_core() {
     let mut clock = VirtualClockAdapter::new(&profile.profile, 0, WALL_BASE).expect("clock");
     let previous = clock.observe_wall().expect("first wall");
     assert!(
-        apply_clock_fault(&mut clock, &FabricTimeFault::BackwardWallJump { ticks: TIMER_DELAY }).expect("apply fault")
+        apply_clock_fault(&mut clock, &Fault::BackwardWallJump { ticks: TIMER_DELAY }).expect("apply fault")
     );
     clock.advance(1).expect("advance");
     let observed = clock.observe_wall().expect("second wall");
@@ -189,7 +189,7 @@ fn virtual_faults_are_explicit_and_timer_faults_do_not_bypass_core() {
         GENERATION,
         TIMER_DEADLINE,
         1,
-        Some(&FabricTimeFault::DelayTimer {
+        Some(&Fault::DelayTimer {
             key: timer.key.clone(),
             ticks: TIMER_DELAY,
         }),

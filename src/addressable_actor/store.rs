@@ -8,17 +8,14 @@ const ACTOR_DATABASE_FILE: &str = "addressable-actor.redb";
 const ACTOR_STATE_TABLE: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("addressable_actor_states_v1");
 const MAX_ACTOR_STATE_BYTES: usize = 2_097_152;
 
-pub struct LocalActorStore {
+pub struct Local {
     database: redb::Database,
     engine_epoch: u64,
 }
 
-impl LocalActorStore {
-    pub fn open(
-        storage: &molten_node_host::node_state::NodeStateNamespace,
-        engine_epoch: u64,
-    ) -> ActorPortResult<Self> {
-        if storage.kind() != molten_node_host::node_state::NodeStateNamespaceKind::Storage {
+impl Local {
+    pub fn open(storage: &molten_node_host::node_state::Scope, engine_epoch: u64) -> PortResult<Self> {
+        if storage.kind() != molten_node_host::node_state::NamespaceKind::Storage {
             return Err(port_error(
                 "actor-storage-namespace",
                 "addressable actor store requires the storage namespace",
@@ -27,7 +24,7 @@ impl LocalActorStore {
         if engine_epoch == 0 {
             return Err(port_error("actor-engine-epoch", "addressable actor engine epoch must be positive"));
         }
-        let path = molten_node_host::node_state::NodeStatePath::parse(ACTOR_DATABASE_FILE).map_err(node_state_error)?;
+        let path = molten_node_host::node_state::RelativePath::parse(ACTOR_DATABASE_FILE).map_err(node_state_error)?;
         let file = storage.open_database_file(&path).map_err(node_state_error)?;
         let database = redb::Database::builder().create_file(file).map_err(redb_error)?;
         initialize(&database)?;
@@ -35,9 +32,9 @@ impl LocalActorStore {
     }
 }
 
-impl ActorCommitPort for LocalActorStore {
-    fn load(&self, actor_key_ref: &str) -> ActorPortResult<Option<PublishedActorState>> {
-        validate_actor_key_ref(actor_key_ref)?;
+impl ActorCommitPort for Local {
+    fn load(&self, actor_key_ref: &str) -> PortResult<Option<PublishedState>> {
+        validate_key_ref(actor_key_ref)?;
         let read = self.database.begin_read().map_err(redb_error)?;
         let table = read.open_table(ACTOR_STATE_TABLE).map_err(redb_error)?;
         table
@@ -47,8 +44,8 @@ impl ActorCommitPort for LocalActorStore {
             .transpose()
     }
 
-    fn compare_and_commit(&mut self, request: &ActorCommitRequest) -> ActorPortResult<ActorCommitObservation> {
-        validate_actor_key_ref(&request.actor_key_ref)?;
+    fn compare_and_commit(&mut self, request: &CommitRequest) -> PortResult<CommitObservation> {
+        validate_key_ref(&request.actor_key_ref)?;
         validate_published_state(&request.next)?;
         let write = self.database.begin_write().map_err(redb_error)?;
         let observed = {
@@ -61,7 +58,7 @@ impl ActorCommitPort for LocalActorStore {
         };
         if observed.as_ref() == Some(&request.next) {
             return Ok(observation(
-                ActorCommitDisposition::AlreadyApplied,
+                CommitDisposition::AlreadyApplied,
                 self.engine_epoch,
                 Some(request.next.state_ref.clone()),
             ));
@@ -69,10 +66,10 @@ impl ActorCommitPort for LocalActorStore {
         if request.requested_engine_epoch != self.engine_epoch
             || !expected_matches(&request.expected, observed.as_ref())
         {
-            return Ok(ActorCommitObservation {
-                disposition: ActorCommitDisposition::Stale,
-                currentness: ActorCommitCurrentness::Linearizable,
-                durability: ActorDurabilityOutcome::Durable,
+            return Ok(CommitObservation {
+                disposition: CommitDisposition::Stale,
+                currentness: CommitCurrentness::Linearizable,
+                durability: DurabilityOutcome::Durable,
                 engine_epoch: self.engine_epoch,
                 observed_state_ref: observed.map(|published| published.state_ref),
             });
@@ -83,15 +80,11 @@ impl ActorCommitPort for LocalActorStore {
             table.insert(request.actor_key_ref.as_str(), bytes.as_slice()).map_err(redb_error)?;
         }
         write.commit().map_err(redb_error)?;
-        Ok(observation(
-            ActorCommitDisposition::Applied,
-            self.engine_epoch,
-            Some(request.next.state_ref.clone()),
-        ))
+        Ok(observation(CommitDisposition::Applied, self.engine_epoch, Some(request.next.state_ref.clone())))
     }
 }
 
-fn initialize(database: &redb::Database) -> ActorPortResult<()> {
+fn initialize(database: &redb::Database) -> PortResult<()> {
     let write = database.begin_write().map_err(redb_error)?;
     {
         let _table = write.open_table(ACTOR_STATE_TABLE).map_err(redb_error)?;
@@ -99,7 +92,7 @@ fn initialize(database: &redb::Database) -> ActorPortResult<()> {
     write.commit().map_err(redb_error)
 }
 
-fn encode_published_state(published: &PublishedActorState) -> ActorPortResult<Vec<u8>> {
+fn encode_published_state(published: &PublishedState) -> PortResult<Vec<u8>> {
     validate_published_state(published)?;
     let bytes = serde_json::to_vec(&published.state).map_err(codec_error)?;
     if bytes.len() > MAX_ACTOR_STATE_BYTES {
@@ -108,7 +101,7 @@ fn encode_published_state(published: &PublishedActorState) -> ActorPortResult<Ve
     Ok(bytes)
 }
 
-fn decode_published_state(bytes: &[u8]) -> ActorPortResult<PublishedActorState> {
+fn decode_published_state(bytes: &[u8]) -> PortResult<PublishedState> {
     if bytes.len() > MAX_ACTOR_STATE_BYTES {
         return Err(port_error("actor-state-bound", "stored addressable actor state exceeds its byte bound"));
     }
@@ -116,10 +109,10 @@ fn decode_published_state(bytes: &[u8]) -> ActorPortResult<PublishedActorState> 
     if !validate_actor_state(&state).is_empty() {
         return Err(port_error("actor-state-validation", "stored addressable actor state is invalid"));
     }
-    Ok(PublishedActorState::from_state(state))
+    Ok(PublishedState::from_state(state))
 }
 
-fn validate_published_state(published: &PublishedActorState) -> ActorPortResult<()> {
+fn validate_published_state(published: &PublishedState) -> PortResult<()> {
     if !validate_actor_state(&published.state).is_empty()
         || published.state_ref != identify_actor_state(&published.state)
         || published.revision != published.state.revision
@@ -130,7 +123,7 @@ fn validate_published_state(published: &PublishedActorState) -> ActorPortResult<
     Ok(())
 }
 
-fn expected_matches(expected: &ExpectedActorState, observed: Option<&PublishedActorState>) -> bool {
+fn expected_matches(expected: &ExpectedState, observed: Option<&PublishedState>) -> bool {
     match (&expected.state_ref, observed) {
         (None, None) => expected.revision == ADDRESSABLE_ACTOR_INITIAL_REVISION,
         (Some(expected_ref), Some(observed)) => {
@@ -141,38 +134,38 @@ fn expected_matches(expected: &ExpectedActorState, observed: Option<&PublishedAc
 }
 
 fn observation(
-    disposition: ActorCommitDisposition,
+    disposition: CommitDisposition,
     engine_epoch: u64,
     observed_state_ref: Option<String>,
-) -> ActorCommitObservation {
-    ActorCommitObservation {
+) -> CommitObservation {
+    CommitObservation {
         disposition,
-        currentness: ActorCommitCurrentness::Linearizable,
-        durability: ActorDurabilityOutcome::Durable,
+        currentness: CommitCurrentness::Linearizable,
+        durability: DurabilityOutcome::Durable,
         engine_epoch,
         observed_state_ref,
     }
 }
 
-fn validate_actor_key_ref(value: &str) -> ActorPortResult<()> {
-    if !valid_actor_reference(value) {
+fn validate_key_ref(value: &str) -> PortResult<()> {
+    if !valid_reference(value) {
         return Err(port_error("actor-key-ref", "addressable actor key reference is invalid"));
     }
     Ok(())
 }
 
-fn redb_error(error: impl std::fmt::Display) -> ActorPortError {
-    ActorPortError::new("actor-redb", error.to_string(), false)
+fn redb_error(error: impl std::fmt::Display) -> PortError {
+    PortError::new("actor-redb", error.to_string(), false)
 }
 
-fn codec_error(error: impl std::fmt::Display) -> ActorPortError {
-    ActorPortError::new("actor-state-codec", error.to_string(), false)
+fn codec_error(error: impl std::fmt::Display) -> PortError {
+    PortError::new("actor-state-codec", error.to_string(), false)
 }
 
-fn node_state_error(error: impl std::fmt::Display) -> ActorPortError {
-    ActorPortError::new("actor-node-state", error.to_string(), false)
+fn node_state_error(error: impl std::fmt::Display) -> PortError {
+    PortError::new("actor-node-state", error.to_string(), false)
 }
 
-fn port_error(code: &'static str, detail: &'static str) -> ActorPortError {
-    ActorPortError::new(code, detail, false)
+fn port_error(code: &'static str, detail: &'static str) -> PortError {
+    PortError::new(code, detail, false)
 }

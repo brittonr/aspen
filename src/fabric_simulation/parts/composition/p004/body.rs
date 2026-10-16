@@ -3,7 +3,7 @@
 /// becomes ready.
 fn next_readiness_tick(
     prepared: &PreparedReferenceWorld,
-    router: &DeterministicSimulationPortRouter,
+    router: &DeterministicPortRouter,
     scheduler: &SimulationSchedulerState,
     fired_recovery_faults: &std::collections::BTreeSet<String>,
 ) -> Option<u64> {
@@ -29,7 +29,7 @@ fn next_readiness_tick(
 /// Completes the selected storage operation or delivers the selected message and returns its
 /// semantic output.
 fn execute_port_choice(
-    router: &mut DeterministicSimulationPortRouter,
+    router: &mut DeterministicPortRouter,
     transition: &SimulationSchedulerTransition,
 ) -> crate::error::Result<String> {
     let selected = &transition.record.selected;
@@ -41,9 +41,9 @@ fn execute_port_choice(
                 .iter()
                 .find(|operation| storage_completion_choice_id(&operation.operation_id) == selected.choice_id)
                 .cloned()
-                .ok_or_else(|| crate::error::MoltenError::invalid_harness("selected storage completion disappeared"))?;
+                .ok_or_else(|| crate::error::Failure::invalid_harness("selected storage completion disappeared"))?;
             router.complete_storage_head(&operation.operation_id).map_err(|error| {
-                crate::error::MoltenError::invalid_harness(format!("reference storage completion denied: {error:?}"))
+                crate::error::Failure::invalid_harness(format!("reference storage completion denied: {error:?}"))
             })
         }
         SchedulerChoiceKind::MessageDelivery => {
@@ -53,12 +53,12 @@ fn execute_port_choice(
                 .iter()
                 .find(|transmission| message_delivery_choice_id(&transmission.transmission_id) == selected.choice_id)
                 .cloned()
-                .ok_or_else(|| crate::error::MoltenError::invalid_harness("selected transport delivery disappeared"))?;
+                .ok_or_else(|| crate::error::Failure::invalid_harness("selected transport delivery disappeared"))?;
             router.deliver_transmission(&transmission.transmission_id).map_err(|error| {
-                crate::error::MoltenError::invalid_harness(format!("reference transport delivery denied: {error:?}"))
+                crate::error::Failure::invalid_harness(format!("reference transport delivery denied: {error:?}"))
             })
         }
-        other => Err(crate::error::MoltenError::invalid_harness(format!(
+        other => Err(crate::error::Failure::invalid_harness(format!(
             "reference runner cannot execute scheduler choice kind {}",
             other.as_str()
         ))),
@@ -88,7 +88,7 @@ fn finish_reference_hosts(
         host.shutdown(scheduler.virtual_tick)?;
         final_state_refs.push(blake3_ref(format!("{:?}", host.executor().state()).as_bytes()));
         if service_states.len() >= host_count {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "reference world reports at most one durable service state per host",
             ));
         }
@@ -110,29 +110,29 @@ fn finish_reference_hosts(
 /// envelope.
 fn reference_resource_units(
     prepared: &PreparedReferenceWorld,
-    router: &DeterministicSimulationPortRouter,
+    router: &DeterministicPortRouter,
     choice_count: usize,
 ) -> crate::error::Result<u64> {
     let choice_resource_units = u64::try_from(choice_count)
-        .map_err(|_| crate::error::MoltenError::invalid_harness("reference choice resource count overflow"))?
+        .map_err(|_| crate::error::Failure::invalid_harness("reference choice resource count overflow"))?
         .checked_mul(RUN_RESOURCE_INCREMENT)
         .ok_or_else(|| {
-            crate::error::MoltenError::invalid_harness("reference choice resource multiplication overflow")
+            crate::error::Failure::invalid_harness("reference choice resource multiplication overflow")
         })?;
     let resource_units = router
         .resource_units()
         .checked_add(choice_resource_units)
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("reference run resource count overflow"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("reference run resource count overflow"))?;
     if resource_units > prepared.world.admitted.manifest.bounds.max_resource_units {
-        return Err(crate::error::MoltenError::invalid_harness("reference run exceeded its resource envelope"));
+        return Err(crate::error::Failure::invalid_harness("reference run exceeded its resource envelope"));
     }
     Ok(resource_units)
 }
 
 struct WorkloadStepContext<'a> {
     prepared: &'a mut PreparedReferenceWorld,
-    router: &'a mut DeterministicSimulationPortRouter,
-    observations: &'a mut Vec<CanonicalSimulationObservation>,
+    router: &'a mut DeterministicPortRouter,
+    observations: &'a mut Vec<Observation>,
     history_material: &'a mut String,
 }
 
@@ -149,41 +149,41 @@ fn execute_workload_step(
     } = context;
     router.set_dispatching(&step.node_id, &step.request_ref);
     let host = prepared.hosts.get_mut(&step.node_id).ok_or_else(|| {
-        crate::error::MoltenError::invalid_harness(format!("missing reference host {}", step.node_id))
+        crate::error::Failure::invalid_harness(format!("missing reference host {}", step.node_id))
     })?;
     let (receipt, outcome) =
         match host.dispatch_request(&step.request_ref, REFERENCE_REQUEST_BYTES, transition.next.virtual_tick)? {
-            crate::system_extension::HostDispatchResult::Executed { receipt, outcome, .. } => (receipt, outcome),
+            crate::system_extension::DispatchResult::Executed { receipt, outcome, .. } => (receipt, outcome),
             other => {
-                return Err(crate::error::MoltenError::invalid_harness(format!(
+                return Err(crate::error::Failure::invalid_harness(format!(
                     "reference request did not execute through the system-extension host: {other:?}"
                 )));
             }
         };
     let completions = host.route_approved_effects(&receipt, &mut **router)?;
     if completions.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "reference request did not cross a deterministic fabric port",
         ));
     }
     let semantic_output_ref = outcome.output_refs.first().cloned().ok_or_else(|| {
-        crate::error::MoltenError::invalid_harness("reference callback returned no decision output ref")
+        crate::error::Failure::invalid_harness("reference callback returned no decision output ref")
     })?;
     let reference_transition = host.executor().last_transition().ok_or_else(|| {
-        crate::error::MoltenError::invalid_harness("reference executor did not retain its pure transition")
+        crate::error::Failure::invalid_harness("reference executor did not retain its pure transition")
     })?;
     let state_ref = outcome
         .state_ref
         .clone()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("reference callback returned no state ref"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("reference callback returned no state ref"))?;
     history_material.push_str(&state_ref);
     history_material.push_str(&transition.record.selected.choice_id);
     let history_ref = blake3_ref(history_material.as_bytes());
     let port_event_ref =
         router.events().last().map(|event| event.event_ref.clone()).ok_or_else(|| {
-            crate::error::MoltenError::invalid_harness("reference route emitted no canonical port event")
+            crate::error::Failure::invalid_harness("reference route emitted no canonical port event")
         })?;
-    let observation = canonical_simulation_observation(SimulationObservation {
+    let observation = observation(SimulationObservation {
         sequence: step.sequence,
         node_id: step.node_id.clone(),
         service: Some(step.service),
@@ -227,17 +227,17 @@ fn rebuild_hosts_from_image(
                 continue;
             };
             let transition = apply_reference_operation(&state, operation).map_err(|error| {
-                crate::error::MoltenError::invalid_harness(format!("durable image replay denied: {error:?}"))
+                crate::error::Failure::invalid_harness(format!("durable image replay denied: {error:?}"))
             })?;
             state = transition.next;
         }
-        let executor = ReferenceServiceExecutor::recovered(
+        let executor = ServiceExecutor::recovered(
             kind,
             operations_for_kind(&prepared.operations, kind),
             &prepared.profiles,
             state,
         )?;
-        let mut host = crate::system_extension::SystemExtensionHost::new(admitted, executor)?;
+        let mut host = crate::system_extension::Dispatcher::new(admitted, executor)?;
         host.activate(FIRST_VIRTUAL_TICK)?;
         prepared.hosts.insert(node_id, host);
     }
@@ -245,8 +245,8 @@ fn rebuild_hosts_from_image(
 }
 
 fn reference_contract_differential(
-    world: &CanonicalSimulatedWorld,
-) -> crate::error::Result<CanonicalSimulationDifferential> {
+    world: &SimulatedWorld,
+) -> crate::error::Result<Differential> {
     let simulation_profile_ref = blake3_ref(FABRIC_SIMULATION_PROFILE_ID.as_bytes());
     let live_profile_ref = blake3_ref(b"reviewed-live-port-contract-profile-v1");
     let shared_contract_ref = blake3_ref(b"fabric-port-command-event-contract-set-v1");
@@ -268,7 +268,7 @@ fn reference_contract_differential(
             )
         })
         .collect::<Vec<_>>();
-    canonical_simulation_differential(DifferentialInput {
+    differential(DifferentialInput {
         simulation_profile_ref: &simulation_profile_ref,
         live_profile_ref: &live_profile_ref,
         shared_contract_ref: &shared_contract_ref,

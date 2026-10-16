@@ -7,8 +7,8 @@ mod tests {
         crate::preserves_rail::content_ref_from_bytes(label.as_bytes())
     }
 
-    fn refs() -> ContextRefSet {
-        ContextRefSet {
+    fn refs() -> RefSet {
+        RefSet {
             policy_refs: vec![local_ref("policy")],
             capability_refs: vec![local_ref("capability")],
             authority_refs: vec![local_ref("authority")],
@@ -19,8 +19,8 @@ mod tests {
         }
     }
 
-    fn profile() -> ContextProfileInput {
-        ContextProfileInput {
+    fn sample() -> Input {
+        Input {
             profile_id: "operator:node-control".to_string(),
             profile_tier: "pilot".to_string(),
             refs: refs(),
@@ -40,8 +40,8 @@ mod tests {
         }
     }
 
-    fn empty_overrides() -> ContextOverrideInput {
-        ContextOverrideInput {
+    fn empty_overrides() -> OverrideInput {
+        OverrideInput {
             policy_refs: Vec::new(),
             authority_refs: Vec::new(),
             resource_refs: Vec::new(),
@@ -55,20 +55,20 @@ mod tests {
     // r[verify molten.operator_workflow.context_profile.overrides]
     // r[verify molten.operator_workflow.context_profile.evidence_only]
     #[test]
-    fn context_profile_artifact_and_expansion_pass_for_valid_refs() {
-        let artifact = build_context_profile_artifact(&profile()).expect("profile artifact");
+    fn artifact_and_expansion_pass_for_valid_refs() {
+        let artifact = build_artifact(&sample()).expect("profile artifact");
         assert_eq!(artifact.decision, DECISION_PASS);
-        let expansion = expand_context_profile(&profile(), &requirements("node.status"), &empty_overrides())
+        let expansion = expand(&sample(), &requirements("node.status"), &empty_overrides())
             .expect("context expansion");
         assert_eq!(expansion.decision, DECISION_PASS);
         assert_eq!(expansion.expanded_refs.policy_refs, refs().policy_refs);
     }
 
     #[test]
-    fn context_profile_denies_malformed_refs_and_unsupported_scope() {
-        let mut profile = profile();
+    fn denies_malformed_refs_and_unsupported_scope() {
+        let mut profile = sample();
         profile.refs.authority_refs = vec!["not-a-ref".to_string()];
-        let expansion = expand_context_profile(&profile, &requirements("retention.delete"), &empty_overrides())
+        let expansion = expand(&profile, &requirements("retention.delete"), &empty_overrides())
             .expect("context expansion");
         assert_eq!(expansion.decision, DECISION_DENY);
         assert!(
@@ -86,26 +86,26 @@ mod tests {
     }
 
     #[test]
-    fn context_profile_allows_additive_evidence_but_denies_conflicting_authority() {
+    fn allows_additive_evidence_but_denies_conflicting_authority() {
         let mut overrides = empty_overrides();
         overrides.evidence_refs = vec![local_ref("extra-evidence")];
         let expansion =
-            expand_context_profile(&profile(), &requirements("node.install"), &overrides).expect("context expansion");
+            expand(&sample(), &requirements("node.install"), &overrides).expect("context expansion");
         assert_eq!(expansion.decision, DECISION_PASS);
         assert!(expansion.expanded_refs.evidence_refs.contains(&local_ref("extra-evidence")));
 
         let mut conflicting = empty_overrides();
         conflicting.authority_refs = vec![local_ref("other-authority")];
-        let denied = expand_context_profile(&profile(), &requirements("node.install"), &conflicting)
+        let denied = expand(&sample(), &requirements("node.install"), &conflicting)
             .expect("denied context expansion");
         assert_eq!(denied.decision, DECISION_DENY);
         assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic == "conflicting-authority-override"));
     }
 
     #[test]
-    fn context_profile_presence_cannot_authorize_mutation_by_itself() {
-        let artifact = build_context_profile_artifact(&profile()).expect("profile artifact");
-        let decision = evaluate_context_profile_authorization_use(&artifact.profile_ref, "node.install", &[])
+    fn presence_cannot_authorize_mutation_by_itself() {
+        let artifact = build_artifact(&sample()).expect("profile artifact");
+        let decision = evaluate_authorization_use(&artifact.profile_ref, "node.install", &[])
             .expect("authorization use");
         assert_eq!(decision.decision, DECISION_DENY);
         assert!(decision.diagnostics.iter().any(|diagnostic| diagnostic == "context-profile-is-not-authority"));

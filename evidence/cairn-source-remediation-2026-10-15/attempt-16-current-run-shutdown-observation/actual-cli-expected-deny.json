@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "python3",
+    "/tmp/molten-f14-current-run-16-restored-se51n6m8/cli-consumer.py",
+    "/home/brittonr/.cargo-target/debug/molten",
+    "negative"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T18:23:08.149661+00:00",
+  "elapsed_seconds": 5.527,
+  "exit_code": 2,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "AssertionError((['/home/brittonr/.cargo-target/debug/molten', 'node', 'run-loop', '--max-requests', '1', '--state-root', '/tmp/molten-f14-cli-consumer-5dirmi83/historical-shutdown-artifact/state'], 0, '<node-control-loop-receipt-v1 \"molten.node.control-loop-receipt.v1\" <decision \"deny\"> <startup \"blake3:b90be01c0c348647ec5e4c20d38a50472a31df5ac60b149fc563d206851eaaa6\"> <heartbeat \"blake3:dbc1df8bcc95af7538ddc0839850b7de3e1c9ead7229e7c34a366ae5047f21c0\"> <max-requests \"1\"> <processed-requests [\"blake3:76346c59b3e425ec512e67ddd7f6c80e4778aaff5632f59ee7577d7dc2a5629f\"]> <dispatch-receipts [\"blake3:0a12d66228b1a0d4a9b6cb534074ab7379f0996d650d73f4427ee2f3685be689\"]> <stopped \"no\"> <profile \"local-preserves-control-loop-v1\"> <diagnostics [\"node control shutdown has unresolved current-run observations\"]> <checks [<check \"bounded-request-loop\" \"pass\">, <check \"deterministic-inbox-order\" \"pass\">, <check \"idempotent-request-dispatch\" \"pass\">, <check \"shutdown-stops-loop\" \"pass\">]>>\\nnode run-loop loop_receipt=blake3:eea52be53d6b447c748fc92a763731cfe50c3ceea243cc83c91c6391166a4b2d heartbeat=blake3:dbc1df8bcc95af7538ddc0839850b7de3e1c9ead7229e7c34a366ae5047f21c0 processed=1 stopped=no\\n', 'node control loop receipt blake3:eea52be53d6b447c748fc92a763731cfe50c3ceea243cc83c91c6391166a4b2d\\n'))\n"
+}

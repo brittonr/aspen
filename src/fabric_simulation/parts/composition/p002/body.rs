@@ -3,10 +3,10 @@
 // r[impl molten.fabric_simulation.fault_model]
 // r[impl molten.fabric_simulation.stateful_transport]
 // r[impl molten.fabric_simulation.stateful_storage]
-impl FabricEffectPort for DeterministicSimulationPortRouter {
+impl FabricEffectPort for DeterministicPortRouter {
     fn route(
         &mut self,
-        binding: &crate::fabric::CanonicalFabricPortBinding,
+        binding: &crate::fabric::CanonicalPortBinding,
         effect: &crate::system_extension::TypedEffectRequest,
     ) -> FabricPortResult<crate::system_extension::PortEffectOutput> {
         let profile = self
@@ -62,7 +62,7 @@ impl FabricEffectPort for DeterministicSimulationPortRouter {
                 blake3_ref(output_material.as_bytes())
             }
         };
-        self.push_event(SimulationPortEventInput {
+        self.push_event(PortEventInput {
             choice_position: self.current_choice_position,
             class: profile.class,
             port_id: &profile.port_id,
@@ -82,14 +82,14 @@ impl FabricEffectPort for DeterministicSimulationPortRouter {
 // r[impl molten.fabric_simulation.same_core]
 // r[impl molten.fabric_simulation.reference_services]
 // r[impl molten.fabric_simulation.fabric_sufficiency]
-pub fn build_reference_simulated_world() -> crate::error::Result<CanonicalSimulatedWorld> {
+pub fn build_reference_simulated_world() -> crate::error::Result<SimulatedWorld> {
     Ok(prepare_reference_world()?.world)
 }
 
 // r[impl molten.fabric_simulation.world_manifest]
 pub fn reference_world_manifest() -> crate::error::Result<SimulatedWorldManifest> {
-    let profiles = reference_port_profiles();
-    let operations = default_reference_operations();
+    let profiles = port_profiles();
+    let operations = default_operations();
     let nodes = reference_nodes(&profiles)?;
     let workload = operations
         .iter()
@@ -109,7 +109,7 @@ pub fn reference_world_manifest() -> crate::error::Result<SimulatedWorldManifest
         .iter()
         .find(|profile| profile.class == crate::fabric::FabricPortClass::Transport)
         .map(|profile| profile.port_id.clone())
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("reference world has no transport port profile"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("reference world has no transport port profile"))?;
     Ok(SimulatedWorldManifest {
         schema: FABRIC_SIMULATION_WORLD_SCHEMA.to_string(),
         runtime_ref: blake3_ref(b"molten-runtime-reference-simulation"),
@@ -185,7 +185,7 @@ fn reference_nodes(profiles: &[SimulatedPortProfile]) -> crate::error::Result<Ve
                 simulation: identity.clone(),
                 live: identity,
             },
-            required_port_classes: reference_required_ports(kind),
+            required_port_classes: required_ports(kind),
         });
     }
     Ok(nodes)
@@ -203,7 +203,7 @@ pub fn causal_acknowledgment_manifest(is_completion_delayed: bool) -> crate::err
         .find(|profile| profile.class == crate::fabric::FabricPortClass::DurableState)
         .map(|profile| profile.port_id.clone())
         .ok_or_else(|| {
-            crate::error::MoltenError::invalid_harness("reference world has no durable-state port profile")
+            crate::error::Failure::invalid_harness("reference world has no durable-state port profile")
         })?;
     let mut faults = Vec::new();
     if is_completion_delayed {
@@ -239,7 +239,7 @@ pub fn causal_acknowledgment_manifest(is_completion_delayed: bool) -> crate::err
 // r[impl molten.fabric_simulation.reference_services]
 // r[impl molten.fabric_simulation.evidence]
 // r[impl molten.fabric_simulation.final_validation]
-pub fn run_reference_simulation_fixture() -> crate::error::Result<ReferenceSimulationFixtureRun> {
+pub fn run_reference_fixture() -> crate::error::Result<ReferenceFixtureRun> {
     let prepared = prepare_reference_world()?;
     run_prepared_reference_world(prepared, DEFAULT_REFERENCE_SEED)
 }
@@ -252,18 +252,18 @@ pub fn run_reference_simulation_fixture() -> crate::error::Result<ReferenceSimul
 pub fn run_reference_world(
     manifest: &SimulatedWorldManifest,
     seed: u64,
-) -> crate::error::Result<ReferenceSimulationFixtureRun> {
+) -> crate::error::Result<ReferenceFixtureRun> {
     let prepared = prepare_world_for_manifest(manifest)?;
     run_prepared_reference_world(prepared, seed)
 }
 
 // r[impl molten.fabric_simulation.replay_shrink]
-pub fn replay_reference_simulation_fixture(
-    expected: &CanonicalSimulationRun,
+pub fn replay_reference_fixture(
+    expected: &Run,
 ) -> crate::error::Result<ReferenceReplayResult> {
-    let replay = run_reference_simulation_fixture()?;
+    let replay = run_reference_fixture()?;
     if replay.world.world_ref != expected.world_ref {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "reference simulation replay world identity differs from the expected run",
         ));
     }

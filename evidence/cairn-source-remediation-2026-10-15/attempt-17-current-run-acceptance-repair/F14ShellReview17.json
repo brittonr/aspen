@@ -1,0 +1,26 @@
+{
+  "text": "{\n  \"confidence\": 0.9,\n  \"explanation\": \"No blocking findings in the bounded static review of daemon p018/p020/p027/p036/p058, their lock/dispatch/service consumers, package contracts, and included lifecycle regressions: historical duplicate dispatch avoids shutdown effects and lock mutation, observation admission precedes shutdown writes, status/restart resolve completion's immutable ledger control reference, and service denial remains independent of observed stopped state. The pure classifier/canonical representations were read only for integration contracts, not independently audited; broader subsystems and parent-owned acceptance/lifecycle integration remain outside this verdict. No Git diff was inspected and no tests, builds, lints, formatters, runtime scenarios, repository mutations, or remote operations were executed; this is source-level review, not fresh acceptance or release proof.\",\n  \"findings\": [],\n  \"overall_correctness\": \"correct\"\n}",
+  "details": {
+    "resolvedPath": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-aspen/2026-10-15T17-47-46-479Z_01a140ad-5faf-7599-8f93-cc88719aa0a6/F14ShellReview17.md",
+    "contentType": "text/markdown",
+    "totalLines": 6,
+    "displayContent": {
+      "text": "{\n  \"confidence\": 0.9,\n  \"explanation\": \"No blocking findings in the bounded static review of daemon p018/p020/p027/p036/p058, their lock/dispatch/service consumers, package contracts, and included lifecycle regressions: historical duplicate dispatch avoids shutdown effects and lock mutation, observation admission precedes shutdown writes, status/restart resolve completion's immutable ledger control reference, and service denial remains independent of observed stopped state. The pure classifier/canonical representations were read only for integration contracts, not independently audited; broader subsystems and parent-owned acceptance/lifecycle integration remain outside this verdict. No Git diff was inspected and no tests, builds, lints, formatters, runtime scenarios, repository mutations, or remote operations were executed; this is source-level review, not fresh acceptance or release proof.\",\n  \"findings\": [],\n  \"overall_correctness\": \"correct\"\n}",
+      "startLine": 1,
+      "lineNumbers": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    "meta": {
+      "source": {
+        "type": "internal",
+        "value": "agent://F14ShellReview17"
+      }
+    }
+  }
+}

@@ -7,7 +7,7 @@ const TEST_LIST_ARGUMENT: &str = "--list";
 const _: () = assert!(MAX_WORKSPACE_LABEL_BYTES <= MAX_REASONABLE_WORKSPACE_BOUND);
 const _: () = assert!(MAX_WORKSPACE_PATH_COMPONENTS <= MAX_REASONABLE_WORKSPACE_BOUND);
 
-pub(crate) type TestSupportResult<T> = std::io::Result<T>;
+pub(crate) type FixtureResult<T> = std::io::Result<T>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WorkspaceRole {
@@ -73,7 +73,7 @@ pub(crate) struct WorkspacePath {
 }
 
 impl WorkspacePath {
-    pub(crate) fn parse(value: &str) -> TestSupportResult<Self> {
+    pub(crate) fn parse(value: &str) -> FixtureResult<Self> {
         validate_workspace_path(value)?;
         Ok(Self {
             relative: std::path::PathBuf::from(value),
@@ -107,11 +107,11 @@ impl std::fmt::Debug for WorkspaceInner {
 }
 
 #[derive(Clone)]
-pub(crate) struct TestWorkspace {
+pub(crate) struct Workspace {
     inner: std::sync::Arc<WorkspaceInner>,
 }
 
-impl std::fmt::Debug for TestWorkspace {
+impl std::fmt::Debug for Workspace {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("TestWorkspace")
@@ -121,8 +121,8 @@ impl std::fmt::Debug for TestWorkspace {
     }
 }
 
-impl TestWorkspace {
-    pub(crate) fn new(logical_label: &str) -> TestSupportResult<Self> {
+impl Workspace {
+    pub(crate) fn new(logical_label: &str) -> FixtureResult<Self> {
         // r[impl molten.testing.cap_std_workspace]
         validate_logical_label(logical_label)?;
         let temp_dir = cap_tempfile::tempdir(cap_tempfile::ambient_authority())?;
@@ -145,31 +145,31 @@ impl TestWorkspace {
         &self.inner.logical_label
     }
 
-    pub(crate) fn state(&self) -> TestSupportResult<TestRoot<StateRole>> {
+    pub(crate) fn state(&self) -> FixtureResult<Root<StateRole>> {
         self.root()
     }
 
-    pub(crate) fn input(&self) -> TestSupportResult<TestRoot<InputRole>> {
+    pub(crate) fn input(&self) -> FixtureResult<Root<InputRole>> {
         self.root()
     }
 
-    pub(crate) fn output(&self) -> TestSupportResult<TestRoot<OutputRole>> {
+    pub(crate) fn output(&self) -> FixtureResult<Root<OutputRole>> {
         self.root()
     }
 
-    pub(crate) fn transport(&self) -> TestSupportResult<TestRoot<TransportRole>> {
+    pub(crate) fn transport(&self) -> FixtureResult<Root<TransportRole>> {
         self.root()
     }
 
-    pub(crate) fn ledger(&self) -> TestSupportResult<TestRoot<LedgerRole>> {
+    pub(crate) fn ledger(&self) -> FixtureResult<Root<LedgerRole>> {
         self.root()
     }
 
-    pub(crate) fn cache(&self) -> TestSupportResult<TestRoot<CacheRole>> {
+    pub(crate) fn cache(&self) -> FixtureResult<Root<CacheRole>> {
         self.root()
     }
 
-    pub(crate) fn adversarial(&self) -> TestSupportResult<TestRoot<AdversarialRole>> {
+    pub(crate) fn adversarial(&self) -> FixtureResult<Root<AdversarialRole>> {
         self.root()
     }
 
@@ -183,10 +183,10 @@ impl TestWorkspace {
 
     pub(crate) fn export_selected<R: WorkspaceRoleMarker>(
         &self,
-        source_root: &TestRoot<R>,
-        destination_root: &TestRoot<OutputRole>,
+        source_root: &Root<R>,
+        destination_root: &Root<OutputRole>,
         plan: &ArtifactExportPlan,
-    ) -> TestSupportResult<ArtifactExportReceipt> {
+    ) -> FixtureResult<ArtifactExportReceipt> {
         // r[impl molten.testing.cap_std_cleanup]
         ensure_workspace_owns_root(self, source_root)?;
         let bytes = source_root.read(&plan.source)?;
@@ -199,10 +199,10 @@ impl TestWorkspace {
         })
     }
 
-    fn root<R: WorkspaceRoleMarker>(&self) -> TestSupportResult<TestRoot<R>> {
+    fn root<R: WorkspaceRoleMarker>(&self) -> FixtureResult<Root<R>> {
         // r[impl molten.testing.cap_std_subroots]
         let dir = self.inner.temp_dir.open_dir(R::ROLE.as_str())?;
-        Ok(TestRoot {
+        Ok(Root {
             dir,
             inner: std::sync::Arc::clone(&self.inner),
             marker: std::marker::PhantomData,
@@ -210,13 +210,13 @@ impl TestWorkspace {
     }
 }
 
-pub(crate) struct TestRoot<R: WorkspaceRoleMarker> {
+pub(crate) struct Root<R: WorkspaceRoleMarker> {
     dir: cap_std::fs::Dir,
     inner: std::sync::Arc<WorkspaceInner>,
     marker: std::marker::PhantomData<R>,
 }
 
-impl<R: WorkspaceRoleMarker> std::fmt::Debug for TestRoot<R> {
+impl<R: WorkspaceRoleMarker> std::fmt::Debug for Root<R> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("TestRoot")
@@ -226,7 +226,7 @@ impl<R: WorkspaceRoleMarker> std::fmt::Debug for TestRoot<R> {
     }
 }
 
-impl<R: WorkspaceRoleMarker> TestRoot<R> {
+impl<R: WorkspaceRoleMarker> Root<R> {
     pub(crate) fn dir(&self) -> &cap_std::fs::Dir {
         &self.dir
     }
@@ -235,16 +235,16 @@ impl<R: WorkspaceRoleMarker> TestRoot<R> {
         format!("{}/{}", self.inner.logical_label, R::ROLE.as_str())
     }
 
-    pub(crate) fn write(&self, path: &WorkspacePath, bytes: &[u8]) -> TestSupportResult<()> {
+    pub(crate) fn write(&self, path: &WorkspacePath, bytes: &[u8]) -> FixtureResult<()> {
         create_parent(&self.dir, path.as_path())?;
         self.dir.write(path.as_path(), bytes)
     }
 
-    pub(crate) fn read(&self, path: &WorkspacePath) -> TestSupportResult<Vec<u8>> {
+    pub(crate) fn read(&self, path: &WorkspacePath) -> FixtureResult<Vec<u8>> {
         self.dir.read(path.as_path())
     }
 
-    pub(crate) fn try_exists(&self, path: &WorkspacePath) -> TestSupportResult<bool> {
+    pub(crate) fn try_exists(&self, path: &WorkspacePath) -> FixtureResult<bool> {
         self.dir.try_exists(path.as_path())
     }
 }
@@ -257,7 +257,7 @@ pub(crate) struct ArtifactExportPlan {
 }
 
 impl ArtifactExportPlan {
-    pub(crate) fn new(artifact_label: &str, source: &str, destination: &str) -> TestSupportResult<Self> {
+    pub(crate) fn new(artifact_label: &str, source: &str, destination: &str) -> FixtureResult<Self> {
         plan_artifact_export(artifact_label, source, destination)
     }
 }
@@ -271,11 +271,11 @@ pub(crate) struct ArtifactExportReceipt {
 }
 
 pub(crate) struct ProcessPathBridge<'a> {
-    workspace: &'a TestWorkspace,
+    workspace: &'a Workspace,
 }
 
 impl ProcessPathBridge<'_> {
-    pub(crate) fn plan<R: WorkspaceRoleMarker>(&self, root: &TestRoot<R>) -> TestSupportResult<ChildProcessPlan> {
+    pub(crate) fn plan<R: WorkspaceRoleMarker>(&self, root: &Root<R>) -> FixtureResult<ChildProcessPlan> {
         // r[impl molten.testing.cap_std_process_bridge]
         ensure_workspace_owns_root(self.workspace, root)?;
         Ok(ChildProcessPlan {

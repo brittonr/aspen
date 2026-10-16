@@ -1,0 +1,18 @@
+{
+  "attempt": "12/20",
+  "change": "adopt-octet-nominal-domain-enforcement",
+  "status": "post-approval implementation and acceptance continuation",
+  "counting_rule": "Conservatively count implementation/verification after the blocked attempt-11 decision as a separate cycle. The earlier attempt-11 evidence and blocker remain retained.",
+  "authorized_scope_decision": "Approve focused nominal acceptance",
+  "implementation_already_performed_after_approval": [
+    "Clarified the adoption-specific focused acceptance scope in governing docs and design.",
+    "Added direct catalog-comparison and preserved DTO/roundtrip markers at their actual implementations."
+  ],
+  "actual_checks_after_those_changes": {
+    "nominal_nix_output": "/nix/store/rq1f0gkfdf8567kjk50zjhi9k1lr5xcw-molten-nominal-reference-domains",
+    "inherited_guard_nix_output": "/nix/store/1r7hswks9x3cy5144a341na4w0a9b3na-molten-inherited-tracey-debt",
+    "whole_molten_library_status": "clean",
+    "rustfmt": "passed",
+    "nixfmt": "direct stale store path was unavailable; rerun only the missing formatter through pinned nix shell"
+  }
+}

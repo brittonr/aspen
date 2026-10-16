@@ -1,4 +1,4 @@
-type CliError = molten::error::MoltenError;
+type CliError = molten::error::Failure;
 type FsPath = std::path::Path;
 type FsPathBuf = std::path::PathBuf;
 type IoValue = preserves::IOValue;

@@ -1,6 +1,7 @@
 //! Receipt-first cluster harness canonical evidence and imperative execution shell.
 
 mod canonical;
+#[path = "fabric/transport.rs"]
 mod fabric_transport;
 mod runner;
 

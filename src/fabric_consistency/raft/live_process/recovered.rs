@@ -3,14 +3,14 @@ use super::*;
 pub(super) async fn run(
     node_id: String,
     endpoint_identity: String,
-    mut node: crate::fabric_consistency::raft::live_cluster::LiveNode,
+    mut node: crate::fabric_consistency::raft::live_cluster::Node,
     run_directory: &std::path::Path,
 ) -> crate::error::Result<()> {
     let listener = node
         .listener
         .take()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("recovered listener is absent"))?;
-    let mut ingress = IrohReplicaIngressPump::spawn(listener, IrohReplicaIngressConfig {
+        .ok_or_else(|| crate::error::Failure::invalid_harness("recovered listener is absent"))?;
+    let mut ingress = ReplicaIngressPump::spawn(listener, ReplicaIngressConfig {
         session_ref: node.session_ref.clone(),
         accept_timeout: std::time::Duration::from_secs(CHILD_TIMEOUT_SECONDS),
         event_capacity: INGRESS_EVENT_CAPACITY,
@@ -50,11 +50,11 @@ pub(super) async fn run(
             }
         }
     }
-    Err(crate::error::MoltenError::invalid_harness("recovered replica exhausted its bounded event loop"))
+    Err(crate::error::Failure::invalid_harness("recovered replica exhausted its bounded event loop"))
 }
 
 async fn send_stale_leader_frame(
-    node: &mut crate::fabric_consistency::raft::live_cluster::LiveNode,
+    node: &mut crate::fabric_consistency::raft::live_cluster::Node,
 ) -> crate::error::Result<()> {
     let state = node.service.state();
     let envelope = ReplicaMessageEnvelope {
@@ -62,7 +62,7 @@ async fn send_stale_leader_frame(
         service_generation: state.profile.service_generation,
         from: super::super::tests::NODE_A.to_string(),
         to: super::super::tests::NODE_B.to_string(),
-        message: RaftMessage::AppendEntries {
+        message: Message::AppendEntries {
             term: STALE_LEADER_TERM,
             leader_id: super::super::tests::NODE_A.to_string(),
             prev_log_index: INITIAL_LOG_INDEX,

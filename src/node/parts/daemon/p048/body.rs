@@ -1,7 +1,7 @@
 
 fn preflight_control_live_send_with_root(
     input: &ControlLiveSendInput<'_>,
-    state_root: Option<&crate::node_state::NodeStateRoot>,
+    state_root: Option<&crate::node_state::DirectoryRoot>,
 ) -> Result<ControlLiveSendPreflight> {
     validate_live_send_request(input, state_root)?;
     let ticket = parse_control_live_ticket(input.receiver_ticket_value)?;
@@ -63,7 +63,7 @@ fn preflight_control_live_send_with_root(
 /// Validates the state root, the sender, the send bounds, and every expected identity the caller pinned.
 fn validate_live_send_request(
     input: &ControlLiveSendInput<'_>,
-    state_root: Option<&crate::node_state::NodeStateRoot>,
+    state_root: Option<&crate::node_state::DirectoryRoot>,
 ) -> Result<()> {
     if let Some(path) = input.state_root {
         validate_state_root(path)?;

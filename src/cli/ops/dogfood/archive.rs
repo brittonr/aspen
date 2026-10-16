@@ -15,36 +15,36 @@ pub(super) fn write(
     manifest: &molten::operator_dogfood::ReleaseExportManifest,
 ) -> molten::error::Result<()> {
     // r[impl molten.filesystem_materialization.archive_members]
-    let policy = archive_policy()?;
+    let policy = policy()?;
     let source = molten::materialization::SourceDirectoryRoot::open_existing(output_path)?;
-    let mut payloads = vec![molten::materialization::MaterializationPayload::new(
+    let mut payloads = vec![molten::materialization::Payload::new(
         RELEASE_ARCHIVE_MANIFEST,
         molten::preserves_rail::to_text(&manifest.value)?.into_bytes(),
     )];
     let max_path_bytes = u64::try_from(policy.max_path_bytes)
-        .map_err(|_| molten::error::MoltenError::invalid_harness("release archive path byte bound does not fit u64"))?;
+        .map_err(|_| molten::error::Failure::invalid_harness("release archive path byte bound does not fit u64"))?;
     for (name, expected_ref) in &manifest.member_refs {
-        let logical_path = molten::materialization::MaterializationPath::parse(name, max_path_bytes)?;
+        let logical_path = molten::materialization::Path::parse(name, max_path_bytes)?;
         let bytes = source.read_path(&logical_path, policy.max_member_bytes)?;
         let actual_ref = molten::operator_dogfood::release_export_file_ref(name, &bytes);
         if actual_ref != *expected_ref {
-            return Err(molten::error::MoltenError::invalid_harness(format!(
+            return Err(molten::error::Failure::invalid_harness(format!(
                 "release export member {name} ref changed before archive write: manifest={expected_ref} observed={actual_ref}"
             )));
         }
-        payloads.push(molten::materialization::MaterializationPayload::new(name, bytes));
+        payloads.push(molten::materialization::Payload::new(name, bytes));
     }
     let archive_file = molten::materialization::create_explicit_output_file(archive_path)?;
     let encoder = zstd::stream::write::Encoder::new(archive_file, RELEASE_ARCHIVE_COMPRESSION_LEVEL)
-        .map_err(molten::error::MoltenError::from)?;
+        .map_err(molten::error::Failure::from)?;
     let encoder = molten::materialization::write_archive(encoder, &policy, &payloads)?;
-    encoder.finish().map_err(molten::error::MoltenError::from)?;
+    encoder.finish().map_err(molten::error::Failure::from)?;
     Ok(())
 }
 
 pub(super) fn read(path: &std::path::Path) -> molten::error::Result<Read> {
     // r[impl molten.filesystem_materialization.archive_members]
-    let policy = archive_policy()?;
+    let policy = policy()?;
     let archive_file = molten::materialization::open_explicit_input_file(path)?;
     let decoder = match zstd::stream::read::Decoder::new(archive_file) {
         Ok(decoder) => decoder,
@@ -89,8 +89,8 @@ fn denied_read(diagnostic: &str) -> Read {
     }
 }
 
-fn archive_policy() -> molten::error::Result<molten::materialization::MaterializationPolicy> {
-    molten::materialization::MaterializationPolicy::bounded(
+fn policy() -> molten::error::Result<molten::materialization::Policy> {
+    molten::materialization::Policy::bounded(
         RELEASE_ARCHIVE_PROFILE,
         molten::materialization::ReplacementPolicy::NoReplace,
     )
@@ -104,7 +104,7 @@ mod tests {
     const MEMBER_BYTES: &[u8] = b"release evidence";
 
     #[test]
-    fn release_archive_round_trip_uses_verified_logical_members() {
+    fn release_round_trip_uses_verified_logical_members() {
         let root = crate::tests::temp_dir("release-archive-round-trip");
         write_member(&root.join(MEMBER_NAME), MEMBER_BYTES);
         let manifest = manifest(molten::operator_dogfood::release_export_file_ref(MEMBER_NAME, MEMBER_BYTES));
@@ -117,7 +117,7 @@ mod tests {
     }
 
     #[test]
-    fn release_archive_rejects_source_bytes_that_do_not_match_manifest() {
+    fn release_rejects_source_bytes_that_do_not_match_manifest() {
         let root = crate::tests::temp_dir("release-archive-ref-mismatch");
         write_member(&root.join(MEMBER_NAME), MEMBER_BYTES);
         let wrong_ref = molten::operator_dogfood::release_export_file_ref(MEMBER_NAME, b"different bytes");

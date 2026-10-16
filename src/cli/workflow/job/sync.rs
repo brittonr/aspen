@@ -2,7 +2,7 @@ type AdmitLoopback = super::command::sync::AdmitLoopback;
 type AdmitPlan = super::command::sync::AdmitPlan;
 type ExecuteLoopback = super::command::sync::ExecuteLoopback;
 type Loopback = super::command::sync::Loopback;
-type MoltenError = molten::error::MoltenError;
+type MoltenError = molten::error::Failure;
 type Plan = super::command::sync::Plan;
 type Result<T> = molten::error::Result<T>;
 

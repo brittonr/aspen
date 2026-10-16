@@ -5,7 +5,7 @@ const EVENTUAL_SURFACE_SCHEMA: &str = "molten.eventual-surface-manifest.v1";
 const EVENTUAL_SURFACE_RECEIPT_SCHEMA: &str = "molten.eventual-surface-receipt.v1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EventualSurfaceManifest {
+pub struct EventualManifest {
     pub scope: String,
     pub carrier: String,
     pub payload_schema: String,
@@ -18,8 +18,8 @@ pub struct EventualSurfaceManifest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EventualSurfaceInput {
-    pub manifest: EventualSurfaceManifest,
+pub struct EventualInput {
+    pub manifest: EventualManifest,
     pub delivered_refs: Vec<String>,
     pub merged_refs: Vec<String>,
     pub missing_refs: Vec<String>,
@@ -29,14 +29,14 @@ pub struct EventualSurfaceInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EventualSurfaceReceipt {
+pub struct EventualReceipt {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub value: IoValue,
     pub receipt_ref: String,
 }
 
-pub fn eventual_surface_manifest_value(manifest: &EventualSurfaceManifest) -> IoValue {
+pub fn eventual_manifest_value(manifest: &EventualManifest) -> IoValue {
     crate::preserves_rail::record("eventual-surface-manifest-v1", vec![
         string(EVENTUAL_SURFACE_SCHEMA),
         field("scope", &manifest.scope),
@@ -51,7 +51,7 @@ pub fn eventual_surface_manifest_value(manifest: &EventualSurfaceManifest) -> Io
     ])
 }
 
-pub fn validate_eventual_surface(input: &EventualSurfaceInput) -> Result<EventualSurfaceReceipt> {
+pub fn validate_eventual(input: &EventualInput) -> Result<EventualReceipt> {
     let mut diagnostics = Vec::new();
     if input.manifest.merge_law != "lww" && input.manifest.merge_law != "orset" {
         diagnostics.push("missing deterministic merge law".to_string());
@@ -71,7 +71,7 @@ pub fn validate_eventual_surface(input: &EventualSurfaceInput) -> Result<Eventua
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let value = receipt_value(decision, &diagnostics, input);
     let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(EventualSurfaceReceipt {
+    Ok(EventualReceipt {
         decision: decision.to_string(),
         diagnostics,
         value,
@@ -79,7 +79,7 @@ pub fn validate_eventual_surface(input: &EventualSurfaceInput) -> Result<Eventua
     })
 }
 
-pub fn anti_entropy_status_assertion(input: &EventualSurfaceInput) -> IoValue {
+pub fn anti_entropy_status_assertion(input: &EventualInput) -> IoValue {
     crate::preserves_rail::record("eventual-surface-status-v1", vec![
         field("scope", &input.manifest.scope),
         list_field("delivered-refs", &input.delivered_refs),
@@ -89,7 +89,7 @@ pub fn anti_entropy_status_assertion(input: &EventualSurfaceInput) -> IoValue {
     ])
 }
 
-fn receipt_value(decision: &str, diagnostics: &[String], input: &EventualSurfaceInput) -> IoValue {
+fn receipt_value(decision: &str, diagnostics: &[String], input: &EventualInput) -> IoValue {
     crate::preserves_rail::record("eventual-surface-receipt-v1", vec![
         string(EVENTUAL_SURFACE_RECEIPT_SCHEMA),
         field("decision", decision),
@@ -119,9 +119,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn eventual_surface_passes_with_replayable_merge_law() {
+    fn eventual_passes_with_replayable_merge_law() {
         let input = input("lww", false, true, false);
-        let receipt = validate_eventual_surface(&input).expect("surface");
+        let receipt = validate_eventual(&input).expect("surface");
         assert_eq!(receipt.decision, "pass");
         assert!(
             crate::preserves_rail::to_text(&anti_entropy_status_assertion(&input))
@@ -131,11 +131,11 @@ mod tests {
     }
 
     #[test]
-    fn eventual_surface_denies_unrecorded_live_authority_claims() {
+    fn eventual_denies_unrecorded_live_authority_claims() {
         let mut input = input("none", true, false, true);
         input.manifest.replay_evidence_refs.clear();
         input.missing_refs = vec![test_ref("missing")];
-        let receipt = validate_eventual_surface(&input).expect("surface");
+        let receipt = validate_eventual(&input).expect("surface");
         assert_eq!(receipt.decision, "deny");
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("merge law")));
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("live timing")));
@@ -147,9 +147,9 @@ mod tests {
         live_timing_observed: bool,
         receiver_verified_import: bool,
         claims_authority: bool,
-    ) -> EventualSurfaceInput {
-        EventualSurfaceInput {
-            manifest: EventualSurfaceManifest {
+    ) -> EventualInput {
+        EventualInput {
+            manifest: EventualManifest {
                 scope: "topic:services".to_string(),
                 carrier: "iroh-gossip".to_string(),
                 payload_schema: "service-ready".to_string(),

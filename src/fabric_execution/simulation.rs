@@ -9,38 +9,38 @@ const SIMULATION_PUBLICATION_CODE: &str = "execution-simulation-publication-fail
 const SIMULATION_RECEIPT_CODE: &str = "execution-simulation-receipt-failed";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ScriptedExecutionObservation {
-    pub process: ExecutionProcessObservation,
+pub struct ScriptedObservation {
+    pub process: ProcessObservation,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SimulatedExecutionAdapterBuildError {
+pub enum SimulatedAdapterBuildError {
     WrongProfileKind,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum SimulationStatus {
+enum Status {
     DefinitePreStartFailure,
     Terminal(String),
     Unknown,
 }
 
 // r[impl molten.fabric_execution.simulation]
-pub struct SimulatedExecutionAdapter<P: ExecutionOutputPublisher> {
-    profile: CanonicalExecutionProfile,
+pub struct SimulatedAdapter<P: ExecutionOutputPublisher> {
+    profile: Profile,
     publisher: P,
-    scripts: std::collections::BTreeMap<String, ScriptedExecutionObservation>,
-    operations: std::collections::BTreeMap<String, (u64, SimulationStatus)>,
+    scripts: std::collections::BTreeMap<String, ScriptedObservation>,
+    operations: std::collections::BTreeMap<String, (u64, Status)>,
 }
 
-impl<P: ExecutionOutputPublisher> SimulatedExecutionAdapter<P> {
+impl<P: ExecutionOutputPublisher> SimulatedAdapter<P> {
     pub fn new(
-        profile: CanonicalExecutionProfile,
+        profile: Profile,
         publisher: P,
-        scripts: std::collections::BTreeMap<String, ScriptedExecutionObservation>,
-    ) -> Result<Self, SimulatedExecutionAdapterBuildError> {
+        scripts: std::collections::BTreeMap<String, ScriptedObservation>,
+    ) -> Result<Self, SimulatedAdapterBuildError> {
         if profile.profile.descriptor.kind != ExecutionProfileKind::DeterministicSimulation {
-            return Err(SimulatedExecutionAdapterBuildError::WrongProfileKind);
+            return Err(SimulatedAdapterBuildError::WrongProfileKind);
         }
         Ok(Self {
             profile,
@@ -55,39 +55,39 @@ impl<P: ExecutionOutputPublisher> SimulatedExecutionAdapter<P> {
     }
 }
 
-impl<P: ExecutionOutputPublisher> ExecutionFabricPort for SimulatedExecutionAdapter<P> {
-    fn profile(&self) -> &CanonicalExecutionProfile {
+impl<P: ExecutionOutputPublisher> ExecutionFabricPort for SimulatedAdapter<P> {
+    fn profile(&self) -> &Profile {
         &self.profile
     }
 
     fn execute(
         &mut self,
-        request: &CanonicalExecutionRequest,
-        resolved: &ResolvedExecutionContext,
+        request: &Request,
+        resolved: &ResolvedContext,
         cancellation: Option<&std::sync::atomic::AtomicBool>,
-    ) -> ExecutionPortResult<CanonicalExecutionReceipt> {
+    ) -> PortResult<Receipt> {
         if request.plan.profile.descriptor.kind != ExecutionProfileKind::DeterministicSimulation {
-            return Err(simulation_failure(
+            return Err(failure(
                 request,
-                ExecutionPortFailureKind::ProfileUnavailable,
+                PortFailureKind::ProfileUnavailable,
                 SIMULATION_PROFILE_CODE,
                 "simulation adapter received a non-simulation request".to_string(),
                 super::mechanics::FailureEvidence::NONE,
             ));
         }
         super::mechanics::validate_resolved_context(request, resolved).map_err(|detail| {
-            simulation_failure(
+            failure(
                 request,
-                ExecutionPortFailureKind::ResolutionDenied,
+                PortFailureKind::ResolutionDenied,
                 SIMULATION_OBSERVATION_CODE,
                 detail,
                 super::mechanics::FailureEvidence::NONE,
             )
         })?;
         let Some(script) = self.scripts.get(&request.plan.request.operation_ref) else {
-            return Err(simulation_failure(
+            return Err(failure(
                 request,
-                ExecutionPortFailureKind::RejectedBeforeStart,
+                PortFailureKind::RejectedBeforeStart,
                 SIMULATION_SCRIPT_CODE,
                 "no deterministic execution script matches the exact operation".to_string(),
                 super::mechanics::FailureEvidence::NONE,
@@ -96,15 +96,15 @@ impl<P: ExecutionOutputPublisher> ExecutionFabricPort for SimulatedExecutionAdap
         let mut process = script.process.clone();
         if cancellation.is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Acquire)) {
             process.lifecycle = ExecutionLifecycleState::Cancelled;
-            process.disposition = ExecutionObservedDisposition::Cancelled;
+            process.disposition = ObservedDisposition::Cancelled;
             process.start_observed = true;
             process.terminal_observed = true;
             process.teardown_observed = true;
         }
         validate_scripted_process(request, &process).map_err(|detail| {
-            simulation_failure(
+            failure(
                 request,
-                ExecutionPortFailureKind::ResolutionDenied,
+                PortFailureKind::ResolutionDenied,
                 SIMULATION_OBSERVATION_CODE,
                 detail,
                 super::mechanics::FailureEvidence {
@@ -116,37 +116,33 @@ impl<P: ExecutionOutputPublisher> ExecutionFabricPort for SimulatedExecutionAdap
         self.publish_and_record(request, process)
     }
 
-    fn reconcile(&self, operation_ref: &str, generation: u64) -> ExecutionReconciliationStatus {
+    fn reconcile(&self, operation_ref: &str, generation: u64) -> ReconciliationStatus {
         let Some((recorded_generation, status)) = self.operations.get(operation_ref) else {
-            return ExecutionReconciliationStatus::NotFound;
+            return ReconciliationStatus::NotFound;
         };
         if *recorded_generation != generation {
-            return ExecutionReconciliationStatus::NotFound;
+            return ReconciliationStatus::NotFound;
         }
         match status {
-            SimulationStatus::DefinitePreStartFailure => ExecutionReconciliationStatus::DefinitePreStartFailure,
-            SimulationStatus::Terminal(receipt_ref) => ExecutionReconciliationStatus::Terminal {
+            Status::DefinitePreStartFailure => ReconciliationStatus::DefinitePreStartFailure,
+            Status::Terminal(receipt_ref) => ReconciliationStatus::Terminal {
                 receipt_ref: receipt_ref.clone(),
             },
-            SimulationStatus::Unknown => ExecutionReconciliationStatus::UnknownRequiresReconciliation,
+            Status::Unknown => ReconciliationStatus::UnknownRequiresReconciliation,
         }
     }
 }
 
-impl<P: ExecutionOutputPublisher> SimulatedExecutionAdapter<P> {
-    fn publish_and_record(
-        &mut self,
-        request: &CanonicalExecutionRequest,
-        process: ExecutionProcessObservation,
-    ) -> ExecutionPortResult<CanonicalExecutionReceipt> {
+impl<P: ExecutionOutputPublisher> SimulatedAdapter<P> {
+    fn publish_and_record(&mut self, request: &Request, process: ProcessObservation) -> PortResult<Receipt> {
         if process.lifecycle == ExecutionLifecycleState::FailedBeforeStart {
             self.operations.insert(
                 request.plan.request.operation_ref.clone(),
-                (request.plan.request.generation, SimulationStatus::DefinitePreStartFailure),
+                (request.plan.request.generation, Status::DefinitePreStartFailure),
             );
-            return Err(simulation_failure(
+            return Err(failure(
                 request,
-                ExecutionPortFailureKind::RejectedBeforeStart,
+                PortFailureKind::RejectedBeforeStart,
                 SIMULATION_PRESTART_CODE,
                 "scripted execution refused before process start".to_string(),
                 super::mechanics::FailureEvidence {
@@ -159,40 +155,32 @@ impl<P: ExecutionOutputPublisher> SimulatedExecutionAdapter<P> {
             super::mechanics::publish_stream(&mut self.publisher, &request.plan.request.operation_ref, &process.stdout);
         let stderr_publication =
             super::mechanics::publish_stream(&mut self.publisher, &request.plan.request.operation_ref, &process.stderr);
-        let is_publication_failed = matches!(stdout_publication, ExecutionStreamPublication::Failed { .. })
-            || matches!(stderr_publication, ExecutionStreamPublication::Failed { .. });
-        let receipt = canonical_execution_receipt(
-            request,
-            &self.profile,
-            process.clone(),
-            stdout_publication,
-            stderr_publication,
-        )
-        .map_err(|error| {
-            simulation_failure(
-                request,
-                ExecutionPortFailureKind::ReceiptConstruction,
-                SIMULATION_RECEIPT_CODE,
-                error.to_string(),
-                super::mechanics::FailureEvidence {
-                    process_observation: Some(process.clone()),
-                    receipt: None,
-                },
-            )
-        })?;
+        let is_publication_failed = matches!(stdout_publication, StreamPublication::Failed { .. })
+            || matches!(stderr_publication, StreamPublication::Failed { .. });
+        let receipt = receipt(request, &self.profile, process.clone(), stdout_publication, stderr_publication)
+            .map_err(|error| {
+                failure(
+                    request,
+                    PortFailureKind::ReceiptConstruction,
+                    SIMULATION_RECEIPT_CODE,
+                    error.to_string(),
+                    super::mechanics::FailureEvidence {
+                        process_observation: Some(process.clone()),
+                        receipt: None,
+                    },
+                )
+            })?;
         if matches!(
             process.lifecycle,
             ExecutionLifecycleState::Unknown
                 | ExecutionLifecycleState::FailedAfterStart
                 | ExecutionLifecycleState::TeardownIncomplete
         ) {
-            self.operations.insert(
-                request.plan.request.operation_ref.clone(),
-                (request.plan.request.generation, SimulationStatus::Unknown),
-            );
-            return Err(simulation_failure(
+            self.operations
+                .insert(request.plan.request.operation_ref.clone(), (request.plan.request.generation, Status::Unknown));
+            return Err(failure(
                 request,
-                ExecutionPortFailureKind::UnknownAfterStart,
+                PortFailureKind::UnknownAfterStart,
                 SIMULATION_UNKNOWN_CODE,
                 "scripted execution lacks definitive completion and teardown evidence".to_string(),
                 super::mechanics::FailureEvidence {
@@ -203,12 +191,12 @@ impl<P: ExecutionOutputPublisher> SimulatedExecutionAdapter<P> {
         }
         self.operations.insert(
             request.plan.request.operation_ref.clone(),
-            (request.plan.request.generation, SimulationStatus::Terminal(receipt.receipt_ref.clone())),
+            (request.plan.request.generation, Status::Terminal(receipt.receipt_ref.clone())),
         );
         if is_publication_failed {
-            return Err(simulation_failure(
+            return Err(failure(
                 request,
-                ExecutionPortFailureKind::OutputPublication,
+                PortFailureKind::OutputPublication,
                 SIMULATION_PUBLICATION_CODE,
                 "one or more simulated output streams were not published".to_string(),
                 super::mechanics::FailureEvidence {
@@ -221,10 +209,7 @@ impl<P: ExecutionOutputPublisher> SimulatedExecutionAdapter<P> {
     }
 }
 
-fn validate_scripted_process(
-    request: &CanonicalExecutionRequest,
-    process: &ExecutionProcessObservation,
-) -> Result<(), String> {
+fn validate_scripted_process(request: &Request, process: &ProcessObservation) -> Result<(), String> {
     if !process.lifecycle.is_terminal() {
         return Err("scripted execution observation is not terminal".to_string());
     }
@@ -248,18 +233,18 @@ fn validate_scripted_process(
     Ok(())
 }
 
-fn simulation_failure(
-    request: &CanonicalExecutionRequest,
-    kind: ExecutionPortFailureKind,
+fn failure(
+    request: &Request,
+    kind: PortFailureKind,
     diagnostic_code: &'static str,
     detail: String,
     evidence: super::mechanics::FailureEvidence,
-) -> Box<ExecutionPortFailure> {
+) -> Box<PortFailure> {
     let super::mechanics::FailureEvidence {
         process_observation,
         receipt,
     } = evidence;
-    Box::new(ExecutionPortFailure {
+    Box::new(PortFailure {
         kind,
         operation_ref: request.plan.request.operation_ref.clone(),
         diagnostic_code,

@@ -1,16 +1,12 @@
 use super::*;
 
-pub(super) async fn elect_node_a(
-    node_a: &mut LiveNode,
-    node_b: &mut LiveNode,
-    node_c: &mut LiveNode,
-) -> crate::error::Result<()> {
+pub(super) async fn elect_node_a(node_a: &mut Node, node_b: &mut Node, node_c: &mut Node) -> crate::error::Result<()> {
     let timer_ref = node_a.service.state().active_election_timer_ref.clone();
     let session_b = node_b.session_ref.clone();
     let session_c = node_c.session_ref.clone();
     let election = node_a.service.handle_event(ReplicaEvent::ElectionTimeout { timer_ref });
-    let receive_b = receive_replica_event(&mut node_b.listener, &session_b, live_timeout());
-    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, live_timeout());
+    let receive_b = receive_replica_event(&mut node_b.listener, &session_b, timeout());
+    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, timeout());
     let (election, vote_request_b, vote_request_c) = tokio::join!(election, receive_b, receive_c);
     require_applied(election)?;
     let vote_request_b = vote_request_b?;
@@ -18,15 +14,15 @@ pub(super) async fn elect_node_a(
 
     let session_a = node_a.session_ref.clone();
     let vote = node_b.service.handle_event(vote_request_b.event);
-    let receive_a = receive_replica_event(&mut node_a.listener, &session_a, live_timeout());
+    let receive_a = receive_replica_event(&mut node_a.listener, &session_a, timeout());
     let (vote, vote_response) = tokio::join!(vote, receive_a);
     require_applied(vote)?;
 
     let session_b = node_b.session_ref.clone();
     let session_c = node_c.session_ref.clone();
     let leadership = node_a.service.handle_event(vote_response?.event);
-    let receive_b = receive_replica_event(&mut node_b.listener, &session_b, live_timeout());
-    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, live_timeout());
+    let receive_b = receive_replica_event(&mut node_b.listener, &session_b, timeout());
+    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, timeout());
     let (leadership, initial_append_b, initial_append_c) = tokio::join!(leadership, receive_b, receive_c);
     require_applied(leadership)?;
     let _initial_append_b = initial_append_b?;
@@ -35,9 +31,9 @@ pub(super) async fn elect_node_a(
 }
 
 pub(super) async fn replicate_request(
-    node_a: &mut LiveNode,
-    node_b: &mut LiveNode,
-    node_c: &mut LiveNode,
+    node_a: &mut Node,
+    node_b: &mut Node,
+    node_c: &mut Node,
     request_ref: &str,
 ) -> crate::error::Result<()> {
     let session_b = node_b.session_ref.clone();
@@ -47,8 +43,8 @@ pub(super) async fn replicate_request(
         command_ref: super::super::tests::test_ref("live-cluster-command"),
         command_schema_ref: super::super::tests::test_ref("live-cluster-command-schema"),
     });
-    let receive_b = receive_replica_event(&mut node_b.listener, &session_b, live_timeout());
-    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, live_timeout());
+    let receive_b = receive_replica_event(&mut node_b.listener, &session_b, timeout());
+    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, timeout());
     let (proposal, append_b, append_c) = tokio::join!(proposal, receive_b, receive_c);
     require_applied(proposal)?;
     let append_b = append_b?;
@@ -56,7 +52,7 @@ pub(super) async fn replicate_request(
 
     let session_a = node_a.session_ref.clone();
     let follower_append = node_b.service.handle_event(append_b.event);
-    let receive_a = receive_replica_event(&mut node_a.listener, &session_a, live_timeout());
+    let receive_a = receive_replica_event(&mut node_a.listener, &session_a, timeout());
     let (follower_append, append_response) = tokio::join!(follower_append, receive_a);
     require_applied(follower_append)?;
     require_applied(node_a.service.handle_event(append_response?.event).await)?;
@@ -64,19 +60,19 @@ pub(super) async fn replicate_request(
 }
 
 pub(super) async fn quorum_read(
-    node_a: &mut LiveNode,
-    node_b: &mut LiveNode,
-    node_c: &mut LiveNode,
+    node_a: &mut Node,
+    node_b: &mut Node,
+    node_c: &mut Node,
     request_ref: &str,
 ) -> crate::error::Result<()> {
     let session_b = node_b.session_ref.clone();
     let session_c = node_c.session_ref.clone();
     let read = node_a.service.handle_event(ReplicaEvent::Read {
         request_ref: request_ref.to_string(),
-        mode: crate::fabric_consistency::ConsistencyReadMode::Linearizable,
+        mode: crate::fabric_consistency::ReadMode::Linearizable,
     });
-    let receive_b = receive_replica_event(&mut node_b.listener, &session_b, live_timeout());
-    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, live_timeout());
+    let receive_b = receive_replica_event(&mut node_b.listener, &session_b, timeout());
+    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, timeout());
     let (read, probe_b, probe_c) = tokio::join!(read, receive_b, receive_c);
     require_applied(read)?;
     let probe_b = probe_b?;
@@ -84,7 +80,7 @@ pub(super) async fn quorum_read(
 
     let session_a = node_a.session_ref.clone();
     let acknowledge = node_b.service.handle_event(probe_b.event);
-    let receive_a = receive_replica_event(&mut node_a.listener, &session_a, live_timeout());
+    let receive_a = receive_replica_event(&mut node_a.listener, &session_a, timeout());
     let (acknowledge, response) = tokio::join!(acknowledge, receive_a);
     require_applied(acknowledge)?;
     let outcome = node_a.service.handle_event(response?.event).await;
@@ -94,7 +90,7 @@ pub(super) async fn quorum_read(
         {
             Ok(())
         }
-        applied @ ReplicaExecutionOutcome::Applied(_) => Err(crate::error::MoltenError::invalid_harness(format!(
+        applied @ ReplicaExecutionOutcome::Applied(_) => Err(crate::error::Failure::invalid_harness(format!(
             "live cluster quorum read produced no current outcome: {applied:?}"
         ))),
         other => require_applied(other),
@@ -102,9 +98,9 @@ pub(super) async fn quorum_read(
 }
 
 pub(super) async fn snapshot_catch_up(
-    node_a: &mut LiveNode,
-    node_b: &mut LiveNode,
-    node_c: &mut LiveNode,
+    node_a: &mut Node,
+    node_b: &mut Node,
+    node_c: &mut Node,
     application_state_ref: &str,
 ) -> crate::error::Result<()> {
     require_applied(
@@ -118,44 +114,40 @@ pub(super) async fn snapshot_catch_up(
     let session_b = node_b.session_ref.clone();
     let session_c = node_c.session_ref.clone();
     let heartbeat = node_a.service.handle_event(ReplicaEvent::HeartbeatTimeout);
-    let receive_b = receive_replica_event(&mut node_b.listener, &session_b, live_timeout());
-    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, live_timeout());
+    let receive_b = receive_replica_event(&mut node_b.listener, &session_b, timeout());
+    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, timeout());
     let (heartbeat, append_b, snapshot_c) = tokio::join!(heartbeat, receive_b, receive_c);
     require_applied(heartbeat)?;
     let _append_b = append_b?;
     let snapshot_c = snapshot_c?;
     assert!(matches!(&snapshot_c.event, ReplicaEvent::Message {
         envelope: ReplicaMessageEnvelope {
-            message: RaftMessage::InstallSnapshot { .. },
+            message: Message::InstallSnapshot { .. },
             ..
         }
     }));
 
     let session_a = node_a.session_ref.clone();
     let install = node_c.service.handle_event(snapshot_c.event);
-    let receive_a = receive_replica_event(&mut node_a.listener, &session_a, live_timeout());
+    let receive_a = receive_replica_event(&mut node_a.listener, &session_a, timeout());
     let (install, response) = tokio::join!(install, receive_a);
     require_applied(install)?;
 
     let session_c = node_c.session_ref.clone();
     let accept = node_a.service.handle_event(response?.event);
-    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, live_timeout());
+    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, timeout());
     let (accept, suffix) = tokio::join!(accept, receive_c);
     require_applied(accept)?;
     let _suffix = suffix?;
     Ok(())
 }
 
-async fn replicate_commit_notice(
-    node_a: &mut LiveNode,
-    node_b: &mut LiveNode,
-    node_c: &mut LiveNode,
-) -> crate::error::Result<()> {
+async fn replicate_commit_notice(node_a: &mut Node, node_b: &mut Node, node_c: &mut Node) -> crate::error::Result<()> {
     let session_b = node_b.session_ref.clone();
     let session_c = node_c.session_ref.clone();
     let heartbeat = node_a.service.handle_event(ReplicaEvent::HeartbeatTimeout);
-    let receive_b = receive_replica_event(&mut node_b.listener, &session_b, live_timeout());
-    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, live_timeout());
+    let receive_b = receive_replica_event(&mut node_b.listener, &session_b, timeout());
+    let receive_c = receive_replica_event(&mut node_c.listener, &session_c, timeout());
     let (heartbeat, commit_b, commit_c) = tokio::join!(heartbeat, receive_b, receive_c);
     require_applied(heartbeat)?;
     let commit_b = commit_b?;
@@ -163,7 +155,7 @@ async fn replicate_commit_notice(
 
     let session_a = node_a.session_ref.clone();
     let follower_commit = node_b.service.handle_event(commit_b.event);
-    let receive_a = receive_replica_event(&mut node_a.listener, &session_a, live_timeout());
+    let receive_a = receive_replica_event(&mut node_a.listener, &session_a, timeout());
     let (follower_commit, response) = tokio::join!(follower_commit, receive_a);
     require_applied(follower_commit)?;
     require_applied(node_a.service.handle_event(response?.event).await)?;
@@ -174,9 +166,9 @@ fn require_applied(outcome: ReplicaExecutionOutcome) -> crate::error::Result<()>
     match outcome {
         ReplicaExecutionOutcome::Applied(_) => Ok(()),
         ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
-            Err(crate::error::MoltenError::invalid_harness(format!("live cluster turn denied: {diagnostic}")))
+            Err(crate::error::Failure::invalid_harness(format!("live cluster turn denied: {diagnostic}")))
         }
-        ReplicaExecutionOutcome::Failed(failed) => Err(crate::error::MoltenError::invalid_harness(format!(
+        ReplicaExecutionOutcome::Failed(failed) => Err(crate::error::Failure::invalid_harness(format!(
             "live cluster effect {} failed: {}",
             failed.failed_kind.as_str(),
             failed.diagnostic

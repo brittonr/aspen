@@ -1,12 +1,12 @@
 
 pub async fn send_control_live_ingress(input: &ControlLiveSendInput<'_>) -> Result<ControlLiveSend> {
-    let state_root = input.state_root.map(crate::node_state::NodeStateRoot::open).transpose()?;
+    let state_root = input.state_root.map(crate::node_state::DirectoryRoot::open).transpose()?;
     send_control_live_ingress_with_root(input, state_root.as_ref()).await
 }
 
 async fn send_control_live_ingress_with_root(
     input: &ControlLiveSendInput<'_>,
-    state_root: Option<&crate::node_state::NodeStateRoot>,
+    state_root: Option<&crate::node_state::DirectoryRoot>,
 ) -> Result<ControlLiveSend> {
     validate_send_input(input, state_root)?;
     let ticket = parse_control_live_ticket(input.receiver_ticket_value)?;
@@ -81,7 +81,7 @@ struct SendRetryOutcome {
 #[derive(Debug)]
 struct FinishSendInput<'a> {
     input: &'a ControlLiveSendInput<'a>,
-    state_root: Option<&'a crate::node_state::NodeStateRoot>,
+    state_root: Option<&'a crate::node_state::DirectoryRoot>,
     ticket: &'a ControlLiveTicket,
     envelope: ControlIngressEnvelope,
     published: ControlLiveIngressPublish,
@@ -91,7 +91,7 @@ struct FinishSendInput<'a> {
 
 fn validate_send_input(
     input: &ControlLiveSendInput<'_>,
-    state_root: Option<&crate::node_state::NodeStateRoot>,
+    state_root: Option<&crate::node_state::DirectoryRoot>,
 ) -> Result<()> {
     if let Some(path) = input.state_root {
         validate_state_root(path)?;
@@ -140,7 +140,7 @@ fn send_envelope(input: &ControlLiveSendInput<'_>, ticket: &ControlLiveTicket) -
 
 fn send_receiver_addr(
     input: &ControlLiveSendInput<'_>,
-    state_root: Option<&crate::node_state::NodeStateRoot>,
+    state_root: Option<&crate::node_state::DirectoryRoot>,
     ticket: &ControlLiveTicket,
     envelope: &ControlIngressEnvelope,
 ) -> Result<std::result::Result<iroh::EndpointAddr, Vec<String>>> {
@@ -171,7 +171,7 @@ fn send_receiver_addr(
 
 async fn publish_with_retries(
     input: &ControlLiveSendInput<'_>,
-    state_root: Option<&crate::node_state::NodeStateRoot>,
+    state_root: Option<&crate::node_state::DirectoryRoot>,
     receiver_addr: &iroh::EndpointAddr,
     ticket: &ControlLiveTicket,
     envelope: &ControlIngressEnvelope,

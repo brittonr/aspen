@@ -1,0 +1,44 @@
+{
+  "preview_plan_hash": "aecce091455d2fef8388557ef2a15ae477036066d08ca610fa22e6b8c5873716",
+  "execution_plan_hash": "a93c102d7570024973ba5d49abc483f3ba49f1bc1da4c8b329fc5a0f5be73c7e",
+  "unchanged_native_identity_fields": [
+    "acceptance_ids",
+    "blocked",
+    "change",
+    "cross_repo_dependencies",
+    "cross_repo_evidence_issues",
+    "input_hash",
+    "layout",
+    "non_claims",
+    "policy",
+    "policy_hash",
+    "profile_identity_hash",
+    "reasons",
+    "review_receipt_hashes",
+    "spec_effect",
+    "workflow_profile",
+    "workflow_profile_compatibility_fallback",
+    "workflow_profile_source",
+    "workflow_profile_version"
+  ],
+  "action_kind_and_description_unchanged": true,
+  "planned_active_source": "./.cairn/changes/support-active-delta-traceability-before-sync",
+  "observed_native_archive_destination": "./.cairn/archive/1970-01-01-support-active-delta-traceability-before-sync",
+  "identical_relative_files_and_content_hashes": {
+    "design.md": "7a7c4d62c10af8265817c9f68088d43d4a4b8607e215d2375100436b4a7001b3",
+    "evidence/2026-10-15-archive-preflight.json": "342d787580611f25ddcf42a088f94a09d8a84a9e5413af05648e2e425b03e90e",
+    "evidence/2026-10-15-guard-runtime.json": "2aef676a638ecec7d593de2894919dd2562044398efca46fa0872e3e89b5ad0d",
+    "evidence/2026-10-15-native-gates-and-review.json": "f63071e1814877ae48c9be73cf14eb3f4aba9cfa46bfa5f9e69c0ff0ea4fe536",
+    "evidence/2026-10-15-sync-preflight.json": "e05d1d3852e239ad4b1144f931cfb45c13da02cd498363bd0553b19eeee2bc7a",
+    "metadata.json": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+    "proposal.md": "92300064655771234693cb43e7cad50b54c4d5f10a8c1e9b7deeeabfe1547d4d",
+    "specs/project/spec.md": "d919a21b733830d4b05d982f3cab2c126d7650034008a1fa71572002bd16b8c7",
+    "tasks.md": "1ac7649b2ae4d65fdeeaab6323961bbaf31aa020a233ca2a5cf9d07029446cd0"
+  },
+  "active_source_removed_in_native_manifest": true,
+  "first_verifier_assertion": {
+    "outcome": "failed after successful native archive",
+    "reason": "Caller incorrectly assumed archive action.path continued naming the active source after the native move; execution names the actual archive destination."
+  },
+  "resolution": "Native input/policy/profile and action kind/description are unchanged. The archive mutation manifest proves the same complete file set and hashes moved from the planned active source to the native archive destination. Preserve both operation-state envelope hashes."
+}

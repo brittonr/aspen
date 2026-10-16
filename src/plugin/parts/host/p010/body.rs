@@ -126,7 +126,7 @@ pub struct PluginHostcallDescriptorInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PluginExtensionConformanceInput<'a> {
+pub struct PluginConformanceInput<'a> {
     pub positive_suite_ref: &'a str,
     pub negative_suite_ref: &'a str,
     pub property_suite_ref: &'a str,
@@ -139,7 +139,7 @@ pub struct PluginExtensionContractInput<'a> {
     pub compatible_host_abi: &'a str,
     pub lifecycle_callbacks: &'a [String],
     pub hostcall_descriptors: &'a [PluginHostcallDescriptorInput<'a>],
-    pub conformance: PluginExtensionConformanceInput<'a>,
+    pub conformance: PluginConformanceInput<'a>,
     pub policy_refs: &'a [String],
     pub supply_chain_refs: &'a [String],
     pub production_profile: bool,
@@ -159,7 +159,7 @@ pub struct PluginHostcallDescriptor {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PluginExtensionConformance {
+pub struct PluginConformance {
     pub positive_suite_ref: String,
     pub negative_suite_ref: String,
     pub property_suite_ref: String,
@@ -173,7 +173,7 @@ pub struct PluginExtensionContract {
     pub compatible_host_abi: String,
     pub lifecycle_callbacks: Vec<String>,
     pub hostcall_descriptors: Vec<PluginHostcallDescriptor>,
-    pub conformance: PluginExtensionConformance,
+    pub conformance: PluginConformance,
     pub policy_refs: Vec<String>,
     pub supply_chain_refs: Vec<String>,
     pub production_profile: bool,
@@ -181,7 +181,7 @@ pub struct PluginExtensionContract {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PluginExtensionNegotiationInput<'a> {
+pub struct PluginNegotiationInput<'a> {
     pub manifest: &'a PluginManifest,
     pub required_contract_refs: &'a [String],
     pub optional_contract_refs: &'a [String],
@@ -193,7 +193,7 @@ pub struct PluginExtensionNegotiationInput<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PluginExtensionNegotiationReceipt {
+pub struct PluginNegotiationReceipt {
     pub receipt_ref: String,
     pub decision: String,
     pub manifest_ref: String,

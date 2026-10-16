@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "b3sum",
+    "src/node/parts/runtime/p005/body.rs",
+    "src/node/parts/daemon/p018/body.rs",
+    "src/node/parts/daemon/p053/body.rs",
+    "src/node/parts/runtime/tests/m000/p002/body.rs",
+    "src/node/parts/daemon/tests/m000/p014/body.rs"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T17:00:47.432476+00:00",
+  "elapsed_seconds": 0.006,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "f9cb3709d262a137ab95c5bf79ad78547075bdc177d803923be0eb5d2557f43a  src/node/parts/runtime/p005/body.rs\n06884b5b4d31b50e0ff7be88da5a381c12381fa71c62e68a4d0bc02528e3174e  src/node/parts/daemon/p018/body.rs\nf9bc1e42527cadb33021b2edd709c5315457478711a9fef3393d14ad5873fdf2  src/node/parts/daemon/p053/body.rs\n62a08d5af6a0399ccaa86a2707e60eacaa3e5cad03f8103277c470e1c6047d5a  src/node/parts/runtime/tests/m000/p002/body.rs\n84ecee0b356a29421ce6b7645b8a8bfa1993100a05dbd5237ad3bc40369fb817  src/node/parts/daemon/tests/m000/p014/body.rs\n",
+  "stderr": ""
+}

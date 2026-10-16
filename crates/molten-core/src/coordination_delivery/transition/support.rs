@@ -184,6 +184,8 @@ pub(super) fn collection_at_capacity(length: usize, capacity: u32) -> bool {
     u32::try_from(length).map_or(true, |length| length >= capacity)
 }
 
+// r[impl molten.audit_f08.original_binding]
+// r[impl molten.audit_f08.unavailable_result]
 pub(super) fn duplicate_transition(
     state: &DeliveryState,
     request_ref: &str,
@@ -203,6 +205,7 @@ pub(super) fn duplicate_transition(
             .item_ref
             .as_ref()
             .and_then(|item_ref| state.in_flight.get(item_ref))
+            .filter(|active| existing.token_ref.as_deref() == Some(active.token.token_ref.as_str()))
             .map(|active| active.token.clone()),
         timer_intents: Vec::new(),
         issue: None,

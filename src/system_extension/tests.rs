@@ -11,10 +11,8 @@ const ROLLED_BACK_GENERATION: u64 = 3;
 // r[verify molten.system_extension.native_host.effect_completion_value.compatibility]
 #[test]
 fn executable_fixture_runs_real_callbacks_under_two_admitted_profiles() {
-    let in_process = run_executable_system_extension_fixture(ExecutionProfile::InProcessNative)
-        .expect("in-process executable fixture");
-    let sandboxed = run_executable_system_extension_fixture(ExecutionProfile::SandboxedComponent)
-        .expect("sandboxed executable fixture");
+    let in_process = run_executable(ExecutionProfile::InProcessNative).expect("in-process executable fixture");
+    let sandboxed = run_executable(ExecutionProfile::SandboxedComponent).expect("sandboxed executable fixture");
 
     for run in [&in_process, &sandboxed] {
         assert_eq!(run.first_request_effects.len(), EXPECTED_FIRST_EFFECT_COUNT);
@@ -36,19 +34,19 @@ fn executable_fixture_runs_real_callbacks_under_two_admitted_profiles() {
         assert!(run
             .evidence
             .iter()
-            .any(|item| matches!(item, HostEvidence::Callback(receipt) if receipt.decision == CallbackExecutionDecision::ExecutorFailed)));
-        assert!(run.evidence.iter().any(|item| matches!(item, HostEvidence::EffectCompletion(_))));
+            .any(|item| matches!(item, Evidence::Callback(receipt) if receipt.decision == CallbackExecutionDecision::ExecutorFailed)));
+        assert!(run.evidence.iter().any(|item| matches!(item, Evidence::EffectCompletion(_))));
         assert!(run.evidence.iter().any(
-            |item| matches!(item, HostEvidence::Migration(receipt) if receipt.operation == MigrationOperation::Upgrade)
+            |item| matches!(item, Evidence::Migration(receipt) if receipt.operation == MigrationOperation::Upgrade)
         ));
         assert!(run.evidence.iter().any(
-            |item| matches!(item, HostEvidence::Migration(receipt) if receipt.operation == MigrationOperation::Rollback)
+            |item| matches!(item, Evidence::Migration(receipt) if receipt.operation == MigrationOperation::Rollback)
         ));
-        assert!(run.evidence.iter().any(|item| matches!(item, HostEvidence::Readiness(receipt) if receipt.ready)));
+        assert!(run.evidence.iter().any(|item| matches!(item, Evidence::Readiness(receipt) if receipt.ready)));
         assert!(run
             .evidence
             .iter()
-            .any(|item| matches!(item, HostEvidence::Readiness(receipt) if !receipt.ready && receipt.health == HealthState::Stopped)));
+            .any(|item| matches!(item, Evidence::Readiness(receipt) if !receipt.ready && receipt.health == HealthState::Stopped)));
         assert!(run.evidence.iter().all(|item| item.evidence_ref().starts_with("blake3:")));
     }
     assert_eq!(in_process.evidence.len(), sandboxed.evidence.len());
@@ -59,8 +57,7 @@ fn executable_fixture_runs_real_callbacks_under_two_admitted_profiles() {
 // r[verify molten.system_extension.evidence]
 #[test]
 fn status_readback_is_canonical_bounded_and_excludes_secret_material() {
-    let run = run_executable_system_extension_fixture(ExecutionProfile::SandboxedComponent)
-        .expect("sandboxed executable fixture");
+    let run = run_executable(ExecutionProfile::SandboxedComponent).expect("sandboxed executable fixture");
     let text = crate::preserves_rail::to_text(&run.final_status.value).expect("status text");
 
     assert!(run.final_status.status_ref.starts_with("blake3:"));
@@ -81,12 +78,10 @@ fn status_readback_is_canonical_bounded_and_excludes_secret_material() {
 // r[verify molten.system_extension.evidence]
 #[test]
 fn deterministic_fixture_reproduces_manifest_status_and_evidence_identity() {
-    let first =
-        run_executable_system_extension_fixture(ExecutionProfile::SandboxedComponent).expect("first fixture run");
-    let second =
-        run_executable_system_extension_fixture(ExecutionProfile::SandboxedComponent).expect("second fixture run");
-    let first_refs: Vec<_> = first.evidence.iter().map(HostEvidence::evidence_ref).collect();
-    let second_refs: Vec<_> = second.evidence.iter().map(HostEvidence::evidence_ref).collect();
+    let first = run_executable(ExecutionProfile::SandboxedComponent).expect("first fixture run");
+    let second = run_executable(ExecutionProfile::SandboxedComponent).expect("second fixture run");
+    let first_refs: Vec<_> = first.evidence.iter().map(Evidence::evidence_ref).collect();
+    let second_refs: Vec<_> = second.evidence.iter().map(Evidence::evidence_ref).collect();
 
     assert_eq!(first.manifest_ref, second.manifest_ref);
     assert_eq!(first.final_status.status_ref, second.final_status.status_ref);
@@ -96,8 +91,8 @@ fn deterministic_fixture_reproduces_manifest_status_and_evidence_identity() {
 // r[verify molten.system_extension.execution_profiles]
 #[test]
 fn unsupported_fixture_profile_has_no_silent_fallback() {
-    let error = run_executable_system_extension_fixture(ExecutionProfile::NativeProcess)
-        .expect_err("native process fixture profile is not admitted");
+    let error =
+        run_executable(ExecutionProfile::NativeProcess).expect_err("native process fixture profile is not admitted");
 
     assert!(error.to_string().contains("admits in-process-native or sandboxed-component"));
 }

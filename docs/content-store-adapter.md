@@ -22,7 +22,7 @@ A backend success callback, QUIC connection, Iroh blob hash, or Redb row never m
 
 ## Partial state and failure semantics
 
-Canonical partial state records the exact verified prefix, missing suffix, verified bytes, generation, event count, sequence, and terminal class. Capability-rooted persistence uses a bounded deterministic `MCPS001` record under a caller-supplied `NodeStateNamespace`; load revalidates profile, manifest, operation, partition, generation, refs, bytes, and event limits before resume.
+Canonical partial state records the exact verified prefix, missing suffix, verified bytes, generation, event count, sequence, and terminal class. Capability-rooted persistence uses a bounded deterministic `MCPS001` record under a caller-supplied `Scope`; load revalidates profile, manifest, operation, partition, generation, refs, bytes, and event limits before resume.
 
 Terminal classes distinguish accepted, streaming, verified, durable, cancelled, retryable, failed, uncertain, and denied. Corruption, truncation, reordering, unexpected chunks, stale tickets, unsupported transforms, root escape, overload, permission denial, timeout, disconnect, and adapter failure remain distinct. Disconnect or timeout after possible progress is uncertain, never normalized to success or definite absence.
 
@@ -33,7 +33,7 @@ Terminal classes distinguish accepted, streaming, verified, durable, cancelled, 
 - **Iroh Blobs** starts an actual `iroh_blobs::BlobsProtocol` router under an admitted persisted transport key and streams BAO leaves over Iroh with a hard per-chunk bound. The client re-verifies Molten chunk identity after transport.
 - **Deterministic simulation** runs the same command and transition core and models corruption, truncation, cancellation, disconnect, capacity, latency, restart, and resume.
 
-The older `chunk_store::publish_iroh_blobs` / `fetch_iroh_blobs` compatibility helpers copy through a capability-rooted local blob directory. They are retained for compatibility and are **not** evidence of live Iroh transport. New live claims require `publish_live_iroh_chunks` plus `execute_live_iroh_stream_get` receipts or test evidence.
+The older `chunk_store::publish_iroh_blobs` / `fetch_iroh_blobs` compatibility helpers copy through a capability-rooted local blob directory. They are retained for compatibility and are **not** evidence of live Iroh transport. New live claims require `publish_chunks` plus `execute_stream_get` receipts or test evidence.
 
 ## Protection and authority
 

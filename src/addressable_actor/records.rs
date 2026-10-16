@@ -10,7 +10,7 @@ const MAX_ACTOR_RECEIPT_BYTES: usize = 262_144;
 const MAX_ACTOR_STATUS_BYTES: usize = 65_536;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ActorServiceStatus {
+pub enum ServiceStatus {
     Denied,
     DuplicateReplay,
     Applied,
@@ -24,7 +24,7 @@ pub enum ActorServiceStatus {
     Unknown,
 }
 
-impl ActorServiceStatus {
+impl ServiceStatus {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Denied => "denied",
@@ -47,7 +47,7 @@ impl ActorServiceStatus {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ActorCommitReceipt {
+pub struct CommitReceipt {
     pub actor_key_ref: String,
     pub request_ref: String,
     pub operation_ref: String,
@@ -55,11 +55,11 @@ pub struct ActorCommitReceipt {
     pub planned_state_ref: String,
     pub final_state_ref: String,
     pub revision: u64,
-    pub status: ActorServiceStatus,
-    pub currentness: super::ActorCommitCurrentness,
-    pub durability: super::ActorDurabilityOutcome,
+    pub status: ServiceStatus,
+    pub currentness: super::CommitCurrentness,
+    pub durability: super::DurabilityOutcome,
     pub engine_epoch: u64,
-    pub effect_observations: Vec<super::ActorEffectObservation>,
+    pub effect_observations: Vec<super::EffectObservation>,
     pub status_ref: Option<String>,
     pub issue: Option<ActorIssue>,
     pub authorizes_future_mutation: bool,
@@ -71,16 +71,14 @@ pub struct ActorCommitReceipt {
 }
 
 #[derive(Clone, Debug)]
-pub struct CanonicalActorCommitReceipt {
+pub struct CanonicalCommitReceipt {
     pub receipt_ref: String,
-    pub status: ActorServiceStatus,
+    pub status: ServiceStatus,
     pub value: preserves::IOValue,
     pub bytes: Vec<u8>,
 }
 
-pub fn canonical_actor_commit_receipt(
-    receipt: &ActorCommitReceipt,
-) -> crate::error::Result<CanonicalActorCommitReceipt> {
+pub fn canonical_commit_receipt(receipt: &CommitReceipt) -> crate::error::Result<CanonicalCommitReceipt> {
     if receipt.actor_key_ref.is_empty()
         || receipt.request_ref.is_empty()
         || receipt.operation_ref.is_empty()
@@ -94,7 +92,7 @@ pub fn canonical_actor_commit_receipt(
         || receipt.claims_runtime_survival
         || receipt.non_claims != required_addressable_actor_non_claims()
     {
-        return Err(crate::error::MoltenError::invalid_harness("addressable actor receipt is invalid"));
+        return Err(crate::error::Failure::invalid_harness("addressable actor receipt is invalid"));
     }
     let effect_observations = receipt
         .effect_observations
@@ -133,9 +131,9 @@ pub fn canonical_actor_commit_receipt(
     ]);
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     if bytes.len() > MAX_ACTOR_RECEIPT_BYTES {
-        return Err(crate::error::MoltenError::invalid_harness("addressable actor receipt exceeds its byte bound"));
+        return Err(crate::error::Failure::invalid_harness("addressable actor receipt exceeds its byte bound"));
     }
-    Ok(CanonicalActorCommitReceipt {
+    Ok(CanonicalCommitReceipt {
         receipt_ref: hash_bytes(ACTOR_RECEIPT_DOMAIN, &bytes),
         status: receipt.status,
         value,
@@ -143,11 +141,9 @@ pub fn canonical_actor_commit_receipt(
     })
 }
 
-pub fn identify_canonical_actor_status(status: &ActorStatus) -> crate::error::Result<String> {
+pub fn identify_canonical_status(status: &ActorStatus) -> crate::error::Result<String> {
     if status.payloads_rendered || status.authorizes_mutation {
-        return Err(crate::error::MoltenError::invalid_harness(
-            "addressable actor status exceeds its authority boundary",
-        ));
+        return Err(crate::error::Failure::invalid_harness("addressable actor status exceeds its authority boundary"));
     }
     let value = record(ACTOR_STATUS_RECORD, vec![
         field("schema", string(&status.schema)),
@@ -173,7 +169,7 @@ pub fn identify_canonical_actor_status(status: &ActorStatus) -> crate::error::Re
     ]);
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     if bytes.len() > MAX_ACTOR_STATUS_BYTES {
-        return Err(crate::error::MoltenError::invalid_harness("addressable actor status exceeds its byte bound"));
+        return Err(crate::error::Failure::invalid_harness("addressable actor status exceeds its byte bound"));
     }
     Ok(hash_bytes(ACTOR_STATUS_DOMAIN, &bytes))
 }

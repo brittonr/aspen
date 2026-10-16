@@ -71,7 +71,7 @@ For invalid output, investigate the canonical payload producer. For fuel exhaust
 - [Pure callback dispatch](../../../crates/molten-core/src/system_extension/dispatch.rs)
 - [Native result admission](../../../src/system_extension/native_host/parts/executor/p002/body.rs)
 - [Independent callback producer](../../../src/bin/molten-native-extension-fixture.rs)
-- [Native wire and publication tests](../../../src/system_extension/native_host/tests.rs)
+- [Native wire and publication tests](../../../src/system_extension/native_host/tests/mod.rs)
 - [Provider-output and process failure cases](../../../tests/parts/nativesystemextension/p001/body.rs)
 - [Component shell denial cases](../../../src/wasm/component/tests/shell.rs)
 - [Component admission cases](../../../src/wasm/component/tests/admission.rs)

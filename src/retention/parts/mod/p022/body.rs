@@ -40,7 +40,7 @@ fn scan_bundle_artifact_files(
     }
     let mut seen_files = OrderedSet::new();
     for entry in bundle_root.root().list_entries(&artifact_dir)? {
-        if entry.kind != crate::local_store::LocalStoreEntryKind::Directory {
+        if entry.kind != crate::local_store::MemberKind::Directory {
             push_bounded(
                 diagnostics,
                 "retention-bundle-unexpected-artifact-root-entry".to_string(),
@@ -80,7 +80,7 @@ fn scan_bundle_artifact_group_files(
 ) -> Result<()> {
     let group_dir = bundle_path(&format!("artifacts/{}", input.dir_name))?;
     for entry in input.bundle_root.root().list_entries(&group_dir)? {
-        if entry.kind != crate::local_store::LocalStoreEntryKind::File || !entry.name.ends_with(".preserves") {
+        if entry.kind != crate::local_store::MemberKind::File || !entry.name.ends_with(".preserves") {
             push_bounded(
                 diagnostics,
                 format!("retention-bundle-unexpected-artifact-entry:{}", input.dir_name),

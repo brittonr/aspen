@@ -7,7 +7,7 @@ mod tests {
         crate::preserves_rail::content_ref_from_bytes(label.as_bytes())
     }
 
-    fn required_adapters() -> Vec<NodeAdapterBinding> {
+    fn required_adapters() -> Vec<AdapterBinding> {
         crate::node_runtime::REQUIRED_RUNTIME_ADAPTERS
             .iter()
             .map(|adapter| {
@@ -20,8 +20,8 @@ mod tests {
         vec![local_ref(label)]
     }
 
-    fn profile() -> CheckedNodeProfile {
-        CheckedNodeProfile {
+    fn sample() -> Checked {
+        Checked {
             profile_ref: local_ref("node-profile"),
             actual_profile_ref: Some(local_ref("node-profile")),
             source_kind: SOURCE_KIND_CHECKED_EXPORT.to_string(),
@@ -40,19 +40,19 @@ mod tests {
         }
     }
 
-    fn input() -> ProfileBackedConfigInput {
-        ProfileBackedConfigInput {
+    fn input() -> BackedInput {
+        BackedInput {
             identity_ref: local_ref("identity"),
-            profile: profile(),
-            overrides: NodeProfileOverrides::default(),
+            profile: sample(),
+            overrides: Overrides::default(),
         }
     }
 
     // r[verify molten.node_runtime.profile_backed_config]
     // r[verify molten.node_runtime.profile_startup_receipt_binding]
     #[test]
-    fn profile_backed_config_builds_canonical_node_config_and_metadata_refs() {
-        let resolved = resolve_profile_backed_config(&input()).expect("profile resolution");
+    fn backed_builds_canonical_and_metadata_refs() {
+        let resolved = resolve_backed(&input()).expect("profile resolution");
         assert_eq!(resolved.decision, DECISION_PASS);
         assert_eq!(resolved.diagnostics, Vec::<String>::new());
         assert_eq!(resolved.profile_metadata_refs.len(), 2);
@@ -68,12 +68,12 @@ mod tests {
 
     // r[verify molten.node_runtime.profile_override_policy]
     #[test]
-    fn development_profile_records_allowed_override() {
+    fn development_records_allowed_override() {
         let mut with_override = input();
         with_override.profile.tier = TIER_DEVELOPMENT.to_string();
         let override_ref = local_ref("override-state-root");
         with_override.overrides.state_root_ref = Some(override_ref.clone());
-        let resolved = resolve_profile_backed_config(&with_override).expect("profile resolution");
+        let resolved = resolve_backed(&with_override).expect("profile resolution");
         assert_eq!(resolved.decision, DECISION_PASS);
         assert!(
             resolved
@@ -86,11 +86,11 @@ mod tests {
     }
 
     #[test]
-    fn release_profile_denies_invariant_weakening_override() {
+    fn release_denies_invariant_weakening_override() {
         let mut with_override = input();
         with_override.profile.tier = TIER_RELEASE.to_string();
         with_override.overrides.state_root_ref = Some(local_ref("override-state-root"));
-        let resolved = resolve_profile_backed_config(&with_override).expect("profile resolution");
+        let resolved = resolve_backed(&with_override).expect("profile resolution");
         assert_eq!(resolved.decision, DECISION_DENY);
         assert!(
             resolved
@@ -101,7 +101,7 @@ mod tests {
     }
 
     #[test]
-    fn profile_resolution_denies_tampered_ref_runtime_nickel_and_unsupported_adapter() {
+    fn resolution_denies_tampered_ref_runtime_nickel_and_unsupported_adapter() {
         let mut bad = input();
         bad.profile.actual_profile_ref = Some(local_ref("tampered-node-profile"));
         bad.profile.source_kind = SOURCE_KIND_NICKEL_SOURCE.to_string();
@@ -109,7 +109,7 @@ mod tests {
             crate::node_runtime::node_adapter_binding("unsupported-adapter", &local_ref("unsupported-adapter"))
                 .expect("unsupported shape ok"),
         );
-        let resolved = resolve_profile_backed_config(&bad).expect("profile resolution");
+        let resolved = resolve_backed(&bad).expect("profile resolution");
         assert_eq!(resolved.decision, DECISION_DENY);
         assert!(resolved.diagnostics.iter().any(|diagnostic| diagnostic.starts_with("profile-ref-mismatch")));
         assert!(
@@ -128,8 +128,8 @@ mod tests {
 
     // r[verify molten.node_runtime.local_default_config_caveat]
     #[test]
-    fn local_default_config_is_fixture_scoped_and_not_release_evidence() {
-        let local = resolve_local_default_config(&LocalDefaultConfigInput {
+    fn local_default_is_fixture_scoped_and_not_release_evidence() {
+        let local = resolve_local_default(&LocalDefaultInput {
             identity_ref: local_ref("identity"),
             state_root_ref: local_ref("state-root"),
             adapters: required_adapters(),

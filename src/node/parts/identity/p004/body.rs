@@ -27,9 +27,9 @@ pub fn admitted_rotation_receipt_ref(
     ]))
 }
 
-fn validate_identity_namespace(root: &crate::node_state::NodeStateNamespace) -> Result<()> {
+fn validate_identity_namespace(root: &crate::node_state::Scope) -> Result<()> {
     match root.kind() {
-        crate::node_state::NodeStateNamespaceKind::Identity | crate::node_state::NodeStateNamespaceKind::Secrets => {
+        crate::node_state::NamespaceKind::Identity | crate::node_state::NamespaceKind::Secrets => {
             Ok(())
         }
         other => Err(MoltenError::invalid_harness(format!(
@@ -58,15 +58,15 @@ fn validate_config(config: &Config) -> Result<()> {
 }
 
 fn write_secret_restricted(
-    root: &crate::node_state::NodeStateNamespace,
-    path: &crate::node_state::NodeStatePath,
+    root: &crate::node_state::Scope,
+    path: &crate::node_state::RelativePath,
     secret_record: &[u8],
 ) -> Result<()> {
     root.write_restricted(path, secret_record, OWNER_ONLY_SECRET_FILE_MODE)
 }
 
-fn read_observed_secret(observation: crate::node_state::NodeStateFileObservation) -> Result<Vec<u8>> {
-    let crate::node_state::NodeStateFileObservation::Regular(file) = observation else {
+fn read_observed_secret(observation: crate::node_state::FileObservation) -> Result<Vec<u8>> {
+    let crate::node_state::FileObservation::Regular(file) = observation else {
         return Err(MoltenError::invalid_harness(
             "persisted endpoint secret changed after source selection",
         ));
@@ -75,12 +75,12 @@ fn read_observed_secret(observation: crate::node_state::NodeStateFileObservation
 }
 
 fn secret_file_permission_status(
-    observation: &crate::node_state::NodeStateFileObservation,
+    observation: &crate::node_state::FileObservation,
 ) -> IrohSecretPermissionStatus {
     match observation {
-        crate::node_state::NodeStateFileObservation::Missing => IrohSecretPermissionStatus::NotPresent,
-        crate::node_state::NodeStateFileObservation::NonRegular(_) => IrohSecretPermissionStatus::Unsafe,
-        crate::node_state::NodeStateFileObservation::Regular(file) => {
+        crate::node_state::FileObservation::Missing => IrohSecretPermissionStatus::NotPresent,
+        crate::node_state::FileObservation::NonRegular(_) => IrohSecretPermissionStatus::Unsafe,
+        crate::node_state::FileObservation::Regular(file) => {
             #[cfg(unix)]
             {
                 file.unix_mode().map_or(IrohSecretPermissionStatus::Unsupported, |mode| {

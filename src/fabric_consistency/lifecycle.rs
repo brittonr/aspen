@@ -1,28 +1,28 @@
 // r[impl molten.fabric_consistency.extension_port]
 // r[impl molten.fabric_consistency.group_isolation]
-pub fn apply_consistency_outcome(
-    binding: &super::ConsistencyGroupBinding,
-    plan: &super::ConsistencyPortPlan,
-    outcome: &super::ConsistencyPortOutcome,
-) -> crate::error::Result<super::ConsistencyGroupBinding> {
+pub fn apply_outcome(
+    binding: &super::Group,
+    plan: &super::PortPlan,
+    outcome: &super::Port,
+) -> crate::error::Result<super::Group> {
     validate_application_binding(binding, plan, outcome)?;
     if outcome.kind.is_non_mutating_failure() {
         return Ok(binding.clone());
     }
     let mut input = binding_input(binding);
     match (&plan.operation, outcome.kind) {
-        (super::ConsistencyOperation::Open { .. }, super::ConsistencyOutcomeKind::Opened) => {}
-        (super::ConsistencyOperation::Drain, super::ConsistencyOutcomeKind::Drained) => {}
-        (super::ConsistencyOperation::Remove, super::ConsistencyOutcomeKind::Removed) => {}
+        (super::Request::Open { .. }, super::Kind::Opened) => {}
+        (super::Request::Drain, super::Kind::Drained) => {}
+        (super::Request::Remove, super::Kind::Removed) => {}
         (
-            super::ConsistencyOperation::Configure {
+            super::Request::Configure {
                 transition:
                     super::ConfigurationTransition::StaticMembershipRefresh {
                         next_membership_ref,
                         next_config_epoch,
                     },
             },
-            super::ConsistencyOutcomeKind::ConfigurationApplied,
+            super::Kind::ConfigurationApplied,
         ) => {
             input.membership_ref.clone_from(next_membership_ref);
             input.config_epoch = *next_config_epoch;
@@ -35,9 +35,9 @@ pub fn apply_consistency_outcome(
 }
 
 fn validate_application_binding(
-    binding: &super::ConsistencyGroupBinding,
-    plan: &super::ConsistencyPortPlan,
-    outcome: &super::ConsistencyPortOutcome,
+    binding: &super::Group,
+    plan: &super::PortPlan,
+    outcome: &super::Port,
 ) -> crate::error::Result<()> {
     if plan.binding_ref != binding.binding_ref
         || plan.lifecycle_before != binding.lifecycle
@@ -45,15 +45,15 @@ fn validate_application_binding(
         || outcome.request_ref != plan.request_ref
         || outcome.binding_ref != binding.binding_ref
     {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "stale or mismatched consistency outcome cannot change group state",
         ));
     }
     Ok(())
 }
 
-fn binding_input(binding: &super::ConsistencyGroupBinding) -> super::ConsistencyGroupBindingInput {
-    super::ConsistencyGroupBindingInput {
+fn binding_input(binding: &super::Group) -> super::GroupInput {
+    super::GroupInput {
         group_id: binding.group_id.clone(),
         extension_id: binding.extension_id.clone(),
         service_id: binding.service_id.clone(),
@@ -76,12 +76,12 @@ fn binding_input(binding: &super::ConsistencyGroupBinding) -> super::Consistency
 }
 
 fn binding_from_input(
-    input: super::ConsistencyGroupBindingInput,
+    input: super::GroupInput,
     binding_ref: String,
-    lifecycle: super::ConsistencyGroupLifecycle,
+    lifecycle: super::GroupLifecycle,
     value: preserves::IOValue,
-) -> super::ConsistencyGroupBinding {
-    super::ConsistencyGroupBinding {
+) -> super::Group {
+    super::Group {
         binding_ref,
         group_id: input.group_id,
         extension_id: input.extension_id,

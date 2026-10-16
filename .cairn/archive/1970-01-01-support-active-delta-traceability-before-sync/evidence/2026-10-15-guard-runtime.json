@@ -1,0 +1,138 @@
+{
+  "records": [
+    {
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "--test",
+        "tools/tracey/inherited_debt_guard.rs",
+        "-o",
+        "/tmp/molten-attempts-6-7-l6bgn98w/traceability-current/guard-tests"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/molten-attempts-6-7-l6bgn98w/traceability-current/guard-tests",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "stdout": "\nrunning 9 tests\ntest tests::accepted_overlap_is_not_pending_and_does_not_mask_debt_growth ... ok\ntest tests::malformed_markers_and_baselines_fail ... ok\ntest tests::drift_and_dangling_fail ... ok\ntest tests::only_native_active_spec_paths_supply_pending_definitions ... ok\ntest tests::missing_requirement_root_fails_closed ... ok\ntest tests::exact_baseline_passes ... ok\ntest tests::only_added_and_modified_requirement_sections_admit_pending_ids ... ok\ntest tests::pending_identity_becomes_dangling_when_its_delta_is_removed ... ok\ntest tests::pending_resolution_preserves_accepted_debt_and_unknown_denial ... ok\n\ntest result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "tools/tracey/inherited_debt_guard.rs",
+        "-o",
+        "/tmp/molten-attempts-6-7-l6bgn98w/traceability-current/guard"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "python3",
+        "/tmp/molten-attempts-6-7-l6bgn98w/guard_cli_probe.py",
+        "/tmp/molten-attempts-6-7-l6bgn98w/traceability-current/guard"
+      ],
+      "exit_code": 0,
+      "stdout": "{\n  \"cases\": [\n    {\n      \"case\": \"pending identity resolves without reducing accepted debt\",\n      \"exit_code\": 0,\n      \"stdout\": \"pending_references=1\\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\\nrequirements=2\\nreferenced=1\\nuncovered=1\\nbaseline_entries=1\\ndangling=0\\nnon_claim=inherited requirements remain uncovered until direct evidence references them\\nverdict=pass\\n\",\n      \"stderr\": \"\"\n    },\n    {\n      \"case\": \"accepted overlap remains accepted\",\n      \"exit_code\": 0,\n      \"stdout\": \"pending_references=0\\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\\nrequirements=2\\nreferenced=1\\nuncovered=1\\nbaseline_entries=1\\ndangling=0\\nnon_claim=inherited requirements remain uncovered until direct evidence references them\\nverdict=pass\\n\",\n      \"stderr\": \"\"\n    },\n    {\n      \"case\": \"accepted debt growth remains denied\",\n      \"exit_code\": 1,\n      \"stdout\": \"pending_references=1\\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\\nrequirements=3\\nreferenced=1\\nuncovered=2\\nbaseline_entries=1\\ndangling=0\\nnon_claim=inherited requirements remain uncovered until direct evidence references them\\n\",\n      \"stderr\": \"unexpected_missing: growth\\nerror: traceability debt differs from the reviewed baseline\\n\"\n    },\n    {\n      \"case\": \"stale debt remains denied\",\n      \"exit_code\": 1,\n      \"stdout\": \"pending_references=1\\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\\nrequirements=1\\nreferenced=1\\nuncovered=0\\nbaseline_entries=1\\ndangling=0\\nnon_claim=inherited requirements remain uncovered until direct evidence references them\\n\",\n      \"stderr\": \"stale_baseline: debt\\nerror: traceability debt differs from the reviewed baseline\\n\"\n    },\n    {\n      \"case\": \"unknown identity remains denied\",\n      \"exit_code\": 1,\n      \"stdout\": \"pending_references=0\\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\\nrequirements=2\\nreferenced=1\\nuncovered=1\\nbaseline_entries=1\\ndangling=1\\nnon_claim=inherited requirements remain uncovered until direct evidence references them\\n\",\n      \"stderr\": \"dangling: unknown\\nerror: dangling traceability references are not permitted\\n\"\n    },\n    {\n      \"case\": \"unknown identity denies baseline write\",\n      \"exit_code\": 1,\n      \"stdout\": \"pending_references=0\\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\\n\",\n      \"stderr\": \"dangling: unknown\\nerror: cannot write a baseline while dangling references exist\\n\"\n    },\n    {\n      \"case\": \"removed identity no longer resolves\",\n      \"exit_code\": 1,\n      \"stdout\": \"pending_references=0\\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\\nrequirements=2\\nreferenced=1\\nuncovered=1\\nbaseline_entries=1\\ndangling=1\\nnon_claim=inherited requirements remain uncovered until direct evidence references them\\n\",\n      \"stderr\": \"dangling: pending\\nerror: dangling traceability references are not permitted\\n\"\n    },\n    {\n      \"case\": \"renamed labels are not definitions\",\n      \"exit_code\": 1,\n      \"stdout\": \"pending_references=0\\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\\nrequirements=2\\nreferenced=1\\nuncovered=1\\nbaseline_entries=1\\ndangling=1\\nnon_claim=inherited requirements remain uncovered until direct evidence references them\\n\",\n      \"stderr\": \"dangling: pending\\nerror: dangling traceability references are not permitted\\n\"\n    },\n    {\n      \"case\": \"archive and proposal definitions are excluded\",\n      \"exit_code\": 1,\n      \"stdout\": \"pending_references=0\\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\\nrequirements=2\\nreferenced=1\\nuncovered=1\\nbaseline_entries=1\\ndangling=1\\nnon_claim=inherited requirements remain uncovered until direct evidence references them\\n\",\n      \"stderr\": \"dangling: pending\\nerror: dangling traceability references are not permitted\\n\"\n    },\n    {\n      \"case\": \"modified identity resolves\",\n      \"exit_code\": 0,\n      \"stdout\": \"pending_references=1\\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\\nrequirements=2\\nreferenced=1\\nuncovered=1\\nbaseline_entries=1\\ndangling=0\\nnon_claim=inherited requirements remain uncovered until direct evidence references them\\nverdict=pass\\n\",\n      \"stderr\": \"\"\n    }\n  ]\n}\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/molten-attempts-6-7-l6bgn98w/traceability-current/guard",
+        "--root",
+        ".",
+        "--baseline",
+        "evidence/tracey/inherited-debt-baseline.txt"
+      ],
+      "exit_code": 0,
+      "stdout": "pending_references=27\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\nrequirements=2795\nreferenced=871\nuncovered=1924\nbaseline_entries=1924\ndangling=0\nnon_claim=inherited requirements remain uncovered until direct evidence references them\nverdict=pass\n",
+      "stderr": ""
+    }
+  ],
+  "cli_scenarios": {
+    "cases": [
+      {
+        "case": "pending identity resolves without reducing accepted debt",
+        "exit_code": 0,
+        "stdout": "pending_references=1\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\nrequirements=2\nreferenced=1\nuncovered=1\nbaseline_entries=1\ndangling=0\nnon_claim=inherited requirements remain uncovered until direct evidence references them\nverdict=pass\n",
+        "stderr": ""
+      },
+      {
+        "case": "accepted overlap remains accepted",
+        "exit_code": 0,
+        "stdout": "pending_references=0\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\nrequirements=2\nreferenced=1\nuncovered=1\nbaseline_entries=1\ndangling=0\nnon_claim=inherited requirements remain uncovered until direct evidence references them\nverdict=pass\n",
+        "stderr": ""
+      },
+      {
+        "case": "accepted debt growth remains denied",
+        "exit_code": 1,
+        "stdout": "pending_references=1\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\nrequirements=3\nreferenced=1\nuncovered=2\nbaseline_entries=1\ndangling=0\nnon_claim=inherited requirements remain uncovered until direct evidence references them\n",
+        "stderr": "unexpected_missing: growth\nerror: traceability debt differs from the reviewed baseline\n"
+      },
+      {
+        "case": "stale debt remains denied",
+        "exit_code": 1,
+        "stdout": "pending_references=1\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\nrequirements=1\nreferenced=1\nuncovered=0\nbaseline_entries=1\ndangling=0\nnon_claim=inherited requirements remain uncovered until direct evidence references them\n",
+        "stderr": "stale_baseline: debt\nerror: traceability debt differs from the reviewed baseline\n"
+      },
+      {
+        "case": "unknown identity remains denied",
+        "exit_code": 1,
+        "stdout": "pending_references=0\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\nrequirements=2\nreferenced=1\nuncovered=1\nbaseline_entries=1\ndangling=1\nnon_claim=inherited requirements remain uncovered until direct evidence references them\n",
+        "stderr": "dangling: unknown\nerror: dangling traceability references are not permitted\n"
+      },
+      {
+        "case": "unknown identity denies baseline write",
+        "exit_code": 1,
+        "stdout": "pending_references=0\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\n",
+        "stderr": "dangling: unknown\nerror: cannot write a baseline while dangling references exist\n"
+      },
+      {
+        "case": "removed identity no longer resolves",
+        "exit_code": 1,
+        "stdout": "pending_references=0\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\nrequirements=2\nreferenced=1\nuncovered=1\nbaseline_entries=1\ndangling=1\nnon_claim=inherited requirements remain uncovered until direct evidence references them\n",
+        "stderr": "dangling: pending\nerror: dangling traceability references are not permitted\n"
+      },
+      {
+        "case": "renamed labels are not definitions",
+        "exit_code": 1,
+        "stdout": "pending_references=0\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\nrequirements=2\nreferenced=1\nuncovered=1\nbaseline_entries=1\ndangling=1\nnon_claim=inherited requirements remain uncovered until direct evidence references them\n",
+        "stderr": "dangling: pending\nerror: dangling traceability references are not permitted\n"
+      },
+      {
+        "case": "archive and proposal definitions are excluded",
+        "exit_code": 1,
+        "stdout": "pending_references=0\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\nrequirements=2\nreferenced=1\nuncovered=1\nbaseline_entries=1\ndangling=1\nnon_claim=inherited requirements remain uncovered until direct evidence references them\n",
+        "stderr": "dangling: pending\nerror: dangling traceability references are not permitted\n"
+      },
+      {
+        "case": "modified identity resolves",
+        "exit_code": 0,
+        "stdout": "pending_references=1\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\nrequirements=2\nreferenced=1\nuncovered=1\nbaseline_entries=1\ndangling=0\nnon_claim=inherited requirements remain uncovered until direct evidence references them\nverdict=pass\n",
+        "stderr": ""
+      }
+    ]
+  },
+  "attempt": "6/20",
+  "command": "nix develop --no-update-lock-file -c python3 /tmp/molten-attempts-6-7-l6bgn98w/traceability_probe.py /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015 /tmp/molten-attempts-6-7-l6bgn98w/traceability-current",
+  "scenarios_harness_source": "import json\nimport pathlib\nimport subprocess\nimport sys\nimport tempfile\n\nGUARD = pathlib.Path(sys.argv[1])\nresults = []\n\n\ndef scenario(name, *, accepted=(\"accepted\", \"debt\"), refs=(\"accepted\", \"pending\"), delta=\"## ADDED Requirements\\nr[pending]\\n\", extra=None, expected=0, diagnostic=\"verdict=pass\", write_baseline=False):\n    with tempfile.TemporaryDirectory(prefix=\"molten-active-delta-case-\") as owned:\n        root = pathlib.Path(owned)\n        files = {\n            \".cairn/specs/project/spec.md\": \"\\n\".join(f\"r[{item}]\" for item in accepted) + \"\\n\",\n            \".cairn/changes/change/specs/project/spec.md\": delta,\n            \"src/evidence.rs\": \"\\n\".join(f\"// r[impl {item}]\" for item in refs) + \"\\n\",\n            \"baseline.txt\": \"debt\\n\",\n        }\n        files.update(extra or {})\n        for relative, text in files.items():\n            target = root / relative\n            target.parent.mkdir(parents=True, exist_ok=True)\n            target.write_text(text)\n        argv = [str(GUARD), \"--root\", str(root), \"--baseline\", str(root / \"baseline.txt\")]\n        if write_baseline:\n            argv += [\"--write-baseline\", str(root / \"output.txt\")]\n        completed = subprocess.run(argv, capture_output=True, text=True, timeout=30)\n        output = completed.stdout + completed.stderr\n        assert completed.returncode == expected, (name, completed.returncode, output)\n        assert diagnostic in output, (name, output)\n        if write_baseline:\n            assert not (root / \"output.txt\").exists(), (name, \"denied baseline write mutated output\")\n        results.append({\"case\": name, \"exit_code\": completed.returncode, \"stdout\": completed.stdout, \"stderr\": completed.stderr})\n\n\nscenario(\"pending identity resolves without reducing accepted debt\")\nscenario(\"accepted overlap remains accepted\", refs=(\"accepted\",), delta=\"## ADDED Requirements\\nr[accepted]\\n\")\nscenario(\"accepted debt growth remains denied\", accepted=(\"accepted\", \"debt\", \"growth\"), expected=1, diagnostic=\"unexpected_missing: growth\")\nscenario(\"stale debt remains denied\", accepted=(\"accepted\",), expected=1, diagnostic=\"stale_baseline: debt\")\nscenario(\"unknown identity remains denied\", refs=(\"accepted\", \"unknown\"), expected=1, diagnostic=\"dangling: unknown\")\nscenario(\"unknown identity denies baseline write\", refs=(\"accepted\", \"unknown\"), expected=1, diagnostic=\"cannot write a baseline while dangling references exist\", write_baseline=True)\nscenario(\"removed identity no longer resolves\", delta=\"## REMOVED Requirements\\nr[pending]\\n\", expected=1, diagnostic=\"dangling: pending\")\nscenario(\"renamed labels are not definitions\", delta=\"## RENAMED Requirements\\nr[pending]\\n\", expected=1, diagnostic=\"dangling: pending\")\nscenario(\"archive and proposal definitions are excluded\", delta=\"\", extra={\".cairn/archive/old/specs/project/spec.md\": \"## ADDED Requirements\\nr[pending]\\n\", \".cairn/changes/change/proposal.md\": \"r[pending]\\n\"}, expected=1, diagnostic=\"dangling: pending\")\nscenario(\"modified identity resolves\", delta=\"## MODIFIED Requirements\\nr[pending]\\n\")\nprint(json.dumps({\"cases\": results}, indent=2))\n",
+  "runner_harness_source": "import json\nimport pathlib\nimport subprocess\nimport sys\n\nsource = pathlib.Path(sys.argv[1])\nroot = pathlib.Path(sys.argv[2])\nroot.mkdir(parents=True, exist_ok=True)\nrecords = []\n\n\ndef run(argv):\n    result = subprocess.run(argv, cwd=source, capture_output=True, text=True, timeout=120)\n    record = {\"command\": [str(arg) for arg in argv], \"exit_code\": result.returncode, \"stdout\": result.stdout, \"stderr\": result.stderr}\n    records.append(record)\n    if result.returncode:\n        print(json.dumps({\"records\": records}, indent=2))\n        raise SystemExit(result.returncode)\n    return record\n\n\ntests = root / \"guard-tests\"\nguard = root / \"guard\"\nrun([\"rustc\", \"--edition=2024\", \"--test\", \"tools/tracey/inherited_debt_guard.rs\", \"-o\", str(tests)])\nrun([str(tests), \"--nocapture\"])\nrun([\"rustc\", \"--edition=2024\", \"tools/tracey/inherited_debt_guard.rs\", \"-o\", str(guard)])\ncli = run([\"python3\", str(root.parent / \"guard_cli_probe.py\"), str(guard)])\nscenarios = json.loads(cli[\"stdout\"])\nrun([str(guard), \"--root\", \".\", \"--baseline\", \"evidence/tracey/inherited-debt-baseline.txt\"])\nprint(json.dumps({\"records\": records, \"cli_scenarios\": scenarios}, indent=2))\n",
+  "static_review": {
+    "confidence": 0.9,
+    "explanation": "No concrete violations found in the scoped implementation, behavioral tests, change documents, or pending-identity guidance. Static review confirmed accepted-only coverage and exact debt comparison, accepted-over-pending precedence, native path and ADDED/MODIFIED section filtering, and unknown-reference denial before baseline writes or normal success. No checks were run; independent Cairn structural validation and lifecycle eligibility were not verified or inferred from the guard.",
+    "findings": [],
+    "overall_correctness": "correct"
+  },
+  "format_command": "nix develop --no-update-lock-file -c rustfmt --check --edition 2024 tools/tracey/inherited_debt_guard.rs crates/molten-core/src/nominal.rs crates/molten-core/src/parts/nominal/p000/body.rs",
+  "format_exit_code": 0,
+  "inherited_tracey_nix_output": "/nix/store/y3lz2gjw8wbc1kp11pqcl7pb34d3b2wb-molten-inherited-tracey-debt",
+  "scope": "Actual standalone guard and owned CLI fixtures. Source identity resolution is not accepted implementation coverage, native acceptance, or resolution of independent provider/runtime blockers."
+}

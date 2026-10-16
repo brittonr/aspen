@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "/tmp/molten-f12-api-smoke-ngw5ds_b/smoke"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T16:25:46.469381+00:00",
+  "elapsed_seconds": 0.001,
+  "exit_code": 101,
+  "timed_out": false,
+  "stdout": "exponential base=2 attempt=0 maximum=128 delay=2 deadline=12\nexponential base=2 attempt=3 maximum=128 delay=16 deadline=26\nexponential base=2 attempt=63 maximum=128 delay=128 deadline=138\nexponential base=2 attempt=64 maximum=128 delay=128 deadline=138\nexponential base=2 attempt=4294967296 maximum=128 delay=128 deadline=138\nexponential base=2 attempt=18446744073709551614 maximum=128 delay=128 deadline=138\nfixed control delay=2 deadline=12\n",
+  "stderr": "\nthread 'main' (1331529) panicked at /tmp/molten-f12-api-smoke-ngw5ds_b/main.rs:48:5:\nassertion `left == right` failed\n  left: Arithmetic(Overflow)\n right: Overflow\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+}

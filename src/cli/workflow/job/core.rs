@@ -17,7 +17,7 @@ impl<T> Items<T> {
 
     pub(crate) fn push(&mut self, value: T) -> Result<()> {
         if self.values.len() >= self.maximum {
-            return Err(molten::error::MoltenError::invalid_harness(format!(
+            return Err(molten::error::Failure::invalid_harness(format!(
                 "{} count exceeds {}",
                 self.label, self.maximum
             )));

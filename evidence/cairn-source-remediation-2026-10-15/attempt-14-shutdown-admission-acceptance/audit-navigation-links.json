@@ -1,0 +1,21 @@
+{
+  "result": "pass",
+  "document": "docs/audits/logical-bugs-2026-09-08.md",
+  "scope": "Only F01/F12 navigation targets were migrated to their native archive locations; historical finding descriptions and evidence classes remain unchanged.",
+  "local_targets": [
+    "../../.cairn/archive/1970-01-01-fix-node-shutdown-admission/proposal.md",
+    "../../.cairn/changes/require-node-startup-source-gate-evidence/proposal.md",
+    "../../.cairn/changes/recover-ingress-enqueue-after-dedup/proposal.md",
+    "../../.cairn/changes/repair-lost-replicas-after-prior-success/proposal.md",
+    "../../.cairn/changes/preserve-replica-fault-domains-during-cleanup/proposal.md",
+    "../../.cairn/changes/admit-world-merge-migrations-before-execution/proposal.md",
+    "../../.cairn/changes/preserve-under-replicated-status-without-targets/proposal.md",
+    "../../.cairn/changes/bind-delivery-duplicate-results-to-original-claims/proposal.md",
+    "../../.cairn/changes/resume-blocked-scheduler-runnables/proposal.md",
+    "../../.cairn/changes/enforce-scheduler-queue-bounds-on-yield/proposal.md",
+    "../../.cairn/changes/bound-terminal-scheduler-retention/proposal.md",
+    "../../.cairn/archive/1970-01-01-saturate-exponential-retry-arithmetic/proposal.md",
+    "../../.cairn/changes/distinguish-absent-world-merge-roots/proposal.md",
+    "../../.cairn/changes/bind-shutdown-observations-to-current-node-run/proposal.md"
+  ]
+}

@@ -172,7 +172,7 @@ fn rollback_leaves_staged_actions_uncommitted() {
 }
 
 #[test]
-fn apply_step_with_predicate_receipt_gates_dataspace_commit() {
+fn apply_step_with_predicate_receipt_gates_commit() {
     let mut state = RuntimeState::new(1);
     let value = Value::string("service.ready").expect("runtime test value");
     let step = Step::Assert {

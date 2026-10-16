@@ -2,7 +2,7 @@
 impl FabricEffectPort for InvalidEffectPort {
     fn route(
         &mut self,
-        _binding: &molten::fabric::CanonicalFabricPortBinding,
+        _binding: &molten::fabric::CanonicalPortBinding,
         _effect: &TypedEffectRequest,
     ) -> molten::fabric::FabricPortResult<PortEffectOutput> {
         self.routed = self
@@ -45,7 +45,7 @@ fn materializing_native_host_rejects_missing_mismatched_and_oversized_effect_val
         let mut service = cohort.install()?;
         service.start(START_TICK).or_fail("start native service")?;
         let accepted = {
-            let mut client = NativeServiceClient::new(&mut service);
+            let mut client = Client::new(&mut service);
             client
                 .submit(&ingress(GENERATION, cohort.admitted.manifest_ref())?, REQUEST_TICK)
                 .or_fail("accepted native ingress")?
@@ -70,16 +70,16 @@ fn materializing_native_host_rejects_missing_mismatched_and_oversized_effect_val
 
 #[derive(Clone, Default)]
 struct ControlledValuePort {
-    inner: std::sync::Arc<std::sync::Mutex<InMemoryNativeCallbackValuePort>>,
-    failure: std::sync::Arc<std::sync::Mutex<Option<(usize, NativeValuePortFailureKind)>>>,
+    inner: std::sync::Arc<std::sync::Mutex<InMemoryCallbackValuePort>>,
+    failure: std::sync::Arc<std::sync::Mutex<Option<(usize, ValuePortFailureKind)>>>,
 }
 
 impl ControlledValuePort {
-    fn fail_next(&self, kind: NativeValuePortFailureKind) -> TestResult<()> {
+    fn fail_next(&self, kind: ValuePortFailureKind) -> TestResult<()> {
         self.fail_after(0, kind)
     }
 
-    fn fail_after(&self, successful_publications: usize, kind: NativeValuePortFailureKind) -> TestResult<()> {
+    fn fail_after(&self, successful_publications: usize, kind: ValuePortFailureKind) -> TestResult<()> {
         *self.failure.lock().or_fail("controlled value failure")? = Some((successful_publications, kind));
         Ok(())
     }
@@ -90,12 +90,12 @@ impl NativeCallbackValuePort for ControlledValuePort {
         &mut self,
         value_ref: &str,
         maximum_bytes: u64,
-    ) -> std::result::Result<NativeCallbackValue, NativeValuePortFailure> {
+    ) -> std::result::Result<NativeCallbackValue, ValuePortFailure> {
         self.inner
             .lock()
             .map_err(|_| {
-                NativeValuePortFailure::new(
-                    NativeValuePortFailureKind::RejectedBeforeAcceptance,
+                ValuePortFailure::new(
+                    ValuePortFailureKind::RejectedBeforeAcceptance,
                     "controlled value port lock is unavailable",
                 )
             })?
@@ -106,11 +106,11 @@ impl NativeCallbackValuePort for ControlledValuePort {
         &mut self,
         value: &NativeCallbackValue,
         maximum_bytes: u64,
-    ) -> std::result::Result<NativeValuePublicationReceipt, NativeValuePortFailure> {
+    ) -> std::result::Result<ValuePublicationReceipt, ValuePortFailure> {
         let failure = {
             let mut failure = self.failure.lock().map_err(|_| {
-                NativeValuePortFailure::new(
-                    NativeValuePortFailureKind::RejectedBeforeAcceptance,
+                ValuePortFailure::new(
+                    ValuePortFailureKind::RejectedBeforeAcceptance,
                     "controlled value failure lock is unavailable",
                 )
             })?;
@@ -127,8 +127,8 @@ impl NativeCallbackValuePort for ControlledValuePort {
             }
         };
         let mut inner = self.inner.lock().map_err(|_| {
-            NativeValuePortFailure::new(
-                NativeValuePortFailureKind::RejectedBeforeAcceptance,
+            ValuePortFailure::new(
+                ValuePortFailureKind::RejectedBeforeAcceptance,
                 "controlled value port lock is unavailable",
             )
         })?;

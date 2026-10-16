@@ -11,7 +11,7 @@ fn collect_specs_under(
         }
         if next.is_file() {
             if next.file_name().is_some_and(|name| name == std::ffi::OsStr::new("spec.md")) {
-                let markdown = std::fs::read_to_string(&next).map_err(molten::error::MoltenError::from)?;
+                let markdown = std::fs::read_to_string(&next).map_err(molten::error::Failure::from)?;
                 sources.extend([molten::requirement_traceability::SpecSource {
                     source: next.display().to_string(),
                     markdown,
@@ -22,9 +22,9 @@ fn collect_specs_under(
             continue;
         }
         let mut entries = std::fs::read_dir(&next)
-            .map_err(molten::error::MoltenError::from)?
+            .map_err(molten::error::Failure::from)?
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(molten::error::MoltenError::from)?;
+            .map_err(molten::error::Failure::from)?;
         entries.sort_by_key(|entry| entry.path());
         // Push in reverse so the stack visits entries in sorted order and keeps
         // the depth-first order of the earlier recursion.
@@ -57,7 +57,7 @@ fn parse_coverage_inputs(
             "positive" => entry.positive.push(evidence),
             "negative" => entry.negative.push(evidence),
             other => {
-                return Err(molten::error::MoltenError::invalid_harness(format!(
+                return Err(molten::error::Failure::invalid_harness(format!(
                     "coverage kind {other} must be positive or negative"
                 )));
             }
@@ -88,7 +88,7 @@ fn parse_receipt_inputs(
 ) -> Outcome<Vec<molten::requirement_traceability::CoverageInput>> {
     let mut sources = Vec::with_capacity(receipt_paths.len());
     for path in receipt_paths {
-        let text = std::fs::read_to_string(&path).map_err(molten::error::MoltenError::from)?;
+        let text = std::fs::read_to_string(&path).map_err(molten::error::Failure::from)?;
         let value = molten::preserves_rail::parse_text(&text)?;
         let receipt = molten::requirement_traceability::parse_verification_run_receipt(&value)?;
         let is_target_exists = root.join(&receipt.target).exists();
@@ -124,12 +124,12 @@ fn evidence_from_fields(
 fn split_fields(item: &str, expected: usize, label: &str) -> Outcome<Vec<String>> {
     let fields = item.split('|').map(str::to_string).collect::<Vec<_>>();
     if fields.len() != expected {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "{label} entry must have {expected} pipe-delimited fields"
         )));
     }
     if fields.iter().any(|field| field.trim().is_empty()) {
-        return Err(molten::error::MoltenError::invalid_harness(format!("{label} fields must not be empty")));
+        return Err(molten::error::Failure::invalid_harness(format!("{label} fields must not be empty")));
     }
     Ok(fields)
 }
@@ -142,9 +142,9 @@ fn write_optional_preserves(path: Option<&FilePath>, value: &preserves::IOValue)
 fn write_optional_text(path: Option<&FilePath>, text: &str) -> Outcome<()> {
     if let Some(path) = path {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(molten::error::MoltenError::from)?;
+            std::fs::create_dir_all(parent).map_err(molten::error::Failure::from)?;
         }
-        std::fs::write(path, text).map_err(molten::error::MoltenError::from)?;
+        std::fs::write(path, text).map_err(molten::error::Failure::from)?;
     } else {
         println!("{text}");
     }

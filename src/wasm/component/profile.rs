@@ -41,19 +41,18 @@ pub const COMPONENT_NON_CLAIMS: &[&str] = &[
 const PROFILE_EXPORT_JSON: &str =
     include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/docs/wasm-component-runtime/generated/profile.json"));
 
-pub fn supported_component_profile() -> super::model::ComponentResult<super::model::ComponentRuntimeProfile> {
-    let exported: super::model::ComponentProfileExport =
-        serde_json::from_str(PROFILE_EXPORT_JSON).map_err(|error| {
-            super::model::ComponentDenial::classified(
-                super::model::ComponentDenialClass::ProfileDenial,
-                format!("component profile export is invalid: {error}"),
-            )
-        })?;
+pub fn supported() -> super::model::Result<super::model::RuntimeProfile> {
+    let exported: super::model::ProfileExport = serde_json::from_str(PROFILE_EXPORT_JSON).map_err(|error| {
+        super::model::Denial::classified(
+            super::model::DenialClass::ProfileDenial,
+            format!("component profile export is invalid: {error}"),
+        )
+    })?;
     validate_export(&exported)?;
     Ok(exported.profile)
 }
 
-pub fn component_profile_ref(profile: &super::model::ComponentRuntimeProfile) -> String {
+pub fn r#ref(profile: &super::model::RuntimeProfile) -> String {
     let mut lines = vec![
         format!("profile-id:{}", profile.profile_id),
         format!("evidence-scope:{}", profile.evidence_scope.as_str()),
@@ -81,9 +80,7 @@ pub fn component_profile_ref(profile: &super::model::ComponentRuntimeProfile) ->
     super::model::content_ref(lines.join("\n").as_bytes())
 }
 
-pub fn validate_component_profile(
-    profile: &super::model::ComponentRuntimeProfile,
-) -> super::model::ComponentResult<()> {
+pub fn validate_runtime(profile: &super::model::RuntimeProfile) -> super::model::Result<()> {
     let mut blockers = Vec::new();
     require_equal(&mut blockers, "profile id", &profile.profile_id, COMPONENT_PROFILE_ID);
     if profile.evidence_scope != super::model::EvidenceScope::Production {
@@ -105,11 +102,11 @@ pub fn validate_component_profile(
     if blockers.is_empty() {
         Ok(())
     } else {
-        Err(super::model::ComponentDenial::from_blockers(blockers))
+        Err(super::model::Denial::from_blockers(blockers))
     }
 }
 
-fn validate_export(exported: &super::model::ComponentProfileExport) -> super::model::ComponentResult<()> {
+fn validate_export(exported: &super::model::ProfileExport) -> super::model::Result<()> {
     let mut blockers = Vec::new();
     require_equal(&mut blockers, "schema id", &exported.schema_id, COMPONENT_PROFILE_SCHEMA);
     if exported.schema_version != COMPONENT_PROFILE_SCHEMA_VERSION {
@@ -117,15 +114,12 @@ fn validate_export(exported: &super::model::ComponentProfileExport) -> super::mo
     }
     require_equal(&mut blockers, "source language", &exported.source_language, COMPONENT_PROFILE_SOURCE_LANGUAGE);
     if !blockers.is_empty() {
-        return Err(super::model::ComponentDenial::from_blockers(blockers));
+        return Err(super::model::Denial::from_blockers(blockers));
     }
-    validate_component_profile(&exported.profile)
+    validate_runtime(&exported.profile)
 }
 
-fn validate_toolchain(
-    profile: &super::model::ComponentRuntimeProfile,
-    blockers: &mut impl crate::bounded::VecSink<String>,
-) {
+fn validate_toolchain(profile: &super::model::RuntimeProfile, blockers: &mut impl crate::bounded::VecSink<String>) {
     for (label, actual, expected) in [
         ("wasmtime", profile.toolchain.wasmtime.as_str(), COMPONENT_WASMTIME_VERSION),
         ("wasm-tools", profile.toolchain.wasm_tools.as_str(), COMPONENT_WASM_TOOLS_VERSION),
@@ -138,16 +132,13 @@ fn validate_toolchain(
     }
 }
 
-fn validate_wit(profile: &super::model::ComponentRuntimeProfile, blockers: &mut impl crate::bounded::VecSink<String>) {
+fn validate_wit(profile: &super::model::RuntimeProfile, blockers: &mut impl crate::bounded::VecSink<String>) {
     require_equal(blockers, "WIT package", &profile.wit.package, COMPONENT_WIT_PACKAGE);
     require_equal(blockers, "WIT world", &profile.wit.world, COMPONENT_WIT_WORLD);
     require_equal(blockers, "WIT source ref", &profile.wit.source_ref, COMPONENT_WIT_SOURCE_REF);
 }
 
-fn validate_features(
-    profile: &super::model::ComponentRuntimeProfile,
-    blockers: &mut impl crate::bounded::VecSink<String>,
-) {
+fn validate_features(profile: &super::model::RuntimeProfile, blockers: &mut impl crate::bounded::VecSink<String>) {
     let features = &profile.features;
     if !(features.component_model
         && features.multi_value
@@ -176,10 +167,7 @@ fn validate_features(
     }
 }
 
-fn validate_determinism(
-    profile: &super::model::ComponentRuntimeProfile,
-    blockers: &mut impl crate::bounded::VecSink<String>,
-) {
+fn validate_determinism(profile: &super::model::RuntimeProfile, blockers: &mut impl crate::bounded::VecSink<String>) {
     let determinism = &profile.determinism;
     if !(determinism.fuel_interruption && determinism.nan_canonicalization && determinism.relaxed_simd_deterministic) {
         blockers.push_item("component deterministic runtime controls are incomplete".to_string());
@@ -189,10 +177,7 @@ fn validate_determinism(
     require_equal(blockers, "host inputs", &determinism.host_inputs, COMPONENT_RECORDED_HOST_INPUTS);
 }
 
-fn validate_resources(
-    profile: &super::model::ComponentRuntimeProfile,
-    blockers: &mut impl crate::bounded::VecSink<String>,
-) {
+fn validate_resources(profile: &super::model::RuntimeProfile, blockers: &mut impl crate::bounded::VecSink<String>) {
     let actual = &profile.resources;
     let expected = [
         ("fuel", actual.fuel, COMPONENT_FUEL_LIMIT),

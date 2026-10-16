@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "cargo",
+    "build",
+    "--bin",
+    "molten"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T18:42:58.710123+00:00",
+  "elapsed_seconds": 145.359,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "    Blocking waiting for file lock on build directory\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build \u2014 compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] \u2192 set KACHE_CACHE_DIR to a fast, local, single-machine path\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build \u2014 compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] \u2192 set KACHE_CACHE_DIR to a fast, local, single-machine path\n   Compiling rand_chacha v0.3.1\n   Compiling rand_chacha v0.9.0\n   Compiling ahash v0.8.12\n   Compiling rand v0.8.6\n   Compiling rand v0.9.4\n   Compiling hashbrown v0.14.5\n   Compiling num-bigint-dig v0.8.6\n   Compiling dashmap v6.2.1\n   Compiling lasso v0.7.3\n   Compiling rsa v0.9.10\n   Compiling steel-parser v0.8.2\n   Compiling secretspec v0.17.0\n   Compiling jsonwebtoken v11.0.0\n   Compiling steel-core v0.8.2\n   Compiling basalt v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)\n   Compiling molten-core v0.1.0 (/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-core)\n   Compiling molten-node-host v0.1.0 (/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-node-host)\n   Compiling molten v0.1.0 (/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2m 25s\n",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

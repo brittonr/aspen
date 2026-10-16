@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "node",
+    "control-dispatch",
+    "--help"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T17:49:54.172898+00:00",
+  "elapsed_seconds": 0.013,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "Usage: molten node control-dispatch [OPTIONS] --state-root <STATE_ROOT>\n\nOptions:\n      --state-root <STATE_ROOT>    \n      --request <REQUEST>          \n      --receipt-out <RECEIPT_OUT>  \n  -h, --help                       Print help\n",
+  "stderr": ""
+}

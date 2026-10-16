@@ -24,7 +24,7 @@ pub fn record_fixture_value() -> Result<ReplayFixtureRecord> {
 
 pub fn tampered_fixture_record_value(variant: ReplayFixtureVariant) -> Result<ReplayFixtureRecord> {
     if variant == ReplayFixtureVariant::Baseline {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "replay fixture tamper variant must differ from baseline",
         ));
     }

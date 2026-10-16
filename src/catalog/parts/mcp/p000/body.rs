@@ -4,7 +4,7 @@ type PreservesRecord<T> = preserves::Record<T>;
 type PreservesValue<T> = preserves::Value<T>;
 type Filter = crate::catalog::Filter;
 type VisibilityInput = crate::catalog::VisibilityInput;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 pub const READ_ONLY_TOOLS: &[&str] = &[

@@ -3,7 +3,7 @@ type IoValue = preserves::IOValue;
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type Record<T> = preserves::Record<T>;
 type Value<T> = preserves::Value<T>;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 const DETERMINISTIC_REPLAY_VERIFY_SCHEMA: &str = crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;

@@ -10,28 +10,28 @@ const FABRIC_TIME_RUN_RECORD: &str = "fabric-time-run-v1";
 const MAX_RUN_EVIDENCE_REFS: usize = 4_096;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalTimeProfile {
+pub struct Profile {
     pub profile: super::AdmittedTimeProfile,
     pub profile_ref: String,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalTimeValue {
+pub struct Value {
     pub time: super::TimeValue,
     pub value_ref: String,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalDuration {
+pub struct Duration {
     pub duration: super::CheckedDuration,
     pub value_ref: String,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CanonicalTimeEventKind {
+pub enum EventKind {
     ClockAnomaly,
     Timer,
     Scheduler,
@@ -42,7 +42,7 @@ pub enum CanonicalTimeEventKind {
     Conformance,
 }
 
-impl CanonicalTimeEventKind {
+impl EventKind {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::ClockAnomaly => "clock-anomaly",
@@ -58,16 +58,16 @@ impl CanonicalTimeEventKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalTimeEvent {
+pub struct Event {
     pub evidence_ref: String,
     pub profile_ref: String,
-    pub kind: CanonicalTimeEventKind,
+    pub kind: EventKind,
     pub generation: u64,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FabricTimeRunReport {
+pub struct RunReport {
     pub profile_ref: String,
     pub profile_kind: String,
     pub generation: u64,
@@ -89,22 +89,22 @@ pub struct FabricTimeRunReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalFabricTimeRun {
+pub struct Run {
     pub report_ref: String,
-    pub report: FabricTimeRunReport,
+    pub report: RunReport,
     pub value: preserves::IOValue,
 }
 
 // r[impl molten.modularity.fabric_boundary.compatibility]
 // r[impl molten.fabric_time.evidence]
-pub fn canonical_admit_time_profile(
+pub fn admit_profile(
     descriptor: &super::TimeProfileDescriptor,
-) -> crate::error::Result<CanonicalTimeProfile> {
+) -> crate::error::Result<Profile> {
     let profile =
         super::admit_time_profile(descriptor).map_err(|issues| validation_error("fabric time profile", &issues))?;
-    let value = time_profile_value(&profile);
+    let value = profile_value(&profile);
     let profile_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalTimeProfile {
+    Ok(Profile {
         profile,
         profile_ref,
         value,
@@ -112,10 +112,10 @@ pub fn canonical_admit_time_profile(
 }
 
 // r[impl molten.fabric_time.time_domains]
-pub fn canonical_time_value(
-    profile: &CanonicalTimeProfile,
+pub fn value(
+    profile: &Profile,
     time: &super::TimeValue,
-) -> crate::error::Result<CanonicalTimeValue> {
+) -> crate::error::Result<Value> {
     super::validate_time_value(&profile.profile, time)
         .map_err(|error| validation_error("canonical time value", &[error]))?;
     let mut details = vec![
@@ -131,17 +131,17 @@ pub fn canonical_time_value(
     details.push(checks(&["domain-explicit", "profile-bound", "checked-range"]));
     let value = crate::preserves_rail::record("fabric-time-value-v1", details);
     let value_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalTimeValue {
+    Ok(Value {
         time: time.clone(),
         value_ref,
         value,
     })
 }
 
-pub fn canonical_duration(
-    profile: &CanonicalTimeProfile,
+pub fn duration(
+    profile: &Profile,
     duration: &super::CheckedDuration,
-) -> crate::error::Result<CanonicalDuration> {
+) -> crate::error::Result<Duration> {
     super::validate_duration(&profile.profile, duration)
         .map_err(|error| validation_error("canonical duration", &[error]))?;
     let value = crate::preserves_rail::record("fabric-time-duration-v1", vec![
@@ -152,7 +152,7 @@ pub fn canonical_duration(
         checks(&["domain-explicit", "profile-bound", "checked-range"]),
     ]);
     let value_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalDuration {
+    Ok(Duration {
         duration: duration.clone(),
         value_ref,
         value,
@@ -160,7 +160,7 @@ pub fn canonical_duration(
 }
 
 // r[impl molten.fabric_time.live_sim_parity]
-pub fn fabric_time_port_descriptors(profile: &CanonicalTimeProfile) -> Vec<crate::fabric::FabricPortDescriptor> {
+pub fn port_descriptors(profile: &Profile) -> Vec<crate::fabric::FabricPortDescriptor> {
     let (determinism, replay) = replay_classes(profile.profile.kind);
     vec![
         port_descriptor(PortDescriptorInput {
@@ -239,14 +239,14 @@ fn replay_classes(kind: super::TimeProfileKind) -> (crate::fabric::DeterminismCl
 }
 
 // r[impl molten.fabric_time.timers]
-pub fn canonical_timer_event(
+pub fn timer_event(
     profile_ref: &str,
     transition: &super::TimerTransition,
-) -> crate::error::Result<CanonicalTimeEvent> {
-    canonical_event(
+) -> crate::error::Result<Event> {
+    event(
         EventHeader {
             profile_ref,
-            kind: CanonicalTimeEventKind::Timer,
+            kind: EventKind::Timer,
             generation: transition.next.key.generation,
             subject: &transition.next.key.service_id,
             action: timer_action(transition.action),

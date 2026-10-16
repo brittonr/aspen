@@ -1,19 +1,19 @@
 
-impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
+impl<E: SystemExtensionExecutor> Dispatcher<E> {
     // r[impl molten.system_extension.typed_effects]
     pub fn route_approved_effects<P: FabricEffectPort>(
         &mut self,
-        callback_receipt: &super::CanonicalCallbackReceipt,
+        callback_receipt: &super::CallbackReceipt,
         port: &mut P,
-    ) -> crate::error::Result<Vec<super::CanonicalEffectCompletion>> {
+    ) -> crate::error::Result<Vec<super::EffectCompletion>> {
         let is_receipt_is_host_owned = self.evidence.iter().any(|evidence| {
             matches!(
                 evidence,
-                HostEvidence::Callback(receipt) if receipt.receipt_ref == callback_receipt.receipt_ref
+                Evidence::Callback(receipt) if receipt.receipt_ref == callback_receipt.receipt_ref
             )
         });
         if !is_receipt_is_host_owned || callback_receipt.decision != super::CallbackExecutionDecision::Succeeded {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "system-extension effect routing requires a successful host-owned callback receipt",
             ));
         }
@@ -39,24 +39,24 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
                 let key = match &effect.target {
                     super::EffectTarget::FabricPort(key) => key,
                     super::EffectTarget::Ambient(ambient) => {
-                        return Err(crate::error::MoltenError::invalid_harness(format!(
+                        return Err(crate::error::Failure::invalid_harness(format!(
                             "ambient effect reached routing after validation: {}",
                             ambient.as_str()
                         )));
                     }
                 };
                 let binding = self.admitted.binding_for(key).ok_or_else(|| {
-                    crate::error::MoltenError::invalid_harness(format!(
+                    crate::error::Failure::invalid_harness(format!(
                         "system-extension effect port {}@{} is not canonically bound",
                         key.port_id, key.version
                     ))
                 })?;
                 let output = port.route(binding, effect).map_err(|_error| {
-                    crate::error::MoltenError::invalid_harness("system-extension bound fabric-port routing failed")
+                    crate::error::Failure::invalid_harness("system-extension bound fabric-port routing failed")
                 })?;
                 let completion =
-                    super::canonical_effect_completion(&callback_receipt.receipt_ref, binding, effect, &output)?;
-                self.record_evidence(HostEvidence::EffectCompletion(completion.clone()))?;
+                    super::effect_completion(&callback_receipt.receipt_ref, binding, effect, &output)?;
+                self.record_evidence(Evidence::EffectCompletion(completion.clone()))?;
                 completions.push(completion);
             }
             Ok(completions)
@@ -66,19 +66,19 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         routing_result
     }
 
-    pub fn health(&mut self, logical_tick: u64) -> crate::error::Result<HostDispatchResult> {
+    pub fn health(&mut self, logical_tick: u64) -> crate::error::Result<DispatchResult> {
         self.invoke_lifecycle_callback(super::CallbackKind::Health, None, logical_tick)
     }
 
     // r[impl molten.system_extension.lifecycle]
     // r[impl molten.system_extension.evidence]
-    pub fn checkpoint(&mut self, logical_tick: u64) -> crate::error::Result<super::CanonicalLifecycleReceipt> {
+    pub fn checkpoint(&mut self, logical_tick: u64) -> crate::error::Result<super::LifecycleReceipt> {
         self.apply_simple_transition(super::LifecycleEventKind::BeginCheckpoint)?;
         let (_, outcome) = self
             .invoke_lifecycle_callback(super::CallbackKind::Checkpoint, None, logical_tick)?
             .require_executed("checkpoint")?;
         let checkpoint_ref = outcome.checkpoint_ref.ok_or_else(|| {
-            crate::error::MoltenError::invalid_harness("validated checkpoint callback returned no checkpoint ref")
+            crate::error::Failure::invalid_harness("validated checkpoint callback returned no checkpoint ref")
         })?;
         self.apply_transition(super::LifecycleEvent {
             kind: super::LifecycleEventKind::CheckpointSucceeded,
@@ -95,7 +95,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         &mut self,
         checkpoint_ref: &str,
         logical_tick: u64,
-    ) -> crate::error::Result<super::CanonicalLifecycleReceipt> {
+    ) -> crate::error::Result<super::LifecycleReceipt> {
         self.apply_simple_transition(super::LifecycleEventKind::BeginRecovery)?;
         self.invoke_lifecycle_callback(super::CallbackKind::Recover, Some(checkpoint_ref), logical_tick)?
             .require_executed("recover")?;
@@ -108,26 +108,26 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         })
     }
 
-    pub fn drain(&mut self, logical_tick: u64) -> crate::error::Result<super::CanonicalLifecycleReceipt> {
+    pub fn drain(&mut self, logical_tick: u64) -> crate::error::Result<super::LifecycleReceipt> {
         self.apply_simple_transition(super::LifecycleEventKind::BeginDrain)?;
         self.invoke_lifecycle_callback(super::CallbackKind::Drain, None, logical_tick)?
             .require_executed("drain")?;
         self.apply_simple_transition(super::LifecycleEventKind::DrainSucceeded)
     }
 
-    pub fn shutdown(&mut self, logical_tick: u64) -> crate::error::Result<super::CanonicalLifecycleReceipt> {
+    pub fn shutdown(&mut self, logical_tick: u64) -> crate::error::Result<super::LifecycleReceipt> {
         self.apply_simple_transition(super::LifecycleEventKind::BeginShutdown)?;
         self.invoke_lifecycle_callback(super::CallbackKind::Shutdown, None, logical_tick)?
             .require_executed("shutdown")?;
         self.apply_simple_transition(super::LifecycleEventKind::ShutdownSucceeded)
     }
 
-    pub fn remove(&mut self) -> crate::error::Result<super::CanonicalLifecycleReceipt> {
+    pub fn remove(&mut self) -> crate::error::Result<super::LifecycleReceipt> {
         self.apply_simple_transition(super::LifecycleEventKind::Remove)
     }
 
     // r[impl molten.system_extension.native_host.recovery]
-    pub fn observe_host_loss(&mut self) -> crate::error::Result<super::CanonicalLifecycleReceipt> {
+    pub fn observe_host_loss(&mut self) -> crate::error::Result<super::LifecycleReceipt> {
         self.apply_transition(super::LifecycleEvent {
             kind: super::LifecycleEventKind::Failure,
             generation: self.state.generation,
@@ -138,11 +138,11 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
     }
 
     // r[impl molten.system_extension.supervision]
-    pub fn restart(&mut self, logical_tick: u64) -> crate::error::Result<super::CanonicalLifecycleReceipt> {
+    pub fn restart(&mut self, logical_tick: u64) -> crate::error::Result<super::LifecycleReceipt> {
         self.apply_simple_transition(super::LifecycleEventKind::BeginRestart)?;
         if self.admitted.manifest().declares_callback(super::CallbackKind::Recover) {
             let checkpoint_ref = self.state.checkpoint_ref.clone().ok_or_else(|| {
-                crate::error::MoltenError::invalid_harness("restart recovery requires a canonical checkpoint ref")
+                crate::error::Failure::invalid_harness("restart recovery requires a canonical checkpoint ref")
             })?;
             return self.recover(&checkpoint_ref, logical_tick);
         }
@@ -156,7 +156,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
     // r[impl molten.system_extension.evidence]
     pub fn upgrade(
         &mut self,
-        next: super::CanonicalAdmittedSystemExtensionManifest,
+        next: super::AdmittedManifest,
         next_executor: E,
         checkpoint_ref: &str,
         logical_tick: u64,
@@ -168,7 +168,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
     // r[impl molten.system_extension.evidence]
     pub fn rollback(
         &mut self,
-        next: super::CanonicalAdmittedSystemExtensionManifest,
+        next: super::AdmittedManifest,
         next_executor: E,
         checkpoint_ref: &str,
         logical_tick: u64,
@@ -177,9 +177,9 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
     }
 
     // r[impl molten.system_extension.operator_readback]
-    pub fn operator_status(&self) -> crate::error::Result<super::CanonicalOperatorStatus> {
+    pub fn operator_status(&self) -> crate::error::Result<super::OperatorStatusRecord> {
         let port_binding_refs = self.admitted.all_binding_refs().map(str::to_string).collect();
-        super::canonical_operator_status(super::OperatorStatus {
+        super::operator_status(super::OperatorStatus {
             extension_id: self.admitted.manifest().extension_id.clone(),
             service_id: self.admitted.manifest().service_id.clone(),
             manifest_ref: self.admitted.manifest_ref().to_string(),

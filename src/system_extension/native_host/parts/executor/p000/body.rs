@@ -7,19 +7,19 @@ const CALLBACK_JOURNAL_CODE: &str = "native-callback-journal-failed";
 const CALLBACK_LOCK_CODE: &str = "native-callback-state-poisoned";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NativeExecutionTemplate {
+pub struct ExecutionTemplate {
     pub host_profile: AdmittedNativeHostProfile,
     pub executable: AdmittedNativeExecutable,
-    pub admitted: CanonicalAdmittedSystemExtensionManifest,
+    pub admitted: AdmittedManifest,
     pub request: ExecutionRequest,
     pub authority: ExecutionAuthorityFacts,
     pub resources: ExecutionResourceGrant,
-    pub resolved: ResolvedExecutionContext,
-    pub context: NativeCallbackContext,
+    pub resolved: ResolvedContext,
+    pub context: CallbackContext,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NativeInvocationObservation {
+pub struct InvocationObservation {
     pub envelope_ref: String,
     pub operation_ref: String,
     pub execution_receipt_ref: Option<String>,
@@ -28,17 +28,17 @@ pub struct NativeInvocationObservation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum NativeExecutorError {
-    Journal(NativeJournalError),
+pub enum CallbackFailure {
+    Journal(Error),
     StatePoisoned,
-    Execution(Box<ExecutionPortFailure>),
+    Execution(Box<PortFailure>),
     ProcessObservation(&'static str),
-    Value(NativeValuePortFailure),
+    Value(ValuePortFailure),
     Wire(String),
     Admission(String),
 }
 
-impl NativeExecutorError {
+impl CallbackFailure {
     pub const fn diagnostic_code(&self) -> &'static str {
         match self {
             Self::Journal(_) => CALLBACK_JOURNAL_CODE,
@@ -50,18 +50,18 @@ impl NativeExecutorError {
     }
 }
 
-pub struct NativeProcessSystemExtensionExecutor<P, J>
+pub struct Process<P, J>
 where
     P: ExecutionFabricPort,
     J: NativeHostJournal,
 {
     port: P,
     journal: std::sync::Arc<std::sync::Mutex<J>>,
-    values: SharedNativeCallbackValuePort,
+    values: SharedCallbackValuePort,
     instance: std::sync::Arc<std::sync::Mutex<NativeInstanceRecord>>,
-    template: NativeExecutionTemplate,
+    template: ExecutionTemplate,
     cancellation: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    observations: Vec<NativeInvocationObservation>,
+    observations: Vec<InvocationObservation>,
 }
 
 struct CallbackCompletionInput<'a> {

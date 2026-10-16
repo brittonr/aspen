@@ -2,9 +2,9 @@
 fn conservative_profile(profile_ref: &str, policy_ref: &str) -> Result<WorldMergeProfile> {
     Ok(WorldMergeProfile {
         profile_ref: WorldMergeProfileRef::new(profile_ref.to_string())
-            .map_err(|error| MoltenError::invalid_harness(format!("invalid merge profile ref: {error}")))?,
+            .map_err(|error| Failure::invalid_harness(format!("invalid merge profile ref: {error}")))?,
         policy_ref: WorldMergePolicyRef::new(policy_ref.to_string())
-            .map_err(|error| MoltenError::invalid_harness(format!("invalid merge policy ref: {error}")))?,
+            .map_err(|error| Failure::invalid_harness(format!("invalid merge policy ref: {error}")))?,
         root_modes: BTreeMap::from([
             (RootKind::Artifact, WorldMergeMode::IdenticalOnly),
             (RootKind::Schema, WorldMergeMode::IdenticalOnly),
@@ -28,7 +28,7 @@ fn operator_world_bounds() -> molten_core::world_commit::WorldCommitBounds {
 
 fn parse_commit_ref(value: &str) -> Result<WorldCommitRef> {
     WorldCommitRef::new(value.to_string())
-        .map_err(|error| MoltenError::invalid_harness(format!("invalid world commit ref: {error:?}")))
+        .map_err(|error| Failure::invalid_harness(format!("invalid world commit ref: {error:?}")))
 }
 
 fn reference(label: &str) -> String {

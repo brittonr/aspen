@@ -4,7 +4,7 @@ Component resource accounting spans declarations, independent byte inspection, e
 
 ## Resource facts have units and aggregation rules
 
-`ComponentArtifactFacts` contains memory and table growth facts, instance/memory/table counts, imports, exports, identity fields, and enabled features. In [admission](../../../src/wasm/component/admission.rs), fixed growth means both `GrowthStrategy::Fixed` and `maximum == Some(initial)`. The initial value must fit the corresponding profile bound. Counts and collection lengths are checked independently: a small memory declaration does not compensate for too many memories or instances.
+`ArtifactFacts` contains memory and table growth facts, instance/memory/table counts, imports, exports, identity fields, and enabled features. In [admission](../../../src/wasm/component/admission.rs), fixed growth means both `GrowthStrategy::Fixed` and `maximum == Some(initial)`. The initial value must fit the corresponding profile bound. Counts and collection lengths are checked independently: a small memory declaration does not compensate for too many memories or instances.
 
 The [byte inspector](../../../src/wasm/component/admission/inspection.rs) clarifies an important accounting detail. Wasm memory declarations are expressed in pages; the inspector converts initial pages to bytes using checked multiplication by 65,536. Its memory growth fact records the maximum initial size encountered, not the sum of all memory sizes. The table growth fact similarly records the largest initial table, while separate counters record the number of memories and tables. Instance accounting adds both core-instance and component-instance section counts with overflow checks.
 
@@ -12,7 +12,7 @@ Accordingly, `max_memory_bytes` should not be described as a complete host-memor
 
 ## Declaration inspection is an independent boundary
 
-The shell does not merely trust producer-supplied counts. `verify_component_artifact_facts` validates the admitted Wasm feature cohort and inspects the bytes, then compares observed growth facts and counts with the expected materialization facts. A discrepancy denies before instantiation.
+The shell does not merely trust producer-supplied counts. `verify_artifact_facts` validates the admitted Wasm feature cohort and inspects the bytes, then compares observed growth facts and counts with the expected materialization facts. A discrepancy denies before instantiation.
 
 Memory inspection rejects memory64, shared memory, custom page sizes, and any declaration whose maximum differs from its initial size. Table inspection rejects table64, shared tables, and nonfixed growth. Imported core memories and tables participate in inspection as well as locally declared ones. These are structural checks over the supplied component, not observations of an already-running workload.
 

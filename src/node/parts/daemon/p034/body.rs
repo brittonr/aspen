@@ -80,32 +80,29 @@ fn current_startup_receipt<Root: NodeStateAuthority + ?Sized>(
     crate::node_runtime::parse_node_startup_receipt(&startup_value)
 }
 
-fn write_active_lock(root: &crate::node_state::NodeStateRoot, startup_receipt_ref: &str) -> Result<()> {
-    let lock_value = active_lock_value(root, startup_receipt_ref)?;
+fn write_active_lock(root: &crate::node_state::DirectoryRoot, startup_receipt_ref: &str) -> Result<()> {
+    let binding = begin_node_run_binding(root, startup_receipt_ref)?;
+    let lock_value = active_lock_value(root, startup_receipt_ref, &binding.run_ref)?;
     write_preserves(root, &fixed_node_path(CONTROL_LOCK_FILE)?, &lock_value)?;
     import_artifact(root, &lock_value)?;
     Ok(())
 }
 
-fn require_active_lock(root: &crate::node_state::NodeStateRoot) -> Result<()> {
+fn require_active_lock(root: &crate::node_state::DirectoryRoot) -> Result<crate::node_runtime::NodeRunBinding> {
     let lock_path = fixed_node_path(CONTROL_LOCK_FILE)?;
     if !root.try_exists(&lock_path)? {
         return Err(MoltenError::invalid_harness("node control dispatch requires active node lock"));
     }
     let lock_value = read_preserves(root, &lock_path)?;
-    let fields = lock_value
-        .collect_simple_record("node-control-lock-v1", Some(6))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-lock-v1 ...>"))?;
-    require_schema(&fields[0], crate::preserves_rail::NODE_CONTROL_LOCK_SCHEMA, "node control lock")?;
-    let locked_startup = record_string(&fields[2], "startup")?;
+    let binding = current_node_run_binding(root)?;
     let startup = current_startup_receipt(root)?;
-    if locked_startup != startup.receipt_ref {
-        return Err(MoltenError::invalid_harness("node control lock is stale for current startup receipt"));
-    }
-    Ok(())
+    validate_member_ref(&binding.startup_receipt_ref, &startup.receipt_ref, "current node run startup")?;
+    let run_ref = active_lock_run_ref(&lock_value, &binding)?;
+    validate_member_ref(&run_ref, &binding.run_ref, "node lock current run")?;
+    Ok(binding)
 }
 
-fn remove_active_lock(root: &crate::node_state::NodeStateRoot) -> Result<()> {
+fn remove_active_lock(root: &crate::node_state::DirectoryRoot) -> Result<()> {
     let path = fixed_node_path(CONTROL_LOCK_FILE)?;
     if root.try_exists(&path)? {
         root.remove_regular_file(&path)?;
@@ -113,17 +110,21 @@ fn remove_active_lock(root: &crate::node_state::NodeStateRoot) -> Result<()> {
     Ok(())
 }
 
-fn active_lock_value(root: &crate::node_state::NodeStateRoot, startup_receipt_ref: &str) -> Result<IoValue> {
-    Ok(crate::preserves_rail::record("node-control-lock-v1", vec![
-        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LOCK_SCHEMA),
+fn active_lock_value(
+    root: &crate::node_state::DirectoryRoot,
+    startup_receipt_ref: &str,
+    run_ref: &str,
+) -> Result<IoValue> {
+    Ok(crate::preserves_rail::record("node-control-lock-v2", vec![
+        crate::preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LOCK_SCHEMA_V2),
         crate::preserves_rail::record("state-root", vec![crate::preserves_rail::string(&state_root_profile_ref(root)?)]),
         crate::preserves_rail::record("startup", vec![crate::preserves_rail::string(startup_receipt_ref)]),
         crate::preserves_rail::record("owner", vec![crate::preserves_rail::string(&local_ref(
             "node-control-owner",
-            startup_receipt_ref,
+            run_ref,
         )?)]),
         crate::preserves_rail::record("profile", vec![crate::preserves_rail::string(
-            "local-preserves-control-file-v1",
+            "local-preserves-control-file-v2",
         )]),
         crate::preserves_rail::record("checks", vec![crate::preserves_rail::sequence(vec![
             crate::preserves_rail::record("check", vec![
@@ -139,6 +140,7 @@ fn active_lock_value(root: &crate::node_state::NodeStateRoot, startup_receipt_re
                 crate::preserves_rail::string("pass"),
             ]),
         ])]),
+        crate::preserves_rail::record("run", vec![crate::preserves_rail::string(run_ref)]),
     ]))
 }
 
@@ -155,11 +157,11 @@ fn import_artifact<Root: NodeStateAuthority + ?Sized>(source: &Root, value: &IoV
 }
 
 struct PendingControlRequest {
-    entry: crate::node_state::NodeStateEntry,
+    entry: crate::node_state::Entry,
     content_ref: String,
 }
 
-fn first_pending_control_request(root: &crate::node_state::NodeStateRoot) -> Result<PendingControlRequest> {
+fn first_pending_control_request(root: &crate::node_state::DirectoryRoot) -> Result<PendingControlRequest> {
     next_pending_control_request(root)?
         .ok_or_else(|| MoltenError::invalid_harness("node control inbox has no pending requests"))
 }
@@ -172,21 +174,21 @@ fn next_pending_control_request<Root: NodeStateAuthority + ?Sized>(
 }
 
 fn pending_control_request_by_name(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::DirectoryRoot,
     name: &str,
 ) -> Result<PendingControlRequest> {
-    crate::node_state::NodeStatePath::parse("control/inbox")?.join_segment(name)?;
+    crate::node_state::RelativePath::parse("control/inbox")?.join_segment(name)?;
     pending_control_requests(root)?
         .into_iter()
         .find(|request| request.entry.name == name)
         .ok_or_else(|| MoltenError::invalid_harness(format!("node control inbox entry {name} is not pending")))
 }
 
-fn pending_control_requests(root: &crate::node_state::NodeStateRoot) -> Result<Vec<PendingControlRequest>> {
+fn pending_control_requests(root: &crate::node_state::DirectoryRoot) -> Result<Vec<PendingControlRequest>> {
     let inbox = root.control_inbox()?;
     let mut requests = Vec::with_capacity(MAX_PENDING_CONTROL_REQUESTS);
     for entry in inbox.list_entries()? {
-        if entry.kind != crate::node_state::NodeStateEntryKind::RegularFile
+        if entry.kind != crate::node_state::EntryKind::RegularFile
             || !entry.name.ends_with(".preserves")
             || entry.name.contains("receipt")
         {
@@ -205,8 +207,8 @@ fn pending_control_requests(root: &crate::node_state::NodeStateRoot) -> Result<V
 }
 
 fn archive_dispatched_request(
-    root: &crate::node_state::NodeStateRoot,
-    request_entry: &crate::node_state::NodeStateEntry,
+    root: &crate::node_state::DirectoryRoot,
+    request_entry: &crate::node_state::Entry,
     request_value: &IoValue,
 ) -> Result<()> {
     let request_ref = crate::preserves_rail::canonical_hash(request_value)?;
@@ -215,7 +217,7 @@ fn archive_dispatched_request(
     root.control_inbox()?.remove_entry(request_entry)
 }
 
-fn node_leaf_path(base: &str, leaf: &str) -> Result<crate::node_state::NodeStatePath> {
+fn node_leaf_path(base: &str, leaf: &str) -> Result<crate::node_state::RelativePath> {
     fixed_node_path(base)?.join_segment(leaf)
 }
 
@@ -223,60 +225,60 @@ fn control_inbox_entry_name(request_ref: &str) -> String {
     format!("{}.preserves", ref_file_stem(request_ref))
 }
 
-fn control_inbox_path(request_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_inbox_path(request_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(CONTROL_INBOX_DIR, &control_inbox_entry_name(request_ref))
 }
 
-fn queue_receipt_path(request_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn queue_receipt_path(request_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_INBOX_DIR,
         &format!("{}.queue-receipt.preserves", ref_file_stem(request_ref)),
     )
 }
 
-fn dispatch_receipt_path(request_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn dispatch_receipt_path(request_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_OUTBOX_DIR,
         &format!("{}.dispatch-receipt.preserves", ref_file_stem(request_ref)),
     )
 }
 
-fn control_outbox_request_path(request_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_outbox_request_path(request_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_OUTBOX_DIR,
         &format!("{}.request.preserves", ref_file_stem(request_ref)),
     )
 }
 
-fn control_outbox_receipt_path(request_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_outbox_receipt_path(request_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_OUTBOX_DIR,
         &format!("{}.control-receipt.preserves", ref_file_stem(request_ref)),
     )
 }
 
-fn control_operation_receipt_path(request_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_operation_receipt_path(request_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_OUTBOX_DIR,
         &format!("{}.operation-receipt.preserves", ref_file_stem(request_ref)),
     )
 }
 
-fn control_operation_subreceipt_path(request_ref: &str, label: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_operation_subreceipt_path(request_ref: &str, label: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_OUTBOX_DIR,
         &format!("{}.{}.preserves", ref_file_stem(request_ref), label),
     )
 }
 
-fn control_heartbeat_receipt_path(heartbeat_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_heartbeat_receipt_path(heartbeat_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_OUTBOX_DIR,
         &format!("{}.heartbeat-receipt.preserves", ref_file_stem(heartbeat_ref)),
     )
 }
 
-fn control_loop_receipt_path(loop_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_loop_receipt_path(loop_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_OUTBOX_DIR,
         &format!("{}.loop-receipt.preserves", ref_file_stem(loop_ref)),

@@ -8,6 +8,7 @@
 //! in-memory decision cores that adapter shells can call before side effects.
 
 pub mod addressable_actor;
+#[path = "cluster/harness.rs"]
 pub mod cluster_harness;
 pub mod codec;
 pub mod content_replication;

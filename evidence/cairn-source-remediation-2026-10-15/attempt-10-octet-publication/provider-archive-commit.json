@@ -1,0 +1,11 @@
+{
+  "command": [
+    "git",
+    "rev-parse",
+    "HEAD"
+  ],
+  "cwd": "/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015",
+  "exit_code": 0,
+  "stdout": "3f7abb641ee604f54629da415bc7686f89662065\n",
+  "stderr": ""
+}

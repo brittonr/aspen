@@ -1,10 +1,10 @@
 
-pub fn read_object(root: &Path, manifest_ref: &str) -> Result<ChunkStoreRead> {
+pub fn read_object(root: &Path, manifest_ref: &str) -> Result<ChunkRead> {
     let root = open_capability_chunk_root(root)?;
     read_object_with_root(&root, manifest_ref)
 }
 
-pub fn read_object_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) -> Result<ChunkStoreRead> {
+pub fn read_object_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) -> Result<ChunkRead> {
     let manifest = match read_manifest_with_root(root, manifest_ref) {
         Ok(manifest) => manifest,
         Err(error) => {
@@ -12,7 +12,7 @@ pub fn read_object_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) -> 
                 ("manifest-ref-binding", "fail"),
                 ("deny-missing-or-invalid-manifest", "pass"),
             ]);
-            store_receipt(root, &receipt_value)?;
+            receipt(root, &receipt_value)?;
             return Err(error);
         }
     };
@@ -22,7 +22,7 @@ pub fn read_object_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) -> 
             ("transform-mode", "fail"),
             ("deny-unsupported-transform", "pass"),
         ]);
-        store_receipt(root, &receipt_value)?;
+        receipt(root, &receipt_value)?;
         return Err(MoltenError::invalid_harness(message));
     }
     let bytes = match reconstruct_object(root, &manifest) {
@@ -33,11 +33,11 @@ pub fn read_object_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) -> 
                     ("streaming-chunk-verification", "fail"),
                     ("deny-corrupt-or-missing-chunk", "pass"),
                 ]);
-            store_receipt(root, &receipt_value)?;
+            receipt(root, &receipt_value)?;
             return Err(error);
         }
     };
-    let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
+    let receipt_value = receipt_value(ChunkReceiptValueInput {
         operation: "fetch",
         decision: "pass",
         manifest_ref: Some(&manifest.manifest_ref),
@@ -51,7 +51,7 @@ pub fn read_object_with_root(root: &CapabilityChunkRoot, manifest_ref: &str) -> 
         details: vec![record("total-len", vec![u64_value(bytes.len() as u64)])],
     });
     index_manifest_available(root, &manifest, &receipt_value)?;
-    Ok(ChunkStoreRead {
+    Ok(ChunkRead {
         manifest_ref: manifest.manifest_ref,
         bytes,
         receipt_value,
@@ -137,7 +137,7 @@ fn read_span(input: SpanInput<'_>) -> Result<SpanData> {
                             ("deny-corrupt-or-missing-chunk", "pass"),
                         ],
                     );
-                    store_receipt(input.root, &receipt_value)?;
+                    receipt(input.root, &receipt_value)?;
                     return Err(error);
                 }
             };
@@ -165,13 +165,13 @@ fn read_span(input: SpanInput<'_>) -> Result<SpanData> {
                 ("range-chunk-verification", "fail"),
                 ("deny-range-reconstruction-mismatch", "pass"),
             ]);
-        store_receipt(input.root, &receipt_value)?;
+        receipt(input.root, &receipt_value)?;
         return Err(MoltenError::invalid_harness(message));
     }
     Ok(SpanData { bytes, refs })
 }
 
-pub fn range_read(root: &Path, manifest_ref: &str, offset: u64, length: u64) -> Result<ChunkStoreRangeRead> {
+pub fn range_read(root: &Path, manifest_ref: &str, offset: u64, length: u64) -> Result<ChunkRangeRead> {
     let root = open_capability_chunk_root(root)?;
     range_read_with_root(&root, manifest_ref, offset, length)
 }
@@ -181,7 +181,7 @@ pub fn range_read_with_root(
     manifest_ref: &str,
     offset: u64,
     length: u64,
-) -> Result<ChunkStoreRangeRead> {
+) -> Result<ChunkRangeRead> {
     let manifest = match read_manifest_with_root(root, manifest_ref) {
         Ok(manifest) => manifest,
         Err(error) => {
@@ -189,7 +189,7 @@ pub fn range_read_with_root(
                 ("manifest-ref-binding", "fail"),
                 ("deny-missing-or-invalid-manifest", "pass"),
             ]);
-            store_receipt(root, &receipt_value)?;
+            receipt(root, &receipt_value)?;
             return Err(error);
         }
     };
@@ -202,7 +202,7 @@ pub fn range_read_with_root(
                 ("range-bounds", "fail"),
                 ("deny-out-of-bounds-range", "pass"),
             ]);
-        store_receipt(root, &receipt_value)?;
+        receipt(root, &receipt_value)?;
         return Err(MoltenError::invalid_harness(message));
     }
     if let Some(message) = unsupported_transform_message(&manifest) {
@@ -211,7 +211,7 @@ pub fn range_read_with_root(
                 ("transform-mode", "fail"),
                 ("deny-unsupported-transform", "pass"),
             ]);
-        store_receipt(root, &receipt_value)?;
+        receipt(root, &receipt_value)?;
         return Err(MoltenError::invalid_harness(message));
     }
     let span = read_span(SpanInput {
@@ -221,7 +221,7 @@ pub fn range_read_with_root(
         offset,
         length,
     })?;
-    let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
+    let receipt_value = receipt_value(ChunkReceiptValueInput {
         operation: "range-read",
         decision: "pass",
         manifest_ref: Some(&manifest.manifest_ref),
@@ -238,7 +238,7 @@ pub fn range_read_with_root(
         ],
     });
     index_manifest_available(root, &manifest, &receipt_value)?;
-    Ok(ChunkStoreRangeRead {
+    Ok(ChunkRangeRead {
         manifest_ref: manifest.manifest_ref,
         offset,
         length,

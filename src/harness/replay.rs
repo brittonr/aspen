@@ -1,7 +1,7 @@
 type PreservesValue = preserves::IOValue;
 type EventBoundary = super::schema::EventBoundary;
 type Divergence = crate::error::HarnessDivergence;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 #[path = "replay/compare.rs"]

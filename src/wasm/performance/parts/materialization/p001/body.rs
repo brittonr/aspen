@@ -17,11 +17,11 @@ pub struct WizerTransformManifest {
 }
 
 pub fn admit_wizer_artifact(
-    materialized: &super::model::MaterializedPerformanceArtifact,
+    materialized: &super::model::MaterializedArtifact,
     manifest: &WizerTransformManifest,
-) -> super::model::PerformanceResult<()> {
+) -> super::model::Result<()> {
     let mut blockers = Vec::new();
-    if materialized.kind != super::model::PerformanceArtifactKind::WizerComponent {
+    if materialized.kind != super::model::ArtifactKind::WizerComponent {
         blockers.push("Wizer admission received a non-Wizer artifact".to_string());
     }
     if manifest.schema_id != WIZER_ADMISSION_SCHEMA {
@@ -57,12 +57,12 @@ pub fn admit_wizer_artifact(
     if blockers.is_empty() {
         Ok(())
     } else {
-        Err(super::model::PerformanceDenial::from_blockers(blockers))
+        Err(super::model::Denial::from_blockers(blockers))
     }
 }
 
 fn validate_bundle_identity_fields(
-    bundle: &PerformanceMaterializationBundle,
+    bundle: &Bundle,
     blockers: &mut impl crate::bounded::VecSink<String>,
 ) {
     for (label, value) in [
@@ -87,18 +87,18 @@ fn validate_bundle_identity_fields(
 }
 
 fn validate_artifact_kind(
-    bundle: &PerformanceMaterializationBundle,
+    bundle: &Bundle,
     blockers: &mut impl crate::bounded::VecSink<String>,
 ) {
     match bundle.kind {
-        super::model::PerformanceArtifactKind::PortableComponent => {
+        super::model::ArtifactKind::PortableComponent => {
             if bundle.source_component_ref != bundle.artifact_ref {
                 blockers
                     .push_item("portable performance artifact must retain its source component identity".to_string());
             }
         }
-        super::model::PerformanceArtifactKind::WizerComponent
-        | super::model::PerformanceArtifactKind::PrecompiledComponent => {
+        super::model::ArtifactKind::WizerComponent
+        | super::model::ArtifactKind::PrecompiledComponent => {
             if bundle.source_component_ref == bundle.artifact_ref {
                 blockers.push_item(
                     "transformed performance artifact must retain distinct source and output identities".to_string(),

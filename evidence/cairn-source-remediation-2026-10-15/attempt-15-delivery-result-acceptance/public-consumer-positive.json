@@ -1,0 +1,24 @@
+{
+  "argv": [
+    "nix",
+    "develop",
+    "--no-update-lock-file",
+    "-c",
+    "cargo",
+    "run",
+    "--offline",
+    "--locked",
+    "--example",
+    "f08_delivery_acceptance",
+    "--",
+    "/tmp/molten-f08-durable-api-15-kzg63rm5/positive-state",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/durable-public-api/positive"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T17:11:51.375691+00:00",
+  "elapsed_seconds": 900.14,
+  "exit_code": -9,
+  "timed_out": true,
+  "stdout": "",
+  "stderr": ""
+}

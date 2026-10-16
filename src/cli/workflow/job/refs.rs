@@ -49,7 +49,7 @@ pub(crate) fn execute(args: super::command::refs::Execute) -> molten::error::Res
     if executed.decision == "pass" {
         Ok(())
     } else {
-        Err(molten::error::MoltenError::invalid_harness(format!(
+        Err(molten::error::Failure::invalid_harness(format!(
             "job ref-execute denied: {}",
             executed.diagnostics.join("; ")
         )))

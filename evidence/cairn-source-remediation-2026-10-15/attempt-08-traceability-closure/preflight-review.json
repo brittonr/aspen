@@ -1,0 +1,29 @@
+{
+  "attempt": "8/20",
+  "change": "support-active-delta-traceability-before-sync",
+  "authorization": "User selected Restructure the lifecycle checklist; retain actual matching-plan native sync/archive and receipts as mandatory post-checklist completion actions.",
+  "change_scope": "Restructure the final checklist item into preflight; preserve actual sync/archive as mandatory post-checklist completion, with unchanged native policy and matching preview/execution plans.",
+  "implementation_and_behavior_evidence": ".cairn/changes/support-active-delta-traceability-before-sync/evidence/2026-10-15-guard-runtime.json",
+  "existing_source_review": ".cairn/changes/support-active-delta-traceability-before-sync/evidence/2026-10-15-native-gates-and-review.json",
+  "new_gate_receipts": [
+    "proposal-preflight-gate.json",
+    "design-preflight-gate.json",
+    "tasks-preflight-gate.json",
+    "strict-preflight-validation.json"
+  ],
+  "reviewed_sync_plan_hash": "e8cab887ad1d9f2cd4eea3ea6df1efb664d44f1f7fa666fee28e628d7a24ee93",
+  "archive_preconditions": {
+    "required_implementation_validation_and_review_supported": true,
+    "final_preflight_checkbox_not_yet_marked": true,
+    "accepted_spec_sync_required_before_archive": true,
+    "native_archive_preview_and_execution_still_required": true,
+    "matching_plan_and_successful_mutation_receipts_required": true,
+    "pending_identity_resolution_does_not_supply_lifecycle_authority": true
+  },
+  "review_outcome": "Preflight is supported; mark only the revised preflight item complete, then regenerate sync plan. Actual lifecycle execution remains pending.",
+  "non_claims": [
+    "This review is not sync or archive execution.",
+    "Earlier guard tests were not rerun merely to confirm their archived passing results.",
+    "No lifecycle gate or historical blocker was waived."
+  ]
+}

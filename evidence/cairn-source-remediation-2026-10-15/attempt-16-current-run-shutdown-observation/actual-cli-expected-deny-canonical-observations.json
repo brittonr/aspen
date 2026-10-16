@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "python3",
+    "/tmp/molten-f14-current-run-16-restored-se51n6m8/cli-consumer.py",
+    "/home/brittonr/.cargo-target/debug/molten",
+    "negative"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T18:23:51.373118+00:00",
+  "elapsed_seconds": 3.367,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "{\"canonical\": {}, \"cases\": [\"missing-run-rejected-without-lifecycle-change\", \"malformed-run-rejected-without-lifecycle-change\", \"unreadable-completion-rejected-without-lifecycle-change\", \"conflicting-lock-run-rejected-without-lifecycle-change\", \"historical-shutdown-artifact-rejected-without-lifecycle-change\", \"legacy-completion-cannot-prove-current-stopped-or-reset-lineage\"], \"events\": [{\"exit\": 0, \"operation\": \"init\"}, {\"exit\": 0, \"operation\": \"run\"}, {\"exit\": 0, \"operation\": \"control-request\"}, {\"exit\": 0, \"operation\": \"control-submit\"}, {\"exit\": 0, \"operation\": \"run-loop\"}, {\"exit\": 0, \"operation\": \"run\"}, {\"exit\": 0, \"operation\": \"control-submit\"}, {\"exit\": 1, \"operation\": \"run-loop\"}, {\"exit\": 0, \"operation\": \"init\"}, {\"exit\": 0, \"operation\": \"run\"}, {\"exit\": 0, \"operation\": \"control-request\"}, {\"exit\": 0, \"operation\": \"control-submit\"}, {\"exit\": 0, \"operation\": \"run-loop\"}, {\"exit\": 0, \"operation\": \"run\"}, {\"exit\": 0, \"operation\": \"control-submit\"}, {\"exit\": 1, \"operation\": \"run-loop\"}, {\"exit\": 0, \"operation\": \"init\"}, {\"exit\": 0, \"operation\": \"run\"}, {\"exit\": 0, \"operation\": \"control-request\"}, {\"exit\": 0, \"operation\": \"control-submit\"}, {\"exit\": 0, \"operation\": \"run-loop\"}, {\"exit\": 0, \"operation\": \"run\"}, {\"exit\": 0, \"operation\": \"control-submit\"}, {\"exit\": 1, \"operation\": \"run-loop\"}, {\"exit\": 0, \"operation\": \"init\"}, {\"exit\": 0, \"operation\": \"run\"}, {\"exit\": 0, \"operation\": \"control-request\"}, {\"exit\": 0, \"operation\": \"control-submit\"}, {\"exit\": 0, \"operation\": \"run-loop\"}, {\"exit\": 0, \"operation\": \"run\"}, {\"exit\": 0, \"operation\": \"control-submit\"}, {\"exit\": 1, \"operation\": \"run-loop\"}, {\"exit\": 0, \"operation\": \"init\"}, {\"exit\": 0, \"operation\": \"run\"}, {\"exit\": 0, \"operation\": \"control-request\"}, {\"exit\": 0, \"operation\": \"control-submit\"}, {\"exit\": 0, \"operation\": \"run-loop\"}, {\"exit\": 0, \"operation\": \"run\"}, {\"exit\": 0, \"operation\": \"control-submit\"}, {\"exit\": 0, \"operation\": \"run-loop\"}, {\"exit\": 0, \"operation\": \"init\"}, {\"exit\": 0, \"operation\": \"run\"}, {\"exit\": 0, \"operation\": \"control-request\"}, {\"exit\": 0, \"operation\": \"control-submit\"}, {\"exit\": 0, \"operation\": \"run-loop\"}, {\"exit\": 0, \"operation\": \"run\"}, {\"exit\": 0, \"operation\": \"stop\"}, {\"exit\": 1, \"operation\": \"status\"}, {\"exit\": 1, \"operation\": \"run\"}], \"mode\": \"negative\"}\n",
+  "stderr": "Expected current-run observation denials executed; lifecycle state remained unchanged.\n"
+}

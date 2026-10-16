@@ -1,0 +1,123 @@
+{
+  "command": [
+    "/nix/store/ynjawpza9ci9i8ha7f3ywaqwbd60m83k-cairn-0.1.0/bin/cairn",
+    "sync",
+    "adopt-molten-nominal-reference-domains",
+    "--root",
+    ".",
+    "--policy",
+    "/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015/cairn-policy/generated/cairn-policy.json"
+  ],
+  "cwd": "/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015",
+  "exit_code": 0,
+  "stdout": "{\n  \"acceptance_ids\": [],\n  \"actions\": [\n    {\n      \"description\": \"merge delta spec into main specs: ./.cairn/changes/adopt-molten-nominal-reference-domains/specs/type-driven-domain-modeling/spec.md\",\n      \"kind\": \"sync_delta_spec\",\n      \"path\": \"./.cairn/changes/adopt-molten-nominal-reference-domains/specs/type-driven-domain-modeling/spec.md\"\n    }\n  ],\n  \"blocked\": false,\n  \"change\": \"adopt-molten-nominal-reference-domains\",\n  \"cross_repo_dependencies\": {\n    \"blocked_count\": 0,\n    \"dependency_count\": 0,\n    \"input_hash\": \"72693277ceb40c908b4efd1c81842c733b3f3c417f223e50b1138938ac6bc983\",\n    \"non_claims\": [\n      \"dependency satisfaction proves presented receipt linkage only\",\n      \"dependency satisfaction does not prove upstream correctness or remote trust\",\n      \"dependency satisfaction does not prove downstream integration correctness or release eligibility\"\n    ],\n    \"policy_hash\": \"62e40f642e798bfaf5a68a495a7456bcf4e9fd8106ae2f52a24100967b39df5d\",\n    \"receipt_hash\": \"3fbe945792d747652b6d8bd78074ba24bcacff8257966f91256ec3482443dc1b\",\n    \"rows\": [],\n    \"satisfied_count\": 0,\n    \"schema\": \"cairn.cross-repo-dependency-receipt.v1\",\n    \"valid\": true,\n    \"verdict\": \"PASS\"\n  },\n  \"cross_repo_evidence_issues\": [],\n  \"delta_specs\": [\n    \"./.cairn/changes/adopt-molten-nominal-reference-domains/specs/type-driven-domain-modeling/spec.md\"\n  ],\n  \"dry_run\": true,\n  \"input_hash\": \"5f6294a2c7ce06e3f0f761503ed0f8275997f794279564abee36e95103893791\",\n  \"layout\": \"cairn\",\n  \"merge_preflight\": {\n    \"documents\": [\n      {\n        \"accepted_before_exists\": true,\n        \"accepted_before_hash\": \"3d4a4a5fde0cea83dc1f01e81f7edeba129492aa71adb9828ad18c5505942d6f\",\n        \"blocked\": false,\n        \"changed\": true,\n        \"delta_hash\": \"c2a2c76a3dba4b9262bbb47663c19a64747f14a3d188d9d7485999f7da4b8f3a\",\n        \"destination\": \".cairn/specs/type-driven-domain-modeling/spec.md\",\n        \"diagnostics\": [],\n        \"expected_after_hash\": \"f47ef20dce629645b0bc359f8b1d5010ab9bc2bd955aa43d69ff896dc81a13f8\",\n        \"operations\": [\n          {\n            \"block_hash\": \"6d705b851568293a7db7184a67b03c5c1cb4d2a2b22d1a1beb9d3642e3918974\",\n            \"heading\": \"### Requirement: Molten reference adoption is exact and producer-owned\",\n            \"kind\": \"added\",\n            \"requirement_id\": \"octet.type_driven_domain_modeling.molten_adoption.catalog\"\n          },\n          {\n            \"block_hash\": \"539601c7b0a52272cf3ecef3f200b116df1580eb5e311786d2cca4ed74642853\",\n            \"heading\": \"### Requirement: Local macro aliases enforce configured primitive denial\",\n            \"kind\": \"added\",\n            \"requirement_id\": \"octet.type_driven_domain_modeling.molten_adoption.macros\"\n          },\n          {\n            \"block_hash\": \"de9298f4d8c93fb9040979c555ee4986c03197795aa14a6dc782151e5c361ace\",\n            \"heading\": \"### Requirement: Compatibility and evidence limits remain explicit\",\n            \"kind\": \"added\",\n            \"requirement_id\": \"octet.type_driven_domain_modeling.molten_adoption.compatibility\"\n          }\n        ],\n        \"outcomes\": [\n          {\n            \"kind\": \"added\",\n            \"requirement_id\": \"octet.type_driven_domain_modeling.molten_adoption.catalog\",\n            \"state\": \"applied\"\n          },\n          {\n            \"kind\": \"added\",\n            \"requirement_id\": \"octet.type_driven_domain_modeling.molten_adoption.macros\",\n            \"state\": \"applied\"\n          },\n          {\n            \"kind\": \"added\",\n            \"requirement_id\": \"octet.type_driven_domain_modeling.molten_adoption.compatibility\",\n            \"state\": \"applied\"\n          }\n        ],\n        \"source\": \".cairn/changes/adopt-molten-nominal-reference-domains/specs/type-driven-domain-modeling/spec.md\"\n      }\n    ]\n  },\n  \"mutated\": false,\n  \"mutation_manifest\": null,\n  \"non_claims\": [\n    \"workflow state proves only the selected policy graph and observed structural artifact facts\",\n    \"workflow instructions do not prove artifact truth, review quality, or implementation correctness\",\n    \"workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates\",\n    \"workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts\"\n  ],\n  \"plan_hash\": \"19224408eac92af2e8ed6970bfa9d6d8fc10568f7b8141c72e1a7028b3417f60\",\n  \"policy\": \"octet-default\",\n  \"policy_hash\": \"62e40f642e798bfaf5a68a495a7456bcf4e9fd8106ae2f52a24100967b39df5d\",\n  \"profile_identity_hash\": \"6021284e813cf175efd26bc476e754b09ed0c8c4ac6c7a941dbe1a64c49af97d\",\n  \"reasons\": [],\n  \"receipt_hash\": \"82e26262b1b8b3d87f67bb2da2f68d5b3d88d4707b33e5b5ba0eaadc7f84bff2\",\n  \"review_receipt_hashes\": [],\n  \"spec_effect\": \"delta\",\n  \"workflow_profile\": \"spec-driven\",\n  \"workflow_profile_compatibility_fallback\": false,\n  \"workflow_profile_source\": \"change_create\",\n  \"workflow_profile_version\": 1\n}\n",
+  "stderr": "",
+  "result": {
+    "acceptance_ids": [],
+    "actions": [
+      {
+        "description": "merge delta spec into main specs: ./.cairn/changes/adopt-molten-nominal-reference-domains/specs/type-driven-domain-modeling/spec.md",
+        "kind": "sync_delta_spec",
+        "path": "./.cairn/changes/adopt-molten-nominal-reference-domains/specs/type-driven-domain-modeling/spec.md"
+      }
+    ],
+    "blocked": false,
+    "change": "adopt-molten-nominal-reference-domains",
+    "cross_repo_dependencies": {
+      "blocked_count": 0,
+      "dependency_count": 0,
+      "input_hash": "72693277ceb40c908b4efd1c81842c733b3f3c417f223e50b1138938ac6bc983",
+      "non_claims": [
+        "dependency satisfaction proves presented receipt linkage only",
+        "dependency satisfaction does not prove upstream correctness or remote trust",
+        "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+      ],
+      "policy_hash": "62e40f642e798bfaf5a68a495a7456bcf4e9fd8106ae2f52a24100967b39df5d",
+      "receipt_hash": "3fbe945792d747652b6d8bd78074ba24bcacff8257966f91256ec3482443dc1b",
+      "rows": [],
+      "satisfied_count": 0,
+      "schema": "cairn.cross-repo-dependency-receipt.v1",
+      "valid": true,
+      "verdict": "PASS"
+    },
+    "cross_repo_evidence_issues": [],
+    "delta_specs": [
+      "./.cairn/changes/adopt-molten-nominal-reference-domains/specs/type-driven-domain-modeling/spec.md"
+    ],
+    "dry_run": true,
+    "input_hash": "5f6294a2c7ce06e3f0f761503ed0f8275997f794279564abee36e95103893791",
+    "layout": "cairn",
+    "merge_preflight": {
+      "documents": [
+        {
+          "accepted_before_exists": true,
+          "accepted_before_hash": "3d4a4a5fde0cea83dc1f01e81f7edeba129492aa71adb9828ad18c5505942d6f",
+          "blocked": false,
+          "changed": true,
+          "delta_hash": "c2a2c76a3dba4b9262bbb47663c19a64747f14a3d188d9d7485999f7da4b8f3a",
+          "destination": ".cairn/specs/type-driven-domain-modeling/spec.md",
+          "diagnostics": [],
+          "expected_after_hash": "f47ef20dce629645b0bc359f8b1d5010ab9bc2bd955aa43d69ff896dc81a13f8",
+          "operations": [
+            {
+              "block_hash": "6d705b851568293a7db7184a67b03c5c1cb4d2a2b22d1a1beb9d3642e3918974",
+              "heading": "### Requirement: Molten reference adoption is exact and producer-owned",
+              "kind": "added",
+              "requirement_id": "octet.type_driven_domain_modeling.molten_adoption.catalog"
+            },
+            {
+              "block_hash": "539601c7b0a52272cf3ecef3f200b116df1580eb5e311786d2cca4ed74642853",
+              "heading": "### Requirement: Local macro aliases enforce configured primitive denial",
+              "kind": "added",
+              "requirement_id": "octet.type_driven_domain_modeling.molten_adoption.macros"
+            },
+            {
+              "block_hash": "de9298f4d8c93fb9040979c555ee4986c03197795aa14a6dc782151e5c361ace",
+              "heading": "### Requirement: Compatibility and evidence limits remain explicit",
+              "kind": "added",
+              "requirement_id": "octet.type_driven_domain_modeling.molten_adoption.compatibility"
+            }
+          ],
+          "outcomes": [
+            {
+              "kind": "added",
+              "requirement_id": "octet.type_driven_domain_modeling.molten_adoption.catalog",
+              "state": "applied"
+            },
+            {
+              "kind": "added",
+              "requirement_id": "octet.type_driven_domain_modeling.molten_adoption.macros",
+              "state": "applied"
+            },
+            {
+              "kind": "added",
+              "requirement_id": "octet.type_driven_domain_modeling.molten_adoption.compatibility",
+              "state": "applied"
+            }
+          ],
+          "source": ".cairn/changes/adopt-molten-nominal-reference-domains/specs/type-driven-domain-modeling/spec.md"
+        }
+      ]
+    },
+    "mutated": false,
+    "mutation_manifest": null,
+    "non_claims": [
+      "workflow state proves only the selected policy graph and observed structural artifact facts",
+      "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+      "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+      "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+    ],
+    "plan_hash": "19224408eac92af2e8ed6970bfa9d6d8fc10568f7b8141c72e1a7028b3417f60",
+    "policy": "octet-default",
+    "policy_hash": "62e40f642e798bfaf5a68a495a7456bcf4e9fd8106ae2f52a24100967b39df5d",
+    "profile_identity_hash": "6021284e813cf175efd26bc476e754b09ed0c8c4ac6c7a941dbe1a64c49af97d",
+    "reasons": [],
+    "receipt_hash": "82e26262b1b8b3d87f67bb2da2f68d5b3d88d4707b33e5b5ba0eaadc7f84bff2",
+    "review_receipt_hashes": [],
+    "spec_effect": "delta",
+    "workflow_profile": "spec-driven",
+    "workflow_profile_compatibility_fallback": false,
+    "workflow_profile_source": "change_create",
+    "workflow_profile_version": 1
+  }
+}

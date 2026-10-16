@@ -1,6 +1,6 @@
 
 fn evaluate_live_peer_bootstrap(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::DirectoryRoot,
     envelope: &ControlIngressEnvelope,
 ) -> Result<Vec<String>> {
     let mut diagnostics = Vec::with_capacity(envelope.peer_bootstrap_refs.len().saturating_add(1));

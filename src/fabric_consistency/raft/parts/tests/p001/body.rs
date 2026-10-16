@@ -38,7 +38,7 @@ pub(super) fn committed_leader() -> ReplicaState {
 
 // r[verify molten.fabric_consistency.live_raft]
 #[test]
-fn live_raft_majority_replication_commits_and_applies_in_effect_order() {
+fn live_majority_replication_commits_and_applies_in_effect_order() {
     let (leader, follower) = elect_node_a();
     let proposal = apply_replica_event(&leader, ReplicaEvent::Propose {
         request_ref: test_ref("proposal-request"),
@@ -80,7 +80,7 @@ fn live_raft_majority_replication_commits_and_applies_in_effect_order() {
 
 // r[verify molten.fabric_consistency.live_raft]
 #[test]
-fn live_raft_minority_and_duplicate_proposals_cannot_advance_commit() {
+fn live_minority_and_duplicate_proposals_cannot_advance_commit() {
     let (leader, _follower) = elect_node_a();
     let request_ref = test_ref("minority-request");
     let proposal = apply_replica_event(&leader, ReplicaEvent::Propose {
@@ -109,7 +109,7 @@ fn live_raft_minority_and_duplicate_proposals_cannot_advance_commit() {
 
 // r[verify molten.fabric_consistency.live_raft]
 #[test]
-fn live_raft_snapshot_compacts_only_through_committed_application_state() {
+fn live_snapshot_compacts_only_through_committed_application_state() {
     let committed = committed_leader();
     let snapshot = apply_replica_event(&committed, ReplicaEvent::CreateSnapshot {
         application_state_ref: test_ref("snapshot-application-state"),
@@ -146,7 +146,7 @@ fn live_raft_snapshot_compacts_only_through_committed_application_state() {
     tampered.snapshot.as_mut().expect("snapshot").application_state_ref = test_ref("tampered-application-state");
     let tamper_error = apply_replica_event(&tampered, ReplicaEvent::Read {
         request_ref: test_ref("tampered-snapshot-read"),
-        mode: crate::fabric_consistency::ConsistencyReadMode::LocalStale,
+        mode: crate::fabric_consistency::ReadMode::LocalStale,
     })
     .expect_err("tampered snapshot must deny before read");
     assert!(tamper_error.to_string().contains("snapshot binding or identity mismatch"));
@@ -154,7 +154,7 @@ fn live_raft_snapshot_compacts_only_through_committed_application_state() {
 
 // r[verify molten.fabric_consistency.live_raft]
 #[test]
-fn live_raft_installs_bound_snapshots_before_acknowledging_catch_up() {
+fn live_installs_bound_snapshots_before_acknowledging_catch_up() {
     let leader = committed_leader();
     let snapshot = apply_replica_event(&leader, ReplicaEvent::CreateSnapshot {
         application_state_ref: test_ref("catch-up-application-state"),
@@ -162,12 +162,12 @@ fn live_raft_installs_bound_snapshots_before_acknowledging_catch_up() {
     .expect("leader snapshot");
     let heartbeat = apply_replica_event(&snapshot.next, ReplicaEvent::HeartbeatTimeout).expect("snapshot heartbeat");
     let install = sent_envelope_to(&heartbeat, NODE_C);
-    assert!(matches!(&install.message, RaftMessage::InstallSnapshot { .. }));
+    assert!(matches!(&install.message, Message::InstallSnapshot { .. }));
 
     let follower = started_state(&active_group(), NODE_C);
     let mut tampered = install.clone();
     match &mut tampered.message {
-        RaftMessage::InstallSnapshot { snapshot, .. } => {
+        Message::InstallSnapshot { snapshot, .. } => {
             snapshot.application_state_ref = test_ref("tampered-catch-up-state");
         }
         other => panic!("expected install snapshot, got {other:?}"),
@@ -207,7 +207,7 @@ fn live_raft_installs_bound_snapshots_before_acknowledging_catch_up() {
 
 // r[verify molten.fabric_consistency.live_raft]
 #[test]
-fn live_raft_denies_superseded_election_timer_before_protocol_effects() {
+fn live_denies_superseded_election_timer_before_protocol_effects() {
     let group = active_group();
     let node_a = started_state(&group, NODE_A);
     let superseded_timer_ref = node_a.active_election_timer_ref.clone();
@@ -225,7 +225,7 @@ fn live_raft_denies_superseded_election_timer_before_protocol_effects() {
 
 // r[verify molten.fabric_consistency.live_raft]
 #[test]
-fn live_raft_denies_stale_epoch_messages_without_state_mutation() {
+fn live_denies_stale_epoch_messages_without_state_mutation() {
     let group = active_group();
     let node_a = started_state(&group, NODE_A);
     let node_b = started_state(&group, NODE_B);
@@ -235,7 +235,7 @@ fn live_raft_denies_stale_epoch_messages_without_state_mutation() {
     .expect("election request");
     let mut stale = sent_envelope_to(&election, NODE_B);
     match &mut stale.message {
-        RaftMessage::RequestVote { config_epoch, .. } => {
+        Message::RequestVote { config_epoch, .. } => {
             *config_epoch += STALE_EPOCH_STEP;
         }
         other => panic!("expected request vote, got {other:?}"),

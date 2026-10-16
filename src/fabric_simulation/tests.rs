@@ -41,7 +41,7 @@ fn reference_world_binds_same_core_and_every_deterministic_port_class() {
 // r[verify molten.fabric_simulation.evidence]
 #[test]
 fn three_reference_services_run_through_host_callbacks_and_named_ports() {
-    let fixture = run_reference_simulation_fixture().expect("reference simulation");
+    let fixture = run_reference_fixture().expect("reference simulation");
 
     assert_eq!(fixture.run.summary.decision, SimulationDecision::Pass);
     assert_eq!(fixture.run.summary.choice_records.len(), EXPECTED_CHOICE_RECORDS);
@@ -68,8 +68,8 @@ fn three_reference_services_run_through_host_callbacks_and_named_ports() {
 // r[verify molten.fabric_simulation.replay_shrink]
 #[test]
 fn reference_run_repeats_with_identical_world_trace_and_evidence_identity() {
-    let first = run_reference_simulation_fixture().expect("first run");
-    let replay = replay_reference_simulation_fixture(&first.run).expect("replay");
+    let first = run_reference_fixture().expect("first run");
+    let replay = replay_reference_fixture(&first.run).expect("replay");
 
     assert!(replay.comparison.matches);
     assert!(replay.comparison.first_divergence.is_none());
@@ -83,8 +83,8 @@ fn reference_run_repeats_with_identical_world_trace_and_evidence_identity() {
 // r[verify molten.fabric_simulation.live_sim_differential]
 // r[verify molten.fabric_simulation.claim_ladder]
 #[test]
-fn differential_is_contract_scoped_and_simulation_cannot_promote_itself_to_live() {
-    let fixture = run_reference_simulation_fixture().expect("reference simulation");
+fn differential_is_contract_scoped_and_cannot_promote_itself_to_live() {
+    let fixture = run_reference_fixture().expect("reference simulation");
     let evidence = ClaimEvidence {
         profile: SimulationClaimProfile::DeterministicWholeSystem,
         implementation_ref: fixture.world.admitted.manifest.runtime_ref.clone(),
@@ -101,7 +101,7 @@ fn differential_is_contract_scoped_and_simulation_cannot_promote_itself_to_live(
         fault_ref: Some(fixture.world.admitted.manifest.fault_plan_ref.clone()),
         operator_ref: None,
     };
-    let promotion = canonical_claim_promotion(
+    let promotion = claim_promotion(
         SimulationClaimProfile::DeterministicWholeSystem,
         SimulationClaimProfile::MultiProcessLive,
         &evidence,
@@ -126,8 +126,8 @@ fn differential_is_contract_scoped_and_simulation_cannot_promote_itself_to_live(
 // r[verify molten.fabric_simulation.evidence]
 #[test]
 fn run_readback_is_bounded_and_excludes_secret_payloads() {
-    let fixture = run_reference_simulation_fixture().expect("reference simulation");
-    let readback = parse_simulation_run_readback(&fixture.run.value).expect("run readback");
+    let fixture = run_reference_fixture().expect("reference simulation");
+    let readback = parse_run_readback(&fixture.run.value).expect("run readback");
     let text = crate::preserves_rail::to_text(&fixture.run.value).expect("run text");
 
     assert_eq!(readback.decision, "pass");
@@ -146,16 +146,16 @@ fn run_readback_is_bounded_and_excludes_secret_payloads() {
 // r[verify molten.fabric_simulation.final_validation]
 #[test]
 fn malformed_run_decision_and_missing_adapter_fail_closed() {
-    let fixture = run_reference_simulation_fixture().expect("reference simulation");
+    let fixture = run_reference_fixture().expect("reference simulation");
     let text = crate::preserves_rail::to_text(&fixture.run.value).expect("run text");
     let malformed_text = text.replacen("pass", "production-approved", 1);
     let malformed = crate::preserves_rail::parse_text(&malformed_text).expect("malformed syntax remains valid");
-    let readback_error = parse_simulation_run_readback(&malformed).expect_err("unknown decision must deny");
+    let readback_error = parse_run_readback(&malformed).expect_err("unknown decision must deny");
     let mut manifest = fixture.world.admitted.manifest.clone();
     manifest
         .port_profiles
         .retain(|profile| profile.class != crate::fabric::FabricPortClass::DurableState);
-    let world_error = canonical_admit_simulated_world(&manifest).expect_err("missing port must deny");
+    let world_error = admit_world(&manifest).expect_err("missing port must deny");
 
     assert!(readback_error.to_string().contains("unsupported simulation decision"));
     assert!(world_error.to_string().contains("MissingPortClass(DurableState)"));

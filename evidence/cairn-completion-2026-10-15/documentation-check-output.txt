@@ -1,0 +1,4 @@
+Auxiliary changed-document verification; not a runtime or source-gate receipt.
+documents_checked=11
+local_link_occurrences_checked=43
+titles_fences_links_and_anchors_valid=true

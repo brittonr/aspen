@@ -17,7 +17,7 @@ const IROH_CLOSE_CODE: u8 = 0;
 const IROH_CLOSE_REASON: &[u8] = b"fabric-transport-loopback-complete";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SimulatedTransportFault {
+pub enum SimulatedFault {
     LocalOverload,
     RemoteRefusal,
     Partition,
@@ -27,17 +27,17 @@ pub enum SimulatedTransportFault {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DeterministicTransportAdapter {
-    profile: CanonicalTransportProfile,
+pub struct DeterministicAdapter {
+    profile: Profile,
     state: TransportState,
     latest_evidence_ref: Option<String>,
 }
 
-impl DeterministicTransportAdapter {
+impl DeterministicAdapter {
     // r[impl molten.fabric_transport.live_sim_parity]
-    pub fn new(profile: CanonicalTransportProfile) -> crate::error::Result<Self> {
+    pub fn new(profile: Profile) -> crate::error::Result<Self> {
         if profile.profile.adapter_kind != TransportAdapterKind::DeterministicSimulation {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "deterministic transport adapter requires a deterministic-simulation profile",
             ));
         }
@@ -52,48 +52,48 @@ impl DeterministicTransportAdapter {
         &self.state
     }
 
-    pub fn profile(&self) -> &CanonicalTransportProfile {
+    pub fn profile(&self) -> &Profile {
         &self.profile
     }
 
-    pub fn status(&self) -> crate::error::Result<TransportStatusReadback> {
-        transport_status_readback(&self.profile, &self.state, self.latest_evidence_ref.as_deref())
+    pub fn status(&self) -> crate::error::Result<StatusReadback> {
+        status_readback(&self.profile, &self.state, self.latest_evidence_ref.as_deref())
     }
 
     // r[impl molten.fabric_transport.failure_semantics]
     pub fn execute_with_fault(
         &mut self,
         command: &TransportCommand,
-        fault: Option<SimulatedTransportFault>,
-    ) -> crate::error::Result<CanonicalTransportTransition> {
+        fault: Option<SimulatedFault>,
+    ) -> crate::error::Result<Transition> {
         match fault {
             None => self.execute(command),
-            Some(SimulatedTransportFault::LocalOverload) => {
-                Err(crate::error::MoltenError::invalid_harness("simulated transport overload before adapter I/O"))
+            Some(SimulatedFault::LocalOverload) => {
+                Err(crate::error::Failure::invalid_harness("simulated transport overload before adapter I/O"))
             }
-            Some(SimulatedTransportFault::RemoteRefusal) => {
+            Some(SimulatedFault::RemoteRefusal) => {
                 self.fail_for_command(command, TransportFailureClass::RemoteRefusal, true)
             }
-            Some(SimulatedTransportFault::Partition) => {
+            Some(SimulatedFault::Partition) => {
                 self.fail_for_command(command, TransportFailureClass::Partition, false)
             }
-            Some(SimulatedTransportFault::Timeout) => {
+            Some(SimulatedFault::Timeout) => {
                 self.fail_for_command(command, TransportFailureClass::Timeout, false)
             }
-            Some(SimulatedTransportFault::DisconnectAfterSubmission) => {
+            Some(SimulatedFault::DisconnectAfterSubmission) => {
                 let _submitted = self.execute(command)?;
                 let session_id = command_session_id(command).cloned().ok_or_else(|| {
-                    crate::error::MoltenError::invalid_harness("disconnect-after-submission requires a session command")
+                    crate::error::Failure::invalid_harness("disconnect-after-submission requires a session command")
                 })?;
                 self.fail_session(command.operation_id(), &session_id, TransportFailureClass::Disconnect, false)
             }
-            Some(SimulatedTransportFault::AdapterFailure) => {
+            Some(SimulatedFault::AdapterFailure) => {
                 self.fail_for_command(command, TransportFailureClass::AdapterFailure, false)
             }
         }
     }
 
-    fn execute(&mut self, command: &TransportCommand) -> crate::error::Result<CanonicalTransportTransition> {
+    fn execute(&mut self, command: &TransportCommand) -> crate::error::Result<Transition> {
         let transition = apply_transport_command(&self.profile.profile, &self.state, command)
             .map_err(|issues| adapter_validation_error("simulated transport command", &issues))?;
         self.apply_transition(transition)
@@ -104,9 +104,9 @@ impl DeterministicTransportAdapter {
         command: &TransportCommand,
         class: TransportFailureClass,
         delivery_definitive: bool,
-    ) -> crate::error::Result<CanonicalTransportTransition> {
+    ) -> crate::error::Result<Transition> {
         let session_id = command_session_id(command).ok_or_else(|| {
-            crate::error::MoltenError::invalid_harness("simulated transport fault requires a session command")
+            crate::error::Failure::invalid_harness("simulated transport fault requires a session command")
         })?;
         self.fail_session(command.operation_id(), session_id, class, delivery_definitive)
     }
@@ -117,7 +117,7 @@ impl DeterministicTransportAdapter {
         session_id: &ScopedTransportId,
         class: TransportFailureClass,
         delivery_definitive: bool,
-    ) -> crate::error::Result<CanonicalTransportTransition> {
+    ) -> crate::error::Result<Transition> {
         let command = TransportCommand::FailSession {
             operation_id: operation_id.to_string(),
             session_id: session_id.clone(),
@@ -130,35 +130,35 @@ impl DeterministicTransportAdapter {
     fn apply_transition(
         &mut self,
         transition: TransportTransition,
-    ) -> crate::error::Result<CanonicalTransportTransition> {
-        let canonical = canonical_transport_transition(&self.profile, transition)?;
+    ) -> crate::error::Result<Transition> {
+        let canonical = crate::fabric_transport::transition(&self.profile, transition)?;
         self.state = canonical.state.clone();
         self.latest_evidence_ref = Some(canonical.transition_ref.clone());
         Ok(canonical)
     }
 }
 
-impl TransportCommandShell for DeterministicTransportAdapter {
+impl TransportCommandShell for DeterministicAdapter {
     fn profile_id(&self) -> &str {
         &self.profile.profile.profile_id
     }
 
-    fn execute_command(&mut self, command: &TransportCommand) -> FabricPortResult<CanonicalTransportTransition> {
+    fn execute_command(&mut self, command: &TransportCommand) -> FabricPortResult<Transition> {
         self.execute(command).map_err(|error| FabricPortError::transport(error.to_string()))
     }
 }
 
 #[derive(Debug)]
-pub struct IrohTransportAdapter {
-    profile: CanonicalTransportProfile,
+pub struct IrohAdapter {
+    profile: Profile,
     state: TransportState,
     latest_evidence_ref: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiveIrohLoopbackResult {
-    pub submitted: CanonicalTransportTransition,
-    pub acknowledged: CanonicalTransportTransition,
+    pub submitted: Transition,
+    pub acknowledged: Transition,
     pub echoed_payload_ref: String,
     pub remote_transport_identity_ref: String,
 }

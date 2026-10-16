@@ -23,5 +23,5 @@
 
 ## Phase 5: Boundary and integration plan
 
-- [ ] [serial] Confirm the diff leaves `SystemExtensionHost`, root Cargo workspace, ALPN registries, system-tier manifests, and Basalt/Cairn admission unchanged, and record the standalone deployment profile naming. r[molten.batch_orchestration.boundary]
+- [ ] [serial] Confirm the diff leaves `system_extension::Dispatcher`, root Cargo workspace, ALPN registries, system-tier manifests, and Basalt/Cairn admission unchanged, and record the standalone deployment profile naming. r[molten.batch_orchestration.boundary]
 - [ ] [serial] Review the vendored `docs/MOLTEN-INTEGRATION.md` port mapping as the follow-on integration plan with per-port gates and non-claims; no port rewiring in this change. r[molten.batch_orchestration.integration] r[molten.batch_orchestration.boundary]

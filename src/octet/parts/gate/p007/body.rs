@@ -75,10 +75,7 @@ fn option_with_inline_value(token: &str) -> bool {
     token.starts_with("--artifact-dir=") || token.starts_with("--baseline=") || token.starts_with("--write-baseline=")
 }
 
-fn load_workspace_octet_config(workspace_root: &Path) -> std::result::Result<WorkspaceOctetConfig, String> {
-    let manifest_path = workspace_root.join("Cargo.toml");
-    let source =
-        fs::read_to_string(&manifest_path).map_err(|error| format!("read {}: {error}", manifest_path.display()))?;
+fn load_workspace_octet_config(source: &str, manifest_path: &Path) -> std::result::Result<WorkspaceOctetConfig, String> {
     let document = source
         .parse::<toml::Table>()
         .map_err(|error| format!("parse {}: {error}", manifest_path.display()))?;
@@ -91,8 +88,8 @@ fn load_workspace_octet_config(workspace_root: &Path) -> std::result::Result<Wor
         .and_then(toml::Value::as_table)
         .ok_or_else(|| format!("missing [workspace.metadata.octet] in {}", manifest_path.display()))?;
     Ok(WorkspaceOctetConfig {
-        default_scope: string_array_field(octet, "default_scope", &manifest_path)?,
-        cargo_check_args: string_array_field(octet, "cargo_check_args", &manifest_path)?,
+        default_scope: string_array_field(octet, "default_scope", manifest_path)?,
+        cargo_check_args: string_array_field(octet, "cargo_check_args", manifest_path)?,
     })
 }
 
@@ -138,15 +135,11 @@ struct OctetProfileHashPayload<'a> {
 }
 
 fn current_config_hash(
-    workspace_root: &Path,
+    files: &[OctetFileHashEntry],
     scope_args: &[String],
     cargo_check_args: &[String],
 ) -> std::result::Result<String, String> {
-    let files = vec![
-        file_hash_entry(workspace_root.join("Cargo.toml")),
-        file_hash_entry(workspace_root.join("dylint.toml")),
-    ];
-    let payload = octet_config_hash_payload(&files, scope_args, cargo_check_args)?;
+    let payload = octet_config_hash_payload(files, scope_args, cargo_check_args)?;
     Ok(b3_full_hash(&payload))
 }
 
@@ -188,12 +181,25 @@ fn octet_config_hash_payload(
     .map_err(|error| format!("serialize Octet configuration hash payload: {error}"))
 }
 
-fn file_hash_entry(path: PathBuf) -> OctetFileHashEntry {
-    let relative = path.file_name().and_then(|name| name.to_str()).unwrap_or("unknown");
-    OctetFileHashEntry {
-        hash: fs::read(&path).ok().and_then(|bytes| b3_ref_from_bytes(&bytes).ok()),
-        path: relative.to_string(),
-    }
+struct WorkspaceSnapshot {
+    manifest_path: PathBuf,
+    manifest: String,
+    files: Vec<OctetFileHashEntry>,
+}
+
+// The public gate adapters capture one capability-scoped workspace observation; metadata
+// validation consumes these bytes and never consults process environment or the filesystem.
+fn capture_workspace() -> std::result::Result<WorkspaceSnapshot, String> {
+    let root = cap_std::fs::Dir::open_ambient_dir(".", cap_std::ambient_authority())
+        .map_err(|error| format!("current_dir: {error}"))?;
+    let manifest_path = PathBuf::from("Cargo.toml");
+    let manifest = root.read_to_string(&manifest_path)
+        .map_err(|error| format!("read {}: {error}", manifest_path.display()))?;
+    let files = ["Cargo.toml", "dylint.toml"].into_iter().map(|path| OctetFileHashEntry {
+        hash: root.read(path).ok().and_then(|bytes| b3_ref_from_bytes(&bytes).ok()),
+        path: path.to_string(),
+    }).collect();
+    Ok(WorkspaceSnapshot { manifest_path, manifest, files })
 }
 
 fn b3_full_hash(input: &str) -> String {
@@ -230,6 +236,7 @@ struct OctetWarningBaselineValueInput<'a> {
 
 fn load_current_octet_run(
     artifacts_dir: &Path,
+    workspace: &std::result::Result<WorkspaceSnapshot, String>,
     checks: &mut impl crate::bounded::VecSink<Check>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<CurrentOctetRun> {
@@ -259,7 +266,7 @@ fn load_current_octet_run(
         return Err(MoltenError::invalid_harness("octet baseline requires parseable status.json"));
     };
     validate_command(command.as_ref(), checks, diagnostics);
-    validate_metadata_binding(command.as_ref(), Some(&status), checks, diagnostics);
+    validate_metadata_binding(command.as_ref(), Some(&status), workspace, checks, diagnostics);
     let has_valid_object_corpus = validate_object_corpus(Some(&object_corpus), checks, diagnostics).is_some();
     if !has_valid_object_corpus {
         return Err(MoltenError::invalid_harness("octet baseline requires valid object corpus receipt"));

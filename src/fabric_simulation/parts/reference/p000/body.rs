@@ -15,21 +15,21 @@ const REFERENCE_INITIAL_GENERATION: u64 = 1;
 const REFERENCE_PORT_OPERATION: &str = "apply";
 
 #[derive(Debug, Clone)]
-pub struct ReferenceServiceExecutor {
+pub struct ServiceExecutor {
     state: ReferenceServiceState,
     operations: std::collections::BTreeMap<String, ReferenceServiceOperation>,
     port_profiles: std::collections::BTreeMap<crate::fabric::FabricPortClass, SimulatedPortProfile>,
     last_transition: Option<ReferenceServiceTransition>,
 }
 
-impl ReferenceServiceExecutor {
+impl ServiceExecutor {
     pub fn new(
         kind: crate::fabric::ReferenceSystemKind,
         operations: std::collections::BTreeMap<String, ReferenceServiceOperation>,
         port_profiles: &[SimulatedPortProfile],
     ) -> crate::error::Result<Self> {
         if operations.values().any(|operation| operation.kind() != kind) {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "reference executor operation kind does not match its extension service",
             ));
         }
@@ -50,12 +50,12 @@ impl ReferenceServiceExecutor {
         state: ReferenceServiceState,
     ) -> crate::error::Result<Self> {
         if state.kind() != kind {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "recovered reference executor state kind does not match its extension service",
             ));
         }
         if operations.values().any(|operation| operation.kind() != kind) {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "recovered reference executor operation kind does not match its extension service",
             ));
         }
@@ -80,7 +80,7 @@ impl ReferenceServiceExecutor {
     }
 }
 
-impl SystemExtensionExecutor for ReferenceServiceExecutor {
+impl SystemExtensionExecutor for ServiceExecutor {
     fn execution_profile(&self) -> crate::system_extension::ExecutionProfile {
         crate::system_extension::ExecutionProfile::InProcessNative
     }
@@ -133,7 +133,7 @@ impl SystemExtensionExecutor for ReferenceServiceExecutor {
     }
 }
 
-impl ReferenceServiceExecutor {
+impl ServiceExecutor {
     fn effect_for(
         &self,
         class: crate::fabric::FabricPortClass,
@@ -160,11 +160,11 @@ impl ReferenceServiceExecutor {
     }
 }
 
-pub fn reference_port_profiles() -> Vec<SimulatedPortProfile> {
+pub fn port_profiles() -> Vec<SimulatedPortProfile> {
     REQUIRED_SIMULATION_PORT_CLASSES
         .into_iter()
         .map(|class| {
-            let port_id = simulation_port_id(class);
+            let port_id = port_id(class);
             let descriptor_ref = blake3_ref(format!("descriptor:{port_id}").as_bytes());
             SimulatedPortProfile {
                 class,
@@ -172,8 +172,8 @@ pub fn reference_port_profiles() -> Vec<SimulatedPortProfile> {
                 version: FABRIC_SIMULATION_PORT_VERSION.to_string(),
                 implementation_profile: FABRIC_SIMULATION_PROFILE_ID.to_string(),
                 descriptor_ref,
-                command_schema_ref: simulation_command_schema(class),
-                event_schema_ref: simulation_event_schema(class),
+                command_schema_ref: command_schema(class),
+                event_schema_ref: event_schema(class),
                 deterministic: true,
                 declared_faults: declared_faults(class),
             }
@@ -181,7 +181,7 @@ pub fn reference_port_profiles() -> Vec<SimulatedPortProfile> {
         .collect()
 }
 
-pub fn reference_port_descriptors(profiles: &[SimulatedPortProfile]) -> Vec<crate::fabric::FabricPortDescriptor> {
+pub fn port_descriptors(profiles: &[SimulatedPortProfile]) -> Vec<crate::fabric::FabricPortDescriptor> {
     profiles
         .iter()
         .map(|profile| crate::fabric::FabricPortDescriptor {
@@ -209,11 +209,11 @@ pub fn reference_manifest_input(
     implementation_ref: String,
     profiles: &[SimulatedPortProfile],
 ) -> crate::error::Result<crate::system_extension::SystemExtensionManifestInput> {
-    let required_classes = reference_required_ports(kind);
+    let required_classes = required_ports(kind);
     let mut required_ports = Vec::with_capacity(required_classes.len());
     for class in required_classes {
         let profile = profiles.iter().find(|profile| profile.class == class).ok_or_else(|| {
-            crate::error::MoltenError::invalid_harness(format!("missing {} reference port profile", class.as_str()))
+            crate::error::Failure::invalid_harness(format!("missing {} reference port profile", class.as_str()))
         })?;
         required_ports.push(crate::fabric::FabricPortRequirement {
             port_id: profile.port_id.clone(),
@@ -271,11 +271,11 @@ pub fn reference_manifest_input(
     })
 }
 
-pub fn reference_required_ports(_kind: crate::fabric::ReferenceSystemKind) -> Vec<crate::fabric::FabricPortClass> {
+pub fn required_ports(_kind: crate::fabric::ReferenceSystemKind) -> Vec<crate::fabric::FabricPortClass> {
     REQUIRED_SIMULATION_PORT_CLASSES.to_vec()
 }
 
-pub fn all_reference_authorities() -> Vec<crate::fabric::FabricAuthority> {
+pub fn all_authorities() -> Vec<crate::fabric::FabricAuthority> {
     let mut authorities = REQUIRED_SIMULATION_PORT_CLASSES.into_iter().map(authority_for_class).collect::<Vec<_>>();
     authorities.sort();
     authorities.dedup();

@@ -1,20 +1,20 @@
 
 fn write_preserves_atomic(path: &std::path::Path, value: &preserves::IOValue) -> crate::error::Result<()> {
     let parent = path.parent().ok_or_else(|| {
-        crate::error::MoltenError::invalid_harness("endpoint handoff path requires a parent directory")
+        crate::error::Failure::invalid_harness("endpoint handoff path requires a parent directory")
     })?;
-    std::fs::create_dir_all(parent).map_err(crate::error::MoltenError::from)?;
+    std::fs::create_dir_all(parent).map_err(crate::error::Failure::from)?;
     let temporary = path.with_extension("preserves.tmp");
     let bytes = crate::preserves_rail::canonical_bytes(value)?;
-    let mut file = std::fs::File::create(&temporary).map_err(crate::error::MoltenError::from)?;
-    file.write_all(&bytes).map_err(crate::error::MoltenError::from)?;
-    file.sync_all().map_err(crate::error::MoltenError::from)?;
-    std::fs::rename(&temporary, path).map_err(crate::error::MoltenError::from)
+    let mut file = std::fs::File::create(&temporary).map_err(crate::error::Failure::from)?;
+    file.write_all(&bytes).map_err(crate::error::Failure::from)?;
+    file.sync_all().map_err(crate::error::Failure::from)?;
+    std::fs::rename(&temporary, path).map_err(crate::error::Failure::from)
 }
 
 fn write_index(run_directory: &std::path::Path) -> crate::error::Result<()> {
     let entries = collect_indexed_artifacts(run_directory)?;
-    std::fs::write(run_directory.join(INDEX_FILE), render_index(&entries)).map_err(crate::error::MoltenError::from)
+    std::fs::write(run_directory.join(INDEX_FILE), render_index(&entries)).map_err(crate::error::Failure::from)
 }
 
 fn collect_indexed_artifacts(run_directory: &std::path::Path) -> crate::error::Result<Vec<IndexedArtifact>> {
@@ -35,7 +35,7 @@ fn collect_indexed_artifacts(run_directory: &std::path::Path) -> crate::error::R
     for (relative_path, artifact_kind, format) in definitions {
         let path = run_directory.join(relative_path);
         ensure_regular_file(&path)?;
-        let bytes = std::fs::read(&path).map_err(crate::error::MoltenError::from)?;
+        let bytes = std::fs::read(&path).map_err(crate::error::Failure::from)?;
         let expected_ref = if format == "preserves" {
             let value = crate::preserves_rail::parse_canonical_bytes(&bytes)?;
             crate::preserves_rail::canonical_hash(&value)?
@@ -126,15 +126,15 @@ fn collect_relative_files(
     let mut pending = vec![current.to_path_buf()];
     while let Some(directory) = pending.pop() {
         if output.len() > MAX_RUN_FILES {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "distinct-process run directory file count exceeds bound",
             ));
         }
-        for entry in std::fs::read_dir(&directory).map_err(crate::error::MoltenError::from)? {
-            let entry = entry.map_err(crate::error::MoltenError::from)?;
-            let file_type = entry.file_type().map_err(crate::error::MoltenError::from)?;
+        for entry in std::fs::read_dir(&directory).map_err(crate::error::Failure::from)? {
+            let entry = entry.map_err(crate::error::Failure::from)?;
+            let file_type = entry.file_type().map_err(crate::error::Failure::from)?;
             if file_type.is_symlink() {
-                return Err(crate::error::MoltenError::invalid_harness(
+                return Err(crate::error::Failure::invalid_harness(
                     "distinct-process run directory must not contain symlinks",
                 ));
             }
@@ -145,13 +145,13 @@ fn collect_relative_files(
                     .path()
                     .strip_prefix(root)
                     .map_err(|error| {
-                        crate::error::MoltenError::invalid_harness(format!("run path strip failed: {error}"))
+                        crate::error::Failure::invalid_harness(format!("run path strip failed: {error}"))
                     })?
                     .to_string_lossy()
                     .into_owned();
                 output.insert(relative);
             } else {
-                return Err(crate::error::MoltenError::invalid_harness(
+                return Err(crate::error::Failure::invalid_harness(
                     "distinct-process run directory contains a non-regular entry",
                 ));
             }
@@ -161,15 +161,15 @@ fn collect_relative_files(
 }
 
 fn ensure_regular_file(path: &std::path::Path) -> crate::error::Result<()> {
-    let metadata = std::fs::symlink_metadata(path).map_err(crate::error::MoltenError::from)?;
+    let metadata = std::fs::symlink_metadata(path).map_err(crate::error::Failure::from)?;
     if !metadata.file_type().is_file() {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "distinct-process artifact is not a regular file: {}",
             path.display()
         )));
     }
     if metadata.len() > MAX_ARTIFACT_BYTES {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "distinct-process artifact exceeds {MAX_ARTIFACT_BYTES} bytes: {}",
             path.display()
         )));
@@ -207,7 +207,7 @@ fn simple_record(
 ) -> crate::error::Result<Vec<preserves::Value<preserves::IOValue>>> {
     let fields = value
         .collect_simple_record(label, Some(field_count))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected <{label} ...>")))?;
     Ok(fields.iter().collect())
 }
 
@@ -215,14 +215,14 @@ fn next<'a>(
     fields: &mut impl Iterator<Item = &'a preserves::Value<preserves::IOValue>>,
     label: &str,
 ) -> crate::error::Result<&'a preserves::Value<preserves::IOValue>> {
-    fields.next().ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("missing {label}")))
+    fields.next().ok_or_else(|| crate::error::Failure::invalid_harness(format!("missing {label}")))
 }
 
 fn required_string(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected string for {label}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected string for {label}")))
 }
 
 fn required_ref(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<String> {
@@ -234,14 +234,14 @@ fn required_ref(value: &preserves::Value<preserves::IOValue>, label: &str) -> cr
 fn required_u64(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected u64 for {label}")))?
-        .map_err(|error| crate::error::MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected u64 for {label}")))?
+        .map_err(|error| crate::error::Failure::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
 fn required_bool(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<bool> {
     value
         .as_boolean()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected bool for {label}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected bool for {label}")))
 }
 
 fn require_schema(value: &preserves::Value<preserves::IOValue>, expected: &str) -> crate::error::Result<()> {
@@ -249,7 +249,7 @@ fn require_schema(value: &preserves::Value<preserves::IOValue>, expected: &str) 
     if actual == expected {
         Ok(())
     } else {
-        Err(crate::error::MoltenError::invalid_harness(format!(
+        Err(crate::error::Failure::invalid_harness(format!(
             "schema mismatch: expected {expected}, got {actual}"
         )))
     }
@@ -260,7 +260,7 @@ fn require_decision(value: &preserves::Value<preserves::IOValue>) -> crate::erro
     if decision == PASS_DECISION {
         Ok(())
     } else {
-        Err(crate::error::MoltenError::invalid_harness(format!(
+        Err(crate::error::Failure::invalid_harness(format!(
             "participant decision must pass, got {decision}"
         )))
     }
@@ -270,7 +270,7 @@ fn parse_role(value: &str) -> crate::error::Result<EndpointParticipantRole> {
     match value {
         LISTENER_ROLE => Ok(EndpointParticipantRole::Listener),
         CLIENT_ROLE => Ok(EndpointParticipantRole::Client),
-        other => Err(crate::error::MoltenError::invalid_harness(format!("unsupported participant role {other}"))),
+        other => Err(crate::error::Failure::invalid_harness(format!("unsupported participant role {other}"))),
     }
 }
 
@@ -281,6 +281,6 @@ fn parse_delivery(value: &str) -> crate::error::Result<DeliveryOutcome> {
         "delivered" => Ok(DeliveryOutcome::Delivered),
         "not-delivered" => Ok(DeliveryOutcome::NotDelivered),
         "uncertain" => Ok(DeliveryOutcome::Uncertain),
-        other => Err(crate::error::MoltenError::invalid_harness(format!("unsupported delivery outcome {other}"))),
+        other => Err(crate::error::Failure::invalid_harness(format!("unsupported delivery outcome {other}"))),
     }
 }

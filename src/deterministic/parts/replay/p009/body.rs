@@ -162,7 +162,7 @@ fn validate_replay_identity(identity: ReplayRunIdentity) -> Result<()> {
 
 fn validate_ref_list(refs: &[String], label: &'static str) -> Result<()> {
     if refs.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness(format!("{label} must not be empty")));
+        return Err(crate::error::Failure::invalid_harness(format!("{label} must not be empty")));
     }
     for reference in refs {
         validate_content_ref(reference)?;
@@ -172,12 +172,12 @@ fn validate_ref_list(refs: &[String], label: &'static str) -> Result<()> {
 
 fn validate_replay_profile(profile: &str) -> Result<()> {
     if profile.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness("replay profile cannot be empty"));
+        return Err(crate::error::Failure::invalid_harness("replay profile cannot be empty"));
     }
     if profile.chars().all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_') {
         Ok(())
     } else {
-        Err(crate::error::MoltenError::invalid_harness("replay profile must be a lowercase ascii token"))
+        Err(crate::error::Failure::invalid_harness("replay profile must be a lowercase ascii token"))
     }
 }
 

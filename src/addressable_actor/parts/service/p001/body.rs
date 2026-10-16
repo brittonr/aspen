@@ -1,23 +1,23 @@
 
 fn reconcile_unknown_commit(
     commit_port: &impl ActorCommitPort,
-    request: &ActorCommitRequest,
-    original: Option<ActorCommitObservation>,
-) -> ActorServiceResult<(ActorServiceStatus, ActorCommitObservation)> {
-    let observed = commit_port.load(&request.actor_key_ref).map_err(ActorServiceError::Port)?;
+    request: &CommitRequest,
+    original: Option<CommitObservation>,
+) -> Result<(ServiceStatus, CommitObservation)> {
+    let observed = commit_port.load(&request.actor_key_ref).map_err(Error::Port)?;
     let (status, state_ref) = if observed.as_ref() == Some(&request.next) {
-        (ActorServiceStatus::AppliedAfterReconciliation, Some(request.next.state_ref.clone()))
+        (ServiceStatus::AppliedAfterReconciliation, Some(request.next.state_ref.clone()))
     } else if expected_matches(&request.expected, observed.as_ref()) {
-        (ActorServiceStatus::NotAppliedAfterReconciliation, observed.map(|published| published.state_ref))
+        (ServiceStatus::NotAppliedAfterReconciliation, observed.map(|published| published.state_ref))
     } else {
-        (ActorServiceStatus::Unknown, observed.map(|published| published.state_ref))
+        (ServiceStatus::Unknown, observed.map(|published| published.state_ref))
     };
     Ok((
         status,
-        original.unwrap_or(ActorCommitObservation {
-            disposition: ActorCommitDisposition::Unknown,
-            currentness: ActorCommitCurrentness::Unknown,
-            durability: ActorDurabilityOutcome::Unknown,
+        original.unwrap_or(CommitObservation {
+            disposition: CommitDisposition::Unknown,
+            currentness: CommitCurrentness::Unknown,
+            durability: DurabilityOutcome::Unknown,
             engine_epoch: request.requested_engine_epoch,
             observed_state_ref: state_ref,
         }),
@@ -26,10 +26,10 @@ fn reconcile_unknown_commit(
 
 fn record_unknown_effect_state(
     commit_port: &mut impl ActorCommitPort,
-    service: &ActorServiceRequest<'_>,
-    current: &PublishedActorState,
+    service: &Request<'_>,
+    current: &PublishedState,
     effect: &ActorEffectIntent,
-) -> ActorServiceResult<PublishedActorState> {
+) -> Result<PublishedState> {
     let internal_request = ActorRequest {
         schema: ACTOR_REQUEST_SCHEMA.to_string(),
         operation_id: format!("{UNKNOWN_EFFECT_OPERATION_PREFIX}{}", effect.effect_ref),
@@ -47,10 +47,10 @@ fn record_unknown_effect_state(
     if transition.decision != ActorDecision::Applied {
         return Ok(current.clone());
     }
-    let next = PublishedActorState::from_state(transition.next_state);
-    let request = ActorCommitRequest {
+    let next = PublishedState::from_state(transition.next_state);
+    let request = CommitRequest {
         actor_key_ref: current.state.actor_key_ref.clone(),
-        expected: ExpectedActorState {
+        expected: ExpectedState {
             state_ref: Some(current.state_ref.clone()),
             revision: current.revision,
         },
@@ -65,26 +65,26 @@ fn record_unknown_effect_state(
     }
 }
 
-fn status_from_observation(observation: &ActorCommitObservation, request: &ActorCommitRequest) -> ActorServiceStatus {
+fn status_from_observation(observation: &CommitObservation, request: &CommitRequest) -> ServiceStatus {
     if observation.engine_epoch != request.requested_engine_epoch
         || !observation.currentness.is_current()
-        || observation.durability != ActorDurabilityOutcome::Durable
+        || observation.durability != DurabilityOutcome::Durable
     {
-        return ActorServiceStatus::Unknown;
+        return ServiceStatus::Unknown;
     }
     match observation.disposition {
-        ActorCommitDisposition::Applied => ActorServiceStatus::Applied,
-        ActorCommitDisposition::AlreadyApplied => ActorServiceStatus::AlreadyApplied,
-        ActorCommitDisposition::Stale => ActorServiceStatus::Stale,
-        ActorCommitDisposition::Unknown => ActorServiceStatus::Unknown,
+        CommitDisposition::Applied => ServiceStatus::Applied,
+        CommitDisposition::AlreadyApplied => ServiceStatus::AlreadyApplied,
+        CommitDisposition::Stale => ServiceStatus::Stale,
+        CommitDisposition::Unknown => ServiceStatus::Unknown,
     }
 }
 
 fn publish_status(
     status_port: &mut impl ActorStatusPort,
-    state: &PublishedActorState,
-    effect_observations: &[ActorEffectObservation],
-) -> ActorServiceResult<ActorStatusObservation> {
+    state: &PublishedState,
+    effect_observations: &[EffectObservation],
+) -> Result<StatusObservation> {
     let evidence_refs = effect_observations
         .iter()
         .filter_map(|observation| observation.outcome_ref.clone())
@@ -93,10 +93,10 @@ fn publish_status(
         maximum_events: MAX_ACTOR_STATUS_EVENTS,
         evidence_refs: &evidence_refs,
     })
-    .map_err(ActorServiceError::Status)?;
+    .map_err(Error::Status)?;
     match status_port.publish_status(&status) {
         Ok(observation) => Ok(observation),
-        Err(error) => Ok(ActorStatusObservation {
+        Err(error) => Ok(StatusObservation {
             status_ref: None,
             outcome_unknown: error.outcome_unknown,
         }),
@@ -105,17 +105,17 @@ fn publish_status(
 
 fn no_commit_outcome(
     transition: ActorTransition,
-    status: ActorServiceStatus,
-    service: &ActorServiceRequest<'_>,
+    status: ServiceStatus,
+    service: &Request<'_>,
     status_port: &mut impl ActorStatusPort,
-) -> ActorServiceResult<ActorServiceOutcome> {
-    let final_state = PublishedActorState::from_state(transition.next_state.clone());
+) -> Result<Outcome> {
+    let final_state = PublishedState::from_state(transition.next_state.clone());
     let effect_observations = Vec::new();
     let status_observation = publish_status(status_port, &final_state, &effect_observations)?;
-    let commit = ActorCommitObservation {
-        disposition: ActorCommitDisposition::Stale,
-        currentness: ActorCommitCurrentness::Unknown,
-        durability: ActorDurabilityOutcome::Unknown,
+    let commit = CommitObservation {
+        disposition: CommitDisposition::Stale,
+        currentness: CommitCurrentness::Unknown,
+        durability: DurabilityOutcome::Unknown,
         engine_epoch: service.requested_engine_epoch,
         observed_state_ref: Some(final_state.state_ref.clone()),
     };
@@ -127,7 +127,7 @@ fn no_commit_outcome(
         effects: &effect_observations,
         status_observation: &status_observation,
     })?;
-    Ok(ActorServiceOutcome {
+    Ok(Outcome {
         transition,
         receipt,
         commit_observation: None,
@@ -139,14 +139,14 @@ fn no_commit_outcome(
 
 struct ReceiptInput<'a> {
     transition: &'a ActorTransition,
-    final_state: &'a PublishedActorState,
-    status: ActorServiceStatus,
-    commit: &'a ActorCommitObservation,
-    effects: &'a [ActorEffectObservation],
-    status_observation: &'a ActorStatusObservation,
+    final_state: &'a PublishedState,
+    status: ServiceStatus,
+    commit: &'a CommitObservation,
+    effects: &'a [EffectObservation],
+    status_observation: &'a StatusObservation,
 }
 
-fn build_receipt(input: ReceiptInput<'_>) -> ActorServiceResult<CanonicalActorCommitReceipt> {
+fn build_receipt(input: ReceiptInput<'_>) -> Result<CanonicalCommitReceipt> {
     let ReceiptInput {
         transition,
         final_state,
@@ -155,7 +155,7 @@ fn build_receipt(input: ReceiptInput<'_>) -> ActorServiceResult<CanonicalActorCo
         effects,
         status_observation,
     } = input;
-    canonical_actor_commit_receipt(&ActorCommitReceipt {
+    canonical_commit_receipt(&CommitReceipt {
         actor_key_ref: transition.next_state.actor_key_ref.clone(),
         request_ref: transition.request_ref.clone(),
         operation_ref: transition.operation_ref.clone(),
@@ -177,7 +177,7 @@ fn build_receipt(input: ReceiptInput<'_>) -> ActorServiceResult<CanonicalActorCo
         claims_runtime_survival: false,
         non_claims: required_addressable_actor_non_claims(),
     })
-    .map_err(|error| ActorServiceError::Receipt(error.to_string()))
+    .map_err(|error| Error::Receipt(error.to_string()))
 }
 
 fn stale_transition(state: &ActorState, request: &ActorRequest) -> ActorTransition {
@@ -204,14 +204,14 @@ fn stale_transition(state: &ActorState, request: &ActorRequest) -> ActorTransiti
 
 fn synthetic_effect_observation(
     effect: &ActorEffectIntent,
-    disposition: ActorEffectDisposition,
+    disposition: EffectDisposition,
     label: &str,
-) -> ActorEffectObservation {
+) -> EffectObservation {
     let mut hasher =
         blake3::Hasher::new_derive_key("onixresearch.molten.addressable-actor-synthetic-effect-observation.v1");
     hasher.update(effect.effect_ref.as_bytes());
     hasher.update(label.as_bytes());
-    ActorEffectObservation {
+    EffectObservation {
         effect_ref: effect.effect_ref.clone(),
         admission_ref: format!("blake3:{}", hasher.finalize().to_hex()),
         disposition,
@@ -219,7 +219,7 @@ fn synthetic_effect_observation(
     }
 }
 
-fn expected_matches(expected: &ExpectedActorState, observed: Option<&PublishedActorState>) -> bool {
+fn expected_matches(expected: &ExpectedState, observed: Option<&PublishedState>) -> bool {
     match (&expected.state_ref, observed) {
         (None, None) => expected.revision == ADDRESSABLE_ACTOR_INITIAL_REVISION,
         (Some(expected_ref), Some(observed)) => {

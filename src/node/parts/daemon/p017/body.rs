@@ -163,12 +163,12 @@ pub fn parse_control_supervisor_policy(value: &IoValue) -> Result<ControlSupervi
 
 pub fn import_control_supervisor_policy(state_root: &Path, policy_value: &IoValue) -> Result<ControlSupervisorPolicy> {
     validate_state_root(state_root)?;
-    let root = crate::node_state::NodeStateRoot::open(state_root)?;
+    let root = crate::node_state::DirectoryRoot::open(state_root)?;
     import_control_supervisor_policy_with_root(&root, policy_value)
 }
 
 pub fn import_control_supervisor_policy_with_root(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::DirectoryRoot,
     policy_value: &IoValue,
 ) -> Result<ControlSupervisorPolicy> {
     ensure_state_layout(root)?;
@@ -204,13 +204,13 @@ fn service_run_supervisor_policy_ref(value: &IoValue) -> Result<Option<String>> 
 }
 
 fn count_prior_supervised_service_runs(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::DirectoryRoot,
     supervisor_policy_ref: &str,
 ) -> Result<u64> {
     let service = root.control_service()?;
     let mut count = 0_u64;
     for entry in service.list_entries()? {
-        if entry.kind != crate::node_state::NodeStateEntryKind::RegularFile
+        if entry.kind != crate::node_state::EntryKind::RegularFile
             || !entry.name.ends_with(".service-run-receipt.preserves")
         {
             continue;
@@ -230,6 +230,6 @@ fn count_prior_supervised_service_runs(
 
 pub fn init_local(input: &InitInput<'_>) -> Result<Init> {
     validate_state_root(input.state_root)?;
-    let root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let root = crate::node_state::DirectoryRoot::open(input.state_root)?;
     init_local_with_root(&root, input)
 }

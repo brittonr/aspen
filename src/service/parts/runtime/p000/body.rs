@@ -1,7 +1,7 @@
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 type Value<T> = preserves::Value<T>;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 const SERVICE_READINESS_ASSERTION_SCHEMA: &str = crate::preserves_rail::SERVICE_READINESS_ASSERTION_SCHEMA;

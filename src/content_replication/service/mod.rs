@@ -29,9 +29,7 @@ pub struct ReconcilePorts<'a> {
 pub fn activate(manifest: Manifest, ports: ActivationPorts<'_>) -> crate::error::Result<ServiceInstance> {
     let issues = validate_manifest(&manifest);
     if !issues.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
-            "content-replication manifest denied: {issues:?}"
-        )));
+        return Err(crate::error::Failure::invalid_harness(format!("content-replication manifest denied: {issues:?}")));
     }
     let authority = ports.authority.observe(&manifest)?;
     validate_authority(&manifest, &authority)?;
@@ -52,7 +50,7 @@ pub fn activate(manifest: Manifest, ports: ActivationPorts<'_>) -> crate::error:
 
 pub fn restart(instance: &ServiceInstance, ports: ActivationPorts<'_>) -> crate::error::Result<ServiceInstance> {
     if !matches!(instance.state, LifecycleState::Stopped | LifecycleState::Failed) {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "content-replication restart requires a stopped or failed instance",
         ));
     }
@@ -60,15 +58,13 @@ pub fn restart(instance: &ServiceInstance, ports: ActivationPorts<'_>) -> crate:
     restarted.restart_count = instance
         .restart_count
         .checked_add(1)
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("content-replication restart count overflow"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("content-replication restart count overflow"))?;
     Ok(restarted)
 }
 
 pub fn drain(instance: &ServiceInstance) -> crate::error::Result<ServiceInstance> {
     if instance.state != LifecycleState::Active {
-        return Err(crate::error::MoltenError::invalid_harness(
-            "content-replication drain requires an active instance",
-        ));
+        return Err(crate::error::Failure::invalid_harness("content-replication drain requires an active instance"));
     }
     let mut drained = instance.clone();
     drained.state = LifecycleState::Draining;
@@ -77,7 +73,7 @@ pub fn drain(instance: &ServiceInstance) -> crate::error::Result<ServiceInstance
 
 pub fn stop(instance: &ServiceInstance) -> crate::error::Result<ServiceInstance> {
     if !matches!(instance.state, LifecycleState::Active | LifecycleState::Draining) {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "content-replication stop requires an active or draining instance",
         ));
     }
@@ -122,9 +118,8 @@ pub fn reconcile(mut instance: ServiceInstance, ports: ReconcilePorts<'_>) -> cr
         history: history.clone(),
         observed_tick: facts.time.observed_tick,
     };
-    let plan = molten_core::content_replication::plan(&input).map_err(|issue| {
-        crate::error::MoltenError::invalid_harness(format!("replication planning denied: {issue:?}"))
-    })?;
+    let plan = molten_core::content_replication::plan(&input)
+        .map_err(|issue| crate::error::Failure::invalid_harness(format!("replication planning denied: {issue:?}")))?;
     let canonical_plan = canonical_plan(&plan)?;
     ports.observations.publish_plan(&canonical_plan)?;
     let mut evidence_refs = facts.evidence_refs();

@@ -3,13 +3,13 @@
 // r[verify molten.crypto_identity.adapter_conformance]
 #[test]
 fn fixture_profile_and_missing_or_unsafe_keys_fail_closed() {
-    let fixture = canonical_crypto_profile(&fixture_blake3_profile(test_ref("fixture-profile")))
+    let fixture = crate::fabric_crypto_identity::profile(&fixture_blake3_profile(test_ref("fixture-profile")))
         .expect("fixture profile is valid for tests");
     let workspace = temp_dir("crypto-fixture-denial");
     let namespace =
-        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Identity, &workspace)
+        crate::node_state::Scope::open(crate::node_state::NamespaceKind::Identity, &workspace)
             .expect("identity namespace");
-    let denied = IrohEd25519FileAdapter::new(&namespace, fixture, test_ref("fixture-backend"))
+    let denied = IrohEd25519::new(&namespace, fixture, test_ref("fixture-backend"))
         .err()
         .expect("fixture profile denied by production adapter");
     assert!(denied.to_string().contains("FixtureProfileDeniedInProduction"));
@@ -25,17 +25,17 @@ fn fixture_profile_and_missing_or_unsafe_keys_fail_closed() {
     assert!(unavailable.to_string().contains("replacement generation is disabled"));
 
     let malformed_workspace = temp_dir("crypto-malformed-record");
-    let malformed_namespace = crate::node_state::NodeStateNamespace::open(
-        crate::node_state::NodeStateNamespaceKind::Secrets,
+    let malformed_namespace = crate::node_state::Scope::open(
+        crate::node_state::NamespaceKind::Secrets,
         &malformed_workspace,
     )
     .expect("malformed secrets namespace");
-    let malformed_path = crate::node_state::NodeStatePath::parse("crypto-authority.key").expect("authority key path");
+    let malformed_path = crate::node_state::RelativePath::parse("crypto-authority.key").expect("authority key path");
     malformed_namespace
         .write_restricted(&malformed_path, b"malformed", OWNER_ONLY_SECRET_FILE_MODE)
         .expect("malformed key fixture");
     let malformed_adapter =
-        IrohEd25519FileAdapter::new(&malformed_namespace, profile(), test_ref("capability-file-backend"))
+        IrohEd25519::new(&malformed_namespace, profile(), test_ref("capability-file-backend"))
             .expect("malformed file adapter");
     let malformed = malformed_adapter
         .resolve_or_generate(KeyPurpose::Authority, &test_ref("generation-policy"), false)
@@ -66,7 +66,7 @@ fn fixture_profile_and_missing_or_unsafe_keys_fail_closed() {
 fn transport_secret_is_only_resolved_for_current_transport_handle() {
     let workspace = temp_dir("crypto-transport-handle");
     let namespace =
-        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Identity, &workspace)
+        crate::node_state::Scope::open(crate::node_state::NamespaceKind::Identity, &workspace)
             .expect("identity namespace");
     let adapter = adapter(&namespace);
     let key = adapter
@@ -96,7 +96,7 @@ fn transport_secret_is_only_resolved_for_current_transport_handle() {
 fn artifact_auth_shell_signs_and_verifies_exact_statement_without_admitting_authority() {
     let workspace = temp_dir("artifact-auth-shell-positive");
     let namespace =
-        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Secrets, &workspace)
+        crate::node_state::Scope::open(crate::node_state::NamespaceKind::Secrets, &workspace)
             .expect("secrets namespace");
     let adapter = adapter(&namespace);
     let key = adapter
@@ -124,7 +124,7 @@ fn artifact_auth_shell_signs_and_verifies_exact_statement_without_admitting_auth
         key_id: "evidence-signing-key",
         currentness_ref: &key.handle.handle.currentness_evidence_ref,
     };
-    let signed = sign_artifact_auth_for_dual_run(&adapter, &MoltenArtifactAuthShellInput {
+    let signed = sign_for_dual_run(&adapter, &ShellInput {
         statement,
         handle: &key.handle.handle,
         signing_policy_ref: &test_ref("artifact-auth-sign-policy"),
@@ -143,7 +143,7 @@ fn artifact_auth_shell_signs_and_verifies_exact_statement_without_admitting_auth
     assert_eq!(signed.public_key_ref, key.handle.handle.public_key_ref);
     assert!(signed.signature_hex.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)));
 
-    let secret_path = crate::node_state::NodeStatePath::parse("crypto-evidence-signing.key").expect("secret path");
+    let secret_path = crate::node_state::RelativePath::parse("crypto-evidence-signing.key").expect("secret path");
     let secret_record = namespace.read(&secret_path, crate::node_state::MAX_NODE_SECRET_BYTES).expect("secret record");
     let public_evidence = format!("{signed:?}{report:?}");
     assert!(!public_evidence.as_bytes().windows(secret_record.len()).any(|window| window == secret_record));
@@ -156,7 +156,7 @@ fn artifact_auth_shell_signs_and_verifies_exact_statement_without_admitting_auth
 fn artifact_auth_shell_rejects_tamper_wrong_preimage_key_currentness_and_false_parity() {
     let workspace = temp_dir("artifact-auth-shell-negative");
     let namespace =
-        crate::node_state::NodeStateNamespace::open(crate::node_state::NodeStateNamespaceKind::Secrets, &workspace)
+        crate::node_state::Scope::open(crate::node_state::NamespaceKind::Secrets, &workspace)
             .expect("secrets namespace");
     let adapter = adapter(&namespace);
     let key = adapter
@@ -184,7 +184,7 @@ fn artifact_auth_shell_rejects_tamper_wrong_preimage_key_currentness_and_false_p
         key_id: "evidence-signing-key",
         currentness_ref: &key.handle.handle.currentness_evidence_ref,
     };
-    let signed = sign_artifact_auth_for_dual_run(&adapter, &MoltenArtifactAuthShellInput {
+    let signed = sign_for_dual_run(&adapter, &ShellInput {
         statement,
         handle: &key.handle.handle,
         signing_policy_ref: &test_ref("artifact-auth-sign-policy"),
@@ -197,7 +197,7 @@ fn artifact_auth_shell_rejects_tamper_wrong_preimage_key_currentness_and_false_p
         request: &denied_signing_request,
         ..statement
     };
-    let denied_signing = sign_artifact_auth_for_dual_run(&adapter, &MoltenArtifactAuthShellInput {
+    let denied_signing = sign_for_dual_run(&adapter, &ShellInput {
         statement: denied_signing_statement,
         handle: &key.handle.handle,
         signing_policy_ref: &test_ref("artifact-auth-sign-policy"),
@@ -227,8 +227,8 @@ fn artifact_auth_shell_rejects_tamper_wrong_preimage_key_currentness_and_false_p
 /// verification. Returns the wrong-key carrier for the false-parity check.
 fn assert_carrier_tampering_denied(
     statement: &MoltenArtifactAuthStatementInput<'_>,
-    signed: &SignedArtifactAuthStatement,
-) -> SignedArtifactAuthStatement {
+    signed: &SignedStatement,
+) -> SignedStatement {
     const SIGNATURE_TAMPER_MASK: u8 = 1;
     const MALFORMED_SIGNATURE_BYTES: usize = 1;
     let mut tampered_signature = signed.clone();

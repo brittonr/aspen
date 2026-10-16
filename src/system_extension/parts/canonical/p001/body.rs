@@ -1,7 +1,7 @@
 
-pub(crate) fn canonical_callback_receipt(
+pub(crate) fn callback_receipt(
     input: CallbackReceiptInput<'_>,
-) -> crate::error::Result<CanonicalCallbackReceipt> {
+) -> crate::error::Result<CallbackReceipt> {
     let approved_effects = if input.decision == CallbackExecutionDecision::Succeeded {
         input.outcome.map_or_else(Vec::new, |outcome| outcome.effects.clone())
     } else {
@@ -59,7 +59,7 @@ pub(crate) fn canonical_callback_receipt(
         ]),
     ]);
     let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalCallbackReceipt {
+    Ok(CallbackReceipt {
         receipt_ref,
         execution_binding_ref,
         invocation: input.invocation.clone(),
@@ -78,7 +78,7 @@ pub struct PortEffectOutput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalEffectCompletion {
+pub struct EffectCompletion {
     pub completion_ref: String,
     pub callback_receipt_ref: String,
     pub binding_ref: String,
@@ -89,15 +89,15 @@ pub struct CanonicalEffectCompletion {
     pub value: preserves::IOValue,
 }
 
-pub(crate) fn canonical_effect_completion(
+pub(crate) fn effect_completion(
     callback_receipt_ref: &str,
-    binding: &crate::fabric::CanonicalFabricPortBinding,
+    binding: &crate::fabric::CanonicalPortBinding,
     effect: &super::TypedEffectRequest,
     output: &PortEffectOutput,
-) -> crate::error::Result<CanonicalEffectCompletion> {
+) -> crate::error::Result<EffectCompletion> {
     crate::preserves_rail::validate_content_ref(&output.output_ref)?;
     if output.output_schema_ref != effect.output_schema_ref {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "system-extension effect completion schema mismatch: actual={} expected={}",
             output.output_schema_ref, effect.output_schema_ref
         )));
@@ -106,7 +106,7 @@ pub(crate) fn canonical_effect_completion(
         crate::preserves_rail::validate_content_ref(&materialized.value_ref)?;
         let observed_ref = crate::preserves_rail::content_ref_from_bytes(&materialized.bytes);
         if materialized.value_ref != output.output_ref || observed_ref != materialized.value_ref {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "system-extension materialized effect output identity mismatch",
             ));
         }
@@ -131,7 +131,7 @@ pub(crate) fn canonical_effect_completion(
         ]),
     ]);
     let completion_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalEffectCompletion {
+    Ok(EffectCompletion {
         completion_ref,
         callback_receipt_ref: callback_receipt_ref.to_string(),
         binding_ref: binding.binding_ref.clone(),
@@ -159,7 +159,7 @@ impl MigrationOperation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalStateMigrationReceipt {
+pub struct StateMigrationReceipt {
     pub receipt_ref: String,
     pub operation: MigrationOperation,
     pub source_schema: String,
@@ -181,7 +181,7 @@ pub(crate) struct StateMigrationReceiptInput<'a> {
 
 pub(crate) fn canonical_state_migration_receipt(
     input: StateMigrationReceiptInput<'_>,
-) -> crate::error::Result<CanonicalStateMigrationReceipt> {
+) -> crate::error::Result<StateMigrationReceipt> {
     let value = crate::preserves_rail::record("system-extension-state-migration-v1", vec![
         crate::preserves_rail::string(super::SYSTEM_EXTENSION_STATE_MIGRATION_SCHEMA),
         field("operation", crate::preserves_rail::string(input.operation.as_str())),
@@ -201,7 +201,7 @@ pub(crate) fn canonical_state_migration_receipt(
         ]),
     ]);
     let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalStateMigrationReceipt {
+    Ok(StateMigrationReceipt {
         receipt_ref,
         operation: input.operation,
         source_schema: input.source_schema.to_string(),
@@ -211,7 +211,7 @@ pub(crate) fn canonical_state_migration_receipt(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalServiceReadiness {
+pub struct ServiceReadiness {
     pub readiness_ref: String,
     pub service_id: String,
     pub generation: u64,
@@ -220,13 +220,13 @@ pub struct CanonicalServiceReadiness {
     pub value: preserves::IOValue,
 }
 
-pub(crate) fn canonical_service_readiness(
+pub(crate) fn service_readiness(
     manifest_ref: &str,
     extension_id: &str,
     service_id: &str,
     state: &super::LifecycleState,
     boundary_ref: &str,
-) -> crate::error::Result<CanonicalServiceReadiness> {
+) -> crate::error::Result<ServiceReadiness> {
     let is_ready = state.phase == super::LifecyclePhase::Running && state.health == super::HealthState::Healthy;
     let action = if is_ready { "publish" } else { "withdraw" };
     let value = crate::preserves_rail::record("system-extension-readiness-v1", vec![
@@ -247,7 +247,7 @@ pub(crate) fn canonical_service_readiness(
         ]),
     ]);
     let readiness_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalServiceReadiness {
+    Ok(ServiceReadiness {
         readiness_ref,
         service_id: service_id.to_string(),
         generation: state.generation,
@@ -276,7 +276,7 @@ pub struct OperatorStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalOperatorStatus {
+pub struct OperatorStatusRecord {
     pub status_ref: String,
     pub status: OperatorStatus,
     pub value: preserves::IOValue,

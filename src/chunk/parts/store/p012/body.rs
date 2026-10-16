@@ -130,7 +130,7 @@ fn chunk_root_ref(chunks: &[ChunkRef]) -> Result<String> {
     ]))
 }
 
-struct ChunkStoreReceiptValueInput<'a> {
+struct ChunkReceiptValueInput<'a> {
     operation: &'a str,
     decision: &'a str,
     manifest_ref: Option<&'a str>,
@@ -139,7 +139,7 @@ struct ChunkStoreReceiptValueInput<'a> {
     details: Vec<IoValue>,
 }
 
-fn receipt_value(input: ChunkStoreReceiptValueInput<'_>) -> IoValue {
+fn receipt_value(input: ChunkReceiptValueInput<'_>) -> IoValue {
     record("chunk-store-receipt-v1", vec![
         string(CHUNK_STORE_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
@@ -165,7 +165,7 @@ fn denial_receipt_value(
     checks: Vec<(&str, &str)>,
 ) -> IoValue {
     let reason = reason.into();
-    receipt_value(ChunkStoreReceiptValueInput {
+    receipt_value(ChunkReceiptValueInput {
         operation,
         decision: "deny",
         manifest_ref,
@@ -175,7 +175,7 @@ fn denial_receipt_value(
     })
 }
 
-pub fn parse_receipt_value(value: &IoValue, expected_receipt_ref: Option<&str>) -> Result<ChunkStoreReceipt> {
+pub fn parse_receipt_value(value: &IoValue, expected_receipt_ref: Option<&str>) -> Result<ChunkReceipt> {
     let fields = simple_record(value, "chunk-store-receipt-v1", 7)?;
     require_schema(&fields[0], CHUNK_STORE_RECEIPT_SCHEMA, "chunk store receipt")?;
     let operation = record_string(&fields[1], "operation")?;
@@ -213,7 +213,7 @@ pub fn parse_receipt_value(value: &IoValue, expected_receipt_ref: Option<&str>) 
         }
         push_bounded(
             &mut checks,
-            ChunkStoreReceiptCheck { name, status },
+            ChunkReceiptCheck { name, status },
             MAX_CHUNK_STORE_CHECKS,
             "chunk store receipt checks",
         )?;
@@ -226,7 +226,7 @@ pub fn parse_receipt_value(value: &IoValue, expected_receipt_ref: Option<&str>) 
             "chunk store receipt hash mismatch: got {receipt_ref}, expected {expected}"
         )));
     }
-    Ok(ChunkStoreReceipt {
+    Ok(ChunkReceipt {
         receipt_ref,
         operation,
         decision,

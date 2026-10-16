@@ -1,13 +1,13 @@
 
-fn read_quorum_evidence(
+fn read_quorum(
     before: &ReplicaState,
     event: &ReplicaEvent,
     source_ref: String,
-) -> crate::error::Result<Option<(u64, ValidatedReplicaQuorumEvidence)>> {
+) -> crate::error::Result<Option<(u64, ValidatedReplicaQuorum)>> {
     let ReplicaEvent::Message { envelope } = event else {
         return Ok(None);
     };
-    let RaftMessage::ReadAcknowledgement {
+    let Message::ReadAcknowledgement {
         term,
         follower_id,
         request_ref,
@@ -19,11 +19,11 @@ fn read_quorum_evidence(
     let pending = before
         .pending_reads
         .get(request_ref)
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("read-currentness evidence lost its pending read"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("read-currentness evidence lost its pending read"))?;
     let mut acknowledgement_members = pending.acknowledgements.iter().cloned().collect::<Vec<_>>();
     acknowledgement_members.push(follower_id.clone());
-    let validated = validate_replica_quorum_evidence(&ReplicaQuorumEvidence {
-        boundary: ReplicaQuorumEvidenceBoundary::ReadCurrentness,
+    let validated = validate_replica_quorum(&ReplicaQuorum {
+        boundary: ReplicaQuorumBoundary::ReadCurrentness,
         group_binding_ref: before.profile.group_binding_ref.clone(),
         membership_ref: before.membership.membership_ref.clone(),
         config_epoch: before.membership.config_epoch,

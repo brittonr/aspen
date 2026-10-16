@@ -5,17 +5,17 @@ use super::*;
 const SIMULATION_ENGINE_EPOCH: u64 = 1;
 
 #[derive(Clone, Debug)]
-pub struct ActorSimulationStep {
+pub struct Step {
     pub operation_id: String,
     pub logical_tick: u64,
     pub operation: ActorOperation,
 }
 
 #[derive(Clone, Debug)]
-pub struct ActorSimulationReport {
+pub struct Report {
     pub receipt_refs: Vec<String>,
-    pub final_state: PublishedActorState,
-    pub effect_observations: Vec<ActorEffectObservation>,
+    pub final_state: PublishedState,
+    pub effect_observations: Vec<EffectObservation>,
     pub status_refs: Vec<String>,
     pub deterministic: bool,
     pub authorizes_production: bool,
@@ -26,12 +26,12 @@ pub struct SequenceRunInput<'a> {
     pub actor_key: &'a ActorKey,
     pub system_extension_manifest_ref: &'a str,
     pub placement_ref: &'a str,
-    pub steps: &'a [ActorSimulationStep],
-    pub scripted_effects: &'a [ActorEffectDisposition],
+    pub steps: &'a [Step],
+    pub scripted_effects: &'a [EffectDisposition],
 }
 
 // r[impl molten.addressable_actor.verification]
-pub fn simulate_actor_sequence(input: SequenceRunInput<'_>) -> ActorServiceResult<ActorSimulationReport> {
+pub fn simulate_sequence(input: SequenceRunInput<'_>) -> Result<Report> {
     let SequenceRunInput {
         profile,
         actor_key,
@@ -42,11 +42,11 @@ pub fn simulate_actor_sequence(input: SequenceRunInput<'_>) -> ActorServiceResul
     } = input;
     let actor_key_ref = identify_actor_key(actor_key);
     let profile_ref = identify_addressable_actor_profile(profile);
-    let mut commit = SimulationCommitPort::default();
-    let mut effects = SimulationEffectPort {
+    let mut commit = CommitPort::default();
+    let mut effects = EffectPort {
         scripted: scripted_effects.iter().copied().collect(),
     };
-    let mut statuses = SimulationStatusPort::default();
+    let mut statuses = StatusPort::default();
     let mut receipt_refs = Vec::with_capacity(steps.len());
     // Each step consumes scripted outcomes plus at most one unscripted denial or failure.
     let mut effect_observations = Vec::with_capacity(steps.len().saturating_add(scripted_effects.len()));
@@ -67,7 +67,7 @@ pub fn simulate_actor_sequence(input: SequenceRunInput<'_>) -> ActorServiceResul
         let expected = expected_state(commit.state.as_ref());
         let request = simulated_request(&current, step);
         let host_binding = simulated_host_binding(&current, profile);
-        let outcome = apply_actor_request(&mut commit, &mut effects, &mut statuses, &ActorServiceRequest {
+        let outcome = apply_request(&mut commit, &mut effects, &mut statuses, &Request {
             profile,
             actor_key,
             host_binding: &host_binding,
@@ -79,20 +79,16 @@ pub fn simulate_actor_sequence(input: SequenceRunInput<'_>) -> ActorServiceResul
         effect_observations.extend(outcome.effect_observations);
     }
     if !effects.scripted.is_empty() {
-        return Err(ActorServiceError::Port(ActorPortError::new(
+        return Err(Error::Port(PortError::new(
             "actor-simulation-script",
             "unused scripted effect outcomes remain",
             false,
         )));
     }
     let final_state = commit.state.ok_or_else(|| {
-        ActorServiceError::Port(ActorPortError::new(
-            "actor-simulation-state",
-            "simulation produced no committed actor state",
-            false,
-        ))
+        Error::Port(PortError::new("actor-simulation-state", "simulation produced no committed actor state", false))
     })?;
-    Ok(ActorSimulationReport {
+    Ok(Report {
         receipt_refs,
         final_state,
         effect_observations,
@@ -102,13 +98,13 @@ pub fn simulate_actor_sequence(input: SequenceRunInput<'_>) -> ActorServiceResul
     })
 }
 
-fn expected_state(published: Option<&PublishedActorState>) -> ExpectedActorState {
+fn expected_state(published: Option<&PublishedState>) -> ExpectedState {
     published.map_or(
-        ExpectedActorState {
+        ExpectedState {
             state_ref: None,
             revision: ADDRESSABLE_ACTOR_INITIAL_REVISION,
         },
-        |published| ExpectedActorState {
+        |published| ExpectedState {
             state_ref: Some(published.state_ref.clone()),
             revision: published.revision,
         },
@@ -116,13 +112,13 @@ fn expected_state(published: Option<&PublishedActorState>) -> ExpectedActorState
 }
 
 /// The step's request against the current actor state, with every admission fact current.
-fn simulated_request(current: &ActorState, step: &ActorSimulationStep) -> ActorRequest {
+fn simulated_request(current: &ActorState, step: &Step) -> ActorRequest {
     let admission = ActorAdmissionFacts {
         profile_ref: current.profile_ref.clone(),
         system_extension_manifest_ref: current.system_extension_manifest_ref.clone(),
-        authority_ref: simulation_ref("authority"),
-        resource_ref: simulation_ref("resource"),
-        adapter_ref: simulation_ref("adapter"),
+        authority_ref: r#ref("authority"),
+        resource_ref: r#ref("resource"),
+        adapter_ref: r#ref("adapter"),
         policy_current: true,
         capability_current: true,
         placement_current: true,
@@ -145,8 +141,8 @@ fn simulated_request(current: &ActorState, step: &ActorSimulationStep) -> ActorR
 
 /// Host binding facts for the current actor state under the profile's delivery profile, all
 /// admitted.
-fn simulated_host_binding(current: &ActorState, profile: &AddressableActorProfile) -> ActorHostBindingFacts {
-    ActorHostBindingFacts {
+fn simulated_host_binding(current: &ActorState, profile: &AddressableActorProfile) -> HostBindingFacts {
+    HostBindingFacts {
         schema: ACTOR_HOST_BINDING_SCHEMA.to_string(),
         actor_key_ref: current.actor_key_ref.clone(),
         profile_ref: current.profile_ref.clone(),
@@ -166,56 +162,56 @@ fn simulated_host_binding(current: &ActorState, profile: &AddressableActorProfil
 }
 
 #[derive(Default)]
-struct SimulationCommitPort {
-    state: Option<PublishedActorState>,
+struct CommitPort {
+    state: Option<PublishedState>,
 }
 
-impl ActorCommitPort for SimulationCommitPort {
-    fn load(&self, actor_key_ref: &str) -> ActorPortResult<Option<PublishedActorState>> {
+impl ActorCommitPort for CommitPort {
+    fn load(&self, actor_key_ref: &str) -> PortResult<Option<PublishedState>> {
         if self.state.as_ref().is_some_and(|published| published.state.actor_key_ref != actor_key_ref) {
-            return Err(ActorPortError::new("actor-simulation-key", "simulation actor key crossed state", false));
+            return Err(PortError::new("actor-simulation-key", "simulation actor key crossed state", false));
         }
         Ok(self.state.clone())
     }
 
-    fn compare_and_commit(&mut self, request: &ActorCommitRequest) -> ActorPortResult<ActorCommitObservation> {
-        if !simulation_expected_matches(&request.expected, self.state.as_ref()) {
-            return Ok(ActorCommitObservation {
-                disposition: ActorCommitDisposition::Stale,
-                currentness: ActorCommitCurrentness::Linearizable,
-                durability: ActorDurabilityOutcome::Durable,
+    fn compare_and_commit(&mut self, request: &CommitRequest) -> PortResult<CommitObservation> {
+        if !expected_matches(&request.expected, self.state.as_ref()) {
+            return Ok(CommitObservation {
+                disposition: CommitDisposition::Stale,
+                currentness: CommitCurrentness::Linearizable,
+                durability: DurabilityOutcome::Durable,
                 engine_epoch: SIMULATION_ENGINE_EPOCH,
                 observed_state_ref: self.state.as_ref().map(|published| published.state_ref.clone()),
             });
         }
         if self.state.as_ref() == Some(&request.next) {
-            return Ok(ActorCommitObservation {
-                disposition: ActorCommitDisposition::AlreadyApplied,
-                currentness: ActorCommitCurrentness::Linearizable,
-                durability: ActorDurabilityOutcome::Durable,
+            return Ok(CommitObservation {
+                disposition: CommitDisposition::AlreadyApplied,
+                currentness: CommitCurrentness::Linearizable,
+                durability: DurabilityOutcome::Durable,
                 engine_epoch: SIMULATION_ENGINE_EPOCH,
                 observed_state_ref: Some(request.next.state_ref.clone()),
             });
         }
         self.state = Some(request.next.clone());
-        Ok(ActorCommitObservation {
-            disposition: ActorCommitDisposition::Applied,
-            currentness: ActorCommitCurrentness::Linearizable,
-            durability: ActorDurabilityOutcome::Durable,
+        Ok(CommitObservation {
+            disposition: CommitDisposition::Applied,
+            currentness: CommitCurrentness::Linearizable,
+            durability: DurabilityOutcome::Durable,
             engine_epoch: SIMULATION_ENGINE_EPOCH,
             observed_state_ref: Some(request.next.state_ref.clone()),
         })
     }
 }
 
-struct SimulationEffectPort {
-    scripted: std::collections::VecDeque<ActorEffectDisposition>,
+struct EffectPort {
+    scripted: std::collections::VecDeque<EffectDisposition>,
 }
 
-impl ActorEffectPort for SimulationEffectPort {
-    fn observe_admission(&mut self, effect: &ActorEffectIntent) -> ActorPortResult<ActorEffectAdmissionObservation> {
-        Ok(ActorEffectAdmissionObservation {
-            admission_ref: simulation_ref(&effect.effect_ref),
+impl ActorEffectPort for EffectPort {
+    fn observe_admission(&mut self, effect: &ActorEffectIntent) -> PortResult<EffectAdmissionObservation> {
+        Ok(EffectAdmissionObservation {
+            admission_ref: r#ref(&effect.effect_ref),
             actor_key_ref: effect.actor_key_ref.clone(),
             profile_ref: effect.profile_ref.clone(),
             system_extension_manifest_ref: effect.system_extension_manifest_ref.clone(),
@@ -233,32 +229,33 @@ impl ActorEffectPort for SimulationEffectPort {
     fn execute(
         &mut self,
         effect: &ActorEffectIntent,
-        admission: &ActorEffectAdmissionObservation,
-    ) -> ActorPortResult<ActorEffectObservation> {
-        let disposition = self.scripted.pop_front().ok_or_else(|| {
-            ActorPortError::new("actor-simulation-script", "scripted effect outcome is missing", false)
-        })?;
-        Ok(ActorEffectObservation {
+        admission: &EffectAdmissionObservation,
+    ) -> PortResult<EffectObservation> {
+        let disposition = self
+            .scripted
+            .pop_front()
+            .ok_or_else(|| PortError::new("actor-simulation-script", "scripted effect outcome is missing", false))?;
+        Ok(EffectObservation {
             effect_ref: effect.effect_ref.clone(),
             admission_ref: admission.admission_ref.clone(),
             disposition,
-            outcome_ref: matches!(disposition, ActorEffectDisposition::Succeeded)
-                .then(|| simulation_ref(&format!("outcome:{}", effect.effect_ref))),
+            outcome_ref: matches!(disposition, EffectDisposition::Succeeded)
+                .then(|| r#ref(&format!("outcome:{}", effect.effect_ref))),
         })
     }
 }
 
 #[derive(Default)]
-struct SimulationStatusPort {
+struct StatusPort {
     refs: Vec<String>,
 }
 
-impl ActorStatusPort for SimulationStatusPort {
-    fn publish_status(&mut self, status: &ActorStatus) -> ActorPortResult<ActorStatusObservation> {
-        let status_ref = identify_canonical_actor_status(status)
-            .map_err(|error| ActorPortError::new("actor-simulation-status", error.to_string(), false))?;
+impl ActorStatusPort for StatusPort {
+    fn publish_status(&mut self, status: &ActorStatus) -> PortResult<StatusObservation> {
+        let status_ref = identify_canonical_status(status)
+            .map_err(|error| PortError::new("actor-simulation-status", error.to_string(), false))?;
         self.refs.push(status_ref.clone());
-        Ok(ActorStatusObservation {
+        Ok(StatusObservation {
             status_ref: Some(status_ref),
             outcome_unknown: false,
         })
@@ -277,7 +274,7 @@ fn extension_phase(phase: ActorPhase) -> molten_core::system_extension::Lifecycl
     }
 }
 
-fn simulation_expected_matches(expected: &ExpectedActorState, observed: Option<&PublishedActorState>) -> bool {
+fn expected_matches(expected: &ExpectedState, observed: Option<&PublishedState>) -> bool {
     match (&expected.state_ref, observed) {
         (None, None) => expected.revision == ADDRESSABLE_ACTOR_INITIAL_REVISION,
         (Some(expected_ref), Some(observed)) => {
@@ -287,7 +284,7 @@ fn simulation_expected_matches(expected: &ExpectedActorState, observed: Option<&
     }
 }
 
-fn simulation_ref(label: &str) -> String {
+fn r#ref(label: &str) -> String {
     let mut hasher = blake3::Hasher::new_derive_key("onixresearch.molten.addressable-actor-simulation-reference.v1");
     hasher.update(label.as_bytes());
     format!("blake3:{}", hasher.finalize().to_hex())

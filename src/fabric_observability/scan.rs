@@ -1,16 +1,16 @@
 use super::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ScanShellControl {
+pub struct ShellControl {
     pub max_items: usize,
     pub max_item_bytes: u64,
     pub cancelled: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DurableScanBinding {
+pub struct DurableBinding {
     pub item_ref: String,
-    pub path: crate::node_state::NodeStatePath,
+    pub path: crate::node_state::RelativePath,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,22 +25,22 @@ pub trait ReadOnlyContentSource {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ScanExecution {
-    pub observations: Vec<CanonicalArtifact<ScanObservation>>,
-    pub result: CanonicalArtifact<IntegrityResult>,
+pub struct IntegrityReadback {
+    pub observations: Vec<Artifact<ScanObservation>>,
+    pub result: Artifact<IntegrityResult>,
 }
 
 // r[impl molten.fabric_observability.integrity_readonly]
 // r[impl molten.fabric_observability.adapter_contract]
-pub fn scan_durable_namespace(
+pub fn durable_namespace(
     profile: &ObservationProfile,
     plan: &IntegrityPlan,
-    namespace: &crate::node_state::NodeStateNamespace,
-    bindings: &[DurableScanBinding],
-    control: &ScanShellControl,
-) -> crate::error::Result<ScanExecution> {
-    canonical_integrity_plan(profile, plan)?;
-    validate_scan_control(profile, plan, control)?;
+    namespace: &crate::node_state::Scope,
+    bindings: &[DurableBinding],
+    control: &ShellControl,
+) -> crate::error::Result<IntegrityReadback> {
+    integrity_plan(profile, plan)?;
+    validate_control(profile, plan, control)?;
     let binding_index = index_bindings(plan, bindings)?;
     let mut observations = Vec::new();
     if !control.cancelled {
@@ -52,18 +52,18 @@ pub fn scan_durable_namespace(
             observations.push(observation);
         }
     }
-    finish_scan(profile, plan, observations, control.cancelled)
+    finish(profile, plan, observations, control.cancelled)
 }
 
 // r[impl molten.fabric_observability.integrity_readonly]
-pub fn scan_content_source(
+pub fn content_source(
     profile: &ObservationProfile,
     plan: &IntegrityPlan,
     source: &dyn ReadOnlyContentSource,
-    control: &ScanShellControl,
-) -> crate::error::Result<ScanExecution> {
-    canonical_integrity_plan(profile, plan)?;
-    validate_scan_control(profile, plan, control)?;
+    control: &ShellControl,
+) -> crate::error::Result<IntegrityReadback> {
+    integrity_plan(profile, plan)?;
+    validate_control(profile, plan, control)?;
     let mut observations = Vec::new();
     if !control.cancelled {
         for target in plan.targets.iter().take(control.max_items) {
@@ -71,32 +71,32 @@ pub fn scan_content_source(
             observations.push(observation_from_source(plan, target, source_observation));
         }
     }
-    finish_scan(profile, plan, observations, control.cancelled)
+    finish(profile, plan, observations, control.cancelled)
 }
 
-fn validate_scan_control(
+fn validate_control(
     profile: &ObservationProfile,
     plan: &IntegrityPlan,
-    control: &ScanShellControl,
+    control: &ShellControl,
 ) -> crate::error::Result<()> {
     if control.max_items == 0 || control.max_items > plan.max_items || control.max_items > profile.bounds.max_scan_items
     {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "integrity scan item bound exceeds the admitted plan or profile",
         ));
     }
     if control.max_item_bytes == 0 {
-        return Err(crate::error::MoltenError::invalid_harness("integrity scan byte bound must be positive"));
+        return Err(crate::error::Failure::invalid_harness("integrity scan byte bound must be positive"));
     }
     Ok(())
 }
 
 fn index_bindings<'a>(
     plan: &IntegrityPlan,
-    bindings: &'a [DurableScanBinding],
-) -> crate::error::Result<std::collections::BTreeMap<String, &'a DurableScanBinding>> {
+    bindings: &'a [DurableBinding],
+) -> crate::error::Result<std::collections::BTreeMap<String, &'a DurableBinding>> {
     if bindings.len() > plan.max_items {
-        return Err(crate::error::MoltenError::invalid_harness("durable scan binding count exceeds the admitted plan"));
+        return Err(crate::error::Failure::invalid_harness("durable scan binding count exceeds the admitted plan"));
     }
     let declared = plan
         .targets
@@ -106,12 +106,12 @@ fn index_bindings<'a>(
     let mut index = std::collections::BTreeMap::new();
     for binding in bindings {
         if !declared.contains(binding.item_ref.as_str()) {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "durable scan binding is outside the admitted integrity plan",
             ));
         }
         if index.insert(binding.item_ref.clone(), binding).is_some() {
-            return Err(crate::error::MoltenError::invalid_harness("duplicate durable scan binding item ref"));
+            return Err(crate::error::Failure::invalid_harness("duplicate durable scan binding item ref"));
         }
     }
     Ok(index)
@@ -120,29 +120,29 @@ fn index_bindings<'a>(
 fn observe_node_state_target(
     plan: &IntegrityPlan,
     target: &IntegrityTarget,
-    namespace: &crate::node_state::NodeStateNamespace,
-    binding: &DurableScanBinding,
+    namespace: &crate::node_state::Scope,
+    binding: &DurableBinding,
     max_bytes: u64,
 ) -> ScanObservation {
     let source = match namespace.observe_file(&binding.path) {
-        Ok(crate::node_state::NodeStateFileObservation::Missing) => ReadOnlyContentObservation {
+        Ok(crate::node_state::FileObservation::Missing) => ReadOnlyContentObservation {
             status: ScanItemStatus::Missing,
             bytes: None,
             evidence_refs: Vec::new(),
         },
-        Ok(crate::node_state::NodeStateFileObservation::NonRegular(_)) => ReadOnlyContentObservation {
+        Ok(crate::node_state::FileObservation::NonRegular(_)) => ReadOnlyContentObservation {
             status: ScanItemStatus::Unsupported,
             bytes: None,
             evidence_refs: Vec::new(),
         },
-        Ok(crate::node_state::NodeStateFileObservation::Regular(file)) if file.size() > max_bytes => {
+        Ok(crate::node_state::FileObservation::Regular(file)) if file.size() > max_bytes => {
             ReadOnlyContentObservation {
                 status: ScanItemStatus::OverBound,
                 bytes: None,
                 evidence_refs: Vec::new(),
             }
         }
-        Ok(crate::node_state::NodeStateFileObservation::Regular(file)) => match file.read_bounded(max_bytes) {
+        Ok(crate::node_state::FileObservation::Regular(file)) => match file.read_bounded(max_bytes) {
             Ok(bytes) => ReadOnlyContentObservation {
                 status: ScanItemStatus::Present,
                 bytes: Some(bytes),
@@ -170,7 +170,7 @@ fn observation_from_source(
 ) -> ScanObservation {
     let observed_content_ref = source.bytes.as_deref().map(crate::preserves_rail::content_ref_from_bytes);
     let observed_length = source.bytes.as_ref().and_then(|bytes| u64::try_from(bytes.len()).ok());
-    let observation_ref = scan_observation_ref(
+    let observation_ref = observation_ref(
         &plan.plan_ref,
         &target.item_ref,
         source.status,
@@ -198,12 +198,12 @@ fn missing_observation(plan: &IntegrityPlan, target: &IntegrityTarget) -> ScanOb
     })
 }
 
-fn finish_scan(
+fn finish(
     profile: &ObservationProfile,
     plan: &IntegrityPlan,
     observations: Vec<ScanObservation>,
     cancelled: bool,
-) -> crate::error::Result<ScanExecution> {
+) -> crate::error::Result<IntegrityReadback> {
     let completion = ScanCompletion {
         scanned_items: observations.len(),
         declared_items: plan.targets.len(),
@@ -214,15 +214,15 @@ fn finish_scan(
     let result = evaluate_integrity_plan(profile, plan, &observations, &completion);
     let canonical_observations = observations
         .iter()
-        .map(|observation| canonical_scan_observation(plan, observation))
+        .map(|observation| scan_observation(plan, observation))
         .collect::<crate::error::Result<Vec<_>>>()?;
-    Ok(ScanExecution {
+    Ok(IntegrityReadback {
         observations: canonical_observations,
-        result: canonical_integrity_result(profile, &result)?,
+        result: integrity_result(profile, &result)?,
     })
 }
 
-fn scan_observation_ref(
+fn observation_ref(
     plan_ref: &str,
     item_ref: &str,
     status: ScanItemStatus,

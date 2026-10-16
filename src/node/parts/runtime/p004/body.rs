@@ -42,7 +42,7 @@ fn ensure_count_at_most(actual: usize, maximum: usize, field: &str) -> Result<()
 }
 
 fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maximum: usize, field: &str) -> Result<()> {
-    crate::bounded::push_bounded(values, value, maximum, field)
+    crate::bounded::push(values, value, maximum, field)
 }
 
 fn validate_non_empty(value: &str, field: &str) -> Result<()> {
@@ -62,4 +62,7 @@ mod tests {
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/runtime/tests/m000/p000/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/runtime/tests/m000/p001/body.rs"));
     include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/runtime/tests/m000/p002/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/runtime/tests/m000/p003/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/runtime/tests/m000/p004/body.rs"));
+    include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/runtime/tests/m000/p005/body.rs"));
 }

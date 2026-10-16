@@ -1,6 +1,6 @@
 
 fn gc_receipt_value(input: GcReceiptInput<'_>) -> IoValue {
-    receipt_value(ChunkStoreReceiptValueInput {
+    receipt_value(ChunkReceiptValueInput {
         operation: "gc",
         decision: input.decision,
         manifest_ref: None,
@@ -42,7 +42,7 @@ fn gc_tombstone_value(input: GcReceiptInput<'_>) -> Option<IoValue> {
     {
         return None;
     }
-    Some(self::receipt_value(ChunkStoreReceiptValueInput {
+    Some(self::receipt_value(ChunkReceiptValueInput {
         operation: "tombstone",
         decision: "pass",
         manifest_ref: None,

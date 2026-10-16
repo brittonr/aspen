@@ -29,7 +29,7 @@ is not yet enrolled, licensed into the tree, or connected to Molten admission.
   and the two-process end-to-end demo, recorded as repo-owned evidence. r[molten.batch_orchestration.validation]
 - Run the guarded reference scheduler patch (`lease_epoch`) against the exact base
   commit and pass `scripts/reference-tests.sh` with repository dependencies. r[molten.batch_orchestration.reference]
-- Keep the pilot outside the admitted system: no `SystemExtensionHost` registration, no
+- Keep the pilot outside the admitted system: no `system_extension::Dispatcher` registration, no
   root-workspace membership, no ALPN registry change, no invented Basalt/Cairn
   admission receipts, and a distinct named deployment profile with its own database. r[molten.batch_orchestration.boundary]
 - Define the native integration plan from `docs/MOLTEN-INTEGRATION.md` as explicit,

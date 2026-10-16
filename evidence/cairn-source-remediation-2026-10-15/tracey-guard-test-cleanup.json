@@ -1,0 +1,9 @@
+{
+  "attempt": "5/20",
+  "prior_snapshot": "tracey-identities-after-direct-repairs.json",
+  "subsequent_change": "Removed the wording-only non_claim_is_bound_to_the_guard test from tools/tracey/inherited_debt_guard.rs; no guard decision logic, reviewed baseline, or accepted specification changed.",
+  "command": "nix develop -c rustc --edition=2024 --test tools/tracey/inherited_debt_guard.rs -o <task-owned-binary> && <task-owned-binary>",
+  "tests": {"passed": 4, "failed": 0, "ignored": 0},
+  "exercised_behaviors": ["exact baseline admission", "drift and dangling rejection", "missing requirement root rejection", "malformed markers and baseline rejection"],
+  "non_claim": "Behavioral self-tests do not resolve the separately recorded live-tree traceability blockers or authorize lifecycle promotion."
+}

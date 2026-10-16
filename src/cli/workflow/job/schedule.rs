@@ -1,4 +1,4 @@
-type MoltenError = molten::error::MoltenError;
+type MoltenError = molten::error::Failure;
 type Path = std::path::Path;
 type Result<T> = molten::error::Result<T>;
 type ScheduleLocal = super::command::worker::ScheduleLocal;

@@ -1,0 +1,176 @@
+{
+  "command": [
+    "/tmp/molten-attempts-6-7-l6bgn98w/cairn-provider/bin/cairn",
+    "archive",
+    "support-active-delta-traceability-before-sync",
+    "--execute",
+    "--root",
+    ".",
+    "--policy",
+    "/home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "exit_code": 0,
+  "stderr": "",
+  "result": {
+    "acceptance_ids": [],
+    "actions": [
+      {
+        "description": "move active change to archive: support-active-delta-traceability-before-sync",
+        "kind": "archive_change",
+        "path": "./.cairn/archive/1970-01-01-support-active-delta-traceability-before-sync"
+      }
+    ],
+    "blocked": false,
+    "change": "support-active-delta-traceability-before-sync",
+    "cross_repo_dependencies": {
+      "blocked_count": 0,
+      "dependency_count": 0,
+      "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+      "non_claims": [
+        "dependency satisfaction proves presented receipt linkage only",
+        "dependency satisfaction does not prove upstream correctness or remote trust",
+        "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+      ],
+      "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+      "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+      "rows": [],
+      "satisfied_count": 0,
+      "schema": "cairn.cross-repo-dependency-receipt.v1",
+      "valid": true,
+      "verdict": "PASS"
+    },
+    "cross_repo_evidence_issues": [],
+    "dry_run": false,
+    "input_hash": "a9711df270e9d26af941ee055e5335eee30013b4a2d4c9d28340c204a77e71a8",
+    "layout": "cairn",
+    "mutated": true,
+    "mutation_manifest": {
+      "after": {
+        "entries": [
+          {
+            "content_hash": "7a7c4d62c10af8265817c9f68088d43d4a4b8607e215d2375100436b4a7001b3",
+            "exists": true,
+            "path": "./.cairn/archive/1970-01-01-support-active-delta-traceability-before-sync/design.md"
+          },
+          {
+            "content_hash": "342d787580611f25ddcf42a088f94a09d8a84a9e5413af05648e2e425b03e90e",
+            "exists": true,
+            "path": "./.cairn/archive/1970-01-01-support-active-delta-traceability-before-sync/evidence/2026-10-15-archive-preflight.json"
+          },
+          {
+            "content_hash": "2aef676a638ecec7d593de2894919dd2562044398efca46fa0872e3e89b5ad0d",
+            "exists": true,
+            "path": "./.cairn/archive/1970-01-01-support-active-delta-traceability-before-sync/evidence/2026-10-15-guard-runtime.json"
+          },
+          {
+            "content_hash": "f63071e1814877ae48c9be73cf14eb3f4aba9cfa46bfa5f9e69c0ff0ea4fe536",
+            "exists": true,
+            "path": "./.cairn/archive/1970-01-01-support-active-delta-traceability-before-sync/evidence/2026-10-15-native-gates-and-review.json"
+          },
+          {
+            "content_hash": "e05d1d3852e239ad4b1144f931cfb45c13da02cd498363bd0553b19eeee2bc7a",
+            "exists": true,
+            "path": "./.cairn/archive/1970-01-01-support-active-delta-traceability-before-sync/evidence/2026-10-15-sync-preflight.json"
+          },
+          {
+            "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+            "exists": true,
+            "path": "./.cairn/archive/1970-01-01-support-active-delta-traceability-before-sync/metadata.json"
+          },
+          {
+            "content_hash": "92300064655771234693cb43e7cad50b54c4d5f10a8c1e9b7deeeabfe1547d4d",
+            "exists": true,
+            "path": "./.cairn/archive/1970-01-01-support-active-delta-traceability-before-sync/proposal.md"
+          },
+          {
+            "content_hash": "d919a21b733830d4b05d982f3cab2c126d7650034008a1fa71572002bd16b8c7",
+            "exists": true,
+            "path": "./.cairn/archive/1970-01-01-support-active-delta-traceability-before-sync/specs/project/spec.md"
+          },
+          {
+            "content_hash": "1ac7649b2ae4d65fdeeaab6323961bbaf31aa020a233ca2a5cf9d07029446cd0",
+            "exists": true,
+            "path": "./.cairn/archive/1970-01-01-support-active-delta-traceability-before-sync/tasks.md"
+          },
+          {
+            "content_hash": null,
+            "exists": false,
+            "path": "./.cairn/changes/support-active-delta-traceability-before-sync"
+          }
+        ],
+        "manifest_hash": "f9bb5c1a4290c5b84b15d2a6cc62e9a6c75b7a61860dc48c0d8d12fe11af72af"
+      },
+      "before": {
+        "entries": [
+          {
+            "content_hash": "7a7c4d62c10af8265817c9f68088d43d4a4b8607e215d2375100436b4a7001b3",
+            "exists": true,
+            "path": "./.cairn/changes/support-active-delta-traceability-before-sync/design.md"
+          },
+          {
+            "content_hash": "342d787580611f25ddcf42a088f94a09d8a84a9e5413af05648e2e425b03e90e",
+            "exists": true,
+            "path": "./.cairn/changes/support-active-delta-traceability-before-sync/evidence/2026-10-15-archive-preflight.json"
+          },
+          {
+            "content_hash": "2aef676a638ecec7d593de2894919dd2562044398efca46fa0872e3e89b5ad0d",
+            "exists": true,
+            "path": "./.cairn/changes/support-active-delta-traceability-before-sync/evidence/2026-10-15-guard-runtime.json"
+          },
+          {
+            "content_hash": "f63071e1814877ae48c9be73cf14eb3f4aba9cfa46bfa5f9e69c0ff0ea4fe536",
+            "exists": true,
+            "path": "./.cairn/changes/support-active-delta-traceability-before-sync/evidence/2026-10-15-native-gates-and-review.json"
+          },
+          {
+            "content_hash": "e05d1d3852e239ad4b1144f931cfb45c13da02cd498363bd0553b19eeee2bc7a",
+            "exists": true,
+            "path": "./.cairn/changes/support-active-delta-traceability-before-sync/evidence/2026-10-15-sync-preflight.json"
+          },
+          {
+            "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+            "exists": true,
+            "path": "./.cairn/changes/support-active-delta-traceability-before-sync/metadata.json"
+          },
+          {
+            "content_hash": "92300064655771234693cb43e7cad50b54c4d5f10a8c1e9b7deeeabfe1547d4d",
+            "exists": true,
+            "path": "./.cairn/changes/support-active-delta-traceability-before-sync/proposal.md"
+          },
+          {
+            "content_hash": "d919a21b733830d4b05d982f3cab2c126d7650034008a1fa71572002bd16b8c7",
+            "exists": true,
+            "path": "./.cairn/changes/support-active-delta-traceability-before-sync/specs/project/spec.md"
+          },
+          {
+            "content_hash": "1ac7649b2ae4d65fdeeaab6323961bbaf31aa020a233ca2a5cf9d07029446cd0",
+            "exists": true,
+            "path": "./.cairn/changes/support-active-delta-traceability-before-sync/tasks.md"
+          }
+        ],
+        "manifest_hash": "95528623de1ba25d4d8bc317b43c060bb9e62e04b5ef15d7003c4214a4d0c983"
+      },
+      "kind": "archive",
+      "manifest_hash": "8213369bb8b0b4cec7d8e7b85d6ac1de1efc6257083de1f5a78eafbff20f812f"
+    },
+    "non_claims": [
+      "workflow state proves only the selected policy graph and observed structural artifact facts",
+      "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+      "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+      "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+    ],
+    "plan_hash": "a93c102d7570024973ba5d49abc483f3ba49f1bc1da4c8b329fc5a0f5be73c7e",
+    "policy": "cairn-default",
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "profile_identity_hash": "71ac21f2531c050fcda6c61ce18916ecdfe8e2eb036565edc9dc12d4beec2f6a",
+    "reasons": [],
+    "receipt_hash": "43126a574a293b0fa8c488c8d88610d1a30b29dfc502d28eaa6c60d7fd6a3ed8",
+    "review_receipt_hashes": [],
+    "spec_effect": "delta",
+    "workflow_profile": "spec-driven",
+    "workflow_profile_compatibility_fallback": false,
+    "workflow_profile_source": "change_create",
+    "workflow_profile_version": 1
+  }
+}

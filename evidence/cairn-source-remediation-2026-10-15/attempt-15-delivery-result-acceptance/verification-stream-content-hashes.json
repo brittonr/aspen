@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "b3sum",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/positive-stdout.txt",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/positive-stderr.txt",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/negative-stdout.txt",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/negative-stderr.txt"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T17:35:52.337521+00:00",
+  "elapsed_seconds": 0.003,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "00947af1841a8fce0ea9cd136ace30cafa9a6ec0c34eda1475c6ec4889b34de6  /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/positive-stdout.txt\naf1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262  /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/positive-stderr.txt\n00947af1841a8fce0ea9cd136ace30cafa9a6ec0c34eda1475c6ec4889b34de6  /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/negative-stdout.txt\nb246c42bfaaa34f4243955fabd9a5c4feafc8d8f4a4e14cb60ca2aa9f614094d  /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/negative-stderr.txt\n",
+  "stderr": ""
+}

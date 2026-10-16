@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "node",
+    "control-dispatch",
+    "--state-root",
+    "/tmp/molten-shutdown-admission-14-8na4_8eo/state",
+    "--receipt-out",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-14-shutdown-admission-acceptance/missing-authority-dispatch.preserves"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T16:54:35.397727+00:00",
+  "elapsed_seconds": 0.054,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "node control receipt blake3:abd47735fe8c676b9260c86c92607f40f27a0743ef3e1ff442ddaf359e5d0dec written to /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-14-shutdown-admission-acceptance/missing-authority-dispatch.preserves\nnode control dispatch operation=shutdown request=blake3:d6a10f608a7bd4370389bbf909a7143b6ff4236dbdfdd78fc559b8bed677bf76 control_receipt=blake3:abd47735fe8c676b9260c86c92607f40f27a0743ef3e1ff442ddaf359e5d0dec subreceipts=1\n",
+  "stderr": ""
+}

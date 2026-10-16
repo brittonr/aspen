@@ -250,14 +250,14 @@ impl ExtensionRoleLifecyclePort for RecordingLifecycle {
 #[test]
 fn static_and_simulated_providers_share_canonical_contracts() {
     let static_snapshot = provider_snapshot(MembershipProviderKind::Static);
-    let mut static_provider = StaticMembershipProvider::new(static_snapshot).expect("static provider");
+    let mut static_provider = StaticProvider::new(static_snapshot).expect("static provider");
     let static_admitted = observe_provider(&mut static_provider).expect("observe static");
     assert_eq!(static_admitted.membership.admitted.view.epoch, VIEW_EPOCH);
     assert!(static_admitted.failures.observations.is_empty());
 
     let simulation_snapshot = provider_snapshot(MembershipProviderKind::DeterministicSimulation);
     let mut simulation_provider =
-        DeterministicSimulationMembershipProvider::new(vec![simulation_snapshot]).expect("simulation provider");
+        DeterministicSimulationProvider::new(vec![simulation_snapshot]).expect("simulation provider");
     let simulation_admitted = observe_provider(&mut simulation_provider).expect("observe simulation");
     assert_eq!(
         simulation_admitted.membership.admitted.view.members,
@@ -267,7 +267,7 @@ fn static_and_simulated_providers_share_canonical_contracts() {
     let exhausted = observe_provider(&mut simulation_provider).expect_err("bounded deterministic stream");
     assert!(exhausted.to_string().contains("snapshot stream is exhausted"));
 
-    let wrong_kind = StaticMembershipProvider::new(provider_snapshot(MembershipProviderKind::PolicyManaged))
+    let wrong_kind = StaticProvider::new(provider_snapshot(MembershipProviderKind::PolicyManaged))
         .expect_err("adapter/profile mismatch denied");
     assert!(wrong_kind.contains("does not match adapter"));
 
@@ -276,7 +276,7 @@ fn static_and_simulated_providers_share_canonical_contracts() {
     drifted.view.epoch = VIEW_EPOCH + 1;
     drifted.profile.profile_ref = test_ref("drifted-simulation-profile");
     drifted.view.source_profile_ref = drifted.profile.profile_ref.clone();
-    let drift = DeterministicSimulationMembershipProvider::new(vec![first, drifted])
+    let drift = DeterministicSimulationProvider::new(vec![first, drifted])
         .expect_err("simulation source profile drift denied");
     assert!(drift.contains("cannot drift source profile"));
 }

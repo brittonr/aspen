@@ -4440,6 +4440,7 @@ dependencies = [
  "steel-core",
  "syndicate",
  "tar",
+ "tempfile",
  "tokio",
  "toml",
  "tracing",

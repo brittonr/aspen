@@ -1,0 +1,159 @@
+{
+  "artifacts": [
+    {
+      "label": "final-cli-positive--completion",
+      "observed_run": "final-cli-positive.json",
+      "text": "evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--completion.preserves",
+      "packed": "evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--completion.packed",
+      "content_ref": "blake3:3df11c4a2519892f8886d52e6387de54965ace07b2e519e507e9b83dae8c2c45",
+      "pack_argv": [
+        "/tmp/molten-f14-current-run-16-restored-se51n6m8/traceability",
+        "pack",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--completion.preserves",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--completion.packed"
+      ],
+      "pack_exit": 0,
+      "hash_argv": [
+        "b3sum",
+        "--no-names",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--completion.packed"
+      ]
+    },
+    {
+      "label": "final-cli-positive--current_loop",
+      "observed_run": "final-cli-positive.json",
+      "text": "evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--current_loop.preserves",
+      "packed": "evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--current_loop.packed",
+      "content_ref": "blake3:781cd28c8b150daf7e1f106ae0d3ec5365d4b635a342aecbc50c856ee00661ca",
+      "pack_argv": [
+        "/tmp/molten-f14-current-run-16-restored-se51n6m8/traceability",
+        "pack",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--current_loop.preserves",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--current_loop.packed"
+      ],
+      "pack_exit": 0,
+      "hash_argv": [
+        "b3sum",
+        "--no-names",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--current_loop.packed"
+      ]
+    },
+    {
+      "label": "final-cli-positive--current_run",
+      "observed_run": "final-cli-positive.json",
+      "text": "evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--current_run.preserves",
+      "packed": "evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--current_run.packed",
+      "content_ref": "blake3:de3e591890996904083388ec509cdf51fbc856d741d4a416f823642f918fbf44",
+      "pack_argv": [
+        "/tmp/molten-f14-current-run-16-restored-se51n6m8/traceability",
+        "pack",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--current_run.preserves",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--current_run.packed"
+      ],
+      "pack_exit": 0,
+      "hash_argv": [
+        "b3sum",
+        "--no-names",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--current_run.packed"
+      ]
+    },
+    {
+      "label": "final-cli-positive--duplicate_loop",
+      "observed_run": "final-cli-positive.json",
+      "text": "evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--duplicate_loop.preserves",
+      "packed": "evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--duplicate_loop.packed",
+      "content_ref": "blake3:4fe36e576fd03618ec3b2d861f6d1be49386175502ee834ca26c31da4b45090a",
+      "pack_argv": [
+        "/tmp/molten-f14-current-run-16-restored-se51n6m8/traceability",
+        "pack",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--duplicate_loop.preserves",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--duplicate_loop.packed"
+      ],
+      "pack_exit": 0,
+      "hash_argv": [
+        "b3sum",
+        "--no-names",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--duplicate_loop.packed"
+      ]
+    },
+    {
+      "label": "final-cli-positive--first_loop",
+      "observed_run": "final-cli-positive.json",
+      "text": "evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--first_loop.preserves",
+      "packed": "evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--first_loop.packed",
+      "content_ref": "blake3:c681195ccc929b13f2211cbcd275b4a660810efd2e4e706a0a4cc12b5d926887",
+      "pack_argv": [
+        "/tmp/molten-f14-current-run-16-restored-se51n6m8/traceability",
+        "pack",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--first_loop.preserves",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--first_loop.packed"
+      ],
+      "pack_exit": 0,
+      "hash_argv": [
+        "b3sum",
+        "--no-names",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-cli-positive--first_loop.packed"
+      ]
+    },
+    {
+      "label": "final-reviewed-cli-positive-canonical-pending--completed-with-pending",
+      "observed_run": "final-reviewed-cli-positive-canonical-pending.json",
+      "text": "evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-reviewed-cli-positive-canonical-pending--completed-with-pending.preserves",
+      "packed": "evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-reviewed-cli-positive-canonical-pending--completed-with-pending.packed",
+      "content_ref": "blake3:63e8124403bb3f24b9d888740cd1e246b88ac61a8a0944236da58e5230a12731",
+      "pack_argv": [
+        "/tmp/molten-f14-current-run-16-restored-se51n6m8/traceability",
+        "pack",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-reviewed-cli-positive-canonical-pending--completed-with-pending.preserves",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-reviewed-cli-positive-canonical-pending--completed-with-pending.packed"
+      ],
+      "pack_exit": 0,
+      "hash_argv": [
+        "b3sum",
+        "--no-names",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-reviewed-cli-positive-canonical-pending--completed-with-pending.packed"
+      ]
+    },
+    {
+      "label": "final-reviewed-cli-positive-canonical-pending--repeat-stop-completion",
+      "observed_run": "final-reviewed-cli-positive-canonical-pending.json",
+      "text": "evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-reviewed-cli-positive-canonical-pending--repeat-stop-completion.preserves",
+      "packed": "evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-reviewed-cli-positive-canonical-pending--repeat-stop-completion.packed",
+      "content_ref": "blake3:c24257ead4c2683ef65771ef18ef0b4de50573bc9533d81009a2d3b920a96d9a",
+      "pack_argv": [
+        "/tmp/molten-f14-current-run-16-restored-se51n6m8/traceability",
+        "pack",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-reviewed-cli-positive-canonical-pending--repeat-stop-completion.preserves",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-reviewed-cli-positive-canonical-pending--repeat-stop-completion.packed"
+      ],
+      "pack_exit": 0,
+      "hash_argv": [
+        "b3sum",
+        "--no-names",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-reviewed-cli-positive-canonical-pending--repeat-stop-completion.packed"
+      ]
+    },
+    {
+      "label": "final-reviewed-cli-expected-deny--unresolved-service",
+      "observed_run": "final-reviewed-cli-expected-deny.json",
+      "text": "evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-reviewed-cli-expected-deny--unresolved-service.preserves",
+      "packed": "evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-reviewed-cli-expected-deny--unresolved-service.packed",
+      "content_ref": "blake3:22570382e1e073f9dbd697083e925c278de5587262734a4955491cc30fdda328",
+      "pack_argv": [
+        "/tmp/molten-f14-current-run-16-restored-se51n6m8/traceability",
+        "pack",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-reviewed-cli-expected-deny--unresolved-service.preserves",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-reviewed-cli-expected-deny--unresolved-service.packed"
+      ],
+      "pack_exit": 0,
+      "hash_argv": [
+        "b3sum",
+        "--no-names",
+        "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/canonical-observations/final-reviewed-cli-expected-deny--unresolved-service.packed"
+      ]
+    }
+  ],
+  "equal_startup_across_actual_restart": "blake3:c2e7c9690f9124a52283deccf7e3b25817019bc74d1ded791943afe448b1117d",
+  "completion_run_matches_current_binding_content_ref": true,
+  "duplicate_preserves_original_dispatch_ref": true
+}

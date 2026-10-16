@@ -10,14 +10,14 @@ const WAKE_EFFECT_COUNT: usize = 2;
 #[test]
 fn service_commits_before_each_freshly_admitted_wake_effect() {
     let profile = profile();
-    let actor_key = actor_key();
+    let actor_key = key();
     let initial = initial_state(&profile, &actor_key);
     let request = request(&initial, "wake-message", INITIAL_TICK, ActorOperation::Wake { reason: message_wake() });
     let host = host_binding(&profile, &initial);
     let mut commit = MemoryCommitPort::new(CommitMode::Apply);
     let mut effects = MemoryEffectPort::succeeding(WAKE_EFFECT_COUNT);
     let mut statuses = MemoryStatusPort::default();
-    let outcome = apply_actor_request(&mut commit, &mut effects, &mut statuses, &ActorServiceRequest {
+    let outcome = apply_request(&mut commit, &mut effects, &mut statuses, &Request {
         profile: &profile,
         actor_key: &actor_key,
         host_binding: &host,
@@ -27,7 +27,7 @@ fn service_commits_before_each_freshly_admitted_wake_effect() {
     })
     .expect("wake actor");
 
-    assert_eq!(outcome.receipt.status, ActorServiceStatus::Applied);
+    assert_eq!(outcome.receipt.status, ServiceStatus::Applied);
     assert_eq!(outcome.final_state.state.phase, ActorPhase::Starting);
     assert_eq!(effects.admission_calls, WAKE_EFFECT_COUNT);
     assert_eq!(effects.execution_calls, WAKE_EFFECT_COUNT);
@@ -36,7 +36,7 @@ fn service_commits_before_each_freshly_admitted_wake_effect() {
         outcome
             .effect_observations
             .iter()
-            .all(|observation| observation.disposition == ActorEffectDisposition::Succeeded)
+            .all(|observation| observation.disposition == EffectDisposition::Succeeded)
     );
     assert_eq!(statuses.status_refs.len(), 1);
     assert!(!outcome.receipt.bytes.is_empty());
@@ -45,7 +45,7 @@ fn service_commits_before_each_freshly_admitted_wake_effect() {
 #[test]
 fn stale_host_generation_denies_before_storage_or_effects() {
     let profile = profile();
-    let actor_key = actor_key();
+    let actor_key = key();
     let initial = initial_state(&profile, &actor_key);
     let request = request(&initial, "wake-message", INITIAL_TICK, ActorOperation::Wake { reason: message_wake() });
     let mut host = host_binding(&profile, &initial);
@@ -53,7 +53,7 @@ fn stale_host_generation_denies_before_storage_or_effects() {
     let mut commit = MemoryCommitPort::new(CommitMode::Apply);
     let mut effects = MemoryEffectPort::succeeding(WAKE_EFFECT_COUNT);
     let mut statuses = MemoryStatusPort::default();
-    let error = apply_actor_request(&mut commit, &mut effects, &mut statuses, &ActorServiceRequest {
+    let error = apply_request(&mut commit, &mut effects, &mut statuses, &Request {
         profile: &profile,
         actor_key: &actor_key,
         host_binding: &host,
@@ -63,30 +63,28 @@ fn stale_host_generation_denies_before_storage_or_effects() {
     })
     .expect_err("stale host generation");
 
-    assert_eq!(error, ActorServiceError::Host(ActorIssue::SystemExtensionGenerationMismatch));
+    assert_eq!(error, Error::Host(ActorIssue::SystemExtensionGenerationMismatch));
     assert_eq!(commit.compare_calls, 0);
     assert_eq!(effects.execution_calls, 0);
 }
 
 // r[verify molten.addressable_actor.verification]
 #[test]
-fn capability_rooted_store_reopens_exact_actor_state() {
+fn capability_rooted_store_reopens_exact_state() {
     let temporary = cap_tempfile::tempdir(cap_std::ambient_authority()).expect("temporary actor root");
-    let root = molten_node_host::node_state::NodeStateRoot::from_dir(temporary.try_clone().expect("clone actor root"));
+    let root = molten_node_host::node_state::DirectoryRoot::from_dir(temporary.try_clone().expect("clone actor root"));
     root.create_layout().expect("node state layout");
-    let storage = root
-        .namespace(molten_node_host::node_state::NodeStateNamespaceKind::Storage)
-        .expect("storage namespace");
+    let storage = root.namespace(molten_node_host::node_state::NamespaceKind::Storage).expect("storage namespace");
     let profile = profile();
-    let actor_key = actor_key();
+    let actor_key = key();
     let initial = initial_state(&profile, &actor_key);
     let actor_key_ref = initial.actor_key_ref.clone();
     let request = request(&initial, "wake-message", INITIAL_TICK, ActorOperation::Wake { reason: message_wake() });
     let mut effects = MemoryEffectPort::succeeding(WAKE_EFFECT_COUNT);
     let mut statuses = MemoryStatusPort::default();
     let expected_state_ref = {
-        let mut store = LocalActorStore::open(&storage, ENGINE_EPOCH).expect("actor store");
-        let outcome = apply_actor_request(&mut store, &mut effects, &mut statuses, &ActorServiceRequest {
+        let mut store = Local::open(&storage, ENGINE_EPOCH).expect("actor store");
+        let outcome = apply_request(&mut store, &mut effects, &mut statuses, &Request {
             profile: &profile,
             actor_key: &actor_key,
             host_binding: &host_binding(&profile, &initial),
@@ -97,7 +95,7 @@ fn capability_rooted_store_reopens_exact_actor_state() {
         .expect("persist actor wake");
         outcome.final_state.state_ref
     };
-    let reopened = LocalActorStore::open(&storage, ENGINE_EPOCH).expect("reopened actor store");
+    let reopened = Local::open(&storage, ENGINE_EPOCH).expect("reopened actor store");
     let observed = reopened.load(&actor_key_ref).expect("read actor state").expect("published actor state");
     assert_eq!(observed.state_ref, expected_state_ref);
     assert_eq!(observed.state.phase, ActorPhase::Starting);

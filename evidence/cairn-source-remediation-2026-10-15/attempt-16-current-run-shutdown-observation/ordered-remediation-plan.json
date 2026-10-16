@@ -1,0 +1,32 @@
+{
+  "argv": [
+    "cargo",
+    "run",
+    "--offline",
+    "--locked",
+    "--",
+    "test",
+    "octet",
+    "remediation",
+    "plan",
+    "--artifacts",
+    "target/octet-f14-cohort16-workspace",
+    "--lib-artifacts",
+    "target/octet-f14-cohort16-library",
+    "--focused-object-corpus",
+    "target/octet-f14-cohort16-workspace/object-corpus-receipt.json",
+    "--receipt-out",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/ordered-remediation-plan.preserves"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T19:47:25.431898+00:00",
+  "elapsed_seconds": 0.429,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "octet remediation plan blake3:03a649e343495f6c3e4eabac5a8fcbf002fe8fc0693b1a431fb7577fd1fe5407 written to /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/ordered-remediation-plan.preserves\noctet remediation plan receipt=blake3:03a649e343495f6c3e4eabac5a8fcbf002fe8fc0693b1a431fb7577fd1fe5407\n",
+  "stderr": "[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build \u2014 compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] \u2192 set KACHE_CACHE_DIR to a fast, local, single-machine path\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build \u2014 compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] \u2192 set KACHE_CACHE_DIR to a fast, local, single-machine path\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.35s\n     Running `/home/brittonr/.cargo-target/debug/molten test octet remediation plan --artifacts target/octet-f14-cohort16-workspace --lib-artifacts target/octet-f14-cohort16-library --focused-object-corpus target/octet-f14-cohort16-workspace/object-corpus-receipt.json --receipt-out /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-16-current-run-shutdown-observation/ordered-remediation-plan.preserves`\n",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

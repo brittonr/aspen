@@ -1,0 +1,212 @@
+{
+  "attempt": "11/20",
+  "change": "adopt-octet-nominal-domain-enforcement",
+  "provider_revision": "3f7abb641ee604f54629da415bc7686f89662065",
+  "scope_decision": "2026-10-16-acceptance-scope-decision.json",
+  "reviewed_inventory_rows": 15,
+  "reviewed_families": {
+    "entity": 7,
+    "canonical_blake3": 8
+  },
+  "constructor_and_scope_review": "Private checked marker-generic storage, private-fallible catalog pair, exact qualified field selectors, actual local macro source, preserved explicit raw wire adapter. No borrowed-representation, tuple-field, wholesale migration, authority, or release-readiness claim.",
+  "prior_static_review": "{\n  \"confidence\": 0.9,\n  \"explanation\": \"No concrete patch-introduced defects found in the scoped nominal changes. Static review covered all fifteen catalog rows, provider-side lint and diagnostic routing, actual-source copy/mutation behavior, positive/negative assertions, and the source extraction/predicate renames; no nominal-admission or wire-projection behavior change was identified. No tests, builds, or runtime checks were performed, as requested; this is not acceptance or readiness evidence, and the explicitly blocked immutable-provider adoption remains unresolved.\",\n  \"findings\": [],\n  \"overall_correctness\": \"correct\"\n}",
+  "new_binding_review": "Published exact revision and generated Nix lock inspected. All 25 unrelated existing root closures remain equal; frozen replay retains the complete old cohort and byte-identical decision. No source override or renamed verifier claim.",
+  "traceability_review": "Catalog row comparison and actual unchanged DTO/roundtrip behavior now carry direct implementation/verification markers for their new accepted identities; no baseline expansion.",
+  "final_nominal_nix_output": "/nix/store/rq1f0gkfdf8567kjk50zjhi9k1lr5xcw-molten-nominal-reference-domains",
+  "final_nominal_cases": {
+    "positive": {
+      "status": {
+        "status": "clean",
+        "exit_code": 0,
+        "output_format": "json",
+        "metadata": {
+          "tool_name": "cargo-octet",
+          "tool_version": "0.1.0",
+          "rustc_version": "rustc 1.96.0-nightly (ac7f9ec7d 2026-03-20)",
+          "toolchain": "nightly-2026-03-21-x86_64-unknown-linux-gnu",
+          "profile_name": "workspace-metadata",
+          "profile_hash": "b3:abf36b4d643dc4c2537f12a814c9fcb11d002f32b361cf1f7e1b683ba4850f07",
+          "config_hash": "b3:5e82a74a428af09e8cdae027c5b96b5cb77702a53e49f95dab73212f58db045e"
+        },
+        "total_findings": 0,
+        "warning_findings": 0,
+        "error_findings": 0,
+        "autofixable_findings": 0,
+        "cargo_process_exit": {
+          "classification": "success",
+          "code": 0
+        }
+      },
+      "findings": []
+    },
+    "raw-field": {
+      "status": {
+        "status": "integration-failure",
+        "exit_code": 2,
+        "output_format": "json",
+        "metadata": {
+          "tool_name": "cargo-octet",
+          "tool_version": "0.1.0",
+          "rustc_version": "rustc 1.96.0-nightly (ac7f9ec7d 2026-03-20)",
+          "toolchain": "nightly-2026-03-21-x86_64-unknown-linux-gnu",
+          "profile_name": "workspace-metadata",
+          "profile_hash": "b3:abf36b4d643dc4c2537f12a814c9fcb11d002f32b361cf1f7e1b683ba4850f07",
+          "config_hash": "b3:5e82a74a428af09e8cdae027c5b96b5cb77702a53e49f95dab73212f58db045e"
+        },
+        "total_findings": 1,
+        "warning_findings": 0,
+        "error_findings": 1,
+        "autofixable_findings": 0,
+        "cargo_process_exit": {
+          "classification": "exit-code",
+          "code": 101
+        }
+      },
+      "findings": [
+        {
+          "version": 2,
+          "index": "F1",
+          "stable_id": "b3:93ba4187989e14d2",
+          "semantic_id": "b3:93ba4187989e14d2",
+          "identity_status": "computed",
+          "normalized_snippet_hash": "b3:d8c93170d99553be778ddf881070601d2a9c9dbe25e2f80fe06765e39689e56f",
+          "config_hash": "b3:5e82a74a428af09e8cdae027c5b96b5cb77702a53e49f95dab73212f58db045e",
+          "cache_status": "disabled",
+          "lint": "raw_domain_value",
+          "group": "tigerstyle::structure",
+          "severity": "error",
+          "file": "crates/molten-core/src/nominal.rs",
+          "line": 237,
+          "column": 5,
+          "message": "registered domain value `AuthorityReferenceSet::holder` uses raw `string` storage in core scope `molten.nominal-reference.principal`",
+          "suggestion": null,
+          "applicability": null,
+          "principle": "Nominal Domain Types",
+          "effect_family": "failure",
+          "evidence_tier": "static_lint",
+          "crate_name": "molten_nominal_check"
+        }
+      ]
+    },
+    "raw-alias": {
+      "status": {
+        "status": "integration-failure",
+        "exit_code": 2,
+        "output_format": "json",
+        "metadata": {
+          "tool_name": "cargo-octet",
+          "tool_version": "0.1.0",
+          "rustc_version": "rustc 1.96.0-nightly (ac7f9ec7d 2026-03-20)",
+          "toolchain": "nightly-2026-03-21-x86_64-unknown-linux-gnu",
+          "profile_name": "workspace-metadata",
+          "profile_hash": "b3:abf36b4d643dc4c2537f12a814c9fcb11d002f32b361cf1f7e1b683ba4850f07",
+          "config_hash": "b3:5e82a74a428af09e8cdae027c5b96b5cb77702a53e49f95dab73212f58db045e"
+        },
+        "total_findings": 2,
+        "warning_findings": 0,
+        "error_findings": 2,
+        "autofixable_findings": 0,
+        "cargo_process_exit": {
+          "classification": "exit-code",
+          "code": 101
+        }
+      },
+      "findings": [
+        {
+          "version": 2,
+          "index": "F1",
+          "stable_id": "b3:b8a0c2fcd8a3c4fd",
+          "semantic_id": "b3:b8a0c2fcd8a3c4fd",
+          "identity_status": "computed",
+          "normalized_snippet_hash": "b3:aa6edd6ee0d963eb83db9c2856182084802094633865cdd8b71f65e7e2d187cd",
+          "config_hash": "b3:5e82a74a428af09e8cdae027c5b96b5cb77702a53e49f95dab73212f58db045e",
+          "cache_status": "disabled",
+          "lint": "primitive_domain_alias",
+          "group": "tigerstyle::structure",
+          "severity": "error",
+          "file": "crates/molten-core/src/nominal.rs",
+          "line": 135,
+          "column": 1,
+          "message": "domain alias `PrincipalRef` resolves to primitive storage declared by `molten.nominal-reference.principal`",
+          "suggestion": null,
+          "applicability": null,
+          "principle": "Nominal Domain Types",
+          "effect_family": "failure",
+          "evidence_tier": "static_lint",
+          "crate_name": "molten_nominal_check"
+        },
+        {
+          "version": 2,
+          "index": "F2",
+          "stable_id": "b3:c962004cdfe8698b",
+          "semantic_id": "b3:c962004cdfe8698b",
+          "identity_status": "computed",
+          "normalized_snippet_hash": "b3:02feec414576c46c55b70874567f565c6700ae99d941f5ad31d56ceea5f90559",
+          "config_hash": "b3:5e82a74a428af09e8cdae027c5b96b5cb77702a53e49f95dab73212f58db045e",
+          "cache_status": "disabled",
+          "lint": "raw_domain_value",
+          "group": "tigerstyle::structure",
+          "severity": "error",
+          "file": "crates/molten-core/src/nominal.rs",
+          "line": 239,
+          "column": 5,
+          "message": "registered domain value `AuthorityReferenceSet::holder` uses raw `string` storage in core scope `molten.nominal-reference.principal`",
+          "suggestion": null,
+          "applicability": null,
+          "principle": "Nominal Domain Types",
+          "effect_family": "failure",
+          "evidence_tier": "static_lint",
+          "crate_name": "molten_nominal_check"
+        }
+      ]
+    }
+  },
+  "final_inherited_tracey_nix_output": "/nix/store/1r7hswks9x3cy5144a341na4w0a9b3na-molten-inherited-tracey-debt",
+  "direct_guard_result": {
+    "command": [
+      "/tmp/molten-nominal-adoption11-pp6_l8i4/tracey-guard",
+      "--root",
+      ".",
+      "--baseline",
+      "evidence/tracey/inherited-debt-baseline.txt"
+    ],
+    "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+    "exit_code": 0,
+    "stdout": "pending_references=25\npending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\nrequirements=2799\nreferenced=875\nuncovered=1924\nbaseline_entries=1924\ndangling=0\nnon_claim=inherited requirements remain uncovered until direct evidence references them\nverdict=pass\n",
+    "stderr": ""
+  },
+  "whole_molten_library_status": {
+    "status": "clean",
+    "exit_code": 0,
+    "output_format": "human",
+    "metadata": {
+      "tool_name": "cargo-octet",
+      "tool_version": "0.1.0",
+      "rustc_version": "rustc 1.96.0-nightly (ac7f9ec7d 2026-03-20)",
+      "toolchain": "nightly-2026-03-21-x86_64-unknown-linux-gnu",
+      "profile_name": "workspace-metadata",
+      "profile_hash": "b3:0e93fe3c5a1d936d701494f49f956891c3286fbc7d988f449f774433889d37b4",
+      "config_hash": "b3:4014eadd722c25db290f856f585c3e673ae23c97611daeb9fe0fcea06e659d24"
+    },
+    "total_findings": 0,
+    "warning_findings": 0,
+    "error_findings": 0,
+    "autofixable_findings": 0,
+    "cargo_process_exit": {
+      "classification": "success",
+      "code": 0
+    }
+  },
+  "final_source_checks": {
+    "rustfmt": "passed for src/authority/nominal.rs",
+    "nixfmt": "passed for flake.nix"
+  },
+  "compatibility_evidence": "2026-10-16-runtime-compatibility.json",
+  "remaining_findings_for_approved_scope": [],
+  "retained_nonblocking_diagnostic": {
+    "whole_core_status": "warning-only",
+    "findings": 985,
+    "scope_approval_does_not_waive_other_changes": true
+  },
+  "review_outcome": "Approved focused scope has implementation and behavioral proof; native gates and actual sync/archive remain mandatory separate completion actions."
+}

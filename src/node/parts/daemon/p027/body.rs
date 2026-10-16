@@ -1,6 +1,6 @@
 
 fn live_peer_admission_diagnostics(
-    state_root: &crate::node_state::NodeStateRoot,
+    state_root: &crate::node_state::DirectoryRoot,
     envelope: &ControlIngressEnvelope,
     admission: &ControlLivePeerAdmission,
 ) -> Result<Vec<String>> {
@@ -67,7 +67,7 @@ fn live_peer_admission_diagnostics(
 }
 
 fn evaluate_live_authority_delegation(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::DirectoryRoot,
     envelope: &ControlIngressEnvelope,
 ) -> Result<Vec<String>> {
     let mut diagnostics = Vec::with_capacity(envelope.authority_refs.len().saturating_add(2));
@@ -229,13 +229,13 @@ fn ingress_idempotency_evidence_refs(envelope: &ControlIngressEnvelope) -> Vec<S
     refs
 }
 
-fn prior_queue_receipt_ref(root: &crate::node_state::NodeStateRoot, request_ref: &str) -> Result<String> {
+fn prior_queue_receipt_ref(root: &crate::node_state::DirectoryRoot, request_ref: &str) -> Result<String> {
     let receipt = read_preserves(root, &queue_receipt_path(request_ref)?)?;
     crate::preserves_rail::canonical_hash(&receipt)
 }
 
 fn prior_dispatch_for_request(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::DirectoryRoot,
     request: &crate::node_runtime::ControlRequest,
 ) -> Result<Option<ControlDispatch>> {
     let receipt_path = control_outbox_receipt_path(&request.request_ref)?;

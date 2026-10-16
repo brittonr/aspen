@@ -1,5 +1,5 @@
 
-pub fn init_local_with_root(root: &crate::node_state::NodeStateRoot, input: &InitInput<'_>) -> Result<Init> {
+pub fn init_local_with_root(root: &crate::node_state::DirectoryRoot, input: &InitInput<'_>) -> Result<Init> {
     validate_node_id(input.node_id)?;
     verify_init_state(root)
         .map_err(|error| MoltenError::invalid_harness(format!("node init state verification failed: {error}")))?;
@@ -22,8 +22,8 @@ pub fn init_local_with_root(root: &crate::node_state::NodeStateRoot, input: &Ini
     let resource_refs = vec![local_ref("node-resource", input.node_id)?];
     let effect_profile_refs = vec![local_ref("node-effect-profile", input.node_id)?];
     let state_root_ref = state_root_profile_ref(root)?;
-    let profile_resolution = crate::node_profile_config::resolve_local_default_config(
-        &crate::node_profile_config::LocalDefaultConfigInput {
+    let profile_resolution = crate::node_profile_config::resolve_local_default(
+        &crate::node_profile_config::LocalDefaultInput {
             identity_ref: identity.identity_ref.clone(),
             state_root_ref,
             adapters,
@@ -58,12 +58,12 @@ pub fn init_local_with_root(root: &crate::node_state::NodeStateRoot, input: &Ini
 
 pub fn init_with_profile(input: &ProfileInitInput<'_>) -> Result<Init> {
     validate_state_root(input.state_root)?;
-    let root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let root = crate::node_state::DirectoryRoot::open(input.state_root)?;
     init_with_profile_and_root(&root, input)
 }
 
 pub fn init_with_profile_and_root(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::DirectoryRoot,
     input: &ProfileInitInput<'_>,
 ) -> Result<Init> {
     validate_node_id(input.node_id)?;
@@ -77,8 +77,8 @@ pub fn init_with_profile_and_root(
     let identity = identity_resolution
         .identity
         .ok_or_else(|| MoltenError::invalid_harness("node daemon identity resolution denied"))?;
-    let profile_resolution = crate::node_profile_config::resolve_profile_backed_config(
-        &crate::node_profile_config::ProfileBackedConfigInput {
+    let profile_resolution = crate::node_profile_config::resolve_backed(
+        &crate::node_profile_config::BackedInput {
             identity_ref: identity.identity_ref.clone(),
             profile: input.profile.clone(),
             overrides: input.overrides.clone(),

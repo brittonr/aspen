@@ -37,8 +37,8 @@ const OUTER_BINDING_INDEX: usize = 2;
 const OUTER_CHECKS_INDEX: usize = 3;
 const OUTER_FIELD_COUNT: usize = 4;
 
-fn profile() -> CanonicalTransportProfile {
-    canonical_transport_profile(&TransportProfile {
+fn profile() -> Profile {
+    crate::fabric_transport::profile(&TransportProfile {
         schema: TRANSPORT_PROFILE_SCHEMA.to_string(),
         profile_id: "iroh-cross-process-v1".to_string(),
         profile_ref: PROFILE_REF.to_string(),
@@ -128,8 +128,8 @@ fn fake_bindings() -> EndpointDescriptorBindings {
     }
 }
 
-fn capability(byte: u8, capability_ref: &str) -> IrohEndpointCapability {
-    IrohEndpointCapability::from_secret_bytes([byte; IROH_SECRET_KEY_BYTES], capability_ref.to_string())
+fn capability(byte: u8, capability_ref: &str) -> EndpointCapability {
+    EndpointCapability::from_secret_bytes([byte; IROH_SECRET_KEY_BYTES], capability_ref.to_string())
         .expect("endpoint capability")
 }
 
@@ -137,7 +137,7 @@ fn bind_addr() -> std::net::SocketAddr {
     std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0))
 }
 
-fn expected(endpoint: &CanonicalCrossProcessEndpoint) -> ExpectedEndpointBinding {
+fn expected(endpoint: &Endpoint) -> ExpectedEndpointBinding {
     let descriptor = &endpoint.descriptor;
     ExpectedEndpointBinding {
         profile_id: descriptor.profile_id.clone(),
@@ -155,12 +155,12 @@ fn expected(endpoint: &CanonicalCrossProcessEndpoint) -> ExpectedEndpointBinding
     }
 }
 
-pub(crate) async fn listener() -> IrohCrossProcessListener {
+pub(crate) async fn listener() -> Listener {
     listener_with_secret(LISTENER_SECRET_BYTE).await
 }
 
-pub(crate) async fn listener_with_secret(secret_byte: u8) -> IrohCrossProcessListener {
-    IrohCrossProcessListener::bind(IrohCrossProcessListenerInput {
+pub(crate) async fn listener_with_secret(secret_byte: u8) -> Listener {
+    Listener::bind(ListenerInput {
         profile: profile(),
         protocol: protocol(),
         capability: capability(secret_byte, LISTENER_CAPABILITY_REF),
@@ -177,8 +177,8 @@ pub(crate) async fn listener_with_secret(secret_byte: u8) -> IrohCrossProcessLis
     .expect("cross-process listener")
 }
 
-pub(crate) fn client_input(endpoint: CanonicalCrossProcessEndpoint) -> IrohCrossProcessClientInput {
-    IrohCrossProcessClientInput {
+pub(crate) fn client_input(endpoint: Endpoint) -> ClientInput {
+    ClientInput {
         profile: profile(),
         protocol: protocol(),
         capability: capability(CLIENT_SECRET_BYTE, CLIENT_CAPABILITY_REF),
@@ -191,9 +191,9 @@ pub(crate) fn client_input(endpoint: CanonicalCrossProcessEndpoint) -> IrohCross
     }
 }
 
-fn effect_binding(profile: &CanonicalTransportProfile) -> crate::fabric::CanonicalFabricPortBinding {
+fn effect_binding(profile: &Profile) -> crate::fabric::CanonicalPortBinding {
     let descriptor = fabric_transport_port_descriptor(profile);
-    crate::fabric::resolve_canonical_fabric_port_binding(
+    crate::fabric::resolve_canonical_port_binding(
         std::slice::from_ref(&descriptor),
         &crate::fabric::FabricPortRequirement {
             port_id: descriptor.port_id.clone(),
@@ -213,7 +213,7 @@ fn effect_binding(profile: &CanonicalTransportProfile) -> crate::fabric::Canonic
 }
 
 fn effect_request(
-    binding: &crate::fabric::CanonicalFabricPortBinding,
+    binding: &crate::fabric::CanonicalPortBinding,
     operation: &str,
     request_ref: &str,
     accounted_bytes: u64,
@@ -233,14 +233,14 @@ fn effect_request(
 // r[verify molten.fabric_transport.cross_process_validation]
 #[test]
 fn canonical_endpoint_roundtrips_and_default_status_redacts_raw_locators() {
-    let endpoint = canonical_cross_process_endpoint(&profile().profile, &protocol(), &fake_bindings())
+    let endpoint = endpoint(&profile().profile, &protocol(), &fake_bindings())
         .expect("canonical endpoint");
-    let parsed = parse_canonical_cross_process_endpoint(&endpoint.value).expect("parsed endpoint");
+    let parsed = parse_endpoint(&endpoint.value).expect("parsed endpoint");
     assert_eq!(parsed, endpoint);
     let handoff_text = crate::preserves_rail::to_text(&endpoint.value).expect("handoff text");
     assert!(handoff_text.contains(FAKE_IP_LOCATOR));
 
-    let status = canonical_endpoint_status(&endpoint.descriptor).expect("endpoint status");
+    let status = endpoint_status(&endpoint.descriptor).expect("endpoint status");
     let status_text = crate::preserves_rail::to_text(&status.value).expect("status text");
     assert!(status_text.contains("locator-classes"));
     assert!(!status_text.contains(FAKE_IP_LOCATOR));
@@ -252,7 +252,7 @@ fn canonical_endpoint_roundtrips_and_default_status_redacts_raw_locators() {
 // r[verify molten.fabric_transport.cross_process_validation]
 #[test]
 fn canonical_endpoint_import_rejects_a_tampered_binding_reference() {
-    let endpoint = canonical_cross_process_endpoint(&profile().profile, &protocol(), &fake_bindings())
+    let endpoint = endpoint(&profile().profile, &protocol(), &fake_bindings())
         .expect("canonical endpoint");
     let fields = endpoint
         .value
@@ -265,6 +265,6 @@ fn canonical_endpoint_import_rejects_a_tampered_binding_reference() {
         crate::preserves_rail::value_to_iovalue(&values[OUTER_BINDING_INDEX]),
         crate::preserves_rail::value_to_iovalue(&values[OUTER_CHECKS_INDEX]),
     ]);
-    let error = parse_canonical_cross_process_endpoint(&tampered).expect_err("tampered ref must deny");
+    let error = parse_endpoint(&tampered).expect_err("tampered ref must deny");
     assert!(error.to_string().contains("descriptor ref mismatch"));
 }

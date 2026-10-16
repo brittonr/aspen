@@ -83,7 +83,7 @@ fn plugin_upgrade_passes(
 }
 
 fn plugin_negotiation_passes(
-    negotiation: Option<&PluginExtensionNegotiationReceipt>,
+    negotiation: Option<&PluginNegotiationReceipt>,
     manifest: &PluginManifest,
     diagnostics: &mut impl PushLimited<String>,
 ) -> Result<bool> {

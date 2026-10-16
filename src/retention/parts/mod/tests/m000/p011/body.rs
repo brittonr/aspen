@@ -4,7 +4,7 @@
         let materialization_receipt_path = bundle_dir.join(CANDIDATE_BUNDLE_MATERIALIZATION_RECEIPT);
         let materialization_receipt_value =
             read_store_value(&materialization_receipt_path).expect("read candidate materialization receipt");
-        let materialization_receipt = crate::materialization::parse_materialization_receipt(
+        let materialization_receipt = crate::materialization::parse_receipt(
             &materialization_receipt_value,
         )
         .expect("parse candidate materialization receipt");

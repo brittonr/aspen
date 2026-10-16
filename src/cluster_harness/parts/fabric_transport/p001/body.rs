@@ -1,9 +1,9 @@
 
 fn execute_prepared_distinct_process_transport_run(
-    input: &DistinctProcessTransportRunInput,
-) -> crate::error::Result<DistinctProcessTransportRun> {
+    input: &DistinctProcessRunInput,
+) -> crate::error::Result<DistinctProcessRun> {
     let timeout = std::time::Duration::from_millis(input.child_timeout_ms);
-    write_transport_input(&input.run_directory, &input.request_ref, &input.payload)?;
+    write_input(&input.run_directory, &input.request_ref, &input.payload)?;
     let listener_invocation_ref = invocation_ref(LISTENER_ROLE);
     let client_invocation_ref = invocation_ref(CLIENT_ROLE);
 
@@ -31,13 +31,13 @@ fn execute_prepared_distinct_process_transport_run(
 
     let client_status = client.wait_bounded(timeout, CLIENT_ROLE)?;
     if !client_status.success() {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "distinct-process client child exited with {client_status}"
         )));
     }
     let listener_status = listener.wait_bounded(timeout, LISTENER_ROLE)?;
     if !listener_status.success() {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "distinct-process listener child exited with {listener_status}"
         )));
     }
@@ -61,7 +61,7 @@ fn execute_prepared_distinct_process_transport_run(
     write_index(&input.run_directory)?;
     let verification = verify_distinct_process_run_directory_inner(&input.run_directory, false)?;
     write_preserves(&input.run_directory.join(VERIFICATION_FILE), &verification.value)?;
-    Ok(DistinctProcessTransportRun {
+    Ok(DistinctProcessRun {
         decision: verification.decision,
         parent_ref,
         verification_ref: verification.verification_ref,
@@ -74,10 +74,10 @@ fn execute_prepared_distinct_process_transport_run(
 pub fn run_distinct_process_listener_child(run_directory: &std::path::Path) -> crate::error::Result<()> {
     validate_child_directory(run_directory)?;
     let runtime = tokio::runtime::Runtime::new().map_err(|error| {
-        crate::error::MoltenError::invalid_harness(format!("listener runtime creation failed: {error}"))
+        crate::error::Failure::invalid_harness(format!("listener runtime creation failed: {error}"))
     })?;
     runtime.block_on(async {
-        let mut listener = IrohCrossProcessListener::bind(IrohCrossProcessListenerInput {
+        let mut listener = Listener::bind(ListenerInput {
             profile: fixture_profile()?,
             protocol: fixture_protocol(),
             capability: fixture_capability(LISTENER_SECRET_BYTE, LISTENER_CAPABILITY_REF)?,
@@ -92,7 +92,7 @@ pub fn run_distinct_process_listener_child(run_directory: &std::path::Path) -> c
         })
         .await?;
         write_preserves_atomic(&run_directory.join(HANDOFF_FILE), &listener.handoff().value)?;
-        let (request_ref, _payload) = read_transport_input(run_directory)?;
+        let (request_ref, _payload) = read_input(run_directory)?;
         let frame = listener
             .accept_one(
                 SESSION_REF,
@@ -122,13 +122,13 @@ pub fn run_distinct_process_client_child(run_directory: &std::path::Path) -> cra
     validate_child_directory(run_directory)?;
     let handoff = read_endpoint_handoff(&run_directory.join(HANDOFF_FILE))?;
     validate_fixture_endpoint(&handoff)?;
-    let (request_ref, payload) = read_transport_input(run_directory)?;
+    let (request_ref, payload) = read_input(run_directory)?;
     let runtime = tokio::runtime::Runtime::new().map_err(|error| {
-        crate::error::MoltenError::invalid_harness(format!("client runtime creation failed: {error}"))
+        crate::error::Failure::invalid_harness(format!("client runtime creation failed: {error}"))
     })?;
     runtime.block_on(async {
-        let frame = exchange_cross_process_frame(
-            IrohCrossProcessClientInput {
+        let frame = exchange_frame(
+            ClientInput {
                 profile: fixture_profile()?,
                 protocol: fixture_protocol(),
                 capability: fixture_capability(CLIENT_SECRET_BYTE, CLIENT_CAPABILITY_REF)?,
@@ -158,16 +158,16 @@ pub fn run_distinct_process_client_child(run_directory: &std::path::Path) -> cra
 }
 
 // r[impl molten.fabric_transport.distinct_process_evidence]
-pub fn verify_distinct_process_transport_run(
+pub fn verify_distinct_process_run(
     run_directory: &std::path::Path,
-) -> crate::error::Result<DistinctProcessTransportVerification> {
+) -> crate::error::Result<DistinctProcessVerification> {
     verify_distinct_process_run_directory_inner(run_directory, true)
 }
 
 fn verify_distinct_process_run_directory_inner(
     run_directory: &std::path::Path,
     require_companion: bool,
-) -> crate::error::Result<DistinctProcessTransportVerification> {
+) -> crate::error::Result<DistinctProcessVerification> {
     let mut diagnostics = validate_run_membership(run_directory, require_companion)?;
     let listener_start = read_start(&run_directory.join(LISTENER_START_FILE))?;
     let client_start = read_start(&run_directory.join(CLIENT_START_FILE))?;
@@ -195,7 +195,7 @@ fn verify_distinct_process_run_directory_inner(
     }
     let parent_ref = crate::preserves_rail::canonical_hash(&actual_parent)?;
     let index_text =
-        std::fs::read_to_string(run_directory.join(INDEX_FILE)).map_err(crate::error::MoltenError::from)?;
+        std::fs::read_to_string(run_directory.join(INDEX_FILE)).map_err(crate::error::Failure::from)?;
     let expected_index = render_index(&collect_indexed_artifacts(run_directory)?);
     if index_text != expected_index {
         diagnostics.push("artifact-index-mismatch".to_string());
@@ -225,7 +225,7 @@ fn verify_distinct_process_run_directory_inner(
     .to_string();
     let value = verification_value(&decision, &index_ref, &parent_ref, &diagnostics);
     let verification_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(DistinctProcessTransportVerification {
+    Ok(DistinctProcessVerification {
         decision,
         parent_ref,
         verification_ref,
@@ -234,47 +234,47 @@ fn verify_distinct_process_run_directory_inner(
     })
 }
 
-fn validate_run_input(input: &DistinctProcessTransportRunInput) -> crate::error::Result<()> {
+fn validate_run_input(input: &DistinctProcessRunInput) -> crate::error::Result<()> {
     if input.child_timeout_ms == 0 || input.child_timeout_ms > MAX_DISTINCT_PROCESS_TIMEOUT_MS {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "distinct-process child timeout must be between 1 and {MAX_DISTINCT_PROCESS_TIMEOUT_MS} milliseconds"
         )));
     }
     if input.run_directory.as_os_str().is_empty() || input.process_binary.as_os_str().is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "distinct-process run requires explicit run directory and process binary",
         ));
     }
     crate::preserves_rail::validate_content_ref(&input.request_ref)?;
     let payload_bytes = u64::try_from(input.payload.len())
-        .map_err(|_| crate::error::MoltenError::invalid_harness("distinct-process payload length exceeds u64"))?;
+        .map_err(|_| crate::error::Failure::invalid_harness("distinct-process payload length exceeds u64"))?;
     if input.payload.is_empty() || payload_bytes > FRAME_LIMIT {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "distinct-process payload must be nonempty and within the frame bound",
         ));
     }
     Ok(())
 }
 
-fn write_transport_input(
+fn write_input(
     run_directory: &std::path::Path,
     request_ref: &str,
     payload: &[u8],
 ) -> crate::error::Result<()> {
     std::fs::write(run_directory.join(REQUEST_INPUT_FILE), request_ref.as_bytes())
-        .map_err(crate::error::MoltenError::from)?;
-    std::fs::write(run_directory.join(PAYLOAD_INPUT_FILE), payload).map_err(crate::error::MoltenError::from)
+        .map_err(crate::error::Failure::from)?;
+    std::fs::write(run_directory.join(PAYLOAD_INPUT_FILE), payload).map_err(crate::error::Failure::from)
 }
 
-fn read_transport_input(run_directory: &std::path::Path) -> crate::error::Result<(String, Vec<u8>)> {
+fn read_input(run_directory: &std::path::Path) -> crate::error::Result<(String, Vec<u8>)> {
     let request_ref =
-        std::fs::read_to_string(run_directory.join(REQUEST_INPUT_FILE)).map_err(crate::error::MoltenError::from)?;
+        std::fs::read_to_string(run_directory.join(REQUEST_INPUT_FILE)).map_err(crate::error::Failure::from)?;
     crate::preserves_rail::validate_content_ref(&request_ref)?;
-    let payload = std::fs::read(run_directory.join(PAYLOAD_INPUT_FILE)).map_err(crate::error::MoltenError::from)?;
+    let payload = std::fs::read(run_directory.join(PAYLOAD_INPUT_FILE)).map_err(crate::error::Failure::from)?;
     let payload_bytes = u64::try_from(payload.len())
-        .map_err(|_| crate::error::MoltenError::invalid_harness("distinct-process payload length exceeds u64"))?;
+        .map_err(|_| crate::error::Failure::invalid_harness("distinct-process payload length exceeds u64"))?;
     if payload.is_empty() || payload_bytes > FRAME_LIMIT {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "distinct-process payload input is empty or over-bound",
         ));
     }

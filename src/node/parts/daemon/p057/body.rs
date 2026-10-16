@@ -17,21 +17,21 @@ fn validate_node_id(node_id: &str) -> Result<()> {
     }
 }
 
-fn fixed_node_path(value: &str) -> Result<crate::node_state::NodeStatePath> {
-    crate::node_state::NodeStatePath::parse(value)
+fn fixed_node_path(value: &str) -> Result<crate::node_state::RelativePath> {
+    crate::node_state::RelativePath::parse(value)
 }
 
 fn write_preserves(
-    root: &crate::node_state::NodeStateRoot,
-    path: &crate::node_state::NodeStatePath,
+    root: &crate::node_state::DirectoryRoot,
+    path: &crate::node_state::RelativePath,
     value: &IoValue,
 ) -> Result<()> {
     root.write(path, crate::preserves_rail::to_text(value)?.as_bytes())
 }
 
 fn read_preserves(
-    root: &crate::node_state::NodeStateRoot,
-    path: &crate::node_state::NodeStatePath,
+    root: &crate::node_state::DirectoryRoot,
+    path: &crate::node_state::RelativePath,
 ) -> Result<IoValue> {
     let text = root.read_to_string(path, crate::node_state::MAX_NODE_STATE_FILE_BYTES)?;
     crate::preserves_rail::parse_text(&text)
@@ -39,7 +39,7 @@ fn read_preserves(
 
 fn diagnostic_node_state_path(
     state_root: &Path,
-    locator: &crate::node_state::NodeStatePath,
+    locator: &crate::node_state::RelativePath,
 ) -> PathBuf {
     state_root.join(locator.as_path())
 }

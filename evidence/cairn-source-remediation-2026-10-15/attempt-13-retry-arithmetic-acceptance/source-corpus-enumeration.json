@@ -1,0 +1,7 @@
+{
+  "method": "Complete specialized glob enumeration, partitioning only capped directories; no sampled or guessed paths.",
+  "files": 1890,
+  "glob_queries": 97,
+  "source_root": "src",
+  "truncated": false
+}

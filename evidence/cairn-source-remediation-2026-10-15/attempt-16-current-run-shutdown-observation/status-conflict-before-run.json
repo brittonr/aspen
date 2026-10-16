@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "node",
+    "run",
+    "--state-root",
+    "/tmp/molten-f14-current-run-16-restored-se51n6m8/unreadable-status-before"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T18:27:34.982906+00:00",
+  "elapsed_seconds": 0.02,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "node run startup=blake3:444be6f52f65792e71b41b3478d58251d217faec6d5553f51461b397ab83e93c adapters=12 state_root=/tmp/molten-f14-current-run-16-restored-se51n6m8/unreadable-status-before\n",
+  "stderr": ""
+}

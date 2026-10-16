@@ -15,24 +15,21 @@ pub(super) struct VoteResponseInput {
     pub is_granted: bool,
 }
 
-pub(super) fn handle_election_timeout(
-    state: &ReplicaState,
-    timer_ref: String,
-) -> crate::error::Result<ReplicaTransition> {
+pub(super) fn handle_timeout(state: &ReplicaState, timer_ref: String) -> crate::error::Result<ReplicaTransition> {
     validation::ensure_running(state)?;
     validation::validate_content_ref(&timer_ref, "Raft election timer ref")?;
     if timer_ref != state.active_election_timer_ref {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "stale Raft election timer cannot activate protocol effects",
         ));
     }
     if state.role == ReplicaRole::Leader {
-        return Err(crate::error::MoltenError::invalid_harness("leader cannot process a follower election timeout"));
+        return Err(crate::error::Failure::invalid_harness("leader cannot process a follower election timeout"));
     }
     let next_term = state
         .current_term
         .checked_add(NEXT_TERM_STEP)
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("Raft term overflow"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("Raft term overflow"))?;
     let mut next = state.clone();
     next.current_term = next_term;
     next.role = ReplicaRole::Candidate;
@@ -51,7 +48,7 @@ pub(super) fn handle_election_timeout(
         voted_for: next.voted_for.clone(),
     });
     for voter in support::peers(&next) {
-        effects.push(support::send_effect(&next, voter, RaftMessage::RequestVote {
+        effects.push(support::send_effect(&next, voter, Message::RequestVote {
             term: next.current_term,
             candidate_id: next.node_id.clone(),
             last_log_index: support::last_log_index(&next),
@@ -61,24 +58,21 @@ pub(super) fn handle_election_timeout(
         }));
     }
     effects.push(support::arm_election_timer(&mut next)?);
-    finish_transition(next, effects)
+    finish(next, effects)
 }
 
 pub(super) fn handle_heartbeat_timeout(state: &ReplicaState) -> crate::error::Result<ReplicaTransition> {
     validation::ensure_running(state)?;
     if state.role != ReplicaRole::Leader {
-        return Err(crate::error::MoltenError::invalid_harness("only a live Raft leader can emit heartbeat traffic"));
+        return Err(crate::error::Failure::invalid_harness("only a live Raft leader can emit heartbeat traffic"));
     }
     let next = state.clone();
     let mut effects = support::append_effects_for_all(&next)?;
     effects.push(ReplicaEffect::ArmHeartbeatTimer);
-    finish_transition(next, effects)
+    finish(next, effects)
 }
 
-pub(super) fn handle_request_vote(
-    transition: &mut MessageTransition,
-    input: VoteRequestInput,
-) -> crate::error::Result<()> {
+pub(super) fn handle_request_vote(transition: &mut MessagePlan, input: VoteRequestInput) -> crate::error::Result<()> {
     if input.term < transition.next.current_term {
         transition.effects.push(support::send_effect(
             &transition.next,
@@ -114,15 +108,12 @@ pub(super) fn handle_request_vote(
     Ok(())
 }
 
-pub(super) fn handle_vote_response(
-    transition: &mut MessageTransition,
-    input: VoteResponseInput,
-) -> crate::error::Result<()> {
+pub(super) fn handle_vote_response(transition: &mut MessagePlan, input: VoteResponseInput) -> crate::error::Result<()> {
     if input.term < transition.next.current_term || transition.next.role != ReplicaRole::Candidate {
         return Ok(());
     }
     if input.voter_id != input.from {
-        return Err(crate::error::MoltenError::invalid_harness("Raft vote response voter does not match its sender"));
+        return Err(crate::error::Failure::invalid_harness("Raft vote response voter does not match its sender"));
     }
     if input.is_granted {
         transition.next.votes_received.insert(input.voter_id);
@@ -133,10 +124,10 @@ pub(super) fn handle_vote_response(
     Ok(())
 }
 
-fn become_leader(transition: &mut MessageTransition) -> crate::error::Result<()> {
+fn become_leader(transition: &mut MessagePlan) -> crate::error::Result<()> {
     let next_log_index = support::last_log_index(&transition.next)
         .checked_add(NEXT_LOG_INDEX_STEP)
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("Raft next log index overflow"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("Raft next log index overflow"))?;
     transition.next.role = ReplicaRole::Leader;
     transition.next.leader_id = Some(transition.next.node_id.clone());
     transition.next.quorum_confirmed_term = Some(transition.next.current_term);

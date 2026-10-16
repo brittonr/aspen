@@ -3,7 +3,7 @@ use std::io::Write;
 
 use cap_fs_ext::OpenOptionsFollowExt;
 
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Path = std::path::Path;
 type PathBuf = std::path::PathBuf;
 type Result<T> = crate::error::Result<T>;
@@ -15,7 +15,7 @@ const _: () = assert!(MAX_LOCAL_STORE_COMPONENTS <= 1_000);
 const _: () = assert!(MAX_LOCAL_STORE_ENTRIES <= 1_000_000);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LocalStoreKind {
+pub enum Kind {
     Artifact,
     Chunk,
     Retention,
@@ -26,7 +26,7 @@ pub enum LocalStoreKind {
     Durable,
 }
 
-impl LocalStoreKind {
+impl Kind {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Artifact => "artifact",
@@ -42,13 +42,13 @@ impl LocalStoreKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct LocalStorePath {
+pub struct Locator {
     relative: PathBuf,
 }
 
-impl LocalStorePath {
+impl Locator {
     pub fn parse(input: &str) -> Result<Self> {
-        validate_local_locator(input)?;
+        validate_locator(input)?;
         let path = Path::new(input);
         let mut relative = PathBuf::new();
         let mut component_count = 0usize;
@@ -102,7 +102,7 @@ impl LocalStorePath {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LocalStoreEntryKind {
+pub enum MemberKind {
     File,
     Directory,
     Symlink,
@@ -110,18 +110,18 @@ pub enum LocalStoreEntryKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LocalStoreEntry {
+pub struct Member {
     pub name: String,
-    pub path: LocalStorePath,
-    pub kind: LocalStoreEntryKind,
+    pub path: Locator,
+    pub kind: MemberKind,
 }
 
-pub struct LocalStoreRoot {
-    kind: LocalStoreKind,
+pub struct StorageRoot {
+    kind: Kind,
     dir: cap_std::fs::Dir,
 }
 
-impl std::fmt::Debug for LocalStoreRoot {
+impl std::fmt::Debug for StorageRoot {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.debug_struct("LocalStoreRoot").field("kind", &self.kind).finish_non_exhaustive()
     }

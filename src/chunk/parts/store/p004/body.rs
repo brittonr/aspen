@@ -1,5 +1,5 @@
 
-pub fn sync_missing_chunks(source_root: &Path, dest_root: &Path, manifest_ref: &str) -> Result<ChunkStoreSync> {
+pub fn sync_missing_chunks(source_root: &Path, dest_root: &Path, manifest_ref: &str) -> Result<ChunkSync> {
     let source_root = open_capability_chunk_root(source_root)?;
     let dest_root = open_capability_chunk_root(dest_root)?;
     sync_missing_chunks_with_roots(&source_root, &dest_root, manifest_ref)
@@ -9,7 +9,7 @@ pub fn sync_missing_chunks_with_roots(
     source_root: &CapabilityChunkRoot,
     dest_root: &CapabilityChunkRoot,
     manifest_ref: &str,
-) -> Result<ChunkStoreSync> {
+) -> Result<ChunkSync> {
     ensure_dirs(dest_root)?;
     let manifest = read_manifest_with_root(source_root, manifest_ref)?;
     let chunk_refs = manifest.chunks.iter().map(|chunk| chunk.chunk_ref.clone()).collect::<Vec<_>>();
@@ -19,7 +19,7 @@ pub fn sync_missing_chunks_with_roots(
                 ("transform-mode", "fail"),
                 ("deny-unsupported-transform", "pass"),
             ]);
-        store_receipt(dest_root, &receipt_value)?;
+        receipt(dest_root, &receipt_value)?;
         return Err(MoltenError::invalid_harness(message));
     }
     let manifest_bytes = source_root.root().read(&manifest_path(manifest_ref)?)?;
@@ -44,7 +44,7 @@ pub fn sync_missing_chunks_with_roots(
         missing_before: &scan.missing_before,
     })?;
     verify_manifest_with_root(dest_root, manifest_ref)?;
-    let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
+    let receipt_value = receipt_value(ChunkReceiptValueInput {
         operation: "remote-sync",
         decision: "pass",
         manifest_ref: Some(&manifest.manifest_ref),
@@ -64,7 +64,7 @@ pub fn sync_missing_chunks_with_roots(
     let available_after = manifest.chunks.iter().map(|chunk| chunk.chunk_ref.clone()).collect::<Vec<_>>();
     index_set_manifest_chunk_availability(dest_root, &manifest, &available_after, &[], Some(&receipt_value))?;
     index_set_partial_fetch(dest_root, &manifest.manifest_ref, "complete", &scan.missing_before, &fetched_chunks)?;
-    Ok(ChunkStoreSync {
+    Ok(ChunkSync {
         manifest_ref: manifest.manifest_ref,
         missing_before: scan.missing_before,
         fetched_chunks,
@@ -161,7 +161,7 @@ fn write_head(input: HeadInput<'_>) -> Result<String> {
                 ("manifest-identity-preserved", "fail"),
                 ("transport-does-not-grant-trust", "pass"),
             ]);
-        store_receipt(input.store_root, &receipt_value)?;
+        receipt(input.store_root, &receipt_value)?;
         return Err(MoltenError::invalid_harness(message));
     }
     write_immutable_blob(
@@ -197,7 +197,7 @@ fn write_parts(input: PartsInput<'_>) -> Result<Vec<IrohChunkBlob>> {
                         ("deny-corrupt-or-missing-chunk", "pass"),
                     ],
                 );
-                store_receipt(input.store_root, &receipt_value)?;
+                receipt(input.store_root, &receipt_value)?;
                 return Err(error);
             }
         };
@@ -227,7 +227,7 @@ struct FinishInput<'a> {
     chunk_refs: &'a [String],
 }
 
-fn finish_pass(input: FinishInput<'_>) -> Result<ChunkStoreIrohPublish> {
+fn finish_pass(input: FinishInput<'_>) -> Result<ChunkIrohPublish> {
     let ticket_value = iroh_ticket_value(&input.manifest.manifest_ref, &input.manifest_blob_ref, &input.chunk_blobs);
     let ticket_ref = canonical_hash(&ticket_value)?;
     write_immutable_bytes(
@@ -239,7 +239,7 @@ fn finish_pass(input: FinishInput<'_>) -> Result<ChunkStoreIrohPublish> {
     )?;
     let ticket = format!("iroh-local-chunk:{}", input.manifest.manifest_ref);
     let chunk_blob_refs = input.chunk_blobs.iter().map(|chunk| chunk.blob_ref.clone()).collect::<Vec<_>>();
-    let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
+    let receipt_value = receipt_value(ChunkReceiptValueInput {
         operation: "iroh-publish",
         decision: "pass",
         manifest_ref: Some(&input.manifest.manifest_ref),
@@ -258,8 +258,8 @@ fn finish_pass(input: FinishInput<'_>) -> Result<ChunkStoreIrohPublish> {
             record("chunk-blob-refs", vec![sequence(chunk_blob_refs.iter().map(string).collect())]),
         ],
     });
-    store_receipt(input.store_root, &receipt_value)?;
-    Ok(ChunkStoreIrohPublish {
+    receipt(input.store_root, &receipt_value)?;
+    Ok(ChunkIrohPublish {
         ticket,
         manifest_ref: input.manifest.manifest_ref,
         manifest_blob_ref: input.manifest_blob_ref,

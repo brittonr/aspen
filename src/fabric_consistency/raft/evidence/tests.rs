@@ -6,12 +6,12 @@ const FIRST_OBSERVATION_SEQUENCE: u32 = 0;
 
 // r[verify molten.fabric_consistency.evidence_granularity]
 #[test]
-fn selected_evidence_records_milestones_and_suppresses_heartbeat_receipts() {
+fn selected_records_milestones_and_suppresses_heartbeat_receipts() {
     let (plan, state) = start_plan();
-    let mut ledger = ReplicaEvidenceLedger::new(&plan).expect("evidence ledger");
+    let mut ledger = ReplicaLedger::new(&plan).expect("evidence ledger");
     assert_eq!(ledger.records().len(), STARTUP_EVIDENCE_COUNT);
-    assert_eq!(ledger.records()[0].kind, ReplicaEvidenceKind::GroupAdmission);
-    assert_eq!(ledger.records()[1].kind, ReplicaEvidenceKind::Configuration);
+    assert_eq!(ledger.records()[0].kind, ReplicaKind::GroupAdmission);
+    assert_eq!(ledger.records()[1].kind, ReplicaKind::Configuration);
 
     ledger
         .observe(
@@ -70,18 +70,14 @@ fn selected_evidence_records_milestones_and_suppresses_heartbeat_receipts() {
 
 /// The commit and read records carry quorum evidence from both voters, and aggregate health stays
 /// unadmitted.
-fn assert_selected_quorum_reads(ledger: &ReplicaEvidenceLedger, committed: &ReplicaState) {
-    let commit = ledger
-        .records()
-        .iter()
-        .find(|record| record.kind == ReplicaEvidenceKind::Commit)
-        .expect("commit evidence");
+fn assert_selected_quorum_reads(ledger: &ReplicaLedger, committed: &ReplicaState) {
+    let commit = ledger.records().iter().find(|record| record.kind == ReplicaKind::Commit).expect("commit evidence");
     assert!(commit.quorum_evidence_ref.is_some());
     assert_eq!(commit.quorum_members, vec![super::tests::NODE_A.to_string(), super::tests::NODE_B.to_string()]);
     let read = ledger
         .records()
         .iter()
-        .find(|record| record.kind == ReplicaEvidenceKind::ReadCurrentness)
+        .find(|record| record.kind == ReplicaKind::ReadCurrentness)
         .expect("read evidence");
     assert!(read.quorum_evidence_ref.is_some());
     assert_eq!(read.quorum_members, vec![super::tests::NODE_A.to_string(), super::tests::NODE_B.to_string()]);
@@ -95,8 +91,8 @@ fn assert_selected_quorum_reads(ledger: &ReplicaEvidenceLedger, committed: &Repl
 // r[verify molten.fabric_consistency.final_validation]
 #[test]
 fn offline_quorum_validation_accepts_distinct_admitted_majority_and_rejects_false_quorum() {
-    let valid = quorum_evidence(vec![super::tests::NODE_A.to_string(), super::tests::NODE_B.to_string()]);
-    let accepted = validate_replica_quorum_evidence(&valid).expect("distinct admitted quorum");
+    let valid = quorum(vec![super::tests::NODE_A.to_string(), super::tests::NODE_B.to_string()]);
+    let accepted = validate_replica_quorum(&valid).expect("distinct admitted quorum");
     assert_eq!(accepted.acknowledgement_members, vec![
         super::tests::NODE_A.to_string(),
         super::tests::NODE_B.to_string()
@@ -104,25 +100,25 @@ fn offline_quorum_validation_accepts_distinct_admitted_majority_and_rejects_fals
 
     let mut duplicate = valid.clone();
     duplicate.acknowledgement_members = vec![super::tests::NODE_A.to_string(), super::tests::NODE_A.to_string()];
-    let duplicate_error = validate_replica_quorum_evidence(&duplicate).expect_err("duplicate voter must deny");
+    let duplicate_error = validate_replica_quorum(&duplicate).expect_err("duplicate voter must deny");
     assert!(duplicate_error.to_string().contains("duplicate acknowledgements"));
 
     let mut minority = valid.clone();
     minority.acknowledgement_members = vec![super::tests::NODE_A.to_string()];
-    let minority_error = validate_replica_quorum_evidence(&minority).expect_err("minority must deny");
+    let minority_error = validate_replica_quorum(&minority).expect_err("minority must deny");
     assert!(minority_error.to_string().contains("required distinct admitted acknowledgements"));
 
     let mut outsider = valid;
     outsider.acknowledgement_members = vec![super::tests::NODE_A.to_string(), "node-outside-membership".to_string()];
-    let outsider_error = validate_replica_quorum_evidence(&outsider).expect_err("outsider must deny");
+    let outsider_error = validate_replica_quorum(&outsider).expect_err("outsider must deny");
     assert!(outsider_error.to_string().contains("outside admitted membership"));
 }
 
 // r[verify molten.fabric_consistency.evidence_granularity]
 #[test]
-fn evidence_capacity_saturates_without_growth_and_failure_is_selected_when_space_exists() {
+fn capacity_saturates_without_growth_and_failure_is_selected_when_space_exists() {
     let (plan, state) = start_plan();
-    let mut bounded = ReplicaEvidenceLedger::with_capacity(&plan, STARTUP_EVIDENCE_COUNT).expect("bounded ledger");
+    let mut bounded = ReplicaLedger::with_capacity(&plan, STARTUP_EVIDENCE_COUNT).expect("bounded ledger");
     bounded
         .observe(&state, &ReplicaEvent::Stop, &ReplicaExecutionOutcome::Denied {
             retained: state.clone(),
@@ -132,14 +128,14 @@ fn evidence_capacity_saturates_without_growth_and_failure_is_selected_when_space
     assert!(bounded.saturated());
     assert_eq!(bounded.records().len(), STARTUP_EVIDENCE_COUNT);
 
-    let mut selected = ReplicaEvidenceLedger::new(&plan).expect("selected failure ledger");
+    let mut selected = ReplicaLedger::new(&plan).expect("selected failure ledger");
     selected
         .observe(&state, &ReplicaEvent::Stop, &ReplicaExecutionOutcome::Denied {
             retained: state.clone(),
             diagnostic: "selected denial".to_string(),
         })
         .expect("selected failure");
-    assert_eq!(selected.records().last().expect("failure record").kind, ReplicaEvidenceKind::Failure);
+    assert_eq!(selected.records().last().expect("failure record").kind, ReplicaKind::Failure);
 }
 
 // r[verify molten.fabric_consistency.evidence_granularity]
@@ -163,9 +159,9 @@ fn recovery_startup_selects_one_recovery_record() {
     state.last_applied = INITIAL_LOG_INDEX;
     plan.state = state;
     plan.initial_effects = vec![ReplicaEffect::RestoreApplicationSnapshot { snapshot }];
-    let ledger = ReplicaEvidenceLedger::new(&plan).expect("recovery evidence ledger");
+    let ledger = ReplicaLedger::new(&plan).expect("recovery evidence ledger");
     assert_eq!(ledger.records().len(), RECOVERY_EVIDENCE_COUNT);
-    assert_eq!(ledger.records().last().expect("recovery record").kind, ReplicaEvidenceKind::Recovery);
+    assert_eq!(ledger.records().last().expect("recovery record").kind, ReplicaKind::Recovery);
 }
 
 fn start_plan() -> (ReplicaStartPlan, ReplicaState) {
@@ -198,7 +194,7 @@ fn vote_envelope(state: &ReplicaState) -> ReplicaMessageEnvelope {
         service_generation: state.profile.service_generation,
         from: super::tests::NODE_B.to_string(),
         to: super::tests::NODE_A.to_string(),
-        message: RaftMessage::VoteResponse {
+        message: Message::VoteResponse {
             term: INITIAL_LOG_INDEX,
             voter_id: super::tests::NODE_B.to_string(),
             granted: true,
@@ -214,7 +210,7 @@ fn read_acknowledgement_envelope(state: &ReplicaState, request_ref: &str) -> Rep
         service_generation: state.profile.service_generation,
         from: super::tests::NODE_B.to_string(),
         to: super::tests::NODE_A.to_string(),
-        message: RaftMessage::ReadAcknowledgement {
+        message: Message::ReadAcknowledgement {
             term: state.current_term,
             follower_id: super::tests::NODE_B.to_string(),
             request_ref: request_ref.to_string(),
@@ -224,9 +220,9 @@ fn read_acknowledgement_envelope(state: &ReplicaState, request_ref: &str) -> Rep
     }
 }
 
-fn quorum_evidence(acknowledgement_members: Vec<String>) -> ReplicaQuorumEvidence {
-    ReplicaQuorumEvidence {
-        boundary: ReplicaQuorumEvidenceBoundary::Commit,
+fn quorum(acknowledgement_members: Vec<String>) -> ReplicaQuorum {
+    ReplicaQuorum {
+        boundary: ReplicaQuorumBoundary::Commit,
         group_binding_ref: super::tests::test_ref("quorum-group"),
         membership_ref: super::tests::test_ref("quorum-membership"),
         config_epoch: INITIAL_LOG_INDEX,

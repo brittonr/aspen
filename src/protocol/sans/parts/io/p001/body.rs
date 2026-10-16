@@ -1,5 +1,5 @@
 
-fn transition_receipt_facts_value(input: TransitionFactsValueInput<'_>) -> Result<IoValue> {
+fn transition_receipt_facts_value(input: TransitionFactsValueInput<'_>) -> Result<Value> {
     Ok(record("sans-io-protocol-transition-v1", vec![
         string(SANS_IO_TRANSITION_SCHEMA),
         field_string("decision", input.decision),
@@ -57,28 +57,28 @@ fn validate_text(label: &str, value: &str) -> Result<()> {
     }
 }
 
-fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
+fn record(label: &'static str, fields: Vec<Value>) -> Value {
     crate::preserves_rail::record(label, fields)
 }
 
-fn field_string(label: &'static str, value: &str) -> IoValue {
+fn field_string(label: &'static str, value: &str) -> Value {
     record(label, vec![string(value)])
 }
 
-fn field_sequence(label: &'static str, values: Vec<IoValue>) -> IoValue {
+fn field_sequence(label: &'static str, values: Vec<Value>) -> Value {
     record(label, vec![crate::preserves_rail::sequence(values)])
 }
 
-fn string(value: &str) -> IoValue {
+fn string(value: &str) -> Value {
     crate::preserves_rail::string(value)
 }
 
-fn ref_values(refs: &[String]) -> Result<Vec<IoValue>> {
+fn ref_values(refs: &[String]) -> Result<Vec<Value>> {
     validate_refs(refs, "sans-io ref")?;
     Ok(refs.iter().map(|reference| string(reference)).collect())
 }
 
-fn string_values(values: &[String]) -> Result<Vec<IoValue>> {
+fn string_values(values: &[String]) -> Result<Vec<Value>> {
     ensure_diagnostic_bound(values.len())?;
     Ok(values.iter().map(|value| string(value)).collect())
 }
@@ -99,15 +99,15 @@ mod tests {
         vec![local_ref(label)]
     }
 
-    fn input() -> ProtocolCoreInput {
-        ProtocolCoreInput {
-            state: ProtocolCoreState {
+    fn input() -> Input {
+        Input {
+            state: State {
                 protocol_id: "node-control-sans-io-fixture".to_string(),
                 phase: PHASE_ACTIVE.to_string(),
                 state_ref: local_ref("before-state"),
                 sequence: 1,
             },
-            event: ProtocolCoreEvent {
+            event: Event {
                 event_kind: EVENT_MESSAGE.to_string(),
                 message_ref: local_ref("message"),
                 freshness_ref: local_ref("freshness"),
@@ -117,7 +117,7 @@ mod tests {
                 requires_replay: true,
                 malformed: false,
             },
-            facts: ProtocolCoreFacts {
+            facts: Facts {
                 limit_profile_ref: local_ref("limits"),
                 authority_refs: refs("authority"),
                 policy_refs: refs("policy"),
@@ -134,8 +134,8 @@ mod tests {
     // r[verify molten.testing.sans_io_positive_negative_fixtures]
     #[test]
     fn same_inputs_produce_same_transition_outputs() {
-        let first = evaluate_protocol_transition(&input()).expect("first transition");
-        let second = evaluate_protocol_transition(&input()).expect("second transition");
+        let first = evaluate_transition(&input()).expect("first transition");
+        let second = evaluate_transition(&input()).expect("second transition");
         assert_eq!(first, second);
         assert_eq!(first.decision, DECISION_PASS);
         assert_eq!(first.outbound_envelope_refs.len(), 1);
@@ -149,7 +149,7 @@ mod tests {
         denied.facts.authority_refs.clear();
         denied.facts.policy_refs.clear();
         denied.facts.replay_refs.clear();
-        let transition = evaluate_protocol_transition(&denied).expect("denied transition");
+        let transition = evaluate_transition(&denied).expect("denied transition");
         assert_eq!(transition.decision, DECISION_DENY);
         assert!(transition.state_delta_ref.is_none());
         assert!(transition.outbound_envelope_refs.is_empty());
@@ -161,7 +161,7 @@ mod tests {
     // r[verify molten.runtime_patterns.sans_io_shell_adapter]
     #[test]
     fn shell_drain_denies_pre_admission_mutation_and_missing_gates() {
-        let transition = evaluate_protocol_transition(&input()).expect("transition");
+        let transition = evaluate_transition(&input()).expect("transition");
         let drained = drain_shell_outputs_after_gates(&ShellDrainInput {
             transition,
             transport_admission_refs: Vec::new(),
@@ -186,7 +186,7 @@ mod tests {
     #[test]
     fn replay_fixture_binds_transition_state_and_effect_refs() {
         let input = input();
-        let transition = evaluate_protocol_transition(&input).expect("transition");
+        let transition = evaluate_transition(&input).expect("transition");
         let drained = drain_shell_outputs_after_gates(&ShellDrainInput {
             transition: transition.clone(),
             transport_admission_refs: refs("transport-admission"),
@@ -198,7 +198,7 @@ mod tests {
         })
         .expect("drain");
         assert_eq!(drained.decision, DECISION_PASS);
-        let replay = sans_io_replay_fixture_value(&input, &transition, &drained).expect("replay fixture");
+        let replay = replay_fixture_value(&input, &transition, &drained).expect("replay fixture");
         let text = crate::preserves_rail::to_text(&replay).expect("replay text");
         assert!(text.contains("sans-io-replay-fixture-v1"));
         assert!(text.contains(&transition.transition_ref));

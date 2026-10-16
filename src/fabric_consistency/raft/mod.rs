@@ -1,3 +1,4 @@
+#[path = "parts/admission/mod.rs"]
 mod admission;
 mod application;
 mod canonical;
@@ -6,8 +7,10 @@ mod durability;
 mod evidence;
 mod executor;
 mod iroh;
+#[path = "parts/model/mod.rs"]
 mod model;
 mod ports;
+#[path = "parts/recovery/mod.rs"]
 mod recovery;
 mod service;
 mod time;

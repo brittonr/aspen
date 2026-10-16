@@ -3,7 +3,7 @@ const MAX_PERFORMANCE_RECEIPT_REFS: usize = 128;
 const MAX_RECEIPT_VALIDATION_BLOCKERS: usize = 16;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PerformanceReceiptInput {
+pub struct ReceiptInput {
     pub run: super::model::BenchmarkRun,
     pub comparison_peer_run: Option<super::model::BenchmarkRun>,
     pub comparison: Option<super::model::BenchmarkComparison>,
@@ -14,65 +14,65 @@ pub struct PerformanceReceiptInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PerformanceReceipt {
-    pub input: PerformanceReceiptInput,
-    pub evidence_role: super::model::PerformanceEvidenceRole,
+pub struct Receipt {
+    pub input: ReceiptInput,
+    pub evidence_role: super::model::EvidenceRole,
     pub non_claims: Vec<String>,
     pub receipt_ref: String,
 }
 
-pub fn build_performance_receipt(
-    mut input: PerformanceReceiptInput,
-) -> super::model::PerformanceResult<PerformanceReceipt> {
+pub fn build_receipt(
+    mut input: ReceiptInput,
+) -> super::model::Result<Receipt> {
     normalize_input(&mut input);
     validate_receipt_input(&input)?;
-    let mut receipt = PerformanceReceipt {
+    let mut receipt = Receipt {
         input,
-        evidence_role: super::model::PerformanceEvidenceRole::RecordedOnly,
+        evidence_role: super::model::EvidenceRole::RecordedOnly,
         non_claims: super::profile::PERFORMANCE_NON_CLAIMS.iter().map(|value| (*value).to_string()).collect(),
         receipt_ref: String::new(),
     };
     receipt.receipt_ref =
-        crate::preserves_rail::canonical_hash(&performance_receipt_value(&receipt)).map_err(|error| {
-            super::model::PerformanceDenial::new(format!("performance receipt hashing failed: {error}"))
+        crate::preserves_rail::canonical_hash(&receipt_value(&receipt)).map_err(|error| {
+            super::model::Denial::new(format!("performance receipt hashing failed: {error}"))
         })?;
     Ok(receipt)
 }
 
-pub fn validate_performance_receipt(receipt: &PerformanceReceipt) -> super::model::PerformanceResult<()> {
+pub fn validate_receipt(receipt: &Receipt) -> super::model::Result<()> {
     validate_receipt_input(&receipt.input)?;
-    if receipt.evidence_role != super::model::PerformanceEvidenceRole::RecordedOnly {
-        return Err(super::model::PerformanceDenial::new("performance receipt evidence role is not recorded-only"));
+    if receipt.evidence_role != super::model::EvidenceRole::RecordedOnly {
+        return Err(super::model::Denial::new("performance receipt evidence role is not recorded-only"));
     }
     let expected_non_claims =
         super::profile::PERFORMANCE_NON_CLAIMS.iter().map(|value| (*value).to_string()).collect::<Vec<_>>();
     if receipt.non_claims != expected_non_claims {
-        return Err(super::model::PerformanceDenial::new("performance receipt changes required non-claims"));
+        return Err(super::model::Denial::new("performance receipt changes required non-claims"));
     }
-    let expected = crate::preserves_rail::canonical_hash(&performance_receipt_value(receipt)).map_err(|error| {
-        super::model::PerformanceDenial::new(format!("performance receipt hashing failed: {error}"))
+    let expected = crate::preserves_rail::canonical_hash(&receipt_value(receipt)).map_err(|error| {
+        super::model::Denial::new(format!("performance receipt hashing failed: {error}"))
     })?;
     if receipt.receipt_ref != expected {
-        return Err(super::model::PerformanceDenial::new("performance receipt identity is stale or tampered"));
+        return Err(super::model::Denial::new("performance receipt identity is stale or tampered"));
     }
     Ok(())
 }
 
-pub fn validate_performance_receipt_against(
-    receipt: &PerformanceReceipt,
-    expected_input: &PerformanceReceiptInput,
-) -> super::model::PerformanceResult<()> {
-    validate_performance_receipt(receipt)?;
-    let expected = build_performance_receipt(expected_input.clone())?;
+pub fn validate_receipt_against(
+    receipt: &Receipt,
+    expected_input: &ReceiptInput,
+) -> super::model::Result<()> {
+    validate_receipt(receipt)?;
+    let expected = build_receipt(expected_input.clone())?;
     if receipt != &expected {
-        return Err(super::model::PerformanceDenial::new(
+        return Err(super::model::Denial::new(
             "performance receipt differs from the independently derived run or comparison",
         ));
     }
     Ok(())
 }
 
-pub fn performance_receipt_value(receipt: &PerformanceReceipt) -> preserves::IOValue {
+pub fn receipt_value(receipt: &Receipt) -> preserves::IOValue {
     let run = &receipt.input.run;
     let phases = phase_values(run);
     crate::preserves_rail::record("wasm-component-performance-receipt-v1", vec![
@@ -157,7 +157,7 @@ fn phase_values(run: &super::model::BenchmarkRun) -> Vec<preserves::IOValue> {
         .collect()
 }
 
-pub fn performance_receipt_summary(receipt: &PerformanceReceipt) -> String {
+pub fn receipt_summary(receipt: &Receipt) -> String {
     let comparison = receipt.input.comparison.as_ref().map_or("recorded-run", |_| "recorded-comparison");
     format!(
         "Wasm component performance {comparison} suite={} run={} receipt={} role=recorded-only (non-normative)",
@@ -165,13 +165,13 @@ pub fn performance_receipt_summary(receipt: &PerformanceReceipt) -> String {
     )
 }
 
-fn validate_receipt_input(input: &PerformanceReceiptInput) -> super::model::PerformanceResult<()> {
+fn validate_receipt_input(input: &ReceiptInput) -> super::model::Result<()> {
     super::comparison::validate_benchmark_run(&input.run)?;
     if let Some(peer) = &input.comparison_peer_run {
         super::comparison::validate_benchmark_run(peer)?;
     }
-    let profile = super::profile::supported_performance_profile()?;
-    let expected_profile_ref = super::profile::performance_profile_ref(&profile);
+    let profile = super::profile::supported()?;
+    let expected_profile_ref = super::profile::r#ref(&profile);
     let mut blockers = Vec::with_capacity(MAX_RECEIPT_VALIDATION_BLOCKERS);
     if input.run.performance_profile_ref != expected_profile_ref
         || input
@@ -195,7 +195,7 @@ fn validate_receipt_input(input: &PerformanceReceiptInput) -> super::model::Perf
     }
     match (&input.comparison, &input.comparison_peer_run) {
         (Some(comparison), Some(peer)) => {
-            if comparison.comparison_ref != super::comparison::benchmark_comparison_ref(comparison) {
+            if comparison.comparison_ref != super::comparison::benchmark_ref(comparison) {
                 blockers.push("performance comparison identity does not match its canonical fields".to_string());
             }
             let runs = if comparison.baseline_run_ref == input.run.run_ref
@@ -229,11 +229,11 @@ fn validate_receipt_input(input: &PerformanceReceiptInput) -> super::model::Perf
     if blockers.is_empty() {
         Ok(())
     } else {
-        Err(super::model::PerformanceDenial::from_blockers(blockers))
+        Err(super::model::Denial::from_blockers(blockers))
     }
 }
 
-fn normalize_input(input: &mut PerformanceReceiptInput) {
+fn normalize_input(input: &mut ReceiptInput) {
     input.mantle_evidence_refs = super::model::sorted_unique(&input.mantle_evidence_refs);
     input.valence_evidence_refs = super::model::sorted_unique(&input.valence_evidence_refs);
     input.conformance_receipt_refs = super::model::sorted_unique(&input.conformance_receipt_refs);

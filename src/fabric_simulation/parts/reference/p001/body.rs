@@ -1,5 +1,5 @@
 
-pub fn default_reference_operations() -> Vec<(crate::fabric::ReferenceSystemKind, String, ReferenceServiceOperation)> {
+pub fn default_operations() -> Vec<(crate::fabric::ReferenceSystemKind, String, ReferenceServiceOperation)> {
     let kv_request = blake3_ref(b"reference-kv-commit");
     let log_append_request = blake3_ref(b"reference-log-append");
     let log_replicate_request = blake3_ref(b"reference-log-replicate");
@@ -65,15 +65,15 @@ pub fn operations_for_kind(
         .collect()
 }
 
-pub fn simulation_port_id(class: crate::fabric::FabricPortClass) -> String {
+pub fn port_id(class: crate::fabric::FabricPortClass) -> String {
     format!("molten.fabric.simulation.{}", class.as_str())
 }
 
-pub fn simulation_command_schema(class: crate::fabric::FabricPortClass) -> String {
+pub fn command_schema(class: crate::fabric::FabricPortClass) -> String {
     format!("molten.fabric.simulation.{}.command.v1", class.as_str())
 }
 
-pub fn simulation_event_schema(class: crate::fabric::FabricPortClass) -> String {
+pub fn event_schema(class: crate::fabric::FabricPortClass) -> String {
     format!("molten.fabric.simulation.{}.event.v1", class.as_str())
 }
 

@@ -23,7 +23,7 @@ use molten_core::world_head::WorldHeadStatementRef;
 use molten_core::world_head::WorldHeadTransitionPlan;
 use preserves::IOValue;
 
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 pub const WORLD_HEAD_CLAIM_RECORD: &str = "world-head-claim";
@@ -177,7 +177,7 @@ pub fn canonical_world_head_claim(claim: &WorldHeadClaim) -> Result<CanonicalWor
     crate::preserves_rail::validate_boundary_schema(&value, &WORLD_HEAD_CLAIM_BOUNDARY_SCHEMA)?;
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     let claim_ref = WorldHeadClaimRef::new(crate::preserves_rail::content_ref_from_bytes(&bytes))
-        .map_err(|error| MoltenError::invalid_harness(format!("world-head claim identity failed: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("world-head claim identity failed: {error}")))?;
     Ok(CanonicalWorldHeadClaim {
         claim: claim.clone(),
         claim_ref,
@@ -195,7 +195,7 @@ pub fn parse_canonical_world_head_claim(bytes: &[u8]) -> Result<CanonicalWorldHe
     )?;
     let schema = crate::preserves_rail::required_string_field(&fields[0], "world-head claim schema")?;
     if schema != WORLD_HEAD_CLAIM_SCHEMA {
-        return Err(MoltenError::invalid_harness("unsupported world-head claim schema"));
+        return Err(Failure::invalid_harness("unsupported world-head claim schema"));
     }
     let branch_id = WorldBranchId::new(crate::preserves_rail::required_string_field(
         &named_field_value(&fields[1], "branch-id")?,
@@ -247,7 +247,7 @@ pub fn parse_canonical_world_head_claim(bytes: &[u8]) -> Result<CanonicalWorldHe
     };
     let canonical = canonical_world_head_claim(&claim)?;
     if canonical.bytes != decoded.canonical_bytes {
-        return Err(MoltenError::invalid_harness("world-head claim bytes are not canonical"));
+        return Err(Failure::invalid_harness("world-head claim bytes are not canonical"));
     }
     Ok(canonical)
 }

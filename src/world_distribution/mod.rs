@@ -8,10 +8,12 @@
 )]
 
 mod bridge;
+#[path = "sync/catalog.rs"]
 mod catalog;
 mod claims;
 mod records;
 mod retention;
+#[path = "sync/service.rs"]
 mod service;
 mod status;
 

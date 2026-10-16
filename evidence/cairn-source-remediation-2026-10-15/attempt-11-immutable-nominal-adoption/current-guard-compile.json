@@ -1,0 +1,17 @@
+{
+  "command": [
+    "nix",
+    "develop",
+    "--no-update-lock-file",
+    "-c",
+    "rustc",
+    "--edition=2024",
+    "tools/tracey/inherited_debt_guard.rs",
+    "-o",
+    "/tmp/molten-nominal-adoption11-pp6_l8i4/tracey-guard"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "building '/nix/store/6vnrsssha410nzylwri9bd4448cm5x1b-cargo-octet-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...\nbuilding '/nix/store/jl7g048pkviv3clsfj3ydgvdmm6j2jpa-octet-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...\ncopying 1 paths...\ncopying path '/nix/store/3gij654smll9xp7937mbf4d9gk3gz1xh-cargo-octet-0.1.0' from 'ssh-ng://root@aspen1.local'...\ncopying 1 paths...\ncopying path '/nix/store/178f27ph50xmw8b48pr7vpg1vklm8ap4-octet-0.1.0' from 'ssh-ng://root@aspen1.local'...\nbuilding '/nix/store/1lkyc4jha2a7nr7xp9jzgj9wlkgsql1q-octet-ui-library.drv' on 'ssh-ng://root@aspen1.local'...\ncopying 1 paths...\ncopying path '/nix/store/m1cyjspix8ss5r7q5b3pwy6nq2lxim15-octet-ui-library' from 'ssh-ng://root@aspen1.local'...\nbuilding '/nix/store/bkjf9sr9m81vyz9lyg3w4385q706mp9s-cargo-octet-0.1.0.drv'...\nbuilding '/nix/store/zc01l6qmmdl37nmpsb4hz9b41jikvk9a-nix-shell-env.drv'...\n"
+}

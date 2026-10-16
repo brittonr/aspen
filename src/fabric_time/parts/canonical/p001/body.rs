@@ -1,13 +1,13 @@
 
 // r[impl molten.fabric_time.scheduler]
-pub fn canonical_scheduler_transition(
+pub fn scheduler_transition(
     profile_ref: &str,
     transition: &super::SchedulerTransition,
-) -> crate::error::Result<CanonicalTimeEvent> {
-    canonical_event(
+) -> crate::error::Result<Event> {
+    event(
         EventHeader {
             profile_ref,
-            kind: CanonicalTimeEventKind::Scheduler,
+            kind: EventKind::Scheduler,
             generation: transition.runnable.generation,
             subject: &transition.runnable.runnable_id,
             action: scheduler_action(transition.action),
@@ -21,14 +21,14 @@ pub fn canonical_scheduler_transition(
     )
 }
 
-pub fn canonical_scheduler_selection(
+pub fn scheduler_selection(
     profile_ref: &str,
     selection: &super::SchedulerSelection,
-) -> crate::error::Result<CanonicalTimeEvent> {
-    canonical_event(
+) -> crate::error::Result<Event> {
+    event(
         EventHeader {
             profile_ref,
-            kind: CanonicalTimeEventKind::Scheduler,
+            kind: EventKind::Scheduler,
             generation: selection.selected.generation,
             subject: &selection.selected.runnable_id,
             action: "selected",
@@ -45,32 +45,32 @@ pub fn canonical_scheduler_selection(
 // Entropy output bytes are intentionally absent. Only purpose, bounds, stream
 // position, mode, and generation are evidence-bearing.
 // r[impl molten.fabric_time.entropy]
-pub fn canonical_entropy_event(metadata: &super::EntropyEvidenceMetadata) -> crate::error::Result<CanonicalTimeEvent> {
+pub fn entropy_event(metadata: &super::EntropyEvidenceMetadata) -> crate::error::Result<Event> {
     let expected_replay = match metadata.mode {
         super::EntropyMode::DeterministicSimulation => super::EntropyReplayClass::RecomputeFromExplicitSeed,
         super::EntropyMode::ProductionCryptographic => super::EntropyReplayClass::SecretInputRequired,
     };
     if metadata.replay_class != expected_replay {
-        return Err(crate::error::MoltenError::invalid_harness("entropy evidence mode and replay class mismatch"));
+        return Err(crate::error::Failure::invalid_harness("entropy evidence mode and replay class mismatch"));
     }
     match metadata.mode {
         super::EntropyMode::DeterministicSimulation => {
             let input_ref = metadata.deterministic_input_ref.as_deref().ok_or_else(|| {
-                crate::error::MoltenError::invalid_harness("deterministic entropy evidence requires an input ref")
+                crate::error::Failure::invalid_harness("deterministic entropy evidence requires an input ref")
             })?;
             crate::preserves_rail::validate_content_ref(input_ref)?;
         }
         super::EntropyMode::ProductionCryptographic if metadata.deterministic_input_ref.is_some() => {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "production entropy evidence must not contain a deterministic input ref",
             ));
         }
         super::EntropyMode::ProductionCryptographic => {}
     }
-    canonical_event(
+    event(
         EventHeader {
             profile_ref: &metadata.profile_ref,
-            kind: CanonicalTimeEventKind::Entropy,
+            kind: EventKind::Entropy,
             generation: metadata.generation,
             subject: &metadata.stream_id,
             action: metadata.mode.as_str(),
@@ -88,14 +88,14 @@ pub fn canonical_entropy_event(metadata: &super::EntropyEvidenceMetadata) -> cra
 }
 
 // r[impl molten.fabric_time.deadline_lease]
-pub fn canonical_deadline_event(
+pub fn deadline_event(
     profile_ref: &str,
     decision: &super::DeadlineDecision,
-) -> crate::error::Result<CanonicalTimeEvent> {
-    canonical_event(
+) -> crate::error::Result<Event> {
+    event(
         EventHeader {
             profile_ref,
-            kind: CanonicalTimeEventKind::Deadline,
+            kind: EventKind::Deadline,
             generation: decision.generation,
             subject: &decision.subject_id,
             action: deadline_status(decision.status),
@@ -110,14 +110,14 @@ pub fn canonical_deadline_event(
     )
 }
 
-pub fn canonical_lease_event(
+pub fn lease_event(
     profile_ref: &str,
     decision: &super::LeaseDecision,
-) -> crate::error::Result<CanonicalTimeEvent> {
-    canonical_event(
+) -> crate::error::Result<Event> {
+    event(
         EventHeader {
             profile_ref,
-            kind: CanonicalTimeEventKind::Lease,
+            kind: EventKind::Lease,
             generation: decision.generation,
             subject: &decision.lease_id,
             action: lease_decision(decision.kind),
@@ -135,15 +135,15 @@ pub fn canonical_lease_event(
     )
 }
 
-pub fn canonical_clock_anomaly_event(
+pub fn clock_anomaly_event(
     profile_ref: &str,
     generation: u64,
     decision: &super::WallClockAnomalyDecision,
-) -> crate::error::Result<CanonicalTimeEvent> {
-    canonical_event(
+) -> crate::error::Result<Event> {
+    event(
         EventHeader {
             profile_ref,
-            kind: CanonicalTimeEventKind::ClockAnomaly,
+            kind: EventKind::ClockAnomaly,
             generation,
             subject: "wall-clock",
             action: clock_anomaly(decision.kind),
@@ -162,25 +162,25 @@ pub fn canonical_clock_anomaly_event(
 #[derive(Clone, Copy)]
 pub struct EventHeader<'a> {
     pub profile_ref: &'a str,
-    pub kind: CanonicalTimeEventKind,
+    pub kind: EventKind,
     pub generation: u64,
     pub subject: &'a str,
     pub action: &'a str,
     pub ticks: u64,
 }
 
-pub fn canonical_named_event(header: EventHeader<'_>) -> crate::error::Result<CanonicalTimeEvent> {
-    canonical_event(header, Vec::new(), &["explicit-input", "generation-bound", "bounded-evidence"])
+pub fn named_event(header: EventHeader<'_>) -> crate::error::Result<Event> {
+    event(header, Vec::new(), &["explicit-input", "generation-bound", "bounded-evidence"])
 }
 
 // r[impl molten.fabric_time.evidence]
 // r[impl molten.fabric_time.non_claims]
-pub fn canonical_fabric_time_run(report: FabricTimeRunReport) -> crate::error::Result<CanonicalFabricTimeRun> {
+pub fn run(report: RunReport) -> crate::error::Result<Run> {
     if report.generation == 0 {
-        return Err(crate::error::MoltenError::invalid_harness("fabric time run generation must be non-zero"));
+        return Err(crate::error::Failure::invalid_harness("fabric time run generation must be non-zero"));
     }
     if !matches!(report.profile_kind.as_str(), "live" | "deterministic-simulation" | "both") {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "unsupported fabric-time profile kind: {}",
             report.profile_kind
         )));
@@ -199,14 +199,14 @@ pub fn canonical_fabric_time_run(report: FabricTimeRunReport) -> crate::error::R
         crate::preserves_rail::validate_content_ref(content_ref)?;
     }
     if report.evidence_refs.len() > MAX_RUN_EVIDENCE_REFS {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "fabric time run evidence count {} exceeds {}",
             report.evidence_refs.len(),
             MAX_RUN_EVIDENCE_REFS
         )));
     }
     if report.non_claims != super::REQUIRED_TIME_NON_CLAIMS {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "fabric time run must preserve the complete canonical non-claim set",
         ));
     }
@@ -239,7 +239,7 @@ pub fn canonical_fabric_time_run(report: FabricTimeRunReport) -> crate::error::R
         ]),
     ]);
     let report_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalFabricTimeRun {
+    Ok(Run {
         report_ref,
         report,
         value,
@@ -247,7 +247,7 @@ pub fn canonical_fabric_time_run(report: FabricTimeRunReport) -> crate::error::R
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FabricTimeRunReadback {
+pub struct RunReadback {
     pub profile_ref: String,
     pub profile_kind: String,
     pub generation: u64,

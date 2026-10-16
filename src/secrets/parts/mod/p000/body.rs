@@ -1,8 +1,7 @@
 type BtreeSet<T> = std::collections::BTreeSet<T>;
 type Cow<'a, B> = std::borrow::Cow<'a, B>;
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
-type PathBuf = std::path::PathBuf;
+type MoltenError = crate::error::Failure;
 type Record<T> = preserves::Record<T>;
 type Result<T> = crate::error::Result<T>;
 type Value<T> = preserves::Value<T>;

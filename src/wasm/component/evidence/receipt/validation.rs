@@ -1,9 +1,7 @@
 const MAX_COMPONENT_RECEIPT_REFS: usize = 128;
 const MAX_COMPONENT_RECEIPT_DIAGNOSTICS: usize = 64;
 
-pub(super) fn validate_input_bounds(
-    input: &super::ComponentReceiptInput,
-) -> super::super::super::model::ComponentResult<()> {
+pub(super) fn validate_input_bounds(input: &super::Input) -> super::super::super::model::Result<()> {
     let mut blockers = [
         ("imports", input.imports.len()),
         ("capabilities", input.capabilities.len()),
@@ -26,13 +24,11 @@ pub(super) fn validate_input_bounds(
     if blockers.is_empty() {
         Ok(())
     } else {
-        Err(super::super::super::model::ComponentDenial::from_blockers(blockers))
+        Err(super::super::super::model::Denial::from_blockers(blockers))
     }
 }
 
-pub(super) fn validate_receipt_shape(
-    receipt: &super::ComponentReceipt,
-) -> super::super::super::model::ComponentResult<()> {
+pub(super) fn validate_shape(receipt: &super::ExecutionRecord) -> super::super::super::model::Result<()> {
     let mut blockers = [
         ("component", receipt.input.component_ref.as_str()),
         ("WIT", receipt.input.wit_ref.as_str()),
@@ -44,7 +40,7 @@ pub(super) fn validate_receipt_shape(
     .map(|(label, _)| format!("component receipt {label} ref is malformed"))
     .collect::<Vec<_>>();
     if receipt.input.evidence_scope == super::super::super::model::EvidenceScope::Production
-        && receipt.input.decision == super::ComponentReceiptDecision::Pass
+        && receipt.input.decision == super::Decision::Pass
         && receipt
             .input
             .bundle_ref
@@ -72,7 +68,7 @@ pub(super) fn validate_receipt_shape(
         .map(|(label, _)| format!("component receipt {label} refs are malformed, duplicate, or unsorted")),
     );
     if receipt.input.evidence_scope == super::super::super::model::EvidenceScope::Production
-        && receipt.input.decision == super::ComponentReceiptDecision::Pass
+        && receipt.input.decision == super::Decision::Pass
         && (receipt.input.mantle_evidence_refs.is_empty()
             || receipt.input.valence_evidence_refs.is_empty()
             || receipt.input.cairn_evidence_refs.is_empty())
@@ -90,32 +86,27 @@ pub(super) fn validate_receipt_shape(
     if blockers.is_empty() {
         Ok(())
     } else {
-        Err(super::super::super::model::ComponentDenial::from_blockers(blockers))
+        Err(super::super::super::model::Denial::from_blockers(blockers))
     }
 }
 
-fn validate_stage_fields(receipt: &super::ComponentReceipt, blockers: &mut impl crate::bounded::VecSink<String>) {
+fn validate_stage_fields(receipt: &super::ExecutionRecord, blockers: &mut impl crate::bounded::VecSink<String>) {
     match receipt.input.decision {
-        super::ComponentReceiptDecision::Deny => validate_denial_fields(receipt, blockers),
-        super::ComponentReceiptDecision::Pass => {
+        super::Decision::Deny => validate_denial_fields(receipt, blockers),
+        super::Decision::Pass => {
             if receipt.input.trap_class.is_some() || !receipt.input.diagnostics.is_empty() {
                 blockers.push_item("passing component receipt cannot carry denial class or diagnostics".to_string());
             }
         }
     }
-    if receipt.input.decision == super::ComponentReceiptDecision::Pass
-        && matches!(
-            receipt.input.stage,
-            super::ComponentReceiptStage::Instantiation
-                | super::ComponentReceiptStage::Execution
-                | super::ComponentReceiptStage::Hostcall
-        )
+    if receipt.input.decision == super::Decision::Pass
+        && matches!(receipt.input.stage, super::Stage::Instantiation | super::Stage::Execution | super::Stage::Hostcall)
         && receipt.input.parent_refs.len() != 1
     {
         blockers.push_item("passing component stage receipt requires exactly one parent stage ref".to_string());
     }
-    if receipt.input.stage == super::ComponentReceiptStage::Execution
-        && receipt.input.decision == super::ComponentReceiptDecision::Pass
+    if receipt.input.stage == super::Stage::Execution
+        && receipt.input.decision == super::Decision::Pass
         && (receipt
             .input
             .input_ref
@@ -132,8 +123,8 @@ fn validate_stage_fields(receipt: &super::ComponentReceipt, blockers: &mut impl 
         blockers
             .push_item("passing component execution receipt is missing input, output, or fuel evidence".to_string());
     }
-    if receipt.input.stage == super::ComponentReceiptStage::Hostcall
-        && receipt.input.decision == super::ComponentReceiptDecision::Pass
+    if receipt.input.stage == super::Stage::Hostcall
+        && receipt.input.decision == super::Decision::Pass
         && (receipt.input.imports.is_empty()
             || receipt.input.capabilities.is_empty()
             || receipt.input.policy_refs.is_empty()
@@ -162,15 +153,15 @@ fn validate_stage_fields(receipt: &super::ComponentReceipt, blockers: &mut impl 
     }
 }
 
-fn validate_denial_fields(receipt: &super::ComponentReceipt, blockers: &mut impl crate::bounded::VecSink<String>) {
-    if receipt.input.stage != super::ComponentReceiptStage::Denial {
+fn validate_denial_fields(receipt: &super::ExecutionRecord, blockers: &mut impl crate::bounded::VecSink<String>) {
+    if receipt.input.stage != super::Stage::Denial {
         blockers.push_item("denied component receipt must use the denial stage".to_string());
     }
     let Some(trap_class) = receipt.input.trap_class.as_deref() else {
         blockers.push_item("component denial receipt requires a canonical denial class".to_string());
         return;
     };
-    if super::super::super::model::ComponentDenialClass::parse(trap_class).is_none() {
+    if super::super::super::model::DenialClass::parse(trap_class).is_none() {
         blockers.push_item("component denial receipt class is not recognized".to_string());
     }
     if !matches!(receipt.input.diagnostics.as_slice(), [diagnostic] if diagnostic == trap_class) {

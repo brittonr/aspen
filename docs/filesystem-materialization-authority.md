@@ -4,7 +4,7 @@ Molten treats bundle export, bundle unpacking, retention candidate handoff, and
 release archive construction as filesystem materialization. A logical bundle
 name is not filesystem authority. Reusable materializers therefore receive one
 explicit destination capability and operate only through
-`materialization::MaterializationRoot`.
+`materialization::Root`.
 
 ## Boundary
 
@@ -20,12 +20,12 @@ fixtures. That setup is not canonical materialization evidence.
 
 ## Pure plan
 
-`MaterializationPath` accepts only non-empty UTF-8 relative paths made from
+`materialization::Path` accepts only non-empty UTF-8 relative paths made from
 normal components. It rejects absolute and platform-prefixed paths, `.` and
 `..`, backslash aliases, NUL bytes, empty components, trailing separators, and
 reserved internal staging names.
 
-`MaterializationPolicy` bounds member count, member size, total bytes, and path
+`materialization::Policy` bounds member count, member size, total bytes, and path
 length beneath process-wide hard safety ceilings, and states either `no-replace` or `replace-regular-files`. The pure
 planner validates all members before mutation, rejects duplicate logical
 paths, sorts members by canonical path, and computes a BLAKE3-backed Preserves

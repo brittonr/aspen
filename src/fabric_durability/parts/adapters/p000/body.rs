@@ -37,7 +37,7 @@ const PHASE_RECONCILED_ABORTED: u8 = 6;
 const LENGTH_PREFIX_BYTES: usize = std::mem::size_of::<u64>();
 
 pub struct RedbDurableStateAdapter {
-    profile: CanonicalDurableProfile,
+    profile: DurableProfile,
     state: DurableState,
     root: crate::local_store::DurableStoreRoot,
     database: redb::Database,
@@ -58,18 +58,18 @@ impl RedbDurableStateAdapter {
     // r[impl molten.fabric_durability.live_sim_parity]
     pub fn open(
         root_path: &std::path::Path,
-        profile: CanonicalDurableProfile,
+        profile: DurableProfile,
         descriptor: DurableNamespaceDescriptor,
     ) -> crate::error::Result<Self> {
         if profile.profile.adapter_kind != DurableAdapterKind::LiveRedb {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "Redb durability adapter requires a live Redb profile",
             ));
         }
         validate_namespace_descriptor(&profile.profile, &descriptor)
             .map_err(|issues| adapter_validation_error("namespace", &issues))?;
         let root = crate::local_store::DurableStoreRoot::open(root_path)?;
-        let database_file = root.root().open_database_file(&crate::local_store::LocalStorePath::parse(STORE_FILE)?)?;
+        let database_file = root.root().open_database_file(&crate::local_store::Locator::parse(STORE_FILE)?)?;
         let database = redb::Database::builder().create_file(database_file).map_err(adapter_error)?;
         initialize_tables(&database)?;
         let state = load_state(&database, descriptor)?;
@@ -85,18 +85,18 @@ impl RedbDurableStateAdapter {
         &self.state
     }
 
-    pub fn profile(&self) -> &CanonicalDurableProfile {
+    pub fn profile(&self) -> &DurableProfile {
         &self.profile
     }
 
     // r[impl molten.fabric_durability.durable_log]
-    pub fn append(&mut self, request: &AppendRequest) -> crate::error::Result<CanonicalDurableTransition> {
+    pub fn append(&mut self, request: &AppendRequest) -> crate::error::Result<TransitionEnvelope> {
         let transition = append_log(&self.profile.profile, &self.state, request)
             .map_err(|issues| adapter_validation_error("append", &issues))?;
         if transition.outcome == MutationOutcome::Durable {
             persist_log(&self.database, &transition.next.durable_log)?;
         }
-        let canonical = canonical_durable_transition(&self.profile, &transition)?;
+        let canonical = durable_transition(&self.profile, &transition)?;
         self.state = transition.next;
         Ok(canonical)
     }
@@ -105,11 +105,11 @@ impl RedbDurableStateAdapter {
         &mut self,
         generation: u64,
         durability: DurabilityLevel,
-    ) -> crate::error::Result<CanonicalDurableTransition> {
+    ) -> crate::error::Result<TransitionEnvelope> {
         let transition = flush_log(&self.profile.profile, &self.state, generation, durability)
             .map_err(|issues| adapter_validation_error("flush", &issues))?;
         persist_log(&self.database, &transition.next.durable_log)?;
-        let canonical = canonical_durable_transition(&self.profile, &transition)?;
+        let canonical = durable_transition(&self.profile, &transition)?;
         self.state = transition.next;
         Ok(canonical)
     }
@@ -119,12 +119,12 @@ impl RedbDurableStateAdapter {
         generation: u64,
         retain_from_sequence: u64,
         authority_ref: Option<&str>,
-    ) -> crate::error::Result<CanonicalDurableTransition> {
+    ) -> crate::error::Result<TransitionEnvelope> {
         let transition =
             truncate_log(&self.profile.profile, &self.state, generation, retain_from_sequence, authority_ref)
                 .map_err(|issues| adapter_validation_error("truncate", &issues))?;
         replace_log(&self.database, &transition.next.durable_log)?;
-        let canonical = canonical_durable_transition(&self.profile, &transition)?;
+        let canonical = durable_transition(&self.profile, &transition)?;
         self.state = transition.next;
         Ok(canonical)
     }
@@ -139,11 +139,11 @@ impl RedbDurableStateAdapter {
 
     // r[impl molten.fabric_durability.ordered_store]
     // r[impl molten.fabric_durability.atomic_batch]
-    pub fn apply_batch(&mut self, request: &AtomicBatchRequest) -> crate::error::Result<CanonicalDurableTransition> {
+    pub fn apply_batch(&mut self, request: &AtomicBatchRequest) -> crate::error::Result<TransitionEnvelope> {
         let transition = apply_atomic_batch(&self.profile.profile, &self.state, request)
             .map_err(|issues| adapter_validation_error("ordered batch", &issues))?;
         persist_ordered_batch(&self.database, request, &transition.next)?;
-        let canonical = canonical_durable_transition(&self.profile, &transition)?;
+        let canonical = durable_transition(&self.profile, &transition)?;
         self.state = transition.next;
         Ok(canonical)
     }
@@ -153,10 +153,10 @@ impl RedbDurableStateAdapter {
         &mut self,
         request: &SnapshotRequest,
         bytes: &[u8],
-    ) -> crate::error::Result<CanonicalDurableTransition> {
+    ) -> crate::error::Result<TransitionEnvelope> {
         let actual_ref = blake3_ref(bytes);
         if actual_ref != request.content_ref {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "snapshot content ref mismatch: expected={} actual={actual_ref}",
                 request.content_ref
             )));
@@ -164,7 +164,7 @@ impl RedbDurableStateAdapter {
         let transition = create_snapshot(&self.profile.profile, &self.state, request)
             .map_err(|issues| adapter_validation_error("snapshot", &issues))?;
         persist_snapshot(&self.root, &self.database, request, bytes, &transition.next)?;
-        let canonical = canonical_durable_transition(&self.profile, &transition)?;
+        let canonical = durable_transition(&self.profile, &transition)?;
         self.state = transition.next;
         Ok(canonical)
     }
@@ -188,7 +188,7 @@ impl RedbDurableStateAdapter {
             .get(snapshot_ref)
             .ok_or_else(|| adapter_validation_error("snapshot restore", &[DurabilityIssue::SnapshotNotFound]))?;
         let relative = format!("{SNAPSHOT_DIRECTORY}/{}.bin", snapshot_file_stem(&snapshot.content_ref)?);
-        let bytes = self.root.root().read(&crate::local_store::LocalStorePath::parse(&relative)?)?;
+        let bytes = self.root.root().read(&crate::local_store::Locator::parse(&relative)?)?;
         let actual_ref = blake3_ref(&bytes);
         let plan = plan_snapshot_restore(&self.state, snapshot_ref, target_generation, &actual_ref)
             .map_err(|issues| adapter_validation_error("snapshot restore", &issues))?;
@@ -199,17 +199,17 @@ impl RedbDurableStateAdapter {
     pub fn apply_effect(
         &mut self,
         command: &EffectTransactionCommand,
-    ) -> crate::error::Result<CanonicalDurableTransition> {
+    ) -> crate::error::Result<TransitionEnvelope> {
         let transition = apply_effect_transaction(&self.profile.profile, &self.state, command)
             .map_err(|issues| adapter_validation_error("effect transaction", &issues))?;
         persist_effect(&self.database, command, &transition.next)?;
-        let canonical = canonical_durable_transition(&self.profile, &transition)?;
+        let canonical = durable_transition(&self.profile, &transition)?;
         self.state = transition.next;
         Ok(canonical)
     }
 
-    pub fn recovery(&self, inventory: &RecoveryInventory) -> crate::error::Result<CanonicalRecoveryDecision> {
-        canonical_recovery_decision(&self.profile, &self.state, evaluate_recovery(&self.state, inventory))
+    pub fn recovery(&self, inventory: &RecoveryInventory) -> crate::error::Result<RecoveryEnvelope> {
+        recovery_decision(&self.profile, &self.state, evaluate_recovery(&self.state, inventory))
     }
 
     pub fn status(&self) -> crate::error::Result<DurableStatusReadback> {
@@ -218,7 +218,7 @@ impl RedbDurableStateAdapter {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SimulatedDurabilityFault {
+pub enum SimulatedFault {
     CrashBeforeMutation,
     ResponseLostAfterCommit,
     CapacityExhausted,
@@ -229,7 +229,7 @@ pub enum SimulatedDurabilityFault {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SimulatedDurableStateAdapter {
-    profile: CanonicalDurableProfile,
+    profile: DurableProfile,
     state: DurableState,
     simulated_ticks: u64,
 }

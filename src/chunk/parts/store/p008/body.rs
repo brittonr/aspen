@@ -1,5 +1,5 @@
 
-fn finish_gc(input: GcFinishInput<'_>) -> Result<ChunkStoreGc> {
+fn finish_gc(input: GcFinishInput<'_>) -> Result<ChunkGc> {
     let decision = if input.notes.denials.is_empty() { "pass" } else { "deny" };
     let mut removed_manifests = Vec::new();
     let mut removed_chunks = Vec::new();
@@ -33,7 +33,7 @@ fn finish_gc(input: GcFinishInput<'_>) -> Result<ChunkStoreGc> {
         receipt_value: &receipt_value,
         tombstone_receipt: tombstone_receipt.as_ref(),
     })?;
-    Ok(ChunkStoreGc {
+    Ok(ChunkGc {
         dry_run: input.is_dry_run,
         decision: decision.to_string(),
         removed_manifests,
@@ -44,17 +44,17 @@ fn finish_gc(input: GcFinishInput<'_>) -> Result<ChunkStoreGc> {
     })
 }
 
-pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
+pub fn gc(root: &Path, input: ChunkGcInput<'_>) -> Result<ChunkGc> {
     let root = open_capability_chunk_root(root)?;
     gc_with_root(&root, input)
 }
 
-pub fn gc_with_root(root: &CapabilityChunkRoot, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
+pub fn gc_with_root(root: &CapabilityChunkRoot, input: ChunkGcInput<'_>) -> Result<ChunkGc> {
     ensure_dirs(root)?;
     let targets = gc_targets(
         root,
-        pinned_refs(root, &store_path("pins/manifests")?)?,
-        pinned_refs(root, &store_path("pins/chunks")?)?,
+        pinned_refs(root, &path("pins/manifests")?)?,
+        pinned_refs(root, &path("pins/chunks")?)?,
     )?;
     let action = if input.dry_run {
         crate::retention::ACTION_ELIGIBILITY
@@ -103,7 +103,7 @@ pub fn list_manifest_refs(root: &Path) -> Result<Vec<String>> {
 }
 
 pub fn list_manifest_refs_with_root(root: &CapabilityChunkRoot) -> Result<Vec<String>> {
-    refs_from_dir(root, &store_path("manifests")?)
+    refs_from_dir(root, &path("manifests")?)
 }
 
 pub fn list_chunk_refs(root: &Path) -> Result<Vec<String>> {
@@ -112,7 +112,7 @@ pub fn list_chunk_refs(root: &Path) -> Result<Vec<String>> {
 }
 
 pub fn list_chunk_refs_with_root(root: &CapabilityChunkRoot) -> Result<Vec<String>> {
-    refs_from_dir(root, &store_path("chunks")?)
+    refs_from_dir(root, &path("chunks")?)
 }
 
 pub fn list_receipt_refs(root: &Path) -> Result<Vec<String>> {
@@ -134,12 +134,12 @@ pub fn list_receipt_refs_with_root(root: &CapabilityChunkRoot) -> Result<Vec<Str
     Ok(refs)
 }
 
-pub fn read_receipt(root: &Path, receipt_ref: &str) -> Result<ChunkStoreReceipt> {
+pub fn read_receipt(root: &Path, receipt_ref: &str) -> Result<ChunkReceipt> {
     let root = open_capability_chunk_root(root)?;
     read_receipt_with_root(&root, receipt_ref)
 }
 
-pub fn read_receipt_with_root(root: &CapabilityChunkRoot, receipt_ref: &str) -> Result<ChunkStoreReceipt> {
+pub fn read_receipt_with_root(root: &CapabilityChunkRoot, receipt_ref: &str) -> Result<ChunkReceipt> {
     ensure_dirs(root)?;
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
@@ -214,7 +214,7 @@ struct LinkSeries {
 
 fn link_series(
     manifest: &ChunkManifest,
-    receipts: &[ChunkStoreReceipt],
+    receipts: &[ChunkReceipt],
     chain: &crate::evidence_chain::ChainScope,
     producer: &crate::evidence_chain::ChainProducer,
 ) -> Result<LinkSeries> {

@@ -1,0 +1,21 @@
+{
+  "attempt": "7/20",
+  "command": "nix develop --no-update-lock-file -c cargo test -p molten-core --doc --offline --locked",
+  "exit_code": 0,
+  "passed": 7,
+  "failed": 0,
+  "ignored": 0,
+  "tested_source": "crates/molten-core/src/parts/nominal/p000/body.rs",
+  "tested_api": "nominal::require_session",
+  "source_lines": [
+    9,
+    15,
+    21,
+    27,
+    33,
+    39,
+    45
+  ],
+  "scope": "Existing compile-fail type-separation doctests after textual-source extraction; not Octet lint enforcement or full-workspace documentation tests.",
+  "environment_observation": "Kache logged index-database disk-I/O failures and disabled caching; compilation and doctests completed successfully without cache reconfiguration."
+}

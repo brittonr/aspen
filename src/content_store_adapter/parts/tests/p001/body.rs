@@ -3,13 +3,13 @@
 // r[verify molten.content_store_adapter.live_sim_conformance]
 #[tokio::test]
 async fn live_iroh_blobs_stream_preserves_molten_identity_and_uses_opaque_admitted_transport_key() {
-    let (workspace, root, manifest) = fixture_store("content-adapter-live-iroh");
+    let (workspace, root, manifest) = fixture("content-adapter-live-iroh");
     let identity_workspace = temp_dir("content-adapter-live-identity");
     let (namespace, backend_ref, material) = live_transport_identity(&identity_workspace);
     let endpoint_id = material.endpoint_id.clone();
     let profile = profile(ContentAdapterClass::IrohBlobs);
     assert!(
-        publish_live_iroh_chunks(&profile, &root, &manifest.manifest_ref, LiveIrohIdentity {
+        publish_chunks(&profile, &root, &manifest.manifest_ref, Identity {
             namespace: &namespace,
             endpoint_id: &endpoint_id,
             handle_ref: &test_ref("stale-handle"),
@@ -18,7 +18,7 @@ async fn live_iroh_blobs_stream_preserves_molten_identity_and_uses_opaque_admitt
         .await
         .is_err()
     );
-    let mut publication = publish_live_iroh_chunks(&profile, &root, &manifest.manifest_ref, LiveIrohIdentity {
+    let mut publication = publish_chunks(&profile, &root, &manifest.manifest_ref, Identity {
         namespace: &namespace,
         endpoint_id: &endpoint_id,
         handle_ref: &material.handle_ref,
@@ -28,7 +28,7 @@ async fn live_iroh_blobs_stream_preserves_molten_identity_and_uses_opaque_admitt
     .expect("live publication");
     assert_eq!(publication.manifest().manifest_ref, manifest.manifest_ref);
     let get = command(&profile, publication.manifest(), ContentOperation::Get, None);
-    let execution = execute_live_iroh_stream_get(StreamGetInput {
+    let execution = fetch_stream(StreamGetInput {
         profile: &profile,
         publication: &publication,
         command: &get,
@@ -40,14 +40,14 @@ async fn live_iroh_blobs_stream_preserves_molten_identity_and_uses_opaque_admitt
     .expect("live Iroh stream");
     assert_eq!(execution.state.artifact.terminal, ContentTerminal::Verified);
     assert_eq!(
-        assemble_verified_content(publication.manifest(), &execution.state.artifact, &execution.verified_chunks)
+        assemble_verified(publication.manifest(), &execution.state.artifact, &execution.verified_chunks)
             .unwrap(),
         b"aaaabbbbcccc"
     );
     assert!(!execution.backend_hint_ref.contains(&endpoint_id));
 
     publication.invalidate_first_locator();
-    let stale = execute_live_iroh_stream_get(StreamGetInput {
+    let stale = fetch_stream(StreamGetInput {
         profile: &profile,
         publication: &publication,
         command: &get,
@@ -70,16 +70,16 @@ async fn live_iroh_blobs_stream_preserves_molten_identity_and_uses_opaque_admitt
 fn live_transport_identity(
     identity_workspace: &std::path::Path,
 ) -> (
-    crate::node_state::NodeStateNamespace,
+    crate::node_state::Scope,
     String,
     crate::fabric_crypto_identity::TransportEndpointKeyMaterial,
 ) {
-    let namespace = crate::node_state::NodeStateNamespace::open(
-        crate::node_state::NodeStateNamespaceKind::Identity,
+    let namespace = crate::node_state::Scope::open(
+        crate::node_state::NamespaceKind::Identity,
         identity_workspace,
     )
     .expect("identity namespace");
-    let crypto_profile = crate::fabric_crypto_identity::canonical_crypto_profile(
+    let crypto_profile = crate::fabric_crypto_identity::profile(
         &crate::fabric_crypto_identity::production_ed25519_profile(
             test_ref("content-crypto-profile"),
             test_ref("content-crypto-entropy"),
@@ -88,7 +88,7 @@ fn live_transport_identity(
     .expect("crypto profile");
     let backend_ref = test_ref("content-identity-backend");
     let adapter =
-        crate::fabric_crypto_identity::IrohEd25519FileAdapter::new(&namespace, crypto_profile, backend_ref.clone())
+        crate::fabric_crypto_identity::IrohEd25519::new(&namespace, crypto_profile, backend_ref.clone())
             .expect("crypto adapter");
     adapter
         .resolve_or_generate(
@@ -110,7 +110,7 @@ fn live_transport_identity(
 fn status_and_backend_protection_are_redacted_bounded_and_non_authoritative() {
     let profile = profile(ContentAdapterClass::CapabilityLocal);
     let backend_label = "/private/root?ticket=secret";
-    let status = bounded_content_status(StatusInput {
+    let status = bounded_status(StatusInput {
         profile: &profile,
         generation: GENERATION_ONE,
         active_operations: 0,

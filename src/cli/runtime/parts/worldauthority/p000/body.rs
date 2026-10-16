@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use molten::error::MoltenError;
+use molten::error::Failure;
 use molten::error::Result;
 use molten::world_branch_authority::encode_receipt;
 use molten::world_branch_authority::plan_receipt;
@@ -166,7 +166,7 @@ fn write_plan(request_path: &Path, policy_path: &Path, out: &Path) -> Result<()>
     let plan = load_plan(request_path, policy_path)?;
     let receipt = plan_receipt(&plan);
     let (receipt_ref, bytes) = encode_receipt(&receipt)?;
-    std::fs::write(out, bytes).map_err(MoltenError::from)?;
+    std::fs::write(out, bytes).map_err(Failure::from)?;
     println!("plan_ref={}", plan.plan_ref);
     println!("receipt_ref={receipt_ref}");
     println!("allowed={}", plan.allowed);
@@ -221,11 +221,11 @@ fn denied_runtime_command(input: DeniedCommandInput<'_>) -> Result<()> {
     };
     let receipt = plan_receipt(&denied);
     let (receipt_ref, bytes) = encode_receipt(&receipt)?;
-    std::fs::write(receipt_out, bytes).map_err(MoltenError::from)?;
+    std::fs::write(receipt_out, bytes).map_err(Failure::from)?;
     println!("decision=denied");
     println!("receipt_ref={receipt_ref}");
     println!("diagnostic={}", receipt.diagnostic);
-    Err(MoltenError::invalid_harness(format!(
+    Err(Failure::invalid_harness(format!(
         "world branch {operation} requires an admitted runtime adapter"
     )))
 }
@@ -235,16 +235,16 @@ fn load_plan(request_path: &Path, policy_path: &Path) -> Result<WorldBranchAutho
     let policy_bytes = read_bounded(policy_path, MAXIMUM_POLICY_BYTES, "world branch policy")?;
     let request = parse_request(&request_bytes)?;
     let policy = std::str::from_utf8(&policy_bytes)
-        .map_err(|_| MoltenError::invalid_harness("world branch policy is not UTF-8"))?;
+        .map_err(|_| Failure::invalid_harness("world branch policy is not UTF-8"))?;
     let (facts, current) = request.into_facts()?;
     Ok(plan_world_branch_authority(policy, &facts, &current))
 }
 
 fn parse_request(bytes: &[u8]) -> Result<OperatorRequest> {
     let request: OperatorRequest = serde_json::from_slice(bytes)
-        .map_err(|error| MoltenError::invalid_harness(format!("invalid world authority request: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("invalid world authority request: {error}")))?;
     if request.schema != OPERATOR_REQUEST_SCHEMA {
-        return Err(MoltenError::invalid_harness("unsupported world authority request schema"));
+        return Err(Failure::invalid_harness("unsupported world authority request schema"));
     }
     Ok(request)
 }
@@ -278,6 +278,6 @@ impl OperatorRequest {
 impl ScopeDto {
     fn into_scope(self) -> Result<NormalizedCapabilityScope> {
         NormalizedCapabilityScope::new(self.resource, self.abilities, self.limit)
-            .map_err(|_| MoltenError::invalid_harness("world authority scope is invalid"))
+            .map_err(|_| Failure::invalid_harness("world authority scope is invalid"))
     }
 }

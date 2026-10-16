@@ -9,11 +9,7 @@ struct RecordingEffects {
 }
 
 impl ConsistencyOperatorEffects for RecordingEffects {
-    fn apply(
-        &mut self,
-        action: ConsistencyOperatorAction,
-        _plan: &ConsistencyPortPlan,
-    ) -> crate::error::Result<String> {
+    fn apply(&mut self, action: Action, _plan: &PortPlan) -> crate::error::Result<String> {
         self.calls += 1;
         Ok(test_ref(action.as_str()))
     }
@@ -21,10 +17,10 @@ impl ConsistencyOperatorEffects for RecordingEffects {
 
 // r[verify molten.fabric_consistency.operator_readback]
 #[test]
-fn operator_dry_run_preflights_without_effects_and_applied_inspect_calls_once() {
+fn dry_run_preflights_without_effects_and_applied_inspect_calls_once() {
     let declared = declared_binding();
-    let create = plan_consistency_operator_action(&declared, ConsistencyOperatorRequest {
-        command: command_for(&declared, ConsistencyOperation::Open {
+    let create = plan_action(&declared, Request {
+        command: command_for(&declared, crate::fabric_consistency::operation::Request::Open {
             mode: GroupOpenMode::Create,
         }),
         dry_run: true,
@@ -32,39 +28,39 @@ fn operator_dry_run_preflights_without_effects_and_applied_inspect_calls_once() 
     .expect("create preflight");
     assert!(create.plan.admitted());
     let mut effects = RecordingEffects::default();
-    let dry_run = execute_consistency_operator_action(&create, &mut effects).expect("create dry run");
-    assert_eq!(dry_run.status, ConsistencyOperatorExecutionStatus::DryRun);
+    let dry_run = execute_action(&create, &mut effects).expect("create dry run");
+    assert_eq!(dry_run.status, ExecutionStatus::DryRun);
     assert_eq!(effects.calls, 0);
 
     let active = active_binding();
-    let inspect = plan_consistency_operator_action(&active, ConsistencyOperatorRequest {
-        command: command_for(&active, ConsistencyOperation::Status),
+    let inspect = plan_action(&active, Request {
+        command: command_for(&active, crate::fabric_consistency::operation::Request::Status),
         dry_run: false,
     })
     .expect("inspect preflight");
-    let applied = execute_consistency_operator_action(&inspect, &mut effects).expect("inspect apply");
-    assert_eq!(applied.status, ConsistencyOperatorExecutionStatus::Applied);
+    let applied = execute_action(&inspect, &mut effects).expect("inspect apply");
+    assert_eq!(applied.status, ExecutionStatus::Applied);
     assert_eq!(effects.calls, 1);
     crate::preserves_rail::validate_content_ref(&applied.execution_ref).expect("operator execution ref");
 }
 
 // r[verify molten.fabric_consistency.operator_readback]
 #[test]
-fn operator_denial_and_unsupported_action_produce_no_effects() {
+fn denial_and_unsupported_action_produce_no_effects() {
     let active = active_binding();
-    let remove = plan_consistency_operator_action(&active, ConsistencyOperatorRequest {
-        command: command_for(&active, ConsistencyOperation::Remove),
+    let remove = plan_action(&active, Request {
+        command: command_for(&active, crate::fabric_consistency::operation::Request::Remove),
         dry_run: false,
     })
     .expect("remove denial preflight");
     assert!(!remove.plan.admitted());
     let mut effects = RecordingEffects::default();
-    let denied = execute_consistency_operator_action(&remove, &mut effects).expect("remove denied");
-    assert_eq!(denied.status, ConsistencyOperatorExecutionStatus::Denied);
+    let denied = execute_action(&remove, &mut effects).expect("remove denied");
+    assert_eq!(denied.status, ExecutionStatus::Denied);
     assert_eq!(effects.calls, 0);
 
-    let unsupported = plan_consistency_operator_action(&active, ConsistencyOperatorRequest {
-        command: command_for(&active, ConsistencyOperation::Health),
+    let unsupported = plan_action(&active, Request {
+        command: command_for(&active, crate::fabric_consistency::operation::Request::Health),
         dry_run: true,
     })
     .expect_err("health is outside the bounded operator action set");
@@ -73,46 +69,46 @@ fn operator_denial_and_unsupported_action_produce_no_effects() {
 
 // r[verify molten.fabric_consistency.operator_readback]
 #[test]
-fn operator_applies_drain_snapshot_recover_and_remove_through_one_effect_shell() {
+fn applies_drain_snapshot_recover_and_remove_through_one_effect_shell() {
     let active = active_binding();
     let mut effects = RecordingEffects::default();
     for operation in [
-        ConsistencyOperation::Drain,
-        ConsistencyOperation::Snapshot {
+        crate::fabric_consistency::operation::Request::Drain,
+        crate::fabric_consistency::operation::Request::Snapshot {
             snapshot_policy_ref: test_ref("operator-snapshot-policy"),
         },
-        ConsistencyOperation::Recover {
+        crate::fabric_consistency::operation::Request::Recover {
             snapshot_ref: test_ref("operator-snapshot"),
             durable_boundary_ref: test_ref("operator-durable-boundary"),
         },
     ] {
-        let preflight = plan_consistency_operator_action(&active, ConsistencyOperatorRequest {
+        let preflight = plan_action(&active, Request {
             command: command_for(&active, operation),
             dry_run: false,
         })
         .expect("active maintenance preflight");
-        let execution = execute_consistency_operator_action(&preflight, &mut effects).expect("maintenance execution");
-        assert_eq!(execution.status, ConsistencyOperatorExecutionStatus::Applied);
+        let execution = execute_action(&preflight, &mut effects).expect("maintenance execution");
+        assert_eq!(execution.status, ExecutionStatus::Applied);
     }
     let draining = draining_binding();
-    let remove = plan_consistency_operator_action(&draining, ConsistencyOperatorRequest {
-        command: command_for(&draining, ConsistencyOperation::Remove),
+    let remove = plan_action(&draining, Request {
+        command: command_for(&draining, crate::fabric_consistency::operation::Request::Remove),
         dry_run: false,
     })
     .expect("remove preflight");
-    let removed = execute_consistency_operator_action(&remove, &mut effects).expect("remove execution");
-    assert_eq!(removed.status, ConsistencyOperatorExecutionStatus::Applied);
+    let removed = execute_action(&remove, &mut effects).expect("remove execution");
+    assert_eq!(removed.status, ExecutionStatus::Applied);
     assert_eq!(effects.calls, 4);
 }
 
 // r[verify molten.fabric_consistency.operator_readback]
 #[test]
-fn operator_readback_is_bounded_and_rejects_substituted_group_identity() {
+fn readback_is_bounded_and_rejects_substituted_group_identity() {
     let active = active_binding();
     let records = (0..(MAX_OPERATOR_EVIDENCE_REFS + 1))
-        .map(|offset| crate::fabric_consistency::raft::ReplicaEvidenceRecord {
+        .map(|offset| crate::fabric_consistency::raft::ReplicaRecord {
             sequence: u64::try_from(offset + 1).expect("bounded evidence sequence"),
-            kind: crate::fabric_consistency::raft::ReplicaEvidenceKind::Commit,
+            kind: crate::fabric_consistency::raft::ReplicaKind::Commit,
             term: INITIAL_CONSISTENCY_EPOCH,
             index: INITIAL_CONSISTENCY_EPOCH,
             source_ref: test_ref(&format!("operator-source-{offset}")),
@@ -121,7 +117,7 @@ fn operator_readback_is_bounded_and_rejects_substituted_group_identity() {
             evidence_ref: test_ref(&format!("operator-evidence-{offset}")),
         })
         .collect::<Vec<_>>();
-    let replica = ConsistencyOperatorReplicaState {
+    let replica = ReplicaState {
         group_binding_ref: active.binding_ref.clone(),
         service_generation: active.service_generation,
         node_id: "node-a".to_string(),
@@ -132,7 +128,7 @@ fn operator_readback_is_bounded_and_rejects_substituted_group_identity() {
         last_applied: INITIAL_CONSISTENCY_EPOCH,
     };
     let health = health();
-    let readback = consistency_operator_readback(&active, &replica, &records, &health).expect("operator readback");
+    let readback = readback(&active, &replica, &records, &health).expect("operator readback");
     assert_eq!(readback.selected_evidence_refs.len(), MAX_OPERATOR_EVIDENCE_REFS);
     assert!(readback.evidence_truncated);
     assert!(!readback.production_admitted);
@@ -140,8 +136,8 @@ fn operator_readback_is_bounded_and_rejects_substituted_group_identity() {
 
     let mut substituted = replica;
     substituted.group_binding_ref = test_ref("substituted-group");
-    let error = consistency_operator_readback(&active, &substituted, &records, &health)
-        .expect_err("substituted readback group must deny");
+    let error =
+        super::readback(&active, &substituted, &records, &health).expect_err("substituted readback group must deny");
     assert!(error.to_string().contains("binding mismatch"));
 }
 
@@ -152,8 +148,8 @@ fn test_ref(label: &str) -> String {
     .expect("operator test ref")
 }
 
-fn declared_binding() -> ConsistencyGroupBinding {
-    canonical_consistency_group_binding(ConsistencyGroupBindingInput {
+fn declared_binding() -> Group {
+    canonical_group(GroupInput {
         group_id: "group:operator".to_string(),
         extension_id: "extension-operator".to_string(),
         service_id: "service-operator".to_string(),
@@ -169,47 +165,38 @@ fn declared_binding() -> ConsistencyGroupBinding {
         resource_profile_ref: test_ref("resources"),
         policy_refs: vec![test_ref("policy")],
         non_claims: vec!["operator-readback-does-not-prove-quorum-currentness".to_string()],
-        supported_read_modes: vec![ConsistencyReadMode::Linearizable],
+        supported_read_modes: vec![ReadMode::Linearizable],
         max_command_bytes: MAX_COMMAND_BYTES,
         max_in_flight_operations: MAX_IN_FLIGHT,
     })
     .expect("operator binding")
 }
 
-fn active_binding() -> ConsistencyGroupBinding {
+fn active_binding() -> Group {
     let declared = declared_binding();
-    let plan = plan_consistency_operation(
+    let plan = plan(
         &declared,
-        command_for(&declared, ConsistencyOperation::Open {
+        command_for(&declared, crate::fabric_consistency::operation::Request::Open {
             mode: GroupOpenMode::Create,
         }),
     )
     .expect("operator open plan");
-    let outcome = normalize_consistency_outcome(
-        &declared,
-        &plan,
-        success_input(&declared, &plan, ConsistencyOutcomeKind::Opened),
-    )
-    .expect("operator open outcome");
-    apply_consistency_outcome(&declared, &plan, &outcome).expect("active operator binding")
+    let outcome =
+        normalize(&declared, &plan, success_input(&declared, &plan, Kind::Opened)).expect("operator open outcome");
+    apply_outcome(&declared, &plan, &outcome).expect("active operator binding")
 }
 
-fn draining_binding() -> ConsistencyGroupBinding {
+fn draining_binding() -> Group {
     let active = active_binding();
-    let plan = plan_consistency_operation(&active, command_for(&active, ConsistencyOperation::Drain))
+    let plan = plan(&active, command_for(&active, crate::fabric_consistency::operation::Request::Drain))
         .expect("operator drain plan");
     let outcome =
-        normalize_consistency_outcome(&active, &plan, success_input(&active, &plan, ConsistencyOutcomeKind::Drained))
-            .expect("operator drain outcome");
-    apply_consistency_outcome(&active, &plan, &outcome).expect("draining operator binding")
+        normalize(&active, &plan, success_input(&active, &plan, Kind::Drained)).expect("operator drain outcome");
+    apply_outcome(&active, &plan, &outcome).expect("draining operator binding")
 }
 
-fn success_input(
-    binding: &ConsistencyGroupBinding,
-    plan: &ConsistencyPortPlan,
-    kind: ConsistencyOutcomeKind,
-) -> ConsistencyOutcomeInput {
-    ConsistencyOutcomeInput {
+fn success_input(binding: &Group, plan: &PortPlan, kind: Kind) -> Input {
+    Input {
         request_ref: plan.request_ref.clone(),
         binding_ref: binding.binding_ref.clone(),
         service_generation: binding.service_generation,
@@ -222,8 +209,8 @@ fn success_input(
     }
 }
 
-fn command_for(binding: &ConsistencyGroupBinding, operation: ConsistencyOperation) -> ConsistencyPortCommandInput {
-    ConsistencyPortCommandInput {
+fn command_for(binding: &Group, operation: crate::fabric_consistency::operation::Request) -> PortCommandInput {
+    PortCommandInput {
         request_ref: test_ref("operator-request"),
         binding_ref: binding.binding_ref.clone(),
         group_id: binding.group_id.clone(),
@@ -246,8 +233,8 @@ fn command_for(binding: &ConsistencyGroupBinding, operation: ConsistencyOperatio
     }
 }
 
-fn health() -> crate::fabric_consistency::raft::ReplicaAggregateHealthEvidence {
-    crate::fabric_consistency::raft::ReplicaAggregateHealthEvidence {
+fn health() -> crate::fabric_consistency::raft::ReplicaAggregateHealth {
+    crate::fabric_consistency::raft::ReplicaAggregateHealth {
         status: "healthy".to_string(),
         selected_record_count: 0,
         suppressed_heartbeat_count: 0,

@@ -25,14 +25,14 @@ pub struct RaftMembershipRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RaftMembershipReceipt {
+pub struct Receipt {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub value: IoValue,
     pub receipt_ref: String,
 }
 
-pub fn preflight_raft_membership(input: &RaftMembershipRequest) -> Result<RaftMembershipReceipt> {
+pub fn preflight_raft_membership(input: &RaftMembershipRequest) -> Result<Receipt> {
     let mut diagnostics = Vec::new();
     if input.peer_session_scope != "raft-membership" {
         diagnostics.push("connected peer session is insufficient for membership admission".to_string());
@@ -51,9 +51,9 @@ pub fn preflight_raft_membership(input: &RaftMembershipRequest) -> Result<RaftMe
         diagnostics.push(format!("unsupported membership role {}", input.requested_role));
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let value = membership_value(RAFT_MEMBERSHIP_PREFLIGHT_SCHEMA, decision, &diagnostics, input);
+    let value = value(RAFT_MEMBERSHIP_PREFLIGHT_SCHEMA, decision, &diagnostics, input);
     let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(RaftMembershipReceipt {
+    Ok(Receipt {
         decision: decision.to_string(),
         diagnostics,
         value,
@@ -61,19 +61,16 @@ pub fn preflight_raft_membership(input: &RaftMembershipRequest) -> Result<RaftMe
     })
 }
 
-pub fn commit_raft_membership(
-    input: &RaftMembershipRequest,
-    preflight: &RaftMembershipReceipt,
-) -> Result<RaftMembershipReceipt> {
+pub fn commit(input: &RaftMembershipRequest, preflight: &Receipt) -> Result<Receipt> {
     let diagnostics = if preflight.decision == "pass" {
         Vec::new()
     } else {
         vec!["membership commit requires passing preflight receipt".to_string()]
     };
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let value = membership_value(RAFT_MEMBERSHIP_COMMIT_SCHEMA, decision, &diagnostics, input);
+    let value = value(RAFT_MEMBERSHIP_COMMIT_SCHEMA, decision, &diagnostics, input);
     let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(RaftMembershipReceipt {
+    Ok(Receipt {
         decision: decision.to_string(),
         diagnostics,
         value,
@@ -87,7 +84,7 @@ fn require_non_empty(diagnostics: &mut impl crate::bounded::VecSink<String>, lab
     }
 }
 
-fn membership_value(schema: &str, decision: &str, diagnostics: &[String], input: &RaftMembershipRequest) -> IoValue {
+fn value(schema: &str, decision: &str, diagnostics: &[String], input: &RaftMembershipRequest) -> IoValue {
     crate::preserves_rail::record("raft-membership-receipt-v1", vec![
         string(schema),
         field("decision", decision),
@@ -119,11 +116,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn membership_preflight_passes_with_quorum_and_source_evidence() {
+    fn preflight_passes_with_quorum_and_source_evidence() {
         let request = request("raft-membership", "voter", true);
         let preflight = preflight_raft_membership(&request).expect("preflight");
         assert_eq!(preflight.decision, "pass");
-        let commit = commit_raft_membership(&request, &preflight).expect("commit");
+        let commit = commit(&request, &preflight).expect("commit");
         assert_eq!(commit.decision, "pass");
     }
 

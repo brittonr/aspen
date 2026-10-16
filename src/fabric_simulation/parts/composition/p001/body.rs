@@ -1,6 +1,6 @@
 
-impl DeterministicSimulationPortRouter {
-    fn new(world: &CanonicalSimulatedWorld) -> Self {
+impl DeterministicPortRouter {
+    fn new(world: &SimulatedWorld) -> Self {
         let profiles = world
             .admitted
             .manifest
@@ -36,7 +36,7 @@ impl DeterministicSimulationPortRouter {
         self.dispatching_request_ref = request_ref.to_string();
     }
 
-    fn events(&self) -> &[CanonicalSimulationPortEvent] {
+    fn events(&self) -> &[PortEvent] {
         &self.events
     }
 
@@ -181,8 +181,8 @@ impl DeterministicSimulationPortRouter {
         Ok(blake3_ref(format!("{operation_id}:{SUBMISSION_ACK_MATERIAL}").as_bytes()))
     }
 
-    fn push_event(&mut self, input: SimulationPortEventInput<'_>) -> Result<(), FabricPortError> {
-        let event = canonical_simulation_port_event(input).map_err(FabricPortError::from)?;
+    fn push_event(&mut self, input: PortEventInput<'_>) -> Result<(), FabricPortError> {
+        let event = port_event(input).map_err(FabricPortError::from)?;
         self.events.push(event);
         Ok(())
     }
@@ -200,7 +200,7 @@ impl DeterministicSimulationPortRouter {
             .find(|profile| profile.class == crate::fabric::FabricPortClass::DurableState)
             .cloned()
             .ok_or_else(|| FabricPortError::malformed("simulation world lacks its durable-state profile"))?;
-        self.push_event(SimulationPortEventInput {
+        self.push_event(PortEventInput {
             choice_position: self.current_choice_position,
             class: profile.class,
             port_id: &profile.port_id,
@@ -224,7 +224,7 @@ impl DeterministicSimulationPortRouter {
             .find(|profile| profile.class == crate::fabric::FabricPortClass::Transport)
             .cloned()
             .ok_or_else(|| FabricPortError::malformed("simulation world lacks its transport profile"))?;
-        self.push_event(SimulationPortEventInput {
+        self.push_event(PortEventInput {
             choice_position: self.current_choice_position,
             class: profile.class,
             port_id: &profile.port_id,
@@ -245,7 +245,7 @@ impl DeterministicSimulationPortRouter {
                 FabricPortError::malformed("simulation world lacks the crashed fault boundary profile")
             })?;
         let request_ref = blake3_ref(fault.fault_id.as_bytes());
-        self.push_event(SimulationPortEventInput {
+        self.push_event(PortEventInput {
             choice_position: self.current_choice_position,
             class: profile.class,
             port_id: &profile.port_id,

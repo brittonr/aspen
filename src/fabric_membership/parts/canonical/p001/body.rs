@@ -2,10 +2,10 @@
 // r[impl molten.fabric_membership.placement]
 // r[impl molten.fabric_membership.authority_separation]
 // r[impl molten.fabric_membership.evidence]
-pub fn canonical_placement_outcome(
-    view: &CanonicalMembershipView,
+pub fn placement_outcome(
+    view: &View,
     request: &PlacementRequest,
-) -> crate::error::Result<CanonicalPlacementOutcome> {
+) -> crate::error::Result<PlacementEnvelope> {
     let outcome =
         plan_placement(&view.admitted, request).map_err(|issues| validation_error("placement request", &issues))?;
     let outcome_value = placement_outcome_value(&outcome);
@@ -56,7 +56,7 @@ pub fn canonical_placement_outcome(
         ]),
     ]);
     let outcome_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalPlacementOutcome {
+    Ok(PlacementEnvelope {
         outcome_ref,
         outcome,
         value,
@@ -124,12 +124,12 @@ fn placement_outcome_value(outcome: &PlacementOutcome) -> preserves::IOValue {
 // r[impl molten.fabric_membership.recruitment]
 // r[impl molten.fabric_membership.fencing]
 // r[impl molten.fabric_membership.evidence]
-pub fn canonical_assignment_transition(
+pub fn assignment_transition(
     transition: &AssignmentTransition,
     intent_ref: &str,
     role_effect_ref: Option<&str>,
     persistence_ref: &str,
-) -> crate::error::Result<CanonicalAssignmentTransition> {
+) -> crate::error::Result<AssignmentEnvelope> {
     let issues = validate_assignment(&transition.next);
     if !issues.is_empty() {
         return Err(validation_error("assignment transition", &issues));
@@ -170,7 +170,7 @@ pub fn canonical_assignment_transition(
         ]),
     ]);
     let transition_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalAssignmentTransition {
+    Ok(AssignmentEnvelope {
         transition_ref,
         transition: transition.clone(),
         intent_ref: intent_ref.to_string(),
@@ -181,12 +181,12 @@ pub fn canonical_assignment_transition(
 }
 
 // r[impl molten.fabric_membership.evidence]
-pub fn membership_status_readback(
-    view: &CanonicalMembershipView,
+pub fn status_readback(
+    view: &View,
     assignments: &[(String, RoleAssignment)],
-) -> crate::error::Result<MembershipStatusReadback> {
+) -> crate::error::Result<StatusReadback> {
     if assignments.len() > MAX_MEMBERSHIP_ITEMS {
-        return Err(crate::error::MoltenError::invalid_harness("membership readback assignment limit exceeded"));
+        return Err(crate::error::Failure::invalid_harness("membership readback assignment limit exceeded"));
     }
     let member_ids = view.admitted.view.members.iter().map(|member| member.node_id.clone()).collect::<Vec<_>>();
     let mut active_assignments = 0u64;
@@ -232,7 +232,7 @@ pub fn membership_status_readback(
         ]),
     ]);
     let status_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(MembershipStatusReadback {
+    Ok(StatusReadback {
         status_ref,
         view_ref: view.view_ref.clone(),
         view_id: view.admitted.view.view_id.clone(),
@@ -249,7 +249,7 @@ pub fn membership_status_readback(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExtensionMembershipPlacementContext {
+pub struct ExtensionPlacementContext {
     service_id: String,
     generation: u64,
     profile_id: String,

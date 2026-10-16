@@ -19,21 +19,21 @@ const RUN_FINAL_STATE_REFS_FIELD_INDEX: usize = 9;
 const RUN_FIRST_DIVERGENCE_FIELD_INDEX: usize = 10;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalSimulatedWorld {
+pub struct SimulatedWorld {
     pub world_ref: String,
     pub admitted: AdmittedSimulatedWorld,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalSimulationObservation {
+pub struct Observation {
     pub observation_ref: String,
     pub observation: SimulationObservation,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalSimulationPortEvent {
+pub struct PortEvent {
     pub event_ref: String,
     pub choice_position: u64,
     pub class: crate::fabric::FabricPortClass,
@@ -45,7 +45,7 @@ pub struct CanonicalSimulationPortEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalSimulationRun {
+pub struct Run {
     pub run_ref: String,
     pub world_ref: String,
     pub profile: SimulationClaimProfile,
@@ -56,7 +56,7 @@ pub struct CanonicalSimulationRun {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalSimulationReproBundle {
+pub struct ReproBundle {
     pub bundle_ref: String,
     pub world_ref: String,
     pub run_ref: String,
@@ -65,7 +65,7 @@ pub struct CanonicalSimulationReproBundle {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalSimulationDifferential {
+pub struct Differential {
     pub report_ref: String,
     pub simulation_profile_ref: String,
     pub live_profile_ref: String,
@@ -76,7 +76,7 @@ pub struct CanonicalSimulationDifferential {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalSimulationShrink {
+pub struct Shrink {
     pub shrink_ref: String,
     pub original_world_ref: String,
     pub shrunk_world_ref: String,
@@ -85,7 +85,7 @@ pub struct CanonicalSimulationShrink {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalClaimPromotion {
+pub struct ClaimPromotion {
     pub decision_ref: String,
     pub current: SimulationClaimProfile,
     pub decision: ClaimPromotionDecision,
@@ -93,7 +93,7 @@ pub struct CanonicalClaimPromotion {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SimulationRunReadback {
+pub struct RunReadback {
     pub decision: String,
     pub profile: String,
     pub choice_count: u64,
@@ -109,15 +109,15 @@ pub struct SimulationRunReadback {
 
 // r[impl molten.fabric_simulation.world_manifest]
 // r[impl molten.fabric_simulation.same_core]
-pub fn canonical_admit_simulated_world(
+pub fn admit_world(
     manifest: &SimulatedWorldManifest,
-) -> crate::error::Result<CanonicalSimulatedWorld> {
+) -> crate::error::Result<SimulatedWorld> {
     let admitted = admit_simulated_world(manifest).map_err(|issues| {
-        crate::error::MoltenError::invalid_harness(format!("fabric simulation world denied: {issues:?}"))
+        crate::error::Failure::invalid_harness(format!("fabric simulation world denied: {issues:?}"))
     })?;
     let value = world_value(&admitted.manifest);
     let world_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalSimulatedWorld {
+    Ok(SimulatedWorld {
         world_ref,
         admitted,
         value,
@@ -125,9 +125,9 @@ pub fn canonical_admit_simulated_world(
 }
 
 // r[impl molten.fabric_simulation.invariants]
-pub fn canonical_simulation_observation(
+pub fn observation(
     observation: SimulationObservation,
-) -> crate::error::Result<CanonicalSimulationObservation> {
+) -> crate::error::Result<Observation> {
     for reference in [
         &observation.state_ref,
         &observation.history_ref,
@@ -170,14 +170,14 @@ pub fn canonical_simulation_observation(
         ]),
     ]);
     let observation_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalSimulationObservation {
+    Ok(Observation {
         observation_ref,
         observation,
         value,
     })
 }
 
-pub struct SimulationPortEventInput<'a> {
+pub struct PortEventInput<'a> {
     pub choice_position: u64,
     pub class: crate::fabric::FabricPortClass,
     pub port_id: &'a str,
@@ -188,9 +188,9 @@ pub struct SimulationPortEventInput<'a> {
 
 // r[impl molten.fabric_simulation.port_substitution]
 // r[impl molten.fabric_simulation.fault_model]
-pub fn canonical_simulation_port_event(
-    input: SimulationPortEventInput<'_>,
-) -> crate::error::Result<CanonicalSimulationPortEvent> {
+pub fn port_event(
+    input: PortEventInput<'_>,
+) -> crate::error::Result<PortEvent> {
     crate::preserves_rail::validate_content_ref(input.request_ref)?;
     crate::preserves_rail::validate_content_ref(input.output_ref)?;
     let value = crate::preserves_rail::record("fabric-simulation-port-event-v1", vec![
@@ -209,7 +209,7 @@ pub fn canonical_simulation_port_event(
         ]),
     ]);
     let event_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalSimulationPortEvent {
+    Ok(PortEvent {
         event_ref,
         choice_position: input.choice_position,
         class: input.class,
@@ -224,13 +224,13 @@ pub fn canonical_simulation_port_event(
 // r[impl molten.fabric_simulation.scheduler]
 // r[impl molten.fabric_simulation.invariants]
 // r[impl molten.fabric_simulation.evidence]
-pub fn canonical_simulation_run(
+pub fn run(
     world_ref: &str,
     profile: SimulationClaimProfile,
     summary: SimulationRunSummary,
     observation_refs: Vec<String>,
     port_event_refs: Vec<String>,
-) -> crate::error::Result<CanonicalSimulationRun> {
+) -> crate::error::Result<Run> {
     crate::preserves_rail::validate_content_ref(world_ref)?;
     validate_refs("observation", &observation_refs)?;
     validate_refs("port-event", &port_event_refs)?;
@@ -267,7 +267,7 @@ pub fn canonical_simulation_run(
         ]),
     ]);
     let run_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalSimulationRun {
+    Ok(Run {
         run_ref,
         world_ref: world_ref.to_string(),
         profile,

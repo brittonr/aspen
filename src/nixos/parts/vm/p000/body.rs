@@ -1,5 +1,5 @@
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 const NIXOS_VM_NODE_EVIDENCE_SCHEMA: &str = crate::preserves_rail::NIXOS_VM_NODE_EVIDENCE_SCHEMA;

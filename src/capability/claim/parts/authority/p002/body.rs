@@ -1,5 +1,5 @@
 
-fn validate_selector(selector: &ClaimSubjectSelector) -> Result<()> {
+fn validate_selector(selector: &SubjectSelector) -> Result<()> {
     match selector.selector_kind.as_str() {
         SELECTOR_EXACT_REF => validate_ref(&selector.selector_value, "exact claim subject ref")?,
         SELECTOR_REF_PREFIX
@@ -17,7 +17,7 @@ fn validate_selector(selector: &ClaimSubjectSelector) -> Result<()> {
     validate_caveats(&selector.caveats)
 }
 
-fn validate_claim(claim: &AuthorityClaim) -> Result<()> {
+fn validate(claim: &Statement) -> Result<()> {
     validate_ref(&claim.issuer_ref, "claim issuer ref")?;
     validate_ref(&claim.holder_ref, "claim holder ref")?;
     validate_ref(&claim.session_ref, "claim session ref")?;

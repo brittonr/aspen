@@ -1,5 +1,5 @@
 
-impl<P, J> NativeProcessSystemExtensionExecutor<P, J>
+impl<P, J> Process<P, J>
 where
     P: ExecutionFabricPort,
     J: NativeHostJournal,
@@ -7,11 +7,11 @@ where
     fn accept_execution_receipt(
         &mut self,
         operation_ref: &str,
-        envelope: &CanonicalNativeCallbackEnvelope,
-        receipt: CanonicalExecutionReceipt,
-    ) -> Result<CallbackOutcome, NativeExecutorError> {
+        envelope: &CanonicalCallbackEnvelope,
+        receipt: Receipt,
+    ) -> Result<CallbackOutcome, CallbackFailure> {
         let is_accepted = receipt.process.lifecycle == ExecutionLifecycleState::Exited
-            && receipt.process.disposition == ExecutionObservedDisposition::ExitPolicyAccepted
+            && receipt.process.disposition == ObservedDisposition::ExitPolicyAccepted
             && !receipt.process.stdout.truncated;
         if !is_accepted {
             self.complete_callback(CallbackCompletionInput {
@@ -24,10 +24,10 @@ where
                 lifecycle: receipt.process.lifecycle,
                 diagnostic_code: Some(CALLBACK_DIAGNOSTIC_CODE),
             })?;
-            return Err(NativeExecutorError::ProcessObservation(CALLBACK_DIAGNOSTIC_CODE));
+            return Err(CallbackFailure::ProcessObservation(CALLBACK_DIAGNOSTIC_CODE));
         }
         let maximum_values = self.maximum_materialized_values()?;
-        let materialized = match decode_native_callback_outcome(
+        let materialized = match decode_callback_outcome(
             &receipt.process.stdout.retained_bytes,
             self.template.host_profile.profile.max_callback_output_bytes,
             self.template.host_profile.profile.max_materialized_value_bytes,
@@ -45,7 +45,7 @@ where
                     lifecycle: ExecutionLifecycleState::Exited,
                     diagnostic_code: Some(CALLBACK_WIRE_CODE),
                 })?;
-                return Err(NativeExecutorError::Wire(error.to_string()));
+                return Err(CallbackFailure::Wire(error.to_string()));
             }
         };
         let outcome = materialized.project();
@@ -61,11 +61,11 @@ where
                 lifecycle: ExecutionLifecycleState::Exited,
                 diagnostic_code: Some(CALLBACK_WIRE_CODE),
             })?;
-            return Err(NativeExecutorError::Admission(format!("callback outcome denied: {issues:?}")));
+            return Err(CallbackFailure::Admission(format!("callback outcome denied: {issues:?}")));
         }
         if let Err(error) = self.publish_outcome_values(operation_ref, &materialized) {
             let state = match &error {
-                NativeExecutorError::Value(failure) if failure.may_have_published() => NativeOperationState::Unknown,
+                CallbackFailure::Value(failure) if failure.may_have_published() => NativeOperationState::Unknown,
                 _ => NativeOperationState::Terminal,
             };
             self.complete_callback(CallbackCompletionInput {
@@ -96,8 +96,8 @@ where
     fn publish_outcome_values(
         &mut self,
         callback_operation_ref: &str,
-        outcome: &NativeMaterializedCallbackOutcome,
-    ) -> Result<(), NativeExecutorError> {
+        outcome: &MaterializedCallbackOutcome,
+    ) -> Result<(), CallbackFailure> {
         let mut values = std::collections::BTreeMap::<String, (String, &NativeCallbackValue)>::new();
         for (position, value) in outcome.outputs.iter().enumerate() {
             let role = format!("output-{position}");
@@ -122,10 +122,10 @@ where
     fn record_execution_failure(
         &mut self,
         operation_ref: &str,
-        envelope: &CanonicalNativeCallbackEnvelope,
-        failure: Box<ExecutionPortFailure>,
-    ) -> Result<CallbackOutcome, NativeExecutorError> {
-        let next_state = if failure.kind == ExecutionPortFailureKind::RejectedBeforeStart {
+        envelope: &CanonicalCallbackEnvelope,
+        failure: Box<PortFailure>,
+    ) -> Result<CallbackOutcome, CallbackFailure> {
+        let next_state = if failure.kind == PortFailureKind::RejectedBeforeStart {
             NativeOperationState::Terminal
         } else {
             NativeOperationState::Unknown
@@ -148,10 +148,10 @@ where
             lifecycle,
             diagnostic_code: Some(failure.diagnostic_code),
         })?;
-        Err(NativeExecutorError::Execution(failure))
+        Err(CallbackFailure::Execution(failure))
     }
 
-    fn complete_callback(&mut self, input: CallbackCompletionInput<'_>) -> Result<(), NativeExecutorError> {
+    fn complete_callback(&mut self, input: CallbackCompletionInput<'_>) -> Result<(), CallbackFailure> {
         let CallbackCompletionInput {
             operation_ref,
             envelope_ref,
@@ -163,7 +163,7 @@ where
             diagnostic_code,
         } = input;
         self.observe_operation(operation_ref, state, terminal_ref)?;
-        self.observations.push(NativeInvocationObservation {
+        self.observations.push(InvocationObservation {
             envelope_ref: envelope_ref.to_string(),
             operation_ref: operation_ref.to_string(),
             execution_receipt_ref,
@@ -171,9 +171,9 @@ where
             diagnostic_code,
         });
         if invocation.generation
-            != self.instance.lock().map_err(|_| NativeExecutorError::StatePoisoned)?.lifecycle.generation
+            != self.instance.lock().map_err(|_| CallbackFailure::StatePoisoned)?.lifecycle.generation
         {
-            return Err(NativeExecutorError::Admission(
+            return Err(CallbackFailure::Admission(
                 "callback completion generation differs from durable instance".to_string(),
             ));
         }
@@ -185,31 +185,31 @@ where
         operation_ref: &str,
         state: NativeOperationState,
         terminal_ref: Option<String>,
-    ) -> Result<(), NativeExecutorError> {
-        let current = self.instance.lock().map_err(|_| NativeExecutorError::StatePoisoned)?.clone();
+    ) -> Result<(), CallbackFailure> {
+        let current = self.instance.lock().map_err(|_| CallbackFailure::StatePoisoned)?.clone();
         let next = observe_native_operation(&current, operation_ref, state, terminal_ref).map_err(|issues| {
-            NativeExecutorError::Admission(format!("native operation observation denied: {issues:?}"))
+            CallbackFailure::Admission(format!("native operation observation denied: {issues:?}"))
         })?;
         self.replace_instance(next)
     }
 
-    fn replace_instance(&self, instance: NativeInstanceRecord) -> Result<(), NativeExecutorError> {
+    fn replace_instance(&self, instance: NativeInstanceRecord) -> Result<(), CallbackFailure> {
         self.save_instance(&instance)?;
-        *self.instance.lock().map_err(|_| NativeExecutorError::StatePoisoned)? = instance;
+        *self.instance.lock().map_err(|_| CallbackFailure::StatePoisoned)? = instance;
         Ok(())
     }
 
-    fn save_instance(&self, instance: &NativeInstanceRecord) -> Result<(), NativeExecutorError> {
+    fn save_instance(&self, instance: &NativeInstanceRecord) -> Result<(), CallbackFailure> {
         self.journal
             .lock()
-            .map_err(|_| NativeExecutorError::StatePoisoned)?
+            .map_err(|_| CallbackFailure::StatePoisoned)?
             .save_instance(instance)
             .map(|_| ())
-            .map_err(NativeExecutorError::Journal)
+            .map_err(CallbackFailure::Journal)
     }
 }
 
-impl<P, J> SystemExtensionExecutor for NativeProcessSystemExtensionExecutor<P, J>
+impl<P, J> SystemExtensionExecutor for Process<P, J>
 where
     P: ExecutionFabricPort,
     J: NativeHostJournal,
@@ -239,7 +239,7 @@ where
     }
 }
 
-fn callback_operation_ref(context: &NativeCallbackContext, invocation: &CallbackInvocation) -> String {
+fn callback_operation_ref(context: &CallbackContext, invocation: &CallbackInvocation) -> String {
     native_identity_ref(&[
         "native-callback-operation-v2",
         &context.instance_id,
@@ -255,10 +255,10 @@ fn insert_publication_value<'a>(
     values: &mut std::collections::BTreeMap<String, (String, &'a NativeCallbackValue)>,
     role: String,
     value: &'a NativeCallbackValue,
-) -> Result<(), NativeExecutorError> {
+) -> Result<(), CallbackFailure> {
     if let Some((_existing_role, existing)) = values.get(&value.value_ref) {
         if existing.bytes != value.bytes {
-            return Err(NativeExecutorError::Admission(
+            return Err(CallbackFailure::Admission(
                 "equal native value references carry different bytes".to_string(),
             ));
         }

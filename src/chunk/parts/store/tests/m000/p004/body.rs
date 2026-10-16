@@ -11,7 +11,7 @@
             &[],
             &retention_evidence,
         );
-        let gc = gc(&root, ChunkStoreGcInput {
+        let gc = gc(&root, ChunkGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
             apply_refs: &wrong_apply_refs,
@@ -33,7 +33,7 @@
         let mut retention_evidence = retention_evidence(&root, "incomplete-remote");
         retention_evidence.remote_refs = vec![chunk_test_ref("remote", "incomplete-remote")];
         retention_evidence.is_reference_index_complete = false;
-        let gc = gc(&root, ChunkStoreGcInput {
+        let gc = gc(&root, ChunkGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
             apply_refs: &[],

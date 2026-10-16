@@ -1,16 +1,16 @@
 
-fn validate_fixture_ports(
-    live: &CanonicalTimeProfile,
-    simulation: &CanonicalTimeProfile,
+fn validate_ports(
+    live: &Profile,
+    simulation: &Profile,
 ) -> crate::error::Result<Vec<String>> {
     let mut refs = Vec::new();
     for profile in [live, simulation] {
-        let descriptors = fabric_time_port_descriptors(profile);
+        let descriptors = port_descriptors(profile);
         crate::fabric::build_fabric_port_registry(&descriptors)
             .map_err(|issues| core_error("validate fixture time ports", issues))?;
         refs.reserve(descriptors.len());
         for descriptor in &descriptors {
-            let (descriptor_ref, _) = crate::fabric::canonical_fabric_port_descriptor(descriptor)?;
+            let (descriptor_ref, _) = crate::fabric::canonical_port_descriptor(descriptor)?;
             refs.push(descriptor_ref);
         }
     }
@@ -29,7 +29,7 @@ fn ensure_shared_conformance(
         || live.scheduler_cancellation_recorded != simulation.scheduler_cancellation_recorded
         || live.entropy_bound_rejected != simulation.entropy_bound_rejected
     {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "live and simulation adapters diverged: live={live:?} simulation={simulation:?}"
         )));
     }
@@ -95,23 +95,23 @@ fn virtual_value(profile: &AdmittedTimeProfile, ticks: u64) -> TimeValue {
 }
 
 fn select_boundary_ref(
-    selection: FabricTimeFixtureSelection,
+    selection: Selection,
     live_ref: &str,
     simulation_ref: &str,
     trace_kind: &str,
 ) -> crate::error::Result<String> {
     match selection {
-        FabricTimeFixtureSelection::Live => Ok(live_ref.to_string()),
-        FabricTimeFixtureSelection::DeterministicSimulation => Ok(simulation_ref.to_string()),
-        FabricTimeFixtureSelection::Both => {
-            canonical_time_trace_ref(trace_kind, &[live_ref.to_string(), simulation_ref.to_string()])
+        Selection::Live => Ok(live_ref.to_string()),
+        Selection::DeterministicSimulation => Ok(simulation_ref.to_string()),
+        Selection::Both => {
+            trace_ref(trace_kind, &[live_ref.to_string(), simulation_ref.to_string()])
         }
     }
 }
 
 fn trace_for_kinds(
-    events: &[&CanonicalTimeEvent],
-    kinds: &[CanonicalTimeEventKind],
+    events: &[&Event],
+    kinds: &[EventKind],
     trace_kind: &str,
 ) -> crate::error::Result<String> {
     let refs = events
@@ -119,20 +119,20 @@ fn trace_for_kinds(
         .filter(|event| kinds.contains(&event.kind))
         .map(|event| event.evidence_ref.clone())
         .collect::<Vec<_>>();
-    canonical_time_trace_ref(trace_kind, &refs)
+    trace_ref(trace_kind, &refs)
 }
 
-fn count_events(events: &[&CanonicalTimeEvent], kinds: &[CanonicalTimeEventKind]) -> crate::error::Result<u64> {
+fn count_events(events: &[&Event], kinds: &[EventKind]) -> crate::error::Result<u64> {
     u64::try_from(events.iter().filter(|event| kinds.contains(&event.kind)).count())
-        .map_err(|_| crate::error::MoltenError::invalid_harness("fabric-time event count overflow"))
+        .map_err(|_| crate::error::Failure::invalid_harness("fabric-time event count overflow"))
 }
 
 fn checked_increment(value: u64, label: &str) -> crate::error::Result<u64> {
     value
         .checked_add(1)
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("{label} overflow")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("{label} overflow")))
 }
 
-fn core_error(label: &str, error: impl std::fmt::Debug) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(format!("{label}: {error:?}"))
+fn core_error(label: &str, error: impl std::fmt::Debug) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("{label}: {error:?}"))
 }

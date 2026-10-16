@@ -1,7 +1,7 @@
 
 fn validate_required_refs(
     requirements: &OperationRequirements,
-    refs: &ContextRefSet,
+    refs: &RefSet,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) {
     if requirements.require_policy && refs.policy_refs.is_empty() {
@@ -21,7 +21,7 @@ fn validate_required_refs(
     }
 }
 
-fn context_profile_value(input: &ContextProfileInput, decision: &str, diagnostics: &[String]) -> Result<IoValue> {
+fn value(input: &Input, decision: &str, diagnostics: &[String]) -> Result<IoValue> {
     Ok(record("context-profile-v1", vec![
         string(CONTEXT_PROFILE_SCHEMA),
         field_string("decision", decision),
@@ -30,20 +30,20 @@ fn context_profile_value(input: &ContextProfileInput, decision: &str, diagnostic
         ref_set_value("refs", &input.refs)?,
         field_sequence("allowed-operations", string_values(&input.allowed_operations)?),
         field_sequence("diagnostics", string_values(diagnostics)?),
-        field_sequence("caveats", string_values(&context_caveats(&input.caveats))?),
+        field_sequence("caveats", string_values(&caveats(&input.caveats))?),
     ]))
 }
 
 struct ExpansionValueInput<'a> {
     profile_ref: &'a str,
     requirements: &'a OperationRequirements,
-    overrides: &'a ContextOverrideInput,
-    expanded_refs: &'a ContextRefSet,
+    overrides: &'a OverrideInput,
+    expanded_refs: &'a RefSet,
     decision: &'a str,
     diagnostics: &'a [String],
 }
 
-fn context_expansion_value(input: ExpansionValueInput<'_>) -> Result<IoValue> {
+fn expansion_value(input: ExpansionValueInput<'_>) -> Result<IoValue> {
     let ExpansionValueInput {
         profile_ref,
         requirements,
@@ -75,8 +75,8 @@ fn requirement_value(requirements: &OperationRequirements) -> IoValue {
     ])
 }
 
-fn override_ref_set(overrides: &ContextOverrideInput) -> ContextRefSet {
-    ContextRefSet {
+fn override_ref_set(overrides: &OverrideInput) -> RefSet {
+    RefSet {
         policy_refs: overrides.policy_refs.clone(),
         capability_refs: Vec::new(),
         authority_refs: overrides.authority_refs.clone(),
@@ -87,13 +87,13 @@ fn override_ref_set(overrides: &ContextOverrideInput) -> ContextRefSet {
     }
 }
 
-fn context_caveats(caveats: &[String]) -> Vec<String> {
+fn caveats(caveats: &[String]) -> Vec<String> {
     let mut output = caveats.to_vec();
     output.push(EVIDENCE_ONLY_CAVEAT.to_string());
     output
 }
 
-fn ref_set_value(label: &'static str, refs: &ContextRefSet) -> Result<IoValue> {
+fn ref_set_value(label: &'static str, refs: &RefSet) -> Result<IoValue> {
     Ok(record(label, vec![
         field_sequence("policy", string_values(&refs.policy_refs)?),
         field_sequence("capability", string_values(&refs.capability_refs)?),

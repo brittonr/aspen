@@ -14,14 +14,14 @@ const DURABILITY_STATUS_RECORD: &str = "fabric-durability-status-v1";
 const DURABILITY_PORT_COUNT: usize = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalDurableProfile {
+pub struct DurableProfile {
     pub profile: DurableStateProfile,
     pub profile_ref: String,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalDurableTransition {
+pub struct TransitionEnvelope {
     pub transition_ref: String,
     pub profile_ref: String,
     pub namespace_id: String,
@@ -31,7 +31,7 @@ pub struct CanonicalDurableTransition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalRecoveryDecision {
+pub struct RecoveryEnvelope {
     pub recovery_ref: String,
     pub decision: RecoveryDecision,
     pub value: preserves::IOValue,
@@ -58,11 +58,11 @@ pub struct DurableStatusReadback {
 // r[impl molten.modularity.fabric_boundary.compatibility]
 // r[impl molten.fabric_durability.port_contracts]
 // r[impl molten.fabric_durability.non_claims]
-pub fn canonical_durable_profile(profile: &DurableStateProfile) -> crate::error::Result<CanonicalDurableProfile> {
+pub fn durable_profile(profile: &DurableStateProfile) -> crate::error::Result<DurableProfile> {
     validate_durable_profile(profile).map_err(|issues| validation_error("durability profile", &issues))?;
     let value = durable_profile_value(profile);
     let profile_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalDurableProfile {
+    Ok(DurableProfile {
         profile: profile.clone(),
         profile_ref,
         value,
@@ -71,7 +71,7 @@ pub fn canonical_durable_profile(profile: &DurableStateProfile) -> crate::error:
 
 // r[impl molten.fabric_durability.port_contracts]
 pub fn fabric_durability_port_descriptors(
-    profile: &CanonicalDurableProfile,
+    profile: &DurableProfile,
 ) -> Vec<crate::fabric::FabricPortDescriptor> {
     let (determinism, replay) = match profile.profile.adapter_kind {
         DurableAdapterKind::LiveRedb => {
@@ -132,10 +132,10 @@ pub fn fabric_durability_port_descriptors(
 // r[impl molten.modularity.fabric_boundary.compatibility]
 // r[impl molten.fabric_durability.evidence]
 // r[impl molten.fabric_durability.uncertain_outcomes]
-pub fn canonical_durable_transition(
-    profile: &CanonicalDurableProfile,
+pub fn durable_transition(
+    profile: &DurableProfile,
     transition: &DurableTransition,
-) -> crate::error::Result<CanonicalDurableTransition> {
+) -> crate::error::Result<TransitionEnvelope> {
     validate_namespace_descriptor(&profile.profile, &transition.next.descriptor)
         .map_err(|issues| validation_error("durability transition state", &issues))?;
     let value = crate::preserves_rail::record(DURABILITY_TRANSITION_RECORD, vec![
@@ -159,7 +159,7 @@ pub fn canonical_durable_transition(
         ]),
     ]);
     let transition_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalDurableTransition {
+    Ok(TransitionEnvelope {
         transition_ref,
         profile_ref: profile.profile_ref.clone(),
         namespace_id: transition.next.descriptor.namespace_id.clone(),
@@ -171,11 +171,11 @@ pub fn canonical_durable_transition(
 
 // r[impl molten.fabric_durability.snapshot_recovery]
 // r[impl molten.fabric_durability.evidence]
-pub fn canonical_recovery_decision(
-    profile: &CanonicalDurableProfile,
+pub fn recovery_decision(
+    profile: &DurableProfile,
     state: &DurableState,
     decision: RecoveryDecision,
-) -> crate::error::Result<CanonicalRecoveryDecision> {
+) -> crate::error::Result<RecoveryEnvelope> {
     validate_namespace_descriptor(&profile.profile, &state.descriptor)
         .map_err(|issues| validation_error("durability recovery state", &issues))?;
     let diagnostics = decision.diagnostics.iter().map(|issue| format!("{issue:?}")).collect::<Vec<_>>();
@@ -197,7 +197,7 @@ pub fn canonical_recovery_decision(
         ]),
     ]);
     let recovery_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalRecoveryDecision {
+    Ok(RecoveryEnvelope {
         recovery_ref,
         decision,
         value,
@@ -207,7 +207,7 @@ pub fn canonical_recovery_decision(
 // r[impl molten.fabric_durability.evidence]
 // r[impl molten.fabric_durability.non_claims]
 pub fn durable_status_readback(
-    profile: &CanonicalDurableProfile,
+    profile: &DurableProfile,
     state: &DurableState,
 ) -> crate::error::Result<DurableStatusReadback> {
     validate_namespace_descriptor(&profile.profile, &state.descriptor)
@@ -266,7 +266,7 @@ pub fn durable_status_readback(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExtensionDurabilityContext {
+pub struct ExtensionContext {
     service_id: String,
     generation: u64,
     profile_id: String,

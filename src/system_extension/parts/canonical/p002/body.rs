@@ -1,7 +1,7 @@
 
-pub(crate) fn canonical_operator_status(status: OperatorStatus) -> crate::error::Result<CanonicalOperatorStatus> {
+pub(crate) fn operator_status(status: OperatorStatus) -> crate::error::Result<OperatorStatusRecord> {
     if status.port_binding_refs.len() > MAX_CANONICAL_EXTENSION_ITEMS {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "system-extension status port binding count {} exceeds {}",
             status.port_binding_refs.len(),
             MAX_CANONICAL_EXTENSION_ITEMS
@@ -32,7 +32,7 @@ pub(crate) fn canonical_operator_status(status: OperatorStatus) -> crate::error:
         ]),
     ]);
     let status_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalOperatorStatus {
+    Ok(OperatorStatusRecord {
         status_ref,
         status,
         value,
@@ -93,10 +93,10 @@ pub fn parse_operator_status_readback(value: &preserves::IOValue) -> crate::erro
     const STATUS_FIELD_COUNT: usize = 16;
     let fields = value
         .collect_simple_record("system-extension-status-v1", Some(STATUS_FIELD_COUNT))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("expected canonical system-extension status"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected canonical system-extension status"))?;
     let schema = required_string(&fields[0], "status schema")?;
     if schema != super::SYSTEM_EXTENSION_STATUS_SCHEMA {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "system-extension status schema mismatch: {schema}"
         )));
     }
@@ -133,7 +133,7 @@ pub fn parse_operator_status_readback(value: &preserves::IOValue) -> crate::erro
 
 fn validate_readback_identifier(value: &str, label: &str) -> crate::error::Result<()> {
     if value.len() > MAX_READBACK_IDENTIFIER_BYTES {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "system-extension {label} exceeds {MAX_READBACK_IDENTIFIER_BYTES} bytes"
         )));
     }
@@ -144,25 +144,25 @@ fn validate_readback_enum(value: &str, label: &str, allowed: &[&str]) -> crate::
     if allowed.contains(&value) {
         Ok(())
     } else {
-        Err(crate::error::MoltenError::invalid_harness(format!("unsupported system-extension {label}: {value}")))
+        Err(crate::error::Failure::invalid_harness(format!("unsupported system-extension {label}: {value}")))
     }
 }
 
 fn record_string_field(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<String> {
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected <{label} STRING>")))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected <{label} STRING>")))?;
     required_string(&fields[0], label)
 }
 
 fn record_u64_field(value: &preserves::Value<preserves::IOValue>, label: &str) -> crate::error::Result<u64> {
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected <{label} U64>")))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected <{label} U64>")))?;
     fields[0]
         .as_u64()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected u64 for {label}")))?
-        .map_err(|error| crate::error::MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected u64 for {label}")))?
+        .map_err(|error| crate::error::Failure::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
 fn record_optional_string_field(
@@ -171,13 +171,13 @@ fn record_optional_string_field(
 ) -> crate::error::Result<Option<String>> {
     let fields = value
         .collect_simple_record(label, Some(1))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected <{label} OPTION>")))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected <{label} OPTION>")))?;
     if fields[0].collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
     let some = fields[0]
         .collect_simple_record("some", Some(1))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected optional string for {label}")))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected optional string for {label}")))?;
     required_string(&some[0], label).map(Some)
 }
 
@@ -185,7 +185,7 @@ fn required_string(value: &preserves::Value<preserves::IOValue>, label: &str) ->
     value
         .as_string()
         .map(|value| value.into_owned())
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected string for {label}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected string for {label}")))
 }
 
 fn effect_value(effect: &super::TypedEffectRequest) -> preserves::IOValue {
@@ -280,6 +280,6 @@ fn checks_value(checks: &[&str]) -> preserves::IOValue {
     field("checks", strings_value(checks.iter().copied()))
 }
 
-fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(format!("{label} validation denied: {issues:?}"))
+fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("{label} validation denied: {issues:?}"))
 }

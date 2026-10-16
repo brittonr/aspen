@@ -206,7 +206,7 @@
     }
 
     fn current_metadata() -> ExpectedMetadata {
-        expected_metadata_for_command(COMMAND_TEXT).expect("compute current octet metadata")
+        expected_metadata_for_command(COMMAND_TEXT, &capture_workspace()).expect("compute current octet metadata")
     }
 
     fn status_json(

@@ -2,10 +2,10 @@
 /// Denies a member that uses a reserved top-level name, is not a regular file, has an invalid
 /// content ref, or exceeds the per-member byte bound.
 fn validate_member_input(
-    policy: &MaterializationPolicy,
+    policy: &Policy,
     reserved: &std::collections::BTreeSet<&str>,
-    logical_path: &MaterializationPath,
-    input: &MaterializationMemberInput,
+    logical_path: &Path,
+    input: &MemberInput,
 ) -> crate::error::Result<()> {
     if reserved.contains(logical_path.top_level()) {
         return Err(invalid(format!(
@@ -14,7 +14,7 @@ fn validate_member_input(
             logical_path.top_level()
         )));
     }
-    if input.kind != MaterializationMemberKind::RegularFile {
+    if input.kind != MemberKind::RegularFile {
         return Err(invalid(format!(
             "materialization member {} has unsupported kind {}",
             logical_path.as_str(),
@@ -34,8 +34,8 @@ fn validate_member_input(
     Ok(())
 }
 
-pub fn validate_materialization_plan(plan: &MaterializationPlan) -> crate::error::Result<()> {
-    let parsed = parse_materialization_plan_value(&plan.value)?;
+pub fn validate_plan(plan: &Plan) -> crate::error::Result<()> {
+    let parsed = parse_plan_value(&plan.value)?;
     if parsed != *plan {
         return Err(invalid("materialization plan fields do not match canonical plan value"));
     }
@@ -43,7 +43,7 @@ pub fn validate_materialization_plan(plan: &MaterializationPlan) -> crate::error
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MaterializationReceipt {
+pub struct Receipt {
     pub receipt_ref: String,
     pub decision: String,
     pub profile: String,
@@ -59,21 +59,21 @@ pub struct MaterializationReceipt {
     pub value: preserves::IOValue,
 }
 
-impl MaterializationReceipt {
+impl Receipt {
     pub fn valid(&self) -> bool {
-        validate_materialization_receipt(self).is_ok()
+        validate_receipt(self).is_ok()
     }
 }
 
-struct MaterializationRootInner {
+struct RootInner {
     dir: cap_std::fs::Dir,
 }
 
-pub struct MaterializationRoot {
-    inner: std::sync::Arc<MaterializationRootInner>,
+pub struct Root {
+    inner: std::sync::Arc<RootInner>,
 }
 
-impl std::fmt::Debug for MaterializationRoot {
+impl std::fmt::Debug for Root {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.debug_struct("MaterializationRoot").finish_non_exhaustive()
     }

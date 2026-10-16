@@ -75,6 +75,36 @@ retains prior attempt history.
 DLQ cleanup needs a separate retention authority reference. A retention timer
 or receipt does not authorize deletion by itself.
 
+### Duplicate result binding
+
+A duplicate request returns the original operation reference, not a new claim.
+A replay can return a token only when its original token reference still matches
+the item's current in-flight token. Later completion, expiry/reclaim, or lease
+extension can make that original token unavailable. In that case the result has
+no token; it never substitutes a later token, even for the same consumer.
+Operations whose original result had no token, such as enqueue, remain tokenless
+on replay.
+
+The existing canonical optional-token representation is retained. Historical
+records are not rewritten, and no unbounded historical token store is added.
+Callers must handle an unavailable token rather than reconstructing it from the
+current item. Duplicate replay does not commit state or schedule timers.
+
+Completion still requires its own current token, owner or delegated authority,
+deadline, and fencing checks. A replayed result does not authorize worker effects.
+This fixes a wrong-response binding; it is not evidence of an authority bypass,
+exactly-once effects, or broader system correctness. Coordination-delivery
+maintainers own this contract and its deterministic replay/reopen regressions.
+
+The correction is natively synced and archived with its
+[executed acceptance and bounded review](../.cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/evidence/2026-10-16-acceptance.json).
+An external public consumer exercised real capability-rooted Redb storage,
+durable reopen, original and unavailable-token replay, conflicting requests,
+owner/fence/deadline denials, and exact delegated completion. Every duplicate
+or denial preserved durable state and controlled timer/status observations.
+Native receipt-backed coverage covers all four F08 requirements; this does not
+claim live workers, a scheduler integration, or whole-repository release coverage.
+
 ## Payload boundary
 
 Delivery state contains content and metadata references only. It does not hold
@@ -104,6 +134,10 @@ Focused verification covers:
 - policy, manifest, identity, and state validation;
 - enqueue, claim, ack, delegated completion, nack, extension, expiry, retry,
   DLQ, redrive, cleanup, and duplicate replay;
+- duplicate claim binding across reclaim, completion, and lease extension,
+  unavailable original tokens, and non-claim replay;
+- unchanged durable revision, queue state, and timers after replay or denial,
+  including canonical response round-trips and Redb reopen;
 - stale currentness, wrong owner, token drift, expired ack, unsupported failure,
   metadata overflow, and missing worker admission;
 - restart and capability-rooted Redb reopen;

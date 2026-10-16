@@ -1,0 +1,40 @@
+{
+  "preview_plan_hash": "e35e448df98d689ee397b04601d32a4ab56fffe7564bcec2c18ad5741b7dfda1",
+  "execution_plan_hash": "0ca0abd797d848b8d3eeaf2b4d4998538850caab93e787a8f593d7eeacc8cf74",
+  "raw_envelope_hashes_equal": false,
+  "hash_semantics_evidence": {
+    "source": "/home/brittonr/git/OnixResearch/cairn/crates/cairn-cli/src/plan_receipts.rs",
+    "lines": "101-128",
+    "observation": "sync_plan_json hashes dry_run, mutated, and mutation_manifest along with the stable planned inputs."
+  },
+  "stable_native_plan_fields_equal": [
+    "acceptance_ids",
+    "actions",
+    "blocked",
+    "change",
+    "cross_repo_dependencies",
+    "cross_repo_evidence_issues",
+    "delta_specs",
+    "input_hash",
+    "layout",
+    "merge_preflight",
+    "non_claims",
+    "policy",
+    "policy_hash",
+    "profile_identity_hash",
+    "reasons",
+    "review_receipt_hashes",
+    "spec_effect",
+    "workflow_profile",
+    "workflow_profile_compatibility_fallback",
+    "workflow_profile_source",
+    "workflow_profile_version"
+  ],
+  "stable_native_plan_fields_differing": [],
+  "mutation_after_hash_matches_reviewed_expected_after_hash": true,
+  "resolution": "Require exact native input, policy, profile, action, delta, and merge-preflight identities; preserve mode-dependent envelope plan hashes separately. No policy, acceptance, or actual mutation requirement is waived.",
+  "first_verifier_assertion": {
+    "outcome": "failed after successful native sync",
+    "reason": "Caller incorrectly assumed the preview and execution envelope plan hashes excluded mode and observed mutation state."
+  }
+}

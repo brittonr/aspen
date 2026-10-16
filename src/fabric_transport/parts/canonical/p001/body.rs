@@ -1,20 +1,20 @@
 
-impl ExtensionTransportContext {
+impl ExtensionContext {
     // r[impl molten.fabric_transport.protocol_registration]
     // r[impl molten.fabric_transport.session_streams]
     pub fn from_host<E: SystemExtensionExecutor>(
-        host: &crate::system_extension::SystemExtensionHost<E>,
-        profile: &CanonicalTransportProfile,
+        host: &crate::system_extension::Dispatcher<E>,
+        profile: &Profile,
     ) -> crate::error::Result<Self> {
         let key = crate::fabric::FabricPortKey {
             port_id: FABRIC_TRANSPORT_PORT_ID.to_string(),
             version: FABRIC_TRANSPORT_PORT_VERSION.to_string(),
         };
         let binding = host.manifest().binding_for(&key).ok_or_else(|| {
-            crate::error::MoltenError::invalid_harness("system extension has no admitted transport port binding")
+            crate::error::Failure::invalid_harness("system extension has no admitted transport port binding")
         })?;
         if binding.binding.implementation_profile != profile.profile.profile_id {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "system-extension transport profile substitution denied",
             ));
         }
@@ -27,7 +27,7 @@ impl ExtensionTransportContext {
     }
 
     #[cfg(test)]
-    pub(crate) fn from_test_snapshot(service_id: &str, generation: u64, profile: &CanonicalTransportProfile) -> Self {
+    pub(crate) fn from_test_snapshot(service_id: &str, generation: u64, profile: &Profile) -> Self {
         Self {
             service_id: service_id.to_string(),
             generation,
@@ -38,24 +38,24 @@ impl ExtensionTransportContext {
 
     pub fn admit_command(
         &self,
-        profile: &CanonicalTransportProfile,
+        profile: &Profile,
         command: &TransportCommand,
         accounted_bytes: u64,
     ) -> crate::error::Result<()> {
         if self.profile_id != profile.profile.profile_id {
-            return Err(crate::error::MoltenError::invalid_harness("transport profile substitution denied"));
+            return Err(crate::error::Failure::invalid_harness("transport profile substitution denied"));
         }
         if command.generation() != self.generation {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "transport command uses a stale service generation",
             ));
         }
         let command_service = command_service_id(command);
         if command_service != self.service_id {
-            return Err(crate::error::MoltenError::invalid_harness("transport command service identity mismatch"));
+            return Err(crate::error::Failure::invalid_harness("transport command service identity mismatch"));
         }
         if accounted_bytes > self.max_frame_bytes {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "transport command bytes {accounted_bytes} exceed {}",
                 self.max_frame_bytes
             )));
@@ -90,7 +90,7 @@ fn command_service_id(command: &TransportCommand) -> &str {
     }
 }
 
-fn canonical_event(event: TransportEvent) -> crate::error::Result<CanonicalTransportEvent> {
+fn event(event: TransportEvent) -> crate::error::Result<Event> {
     let value = crate::preserves_rail::record(TRANSPORT_EVENT_RECORD, vec![
         crate::preserves_rail::string(TRANSPORT_EVENT_SCHEMA),
         field("kind", crate::preserves_rail::string(event.kind.as_str())),
@@ -138,14 +138,14 @@ fn canonical_event(event: TransportEvent) -> crate::error::Result<CanonicalTrans
         ]),
     ]);
     let event_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalTransportEvent {
+    Ok(Event {
         event_ref,
         event,
         value,
     })
 }
 
-fn transport_profile_value(profile: &TransportProfile) -> preserves::IOValue {
+fn profile_value(profile: &TransportProfile) -> preserves::IOValue {
     crate::preserves_rail::record(TRANSPORT_PROFILE_RECORD, vec![
         crate::preserves_rail::string(TRANSPORT_PROFILE_SCHEMA),
         field("profile-id", crate::preserves_rail::string(&profile.profile_id)),
@@ -205,9 +205,9 @@ fn count_value(value: usize) -> crate::error::Result<preserves::IOValue> {
 }
 
 fn count(value: usize) -> crate::error::Result<u64> {
-    u64::try_from(value).map_err(|_| crate::error::MoltenError::invalid_harness("transport collection count overflow"))
+    u64::try_from(value).map_err(|_| crate::error::Failure::invalid_harness("transport collection count overflow"))
 }
 
-fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(format!("{label} validation denied: {issues:?}"))
+fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("{label} validation denied: {issues:?}"))
 }

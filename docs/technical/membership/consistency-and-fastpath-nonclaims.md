@@ -6,7 +6,7 @@ Membership, consistency, and fast-path modeling share vocabulary such as views, 
 
 Membership profiles include `ConsistencyBacked` and authority strengths such as `ConsistencyOrdered`. Those types preserve the provenance and declared strength of a supplied view. They do not make the membership core a consensus service. The core accepts explicit inputs and returns deterministic admission, reduction, placement, and lifecycle decisions without transport or persistence effects.
 
-The inspected [`PolicyManagedMembershipProvider`](../../../src/fabric_membership/adapters.rs) accepts policy-managed or consistency-backed snapshots. Replacement requires the same provider kind and profile reference and an advancing view epoch. The adapter stores and returns the supplied snapshot; these operations do not demonstrate how an upstream consistency authority obtained agreement. Calling this adapter “consistency-backed” cannot supply missing quorum or durability evidence.
+The inspected [`PolicyManagedProvider`](../../../src/fabric_membership/adapters.rs) accepts policy-managed or consistency-backed snapshots. Replacement requires the same provider kind and profile reference and an advancing view epoch. The adapter stores and returns the supplied snapshot; these operations do not demonstrate how an upstream consistency authority obtained agreement. Calling this adapter “consistency-backed” cannot supply missing quorum or durability evidence.
 
 Likewise, a planner's refusal to combine conflicting membership views is not a consensus algorithm. It preserves uncertainty at an authority boundary. An external consistency service might resolve a membership decision, but neither the decision's shape nor its canonical reference establishes that the resolution happened.
 

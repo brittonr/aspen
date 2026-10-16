@@ -25,7 +25,7 @@ pub struct SightglassProcessInvocation<'a> {
     pub engine: &'a std::path::Path,
     pub benchmark: &'a std::path::Path,
     pub benchmark_ref: &'a str,
-    pub profile: &'a super::model::PerformanceProfile,
+    pub profile: &'a super::model::Profile,
     pub suite: &'a super::model::BenchmarkSuite,
     pub expected_architecture: &'a str,
     pub max_output_bytes: u64,
@@ -39,11 +39,11 @@ pub struct SightglassProcessResult {
 
 pub fn run_sightglass_process(
     invocation: &SightglassProcessInvocation<'_>,
-) -> super::model::PerformanceResult<SightglassProcessResult> {
+) -> super::model::Result<SightglassProcessResult> {
     validate_invocation(invocation)?;
     let [runner_file, engine_file, benchmark_file] = open_admitted_files(invocation)?;
     let stdout_limit = usize::try_from(invocation.max_output_bytes).map_err(|error| {
-        super::model::PerformanceDenial::new(format!("Sightglass output bound is unsupported: {error}"))
+        super::model::Denial::new(format!("Sightglass output bound is unsupported: {error}"))
     })?;
     let total_timeout = std::time::Duration::from_secs(invocation.profile.comparison.max_sightglass_run_seconds);
     let mut suite_deadline =
@@ -55,11 +55,11 @@ pub fn run_sightglass_process(
         let remaining_timeout = Some(suite_deadline.remaining().map_err(supervision_denial)?)
             .filter(|duration| !duration.is_zero())
             .ok_or_else(|| {
-                super::model::PerformanceDenial::new("Sightglass suite exceeded its admitted total runtime")
+                super::model::Denial::new("Sightglass suite exceeded its admitted total runtime")
             })?;
         let remaining_stdout =
             stdout_limit.checked_sub(total_stdout_bytes).filter(|remaining| *remaining > 0).ok_or_else(|| {
-                super::model::PerformanceDenial::new("Sightglass suite exceeded its admitted total output")
+                super::model::Denial::new("Sightglass suite exceeded its admitted total output")
             })?;
         let output = run_sightglass_subprocess(SubprocessInput {
             runner: &runner_file.process_path,
@@ -71,17 +71,17 @@ pub fn run_sightglass_process(
         })?;
         total_stdout_bytes = total_stdout_bytes
             .checked_add(output.stdout.len())
-            .ok_or_else(|| super::model::PerformanceDenial::new("Sightglass suite output accounting overflowed"))?;
+            .ok_or_else(|| super::model::Denial::new("Sightglass suite output accounting overflowed"))?;
         append_diagnostic_stderr(&mut diagnostic_stderr_bytes, output.stderr)?;
         let process_measurements = process_measurements(&output.stdout, process_ordinal)?;
         raw_measurements.reserve(process_measurements.len());
         raw_measurements.extend(process_measurements);
     }
     let stdout = serde_json::to_vec(&raw_measurements).map_err(|error| {
-        super::model::PerformanceDenial::new(format!("Sightglass raw JSON normalization failed: {error}"))
+        super::model::Denial::new(format!("Sightglass raw JSON normalization failed: {error}"))
     })?;
     if stdout.len() > stdout_limit {
-        return Err(super::model::PerformanceDenial::new(
+        return Err(super::model::Denial::new(
             "Sightglass normalized suite output exceeded its admitted bound",
         ));
     }
@@ -94,19 +94,19 @@ pub fn run_sightglass_process(
     })
 }
 
-fn validate_invocation(invocation: &SightglassProcessInvocation<'_>) -> super::model::PerformanceResult<()> {
-    super::profile::validate_performance_profile(invocation.profile)?;
+fn validate_invocation(invocation: &SightglassProcessInvocation<'_>) -> super::model::Result<()> {
+    super::profile::validate(invocation.profile)?;
     super::comparison::validate_suite_instance(invocation.profile, invocation.suite)?;
     if invocation.expected_architecture.trim().is_empty()
         || invocation.max_output_bytes == 0
         || invocation.max_output_bytes > invocation.profile.comparison.max_sightglass_output_bytes
     {
-        return Err(super::model::PerformanceDenial::new(
+        return Err(super::model::Denial::new(
             "Sightglass invocation requires an architecture and reviewed output bound",
         ));
     }
     if !invocation.suite.workload_refs.iter().any(|value| value == invocation.benchmark_ref) {
-        return Err(super::model::PerformanceDenial::new(
+        return Err(super::model::Denial::new(
             "Sightglass benchmark identity is absent from the admitted suite",
         ));
     }
@@ -117,7 +117,7 @@ fn validate_invocation(invocation: &SightglassProcessInvocation<'_>) -> super::m
 /// bound.
 fn open_admitted_files(
     invocation: &SightglassProcessInvocation<'_>,
-) -> super::model::PerformanceResult<[AdmittedProcessFile; 3]> {
+) -> super::model::Result<[AdmittedProcessFile; 3]> {
     let runner_file = open_admitted_process_file(
         invocation.program,
         &invocation.suite.runner_artifact_ref,
@@ -142,13 +142,13 @@ fn open_admitted_files(
 fn append_diagnostic_stderr(
     diagnostic_stderr_bytes: &mut impl crate::bounded::VecSink<u8>,
     stderr: Vec<u8>,
-) -> super::model::PerformanceResult<()> {
+) -> super::model::Result<()> {
     let diagnostic_total = diagnostic_stderr_bytes
         .item_count()
         .checked_add(stderr.len())
-        .ok_or_else(|| super::model::PerformanceDenial::new("Sightglass diagnostic accounting overflowed"))?;
+        .ok_or_else(|| super::model::Denial::new("Sightglass diagnostic accounting overflowed"))?;
     if diagnostic_total > MAX_DIAGNOSTIC_STDERR_BYTES {
-        return Err(super::model::PerformanceDenial::new(
+        return Err(super::model::Denial::new(
             "Sightglass suite diagnostic stderr exceeded its admitted bound",
         ));
     }
@@ -161,13 +161,13 @@ fn append_diagnostic_stderr(
 fn process_measurements(
     stdout: &[u8],
     process_ordinal: u32,
-) -> super::model::PerformanceResult<Vec<serde_json::Value>> {
+) -> super::model::Result<Vec<serde_json::Value>> {
     let mut process_measurements: Vec<serde_json::Value> = serde_json::from_slice(stdout)
-        .map_err(|error| super::model::PerformanceDenial::new(format!("Sightglass raw JSON is malformed: {error}")))?;
+        .map_err(|error| super::model::Denial::new(format!("Sightglass raw JSON is malformed: {error}")))?;
     for measurement in &mut process_measurements {
         let process = measurement
             .get_mut("process")
-            .ok_or_else(|| super::model::PerformanceDenial::new("Sightglass raw JSON omits its diagnostic process"))?;
+            .ok_or_else(|| super::model::Denial::new("Sightglass raw JSON omits its diagnostic process"))?;
         *process = serde_json::Value::from(process_ordinal);
     }
     Ok(process_measurements)
@@ -197,8 +197,8 @@ struct SightglassSubprocessOutput {
     stderr: Vec<u8>,
 }
 
-fn supervision_denial(error: crate::error::MoltenError) -> super::model::PerformanceDenial {
-    super::model::PerformanceDenial::new(format!("Sightglass supervision clock denied: {error}"))
+fn supervision_denial(error: crate::error::Failure) -> super::model::Denial {
+    super::model::Denial::new(format!("Sightglass supervision clock denied: {error}"))
 }
 
 struct SubprocessInput<'a> {
@@ -212,7 +212,7 @@ struct SubprocessInput<'a> {
 
 fn run_sightglass_subprocess(
     input: SubprocessInput<'_>,
-) -> super::model::PerformanceResult<SightglassSubprocessOutput> {
+) -> super::model::Result<SightglassSubprocessOutput> {
     let SubprocessInput {
         runner,
         engine,
@@ -232,22 +232,22 @@ fn run_sightglass_subprocess(
         .arg(SIGHTGLASS_ARGUMENT_SEPARATOR)
         .arg(benchmark);
     let mut child = command.spawn().map_err(|error| {
-        super::model::PerformanceDenial::new(format!("Sightglass process could not start: {error}"))
+        super::model::Denial::new(format!("Sightglass process could not start: {error}"))
     })?;
     let stdout = child
         .stdout
         .take()
-        .ok_or_else(|| super::model::PerformanceDenial::new("Sightglass process stdout pipe is unavailable"))?;
+        .ok_or_else(|| super::model::Denial::new("Sightglass process stdout pipe is unavailable"))?;
     let stderr = child
         .stderr
         .take()
-        .ok_or_else(|| super::model::PerformanceDenial::new("Sightglass process stderr pipe is unavailable"))?;
+        .ok_or_else(|| super::model::Denial::new("Sightglass process stderr pipe is unavailable"))?;
     let stdout_reader = std::thread::spawn(move || read_bounded(stdout, stdout_limit));
     let stderr_reader = std::thread::spawn(move || read_bounded(stderr, MAX_DIAGNOSTIC_STDERR_BYTES));
     let mut deadline = crate::fabric_time::SupervisionDeadline::after(timeout).map_err(supervision_denial)?;
     let status = loop {
         match child.try_wait().map_err(|error| {
-            super::model::PerformanceDenial::new(format!("Sightglass process status failed: {error}"))
+            super::model::Denial::new(format!("Sightglass process status failed: {error}"))
         })? {
             Some(status) => break status,
             None if deadline.is_expired().map_err(supervision_denial)? => {
@@ -259,7 +259,7 @@ fn run_sightglass_subprocess(
                 let stderr_diagnostic = join_bounded_reader(stderr_reader, "stderr")
                     .err()
                     .map_or_else(String::new, |error| format!(": {error}"));
-                return Err(super::model::PerformanceDenial::new(format!(
+                return Err(super::model::Denial::new(format!(
                     "Sightglass process exceeded its admitted runtime{kill_diagnostic}{wait_diagnostic}{stdout_diagnostic}{stderr_diagnostic}"
                 )));
             }
@@ -269,7 +269,7 @@ fn run_sightglass_subprocess(
     let stdout = join_bounded_reader(stdout_reader, "stdout")?;
     let stderr = join_bounded_reader(stderr_reader, "stderr")?;
     if !status.success() {
-        return Err(super::model::PerformanceDenial::new(format!(
+        return Err(super::model::Denial::new(format!(
             "Sightglass process denied with status {status}: {}",
             bounded_diagnostic(&stderr)
         )));

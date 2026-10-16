@@ -10,7 +10,7 @@ const MAX_DELIVERY_RECEIPT_BYTES: usize = 262_144;
 const MAX_DELIVERY_STATUS_BYTES: usize = 65_536;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DeliveryServiceStatus {
+pub enum ServiceStatus {
     Denied,
     DuplicateReplay,
     Applied,
@@ -21,7 +21,7 @@ pub enum DeliveryServiceStatus {
     Unknown,
 }
 
-impl DeliveryServiceStatus {
+impl ServiceStatus {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Denied => "denied",
@@ -41,16 +41,16 @@ impl DeliveryServiceStatus {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DeliveryCommitReceipt {
+pub struct CommitReceipt {
     pub queue_id: String,
     pub request_ref: String,
     pub operation_ref: String,
     pub before_state_ref: String,
     pub after_state_ref: String,
     pub revision: u64,
-    pub status: DeliveryServiceStatus,
+    pub status: ServiceStatus,
     pub currentness: DeliveryCurrentness,
-    pub durability: super::DeliveryDurabilityOutcome,
+    pub durability: super::DurabilityOutcome,
     pub engine_epoch: u64,
     pub timer_refs: Vec<String>,
     pub failed_timer_refs: Vec<String>,
@@ -63,16 +63,14 @@ pub struct DeliveryCommitReceipt {
 }
 
 #[derive(Clone, Debug)]
-pub struct CanonicalDeliveryCommitReceipt {
+pub struct CanonicalCommitReceipt {
     pub receipt_ref: String,
-    pub status: DeliveryServiceStatus,
+    pub status: ServiceStatus,
     pub value: preserves::IOValue,
     pub bytes: Vec<u8>,
 }
 
-pub fn canonical_delivery_commit_receipt(
-    receipt: &DeliveryCommitReceipt,
-) -> crate::error::Result<CanonicalDeliveryCommitReceipt> {
+pub fn canonical_commit_receipt(receipt: &CommitReceipt) -> crate::error::Result<CanonicalCommitReceipt> {
     if receipt.queue_id.is_empty()
         || receipt.request_ref.is_empty()
         || receipt.operation_ref.is_empty()
@@ -83,7 +81,7 @@ pub fn canonical_delivery_commit_receipt(
         || receipt.claims_exactly_once
         || receipt.non_claims != required_delivery_non_claims()
     {
-        return Err(crate::error::MoltenError::invalid_harness("coordination delivery receipt is invalid"));
+        return Err(crate::error::Failure::invalid_harness("coordination delivery receipt is invalid"));
     }
     let value = record(DELIVERY_COMMIT_RECEIPT_RECORD, vec![
         field("schema", string(DELIVERY_COMMIT_RECEIPT_SCHEMA)),
@@ -108,9 +106,9 @@ pub fn canonical_delivery_commit_receipt(
     ]);
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     if bytes.len() > MAX_DELIVERY_RECEIPT_BYTES {
-        return Err(crate::error::MoltenError::invalid_harness("coordination delivery receipt exceeds its byte bound"));
+        return Err(crate::error::Failure::invalid_harness("coordination delivery receipt exceeds its byte bound"));
     }
-    Ok(CanonicalDeliveryCommitReceipt {
+    Ok(CanonicalCommitReceipt {
         receipt_ref: hash_bytes(DELIVERY_RECEIPT_DOMAIN, &bytes),
         status: receipt.status,
         value,
@@ -118,7 +116,7 @@ pub fn canonical_delivery_commit_receipt(
     })
 }
 
-pub fn identify_canonical_delivery_status(status: &DeliveryStatus) -> crate::error::Result<String> {
+pub fn identify_canonical_status(status: &DeliveryStatus) -> crate::error::Result<String> {
     let active = status
         .active_claims
         .iter()
@@ -153,9 +151,7 @@ pub fn identify_canonical_delivery_status(status: &DeliveryStatus) -> crate::err
     ]);
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     if bytes.len() > MAX_DELIVERY_STATUS_BYTES || status.payloads_rendered {
-        return Err(crate::error::MoltenError::invalid_harness(
-            "coordination delivery status is invalid or over bound",
-        ));
+        return Err(crate::error::Failure::invalid_harness("coordination delivery status is invalid or over bound"));
     }
     Ok(hash_bytes(DELIVERY_STATUS_DOMAIN, &bytes))
 }

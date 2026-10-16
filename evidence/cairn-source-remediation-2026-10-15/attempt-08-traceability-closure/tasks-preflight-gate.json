@@ -1,0 +1,127 @@
+{
+  "command": [
+    "/tmp/molten-attempts-6-7-l6bgn98w/cairn-provider/bin/cairn",
+    "gate",
+    "tasks",
+    "support-active-delta-traceability-before-sync",
+    "--root",
+    ".",
+    "--policy",
+    "/home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "exit_code": 0,
+  "stderr": "",
+  "result": {
+    "acceptance_ids": [],
+    "change": "support-active-delta-traceability-before-sync",
+    "evidence_summary": {
+      "docs_only": 0,
+      "fixture": 0,
+      "formal": 0,
+      "mode": "advisory",
+      "model": 0,
+      "probe": 0,
+      "property": 0
+    },
+    "input_hash": "4dd02b0e2a3f092d0993374c7f6f31ad581a7b56f66d9a8d5a0b39bffc77d4aa",
+    "issues": [],
+    "layout": "cairn",
+    "non_claims": [
+      "workflow state proves only the selected policy graph and observed structural artifact facts",
+      "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+      "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+      "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+    ],
+    "policy": "cairn-default",
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "policy_selection": {
+      "blake3": "7a67802377005c18ebded42899e7f564f5d87087b6c14ca70464b35886f340a9",
+      "installation_receipt": false,
+      "locator": "/home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json",
+      "source": "explicit"
+    },
+    "probe_evidence": {
+      "declarations_present": false,
+      "probes": []
+    },
+    "profile_identity_hash": "4f7ad03c1c6c26f0794352f73b4d817d094179e1e7257f60759ecde828114e6a",
+    "receipt_hash": "01fc3d61183bb514aaf7aafbec642dd43e3ed80a8193e61b5e92d5fefe5d0b9b",
+    "review_receipt_hashes": [],
+    "spec_effect": "delta",
+    "stage": "tasks",
+    "substance": [
+      {
+        "checkbox_tasks": 0,
+        "kind": "design",
+        "malformed_dependency_markers": 0,
+        "path": "./.cairn/changes/support-active-delta-traceability-before-sync/design.md",
+        "requirement_blocks": 0,
+        "scenario_blocks": 0,
+        "substantive_lines": 11,
+        "substantive_requirement_blocks": 0,
+        "substantive_tasks": 0,
+        "task_done": 0,
+        "task_in_progress": 0,
+        "task_todo": 0
+      },
+      {
+        "checkbox_tasks": 0,
+        "kind": "proposal",
+        "malformed_dependency_markers": 0,
+        "path": "./.cairn/changes/support-active-delta-traceability-before-sync/proposal.md",
+        "requirement_blocks": 0,
+        "scenario_blocks": 0,
+        "substantive_lines": 11,
+        "substantive_requirement_blocks": 0,
+        "substantive_tasks": 0,
+        "task_done": 0,
+        "task_in_progress": 0,
+        "task_todo": 0
+      },
+      {
+        "checkbox_tasks": 0,
+        "kind": "delta_spec",
+        "malformed_dependency_markers": 0,
+        "path": "./.cairn/changes/support-active-delta-traceability-before-sync/specs/project/spec.md",
+        "requirement_blocks": 5,
+        "scenario_blocks": 7,
+        "substantive_lines": 28,
+        "substantive_requirement_blocks": 5,
+        "substantive_tasks": 0,
+        "task_done": 0,
+        "task_in_progress": 0,
+        "task_todo": 0
+      },
+      {
+        "checkbox_tasks": 7,
+        "kind": "tasks",
+        "malformed_dependency_markers": 0,
+        "path": "./.cairn/changes/support-active-delta-traceability-before-sync/tasks.md",
+        "requirement_blocks": 0,
+        "scenario_blocks": 0,
+        "substantive_lines": 8,
+        "substantive_requirement_blocks": 0,
+        "substantive_tasks": 7,
+        "task_done": 6,
+        "task_in_progress": 0,
+        "task_todo": 1
+      }
+    ],
+    "task_ordering": {
+      "active": false,
+      "edges": [],
+      "issues": [],
+      "nodes": [],
+      "order": [],
+      "ready_tasks": [],
+      "valid": true
+    },
+    "valid": true,
+    "verdict": "PASS",
+    "workflow_profile": "spec-driven",
+    "workflow_profile_compatibility_fallback": false,
+    "workflow_profile_source": "change_create",
+    "workflow_profile_version": 1
+  }
+}

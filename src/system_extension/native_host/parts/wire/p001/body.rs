@@ -2,21 +2,21 @@
 fn parse_effect(
     value: &preserves::Value<preserves::IOValue>,
     maximum_value_bytes: u64,
-) -> crate::error::Result<NativeMaterializedEffectRequest> {
+) -> crate::error::Result<MaterializedEffectRequest> {
     let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = crate::preserves_rail::simple_record_fields(&value, EFFECT_RECORD, EFFECT_FIELD_COUNT)?;
     let target_value = crate::preserves_rail::value_to_iovalue(&fields[0]);
     let target_fields =
         crate::preserves_rail::simple_record_fields(&target_value, PORT_TARGET_RECORD, PORT_TARGET_FIELD_COUNT)
             .map_err(|_| {
-                crate::error::MoltenError::invalid_harness("native callback effect target must be an exact fabric port")
+                crate::error::Failure::invalid_harness("native callback effect target must be an exact fabric port")
             })?;
     let schema = crate::preserves_rail::required_string_field(&fields[7], "effect schema")?;
     if schema != NATIVE_CALLBACK_OUTCOME_SCHEMA {
-        return Err(crate::error::MoltenError::invalid_harness("native callback effect schema mismatch"));
+        return Err(crate::error::Failure::invalid_harness("native callback effect schema mismatch"));
     }
     let request = parse_value(&fields[4], "effect request", maximum_value_bytes)?;
-    Ok(NativeMaterializedEffectRequest {
+    Ok(MaterializedEffectRequest {
         effect: TypedEffectRequest {
             target: EffectTarget::FabricPort(crate::fabric::FabricPortKey {
                 port_id: crate::preserves_rail::required_string_field(&target_fields[0], "effect port id")?,
@@ -71,7 +71,7 @@ fn parse_value(
         value_ref: crate::preserves_rail::required_content_ref_string(&fields[0], field)?,
         bytes: parse_bytes(&fields[1], field, maximum_bytes)?,
     };
-    super::admit_native_callback_value(&value, maximum_bytes).map_err(value_error)?;
+    super::admit_callback_value(&value, maximum_bytes).map_err(value_error)?;
     Ok(value)
 }
 
@@ -93,25 +93,25 @@ fn parse_bytes(
         .map(|value| {
             let number = required_u64(value, field)?;
             u8::try_from(number).map_err(|_| {
-                crate::error::MoltenError::invalid_harness(format!("{field} contains a value outside the byte range"))
+                crate::error::Failure::invalid_harness(format!("{field} contains a value outside the byte range"))
             })
         })
         .collect()
 }
 
 fn require_input_links(
-    context: &NativeCallbackContext,
+    context: &CallbackContext,
     invocation: &CallbackInvocation,
-    inputs: &NativeCallbackInputs,
+    inputs: &CallbackInputs,
 ) -> crate::error::Result<()> {
     if invocation.payload_ref.as_deref() != inputs.payload.as_ref().map(|value| value.value_ref.as_str()) {
-        return Err(crate::error::MoltenError::invalid_harness("native callback payload reference lacks exact bytes"));
+        return Err(crate::error::Failure::invalid_harness("native callback payload reference lacks exact bytes"));
     }
     if context.state_ref.as_deref() != inputs.state.as_ref().map(|value| value.value_ref.as_str()) {
-        return Err(crate::error::MoltenError::invalid_harness("native callback state reference lacks exact bytes"));
+        return Err(crate::error::Failure::invalid_harness("native callback state reference lacks exact bytes"));
     }
     for value in inputs.payload.iter().chain(inputs.state.iter()) {
-        super::admit_native_callback_value(value, u64::MAX).map_err(value_error)?;
+        super::admit_callback_value(value, u64::MAX).map_err(value_error)?;
     }
     Ok(())
 }
@@ -136,8 +136,8 @@ fn parse_ref_sequence(
 fn required_u64(value: &preserves::Value<preserves::IOValue>, field: &str) -> crate::error::Result<u64> {
     value
         .as_u64()
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected u64 for {field}")))?
-        .map_err(|error| crate::error::MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| crate::error::Failure::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
 fn parse_health(value: &str) -> crate::error::Result<HealthState> {
@@ -149,7 +149,7 @@ fn parse_health(value: &str) -> crate::error::Result<HealthState> {
         "failed" => Ok(HealthState::Failed),
         "quarantined" => Ok(HealthState::Quarantined),
         "stopped" => Ok(HealthState::Stopped),
-        _ => Err(crate::error::MoltenError::invalid_harness("native callback health is unsupported")),
+        _ => Err(crate::error::Failure::invalid_harness("native callback health is unsupported")),
     }
 }
 
@@ -159,22 +159,22 @@ fn require_byte_bound(bytes: &[u8], maximum: u64, label: &str) -> crate::error::
 
 fn require_byte_bound_len(actual: usize, maximum: u64, label: &str) -> crate::error::Result<()> {
     let actual = u64::try_from(actual)
-        .map_err(|_| crate::error::MoltenError::invalid_harness(format!("{label} length does not fit u64")))?;
+        .map_err(|_| crate::error::Failure::invalid_harness(format!("{label} length does not fit u64")))?;
     if actual > maximum {
-        return Err(crate::error::MoltenError::invalid_harness(format!("{label} exceeds {maximum} bytes")));
+        return Err(crate::error::Failure::invalid_harness(format!("{label} exceeds {maximum} bytes")));
     }
     Ok(())
 }
 
 fn require_item_bound(actual: usize, maximum: u64, label: &str) -> crate::error::Result<()> {
     let actual = u64::try_from(actual)
-        .map_err(|_| crate::error::MoltenError::invalid_harness(format!("{label} count does not fit u64")))?;
+        .map_err(|_| crate::error::Failure::invalid_harness(format!("{label} count does not fit u64")))?;
     if actual > maximum {
-        return Err(crate::error::MoltenError::invalid_harness(format!("{label} exceeds its item bound")));
+        return Err(crate::error::Failure::invalid_harness(format!("{label} exceeds its item bound")));
     }
     Ok(())
 }
 
-fn value_error(error: super::NativeValuePortFailure) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(error.message)
+fn value_error(error: super::ValuePortFailure) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(error.message)
 }

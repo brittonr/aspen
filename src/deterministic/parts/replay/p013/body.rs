@@ -162,10 +162,10 @@ fn validate_replay_summary(summary: &ReplayTraceSummary) -> Result<()> {
 
 fn validate_ref_list_bound(refs: &[String], label: &'static str) -> Result<()> {
     if refs.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness(format!("{label} must not be empty")));
+        return Err(crate::error::Failure::invalid_harness(format!("{label} must not be empty")));
     }
     if refs.len() > MAX_MULTITURN_REPLAY_ITEMS {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "{label} count exceeds {MAX_MULTITURN_REPLAY_ITEMS}"
         )));
     }
@@ -177,10 +177,10 @@ fn validate_ref_list_bound(refs: &[String], label: &'static str) -> Result<()> {
 
 fn validate_boundary_refs(boundaries: &[ReplayBoundaryRef]) -> Result<()> {
     if boundaries.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness("boundary refs must not be empty"));
+        return Err(crate::error::Failure::invalid_harness("boundary refs must not be empty"));
     }
     if boundaries.len() > MAX_MULTITURN_REPLAY_ITEMS {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "boundary refs count exceeds {MAX_MULTITURN_REPLAY_ITEMS}"
         )));
     }
@@ -188,7 +188,7 @@ fn validate_boundary_refs(boundaries: &[ReplayBoundaryRef]) -> Result<()> {
         validate_content_ref(&boundary.boundary_ref)?;
         validate_replay_profile(&boundary.boundary_kind)?;
         if boundary.field_path.is_empty() {
-            return Err(crate::error::MoltenError::invalid_harness("boundary field path cannot be empty"));
+            return Err(crate::error::Failure::invalid_harness("boundary field path cannot be empty"));
         }
     }
     Ok(())

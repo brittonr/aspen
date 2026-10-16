@@ -2,7 +2,7 @@
 fn remove_tree_if_present(dir: &cap_std::fs::Dir, path: &std::path::Path) -> crate::error::Result<()> {
     match entry_kind(dir, path)? {
         None => Ok(()),
-        Some(MaterializationMemberKind::Directory) => dir.remove_dir_all(path).map_err(crate::error::MoltenError::from),
+        Some(MemberKind::Directory) => dir.remove_dir_all(path).map_err(crate::error::Failure::from),
         Some(_) => Err(invalid("materialization stage path is not a real directory")),
     }
 }

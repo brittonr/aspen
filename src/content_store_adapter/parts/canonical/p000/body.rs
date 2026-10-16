@@ -8,59 +8,59 @@ const PARTIAL_RECORD: &str = "content-store-adapter-partial-state-v1";
 const STATUS_RECORD: &str = "content-store-adapter-status-v1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalContentArtifact<T> {
+pub struct Artifact<T> {
     pub artifact: T,
     pub artifact_ref: String,
     pub value: preserves::IOValue,
 }
 
 // r[impl molten.content_store_adapter.port_contract]
-pub fn canonical_content_profile(
+pub fn bind_profile(
     profile: &ContentAdapterProfile,
-) -> crate::error::Result<CanonicalContentArtifact<ContentAdapterProfile>> {
+) -> crate::error::Result<Artifact<ContentAdapterProfile>> {
     require_valid("content adapter profile", &validate_content_profile(profile))?;
-    canonical_artifact(profile.clone(), profile_value(profile))
+    artifact(profile.clone(), profile_value(profile))
 }
 
-pub fn canonical_content_command(
+pub fn bind_command(
     profile: &ContentAdapterProfile,
     manifest: &ContentManifestDescriptor,
     command: &ContentCommand,
     active_operations: u64,
     queued_bytes: u64,
-) -> crate::error::Result<CanonicalContentArtifact<ContentCommand>> {
+) -> crate::error::Result<Artifact<ContentCommand>> {
     let active_operations = crate::bounded::usize_from_u64(active_operations, "content active operations")?;
     let preflight = preflight_content_operation(profile, manifest, command, active_operations, queued_bytes);
     require_valid("content command", &preflight.issues)?;
-    canonical_artifact(command.clone(), command_value(command))
+    artifact(command.clone(), command_value(command))
 }
 
-pub fn canonical_content_event(
+pub fn bind_event(
     profile: &ContentAdapterProfile,
     event: &ContentEvent,
-) -> crate::error::Result<CanonicalContentArtifact<ContentEvent>> {
+) -> crate::error::Result<Artifact<ContentEvent>> {
     require_valid("content event", &validate_content_event(profile, event))?;
-    canonical_artifact(event.clone(), event_value(event))
+    artifact(event.clone(), event_value(event))
 }
 
-pub fn canonical_partial_state(
+pub fn partial_state(
     profile: &ContentAdapterProfile,
     manifest: &ContentManifestDescriptor,
     state: &ContentPartialState,
-) -> crate::error::Result<CanonicalContentArtifact<ContentPartialState>> {
+) -> crate::error::Result<Artifact<ContentPartialState>> {
     require_valid("content partial state", &validate_partial_state(profile, manifest, state))?;
-    canonical_artifact(state.clone(), partial_value(state))
+    artifact(state.clone(), partial_value(state))
 }
 
-pub fn canonical_content_status(
+pub fn status(
     profile: &ContentAdapterProfile,
     status: &ContentAdapterStatus,
-) -> crate::error::Result<CanonicalContentArtifact<ContentAdapterStatus>> {
+) -> crate::error::Result<Artifact<ContentAdapterStatus>> {
     require_valid("content adapter status", &validate_adapter_status(profile, status))?;
-    canonical_artifact(status.clone(), status_value(status))
+    artifact(status.clone(), status_value(status))
 }
 
-pub fn content_store_port_descriptors(profile_ref: &str) -> Vec<FabricPortDescriptor> {
+pub fn port_descriptors(profile_ref: &str) -> Vec<FabricPortDescriptor> {
     vec![
         content_exchange_port_descriptor(profile_ref),
         content_store_port_descriptor(profile_ref),

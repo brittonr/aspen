@@ -3,7 +3,7 @@ use molten_core::content_store_adapter::*;
 use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SimulationFault {
+pub enum Fault {
     CorruptAt(usize),
     TruncateAt(usize),
     CancelAt(usize),
@@ -13,9 +13,9 @@ pub enum SimulationFault {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SimulationContentExecution {
-    pub state: CanonicalContentArtifact<ContentPartialState>,
-    pub events: Vec<CanonicalContentArtifact<ContentEvent>>,
+pub struct ModelExecution {
+    pub state: Artifact<ContentPartialState>,
+    pub events: Vec<Artifact<ContentEvent>>,
     pub verified_chunks: Vec<VerifiedChunkPayload>,
 }
 
@@ -29,12 +29,12 @@ pub struct SimulatedStreamInput<'a> {
     pub generation: u64,
     pub retained: Option<&'a ContentPartialState>,
     pub chunks: &'a std::collections::BTreeMap<String, Vec<u8>>,
-    pub fault: Option<SimulationFault>,
+    pub fault: Option<Fault>,
 }
 
 // r[impl molten.content_store_adapter.partial_state]
 // r[impl molten.content_store_adapter.live_sim_conformance]
-pub fn execute_simulated_stream(input: SimulatedStreamInput<'_>) -> crate::error::Result<SimulationContentExecution> {
+pub fn execute_simulated_stream(input: SimulatedStreamInput<'_>) -> crate::error::Result<ModelExecution> {
     let SimulatedStreamInput {
         profile,
         manifest,
@@ -52,12 +52,12 @@ pub fn execute_simulated_stream(input: SimulatedStreamInput<'_>) -> crate::error
     let mut events = Vec::with_capacity(remaining_chunks);
     let mut verified_chunks = Vec::with_capacity(remaining_chunks);
     for descriptor in manifest.chunks.iter().skip(resume_position) {
-        if fault == Some(SimulationFault::CancelAt(descriptor.position)) {
+        if fault == Some(Fault::CancelAt(descriptor.position)) {
             state = cancel_content_operation(profile, &state).map_err(transition_error)?;
             events.push(terminal_stream_event(input, &state, None, None)?);
             break;
         }
-        if fault == Some(SimulationFault::DisconnectAt(descriptor.position)) {
+        if fault == Some(Fault::DisconnectAt(descriptor.position)) {
             state = classify_content_failure(profile, &state, ContentFailure::TransportDisconnected)
                 .map_err(transition_error)?;
             events.push(terminal_stream_event(input, &state, None, state.failure)?);
@@ -72,9 +72,9 @@ pub fn execute_simulated_stream(input: SimulatedStreamInput<'_>) -> crate::error
                     position: descriptor.position,
                     bytes: bytes.clone(),
                 });
-                events.push(canonical_content_event(
+                events.push(bind_event(
                     profile,
-                    &content_event(EventInput {
+                    &event(EventInput {
                         command,
                         sequence: observation.sequence,
                         terminal: state.terminal,
@@ -93,8 +93,8 @@ pub fn execute_simulated_stream(input: SimulatedStreamInput<'_>) -> crate::error
             }
         }
     }
-    let state = canonical_partial_state(profile, manifest, &state)?;
-    Ok(SimulationContentExecution {
+    let state = partial_state(profile, manifest, &state)?;
+    Ok(ModelExecution {
         state,
         events,
         verified_chunks,
@@ -105,7 +105,7 @@ pub fn execute_simulated_stream(input: SimulatedStreamInput<'_>) -> crate::error
 /// latency fault past the command deadline.
 fn begin_simulated_state(
     input: SimulatedStreamInput<'_>,
-) -> crate::error::Result<std::ops::ControlFlow<SimulationContentExecution, ContentPartialState>> {
+) -> crate::error::Result<std::ops::ControlFlow<ModelExecution, ContentPartialState>> {
     let SimulatedStreamInput {
         profile,
         manifest,
@@ -116,29 +116,29 @@ fn begin_simulated_state(
         ..
     } = input;
     if profile.class != ContentAdapterClass::DeterministicSimulation {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "simulation execution requires deterministic simulation profile",
         ));
     }
     let preflight = preflight_content_operation(profile, manifest, command, 0, 0);
     if preflight.terminal != ContentTerminal::Accepted || !preflight.issues.is_empty() {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "simulation preflight denied: {:?}",
             preflight.issues
         )));
     }
     let state = begin_partial_state(profile, manifest, command, generation, retained).map_err(|issues| {
-        crate::error::MoltenError::invalid_harness(format!("simulation partial state denied: {issues:?}"))
+        crate::error::Failure::invalid_harness(format!("simulation partial state denied: {issues:?}"))
     })?;
-    if fault == Some(SimulationFault::CapacityExceeded) {
+    if fault == Some(Fault::CapacityExceeded) {
         let state = classify_content_failure(profile, &state, ContentFailure::Overload).map_err(transition_error)?;
         return terminal_execution(profile, manifest, command, state).map(std::ops::ControlFlow::Break);
     }
-    if let Some(SimulationFault::LatencyTicks(latency)) = fault {
+    if let Some(Fault::LatencyTicks(latency)) = fault {
         let completion_tick = command
             .submitted_tick
             .checked_add(latency)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("simulation latency overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("simulation latency overflow"))?;
         if completion_tick > command.deadline_tick {
             let state = classify_content_failure(profile, &state, ContentFailure::Timeout).map_err(transition_error)?;
             return terminal_execution(profile, manifest, command, state).map(std::ops::ControlFlow::Break);
@@ -154,10 +154,10 @@ fn terminal_stream_event(
     state: &ContentPartialState,
     chunk_ref: Option<String>,
     failure: Option<ContentFailure>,
-) -> crate::error::Result<CanonicalContentArtifact<ContentEvent>> {
-    canonical_content_event(
+) -> crate::error::Result<Artifact<ContentEvent>> {
+    bind_event(
         input.profile,
-        &content_event(EventInput {
+        &event(EventInput {
             command: input.command,
             sequence: terminal_sequence(state)?,
             terminal: state.terminal,
@@ -184,17 +184,17 @@ fn simulated_chunk_observation<'a>(
         ..
     } = input;
     let bytes = chunks.get(&descriptor.chunk_ref).ok_or_else(|| {
-        crate::error::MoltenError::invalid_harness(format!("simulation lacks chunk {}", descriptor.chunk_ref))
+        crate::error::Failure::invalid_harness(format!("simulation lacks chunk {}", descriptor.chunk_ref))
     })?;
     let manifest_chunk_size = usize::try_from(manifest.chunk_size)
-        .map_err(|_| crate::error::MoltenError::invalid_harness("simulation chunk size does not fit usize"))?;
+        .map_err(|_| crate::error::Failure::invalid_harness("simulation chunk size does not fit usize"))?;
     let mut observed_ref = crate::chunk_store::hash_chunk(bytes, manifest_chunk_size);
     let mut observed_length = u64::try_from(bytes.len())
-        .map_err(|_| crate::error::MoltenError::invalid_harness("simulation chunk length does not fit u64"))?;
-    if fault == Some(SimulationFault::CorruptAt(descriptor.position)) {
+        .map_err(|_| crate::error::Failure::invalid_harness("simulation chunk length does not fit u64"))?;
+    if fault == Some(Fault::CorruptAt(descriptor.position)) {
         observed_ref = crate::preserves_rail::content_ref_from_bytes(b"deterministic-corruption");
     }
-    if fault == Some(SimulationFault::TruncateAt(descriptor.position)) {
+    if fault == Some(Fault::TruncateAt(descriptor.position)) {
         observed_length = observed_length.saturating_sub(1);
     }
     let sequence = next_sequence(state)?;
@@ -214,10 +214,10 @@ fn terminal_execution(
     manifest: &ContentManifestDescriptor,
     command: &ContentCommand,
     state: ContentPartialState,
-) -> crate::error::Result<SimulationContentExecution> {
-    let event = canonical_content_event(
+) -> crate::error::Result<ModelExecution> {
+    let event = bind_event(
         profile,
-        &content_event(EventInput {
+        &event(EventInput {
             command,
             sequence: terminal_sequence(&state)?,
             terminal: state.terminal,
@@ -227,8 +227,8 @@ fn terminal_execution(
             evidence_refs: &manifest.evidence_refs,
         }),
     )?;
-    Ok(SimulationContentExecution {
-        state: canonical_partial_state(profile, manifest, &state)?,
+    Ok(ModelExecution {
+        state: partial_state(profile, manifest, &state)?,
         events: vec![event],
         verified_chunks: Vec::new(),
     })
@@ -249,16 +249,16 @@ fn failure_from_issues(issues: &[ContentIssue]) -> ContentFailure {
 fn terminal_sequence(state: &ContentPartialState) -> crate::error::Result<u64> {
     state
         .last_sequence
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("terminal simulation state lacks event sequence"))
+        .ok_or_else(|| crate::error::Failure::invalid_harness("terminal simulation state lacks event sequence"))
 }
 
-fn transition_error(issue: ContentIssue) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(format!("simulation transition denied: {issue:?}"))
+fn transition_error(issue: ContentIssue) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("simulation transition denied: {issue:?}"))
 }
 
 fn next_sequence(state: &ContentPartialState) -> crate::error::Result<u64> {
     state
         .last_sequence
         .map_or(Some(0), |sequence| sequence.checked_add(1))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("simulation event sequence overflow"))
+        .ok_or_else(|| crate::error::Failure::invalid_harness("simulation event sequence overflow"))
 }

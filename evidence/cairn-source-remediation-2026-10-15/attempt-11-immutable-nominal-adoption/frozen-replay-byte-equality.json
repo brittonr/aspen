@@ -1,0 +1,11 @@
+{
+  "attempt": "11/20",
+  "generated_decision": "/nix/store/39wy8wn4pl0k230g5wg7gpryg3ky1y17-molten-verified-node-replication-pilot/share/molten/verified-node-replication-pilot/decision.json",
+  "existing_archive_decision": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/.cairn/archive/2026-07-11-consume-octet-verus-toolchain/evidence/decision.json",
+  "byte_for_byte_equal": true,
+  "provider_revision": "fc38f59330b626961d166febfdf1a5aa6575460f",
+  "decision_blake3": "fd87a3a9509cdbc37b7f3caecbe7e97d8add13355110206f1e4666a4d75e7d75",
+  "decision": "blocked-verifier-internal-error",
+  "runtime_dependency_status": "denied",
+  "historical_evidence_modified": false
+}

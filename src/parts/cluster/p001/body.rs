@@ -1,5 +1,5 @@
 
-fn cluster_lifecycle_run_diagnostics(input: &ClusterLifecycleRunInput) -> crate::error::Result<Vec<String>> {
+fn lifecycle_run_diagnostics(input: &LifecycleRunInput) -> crate::error::Result<Vec<String>> {
     let mut diagnostics = input.diagnostics.clone();
     collect_lifecycle_text_diagnostic("workflow-id", &input.workflow_id, &mut diagnostics)?;
     collect_lifecycle_ref_diagnostic("manifest", &input.manifest_ref, &mut diagnostics)?;
@@ -20,7 +20,7 @@ fn cluster_lifecycle_run_diagnostics(input: &ClusterLifecycleRunInput) -> crate:
     collect_stop_order_diagnostics(input, &mut diagnostics)?;
     push_lifecycle_if(
         &mut diagnostics,
-        !cluster_lifecycle_has_canonical_receipts(input),
+        !lifecycle_has_canonical_receipts(input),
         "cluster-lifecycle-stdout-only-evidence",
     )?;
     Ok(diagnostics)
@@ -41,15 +41,15 @@ fn collect_ordered_lifecycle_nodes(
 }
 
 fn collect_summary_node_diagnostics(
-    input: &ClusterLifecycleRunInput,
+    input: &LifecycleRunInput,
     ordered_nodes: &std::collections::BTreeSet<String>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<std::collections::BTreeSet<String>> {
     let mut seen = std::collections::BTreeSet::new();
-    let has_init = cluster_lifecycle_has_phase(input, CLUSTER_LIFECYCLE_PHASE_INIT);
-    let has_start = cluster_lifecycle_has_phase(input, CLUSTER_LIFECYCLE_PHASE_START);
-    let has_status = cluster_lifecycle_has_phase(input, CLUSTER_LIFECYCLE_PHASE_STATUS);
-    let has_stop = cluster_lifecycle_has_phase(input, CLUSTER_LIFECYCLE_PHASE_STOP);
+    let has_init = lifecycle_has_phase(input, CLUSTER_LIFECYCLE_PHASE_INIT);
+    let has_start = lifecycle_has_phase(input, CLUSTER_LIFECYCLE_PHASE_START);
+    let has_status = lifecycle_has_phase(input, CLUSTER_LIFECYCLE_PHASE_STATUS);
+    let has_stop = lifecycle_has_phase(input, CLUSTER_LIFECYCLE_PHASE_STOP);
     for summary in &input.node_summaries {
         collect_lifecycle_text_diagnostic("node-summary-id", &summary.node_id, diagnostics)?;
         if !seen.insert(summary.node_id.clone()) {
@@ -95,7 +95,7 @@ fn collect_summary_node_diagnostics(
 }
 
 fn collect_summary_optional_ref_diagnostics(
-    summary: &ClusterLifecycleNodeSummary,
+    summary: &LifecycleNodeSummary,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<()> {
     for (label, reference) in [
@@ -115,7 +115,7 @@ fn collect_summary_optional_ref_diagnostics(
 }
 
 fn collect_required_optional_summary_ref(
-    summary: &ClusterLifecycleNodeSummary,
+    summary: &LifecycleNodeSummary,
     label: &str,
     reference: Option<&str>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
@@ -127,7 +127,7 @@ fn collect_required_optional_summary_ref(
 }
 
 fn collect_phase_diagnostics(
-    phase: &ClusterLifecyclePhaseObservation,
+    phase: &LifecyclePhaseObservation,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<()> {
     collect_lifecycle_text_diagnostic("phase", &phase.phase, diagnostics)?;
@@ -140,10 +140,10 @@ fn collect_phase_diagnostics(
 }
 
 fn collect_stop_order_diagnostics(
-    input: &ClusterLifecycleRunInput,
+    input: &LifecycleRunInput,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<()> {
-    let has_stop = cluster_lifecycle_has_phase(input, CLUSTER_LIFECYCLE_PHASE_STOP);
+    let has_stop = lifecycle_has_phase(input, CLUSTER_LIFECYCLE_PHASE_STOP);
     for node_id in &input.stop_order {
         collect_lifecycle_text_diagnostic("stop-order-node", node_id, diagnostics)?;
     }
@@ -160,13 +160,13 @@ fn collect_stop_order_diagnostics(
     Ok(())
 }
 
-fn cluster_lifecycle_has_canonical_receipts(input: &ClusterLifecycleRunInput) -> bool {
+fn lifecycle_has_canonical_receipts(input: &LifecycleRunInput) -> bool {
     input.phases.iter().any(|phase| !phase.receipt_refs.is_empty())
         || !input.already_running_refs.is_empty()
         || input.node_summaries.iter().any(summary_has_lifecycle_receipts)
 }
 
-fn summary_has_lifecycle_receipts(summary: &ClusterLifecycleNodeSummary) -> bool {
+fn summary_has_lifecycle_receipts(summary: &LifecycleNodeSummary) -> bool {
     [
         &summary.identity_ref,
         &summary.startup_ref,
@@ -182,7 +182,7 @@ fn summary_has_lifecycle_receipts(summary: &ClusterLifecycleNodeSummary) -> bool
     .any(|reference| reference.is_some())
 }
 
-fn cluster_lifecycle_has_phase(input: &ClusterLifecycleRunInput, phase_name: &str) -> bool {
+fn lifecycle_has_phase(input: &LifecycleRunInput, phase_name: &str) -> bool {
     input.phases.iter().any(|phase| phase.phase == phase_name)
 }
 
@@ -220,7 +220,7 @@ fn collect_lifecycle_ref_diagnostics(
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> crate::error::Result<()> {
     if refs.len() > MAX_CLUSTER_LIFECYCLE_ITEMS {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "cluster lifecycle {label} ref count {} exceeds bound {MAX_CLUSTER_LIFECYCLE_ITEMS}",
             refs.len()
         )));
@@ -269,7 +269,7 @@ fn push_lifecycle_diagnostic(
     diagnostic: impl Into<String>,
 ) -> crate::error::Result<()> {
     if diagnostics.item_count() >= MAX_CLUSTER_LIFECYCLE_ITEMS {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "cluster lifecycle diagnostic count exceeds bound {MAX_CLUSTER_LIFECYCLE_ITEMS}"
         )));
     }
@@ -277,7 +277,7 @@ fn push_lifecycle_diagnostic(
     Ok(())
 }
 
-fn cluster_lifecycle_decision(diagnostics: &[String]) -> &'static str {
+fn lifecycle_decision(diagnostics: &[String]) -> &'static str {
     if diagnostics.is_empty() {
         CLUSTER_LIFECYCLE_PASS
     } else {

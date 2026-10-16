@@ -2,48 +2,45 @@ const WASM_PAGE_BYTES: u64 = 65_536;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ObservedResources {
-    memory: super::ComponentGrowthFacts,
-    table: super::ComponentGrowthFacts,
+    memory: super::GrowthFacts,
+    table: super::GrowthFacts,
     instances: u64,
     memories: u64,
     tables: u64,
 }
 
-pub(crate) fn verify_component_artifact_facts(
-    bytes: &[u8],
-    expected: &super::ComponentArtifactFacts,
-) -> super::super::model::ComponentResult<()> {
+pub(crate) fn verify_artifact_facts(bytes: &[u8], expected: &super::ArtifactFacts) -> super::super::model::Result<()> {
     validate_feature_cohort(bytes)?;
     let observed = inspect_resources(bytes)?;
     if observed.memory != expected.memory {
-        return Err(super::super::model::ComponentDenial::new(
+        return Err(super::super::model::Denial::new(
             "component memory declaration differs from admitted materialization facts",
         ));
     }
     if observed.table != expected.table {
-        return Err(super::super::model::ComponentDenial::new(
+        return Err(super::super::model::Denial::new(
             "component table declaration differs from admitted materialization facts",
         ));
     }
     if observed.instances != expected.instances {
-        return Err(super::super::model::ComponentDenial::new(
+        return Err(super::super::model::Denial::new(
             "component instance count differs from admitted materialization facts",
         ));
     }
     if observed.memories != expected.memories {
-        return Err(super::super::model::ComponentDenial::new(
+        return Err(super::super::model::Denial::new(
             "component memory count differs from admitted materialization facts",
         ));
     }
     if observed.tables != expected.tables {
-        return Err(super::super::model::ComponentDenial::new(
+        return Err(super::super::model::Denial::new(
             "component table count differs from admitted materialization facts",
         ));
     }
     Ok(())
 }
 
-fn validate_feature_cohort(bytes: &[u8]) -> super::super::model::ComponentResult<()> {
+fn validate_feature_cohort(bytes: &[u8]) -> super::super::model::Result<()> {
     let features = wasmparser::WasmFeatures::WASM1
         | wasmparser::WasmFeatures::REFERENCE_TYPES
         | wasmparser::WasmFeatures::MULTI_VALUE
@@ -51,15 +48,15 @@ fn validate_feature_cohort(bytes: &[u8]) -> super::super::model::ComponentResult
         | wasmparser::WasmFeatures::SIMD
         | wasmparser::WasmFeatures::COMPONENT_MODEL;
     wasmparser::Validator::new_with_features(features).validate_all(bytes).map_err(|error| {
-        super::super::model::ComponentDenial::classified(
-            super::super::model::ComponentDenialClass::ProfileDenial,
+        super::super::model::Denial::classified(
+            super::super::model::DenialClass::ProfileDenial,
             format!("component feature-cohort validation failed: {error}"),
         )
     })?;
     Ok(())
 }
 
-fn inspect_resources(bytes: &[u8]) -> super::super::model::ComponentResult<ObservedResources> {
+fn inspect_resources(bytes: &[u8]) -> super::super::model::Result<ObservedResources> {
     let mut observed = ObservedResources {
         memory: empty_growth(),
         table: empty_growth(),
@@ -95,7 +92,7 @@ fn inspect_resources(bytes: &[u8]) -> super::super::model::ComponentResult<Obser
 fn inspect_imports(
     section: wasmparser::ImportSectionReader<'_>,
     observed: &mut ObservedResources,
-) -> super::super::model::ComponentResult<()> {
+) -> super::super::model::Result<()> {
     for import in section {
         match import.map_err(parse_denial)?.ty {
             wasmparser::TypeRef::Memory(memory) => observe_memory(memory, observed)?,
@@ -106,43 +103,33 @@ fn inspect_imports(
     Ok(())
 }
 
-fn observe_memory(
-    memory: wasmparser::MemoryType,
-    observed: &mut ObservedResources,
-) -> super::super::model::ComponentResult<()> {
+fn observe_memory(memory: wasmparser::MemoryType, observed: &mut ObservedResources) -> super::super::model::Result<()> {
     if memory.memory64 || memory.shared || memory.page_size_log2.is_some() {
-        return Err(super::super::model::ComponentDenial::new(
+        return Err(super::super::model::Denial::new(
             "component memory uses a disabled memory64, shared, or custom-page-size feature",
         ));
     }
     if memory.maximum != Some(memory.initial) {
-        return Err(super::super::model::ComponentDenial::new(
-            "component memory declaration permits nondeterministic growth",
-        ));
+        return Err(super::super::model::Denial::new("component memory declaration permits nondeterministic growth"));
     }
     let initial = memory
         .initial
         .checked_mul(WASM_PAGE_BYTES)
-        .ok_or_else(|| super::super::model::ComponentDenial::new("component memory byte bound overflowed"))?;
+        .ok_or_else(|| super::super::model::Denial::new("component memory byte bound overflowed"))?;
     observed.memory.initial = observed.memory.initial.max(initial);
     observed.memory.maximum = Some(observed.memory.initial);
     observed.memories = checked_add("memory", observed.memories, 1)?;
     Ok(())
 }
 
-fn observe_table(
-    table: wasmparser::TableType,
-    observed: &mut ObservedResources,
-) -> super::super::model::ComponentResult<()> {
+fn observe_table(table: wasmparser::TableType, observed: &mut ObservedResources) -> super::super::model::Result<()> {
     if table.table64 || table.shared {
-        return Err(super::super::model::ComponentDenial::new(
+        return Err(super::super::model::Denial::new(
             "component table uses a disabled table64 or shared-table feature",
         ));
     }
     if table.maximum != Some(table.initial) {
-        return Err(super::super::model::ComponentDenial::new(
-            "component table declaration permits nondeterministic growth",
-        ));
+        return Err(super::super::model::Denial::new("component table declaration permits nondeterministic growth"));
     }
     observed.table.initial = observed.table.initial.max(table.initial);
     observed.table.maximum = Some(observed.table.initial);
@@ -150,22 +137,22 @@ fn observe_table(
     Ok(())
 }
 
-fn checked_add(label: &str, left: u64, right: u64) -> super::super::model::ComponentResult<u64> {
+fn checked_add(label: &str, left: u64, right: u64) -> super::super::model::Result<u64> {
     left.checked_add(right)
-        .ok_or_else(|| super::super::model::ComponentDenial::new(format!("component {label} count overflowed")))
+        .ok_or_else(|| super::super::model::Denial::new(format!("component {label} count overflowed")))
 }
 
-fn empty_growth() -> super::ComponentGrowthFacts {
-    super::ComponentGrowthFacts {
+fn empty_growth() -> super::GrowthFacts {
+    super::GrowthFacts {
         initial: 0,
         maximum: Some(0),
         strategy: super::super::model::GrowthStrategy::Fixed,
     }
 }
 
-fn parse_denial(error: wasmparser::BinaryReaderError) -> super::super::model::ComponentDenial {
-    super::super::model::ComponentDenial::classified(
-        super::super::model::ComponentDenialClass::ResourceDenial,
+fn parse_denial(error: wasmparser::BinaryReaderError) -> super::super::model::Denial {
+    super::super::model::Denial::classified(
+        super::super::model::DenialClass::ResourceDenial,
         format!("component resource inspection failed: {error}"),
     )
 }

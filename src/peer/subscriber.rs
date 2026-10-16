@@ -151,14 +151,14 @@ mod tests {
     const STALE_TICK: u64 = 3;
 
     #[test]
-    fn subscriber_projection_passes_with_read_evidence() {
+    fn projection_passes_with_read_evidence() {
         let receipt = validate_subscription_projection(&grant(), &request("read", CURRENT_TICK, LIMIT, false))
             .expect("projection");
         assert_eq!(receipt.decision, "pass");
     }
 
     #[test]
-    fn subscriber_projection_denies_write_upgrade_and_sensitive_egress() {
+    fn projection_denies_write_upgrade_and_sensitive_egress() {
         let mut grant = grant();
         grant.redaction_profile = "none".to_string();
         let receipt = validate_subscription_projection(&grant, &request("publish", STALE_TICK, LIMIT + 1, true))

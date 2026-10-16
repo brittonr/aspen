@@ -1,0 +1,144 @@
+{
+  "command": [
+    "/tmp/molten-attempts-6-7-l6bgn98w/cairn-provider/bin/cairn",
+    "sync",
+    "support-active-delta-traceability-before-sync",
+    "--root",
+    ".",
+    "--policy",
+    "/home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "exit_code": 0,
+  "stderr": "",
+  "result": {
+    "acceptance_ids": [],
+    "actions": [
+      {
+        "description": "merge delta spec into main specs: ./.cairn/changes/support-active-delta-traceability-before-sync/specs/project/spec.md",
+        "kind": "sync_delta_spec",
+        "path": "./.cairn/changes/support-active-delta-traceability-before-sync/specs/project/spec.md"
+      }
+    ],
+    "blocked": false,
+    "change": "support-active-delta-traceability-before-sync",
+    "cross_repo_dependencies": {
+      "blocked_count": 0,
+      "dependency_count": 0,
+      "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+      "non_claims": [
+        "dependency satisfaction proves presented receipt linkage only",
+        "dependency satisfaction does not prove upstream correctness or remote trust",
+        "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+      ],
+      "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+      "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+      "rows": [],
+      "satisfied_count": 0,
+      "schema": "cairn.cross-repo-dependency-receipt.v1",
+      "valid": true,
+      "verdict": "PASS"
+    },
+    "cross_repo_evidence_issues": [],
+    "delta_specs": [
+      "./.cairn/changes/support-active-delta-traceability-before-sync/specs/project/spec.md"
+    ],
+    "dry_run": true,
+    "input_hash": "d4a2034a72500b8957ba5da5e7985b20e52929ece16d64b61bde7ad26aa14ba9",
+    "layout": "cairn",
+    "merge_preflight": {
+      "documents": [
+        {
+          "accepted_before_exists": true,
+          "accepted_before_hash": "176bab4fae267c2593536d3839e14162635edbef338805c67bb241fa51cb6783",
+          "blocked": false,
+          "changed": true,
+          "delta_hash": "d919a21b733830d4b05d982f3cab2c126d7650034008a1fa71572002bd16b8c7",
+          "destination": ".cairn/specs/project/spec.md",
+          "diagnostics": [],
+          "expected_after_hash": "6dac7429a656d18b7713832c6d6807ee8fa3ad12f5690e6201bc6a6ae01181ce",
+          "operations": [
+            {
+              "block_hash": "da6964ecaa2d5104fb64f4e8b5949f9a010a8325256d872b3d732083e55f68ae",
+              "heading": "### Requirement: Traceability growth fails closed",
+              "kind": "modified",
+              "requirement_id": "molten.project.inherited_tracey_debt.growth_denial"
+            },
+            {
+              "block_hash": "f5b1cc61c73f22d01bffee640e7ab9cd85282dea26eaabad7cad0cd9f34e0118",
+              "heading": "### Requirement: Pending references are separate from accepted coverage",
+              "kind": "added",
+              "requirement_id": "molten.project.inherited_tracey_debt.active_delta_scope"
+            },
+            {
+              "block_hash": "c8a9f70fb57fb5c0abcd2da27c843d65c883653c8c21ef092d7ff544c05ebf90",
+              "heading": "### Requirement: Only native active delta definitions admit pending identities",
+              "kind": "added",
+              "requirement_id": "molten.project.inherited_tracey_debt.active_delta_admission"
+            },
+            {
+              "block_hash": "91d92df56962859410dd76b4dca68923868c744a8b7ac7c7c2f452f4016453a0",
+              "heading": "### Requirement: Pending resolution does not authorize lifecycle acceptance",
+              "kind": "added",
+              "requirement_id": "molten.project.inherited_tracey_debt.active_delta_non_claims"
+            },
+            {
+              "block_hash": "bad1755c78693bced4738002108778b92778b2b9efeb44d1f9eac431f7a12dd9",
+              "heading": "### Requirement: Pre-sync traceability validation is reproducible",
+              "kind": "added",
+              "requirement_id": "molten.project.inherited_tracey_debt.active_delta_validation"
+            }
+          ],
+          "outcomes": [
+            {
+              "kind": "modified",
+              "requirement_id": "molten.project.inherited_tracey_debt.growth_denial",
+              "state": "applied"
+            },
+            {
+              "kind": "added",
+              "requirement_id": "molten.project.inherited_tracey_debt.active_delta_scope",
+              "state": "applied"
+            },
+            {
+              "kind": "added",
+              "requirement_id": "molten.project.inherited_tracey_debt.active_delta_admission",
+              "state": "applied"
+            },
+            {
+              "kind": "added",
+              "requirement_id": "molten.project.inherited_tracey_debt.active_delta_non_claims",
+              "state": "applied"
+            },
+            {
+              "kind": "added",
+              "requirement_id": "molten.project.inherited_tracey_debt.active_delta_validation",
+              "state": "applied"
+            }
+          ],
+          "source": ".cairn/changes/support-active-delta-traceability-before-sync/specs/project/spec.md"
+        }
+      ]
+    },
+    "mutated": false,
+    "mutation_manifest": null,
+    "non_claims": [
+      "workflow state proves only the selected policy graph and observed structural artifact facts",
+      "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+      "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+      "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+    ],
+    "plan_hash": "e35e448df98d689ee397b04601d32a4ab56fffe7564bcec2c18ad5741b7dfda1",
+    "policy": "cairn-default",
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "profile_identity_hash": "688d80daf6ffe4cbb250d7f66ca5281158eb01eb4014d1d2a5d74da789b4929f",
+    "reasons": [],
+    "receipt_hash": "9762f47acbc4b6d67ffb430f4209364bffa04b027f407b3ba71516895735cebf",
+    "review_receipt_hashes": [],
+    "spec_effect": "delta",
+    "workflow_profile": "spec-driven",
+    "workflow_profile_compatibility_fallback": false,
+    "workflow_profile_source": "change_create",
+    "workflow_profile_version": 1
+  }
+}

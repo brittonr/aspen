@@ -10,10 +10,10 @@ struct PlannedArtifact {
 }
 
 pub(super) fn run_fixture(
-    selection: molten::fabric_time::FabricTimeFixtureSelection,
+    selection: molten::fabric_time::Selection,
     out: std::path::PathBuf,
 ) -> molten::error::Result<()> {
-    let run = molten::fabric_time::run_executable_fabric_time_fixture(selection)?;
+    let run = molten::fabric_time::run_executable(selection)?;
     let plan = plan_fixture_artifacts(&run)?;
     write_artifacts(&out, &plan)?;
     println!(
@@ -30,16 +30,16 @@ pub(super) fn run_fixture(
 }
 
 pub(super) fn show(report: std::path::PathBuf) -> molten::error::Result<()> {
-    let metadata = std::fs::metadata(&report).map_err(molten::error::MoltenError::from)?;
+    let metadata = std::fs::metadata(&report).map_err(molten::error::Failure::from)?;
     if metadata.len() > MAX_REPORT_ARTIFACT_BYTES {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "fabric-time report is {} bytes; maximum is {MAX_REPORT_ARTIFACT_BYTES}",
             metadata.len()
         )));
     }
-    let source = std::fs::read_to_string(&report).map_err(molten::error::MoltenError::from)?;
+    let source = std::fs::read_to_string(&report).map_err(molten::error::Failure::from)?;
     let value = molten::preserves_rail::parse_text(&source)?;
-    let readback = molten::fabric_time::parse_fabric_time_run_readback(&value)?;
+    let readback = molten::fabric_time::parse_run_readback(&value)?;
     println!(
         "fabric-time report ok profile={} generation={} final-ticks={} timers={} scheduler={} entropy={} deadline-lease={} faults={} live-clock={} conformance={} report={}",
         readback.profile_kind,
@@ -57,16 +57,14 @@ pub(super) fn show(report: std::path::PathBuf) -> molten::error::Result<()> {
     Ok(())
 }
 
-fn plan_fixture_artifacts(
-    run: &molten::fabric_time::ExecutableFabricTimeFixtureRun,
-) -> molten::error::Result<Vec<PlannedArtifact>> {
+fn plan_fixture_artifacts(run: &molten::fabric_time::ExecutableRun) -> molten::error::Result<Vec<PlannedArtifact>> {
     let artifact_count = run
         .events
         .len()
         .checked_add(FIXED_ARTIFACT_COUNT)
-        .ok_or_else(|| molten::error::MoltenError::invalid_harness("fabric-time artifact count overflow"))?;
+        .ok_or_else(|| molten::error::Failure::invalid_harness("fabric-time artifact count overflow"))?;
     if artifact_count > MAX_ARTIFACTS {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "fabric-time artifact count {artifact_count} exceeds {MAX_ARTIFACTS}"
         )));
     }
@@ -99,7 +97,7 @@ fn validate_artifact_plan(artifacts: &[PlannedArtifact]) -> molten::error::Resul
     for artifact in artifacts {
         validate_relative_artifact_path(&artifact.relative_path)?;
         if !paths.insert(artifact.relative_path.clone()) {
-            return Err(molten::error::MoltenError::invalid_harness(format!(
+            return Err(molten::error::Failure::invalid_harness(format!(
                 "duplicate fabric-time artifact path {}",
                 artifact.relative_path.display()
             )));
@@ -110,7 +108,7 @@ fn validate_artifact_plan(artifacts: &[PlannedArtifact]) -> molten::error::Resul
 
 fn validate_relative_artifact_path(path: &std::path::Path) -> molten::error::Result<()> {
     if path.as_os_str().is_empty() || path.is_absolute() {
-        return Err(molten::error::MoltenError::invalid_harness(
+        return Err(molten::error::Failure::invalid_harness(
             "fabric-time artifact path must be non-empty and relative",
         ));
     }
@@ -120,7 +118,7 @@ fn validate_relative_artifact_path(path: &std::path::Path) -> molten::error::Res
             std::path::Component::ParentDir | std::path::Component::RootDir | std::path::Component::Prefix(_)
         )
     }) {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "fabric-time artifact path escapes output root: {}",
             path.display()
         )));
@@ -129,27 +127,27 @@ fn validate_relative_artifact_path(path: &std::path::Path) -> molten::error::Res
 }
 
 fn write_artifacts(root: &std::path::Path, artifacts: &[PlannedArtifact]) -> molten::error::Result<()> {
-    std::fs::create_dir_all(root).map_err(molten::error::MoltenError::from)?;
+    std::fs::create_dir_all(root).map_err(molten::error::Failure::from)?;
     for artifact in artifacts {
         let path = root.join(&artifact.relative_path);
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(molten::error::MoltenError::from)?;
+            std::fs::create_dir_all(parent).map_err(molten::error::Failure::from)?;
         }
-        std::fs::write(path, artifact.content.as_bytes()).map_err(molten::error::MoltenError::from)?;
+        std::fs::write(path, artifact.content.as_bytes()).map_err(molten::error::Failure::from)?;
     }
     Ok(())
 }
 
-const fn event_kind(kind: molten::fabric_time::CanonicalTimeEventKind) -> &'static str {
+const fn event_kind(kind: molten::fabric_time::EventKind) -> &'static str {
     match kind {
-        molten::fabric_time::CanonicalTimeEventKind::ClockAnomaly => "clock-anomaly",
-        molten::fabric_time::CanonicalTimeEventKind::Timer => "timer",
-        molten::fabric_time::CanonicalTimeEventKind::Scheduler => "scheduler",
-        molten::fabric_time::CanonicalTimeEventKind::Entropy => "entropy",
-        molten::fabric_time::CanonicalTimeEventKind::Deadline => "deadline",
-        molten::fabric_time::CanonicalTimeEventKind::Lease => "lease",
-        molten::fabric_time::CanonicalTimeEventKind::Fault => "fault",
-        molten::fabric_time::CanonicalTimeEventKind::Conformance => "conformance",
+        molten::fabric_time::EventKind::ClockAnomaly => "clock-anomaly",
+        molten::fabric_time::EventKind::Timer => "timer",
+        molten::fabric_time::EventKind::Scheduler => "scheduler",
+        molten::fabric_time::EventKind::Entropy => "entropy",
+        molten::fabric_time::EventKind::Deadline => "deadline",
+        molten::fabric_time::EventKind::Lease => "lease",
+        molten::fabric_time::EventKind::Fault => "fault",
+        molten::fabric_time::EventKind::Conformance => "conformance",
     }
 }
 
@@ -159,10 +157,7 @@ mod tests {
 
     #[test]
     fn fixture_plan_is_bounded_relative_and_complete() {
-        let run = molten::fabric_time::run_executable_fabric_time_fixture(
-            molten::fabric_time::FabricTimeFixtureSelection::Both,
-        )
-        .expect("fixture");
+        let run = molten::fabric_time::run_executable(molten::fabric_time::Selection::Both).expect("fixture");
         let plan = plan_fixture_artifacts(&run).expect("plan");
         assert_eq!(plan.len(), run.events.len() + FIXED_ARTIFACT_COUNT);
         assert!(plan.iter().all(|artifact| artifact.relative_path.is_relative()));

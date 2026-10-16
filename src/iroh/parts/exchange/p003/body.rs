@@ -94,7 +94,7 @@ fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
 }
 
 fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maximum: usize, label: &str) -> Result<()> {
-    crate::bounded::push_bounded(values, value, maximum, label)
+    crate::bounded::push(values, value, maximum, label)
 }
 
 fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {

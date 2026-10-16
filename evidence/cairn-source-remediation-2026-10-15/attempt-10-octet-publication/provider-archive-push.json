@@ -1,0 +1,12 @@
+{
+  "command": [
+    "git",
+    "push",
+    "origin",
+    "HEAD:refs/heads/cairn/molten-nominal-adoption-20261015"
+  ],
+  "cwd": "/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015",
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "To github.com:OnixResearch/octet.git\n   82a6f01..3f7abb6  HEAD -> cairn/molten-nominal-adoption-20261015\n"
+}

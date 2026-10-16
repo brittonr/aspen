@@ -1,0 +1,7 @@
+{
+  "observation": "CanonicalCommitReceipt.receipt_ref is a domain-framed BLAKE3 identity, not unframed b3sum(file). The initial equality assertion was incorrect; no product behavior failed and the runtime was not repeated.",
+  "source": "src/coordination_delivery/records.rs:107-115",
+  "domain": "onixresearch.molten.coordination-delivery-commit-receipt.v1",
+  "preserved_identities": "Each result records both its actual native domain-framed receipt_ref and independent canonical_packed_content_ref. All 26 positive/negative corresponding packed files are byte-identical by BLAKE3.",
+  "canonical_parse_and_recanonicalization": "The successful actual consumer validated each result value and exact canonical bytes."
+}

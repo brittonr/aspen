@@ -2,7 +2,7 @@
 fn control_live_transport_receipt_path(
     envelope_ref: &str,
     operation: &str,
-) -> Result<crate::node_state::NodeStatePath> {
+) -> Result<crate::node_state::RelativePath> {
     ingress_receipt_leaf(&format!(
         "{}.live-{}.receipt.preserves",
         ref_file_stem(envelope_ref),
@@ -10,46 +10,46 @@ fn control_live_transport_receipt_path(
     ))
 }
 
-fn control_live_send_receipt_path(send_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_live_send_receipt_path(send_ref: &str) -> Result<crate::node_state::RelativePath> {
     ingress_receipt_leaf(&format!("{}.live-send.receipt.preserves", ref_file_stem(send_ref)))
 }
 
-fn control_live_send_retry_receipt_path(retry_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_live_send_retry_receipt_path(retry_ref: &str) -> Result<crate::node_state::RelativePath> {
     ingress_receipt_leaf(&format!(
         "{}.live-send-retry.receipt.preserves",
         ref_file_stem(retry_ref)
     ))
 }
 
-fn control_live_send_duplicate_receipt_path(duplicate_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_live_send_duplicate_receipt_path(duplicate_ref: &str) -> Result<crate::node_state::RelativePath> {
     ingress_receipt_leaf(&format!(
         "{}.live-send-duplicate.receipt.preserves",
         ref_file_stem(duplicate_ref)
     ))
 }
 
-fn control_live_workflow_receipt_path(workflow_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_live_workflow_receipt_path(workflow_ref: &str) -> Result<crate::node_state::RelativePath> {
     ingress_receipt_leaf(&format!(
         "{}.live-workflow.receipt.preserves",
         ref_file_stem(workflow_ref)
     ))
 }
 
-fn control_live_listener_receipt_path(listener_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_live_listener_receipt_path(listener_ref: &str) -> Result<crate::node_state::RelativePath> {
     node_leaf_path(
         CONTROL_SERVICE_DIR,
         &format!("{}.live-listener-receipt.preserves", ref_file_stem(listener_ref)),
     )
 }
 
-fn control_authority_receipt_path(envelope_ref: &str) -> Result<crate::node_state::NodeStatePath> {
+fn control_authority_receipt_path(envelope_ref: &str) -> Result<crate::node_state::RelativePath> {
     ingress_receipt_leaf(&format!(
         "{}.authority-receipt.preserves",
         ref_file_stem(envelope_ref)
     ))
 }
 
-fn ingress_receipt_leaf(leaf: &str) -> Result<crate::node_state::NodeStatePath> {
+fn ingress_receipt_leaf(leaf: &str) -> Result<crate::node_state::RelativePath> {
     fixed_node_path(CONTROL_INGRESS_DIR)?.join("receipts")?.join_segment(leaf)
 }
 

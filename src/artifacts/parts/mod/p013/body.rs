@@ -251,7 +251,7 @@ fn value_to_iovalue(value: &RailValue) -> IoValue {
 fn put_payload_bytes(
     root: &CapabilityArtifactRoot,
     payload_bytes: &[u8],
-) -> Result<crate::chunk_store::ChunkStorePut> {
+) -> Result<crate::chunk_store::ChunkPut> {
     let chunk_root = chunk_root_with_root(root)?;
     crate::chunk_store::put_bytes_with_root(
         &chunk_root,
@@ -264,7 +264,7 @@ fn put_payload_bytes(
 fn read_chunk_object(
     root: &CapabilityArtifactRoot,
     manifest_ref: &str,
-) -> Result<crate::chunk_store::ChunkStoreRead> {
+) -> Result<crate::chunk_store::ChunkRead> {
     let chunk_root = chunk_root_with_root(root)?;
     crate::chunk_store::read_object_with_root(&chunk_root, manifest_ref)
 }

@@ -1,6 +1,6 @@
 
 fn initial_state(
-    group: crate::fabric_consistency::ConsistencyGroupBinding,
+    group: crate::fabric_consistency::Group,
     node_id: String,
     membership: super::StaticMembership,
     profile: super::ReplicaProfile,
@@ -39,17 +39,17 @@ fn initial_state(
 
 fn validate_identifier(value: &str, label: &str) -> crate::error::Result<()> {
     if value.is_empty() || value.len() > MAX_REPLICA_IDENTIFIER_BYTES {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "{label} must be non-empty and at most {MAX_REPLICA_IDENTIFIER_BYTES} bytes"
         )));
     }
     if !value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':')) {
-        return Err(crate::error::MoltenError::invalid_harness(format!("{label} contains unsupported characters")));
+        return Err(crate::error::Failure::invalid_harness(format!("{label} contains unsupported characters")));
     }
     Ok(())
 }
 
 fn validate_content_ref(value: &str, label: &str) -> crate::error::Result<()> {
     crate::preserves_rail::validate_content_ref(value)
-        .map_err(|error| crate::error::MoltenError::invalid_harness(format!("invalid {label}: {error}")))
+        .map_err(|error| crate::error::Failure::invalid_harness(format!("invalid {label}: {error}")))
 }

@@ -44,16 +44,16 @@ impl ExecutionOutputPublisher for MemoryPublisher {
     fn publish(
         &mut self,
         operation_ref: &str,
-        stream: &RetainedExecutionStream,
-    ) -> Result<PublishedExecutionStream, ExecutionOutputPublicationError> {
+        stream: &RetainedStream,
+    ) -> Result<PublishedStream, OutputPublicationError> {
         if self.fail {
-            return Err(ExecutionOutputPublicationError::Unavailable);
+            return Err(OutputPublicationError::Unavailable);
         }
         let content_ref = crate::preserves_rail::content_ref_from_bytes(&stream.retained_bytes);
         let receipt_material = format!("{operation_ref}\0{}\0{content_ref}", stream.role);
         let publication_receipt_ref = crate::preserves_rail::content_ref_from_bytes(receipt_material.as_bytes());
         self.published.push((operation_ref.to_string(), stream.role.clone(), stream.retained_bytes.clone()));
-        Ok(PublishedExecutionStream {
+        Ok(PublishedStream {
             content_ref,
             publication_receipt_ref,
         })
@@ -171,33 +171,26 @@ const fn resources() -> ExecutionResourceGrant {
     }
 }
 
-fn canonical_request(
-    kind: ExecutionProfileKind,
-    arguments: Vec<String>,
-) -> (CanonicalExecutionProfile, CanonicalExecutionRequest) {
+fn canonical_request(kind: ExecutionProfileKind, arguments: Vec<String>) -> (Profile, Request) {
     canonicalize_request(kind, request(arguments))
 }
 
-fn canonicalize_request(
-    kind: ExecutionProfileKind,
-    request: ExecutionRequest,
-) -> (CanonicalExecutionProfile, CanonicalExecutionRequest) {
+fn canonicalize_request(kind: ExecutionProfileKind, request: ExecutionRequest) -> (Profile, Request) {
     canonicalize_request_with_descriptor(&descriptor(kind), request)
 }
 
 fn canonicalize_request_with_descriptor(
     descriptor: &ExecutionProfileDescriptor,
     request: ExecutionRequest,
-) -> (CanonicalExecutionProfile, CanonicalExecutionRequest) {
-    let profile = canonical_admit_execution_profile(descriptor).expect("canonical profile");
+) -> (Profile, Request) {
+    let profile = admit_profile(descriptor).expect("canonical profile");
     let authority = authority(&request);
-    let request = canonical_admit_execution_request(&profile, &request, &authority, resources(), GENERATION)
-        .expect("canonical request");
+    let request = admit_request(&profile, &request, &authority, resources(), GENERATION).expect("canonical request");
     (profile, request)
 }
 
-fn resolved(stdin_bytes: Option<Vec<u8>>) -> ResolvedExecutionContext {
-    ResolvedExecutionContext {
+fn resolved(stdin_bytes: Option<Vec<u8>>) -> ResolvedContext {
+    ResolvedContext {
         executable_path: std::path::PathBuf::from("/bin/sh"),
         executable_artifact_ref: HASH_B.to_string(),
         executable_identity_ref: HASH_C.to_string(),
@@ -212,9 +205,9 @@ fn script_arguments(script: &str) -> Vec<String> {
     vec!["-c".to_string(), script.to_string()]
 }
 
-fn scripted_process(lifecycle: ExecutionLifecycleState, bytes: &[u8]) -> ExecutionProcessObservation {
+fn scripted_process(lifecycle: ExecutionLifecycleState, bytes: &[u8]) -> ProcessObservation {
     let byte_count = u64::try_from(bytes.len()).expect("fixture output byte count");
-    ExecutionProcessObservation {
+    ProcessObservation {
         lifecycle,
         start_observed: lifecycle != ExecutionLifecycleState::FailedBeforeStart,
         terminal_observed: !matches!(
@@ -227,15 +220,15 @@ fn scripted_process(lifecycle: ExecutionLifecycleState, bytes: &[u8]) -> Executi
         ),
         exit_code: Some(SUCCESS_EXIT_CODE),
         signal: None,
-        disposition: ExecutionObservedDisposition::ExitPolicyAccepted,
-        stdout: RetainedExecutionStream {
+        disposition: ObservedDisposition::ExitPolicyAccepted,
+        stdout: RetainedStream {
             role: "stdout-retained-prefix".to_string(),
             retained_bytes: bytes.to_vec(),
             observed_bytes: byte_count,
             retained_byte_count: byte_count,
             truncated: false,
         },
-        stderr: RetainedExecutionStream {
+        stderr: RetainedStream {
             role: "stderr-retained-prefix".to_string(),
             retained_bytes: Vec::new(),
             observed_bytes: 0,
@@ -249,13 +242,11 @@ fn scripted_process(lifecycle: ExecutionLifecycleState, bytes: &[u8]) -> Executi
 // r[verify molten.fabric_execution.port_contract]
 #[test]
 fn source_cohort_and_exact_port_binding_are_canonical() {
-    let source =
-        canonical_bounded_exec_source_cohort(ExecutionPlatform::UnixProcessGroup).expect("bounded exec source cohort");
+    let source = bounded_exec_source_cohort(ExecutionPlatform::UnixProcessGroup).expect("bounded exec source cohort");
     assert_eq!(source.revision, BOUNDED_EXEC_REVISION);
     assert!(source.source_ref.starts_with("blake3:"));
 
-    let profile =
-        canonical_admit_execution_profile(&descriptor(ExecutionProfileKind::LiveBoundedProcess)).expect("live profile");
+    let profile = admit_profile(&descriptor(ExecutionProfileKind::LiveBoundedProcess)).expect("live profile");
     let descriptor = fabric_execution_port_descriptor(&profile);
     let registry =
         crate::fabric::build_fabric_port_registry(std::slice::from_ref(&descriptor)).expect("execution registry");

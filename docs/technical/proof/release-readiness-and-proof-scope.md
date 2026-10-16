@@ -12,7 +12,7 @@ CI/release pass evidence also uses zero retries under that contract. An explorat
 
 ## What release profile validation checks
 
-`ReleaseProfileInput` identifies a profile and tier, optional candidate reference, evidence references, generated-export freshness values, whether stack provenance is required, accepted Valence policy hashes, and caveats. The [profile validator](../../../src/prod/release/parts/profile/p000/body.rs) recognizes development, pilot, and release tiers. Release-specific checks require a non-placeholder candidate and the supplied evidence-reference fields, including source gate, policy, Octet, Cairn, stack provenance, and production profile.
+`release_profile_core::Input` identifies a profile and tier, optional candidate reference, evidence references, generated-export freshness values, whether stack provenance is required, accepted Valence policy hashes, and caveats. The [profile validator](../../../src/prod/release/parts/profile/p000/body.rs) recognizes development, pilot, and release tiers. Release-specific checks require a non-placeholder candidate and the supplied evidence-reference fields, including source gate, policy, Octet, Cairn, stack provenance, and production profile.
 
 For release tier, stack provenance cannot be optional. Expected and actual generated-export references must both be supplied, be valid references, agree with each other, and avoid recognized placeholders. Accepted Valence policy hashes cannot be absent for release; duplicate and recognized placeholder values produce diagnostics. These checks describe the supplied profile values. They do not execute a source gate, contact a provenance service, or cryptographically validate every referenced artifact.
 

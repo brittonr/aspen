@@ -179,7 +179,7 @@ fn observe_release_export_members(output_path: &Path) -> Result<Vec<(String, Str
     let source = crate::materialization::SourceDirectoryRoot::open_existing(output_path)?;
     let mut members = Vec::new();
     for name in release_export_member_names() {
-        let path = crate::materialization::MaterializationPath::parse_within(name, policy.max_path_bytes)?;
+        let path = crate::materialization::Path::parse_within(name, policy.max_path_bytes)?;
         let bytes = source.read_path(&path, policy.max_member_bytes)?;
         members.push_limited_value(
             (name.to_string(), release_export_file_ref(name, &bytes)),
@@ -187,7 +187,7 @@ fn observe_release_export_members(output_path: &Path) -> Result<Vec<(String, Str
             "release export members",
         )?;
     }
-    let keyring_path = crate::materialization::MaterializationPath::parse_within("signed-keyring", policy.max_path_bytes)?;
+    let keyring_path = crate::materialization::Path::parse_within("signed-keyring", policy.max_path_bytes)?;
     let keyring = source.open_subdir(&keyring_path)?;
     for relative in keyring.list_regular_files_recursive(&policy)? {
         let name = format!("signed-keyring/{}", relative.as_str());
@@ -204,14 +204,14 @@ fn observe_release_export_members(output_path: &Path) -> Result<Vec<(String, Str
 fn read_output_text(output_path: &Path, name: &str) -> Result<String> {
     let policy = release_materialization_policy()?;
     let source = crate::materialization::SourceDirectoryRoot::open_existing(output_path)?;
-    let path = crate::materialization::MaterializationPath::parse_within(name, policy.max_path_bytes)?;
+    let path = crate::materialization::Path::parse_within(name, policy.max_path_bytes)?;
     let bytes = source.read_path(&path, policy.max_member_bytes)?;
     String::from_utf8(bytes)
         .map_err(|error| MoltenError::invalid_harness(format!("release output {name} is not UTF-8: {error}")))
 }
 
-fn release_materialization_policy() -> Result<crate::materialization::MaterializationPolicy> {
-    crate::materialization::MaterializationPolicy::bounded(
+fn release_materialization_policy() -> Result<crate::materialization::Policy> {
+    crate::materialization::Policy::bounded(
         "operator-release-directory-v1",
         crate::materialization::ReplacementPolicy::NoReplace,
     )

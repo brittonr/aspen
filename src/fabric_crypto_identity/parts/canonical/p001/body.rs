@@ -1,6 +1,6 @@
 
 // r[impl molten.crypto_identity.redaction]
-pub fn canonical_crypto_status(input: &AdapterDiagnosticInput) -> crate::error::Result<CryptoStatusReadback> {
+pub fn status(input: &AdapterDiagnosticInput) -> crate::error::Result<StatusReadback> {
     let status = redact_adapter_status(input).map_err(|issues| validation_error("crypto status", &issues))?;
     let value = crate::preserves_rail::record(CRYPTO_STATUS_RECORD, vec![
         crate::preserves_rail::string(CRYPTO_STATUS_SCHEMA),
@@ -23,14 +23,14 @@ pub fn canonical_crypto_status(input: &AdapterDiagnosticInput) -> crate::error::
         ]),
     ]);
     let status_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CryptoStatusReadback {
+    Ok(StatusReadback {
         status,
         status_ref,
         value,
     })
 }
 
-pub fn fabric_crypto_port_descriptors(profile: &CanonicalCryptoProfile) -> Vec<crate::fabric::FabricPortDescriptor> {
+pub fn fabric_crypto_port_descriptors(profile: &Profile) -> Vec<crate::fabric::FabricPortDescriptor> {
     let definitions = [
         (
             FABRIC_CRYPTO_KEY_PORT_ID,
@@ -87,8 +87,8 @@ fn issue_label(issue: &CryptoIdentityIssue) -> &'static str {
     }
 }
 
-fn validation_error<T: std::fmt::Debug>(label: &str, issues: &[T]) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(format!("{label} validation failed: {issues:?}"))
+fn validation_error<T: std::fmt::Debug>(label: &str, issues: &[T]) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("{label} validation failed: {issues:?}"))
 }
 
 fn field(name: &str, value: preserves::IOValue) -> preserves::IOValue {

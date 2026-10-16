@@ -13,7 +13,7 @@ const PORT_TARGET_FIELD_COUNT: u64 = 2;
 const VALUE_FIELD_COUNT: u64 = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NativeCallbackContext {
+pub struct CallbackContext {
     pub manifest_ref: String,
     pub executable_ref: String,
     pub instance_id: String,
@@ -26,27 +26,27 @@ pub struct NativeCallbackContext {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NativeCallbackInputs {
+pub struct CallbackInputs {
     pub payload: Option<NativeCallbackValue>,
     pub state: Option<NativeCallbackValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NativeMaterializedEffectRequest {
+pub struct MaterializedEffectRequest {
     pub effect: TypedEffectRequest,
     pub request: NativeCallbackValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NativeMaterializedCallbackOutcome {
+pub struct MaterializedCallbackOutcome {
     pub outputs: Vec<NativeCallbackValue>,
-    pub effects: Vec<NativeMaterializedEffectRequest>,
+    pub effects: Vec<MaterializedEffectRequest>,
     pub state: Option<NativeCallbackValue>,
     pub checkpoint: Option<NativeCallbackValue>,
     pub health: HealthState,
 }
 
-impl NativeMaterializedCallbackOutcome {
+impl MaterializedCallbackOutcome {
     pub fn project(&self) -> CallbackOutcome {
         CallbackOutcome {
             output_refs: self.outputs.iter().map(|value| value.value_ref.clone()).collect(),
@@ -67,29 +67,29 @@ impl NativeMaterializedCallbackOutcome {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalNativeCallbackEnvelope {
+pub struct CanonicalCallbackEnvelope {
     pub envelope_ref: String,
     pub invocation: CallbackInvocation,
-    pub context: NativeCallbackContext,
-    pub inputs: NativeCallbackInputs,
+    pub context: CallbackContext,
+    pub inputs: CallbackInputs,
     pub value: preserves::IOValue,
     pub bytes: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DecodedNativeCallbackEnvelope {
+pub struct DecodedCallbackEnvelope {
     pub invocation: CallbackInvocation,
-    pub context: NativeCallbackContext,
-    pub inputs: NativeCallbackInputs,
+    pub context: CallbackContext,
+    pub inputs: CallbackInputs,
 }
 
 // r[impl molten.system_extension.native_host.value_protocol]
 // r[impl molten.system_extension.native_host.value_materialization]
-pub fn canonical_native_callback_envelope(
-    context: &NativeCallbackContext,
+pub fn canonical_callback_envelope(
+    context: &CallbackContext,
     invocation: &CallbackInvocation,
-    inputs: &NativeCallbackInputs,
-) -> crate::error::Result<CanonicalNativeCallbackEnvelope> {
+    inputs: &CallbackInputs,
+) -> crate::error::Result<CanonicalCallbackEnvelope> {
     require_input_links(context, invocation, inputs)?;
     let value = crate::preserves_rail::record(CALLBACK_ENVELOPE_RECORD, vec![
         crate::preserves_rail::string(NATIVE_CALLBACK_ENVELOPE_SCHEMA),
@@ -113,7 +113,7 @@ pub fn canonical_native_callback_envelope(
     ]);
     let envelope_ref = crate::preserves_rail::canonical_hash(&value)?;
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
-    Ok(CanonicalNativeCallbackEnvelope {
+    Ok(CanonicalCallbackEnvelope {
         envelope_ref,
         invocation: invocation.clone(),
         context: context.clone(),
@@ -125,26 +125,26 @@ pub fn canonical_native_callback_envelope(
 
 // r[impl molten.system_extension.native_host.value_protocol]
 // r[impl molten.system_extension.native_host.value_materialization]
-pub fn decode_native_callback_envelope(
+pub fn decode_callback_envelope(
     bytes: &[u8],
     maximum_bytes: u64,
     maximum_value_bytes: u64,
     maximum_items: u64,
-) -> crate::error::Result<DecodedNativeCallbackEnvelope> {
+) -> crate::error::Result<DecodedCallbackEnvelope> {
     require_byte_bound(bytes, maximum_bytes, "native callback input")?;
     let decoded = crate::preserves_rail::strict_canonical_decode(bytes)?;
     let fields =
         crate::preserves_rail::simple_record_fields(&decoded.value, CALLBACK_ENVELOPE_RECORD, ENVELOPE_FIELD_COUNT)?;
     let schema = crate::preserves_rail::required_string_field(&fields[0], "callback envelope schema")?;
     if schema != NATIVE_CALLBACK_ENVELOPE_SCHEMA {
-        return Err(crate::error::MoltenError::invalid_harness("native callback envelope schema mismatch"));
+        return Err(crate::error::Failure::invalid_harness("native callback envelope schema mismatch"));
     }
     let callback_name = crate::preserves_rail::required_string_field(&fields[7], "callback kind")?;
     let callback = CallbackKind::parse(&callback_name)
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("native callback kind is unsupported"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("native callback kind is unsupported"))?;
     let framing = crate::preserves_rail::required_string_field(&fields[17], "callback framing")?;
     if framing != NATIVE_FRAMING {
-        return Err(crate::error::MoltenError::invalid_harness("native callback framing mismatch"));
+        return Err(crate::error::Failure::invalid_harness("native callback framing mismatch"));
     }
     let payload = parse_optional_value(&fields[10], "callback payload", maximum_value_bytes)?;
     let state = parse_optional_value(&fields[13], "callback state", maximum_value_bytes)?;
@@ -158,7 +158,7 @@ pub fn decode_native_callback_envelope(
         logical_tick: required_u64(&fields[11], "callback logical tick")?,
         deadline_tick: required_u64(&fields[12], "callback deadline tick")?,
     };
-    let context = NativeCallbackContext {
+    let context = CallbackContext {
         manifest_ref: crate::preserves_rail::required_content_ref_string(&fields[1], "callback manifest ref")?,
         executable_ref: crate::preserves_rail::required_content_ref_string(&fields[2], "callback executable ref")?,
         instance_id: crate::preserves_rail::required_string_field(&fields[3], "callback instance id")?,
@@ -169,9 +169,9 @@ pub fn decode_native_callback_envelope(
         resource_ref: crate::preserves_rail::required_content_ref_string(&fields[15], "callback resource ref")?,
         port_binding_refs: parse_ref_sequence(&fields[16], "callback port refs", maximum_items)?,
     };
-    let inputs = NativeCallbackInputs { payload, state };
+    let inputs = CallbackInputs { payload, state };
     require_input_links(&context, &invocation, &inputs)?;
-    Ok(DecodedNativeCallbackEnvelope {
+    Ok(DecodedCallbackEnvelope {
         invocation,
         context,
         inputs,
@@ -180,9 +180,9 @@ pub fn decode_native_callback_envelope(
 
 // r[impl molten.system_extension.native_host.value_protocol]
 // r[impl molten.system_extension.native_host.value_publication]
-pub fn encode_native_callback_outcome(outcome: &NativeMaterializedCallbackOutcome) -> crate::error::Result<Vec<u8>> {
+pub fn encode_callback_outcome(outcome: &MaterializedCallbackOutcome) -> crate::error::Result<Vec<u8>> {
     for value in outcome.values() {
-        super::admit_native_callback_value(value, u64::MAX).map_err(value_error)?;
+        super::admit_callback_value(value, u64::MAX).map_err(value_error)?;
     }
     let value = crate::preserves_rail::record(CALLBACK_OUTCOME_RECORD, vec![
         crate::preserves_rail::string(NATIVE_CALLBACK_OUTCOME_SCHEMA),
@@ -197,19 +197,19 @@ pub fn encode_native_callback_outcome(outcome: &NativeMaterializedCallbackOutcom
 
 // r[impl molten.system_extension.native_host.value_protocol]
 // r[impl molten.system_extension.native_host.value_publication]
-pub fn decode_native_callback_outcome(
+pub fn decode_callback_outcome(
     bytes: &[u8],
     maximum_bytes: u64,
     maximum_value_bytes: u64,
     maximum_items: u64,
-) -> crate::error::Result<NativeMaterializedCallbackOutcome> {
+) -> crate::error::Result<MaterializedCallbackOutcome> {
     require_byte_bound(bytes, maximum_bytes, "native callback output")?;
     let decoded = crate::preserves_rail::strict_canonical_decode(bytes)?;
     let fields =
         crate::preserves_rail::simple_record_fields(&decoded.value, CALLBACK_OUTCOME_RECORD, OUTCOME_FIELD_COUNT)?;
     let schema = crate::preserves_rail::required_string_field(&fields[0], "callback outcome schema")?;
     if schema != NATIVE_CALLBACK_OUTCOME_SCHEMA {
-        return Err(crate::error::MoltenError::invalid_harness("native callback outcome schema mismatch"));
+        return Err(crate::error::Failure::invalid_harness("native callback outcome schema mismatch"));
     }
     let output_values = crate::preserves_rail::required_sequence_field(&fields[1], "callback outputs")?;
     let effect_values = crate::preserves_rail::required_sequence_field(&fields[2], "callback effects")?;
@@ -220,7 +220,7 @@ pub fn decode_native_callback_outcome(
         .checked_add(effect_values.len())
         .and_then(|count| count.checked_add(state.iter().count()))
         .and_then(|count| count.checked_add(checkpoint.iter().count()))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("native callback value count overflow"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("native callback value count overflow"))?;
     require_item_bound(value_count, maximum_items, "callback output values")?;
     let outputs = output_values
         .iter()
@@ -230,7 +230,7 @@ pub fn decode_native_callback_outcome(
         .iter()
         .map(|value| parse_effect(value, maximum_value_bytes))
         .collect::<crate::error::Result<Vec<_>>>()?;
-    Ok(NativeMaterializedCallbackOutcome {
+    Ok(MaterializedCallbackOutcome {
         outputs,
         effects,
         state,
@@ -239,7 +239,7 @@ pub fn decode_native_callback_outcome(
     })
 }
 
-fn effect_value(effect: &NativeMaterializedEffectRequest) -> preserves::IOValue {
+fn effect_value(effect: &MaterializedEffectRequest) -> preserves::IOValue {
     let target = match &effect.effect.target {
         EffectTarget::FabricPort(key) => crate::preserves_rail::record(PORT_TARGET_RECORD, vec![
             crate::preserves_rail::string(&key.port_id),

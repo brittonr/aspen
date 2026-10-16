@@ -47,7 +47,7 @@ pub fn validate_effect_log(input: EffectLogValidationInput<'_>) -> Result<Effect
     validate_effect_log_input(input)?;
     let mut diagnostics = Vec::new();
     if let Some(diagnostic) = first_effect_log_diagnostic(input)? {
-        crate::bounded::push_bounded(
+        crate::bounded::push(
             &mut diagnostics,
             diagnostic,
             EFFECT_LOG_DIAGNOSTIC_LIMIT,

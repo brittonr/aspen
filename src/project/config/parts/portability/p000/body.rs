@@ -1,6 +1,6 @@
 type IoValue = preserves::IOValue;
 type Result<T> = crate::error::Result<T>;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 
@@ -21,7 +21,7 @@ const RELEASE_SCOPE_MARKER: &str = "release";
 const EVIDENCE_ONLY_CAVEAT: &str = "config portability receipts are authoring evidence only and do not grant runtime authority, policy, provenance, resource, transport, source-gate, retention, release, deployment, or execution trust";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConfigFileRecord {
+pub struct FileRecord {
     pub path: String,
     pub contents: String,
     pub release_scoped: bool,
@@ -35,13 +35,13 @@ pub struct SourcePinRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConfigPortabilityInput {
-    pub files: Vec<ConfigFileRecord>,
+pub struct Input {
+    pub files: Vec<FileRecord>,
     pub source_pins: Vec<SourcePinRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ConfigPortabilityReport {
+pub struct Report {
     pub decision: String,
     pub diagnostics: Vec<String>,
     pub compared_source_pins: Vec<String>,
@@ -54,13 +54,13 @@ pub struct ConfigPortabilityReport {
 // r[impl molten.project.config_portability.git_source_pin_drift]
 // r[impl molten.project.config_portability.config_lint]
 // r[impl molten.project.config_portability.named_config_constants]
-pub fn build_config_portability_report(input: &ConfigPortabilityInput) -> Result<ConfigPortabilityReport> {
-    ensure_config_file_bound(input.files.len())?;
+pub fn build_report(input: &Input) -> Result<Report> {
+    ensure_file_bound(input.files.len())?;
     ensure_source_pin_bound(input.source_pins.len())?;
     let mut diagnostics = Vec::new();
     for file in &input.files {
         validate_file_record(file)?;
-        lint_config_file(file, &mut diagnostics);
+        lint_file(file, &mut diagnostics);
     }
     let compared_source_pins = lint_source_pins(&input.source_pins, &mut diagnostics)?;
     diagnostics.sort();
@@ -71,9 +71,9 @@ pub fn build_config_portability_report(input: &ConfigPortabilityInput) -> Result
     } else {
         DECISION_DENY
     };
-    let value = config_portability_value(input, decision, &diagnostics, &compared_source_pins)?;
+    let value = value(input, decision, &diagnostics, &compared_source_pins)?;
     let report_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(ConfigPortabilityReport {
+    Ok(Report {
         decision: decision.to_string(),
         diagnostics,
         compared_source_pins,
@@ -82,12 +82,12 @@ pub fn build_config_portability_report(input: &ConfigPortabilityInput) -> Result
     })
 }
 
-fn validate_file_record(file: &ConfigFileRecord) -> Result<()> {
+fn validate_file_record(file: &FileRecord) -> Result<()> {
     validate_text("config file path", &file.path)?;
     validate_text("config file contents", &file.contents)
 }
 
-fn lint_config_file(file: &ConfigFileRecord, diagnostics: &mut impl crate::bounded::VecSink<String>) {
+fn lint_file(file: &FileRecord, diagnostics: &mut impl crate::bounded::VecSink<String>) {
     for (line_index, line) in file.contents.lines().enumerate() {
         let line_number = line_index + 1;
         if has_user_home_path(line) {
@@ -146,8 +146,8 @@ fn validate_source_pin(pin: &SourcePinRecord) -> Result<()> {
     validate_text("source pin nix revision", &pin.nix_revision)
 }
 
-fn config_portability_value(
-    input: &ConfigPortabilityInput,
+fn value(
+    input: &Input,
     decision: &str,
     diagnostics: &[String],
     compared_source_pins: &[String],
@@ -163,7 +163,7 @@ fn config_portability_value(
     ]))
 }
 
-fn file_record_values(files: &[ConfigFileRecord]) -> Result<Vec<IoValue>> {
+fn file_record_values(files: &[FileRecord]) -> Result<Vec<IoValue>> {
     files
         .iter()
         .map(|file| {
@@ -221,7 +221,7 @@ fn validate_text(label: &str, value: &str) -> Result<()> {
     }
 }
 
-fn ensure_config_file_bound(count: usize) -> Result<()> {
+fn ensure_file_bound(count: usize) -> Result<()> {
     crate::bounded::ensure_count_at_most(count, MAX_CONFIG_FILES, "config files")
 }
 

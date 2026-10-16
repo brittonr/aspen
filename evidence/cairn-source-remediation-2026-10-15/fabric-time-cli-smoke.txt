@@ -1,0 +1,20 @@
+   Compiling tar v0.4.46
+   Compiling steel-core v0.8.2
+   Compiling chaoscontrol-snapshot-descriptor v0.1.0 (https://github.com/brittonr/chaoscontrol.git?rev=b8c440ea3b19df796542e58e8ee36200e1c3db85#b8c440ea)
+   Compiling iroh-util v0.6.0
+   Compiling iroh-gossip v0.101.0
+   Compiling molten-core v0.1.0 (/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-core)
+   Compiling iroh-blobs v0.103.0
+   Compiling wasmtime-wasi-io v45.0.0
+   Compiling wiggle v45.0.0
+   Compiling wasmtime-wasi v45.0.0
+   Compiling iroh-docs v0.101.0
+   Compiling molten-node-host v0.1.0 (/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-node-host)
+   Compiling nickel-lang v2.2.0
+   Compiling molten v0.1.0 (/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5m 43s
+     Running `/home/brittonr/.cargo-target/debug/molten fabric-time show /home/brittonr/.cache/molten-guided-goal-69fuhbc2/source-smoke-05/fabric-time/report.preserves`
+fabric-time report ok profile=both generation=1 final-ticks=36 timers=5 scheduler=7 entropy=3 deadline-lease=5 faults=6 live-clock=true conformance=true report=blake3:20915d1d0bc9313576a284b047e9bbe62b65a841f0fd76cdccbd3d1011ac889b
+
+
+Wall time: 407.83 seconds

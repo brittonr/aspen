@@ -1,10 +1,10 @@
 use super::*;
 
 pub(super) fn aggregate(
-    ledger: &ReplicaEvidenceLedger,
+    ledger: &ReplicaLedger,
     state: &ReplicaState,
     production_admitted: bool,
-) -> crate::error::Result<ReplicaAggregateHealthEvidence> {
+) -> crate::error::Result<ReplicaAggregateHealth> {
     let status = if state.lifecycle == ReplicaLifecycle::Stopped {
         "stopped"
     } else if ledger.saturated || ledger.diagnostic.is_some() || !state.pending_reads.is_empty() {
@@ -23,27 +23,28 @@ pub(super) fn aggregate(
         || crate::preserves_rail::record("none", Vec::new()),
         |reference| crate::preserves_rail::record("some", vec![crate::preserves_rail::string(reference)]),
     );
-    let evidence_ref = crate::preserves_rail::canonical_hash(&crate::preserves_rail::record(
-        "raft-aggregate-health-evidence-v1",
-        vec![
-            crate::preserves_rail::string(&ledger.group_binding_ref),
-            crate::preserves_rail::u64_value(ledger.service_generation),
-            crate::preserves_rail::string(&ledger.node_id),
-            crate::preserves_rail::string(status),
-            crate::preserves_rail::u64_value(state.current_term),
-            crate::preserves_rail::u64_value(state.commit_index),
-            crate::preserves_rail::u64_value(state.last_applied),
-            crate::preserves_rail::u64_value(u64::try_from(ledger.records.len()).map_err(|_| {
-                crate::error::MoltenError::invalid_harness("live Raft evidence record count exceeds u64")
-            })?),
-            crate::preserves_rail::u64_value(ledger.suppressed_heartbeat_count),
-            crate::preserves_rail::bool_value(ledger.saturated),
-            diagnostic_value,
-            selected_refs,
-            crate::preserves_rail::bool_value(production_admitted),
-        ],
-    ))?;
-    Ok(ReplicaAggregateHealthEvidence {
+    let evidence_ref =
+        crate::preserves_rail::canonical_hash(&crate::preserves_rail::record(
+            "raft-aggregate-health-evidence-v1",
+            vec![
+                crate::preserves_rail::string(&ledger.group_binding_ref),
+                crate::preserves_rail::u64_value(ledger.service_generation),
+                crate::preserves_rail::string(&ledger.node_id),
+                crate::preserves_rail::string(status),
+                crate::preserves_rail::u64_value(state.current_term),
+                crate::preserves_rail::u64_value(state.commit_index),
+                crate::preserves_rail::u64_value(state.last_applied),
+                crate::preserves_rail::u64_value(u64::try_from(ledger.records.len()).map_err(|_| {
+                    crate::error::Failure::invalid_harness("live Raft evidence record count exceeds u64")
+                })?),
+                crate::preserves_rail::u64_value(ledger.suppressed_heartbeat_count),
+                crate::preserves_rail::bool_value(ledger.saturated),
+                diagnostic_value,
+                selected_refs,
+                crate::preserves_rail::bool_value(production_admitted),
+            ],
+        ))?;
+    Ok(ReplicaAggregateHealth {
         status: status.to_string(),
         selected_record_count: ledger.records.len(),
         suppressed_heartbeat_count: ledger.suppressed_heartbeat_count,

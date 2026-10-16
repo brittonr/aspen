@@ -1,0 +1,36 @@
+{
+  "attempt": "8/20",
+  "status": "accepted, natively synced and archived in dedicated worktree; not yet integrated into canonical Molten",
+  "change": "support-active-delta-traceability-before-sync",
+  "archive": ".cairn/archive/1970-01-01-support-active-delta-traceability-before-sync",
+  "sync_preview_plan_hash": "e35e448df98d689ee397b04601d32a4ab56fffe7564bcec2c18ad5741b7dfda1",
+  "sync_execution_plan_hash": "0ca0abd797d848b8d3eeaf2b4d4998538850caab93e787a8f593d7eeacc8cf74",
+  "sync_input_hash": "d4a2034a72500b8957ba5da5e7985b20e52929ece16d64b61bde7ad26aa14ba9",
+  "sync_observed_after_hash": "6dac7429a656d18b7713832c6d6807ee8fa3ad12f5690e6201bc6a6ae01181ce",
+  "archive_preview_plan_hash": "aecce091455d2fef8388557ef2a15ae477036066d08ca610fa22e6b8c5873716",
+  "archive_execution_plan_hash": "a93c102d7570024973ba5d49abc483f3ba49f1bc1da4c8b329fc5a0f5be73c7e",
+  "archive_input_hash": "a9711df270e9d26af941ee055e5335eee30013b4a2d4c9d28340c204a77e71a8",
+  "archive_preserved_files": 9,
+  "strict_validation_valid": true,
+  "strict_validation_findings": [],
+  "live_guard_exit_code": 0,
+  "remaining_active_worktree_changes": 52,
+  "immediate_outcome": "The completed pending-identity guard change is now accepted and archived without a self-referential task or waived native gates.",
+  "durable_capability": "Pending source identities resolve before spec sync while accepted coverage and exact inherited debt remain separate; actual native lifecycle operations retain explicit input/action and mutation linkage.",
+  "maintenance_owner": "Molten source-policy and traceability maintainers",
+  "repeatability_evidence": [
+    "post-sync-live-guard.json",
+    "strict-post-archive-validation.json",
+    "sync-reviewed-plan.json",
+    "sync-execute.json",
+    "sync-plan-identity-review.json",
+    "archive-reviewed-plan.json",
+    "archive-execute.json",
+    "archive-plan-identity-review.json"
+  ],
+  "non_claims": [
+    "No canonical-worktree integration or Molten push.",
+    "No claim that mode-dependent preview/execution envelope plan_hash values are identical.",
+    "No claim that other active changes meet acceptance."
+  ]
+}

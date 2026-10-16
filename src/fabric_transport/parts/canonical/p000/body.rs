@@ -13,31 +13,31 @@ const TRANSPORT_OUTPUT_SCHEMA: &str = "molten.fabric.transport.event.v1";
 const MAX_CANONICAL_TRANSPORT_EVENTS: usize = 128;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalTransportProfile {
+pub struct Profile {
     pub profile: TransportProfile,
     pub profile_ref: String,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalTransportEvent {
+pub struct Event {
     pub event_ref: String,
     pub event: TransportEvent,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalTransportTransition {
+pub struct Transition {
     pub transition_ref: String,
     pub profile_ref: String,
     pub decision: TransportTransitionDecision,
-    pub events: Vec<CanonicalTransportEvent>,
+    pub events: Vec<Event>,
     pub state: TransportState,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TransportStatusReadback {
+pub struct StatusReadback {
     pub profile_ref: String,
     pub adapter_kind: TransportAdapterKind,
     pub active_protocols: u64,
@@ -57,11 +57,11 @@ pub struct TransportStatusReadback {
 // r[impl molten.fabric_transport.port_contract]
 // r[impl molten.fabric_transport.live_sim_parity]
 // r[impl molten.fabric_transport.failure_semantics]
-pub fn canonical_transport_profile(profile: &TransportProfile) -> crate::error::Result<CanonicalTransportProfile> {
+pub fn profile(profile: &TransportProfile) -> crate::error::Result<Profile> {
     validate_transport_profile(profile).map_err(|issues| validation_error("transport profile", &issues))?;
-    let value = transport_profile_value(profile);
+    let value = profile_value(profile);
     let profile_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalTransportProfile {
+    Ok(Profile {
         profile: profile.clone(),
         profile_ref,
         value,
@@ -69,7 +69,7 @@ pub fn canonical_transport_profile(profile: &TransportProfile) -> crate::error::
 }
 
 // r[impl molten.fabric_transport.port_contract]
-pub fn fabric_transport_port_descriptor(profile: &CanonicalTransportProfile) -> crate::fabric::FabricPortDescriptor {
+pub fn fabric_transport_port_descriptor(profile: &Profile) -> crate::fabric::FabricPortDescriptor {
     let (determinism, replay) = match profile.profile.adapter_kind {
         TransportAdapterKind::IrohLive => {
             (crate::fabric::DeterminismClass::ExternalEffect, crate::fabric::ReplayClass::RecordedEffectRequired)
@@ -124,13 +124,13 @@ pub fn fabric_transport_port_descriptor(profile: &CanonicalTransportProfile) -> 
 // r[impl molten.modularity.fabric_boundary.compatibility]
 // r[impl molten.fabric_transport.evidence]
 // r[impl molten.fabric_transport.failure_semantics]
-pub fn canonical_transport_transition(
-    profile: &CanonicalTransportProfile,
+pub fn transition(
+    profile: &Profile,
     transition: TransportTransition,
-) -> crate::error::Result<CanonicalTransportTransition> {
+) -> crate::error::Result<Transition> {
     validate_transport_profile(&profile.profile).map_err(|issues| validation_error("transport profile", &issues))?;
     if transition.events.is_empty() || transition.events.len() > MAX_CANONICAL_TRANSPORT_EVENTS {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "transport transition event count {} outside canonical bound",
             transition.events.len()
         )));
@@ -141,7 +141,7 @@ pub fn canonical_transport_transition(
     }
     let mut events = Vec::with_capacity(transition.events.len());
     for event in transition.events {
-        events.push(canonical_event(event)?);
+        events.push(self::event(event)?);
     }
     let event_refs = events.iter().map(|event| event.event_ref.as_str());
     let value = crate::preserves_rail::record(TRANSPORT_TRANSITION_RECORD, vec![
@@ -162,7 +162,7 @@ pub fn canonical_transport_transition(
         ]),
     ]);
     let transition_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalTransportTransition {
+    Ok(Transition {
         transition_ref,
         profile_ref: profile.profile_ref.clone(),
         decision: transition.decision,
@@ -173,11 +173,11 @@ pub fn canonical_transport_transition(
 }
 
 // r[impl molten.fabric_transport.evidence]
-pub fn transport_status_readback(
-    profile: &CanonicalTransportProfile,
+pub fn status_readback(
+    profile: &Profile,
     state: &TransportState,
     latest_evidence_ref: Option<&str>,
-) -> crate::error::Result<TransportStatusReadback> {
+) -> crate::error::Result<StatusReadback> {
     validate_transport_profile(&profile.profile).map_err(|issues| validation_error("transport profile", &issues))?;
     if let Some(reference) = latest_evidence_ref {
         crate::preserves_rail::validate_content_ref(reference)?;
@@ -208,7 +208,7 @@ pub fn transport_status_readback(
     let inflight_bytes = state.sessions.values().try_fold(0_u64, |total, session| {
         total
             .checked_add(session.inflight_bytes)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("transport status inflight-byte overflow"))
+            .ok_or_else(|| crate::error::Failure::invalid_harness("transport status inflight-byte overflow"))
     })?;
     let value = crate::preserves_rail::record(TRANSPORT_STATUS_RECORD, vec![
         crate::preserves_rail::string(TRANSPORT_STATUS_SCHEMA),
@@ -231,7 +231,7 @@ pub fn transport_status_readback(
         ]),
     ]);
     let status_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(TransportStatusReadback {
+    Ok(StatusReadback {
         profile_ref: profile.profile_ref.clone(),
         adapter_kind: profile.profile.adapter_kind,
         active_protocols,
@@ -249,7 +249,7 @@ pub fn transport_status_readback(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExtensionTransportContext {
+pub struct ExtensionContext {
     service_id: String,
     generation: u64,
     profile_id: String,

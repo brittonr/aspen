@@ -38,7 +38,7 @@ use super::canonical_world_head_conflict;
 use super::canonical_world_head_transition_receipt;
 use super::world_head_artifact_statement;
 use super::world_head_authentication_scope;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 const STATEMENT_SET_IDENTITY_DOMAIN: &str = "molten.world-head.statement-set.v1";
@@ -143,7 +143,7 @@ pub fn evaluate_world_head_authentication(
         .collect::<Vec<_>>();
     let statement_ref = statement_set_ref(&statements)?;
     let decision_ref = WorldHeadAuthenticationDecisionRef::new(format!("blake3:{}", decision.decision_blake3))
-        .map_err(|error| MoltenError::invalid_harness(format!("invalid authentication decision ref: {error}")))?;
+        .map_err(|error| Failure::invalid_harness(format!("invalid authentication decision ref: {error}")))?;
     let is_policy_matches = policy.profile_id == scope.profile_id
         && scope.verifier_context.digest_hex
             == crate::preserves_rail::content_ref_hex(claim.claim.policy_ref.as_str())?;
@@ -267,7 +267,7 @@ pub fn record_world_head_conflict<S: WorldHeadConflictPort>(
     maximum: u32,
 ) -> Result<Option<(WorldHeadConflictSet, CanonicalWorldHeadConflict)>> {
     let conflict = classify_world_head_conflict(plans, maximum)
-        .map_err(|issues| MoltenError::invalid_harness(format!("world-head conflict denied: {issues:?}")))?;
+        .map_err(|issues| Failure::invalid_harness(format!("world-head conflict denied: {issues:?}")))?;
     let Some(conflict) = conflict else {
         return Ok(None);
     };

@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 use molten_core::world_faults::*;
 
 use super::*;
-use crate::error::MoltenError;
+use crate::error::Failure;
 use crate::error::Result;
 
 #[derive(Debug, Clone)]
@@ -39,7 +39,7 @@ pub fn run_world_fault_conformance(
         if matches!(case.phase, FaultPhase::ProcessRestart | FaultPhase::RecoveryReadBack) {
             restart_count = restart_count.saturating_add(1);
             if restart_count > profile.limits.max_restarts {
-                return Err(MoltenError::invalid_harness("world fault restart bound exceeded"));
+                return Err(Failure::invalid_harness("world fault restart bound exceeded"));
             }
             ports.restart.restart(case)?;
         }
@@ -78,7 +78,7 @@ pub fn run_world_fault_conformance(
     let record = canonical_world_fault_receipt(&receipt, profile)?;
     let persisted_receipt_ref = ports.receipts.publish_receipt(&record)?;
     if persisted_receipt_ref != record.record_ref {
-        return Err(MoltenError::invalid_harness("world fault receipt port returned a crossed record identity"));
+        return Err(Failure::invalid_harness("world fault receipt port returned a crossed record identity"));
     }
     Ok(WorldFaultHarnessOutcome {
         receipt,
@@ -95,6 +95,6 @@ fn core_issues(issues: Vec<WorldFaultIssue>, context: &str) -> Result<()> {
     }
 }
 
-fn core_error(context: &str, issues: Vec<WorldFaultIssue>) -> MoltenError {
-    MoltenError::invalid_harness(format!("{context} denied: {issues:?}"))
+fn core_error(context: &str, issues: Vec<WorldFaultIssue>) -> Failure {
+    Failure::invalid_harness(format!("{context} denied: {issues:?}"))
 }

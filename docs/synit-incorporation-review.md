@@ -143,6 +143,11 @@ UCAN caveat model already expresses a bounded filter over Preserves payloads. If
 it does, Molten consumes it. If it does not, the decision to add a second
 authority format needs its own review.
 
+**Recorded decision (2026-10-15).** [The caveat attenuation boundary review](caveat-attenuation-decision.md)
+inventories the current consumers and pinned UCAN/Basalt cohort. It adds no new filter
+format: current consumers need scope restrictions, while proxy rewriting remains an
+unadmitted future requirement. The decision preserves the separate stack authority owners.
+
 **Evidence to prove it.** Positive: a rewrite rule that matches rewrites the
 payload and a rule that does not match rejects. Negative: an unknown caveat
 rejects everything; an unbound template ref fails validation; caveat order is

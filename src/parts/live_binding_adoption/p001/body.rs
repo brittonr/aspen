@@ -16,22 +16,22 @@ mod tests {
         expected: String,
     }
 
-    const KINDS: [AdoptionArtifactKind; ADOPTION_KIND_COUNT] = [
-        AdoptionArtifactKind::BindingRecord,
-        AdoptionArtifactKind::BindingSnapshot,
-        AdoptionArtifactKind::ResolutionReceipt,
-        AdoptionArtifactKind::TransitionReceipt,
-        AdoptionArtifactKind::RootInventory,
-        AdoptionArtifactKind::GenerationAttribution,
-        AdoptionArtifactKind::RetirementReport,
-        AdoptionArtifactKind::DeployDiagnostic,
-        AdoptionArtifactKind::SemanticOperationBinding,
+    const KINDS: [ArtifactKind; ADOPTION_KIND_COUNT] = [
+        ArtifactKind::BindingRecord,
+        ArtifactKind::BindingSnapshot,
+        ArtifactKind::ResolutionReceipt,
+        ArtifactKind::TransitionReceipt,
+        ArtifactKind::RootInventory,
+        ArtifactKind::GenerationAttribution,
+        ArtifactKind::RetirementReport,
+        ArtifactKind::DeployDiagnostic,
+        ArtifactKind::SemanticOperationBinding,
     ];
 
     #[test]
-    fn every_adoption_artifact_has_deterministic_preserves_roundtrip() {
+    fn every_artifact_has_deterministic_preserves_roundtrip() {
         for kind in KINDS {
-            let built = build_adoption_artifact(
+            let built = build_artifact(
                 kind,
                 &[
                     CanonicalField {
@@ -46,7 +46,7 @@ mod tests {
                 &["artifact is evidence, not authority".to_string()],
             )
             .expect("build adoption artifact");
-            let parsed = parse_adoption_artifact(kind, &built.value).expect("parse adoption artifact");
+            let parsed = parse_artifact(kind, &built.value).expect("parse adoption artifact");
             assert_eq!(parsed.artifact_ref, built.artifact_ref);
             assert_eq!(parsed.fields, built.fields);
         }
@@ -71,20 +71,20 @@ mod tests {
     }
 
     #[test]
-    fn strict_semantic_binding_is_canonical_and_rejects_drift() {
+    fn strict_semantic_is_canonical_and_rejects_drift() {
         let operation =
             kamacite_core::compute_identity(kamacite_core::IdentityDomain::EffectOperation, b"strict-operation");
         let exact = semantic_surfaces(&operation);
         let artifact =
-            build_strict_semantic_operation_binding(&operation, &exact).expect("build strict semantic binding");
-        let parsed = parse_adoption_artifact(AdoptionArtifactKind::SemanticOperationBinding, &artifact.value)
+            build_strict_semantic_operation(&operation, &exact).expect("build strict semantic binding");
+        let parsed = parse_artifact(ArtifactKind::SemanticOperationBinding, &artifact.value)
             .expect("parse strict semantic binding");
         assert_eq!(parsed.artifact_ref, artifact.artifact_ref);
 
         let mut drifted = exact;
         drifted.handler_binding =
             kamacite_core::compute_identity(kamacite_core::IdentityDomain::EffectOperation, b"drifted-operation");
-        assert!(build_strict_semantic_operation_binding(&operation, &drifted).is_err());
+        assert!(build_strict_semantic_operation(&operation, &drifted).is_err());
     }
 
     #[test]
@@ -112,13 +112,13 @@ mod tests {
             value: "blake3:snapshot".to_string(),
         };
         assert!(
-            build_adoption_artifact(AdoptionArtifactKind::BindingRecord, &[duplicate.clone(), duplicate], &[
+            build_artifact(ArtifactKind::BindingRecord, &[duplicate.clone(), duplicate], &[
                 "not authority".to_string()
             ],)
             .is_err()
         );
-        let built = build_adoption_artifact(
-            AdoptionArtifactKind::BindingRecord,
+        let built = build_artifact(
+            ArtifactKind::BindingRecord,
             &[CanonicalField {
                 name: "snapshot".to_string(),
                 value: "blake3:snapshot".to_string(),
@@ -126,6 +126,6 @@ mod tests {
             &["not authority".to_string()],
         )
         .expect("build binding artifact");
-        assert!(parse_adoption_artifact(AdoptionArtifactKind::RetirementReport, &built.value,).is_err());
+        assert!(parse_artifact(ArtifactKind::RetirementReport, &built.value,).is_err());
     }
 }

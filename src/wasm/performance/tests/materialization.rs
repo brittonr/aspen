@@ -1,43 +1,36 @@
 use super::super::*;
 
 #[test]
-fn portable_wizer_and_precompiled_artifacts_require_exact_mantle_materialization() {
+fn portable_wizer_and_precompiled_artifacts_require_exact_mantle() {
     // r[verify molten.wasm_performance.materialization]
     // r[verify molten.wasm_performance.aot_admission]
     // r[verify molten.wasm_performance.wizer]
-    let profile = supported_performance_profile().expect("supported performance profile");
+    let profile = supported().expect("supported performance profile");
     let portable_bytes = super::support::fixture_component_bytes();
     let portable_source = super::support::fixture_bytes_ref(&portable_bytes);
     let (_portable_suite, _portable_bundle, portable) = super::support::fixture_materialized(
         &profile,
-        PerformanceArtifactKind::PortableComponent,
+        ArtifactKind::PortableComponent,
         &portable_bytes,
         portable_source,
     );
-    assert_eq!(portable.kind, PerformanceArtifactKind::PortableComponent);
-    assert_eq!(portable.consumer, crate::wasm_component::ComponentConsumer::Actor);
+    assert_eq!(portable.kind, ArtifactKind::PortableComponent);
+    assert_eq!(portable.consumer, crate::wasm_component::Consumer::Actor);
 
-    let mut system_bundle = super::support::fixture_bundle(
-        PerformanceArtifactKind::PortableComponent,
-        &portable_bytes,
-        portable.artifact_ref.clone(),
-    );
-    system_bundle.consumer = crate::wasm_component::ComponentConsumer::SystemExtension;
-    system_bundle.bundle_ref = performance_materialization_bundle_ref(&system_bundle);
+    let mut system_bundle =
+        super::support::fixture_bundle(ArtifactKind::PortableComponent, &portable_bytes, portable.artifact_ref.clone());
+    system_bundle.consumer = crate::wasm_component::Consumer::SystemExtension;
+    system_bundle.bundle_ref = bundle_ref(&system_bundle);
     let mut system_suite = profile.fast.clone();
     system_suite.materialization_bundle_refs = vec![system_bundle.bundle_ref.clone()];
-    let system_extension = verify_performance_materialization(&system_suite, &system_bundle, &portable_bytes)
-        .expect("system-extension performance materialization");
-    assert_eq!(system_extension.consumer, crate::wasm_component::ComponentConsumer::SystemExtension);
+    let system_extension =
+        verify(&system_suite, &system_bundle, &portable_bytes).expect("system-extension performance materialization");
+    assert_eq!(system_extension.consumer, crate::wasm_component::Consumer::SystemExtension);
 
     let source_ref = portable.artifact_ref.clone();
     let wizer_bytes = super::support::fixture_alternate_component_bytes();
-    let (_wizer_suite, _wizer_bundle, wizer) = super::support::fixture_materialized(
-        &profile,
-        PerformanceArtifactKind::WizerComponent,
-        &wizer_bytes,
-        source_ref.clone(),
-    );
+    let (_wizer_suite, _wizer_bundle, wizer) =
+        super::support::fixture_materialized(&profile, ArtifactKind::WizerComponent, &wizer_bytes, source_ref.clone());
     let wizer_manifest = WizerTransformManifest {
         schema_id: WIZER_ADMISSION_SCHEMA.to_string(),
         original_component_ref: source_ref.clone(),
@@ -59,11 +52,11 @@ fn portable_wizer_and_precompiled_artifacts_require_exact_mantle_materialization
 }
 
 /// A Mantle-materialized precompiled component is admitted and remeasured before deserialization.
-fn assert_precompiled_admission(profile: &PerformanceProfile, source_ref: String) {
+fn assert_precompiled_admission(profile: &Profile, source_ref: String) {
     let precompiled_bytes = super::support::fixture_precompiled_component_bytes();
     let (_aot_suite, _aot_bundle, precompiled) = super::support::fixture_materialized(
         profile,
-        PerformanceArtifactKind::PrecompiledComponent,
+        ArtifactKind::PrecompiledComponent,
         &precompiled_bytes,
         source_ref,
     );
@@ -102,45 +95,34 @@ fn local_tampered_incomplete_aot_and_wizer_artifacts_deny_before_use() {
     // r[verify molten.wasm_performance.aot_admission]
     // r[verify molten.wasm_performance.wizer]
     // r[verify molten.wasm_performance.validation]
-    let profile = supported_performance_profile().expect("supported performance profile");
+    let profile = supported().expect("supported performance profile");
     let invalid_component_bytes = b"not-a-component";
     let invalid_component_ref = super::support::fixture_bytes_ref(invalid_component_bytes);
-    let invalid_component_bundle = super::support::fixture_bundle(
-        PerformanceArtifactKind::PortableComponent,
-        invalid_component_bytes,
-        invalid_component_ref,
-    );
+    let invalid_component_bundle =
+        super::support::fixture_bundle(ArtifactKind::PortableComponent, invalid_component_bytes, invalid_component_ref);
     let mut invalid_component_suite = profile.fast.clone();
     invalid_component_suite.materialization_bundle_refs = vec![invalid_component_bundle.bundle_ref.clone()];
-    assert!(
-        verify_performance_materialization(
-            &invalid_component_suite,
-            &invalid_component_bundle,
-            invalid_component_bytes,
-        )
-        .is_err()
-    );
+    assert!(verify(&invalid_component_suite, &invalid_component_bundle, invalid_component_bytes,).is_err());
 
     let source_bytes = super::support::fixture_component_bytes();
     let source_ref = super::support::fixture_bytes_ref(&source_bytes);
     let bytes = super::support::fixture_precompiled_component_bytes();
-    let mut bundle =
-        super::support::fixture_bundle(PerformanceArtifactKind::PrecompiledComponent, &bytes, source_ref.clone());
+    let mut bundle = super::support::fixture_bundle(ArtifactKind::PrecompiledComponent, &bytes, source_ref.clone());
     let mut suite = profile.fast.clone();
     suite.materialization_bundle_refs = vec![bundle.bundle_ref.clone()];
 
-    assert!(verify_performance_materialization(&suite, &bundle, b"tampered").is_err());
+    assert!(verify(&suite, &bundle, b"tampered").is_err());
 
     bundle.locally_produced_transform = true;
-    bundle.bundle_ref = performance_materialization_bundle_ref(&bundle);
+    bundle.bundle_ref = bundle_ref(&bundle);
     suite.materialization_bundle_refs = vec![bundle.bundle_ref.clone()];
-    assert!(verify_performance_materialization(&suite, &bundle, &bytes).is_err());
+    assert!(verify(&suite, &bundle, &bytes).is_err());
 
     bundle.locally_produced_transform = false;
     bundle.valence_sidecar_refs.clear();
-    bundle.bundle_ref = performance_materialization_bundle_ref(&bundle);
+    bundle.bundle_ref = bundle_ref(&bundle);
     suite.materialization_bundle_refs = vec![bundle.bundle_ref.clone()];
-    assert!(verify_performance_materialization(&suite, &bundle, &bytes).is_err());
+    assert!(verify(&suite, &bundle, &bytes).is_err());
 
     assert_cross_target_precompile_denied(&profile, &bytes, source_ref.clone());
     assert_drifting_wizer_denied(&profile, source_ref);
@@ -148,9 +130,9 @@ fn local_tampered_incomplete_aot_and_wizer_artifacts_deny_before_use() {
 
 /// A precompiled component is denied for a runtime expectation that targets a different
 /// architecture.
-fn assert_cross_target_precompile_denied(profile: &PerformanceProfile, bytes: &[u8], source_ref: String) {
+fn assert_cross_target_precompile_denied(profile: &Profile, bytes: &[u8], source_ref: String) {
     let (_aot_suite, _aot_bundle, precompiled) =
-        super::support::fixture_materialized(profile, PerformanceArtifactKind::PrecompiledComponent, bytes, source_ref);
+        super::support::fixture_materialized(profile, ArtifactKind::PrecompiledComponent, bytes, source_ref);
     let manifest = PrecompiledComponentManifest {
         schema_id: PRECOMPILED_ADMISSION_SCHEMA.to_string(),
         source_component_ref: precompiled.source_component_ref.clone(),
@@ -176,14 +158,10 @@ fn assert_cross_target_precompile_denied(profile: &PerformanceProfile, bytes: &[
 }
 
 /// A Wizer transform with drifting repeated outputs, or one that observed ambient state, is denied.
-fn assert_drifting_wizer_denied(profile: &PerformanceProfile, source_ref: String) {
+fn assert_drifting_wizer_denied(profile: &Profile, source_ref: String) {
     let wizer_bytes = super::support::fixture_alternate_component_bytes();
-    let (_wizer_suite, _wizer_bundle, wizer) = super::support::fixture_materialized(
-        profile,
-        PerformanceArtifactKind::WizerComponent,
-        &wizer_bytes,
-        source_ref,
-    );
+    let (_wizer_suite, _wizer_bundle, wizer) =
+        super::support::fixture_materialized(profile, ArtifactKind::WizerComponent, &wizer_bytes, source_ref);
     let mut drifting = WizerTransformManifest {
         schema_id: WIZER_ADMISSION_SCHEMA.to_string(),
         original_component_ref: wizer.source_component_ref.clone(),

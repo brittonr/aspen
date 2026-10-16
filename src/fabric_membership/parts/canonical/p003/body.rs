@@ -16,18 +16,18 @@ fn validate_evidence_ref(label: &str, value: &str) -> crate::error::Result<()> {
     if is_valid {
         Ok(())
     } else {
-        Err(crate::error::MoltenError::invalid_harness(format!("{label} ref is malformed")))
+        Err(crate::error::Failure::invalid_harness(format!("{label} ref is malformed")))
     }
 }
 
 fn checked_increment(value: u64) -> crate::error::Result<u64> {
     value
         .checked_add(1)
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("membership readback count overflow"))
+        .ok_or_else(|| crate::error::Failure::invalid_harness("membership readback count overflow"))
 }
 
-fn validation_error<T: std::fmt::Debug>(label: &str, issues: &[T]) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(format!("{label} validation failed: {issues:?}"))
+fn validation_error<T: std::fmt::Debug>(label: &str, issues: &[T]) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("{label} validation failed: {issues:?}"))
 }
 
 fn field(name: &str, value: preserves::IOValue) -> preserves::IOValue {

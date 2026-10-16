@@ -1,0 +1,159 @@
+{
+  "attempt": "13/20",
+  "change": "saturate-exponential-retry-arithmetic",
+  "result": "acceptance passed, reviewed, natively synced and archived in the dedicated Molten worktree",
+  "repository": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "archive": ".cairn/archive/1970-01-01-saturate-exponential-retry-arithmetic",
+  "acceptance": ".cairn/archive/1970-01-01-saturate-exponential-retry-arithmetic/evidence/2026-10-16-acceptance.json",
+  "ordered_acceptance": {
+    "focused_core": {
+      "passed": 41,
+      "failed": 0,
+      "record": "focused-fabric-time-tests.txt"
+    },
+    "focused_shell_and_replay": {
+      "passed": 34,
+      "failed": 0,
+      "record": "focused-fabric-time-tests.txt"
+    },
+    "actual_cli_live_and_simulation": {
+      "run": "fabric-time-cli-run.json",
+      "readback": "fabric-time-cli-show.json",
+      "canonical_report": "blake3:b5300153e68cb7775b6f0e8c8ebc6f689f3a4e663a50c7a17a31b42dc0dfc35e"
+    },
+    "actual_public_api": {
+      "result": "pass",
+      "record": "public-api-consumer-run-final.json",
+      "saturated_case": {
+        "base": 2,
+        "attempt": 63,
+        "maximum": 128,
+        "now": 10,
+        "observed_delay": 128,
+        "observed_deadline": 138
+      },
+      "boundaries": [
+        0,
+        3,
+        63,
+        64,
+        4294967296,
+        18446744073709551614
+      ],
+      "fixed_control": {
+        "delay": 2,
+        "deadline": 12
+      },
+      "deadline_overflow": "Arithmetic(Overflow)",
+      "attempt_exhaustion": "RetryExhausted",
+      "temporary_source_and_binary_removed": true
+    },
+    "configured_octet_producers": {
+      "workspace": "clean, zero findings",
+      "library": "clean, zero findings",
+      "configured_workspace_scope": [
+        "molten",
+        "molten-node-host"
+      ],
+      "targets": "workspace metadata all-targets; second producer molten --lib",
+      "unchanged_gate": "strict-ci",
+      "canonical_gate_receipt": "blake3:6e7ee8961b4e805d94aedbd4c8c7740905b6dfa7683600bddecd8f6b7ebf841e",
+      "artifact_import": "blake3:f31ea3e591ef61a52549d23d260865e10fd1be657177c63bac3a66d3d07c1ebc",
+      "imported_artifacts": 6,
+      "remediation_plan": "blake3:70046c44ddc91019d9ee642f1f2ae9188342f45010b5dd751efc7429e99f26dd"
+    },
+    "workspace_all_targets": {
+      "passed": 2095,
+      "failed": 0,
+      "record": "cargo-workspace-all-targets-and-doc.txt"
+    },
+    "workspace_doctests": {
+      "passed": 7,
+      "failed": 0,
+      "record": "cargo-workspace-all-targets-and-doc.txt"
+    },
+    "explicit_feature_cohorts": {
+      "passed": 4209,
+      "failed": 0,
+      "ignored": 1,
+      "enabled": [
+        "doltlite-oracle",
+        "executable-extents",
+        "profiler-perf",
+        "profiler-alloc",
+        "world-snapshot-vm-cohort"
+      ],
+      "disabled": [
+        "profiler-disabled"
+      ],
+      "record": "cargo-explicit-compatible-feature-cohorts.txt"
+    },
+    "clippy_and_format": {
+      "result": "pass",
+      "scope": "workspace all-targets default, explicit enabled cohort, profiler-disabled cohort; -D warnings; cargo fmt --all --check",
+      "record": "clippy-all-cohorts-and-format.txt"
+    },
+    "repository_nix_gate": {
+      "result": "pass",
+      "target": "x86_64-linux",
+      "reported_checks": 674,
+      "hermetic_nextest_passed": 1693,
+      "record": "nix-flake-check.txt"
+    },
+    "ordered_strict_cairn": {
+      "valid": true,
+      "findings": 0,
+      "record": "ordered-strict-cairn-validation.json"
+    }
+  },
+  "native_sync": {
+    "preview": "sync-reviewed-plan.json",
+    "execution": "sync-execute.json",
+    "input_hash": "cc20462a81e9208dcb24a26051bc0a224e7de1fe4ddf46490e5c54eb91446f0a",
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "profile_identity_hash": "10dc11dc310cab16e988bf38650b6d6dc379b5cc594ae6d589db21a5648c4f19",
+    "reviewed_actions_match": true,
+    "accepted_before_hash": "30029044b594ff313f73debe087b9d3c43c8372ac67de5757095efdd361feba4",
+    "accepted_after_hash": "21c5dbff8b7278c06e0436f2e8df147746d509b33c0d0f7baa6e9c58d4de032b",
+    "actual_mutation_matches_expected_hashes": true
+  },
+  "native_archive": {
+    "preview": "archive-reviewed-plan-final.json",
+    "execution": "archive-execute.json",
+    "input_hash": "e4d9dbfe01121566a95df45c5f8b236c8f2620ee566f5a70addf6209dee2ea6f",
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "profile_identity_hash": "d3d930803e8e912b19d2e7413460c6ee70baab7fe397297307a904a972654bba",
+    "preserved_members": 7,
+    "independent_b3sum_and_native_manifests_match": true,
+    "active_source_path_absent": true,
+    "date_note": "The 1970-01-01 archive prefix is the native provider output under its unchanged logical-time default; no path was guessed or manually renamed."
+  },
+  "post_archive": {
+    "strict_cairn_valid": true,
+    "strict_cairn_findings": 0,
+    "live_traceability_guard": "pass",
+    "accepted_requirements": 2806,
+    "referenced_requirements": 882,
+    "pending_identities": 18,
+    "inherited_uncovered": 1924,
+    "baseline_entries": 1924,
+    "dangling": 0,
+    "active_changes": 50,
+    "inventory": "post-archive-active-changes.json"
+  },
+  "documentation_link_check": "documentation-links.json",
+  "historical_evidence": "Preserved byte-for-byte, including initial incomplete-input denials and temporary-consumer invocation failures; no archive mutation was rerun after local inspection assertions.",
+  "temporary_guard_note": "The old session temporary executable no longer existed; rebuilt the unchanged repository source using the already available pinned Nix compiler after a redundant nix-develop launch timed out. No host GC, cache, or quota settings changed.",
+  "immediate_outcome": "F12 acceptance gap closed without changing arithmetic, loosening policy, editing historical evidence, or publishing Molten.",
+  "durable_capability": "Normal wide-reference/boundary tests, canonical retry/replay comparisons, exact source bindings, and repeatable full accepted verification commands.",
+  "maintenance_owner": "Molten fabric-time maintainers; source-policy and lifecycle maintainers own the verification rails.",
+  "integration_or_molten_push_performed": false,
+  "objective_complete": false,
+  "non_claims": [
+    "Not completion of other active changes or zero active Cairns.",
+    "Not a clean whole-molten-core Octet lint claim; the configured gate scope and separately retained whole-core warning debt remain explicit.",
+    "The ignored external DoltLite test did not execute; optional-feature checks do not establish a live DoltLite or KVM backend campaign.",
+    "No safe application retry, fixed-delivery-profile exposure, global liveness, measured performance, release readiness, integration, or Molten remote publication claim.",
+    "Local worktree/store paths are verification locators, not durable product dependencies."
+  ]
+}

@@ -261,7 +261,7 @@ fn placement_diagnostics(input: &ConsensusPlacementInput) -> Result<Vec<String>>
         diagnostics.push("consensus placement lacks a fault-domain ref for every admitted member".to_string());
     }
     let unique_fault_domains = input.fault_domain_refs.iter().collect::<std::collections::BTreeSet<_>>().len();
-    let quorum = majority_quorum_count(input.admitted_members.len())?;
+    let quorum = majority_count(input.admitted_members.len())?;
     if unique_fault_domains < quorum {
         diagnostics.push(format!(
             "unsafe fault-domain concentration: {unique_fault_domains} domains for quorum {quorum}"

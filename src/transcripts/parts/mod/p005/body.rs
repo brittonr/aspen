@@ -1,4 +1,3 @@
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -41,8 +40,16 @@ mod tests {
     fn fresh_runs_are_deterministic_across_temp_roots_and_render_hides_output() {
         let source = "```preserves:hide\n<value \"stable\">\n```\n```expect\n<expect-output <value \"stable\">>\n```\n";
         let transcript = parse_markdown(source, &TranscriptParseInput::default()).expect("parse");
-        let first = run_transcript(&transcript, &TranscriptRunInput::default()).expect("run first");
-        let second = run_transcript(&transcript, &TranscriptRunInput::default()).expect("run second");
+        let first = {
+            let state = crate::test_support::process_workspace("transcript-state").expect("state workspace");
+            run_transcript(&transcript, &TranscriptRunInput::default(), |_| Ok(state.to_path_buf()))
+        }
+        .expect("run first");
+        let second = {
+            let state = crate::test_support::process_workspace("transcript-state").expect("state workspace");
+            run_transcript(&transcript, &TranscriptRunInput::default(), |_| Ok(state.to_path_buf()))
+        }
+        .expect("run second");
         assert_eq!(first.decision, DECISION_PASS);
         assert_eq!(second.decision, DECISION_PASS);
         assert_eq!(
@@ -58,7 +65,11 @@ mod tests {
     fn restricted_cli_installs_artifact_and_matches_receipt_expectations() {
         let source = "```preserves\n<payload \"doc\">\n```\n```molten-cli\ntest artifact install --kind transcript-example\n```\n```expect\n<expect-decision \"pass\">\n```\n```molten-cli\ntest artifact list\n```\n";
         let transcript = parse_markdown(source, &admitted_parse_input("install")).expect("parse");
-        let run = run_transcript(&transcript, &TranscriptRunInput::default()).expect("run");
+        let run = {
+            let state = crate::test_support::process_workspace("transcript-state").expect("state workspace");
+            run_transcript(&transcript, &TranscriptRunInput::default(), |_| Ok(state.to_path_buf()))
+        }
+        .expect("run");
         assert_eq!(run.decision, DECISION_PASS);
         assert!(run.stanza_outcomes.iter().any(|outcome| {
             outcome
@@ -73,7 +84,11 @@ mod tests {
         let source =
             "```molten-cli:error\ntest unsupported command\n```\n```molten-cli:bug\ntest artifact closure\n```\n";
         let transcript = parse_markdown(source, &TranscriptParseInput::default()).expect("parse");
-        let run = run_transcript(&transcript, &TranscriptRunInput::default()).expect("run");
+        let run = {
+            let state = crate::test_support::process_workspace("transcript-state").expect("state workspace");
+            run_transcript(&transcript, &TranscriptRunInput::default(), |_| Ok(state.to_path_buf()))
+        }
+        .expect("run");
         assert_eq!(run.decision, DECISION_KNOWN_BUG);
         assert_eq!(run.stanza_outcomes[0].decision, DECISION_PASS);
         assert_eq!(run.stanza_outcomes[1].decision, DECISION_KNOWN_BUG);
@@ -128,18 +143,26 @@ mod tests {
         assert_eq!(cache_key.capability_refs, vec![capability_ref]);
         assert!(cache_key.assumption_refs.contains(&seed_ref));
         assert!(cache_key.assumption_refs.contains(&expected_ref));
-        assert!(cache_key.assumption_refs.contains(
-            &transcript_logical_time_ref(Some(TEST_LOGICAL_TIME_STEP)).expect("logical time ref").expect("logical time set")
-        ));
+        assert!(
+            cache_key.assumption_refs.contains(
+                &transcript_logical_time_ref(Some(TEST_LOGICAL_TIME_STEP))
+                    .expect("logical time ref")
+                    .expect("logical time set")
+            )
+        );
 
-        let cache_root = temp_state_root("cache-test").expect("cache root");
+        let cache_root = crate::test_support::process_workspace("cache-test").expect("cache root");
         let input = TranscriptRunInput {
-            cache_root: Some(cache_root),
+            cache_root: Some(cache_root.to_path_buf()),
             ..TranscriptRunInput::default()
         };
-        let first = run_transcript(&transcript, &input).expect("first run");
+        let state = crate::test_support::process_workspace("transcript-state").expect("state workspace");
+        let first = run_transcript(&transcript, &input, |_| Ok(state.to_path_buf())).expect("first run");
         assert!(first.cache_receipt_value.is_some());
-        let second = run_transcript(&transcript, &input).expect("second cached run");
+        let second = run_transcript(&transcript, &input, |_| {
+            Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied).into())
+        })
+        .expect("cached receipt without temporary authority");
         assert!(second.cache_receipt_value.is_some());
         assert_eq!(second.stanza_outcomes.len(), 0);
         assert_eq!(first.receipt_ref, second.receipt_ref);
@@ -149,9 +172,17 @@ mod tests {
     fn canonical_receipt_oracle_matches_artifact_closure() {
         let source = "```preserves\n<payload \"doc\">\n```\n```molten-cli\ntest artifact install --kind transcript-example\n```\n```molten-cli\ntest artifact closure\n```\n```expect\n<expect-receipt \"artifact-receipt-v1\" \"pass\">\n```\n";
         let transcript = parse_markdown(source, &admitted_parse_input("receipt-oracle")).expect("parse");
-        let run = run_transcript(&transcript, &TranscriptRunInput::default()).expect("run");
+        let run = {
+            let state = crate::test_support::process_workspace("transcript-state").expect("state workspace");
+            run_transcript(&transcript, &TranscriptRunInput::default(), |_| Ok(state.to_path_buf()))
+        }
+        .expect("run");
         assert_eq!(run.decision, DECISION_PASS);
-        assert!(run.receipt_value.collect_simple_record("transcript-run-receipt-v1", Some(TRANSCRIPT_RUN_RECEIPT_FIELD_COUNT)).is_some());
+        assert!(
+            run.receipt_value
+                .collect_simple_record("transcript-run-receipt-v1", Some(TRANSCRIPT_RUN_RECEIPT_FIELD_COUNT))
+                .is_some()
+        );
         let rendered = to_text(&run.receipt_value).expect("receipt text");
         assert!(rendered.contains("profile-seed-effect-resource-bound"));
     }
@@ -164,21 +195,33 @@ mod tests {
             missing_ref
         );
         let stale = parse_markdown(&stale_source, &TranscriptParseInput::default()).expect("parse stale");
-        let stale_run = run_transcript(&stale, &TranscriptRunInput::default()).expect("run stale");
+        let stale_run = {
+            let state = crate::test_support::process_workspace("transcript-state").expect("state workspace");
+            run_transcript(&stale, &TranscriptRunInput::default(), |_| Ok(state.to_path_buf()))
+        }
+        .expect("run stale");
         assert_eq!(stale_run.decision, DECISION_DENY);
-        assert!(stale_run
-            .stanza_outcomes
-            .iter()
-            .any(|outcome| outcome.diagnostics.iter().any(|diagnostic| diagnostic.contains("decision mismatch"))));
+        assert!(
+            stale_run
+                .stanza_outcomes
+                .iter()
+                .any(|outcome| outcome.diagnostics.iter().any(|diagnostic| diagnostic.contains("decision mismatch")))
+        );
 
         let raw_source = "```preserves:hide\n<value \"hidden\">\n```\n```expect\n<expect-stdout \"hidden\">\n```\n";
         let raw = parse_markdown(raw_source, &TranscriptParseInput::default()).expect("parse raw");
-        let raw_run = run_transcript(&raw, &TranscriptRunInput::default()).expect("run raw");
+        let raw_run = {
+            let state = crate::test_support::process_workspace("transcript-state").expect("state workspace");
+            run_transcript(&raw, &TranscriptRunInput::default(), |_| Ok(state.to_path_buf()))
+        }
+        .expect("run raw");
         assert_eq!(raw_run.decision, DECISION_DENY);
-        assert!(raw_run
-            .stanza_outcomes
-            .iter()
-            .any(|outcome| outcome.diagnostics.iter().any(|diagnostic| diagnostic.contains("diagnostic-only"))));
+        assert!(
+            raw_run
+                .stanza_outcomes
+                .iter()
+                .any(|outcome| outcome.diagnostics.iter().any(|diagnostic| diagnostic.contains("diagnostic-only")))
+        );
     }
 
     #[test]
@@ -192,98 +235,35 @@ mod tests {
         };
         let source = "```preserves\n<payload \"doc\">\n```\n```molten-cli\ntest artifact install --kind transcript-example\n```\n";
         let transcript = parse_markdown(source, &missing_capability_input).expect("parse missing capability");
-        let run = run_transcript(&transcript, &TranscriptRunInput::default()).expect("run missing capability");
+        let run = {
+            let state = crate::test_support::process_workspace("transcript-state").expect("state workspace");
+            run_transcript(&transcript, &TranscriptRunInput::default(), |_| Ok(state.to_path_buf()))
+        }
+        .expect("run missing capability");
         assert_eq!(run.decision, DECISION_DENY);
-        assert!(run
-            .stanza_outcomes
-            .iter()
-            .any(|outcome| outcome.diagnostics.iter().any(|diagnostic| diagnostic.contains("missing capability ref"))));
+        assert!(
+            run.stanza_outcomes.iter().any(|outcome| outcome
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("missing capability ref")))
+        );
 
-        let nondeterministic = parse_markdown(
-            "```molten-cli\ntest nondeterministic\n```\n",
-            &TranscriptParseInput::default(),
-        )
-        .expect("parse nondeterministic");
-        let nondeterministic_run = run_transcript(&nondeterministic, &TranscriptRunInput::default())
-            .expect("run nondeterministic");
+        let nondeterministic =
+            parse_markdown("```molten-cli\ntest nondeterministic\n```\n", &TranscriptParseInput::default())
+                .expect("parse nondeterministic");
+        let nondeterministic_run = {
+            let state = crate::test_support::process_workspace("transcript-state").expect("state workspace");
+            run_transcript(&nondeterministic, &TranscriptRunInput::default(), |_| Ok(state.to_path_buf()))
+        }
+        .expect("run nondeterministic");
         assert_eq!(nondeterministic_run.decision, DECISION_DENY);
-        assert!(nondeterministic_run
-            .stanza_outcomes
-            .iter()
-            .any(|outcome| outcome.diagnostics.iter().any(|diagnostic| diagnostic.contains("nondeterministic"))));
-    }
-
-    #[test]
-    fn stanza_modifier_refs_admit_effects_and_profile_mismatch_misses_cache() {
-        let policy_ref = test_ref("modifier-policy");
-        let capability_ref = test_ref("modifier-capability");
-        let resource_ref = test_ref("modifier-resource");
-        let effect_ref = test_ref("modifier-effect");
-        let schema_ref = test_ref("modifier-schema");
-        let source = format!(
-            "```preserves\n<payload \"doc\">\n```\n```molten-cli policy-ref={} capability-ref={} resource-ref={} effect-ref={} schema-ref={}\ntest artifact install --kind transcript-example\n```\n```expect\n<expect-decision \"pass\">\n```\n",
-            policy_ref, capability_ref, resource_ref, effect_ref, schema_ref
-        );
-        let transcript = parse_markdown(&source, &TranscriptParseInput::default()).expect("parse modifier refs");
-        assert!(transcript.stanzas[1].declared_refs.contains(&capability_ref));
-        let run = run_transcript(&transcript, &TranscriptRunInput::default()).expect("run modifier refs");
-        assert_eq!(run.decision, DECISION_PASS);
-
-        let cache_root = temp_state_root("profile-mismatch-cache").expect("cache root");
-        let profile_one = parse_markdown("```preserves\n<value \"profile\">\n```\n", &TranscriptParseInput {
-            handler_profile_ref: Some(test_ref("profile-one")),
-            ..TranscriptParseInput::default()
-        })
-        .expect("profile one parse");
-        let profile_two = parse_markdown("```preserves\n<value \"profile\">\n```\n", &TranscriptParseInput {
-            handler_profile_ref: Some(test_ref("profile-two")),
-            ..TranscriptParseInput::default()
-        })
-        .expect("profile two parse");
-        let input = TranscriptRunInput {
-            cache_root: Some(cache_root),
-            ..TranscriptRunInput::default()
-        };
-        let first = run_transcript(&profile_one, &input).expect("profile one run");
-        let second = run_transcript(&profile_two, &input).expect("profile two run");
-        assert!(first.cache_receipt_value.is_some());
-        assert!(!second.stanza_outcomes.is_empty());
-        assert_ne!(first.receipt_ref, second.receipt_ref);
-    }
-
-    #[test]
-    fn ucm_compatibility_claim_is_denied() {
-        let error = parse_markdown("```ucm\n.> load scratch.u\n```\n", &TranscriptParseInput::default())
-            .expect_err("ucm syntax denied");
-        assert!(error.to_string().contains("prior art only"), "{error}");
-    }
-
-    #[test]
-    fn ledger_classifies_transcript_artifacts_and_receipts() {
-        let transcript =
-            parse_markdown("```preserves\n<value 1>\n```", &TranscriptParseInput::default()).expect("parse");
-        assert_eq!(crate::ledger::artifact_kind(&transcript.value), "transcript-artifact");
-        let run = run_transcript(&transcript, &TranscriptRunInput::default()).expect("run");
-        assert_eq!(crate::ledger::artifact_kind(&run.receipt_value), "transcript-run-receipt");
-    }
-
-    #[hegel::test(test_cases = 16)]
-    fn hegel_stanza_order_identity_and_denied_ambient_properties(tc: Case) {
-        let n = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1000));
-        let source = format!("```preserves\n<value {}>\n```\n```expect\n<expect-output <value {}>>\n```\n", n, n);
-        let transcript = parse_markdown(&source, &TranscriptParseInput::default()).expect("parse");
-        let reparsed = parse_transcript_artifact(&transcript.value).expect("reparse");
-        assert_eq!(transcript.transcript_ref, reparsed.transcript_ref);
-        assert_eq!(transcript.stanzas[0].index, 0);
-        assert_eq!(transcript.stanzas[1].index, 1);
-        let run = run_transcript(&transcript, &TranscriptRunInput::default()).expect("run");
-        assert_eq!(run.decision, DECISION_PASS);
-        let bad = parse_markdown(&format!("```shell\necho {}\n```", n), &TranscriptParseInput::default());
-        assert!(bad.is_err());
-        let value = parse_text(&format!("<value {}>", n)).expect("value");
-        assert_eq!(
-            canonical_hash(run.stanza_outcomes[0].output.as_ref().expect("output")).expect("output ref"),
-            canonical_hash(&value).expect("value ref")
+        assert!(
+            nondeterministic_run
+                .stanza_outcomes
+                .iter()
+                .any(|outcome| outcome.diagnostics.iter().any(|diagnostic| diagnostic.contains("nondeterministic")))
         );
     }
+
+    include!("execution.rs");
 }

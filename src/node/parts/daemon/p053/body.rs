@@ -1,6 +1,6 @@
 
 fn write_dispatch_queue_receipt(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::DirectoryRoot,
     request: &crate::node_runtime::ControlRequest,
     phase: &str,
 ) -> Result<String> {
@@ -24,7 +24,7 @@ fn write_dispatch_queue_receipt(
 }
 
 fn dispatch_status_request(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::DirectoryRoot,
     request: &crate::node_runtime::ControlRequest,
 ) -> Result<ControlDispatch> {
     let status = status_local_node_with_request(root, request)?;
@@ -43,7 +43,7 @@ fn dispatch_status_request(
 }
 
 fn dispatch_shutdown_request(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::DirectoryRoot,
     request: &crate::node_runtime::ControlRequest,
 ) -> Result<ControlDispatch> {
     let startup = current_startup_receipt(root)?;
@@ -74,7 +74,7 @@ fn dispatch_shutdown_request(
 
 #[derive(Debug, Clone, Copy)]
 struct ControlProvenanceInput<'a> {
-    state_root: &'a crate::node_state::NodeStateRoot,
+    state_root: &'a crate::node_state::DirectoryRoot,
     request: &'a crate::node_runtime::ControlRequest,
     artifact_ref: &'a str,
     operation: &'a str,

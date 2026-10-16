@@ -93,7 +93,7 @@ pub fn chaos_schedule_receipt(input: &ChaosScheduleInput) -> Result<ChaosSchedul
     validate_content_ref(&input.event_ref)?;
     validate_chaos_fault_kind(&input.fault_kind)?;
     if input.intensity_percent > 100 {
-        return Err(crate::error::MoltenError::invalid_harness("chaos schedule intensity exceeds 100"));
+        return Err(crate::error::Failure::invalid_harness("chaos schedule intensity exceeds 100"));
     }
     let preimage = record("deterministic-chaos-schedule-preimage-v1", vec![
         record("seed-ref", vec![string(&input.seed_ref)]),
@@ -221,7 +221,7 @@ fn trace_privacy_checks(decision: &str, has_export_authority: bool, contains_sen
 fn validate_integration_kind(kind: &str) -> Result<()> {
     match kind {
         "remote-sync" | "storage" | "job-dag" | "upgrade" => Ok(()),
-        _ => Err(crate::error::MoltenError::invalid_harness(format!(
+        _ => Err(crate::error::Failure::invalid_harness(format!(
             "unsupported deterministic integration kind {kind}"
         ))),
     }
@@ -230,14 +230,14 @@ fn validate_integration_kind(kind: &str) -> Result<()> {
 fn validate_chaos_fault_kind(kind: &str) -> Result<()> {
     match kind {
         "fault" | "delay" | "drop" | "reorder" | "partition" | "resource-limit" => Ok(()),
-        _ => Err(crate::error::MoltenError::invalid_harness(format!("unsupported chaos fault kind {kind}"))),
+        _ => Err(crate::error::Failure::invalid_harness(format!("unsupported chaos fault kind {kind}"))),
     }
 }
 
 fn chaos_sample_percent(sample_ref: &str) -> Result<u64> {
     let hex = content_ref_hex(sample_ref)?;
     let sample = u64::from_str_radix(&hex[..16], 16)
-        .map_err(|error| crate::error::MoltenError::invalid_harness(format!("invalid chaos sample ref: {error}")))?;
+        .map_err(|error| crate::error::Failure::invalid_harness(format!("invalid chaos sample ref: {error}")))?;
     Ok(sample % 100)
 }
 
@@ -288,5 +288,5 @@ fn parse_replay_verify_receipt(value: &IoValue, receipt_ref: &str) -> Result<Par
             final_state_refs: vec![final_state_ref],
         });
     }
-    Err(crate::error::MoltenError::invalid_harness("expected <deterministic-replay-verify-v1 ...>"))
+    Err(crate::error::Failure::invalid_harness("expected <deterministic-replay-verify-v1 ...>"))
 }

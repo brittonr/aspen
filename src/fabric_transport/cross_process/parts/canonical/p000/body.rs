@@ -35,7 +35,7 @@ pub struct EndpointDescriptorBindings {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalCrossProcessEndpoint {
+pub struct Endpoint {
     pub descriptor: CrossProcessEndpointDescriptor,
     pub descriptor_ref: String,
     pub handoff_ref: String,
@@ -43,18 +43,18 @@ pub struct CanonicalCrossProcessEndpoint {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalEndpointStatus {
+pub struct EndpointStatus {
     pub status: EndpointStatusReadback,
     pub status_ref: String,
     pub value: preserves::IOValue,
 }
 
 // r[impl molten.fabric_transport.cross_process_endpoint]
-pub fn canonical_cross_process_endpoint(
+pub fn endpoint(
     profile: &TransportProfile,
     protocol: &ProtocolDescriptor,
     bindings: &EndpointDescriptorBindings,
-) -> crate::error::Result<CanonicalCrossProcessEndpoint> {
+) -> crate::error::Result<Endpoint> {
     let binding_value = endpoint_binding_value(profile, protocol, bindings);
     let descriptor_ref = crate::preserves_rail::canonical_hash(&binding_value)?;
     let descriptor = CrossProcessEndpointDescriptor {
@@ -83,7 +83,7 @@ pub fn canonical_cross_process_endpoint(
         .map_err(|issues| validation_error("canonical endpoint descriptor", &issues))?;
     let value = endpoint_descriptor_value(&descriptor_ref, binding_value);
     let handoff_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalCrossProcessEndpoint {
+    Ok(Endpoint {
         descriptor,
         descriptor_ref,
         handoff_ref,
@@ -92,25 +92,25 @@ pub fn canonical_cross_process_endpoint(
 }
 
 // r[impl molten.fabric_transport.cross_process_endpoint]
-pub fn parse_canonical_cross_process_endpoint(
+pub fn parse_endpoint(
     value: &preserves::IOValue,
-) -> crate::error::Result<CanonicalCrossProcessEndpoint> {
+) -> crate::error::Result<Endpoint> {
     let outer = simple_record(value, ENDPOINT_DESCRIPTOR_RECORD, ENDPOINT_DESCRIPTOR_FIELD_COUNT)?;
     let mut outer = outer.as_slice().iter();
     let schema = required_string(next_field(&mut outer, "endpoint handoff schema")?, "endpoint handoff schema")?;
     if schema != CROSS_PROCESS_ENDPOINT_HANDOFF_SCHEMA {
-        return Err(crate::error::MoltenError::invalid_harness("cross-process endpoint handoff schema mismatch"));
+        return Err(crate::error::Failure::invalid_harness("cross-process endpoint handoff schema mismatch"));
     }
     let declared_descriptor_ref =
         required_ref(next_field(&mut outer, "endpoint descriptor ref")?, "endpoint descriptor ref")?;
     let binding_value = crate::preserves_rail::value_to_iovalue(next_field(&mut outer, "endpoint binding")?);
     let actual_descriptor_ref = crate::preserves_rail::canonical_hash(&binding_value)?;
     if declared_descriptor_ref != actual_descriptor_ref {
-        return Err(crate::error::MoltenError::invalid_harness("cross-process endpoint descriptor ref mismatch"));
+        return Err(crate::error::Failure::invalid_harness("cross-process endpoint descriptor ref mismatch"));
     }
     let descriptor = parse_endpoint_binding(&binding_value, &declared_descriptor_ref)?;
     let handoff_ref = crate::preserves_rail::canonical_hash(value)?;
-    Ok(CanonicalCrossProcessEndpoint {
+    Ok(Endpoint {
         descriptor,
         descriptor_ref: declared_descriptor_ref,
         handoff_ref,
@@ -119,9 +119,9 @@ pub fn parse_canonical_cross_process_endpoint(
 }
 
 // r[impl molten.fabric_transport.cross_process_endpoint]
-pub fn canonical_endpoint_status(
+pub fn endpoint_status(
     descriptor: &CrossProcessEndpointDescriptor,
-) -> crate::error::Result<CanonicalEndpointStatus> {
+) -> crate::error::Result<EndpointStatus> {
     let status = endpoint_status_readback(descriptor);
     let value = crate::preserves_rail::record(ENDPOINT_STATUS_RECORD, vec![
         crate::preserves_rail::string(CROSS_PROCESS_ENDPOINT_STATUS_SCHEMA),
@@ -143,7 +143,7 @@ pub fn canonical_endpoint_status(
         ]),
     ]);
     let status_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalEndpointStatus {
+    Ok(EndpointStatus {
         status,
         status_ref,
         value,

@@ -10,7 +10,7 @@ fn parse_profile(value: &Value<IoValue>) -> Result<bool> {
     }
 }
 
-pub fn plugin_extension_negotiation_receipt_value(input: &PluginExtensionNegotiationInput<'_>) -> Result<IoValue> {
+pub fn plugin_negotiation_receipt_value(input: &PluginNegotiationInput<'_>) -> Result<IoValue> {
     validate_refs(input.required_contract_refs, "plugin extension required contract refs")?;
     validate_refs(input.optional_contract_refs, "plugin extension optional contract refs")?;
     validate_refs(input.host_supported_contract_refs, "plugin extension host supported refs")?;
@@ -51,7 +51,7 @@ pub fn plugin_extension_negotiation_receipt_value(input: &PluginExtensionNegotia
 }
 
 fn negotiate_required(
-    input: &PluginExtensionNegotiationInput<'_>,
+    input: &PluginNegotiationInput<'_>,
     selected_refs: &mut impl PushLimited<String>,
     diagnostics: &mut impl PushLimited<String>,
 ) -> Result<()> {
@@ -73,7 +73,7 @@ fn negotiate_required(
 }
 
 fn negotiate_optional(
-    input: &PluginExtensionNegotiationInput<'_>,
+    input: &PluginNegotiationInput<'_>,
     selected_refs: &mut impl PushLimited<String>,
     diagnostics: &mut impl PushLimited<String>,
 ) -> Result<()> {
@@ -94,7 +94,7 @@ fn negotiate_optional(
     Ok(())
 }
 
-pub fn parse_plugin_extension_negotiation_receipt(value: &IoValue) -> Result<PluginExtensionNegotiationReceipt> {
+pub fn parse_plugin_negotiation_receipt(value: &IoValue) -> Result<PluginNegotiationReceipt> {
     let fields = simple_record(
         value,
         "plugin-extension-negotiation-receipt-v1",
@@ -110,7 +110,7 @@ pub fn parse_plugin_extension_negotiation_receipt(value: &IoValue) -> Result<Plu
     let decision = record_decision(&fields[1], "decision")?;
     let diagnostics = record_string_sequence(&fields[7], "diagnostics")?;
     validate_receipt_coherence(&decision, &checks, &diagnostics, "plugin extension negotiation receipt")?;
-    Ok(PluginExtensionNegotiationReceipt {
+    Ok(PluginNegotiationReceipt {
         receipt_ref: canonical_hash(value)?,
         decision,
         manifest_ref: record_ref(&fields[2], "manifest")?,

@@ -1,0 +1,8 @@
+{
+  "attempt": "15/20",
+  "change": "bind-delivery-duplicate-results-to-original-claims",
+  "target": "Bind already-executed broad source/feature/Nix acceptance to F08, exercise current real public service with durable state, and pass the recorded change-specific lifecycle and traceability/evidence obligations.",
+  "product_implementation_state": "Already corrected in attempt 2; no source edit planned without evidence of a remaining defect.",
+  "remaining_before": 49,
+  "molten_remote_publication_authorized": false
+}

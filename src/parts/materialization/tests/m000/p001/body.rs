@@ -37,7 +37,7 @@
         const TINY_MAX_MEMBER_BYTES: u64 = 4;
         const TINY_MAX_TOTAL_BYTES: u64 = 4;
         const TINY_MAX_PATH_BYTES: u64 = 128;
-        let tiny = MaterializationPolicy::bounded("tiny-archive-v1", ReplacementPolicy::NoReplace)
+        let tiny = Policy::bounded("tiny-archive-v1", ReplacementPolicy::NoReplace)
             .expect("tiny policy")
             .with_bounds(TINY_MAX_MEMBERS, TINY_MAX_MEMBER_BYTES, TINY_MAX_TOTAL_BYTES, TINY_MAX_PATH_BYTES)
             .expect("tiny bounds");

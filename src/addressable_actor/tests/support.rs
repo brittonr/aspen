@@ -45,7 +45,7 @@ pub(super) fn profile() -> AddressableActorProfile {
     }
 }
 
-pub(super) fn actor_key() -> ActorKey {
+pub(super) fn key() -> ActorKey {
     ActorKey {
         schema: ACTOR_KEY_SCHEMA.to_string(),
         namespace_ref: reference("namespace"),
@@ -106,22 +106,22 @@ pub(super) fn message_wake() -> WakeReason {
     }
 }
 
-pub(super) fn empty_expected() -> ExpectedActorState {
-    ExpectedActorState {
+pub(super) fn empty_expected() -> ExpectedState {
+    ExpectedState {
         state_ref: None,
         revision: ADDRESSABLE_ACTOR_INITIAL_REVISION,
     }
 }
 
-pub(super) fn expected(published: &PublishedActorState) -> ExpectedActorState {
-    ExpectedActorState {
+pub(super) fn expected(published: &PublishedState) -> ExpectedState {
+    ExpectedState {
         state_ref: Some(published.state_ref.clone()),
         revision: published.revision,
     }
 }
 
-pub(super) fn host_binding(profile: &AddressableActorProfile, state: &ActorState) -> ActorHostBindingFacts {
-    ActorHostBindingFacts {
+pub(super) fn host_binding(profile: &AddressableActorProfile, state: &ActorState) -> HostBindingFacts {
+    HostBindingFacts {
         schema: ACTOR_HOST_BINDING_SCHEMA.to_string(),
         actor_key_ref: state.actor_key_ref.clone(),
         profile_ref: state.profile_ref.clone(),
@@ -161,7 +161,7 @@ pub(super) enum CommitMode {
 }
 
 pub(super) struct MemoryCommitPort {
-    pub(super) head: Option<PublishedActorState>,
+    pub(super) head: Option<PublishedState>,
     pub(super) mode: CommitMode,
     pub(super) compare_calls: u32,
 }
@@ -177,42 +177,41 @@ impl MemoryCommitPort {
 }
 
 impl ActorCommitPort for MemoryCommitPort {
-    fn load(&self, _actor_key_ref: &str) -> ActorPortResult<Option<PublishedActorState>> {
+    fn load(&self, _actor_key_ref: &str) -> PortResult<Option<PublishedState>> {
         Ok(self.head.clone())
     }
 
-    fn compare_and_commit(&mut self, request: &ActorCommitRequest) -> ActorPortResult<ActorCommitObservation> {
+    fn compare_and_commit(&mut self, request: &CommitRequest) -> PortResult<CommitObservation> {
         self.compare_calls = self.compare_calls.saturating_add(1);
         match self.mode {
             CommitMode::Apply => {
                 self.head = Some(request.next.clone());
-                Ok(commit_observation(ActorCommitDisposition::Applied, Some(request.next.state_ref.clone())))
+                Ok(commit_observation(CommitDisposition::Applied, Some(request.next.state_ref.clone())))
             }
-            CommitMode::UnknownBefore => Err(ActorPortError::new("scripted-unknown", "unknown before apply", true)),
+            CommitMode::UnknownBefore => Err(PortError::new("scripted-unknown", "unknown before apply", true)),
             CommitMode::UnknownAfter => {
                 self.head = Some(request.next.clone());
-                Err(ActorPortError::new("scripted-unknown", "unknown after apply", true))
+                Err(PortError::new("scripted-unknown", "unknown after apply", true))
             }
-            CommitMode::Stale => Ok(commit_observation(
-                ActorCommitDisposition::Stale,
-                self.head.as_ref().map(|head| head.state_ref.clone()),
-            )),
+            CommitMode::Stale => {
+                Ok(commit_observation(CommitDisposition::Stale, self.head.as_ref().map(|head| head.state_ref.clone())))
+            }
         }
     }
 }
 
-fn commit_observation(disposition: ActorCommitDisposition, state_ref: Option<String>) -> ActorCommitObservation {
-    ActorCommitObservation {
+fn commit_observation(disposition: CommitDisposition, state_ref: Option<String>) -> CommitObservation {
+    CommitObservation {
         disposition,
-        currentness: ActorCommitCurrentness::Linearizable,
-        durability: ActorDurabilityOutcome::Durable,
+        currentness: CommitCurrentness::Linearizable,
+        durability: DurabilityOutcome::Durable,
         engine_epoch: ENGINE_EPOCH,
         observed_state_ref: state_ref,
     }
 }
 
 pub(super) struct MemoryEffectPort {
-    pub(super) scripted: std::collections::VecDeque<ActorEffectDisposition>,
+    pub(super) scripted: std::collections::VecDeque<EffectDisposition>,
     pub(super) deny_admission_at: Option<usize>,
     pub(super) admission_calls: usize,
     pub(super) execution_calls: usize,
@@ -221,14 +220,14 @@ pub(super) struct MemoryEffectPort {
 impl MemoryEffectPort {
     pub(super) fn succeeding(count: usize) -> Self {
         Self {
-            scripted: std::iter::repeat_n(ActorEffectDisposition::Succeeded, count).collect(),
+            scripted: std::iter::repeat_n(EffectDisposition::Succeeded, count).collect(),
             deny_admission_at: None,
             admission_calls: 0,
             execution_calls: 0,
         }
     }
 
-    pub(super) fn scripted(dispositions: impl IntoIterator<Item = ActorEffectDisposition>) -> Self {
+    pub(super) fn scripted(dispositions: impl IntoIterator<Item = EffectDisposition>) -> Self {
         Self {
             scripted: dispositions.into_iter().collect(),
             deny_admission_at: None,
@@ -239,10 +238,10 @@ impl MemoryEffectPort {
 }
 
 impl ActorEffectPort for MemoryEffectPort {
-    fn observe_admission(&mut self, effect: &ActorEffectIntent) -> ActorPortResult<ActorEffectAdmissionObservation> {
+    fn observe_admission(&mut self, effect: &ActorEffectIntent) -> PortResult<EffectAdmissionObservation> {
         let call = self.admission_calls;
         self.admission_calls = self.admission_calls.saturating_add(1);
-        Ok(ActorEffectAdmissionObservation {
+        Ok(EffectAdmissionObservation {
             admission_ref: reference(&format!("admission:{call}:{}", effect.effect_ref)),
             actor_key_ref: effect.actor_key_ref.clone(),
             profile_ref: effect.profile_ref.clone(),
@@ -261,15 +260,15 @@ impl ActorEffectPort for MemoryEffectPort {
     fn execute(
         &mut self,
         effect: &ActorEffectIntent,
-        admission: &ActorEffectAdmissionObservation,
-    ) -> ActorPortResult<ActorEffectObservation> {
+        admission: &EffectAdmissionObservation,
+    ) -> PortResult<EffectObservation> {
         self.execution_calls = self.execution_calls.saturating_add(1);
-        let disposition = self.scripted.pop_front().unwrap_or(ActorEffectDisposition::Failed);
-        Ok(ActorEffectObservation {
+        let disposition = self.scripted.pop_front().unwrap_or(EffectDisposition::Failed);
+        Ok(EffectObservation {
             effect_ref: effect.effect_ref.clone(),
             admission_ref: admission.admission_ref.clone(),
             disposition,
-            outcome_ref: matches!(disposition, ActorEffectDisposition::Succeeded)
+            outcome_ref: matches!(disposition, EffectDisposition::Succeeded)
                 .then(|| reference(&format!("outcome:{}", effect.effect_ref))),
         })
     }
@@ -281,11 +280,11 @@ pub(super) struct MemoryStatusPort {
 }
 
 impl ActorStatusPort for MemoryStatusPort {
-    fn publish_status(&mut self, status: &ActorStatus) -> ActorPortResult<ActorStatusObservation> {
-        let status_ref = identify_canonical_actor_status(status)
-            .map_err(|error| ActorPortError::new("actor-status", error.to_string(), false))?;
+    fn publish_status(&mut self, status: &ActorStatus) -> PortResult<StatusObservation> {
+        let status_ref = identify_canonical_status(status)
+            .map_err(|error| PortError::new("actor-status", error.to_string(), false))?;
         self.status_refs.push(status_ref.clone());
-        Ok(ActorStatusObservation {
+        Ok(StatusObservation {
             status_ref: Some(status_ref),
             outcome_unknown: false,
         })

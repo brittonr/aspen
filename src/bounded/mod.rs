@@ -34,15 +34,13 @@ pub(crate) fn ensure_count_at_most(count: usize, maximum: usize, label: &str) ->
     if count <= maximum {
         return Ok(());
     }
-    Err(crate::error::MoltenError::invalid_harness(format!(
-        "{label} count {count} exceeds maximum {maximum}"
-    )))
+    Err(crate::error::Failure::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
 }
 
 pub(crate) fn checked_count_sum(left: usize, right: usize, maximum: usize, label: &str) -> crate::error::Result<usize> {
     let total = left
         .checked_add(right)
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("{label} count overflow")))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness(format!("{label} count overflow")))?;
     ensure_count_at_most(total, maximum, label)?;
     Ok(total)
 }
@@ -51,28 +49,23 @@ pub(crate) fn checked_count_sum(left: usize, right: usize, maximum: usize, label
 /// index.
 pub(crate) fn usize_from_u64(value: u64, label: &str) -> crate::error::Result<usize> {
     usize::try_from(value)
-        .map_err(|_| crate::error::MoltenError::invalid_harness(format!("{label} {value} does not fit usize")))
+        .map_err(|_| crate::error::Failure::invalid_harness(format!("{label} {value} does not fit usize")))
 }
 
 /// Converts a host `usize` count into the public `u64` representation, denying a count that does
 /// not fit.
 pub(crate) fn u64_from_usize(value: usize, label: &str) -> crate::error::Result<u64> {
     u64::try_from(value)
-        .map_err(|_| crate::error::MoltenError::invalid_harness(format!("{label} {value} does not fit u64")))
+        .map_err(|_| crate::error::Failure::invalid_harness(format!("{label} {value} does not fit u64")))
 }
 
-pub(crate) fn push_bounded<T>(
-    values: &mut impl VecSink<T>,
-    value: T,
-    maximum: usize,
-    label: &str,
-) -> crate::error::Result<()> {
+pub(crate) fn push<T>(values: &mut impl VecSink<T>, value: T, maximum: usize, label: &str) -> crate::error::Result<()> {
     checked_count_sum(values.item_count(), 1, maximum, label)?;
     values.push_item(value);
     Ok(())
 }
 
-pub(crate) fn extend_bounded<T>(
+pub(crate) fn extend<T>(
     values: &mut impl VecSink<T>,
     incoming: &[T],
     maximum: usize,
@@ -95,7 +88,7 @@ impl<T, S> PushLimited<T> for S
 where S: VecSink<T>
 {
     fn push_limited(&mut self, value: T, maximum: usize, label: &str) -> crate::error::Result<()> {
-        push_bounded(self, value, maximum, label)
+        push(self, value, maximum, label)
     }
 }
 
@@ -113,7 +106,7 @@ where S: VecSink<String>
     }
 
     pub(crate) fn push(&mut self, diagnostic: impl Into<String>) -> crate::error::Result<()> {
-        push_bounded(self.sink, diagnostic.into(), self.maximum, self.label)
+        push(self.sink, diagnostic.into(), self.maximum, self.label)
     }
 }
 
@@ -126,15 +119,14 @@ mod tests {
     const TEST_ONE: usize = 1;
 
     #[test]
-    fn bounded_push_allows_exact_limit_and_denies_one_past_without_mutation() {
+    fn push_allows_exact_limit_and_denies_one_past_without_mutation() {
         let mut values = Vec::new();
-        push_bounded(&mut values, "first", TEST_LIMIT, "test values").expect("first push");
-        push_bounded(&mut values, "second", TEST_LIMIT, "test values").expect("second push");
+        push(&mut values, "first", TEST_LIMIT, "test values").expect("first push");
+        push(&mut values, "second", TEST_LIMIT, "test values").expect("second push");
         assert_eq!(values, vec!["first", "second"]);
 
         let before = values.clone();
-        let error =
-            push_bounded(&mut values, "third", TEST_LIMIT, "test values").expect_err("one-past-limit push denies");
+        let error = push(&mut values, "third", TEST_LIMIT, "test values").expect_err("one-past-limit push denies");
         assert!(error.to_string().contains("test values count 3 exceeds maximum 2"));
         assert_eq!(values, before);
     }
@@ -147,18 +139,17 @@ mod tests {
     }
 
     #[test]
-    fn bounded_extend_denies_before_appending_any_item() {
+    fn extend_denies_before_appending_any_item() {
         let mut values = vec!["existing".to_string()];
         let incoming = vec!["first".to_string(), "second".to_string()];
         let before = values.clone();
-        let error =
-            extend_bounded(&mut values, &incoming, TEST_LIMIT, "extend values").expect_err("extend over limit denies");
+        let error = extend(&mut values, &incoming, TEST_LIMIT, "extend values").expect_err("extend over limit denies");
         assert!(error.to_string().contains("extend values count 3 exceeds maximum 2"));
         assert_eq!(values, before);
     }
 
     #[test]
-    fn diagnostic_sink_uses_bounded_push_behavior() {
+    fn diagnostic_sink_uses_push_behavior() {
         let mut diagnostics = Vec::new();
         {
             let mut sink = DiagnosticSink::new(&mut diagnostics, TEST_LIMIT, "diagnostics");

@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "node",
+    "run",
+    "--state-root",
+    "/tmp/molten-f14-current-run-16-restored-se51n6m8/repeated-stop-before"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T18:26:37.095531+00:00",
+  "elapsed_seconds": 0.014,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "error: invalid harness artifact: node restart has unresolved current-run shutdown observations\n"
+}

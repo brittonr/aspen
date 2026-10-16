@@ -68,9 +68,9 @@ fn issue_code(issue: &ObservabilityIssue) -> &'static str {
     }
 }
 
-fn canonical_artifact<T>(artifact: T, value: preserves::IOValue) -> crate::error::Result<CanonicalArtifact<T>> {
-    let artifact_ref = canonical_hash(&value)?;
-    Ok(CanonicalArtifact {
+fn artifact<T>(artifact: T, value: preserves::IOValue) -> crate::error::Result<Artifact<T>> {
+    let artifact_ref = hash(&value)?;
+    Ok(Artifact {
         artifact,
         artifact_ref,
         value,
@@ -85,8 +85,8 @@ fn require_valid(label: &str, issues: &[ObservabilityIssue]) -> crate::error::Re
     }
 }
 
-fn validation_error(label: &str, issues: &[ObservabilityIssue]) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(format!("{label} denied: {issues:?}"))
+fn validation_error(label: &str, issues: &[ObservabilityIssue]) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("{label} denied: {issues:?}"))
 }
 
 fn checks(names: &[&str]) -> preserves::IOValue {
@@ -129,7 +129,7 @@ fn bool_value(value: bool) -> preserves::IOValue {
     crate::preserves_rail::bool_value(value)
 }
 
-fn canonical_hash(value: &preserves::IOValue) -> crate::error::Result<String> {
+fn hash(value: &preserves::IOValue) -> crate::error::Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 

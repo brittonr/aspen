@@ -93,12 +93,10 @@ fn equal_explicit_inputs_reproduce_the_pre_migration_canonical_fixtures() -> cas
 fn one_field_membership_mutations_change_the_projection_refs() -> cases::TestResult<()> {
     let mut source = inputs::membership_source_profile();
     source.max_view_age_ticks += 1;
-    let mutated_profile =
-        molten::fabric_membership::canonical_membership_profile(&source).or_fail("mutated profile admits")?;
+    let mutated_profile = molten::fabric_membership::profile(&source).or_fail("mutated profile admits")?;
     assert_ref_moves("membership-profile", &mutated_profile.admission_ref)?;
 
-    let profile = molten::fabric_membership::canonical_membership_profile(&inputs::membership_source_profile())
-        .or_fail("profile admits")?;
+    let profile = molten::fabric_membership::profile(&inputs::membership_source_profile()).or_fail("profile admits")?;
     let descriptors = inputs::node_descriptors();
     let mut view = inputs::membership_view(&profile.profile, &descriptors);
     view.epoch += 1;
@@ -123,13 +121,12 @@ fn one_field_membership_mutations_change_the_projection_refs() -> cases::TestRes
 fn one_field_time_and_transport_mutations_change_the_projection_refs() -> cases::TestResult<()> {
     let mut time = inputs::time_profile_descriptor();
     time.max_timers -= 1;
-    let mutated_time = molten::fabric_time::canonical_admit_time_profile(&time).or_fail("mutated time admits")?;
+    let mutated_time = molten::fabric_time::admit_profile(&time).or_fail("mutated time admits")?;
     assert_ref_moves("time-profile", &mutated_time.profile_ref)?;
 
     let mut transport = ports::transport_profile();
     transport.limits.max_listeners -= 1;
-    let mutated_transport =
-        molten::fabric_transport::canonical_transport_profile(&transport).or_fail("mutated transport admits")?;
+    let mutated_transport = molten::fabric_transport::profile(&transport).or_fail("mutated transport admits")?;
     assert_ref_moves("transport-profile", &mutated_transport.profile_ref)?;
 
     let transport = ports::transport_profile();
@@ -145,8 +142,7 @@ fn one_field_time_and_transport_mutations_change_the_projection_refs() -> cases:
 fn one_field_durability_mutations_change_the_projection_refs() -> cases::TestResult<()> {
     let mut durable = ports::durable_state_profile();
     durable.max_snapshots -= 1;
-    let mutated_durable =
-        molten::fabric_durability::canonical_durable_profile(&durable).or_fail("mutated durability admits")?;
+    let mutated_durable = molten::fabric_durability::durable_profile(&durable).or_fail("mutated durability admits")?;
     assert_ref_moves("durable-profile", &mutated_durable.profile_ref)?;
 
     let mut append = ports::durable_append_request();

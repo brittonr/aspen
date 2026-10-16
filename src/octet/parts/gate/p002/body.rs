@@ -1,5 +1,6 @@
 
 pub fn evaluate_octet_gate(input: &OctetGateInput) -> Result<OctetGateEvaluation> {
+    let workspace = capture_workspace();
     let mut checks = Vec::new();
     let mut diagnostics = Vec::new();
 
@@ -11,7 +12,7 @@ pub fn evaluate_octet_gate(input: &OctetGateInput) -> Result<OctetGateEvaluation
     let has_valid_object_corpus = object_corpus_receipt.is_some();
     let has_valid_command_shape = validate_command(files.command.as_ref(), &mut checks, &mut diagnostics);
     let has_current_metadata_binding =
-        validate_metadata_binding(files.command.as_ref(), status.as_ref(), &mut checks, &mut diagnostics);
+        validate_metadata_binding(files.command.as_ref(), status.as_ref(), &workspace, &mut checks, &mut diagnostics);
     let counts = finding_counts(status.as_ref(), &lint_counts);
     let evidence = derive_evidence(EvidenceInput {
         status: status.as_ref(),
@@ -181,7 +182,7 @@ fn push_outcome_checks(
 
 #[doc(hidden)]
 pub fn synthetic_clean_octet_gate_receipt_for_tests() -> Result<IoValue> {
-    let metadata = expected_metadata_for_command(DEFAULT_GATE_COMMAND)
+    let metadata = expected_metadata_for_command(DEFAULT_GATE_COMMAND, &capture_workspace())
         .map_err(|message| MoltenError::invalid_harness(format!("current octet metadata fixture: {message}")))?;
     let policy = octet_gate_policy_value(&OctetGateInput {
         artifacts_dir: PathBuf::from("target/octet"),
@@ -215,7 +216,7 @@ pub fn synthetic_clean_octet_gate_receipt_for_tests() -> Result<IoValue> {
 pub fn build_octet_warning_baseline(input: &OctetWarningBaselineInput) -> Result<OctetWarningBaselineArtifact> {
     let mut checks = Vec::new();
     let mut diagnostics = Vec::new();
-    let run = load_current_octet_run(&input.artifacts_dir, &mut checks, &mut diagnostics)?;
+    let run = load_current_octet_run(&input.artifacts_dir, &capture_workspace(), &mut checks, &mut diagnostics)?;
     if checks.iter().any(|check| check.status != "pass") {
         return Err(MoltenError::invalid_harness(format!(
             "cannot create octet warning baseline from invalid artifacts: {}",

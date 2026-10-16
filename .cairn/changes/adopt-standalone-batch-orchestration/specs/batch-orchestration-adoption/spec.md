@@ -89,7 +89,7 @@ NOT proceed by removing installer guards on a moved checkout.
 ### Requirement: The pilot stays outside the admitted system
 
 r[molten.batch_orchestration.boundary] The vendored pilot MUST NOT register in
-`SystemExtensionHost`, join the root Cargo workspace, change ALPN registries or
+`system_extension::Dispatcher`, join the root Cargo workspace, change ALPN registries or
 system-tier manifests, consume Basalt/Cairn production admission, or emit invented
 admission receipts; its operator policy MUST be recorded as a distinct named standalone
 deployment profile with its own database.

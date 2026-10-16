@@ -4,17 +4,17 @@ Materialization connects a logical description of files to actual destination mu
 
 ## A plan is not a destination capability
 
-`MaterializationPath` admits nonempty UTF-8 relative names with normal components, rejecting traversal, absolute names, platform prefixes, backslash aliases, empty components, trailing separators, NULs, and reserved staging names. This is intentionally stricter than merely joining a tar header to a destination string. The planner can reason about a canonical logical namespace without resolving any host path.
+`materialization::Path` admits nonempty UTF-8 relative names with normal components, rejecting traversal, absolute names, platform prefixes, backslash aliases, empty components, trailing separators, NULs, and reserved staging names. This is intentionally stricter than merely joining a tar header to a destination string. The planner can reason about a canonical logical namespace without resolving any host path.
 
-`MaterializationPolicy` records the workflow profile, replacement policy, and finite bounds on members, member bytes, aggregate bytes, and path length. The [plan definitions](../../../src/parts/materialization/p000/body.rs) distinguish member inputs, planned members, and payloads. According to the governing contract, planning validates all members before mutation, rejects duplicate logical paths, sorts by canonical path, and computes a Preserves-based BLAKE3 plan identity.
+`materialization::Policy` records the workflow profile, replacement policy, and finite bounds on members, member bytes, aggregate bytes, and path length. The [plan definitions](../../../src/parts/materialization/p000/body.rs) distinguish member inputs, planned members, and payloads. According to the governing contract, planning validates all members before mutation, rejects duplicate logical paths, sorts by canonical path, and computes a Preserves-based BLAKE3 plan identity.
 
-That identity binds logical content and policy, not the operator's host directory spelling. Two uses of the same plan may therefore describe identical intended bytes without sharing destination authority. The destination is separately represented by `MaterializationRoot`, whose acquired directory constrains effects. This is the same broad authority separation as [typed local stores](../../local-filesystem-authority.md), but materialization additionally defines staged publication and its own receipt.
+That identity binds logical content and policy, not the operator's host directory spelling. Two uses of the same plan may therefore describe identical intended bytes without sharing destination authority. The destination is separately represented by `materialization::Root`, whose acquired directory constrains effects. This is the same broad authority separation as [typed local stores](../../local-filesystem-authority.md), but materialization additionally defines staged publication and its own receipt.
 
 ## Staging links bytes to a plan
 
 In the [stage and commit implementation](../../../src/parts/materialization/p002/body.rs), `stage` first validates the plan, validates payloads against it, computes the staging path, and performs staging. On staging failure it attempts cleanup and preserves cleanup failure in the returned error rather than reporting success.
 
-The successful `StagedMaterialization` carries the root's shared identity, the plan ref, and the staging path. Staged files live beneath `.molten-materialize/<plan-hash>/tree` inside the destination capability. The contract requires size and BLAKE3 verification after writing. Staging is therefore not merely a temporary filename convention: it binds observed bytes to a previously admitted plan and to one acquired root.
+The successful `materialization::Staged` carries the root's shared identity, the plan ref, and the staging path. Staged files live beneath `.molten-materialize/<plan-hash>/tree` inside the destination capability. The contract requires size and BLAKE3 verification after writing. Staging is therefore not merely a temporary filename convention: it binds observed bytes to a previously admitted plan and to one acquired root.
 
 Commit validates the plan again, rejects a stage from another root, rejects a mismatched plan ref, and preflights publication. Root equality here is process-local authority provenance, not canonical identity or serialized Rust layout. Passing this check says which acquired destination owns the stage; it does not identify the host directory in a receipt.
 
@@ -32,7 +32,7 @@ Consider an illustrative admitted plan for `manifest.pr` and `payload/data.bin`.
 
 Under a named replacement profile, an existing regular `manifest.pr` can move to backup before the staged version is linked into place. Suppose publication of `payload/data.bin` then fails. The recorded state enables rollback of earlier publication and restoration of the backup. The caller should treat the returned error as a failed materialization, not synthesize a receipt from the fact that one file was briefly visible.
 
-A different failure occurs if the caller submits the stage to another `MaterializationRoot`, even one opened from the same textual pathname. Commit checks the acquired root identity, so textual coincidence does not transfer ownership. This illustrates why plan identity and destination capability are complementary rather than interchangeable.
+A different failure occurs if the caller submits the stage to another `materialization::Root`, even one opened from the same textual pathname. Commit checks the acquired root identity, so textual coincidence does not transfer ownership. This illustrates why plan identity and destination capability are complementary rather than interchangeable.
 
 ## Verification and archive review
 

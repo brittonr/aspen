@@ -2,7 +2,7 @@ use preserves::ValueImpl;
 
 type CompoundClass = preserves::CompoundClass;
 type IoValue = preserves::IOValue;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 type Record<T> = preserves::Record<T>;
 type Result<T> = crate::error::Result<T>;

@@ -1,12 +1,12 @@
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChunkStoreReceipt {
+pub struct ChunkReceipt {
     pub receipt_ref: String,
     pub operation: String,
     pub decision: String,
     pub manifest_ref: Option<String>,
     pub chunk_refs: Vec<String>,
-    pub checks: Vec<ChunkStoreReceiptCheck>,
+    pub checks: Vec<ChunkReceiptCheck>,
     pub details: Vec<IoValue>,
     pub value: IoValue,
 }
@@ -52,7 +52,7 @@ struct CapabilityPutBytesWithTransformsInput<'a> {
     transforms: &'a ChunkTransforms,
 }
 
-pub fn put_bytes(root: &Path, object_kind: &str, bytes: &[u8], chunk_size: u64) -> Result<ChunkStorePut> {
+pub fn put_bytes(root: &Path, object_kind: &str, bytes: &[u8], chunk_size: u64) -> Result<ChunkPut> {
     let root = open_capability_chunk_root(root)?;
     put_bytes_with_root(&root, object_kind, bytes, chunk_size)
 }
@@ -62,7 +62,7 @@ pub fn put_bytes_with_root(
     object_kind: &str,
     bytes: &[u8],
     chunk_size: u64,
-) -> Result<ChunkStorePut> {
+) -> Result<ChunkPut> {
     let metadata = record("chunk-metadata-v1", vec![
         record("object-kind", vec![string(object_kind)]),
         record("policy", vec![string("public-local-fixture")]),
@@ -78,7 +78,7 @@ pub fn put_bytes_with_root(
     })
 }
 
-pub fn put_bytes_with_metadata(input: &PutBytesWithMetadataInput<'_>) -> Result<ChunkStorePut> {
+pub fn put_bytes_with_metadata(input: &PutBytesWithMetadataInput<'_>) -> Result<ChunkPut> {
     let root = open_capability_chunk_root(input.root)?;
     put_bytes_with_transforms_root(&CapabilityPutBytesWithTransformsInput {
         root: &root,
@@ -115,7 +115,7 @@ struct FinalizeInput<'a> {
     written: Written,
 }
 
-pub fn put_bytes_with_transforms(input: &PutBytesWithTransformsInput<'_>) -> Result<ChunkStorePut> {
+pub fn put_bytes_with_transforms(input: &PutBytesWithTransformsInput<'_>) -> Result<ChunkPut> {
     let root = open_capability_chunk_root(input.root)?;
     put_bytes_with_transforms_root(&CapabilityPutBytesWithTransformsInput {
         root: &root,
@@ -128,7 +128,7 @@ pub fn put_bytes_with_transforms(input: &PutBytesWithTransformsInput<'_>) -> Res
     })
 }
 
-fn put_bytes_with_transforms_root(input: &CapabilityPutBytesWithTransformsInput<'_>) -> Result<ChunkStorePut> {
+fn put_bytes_with_transforms_root(input: &CapabilityPutBytesWithTransformsInput<'_>) -> Result<ChunkPut> {
     let ready = prepare_put(input)?;
     let written = write_put_parts(input.root, input.bytes, ready.chunk_size, input.transforms)?;
     finish_put(FinalizeInput {
@@ -152,7 +152,7 @@ fn prepare_put(input: &CapabilityPutBytesWithTransformsInput<'_>) -> Result<Read
                 ("object-kind", "fail"),
                 ("denial-receipt", "pass"),
             ]);
-        store_receipt(input.root, &receipt_value)?;
+        receipt(input.root, &receipt_value)?;
         return Err(MoltenError::invalid_harness("chunk store object kind must not be empty"));
     }
     if input.chunk_size == 0 {
@@ -161,7 +161,7 @@ fn prepare_put(input: &CapabilityPutBytesWithTransformsInput<'_>) -> Result<Read
                 ("chunk-size", "fail"),
                 ("denial-receipt", "pass"),
             ]);
-        store_receipt(input.root, &receipt_value)?;
+        receipt(input.root, &receipt_value)?;
         return Err(MoltenError::invalid_harness("fixed_v1 chunk size must be non-zero"));
     }
     let chunk_size = match chunk_size_to_usize(input.chunk_size, "fixed_v1 chunk size") {
@@ -171,7 +171,7 @@ fn prepare_put(input: &CapabilityPutBytesWithTransformsInput<'_>) -> Result<Read
                 ("chunk-size", "fail"),
                 ("denial-receipt", "pass"),
             ]);
-            store_receipt(input.root, &receipt_value)?;
+            receipt(input.root, &receipt_value)?;
             return Err(error);
         }
     };
@@ -181,7 +181,7 @@ fn prepare_put(input: &CapabilityPutBytesWithTransformsInput<'_>) -> Result<Read
             ("transform-ordering", "fail"),
             ("deny-plaintext-hash-leakage", "pass"),
         ]);
-        store_receipt(input.root, &receipt_value)?;
+        receipt(input.root, &receipt_value)?;
         return Err(error);
     }
     if let Err(error) = validate_put_bounds(input.bytes.len(), chunk_size, input.policy_refs.len()) {
@@ -189,7 +189,7 @@ fn prepare_put(input: &CapabilityPutBytesWithTransformsInput<'_>) -> Result<Read
             ("resource-bounds", "fail"),
             ("denial-receipt", "pass"),
         ]);
-        store_receipt(input.root, &receipt_value)?;
+        receipt(input.root, &receipt_value)?;
         return Err(error);
     }
     let metadata_ref = canonical_hash(input.metadata)?;
@@ -216,7 +216,7 @@ fn ensure_part(root: &CapabilityChunkRoot, chunk: &[u8], chunk_size: usize) -> R
                     ("existing-chunk-hash-binding", "fail"),
                     ("deny-corrupt-dedup-source", "pass"),
                 ]);
-            store_receipt(root, &receipt_value)?;
+            receipt(root, &receipt_value)?;
             return Err(error);
         }
         Ok((chunk_ref, true))
@@ -273,7 +273,7 @@ fn note_reuse(root: &CapabilityChunkRoot, manifest_ref: &str, refs: &[String]) -
     if refs.is_empty() {
         return Ok(());
     }
-    let dedup_receipt = self::receipt_value(ChunkStoreReceiptValueInput {
+    let dedup_receipt = self::receipt_value(ChunkReceiptValueInput {
         operation: "dedup-hit",
         decision: "pass",
         manifest_ref: Some(manifest_ref),
@@ -285,5 +285,5 @@ fn note_reuse(root: &CapabilityChunkRoot, manifest_ref: &str, refs: &[String]) -
         ],
         details: vec![record("dedup-hits", vec![u64_value(refs.len() as u64)])],
     });
-    store_receipt(root, &dedup_receipt)
+    receipt(root, &dedup_receipt)
 }

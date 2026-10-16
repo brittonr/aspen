@@ -16,7 +16,7 @@ Use this reference when assembling an integration handoff: identify which layer 
 | `molten.wasm.component.v1` | Component profile and runtime shell | Component artifact, WIT cohort, materialization and receipt rails |
 | `molten.wasm.abi.v1` | Legacy artifact classification | Core-module ABI; not interchangeable with Component Model |
 
-The CLI value enum includes `native-process`, but `run_executable_system_extension_fixture` refuses it. The native service methods documented in the governing page are not additional CLI subcommands. Do not translate method names into invented install, recover, or journal flags.
+The CLI value enum includes `native-process`, but `run_executable` refuses it. The native service methods documented in the governing page are not additional CLI subcommands. Do not translate method names into invented install, recover, or journal flags.
 
 ## Generic manifest inputs
 
@@ -51,10 +51,10 @@ The `native-host-local-pilot-v2` profile uses ALPN `molten/system-extension/nati
 
 | Input or result | Owner | Necessary pairing |
 | --- | --- | --- |
-| `NativeCallbackContext` | Admitted host template and instance | Manifest/executable/instance identities, state ref, policy/resource/port refs |
-| `NativeCallbackInputs` | Value-port materialization | Optional payload and prior-state values must match required refs |
+| `CallbackContext` | Admitted host template and instance | Manifest/executable/instance identities, state ref, policy/resource/port refs |
+| `CallbackInputs` | Value-port materialization | Optional payload and prior-state values must match required refs |
 | `NativeCallbackValue` | Value producer, independently checked by consumer | `value_ref` with exact `bytes` |
-| `NativeMaterializedCallbackOutcome` | Child producer | Outputs, effect bodies, next state, checkpoint, and health |
+| `MaterializedCallbackOutcome` | Child producer | Outputs, effect bodies, next state, checkpoint, and health |
 | `NativeOperationRecord` | Host journal transitions | Operation/parent refs, kind, generation, state, terminal ref, retry flag |
 
 The independent native fixture reads one bounded envelope from stdin and writes one canonical packed outcome to stdout. Diagnostics belong on stderr, not mixed into the protocol frame. Its state construction is fixture-specific byte concatenation, not a general application schema recommendation.
@@ -86,7 +86,7 @@ An integrator supplies a native outcome containing an effect request reference b
 - [Native host contract](../../native-system-extension-host.md)
 - [Fixture manifest fields](../../../src/system_extension/parts/fixture/p001/body.rs)
 - [Callback and effect model](../../../crates/molten-core/src/system_extension/dispatch.rs)
-- [Native protocol fixture and tests](../../../src/system_extension/native_host/tests.rs)
+- [Native protocol fixture and tests](../../../src/system_extension/native_host/tests/mod.rs)
 - [Independent native producer](../../../src/bin/molten-native-extension-fixture.rs)
 - [Component profile template](../../wasm-component-runtime/profile-template.ncl)
 - [CLI artifact inventory](../../../src/cli/runtime/system_extension/ops.rs)

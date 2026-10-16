@@ -1,0 +1,26 @@
+{
+  "argv": [
+    "b3sum",
+    "/tmp/molten-shutdown-admission-14-8na4_8eo/state/control/node.lock.preserves",
+    "/tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-cache.preserves",
+    "/tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-catalog-mcp.preserves",
+    "/tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-chunks.preserves",
+    "/tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-control.preserves",
+    "/tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-coordination.preserves",
+    "/tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-jobs.preserves",
+    "/tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-ledger.preserves",
+    "/tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-plugin-host.preserves",
+    "/tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-registry.preserves",
+    "/tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-remote-dataspace.preserves",
+    "/tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-services.preserves",
+    "/tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-storage.preserves",
+    "/tmp/molten-shutdown-admission-14-8na4_8eo/state/startup-receipt.preserves"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T16:54:35.338036+00:00",
+  "elapsed_seconds": 0.009,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "22aa41788b9fd5d8b9ba549e16bf11d515ed4ab48231ba48d95f9a3b88f54271  /tmp/molten-shutdown-admission-14-8na4_8eo/state/control/node.lock.preserves\n03296e561d31430e6dad73556560c44735eccbec28c9cacf2d756e2c0782e8e6  /tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-cache.preserves\naefe4671911578e6e4b5a27393b95e11495d8cc7c6abcaf120177911d4378a14  /tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-catalog-mcp.preserves\nad96c07d493ab145f997dd9980f26785134ef075370e69cd57a9082510827d75  /tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-chunks.preserves\n8d160d139b9ce4881f4b917ccc9821349b6439f8353fc68e59537bc1db81a0c9  /tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-control.preserves\n75c8015908856c44fb364c37aa498ff4023e86d6c9f8a1ad84fb6dfe1107a7e3  /tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-coordination.preserves\n555c89a9415701de33a868f7a4e55d57c247beef05d16f4ceecb5b9aa0d9cddb  /tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-jobs.preserves\ndd2db53a900073aca8598b87f3e6cc8e6e1eea16bab1284b68149bb5e99b3691  /tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-ledger.preserves\n5e40831c2b1ee8794d3586e8b801d9d1d7f3e0a1214d6cdb5be7c5ce17009399  /tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-plugin-host.preserves\n320a3a95c39dd4939bab1c1feda9ef713931b800943f550c728866bf69afcdf5  /tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-registry.preserves\n5f7232834bf7217b271f1b58fe2b0f02b6d2f1ffe5585d769401e00d4ada9b52  /tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-remote-dataspace.preserves\n9dc270cf1317621f1f65597f3a668c2a0e68ca52f26f844ee12bdae2c279b54e  /tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-services.preserves\nfb60738ef42cf9a026b211e51fa432ae8ce3782b56e143bf37ceb8bca2c9878b  /tmp/molten-shutdown-admission-14-8na4_8eo/state/receipts/adapter-start-storage.preserves\na26935a0121272ebb01dddab96524b6ddfa0dbd3ed0e83051ee7e80690dcb21c  /tmp/molten-shutdown-admission-14-8na4_8eo/state/startup-receipt.preserves\n",
+  "stderr": ""
+}

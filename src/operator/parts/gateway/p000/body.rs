@@ -2,7 +2,7 @@ type ChunkManifest = crate::chunk_store::ChunkManifest;
 type ChunkTransforms = crate::chunk_store::ChunkTransforms;
 type IoValue = preserves::IOValue;
 type Map<K, V> = std::collections::BTreeMap<K, V>;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 type Set<T> = std::collections::BTreeSet<T>;
 

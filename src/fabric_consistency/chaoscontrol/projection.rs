@@ -35,7 +35,7 @@ impl ChaosControlConformanceProfile {
     pub fn validate(&self) -> crate::error::Result<()> {
         crate::preserves_rail::validate_content_ref(&self.chaoscontrol_profile_ref)?;
         if self.max_command_bytes == 0 || self.max_projected_observations == 0 {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "ChaosControl conformance profile requires nonzero observation bounds",
             ));
         }
@@ -46,7 +46,7 @@ impl ChaosControlConformanceProfile {
     // cannot support external conformance evidence.
     pub fn admits_conformance(&self) -> crate::error::Result<()> {
         if self.observation_mode != ChaosControlObservationMode::Lossless {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "ChaosControl conformance requires lossless observation mode",
             ));
         }
@@ -106,7 +106,7 @@ impl ChaosControlChainProjector {
     pub fn bind(profile: ChaosControlConformanceProfile, initial_state_ref: &str) -> crate::error::Result<Self> {
         profile.validate()?;
         crate::preserves_rail::validate_content_ref(initial_state_ref)?;
-        let genesis_digest = chaoscontrol_chain_genesis(&profile.chaoscontrol_profile_ref, initial_state_ref);
+        let genesis_digest = chain_genesis(&profile.chaoscontrol_profile_ref, initial_state_ref);
         Ok(Self {
             profile,
             initial_state_ref: initial_state_ref.to_string(),
@@ -142,24 +142,24 @@ impl ChaosControlChainProjector {
         self.profile.admits_conformance()?;
         self.validate_committed_apply(apply)?;
         if apply.command_index < self.next_command_index {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "ChaosControl projection denies a stale or duplicated committed apply",
             ));
         }
         if apply.command_index > self.next_command_index {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "ChaosControl projection denies a noncontiguous committed apply",
             ));
         }
         if apply.lifecycle_generation < self.last_lifecycle_generation {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "ChaosControl projection denies a lifecycle generation regression",
             ));
         }
         if self.projected_count >= self.profile.max_projected_observations {
-            return Err(crate::error::MoltenError::invalid_harness("ChaosControl projection bound exceeded"));
+            return Err(crate::error::Failure::invalid_harness("ChaosControl projection bound exceeded"));
         }
-        let next_digest = chaoscontrol_chain_transition(
+        let next_digest = chain_transition(
             &self.profile.chaoscontrol_profile_ref,
             apply.command_index,
             &self.prior_digest,
@@ -183,7 +183,7 @@ impl ChaosControlChainProjector {
         self.next_command_index = self
             .next_command_index
             .checked_add(1)
-            .ok_or_else(|| crate::error::MoltenError::invalid_harness("ChaosControl command index overflow"))?;
+            .ok_or_else(|| crate::error::Failure::invalid_harness("ChaosControl command index overflow"))?;
         self.last_lifecycle_generation = apply.lifecycle_generation;
         self.projected_count += 1;
         Ok(observation)
@@ -201,33 +201,28 @@ impl ChaosControlChainProjector {
             crate::preserves_rail::validate_content_ref(reference)?;
         }
         if apply.command_bytes.is_empty() {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "ChaosControl projection denies an empty committed command",
             ));
         }
         if apply.command_bytes.len() as u64 > self.profile.max_command_bytes {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "ChaosControl committed command exceeds the profile command bound",
             ));
         }
         if apply.command_index < FIRST_CHAOSCONTROL_COMMAND_INDEX {
-            return Err(crate::error::MoltenError::invalid_harness("ChaosControl command index must start at one"));
+            return Err(crate::error::Failure::invalid_harness("ChaosControl command index must start at one"));
         }
         Ok(())
     }
 }
 
-pub fn chaoscontrol_chain_genesis(profile_ref: &str, initial_state_ref: &str) -> String {
-    chaoscontrol_domain_hash(CHAOSCONTROL_SMR_GENESIS_DOMAIN, &[profile_ref.as_bytes(), initial_state_ref.as_bytes()])
+pub fn chain_genesis(profile_ref: &str, initial_state_ref: &str) -> String {
+    domain_hash(CHAOSCONTROL_SMR_GENESIS_DOMAIN, &[profile_ref.as_bytes(), initial_state_ref.as_bytes()])
 }
 
-pub fn chaoscontrol_chain_transition(
-    profile_ref: &str,
-    command_index: u64,
-    prior_digest: &str,
-    command: &[u8],
-) -> String {
-    chaoscontrol_domain_hash(CHAOSCONTROL_SMR_TRANSITION_DOMAIN, &[
+pub fn chain_transition(profile_ref: &str, command_index: u64, prior_digest: &str, command: &[u8]) -> String {
+    domain_hash(CHAOSCONTROL_SMR_TRANSITION_DOMAIN, &[
         profile_ref.as_bytes(),
         &command_index.to_be_bytes(),
         prior_digest.as_bytes(),
@@ -236,7 +231,7 @@ pub fn chaoscontrol_chain_transition(
     ])
 }
 
-fn chaoscontrol_domain_hash(domain: &[u8], parts: &[&[u8]]) -> String {
+fn domain_hash(domain: &[u8], parts: &[&[u8]]) -> String {
     let mut hasher = blake3::Hasher::new();
     hasher.update(domain);
     for part in parts {

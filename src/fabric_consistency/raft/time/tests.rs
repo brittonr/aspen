@@ -28,9 +28,9 @@ impl CryptographicEntropySource for FixedEntropySource {
 
 // r[verify molten.fabric_consistency.live_service_ports]
 #[tokio::test]
-async fn tokio_replica_time_port_delivers_entropy_bound_election_and_heartbeat_events() {
+async fn tokio_replica_port_delivers_entropy_bound_election_and_heartbeat_events() {
     let (mut port, mut receiver) =
-        time_port(HEARTBEAT_TICKS, ELECTION_MIN_TICKS, ELECTION_MAX_TICKS).expect("Tokio replica time port");
+        port(HEARTBEAT_TICKS, ELECTION_MIN_TICKS, ELECTION_MAX_TICKS).expect("Tokio replica time port");
 
     let timer_ref = super::tests::test_ref("election-timer-token");
     let election_evidence = port.arm_election_timer(&timer_ref).expect("election timer");
@@ -62,7 +62,7 @@ async fn tokio_replica_time_port_delivers_entropy_bound_election_and_heartbeat_e
 #[tokio::test]
 async fn rearming_election_timer_cancels_the_superseded_delivery() {
     let (mut port, mut receiver) =
-        time_port(HEARTBEAT_TICKS, ELECTION_MIN_TICKS, ELECTION_MAX_TICKS).expect("Tokio replica time port");
+        port(HEARTBEAT_TICKS, ELECTION_MIN_TICKS, ELECTION_MAX_TICKS).expect("Tokio replica time port");
 
     port.arm_election_timer(&super::tests::test_ref("superseded-timer-token")).expect("first timer");
     let replacement_timer_ref = super::tests::test_ref("replacement-timer-token");
@@ -82,7 +82,7 @@ async fn rearming_election_timer_cancels_the_superseded_delivery() {
 #[tokio::test]
 async fn full_event_queue_parks_timer_delivery_until_drained() {
     let (mut port, mut receiver) =
-        time_port(HEARTBEAT_TICKS, ELECTION_MIN_TICKS, ELECTION_MAX_TICKS).expect("Tokio replica time port");
+        port(HEARTBEAT_TICKS, ELECTION_MIN_TICKS, ELECTION_MAX_TICKS).expect("Tokio replica time port");
     let timer_ref = super::tests::test_ref("backpressured-timer-token");
     port.arm_heartbeat_timer().expect("heartbeat timer");
     port.arm_election_timer(&timer_ref).expect("election timer");
@@ -111,30 +111,30 @@ async fn full_event_queue_parks_timer_delivery_until_drained() {
 
 // r[verify molten.fabric_consistency.live_service_ports]
 #[test]
-fn tokio_replica_time_port_denies_unsafe_timer_bounds_before_activation() {
-    let result = time_port(HEARTBEAT_TICKS, HEARTBEAT_TICKS, ELECTION_MAX_TICKS);
+fn tokio_replica_port_denies_unsafe_timer_bounds_before_activation() {
+    let result = port(HEARTBEAT_TICKS, HEARTBEAT_TICKS, ELECTION_MAX_TICKS);
     let error = result.err().expect("unsafe bounds must deny");
     assert!(error.to_string().contains("heartbeat < election minimum"));
 }
 
 // r[verify molten.fabric_consistency.live_service_ports]
 #[tokio::test]
-async fn tokio_replica_time_port_denies_malformed_timer_token_without_delivery() {
+async fn tokio_replica_port_denies_malformed_timer_token_without_delivery() {
     let (mut port, mut receiver) =
-        time_port(HEARTBEAT_TICKS, ELECTION_MIN_TICKS, ELECTION_MAX_TICKS).expect("Tokio replica time port");
+        port(HEARTBEAT_TICKS, ELECTION_MIN_TICKS, ELECTION_MAX_TICKS).expect("Tokio replica time port");
     let error = port.arm_election_timer("malformed-timer-token").expect_err("malformed timer token must deny");
     assert!(error.to_string().contains("content ref"), "unexpected error: {error}");
     assert!(receiver.try_recv().is_err());
 }
 
-fn time_port(
+fn port(
     heartbeat_ticks: u64,
     election_min_ticks: u64,
     election_max_ticks: u64,
-) -> crate::error::Result<(TokioReplicaTimePort<FixedEntropySource>, tokio::sync::mpsc::Receiver<ReplicaEvent>)> {
+) -> crate::error::Result<(TokioReplicaPort<FixedEntropySource>, tokio::sync::mpsc::Receiver<ReplicaEvent>)> {
     let (sender, receiver) = tokio::sync::mpsc::channel(TIME_TEST_EVENT_CAPACITY);
     let profile = crate::fabric_time::tests::live_profile().profile;
-    let config = TokioReplicaTimeConfig {
+    let config = TokioReplicaConfig {
         profile,
         generation: GENERATION,
         service_id: "raft-service".to_string(),
@@ -145,7 +145,7 @@ fn time_port(
         election_min_ticks,
         election_max_ticks,
     };
-    Ok((TokioReplicaTimePort::new(config, FixedEntropySource, sender)?, receiver))
+    Ok((TokioReplicaPort::new(config, FixedEntropySource, sender)?, receiver))
 }
 
 fn entropy_binding_ref() -> String {

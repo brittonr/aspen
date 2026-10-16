@@ -37,7 +37,7 @@ fn run_scan(input: ScanInput) -> Outcome<()> {
     if manifest.decision == "pass" {
         Ok(())
     } else {
-        Err(molten::error::MoltenError::invalid_harness(format!(
+        Err(molten::error::Failure::invalid_harness(format!(
             "requirement traceability denied: {}",
             summary.replace('\n', "; ")
         )))
@@ -68,7 +68,7 @@ fn run_verification_run(input: VerificationRunCommandInput) -> Outcome<()> {
 }
 
 fn run_ci_run_receipt(input: CiRunReceiptCommandInput) -> Outcome<()> {
-    let junit_text = std::fs::read_to_string(&input.junit).map_err(molten::error::MoltenError::from)?;
+    let junit_text = std::fs::read_to_string(&input.junit).map_err(molten::error::Failure::from)?;
     let counts = parse_junit_counts(&junit_text)?;
     let receipt = molten::testing_hardening::build_ci_test_run_receipt(&molten::testing_hardening::CiTestRunInput {
         source_ref: molten::preserves_rail::content_ref_from_bytes(input.source_marker.as_bytes()),
@@ -89,7 +89,7 @@ fn run_ci_run_receipt(input: CiRunReceiptCommandInput) -> Outcome<()> {
 }
 
 fn run_nextest_profile_matrix(input: NextestProfileMatrixCommandInput) -> Outcome<()> {
-    let config_text = std::fs::read_to_string(&input.nextest_config).map_err(molten::error::MoltenError::from)?;
+    let config_text = std::fs::read_to_string(&input.nextest_config).map_err(molten::error::Failure::from)?;
     let config = parse_nextest_config(&config_text)?;
     let profiles = nextest_profiles_from_config(&config)?;
     let matrix = molten::testing_hardening::build_nextest_profile_matrix(
@@ -101,7 +101,7 @@ fn run_nextest_profile_matrix(input: NextestProfileMatrixCommandInput) -> Outcom
     if matrix.decision == "pass" {
         Ok(())
     } else {
-        Err(molten::error::MoltenError::invalid_harness(format!(
+        Err(molten::error::Failure::invalid_harness(format!(
             "nextest profile matrix denied: {}",
             matrix.diagnostics.join(DIAGNOSTIC_JOIN_SEPARATOR)
         )))
@@ -110,7 +110,7 @@ fn run_nextest_profile_matrix(input: NextestProfileMatrixCommandInput) -> Outcom
 
 fn parse_nextest_config(text: &str) -> Outcome<toml::Value> {
     toml::from_str::<toml::Value>(text)
-        .map_err(|error| molten::error::MoltenError::invalid_harness(format!("invalid nextest config TOML: {error}")))
+        .map_err(|error| molten::error::Failure::invalid_harness(format!("invalid nextest config TOML: {error}")))
 }
 
 fn nextest_profiles_from_config(config: &toml::Value) -> Outcome<Vec<molten::testing_hardening::SemanticProfileInput>> {
@@ -142,7 +142,7 @@ fn nextest_retry_policy(config: &toml::Value, profile_id: &str) -> Outcome<Strin
 fn nextest_profile_string(config: &toml::Value, profile_id: &str, field: &str) -> Outcome<Option<String>> {
     nextest_profile_field(config, profile_id, field)?.map_or(Ok(None), |value| {
         value.as_str().map(|text| Some(text.to_string())).ok_or_else(|| {
-            molten::error::MoltenError::invalid_harness(format!("profile {profile_id} field {field} must be a string"))
+            molten::error::Failure::invalid_harness(format!("profile {profile_id} field {field} must be a string"))
         })
     })
 }
@@ -155,7 +155,7 @@ fn nextest_profile_nested_string(
 ) -> Outcome<Option<String>> {
     nextest_profile_nested_field(config, profile_id, table_field, field)?.map_or(Ok(None), |value| {
         value.as_str().map(|text| Some(text.to_string())).ok_or_else(|| {
-            molten::error::MoltenError::invalid_harness(format!(
+            molten::error::Failure::invalid_harness(format!(
                 "profile {profile_id} field {table_field}.{field} must be a string"
             ))
         })
@@ -165,7 +165,7 @@ fn nextest_profile_nested_string(
 fn nextest_profile_integer(config: &toml::Value, profile_id: &str, field: &str) -> Outcome<Option<i64>> {
     nextest_profile_field(config, profile_id, field)?.map_or(Ok(None), |value| {
         value.as_integer().map(Some).ok_or_else(|| {
-            molten::error::MoltenError::invalid_harness(format!(
+            molten::error::Failure::invalid_harness(format!(
                 "profile {profile_id} field {field} must be an integer"
             ))
         })
@@ -190,7 +190,7 @@ fn nextest_profile_field<'a>(
         };
         current_profile = parent.to_string();
     }
-    Err(molten::error::MoltenError::invalid_harness(format!(
+    Err(molten::error::Failure::invalid_harness(format!(
         "profile {profile_id} inheritance exceeds bound"
     )))
 }
@@ -216,7 +216,7 @@ fn nextest_profile_nested_field<'a>(
         };
         current_profile = parent.to_string();
     }
-    Err(molten::error::MoltenError::invalid_harness(format!(
+    Err(molten::error::Failure::invalid_harness(format!(
         "profile {profile_id} inheritance exceeds bound"
     )))
 }
@@ -247,8 +247,8 @@ fn render_nextest_profile_matrix_summary(matrix: &molten::testing_hardening::Nex
 fn run_config_lint(input: ConfigLintCommandInput) -> Outcome<()> {
     let files = read_config_lint_files(&input.root)?;
     let source_pins = read_source_pin_records(&input.root)?;
-    let report = molten::project_config_portability::build_config_portability_report(
-        &molten::project_config_portability::ConfigPortabilityInput { files, source_pins },
+    let report = molten::project_config_portability::build_report(
+        &molten::project_config_portability::Input { files, source_pins },
     )?;
     write_optional_preserves(input.out.as_ref(), &report.value)?;
     write_optional_text(input.summary_out.as_ref(), &render_config_lint_summary(&report))?;
@@ -256,7 +256,7 @@ fn run_config_lint(input: ConfigLintCommandInput) -> Outcome<()> {
     if report.decision == "pass" {
         Ok(())
     } else {
-        Err(molten::error::MoltenError::invalid_harness(format!(
+        Err(molten::error::Failure::invalid_harness(format!(
             "config portability denied: {}",
             report.diagnostics.join(DIAGNOSTIC_JOIN_SEPARATOR)
         )))
@@ -265,12 +265,12 @@ fn run_config_lint(input: ConfigLintCommandInput) -> Outcome<()> {
 
 fn read_config_lint_files(
     root: &std::path::Path,
-) -> Outcome<Vec<molten::project_config_portability::ConfigFileRecord>> {
+) -> Outcome<Vec<molten::project_config_portability::FileRecord>> {
     let mut records = Vec::with_capacity(CONFIG_LINT_FILES.len());
     for (relative_path, release_scoped) in CONFIG_LINT_FILES {
         let path = root.join(relative_path);
-        let contents = std::fs::read_to_string(&path).map_err(molten::error::MoltenError::from)?;
-        records.push(molten::project_config_portability::ConfigFileRecord {
+        let contents = std::fs::read_to_string(&path).map_err(molten::error::Failure::from)?;
+        records.push(molten::project_config_portability::FileRecord {
             path: (*relative_path).to_string(),
             contents,
             release_scoped: *release_scoped,

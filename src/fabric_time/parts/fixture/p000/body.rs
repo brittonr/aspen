@@ -40,13 +40,13 @@ const RETRY_MAXIMUM: u64 = 20;
 const RETRY_JITTER: u64 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FabricTimeFixtureSelection {
+pub enum Selection {
     Live,
     DeterministicSimulation,
     Both,
 }
 
-impl FabricTimeFixtureSelection {
+impl Selection {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Live => "live",
@@ -57,25 +57,25 @@ impl FabricTimeFixtureSelection {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExecutableFabricTimeFixtureRun {
-    pub selection: FabricTimeFixtureSelection,
-    pub live_profile: CanonicalTimeProfile,
-    pub simulation_profile: CanonicalTimeProfile,
+pub struct ExecutableRun {
+    pub selection: Selection,
+    pub live_profile: Profile,
+    pub simulation_profile: Profile,
     pub port_descriptor_refs: Vec<String>,
     pub live_conformance: AdapterConformanceObservation,
     pub simulation_conformance: AdapterConformanceObservation,
-    pub events: Vec<CanonicalTimeEvent>,
-    pub report: CanonicalFabricTimeRun,
+    pub events: Vec<Event>,
+    pub report: Run,
     pub production_entropy_source: String,
 }
 
 // r[impl molten.fabric_time.live_sim_parity]
 // r[impl molten.fabric_time.final_validation]
-pub fn run_executable_fabric_time_fixture(
-    selection: FabricTimeFixtureSelection,
-) -> crate::error::Result<ExecutableFabricTimeFixtureRun> {
+pub fn run_executable(
+    selection: Selection,
+) -> crate::error::Result<ExecutableRun> {
     let [live_profile, simulation_profile] = admitted_profiles()?;
-    let port_descriptor_refs = validate_fixture_ports(&live_profile, &simulation_profile)?;
+    let port_descriptor_refs = validate_ports(&live_profile, &simulation_profile)?;
 
     let mut live_clock = LiveClockAdapter::new(&live_profile.profile, PROFILE_MAX_TICKS)?;
     let first_live_wall = live_clock.observe_wall()?;
@@ -102,7 +102,7 @@ pub fn run_executable_fabric_time_fixture(
     let mut events = vec![live_initial.clone(), simulation_initial.clone()];
     events.push(conformance_event(live_ref, "live-adapter", "passed", live_final_ticks)?);
     events.push(conformance_event(simulation_ref, "simulation-adapter", "passed", simulation_initial_ticks)?);
-    events.push(canonical_clock_anomaly_event(live_ref, FIXTURE_GENERATION, &live_wall_decision)?);
+    events.push(clock_anomaly_event(live_ref, FIXTURE_GENERATION, &live_wall_decision)?);
     events.push(run_live_scheduler_scenario(&live_profile)?);
 
     let _counters = run_simulation_scenarios(&simulation_profile, &mut virtual_clock, &mut events)?;
@@ -114,8 +114,8 @@ pub fn run_executable_fabric_time_fixture(
     events.push(simulation_terminal.clone());
 
     let final_time_ticks = match selection {
-        FabricTimeFixtureSelection::Live => live_final_ticks,
-        FabricTimeFixtureSelection::DeterministicSimulation | FabricTimeFixtureSelection::Both => {
+        Selection::Live => live_final_ticks,
+        Selection::DeterministicSimulation | Selection::Both => {
             virtual_clock.now_ticks()?
         }
     };
@@ -126,7 +126,7 @@ pub fn run_executable_fabric_time_fixture(
     ];
     let report = run_report(selection, &events, profile_refs, final_time_ticks, boundaries)?;
 
-    Ok(ExecutableFabricTimeFixtureRun {
+    Ok(ExecutableRun {
         selection,
         live_profile,
         simulation_profile,
@@ -144,10 +144,10 @@ fn conformance_event(
     subject: &str,
     action: &str,
     ticks: u64,
-) -> crate::error::Result<CanonicalTimeEvent> {
-    canonical_named_event(EventHeader {
+) -> crate::error::Result<Event> {
+    named_event(EventHeader {
         profile_ref,
-        kind: CanonicalTimeEventKind::Conformance,
+        kind: EventKind::Conformance,
         generation: FIXTURE_GENERATION,
         subject,
         action,
@@ -156,10 +156,10 @@ fn conformance_event(
 }
 
 /// The admitted live profile and the admitted deterministic simulation profile, in that order.
-fn admitted_profiles() -> crate::error::Result<[CanonicalTimeProfile; 2]> {
+fn admitted_profiles() -> crate::error::Result<[Profile; 2]> {
     let live_profile =
-        canonical_admit_time_profile(&fixture_profile("molten.fabric-time.live", HASH_A, TimeProfileKind::Live, None))?;
-    let simulation_profile = canonical_admit_time_profile(&fixture_profile(
+        admit_profile(&profile("molten.fabric-time.live", HASH_A, TimeProfileKind::Live, None))?;
+    let simulation_profile = admit_profile(&profile(
         "molten.fabric-time.simulation",
         HASH_B,
         TimeProfileKind::DeterministicSimulation,
@@ -183,24 +183,24 @@ fn classify_live_wall(
 /// terminal events. `boundaries` holds the live and simulation initial events, then the live and
 /// simulation terminal events.
 fn run_report(
-    selection: FabricTimeFixtureSelection,
-    events: &[CanonicalTimeEvent],
+    selection: Selection,
+    events: &[Event],
     [live_profile_ref, simulation_profile_ref]: [&str; 2],
     final_time_ticks: u64,
-    [live_initial, simulation_initial, live_terminal, simulation_terminal]: [&CanonicalTimeEvent; 4],
-) -> crate::error::Result<CanonicalFabricTimeRun> {
+    [live_initial, simulation_initial, live_terminal, simulation_terminal]: [&Event; 4],
+) -> crate::error::Result<Run> {
     let selected_events = events
         .iter()
         .filter(|event| match selection {
-            FabricTimeFixtureSelection::Live => event.profile_ref == live_profile_ref,
-            FabricTimeFixtureSelection::DeterministicSimulation => event.profile_ref == simulation_profile_ref,
-            FabricTimeFixtureSelection::Both => true,
+            Selection::Live => event.profile_ref == live_profile_ref,
+            Selection::DeterministicSimulation => event.profile_ref == simulation_profile_ref,
+            Selection::Both => true,
         })
         .collect::<Vec<_>>();
     let evidence_refs = selected_events.iter().map(|event| event.evidence_ref.clone()).collect::<Vec<_>>();
     let profile_ref = match selection {
-        FabricTimeFixtureSelection::Live => live_profile_ref.to_string(),
-        FabricTimeFixtureSelection::DeterministicSimulation | FabricTimeFixtureSelection::Both => {
+        Selection::Live => live_profile_ref.to_string(),
+        Selection::DeterministicSimulation | Selection::Both => {
             simulation_profile_ref.to_string()
         }
     };
@@ -213,15 +213,15 @@ fn run_report(
         "terminal-outcome",
     )?;
     let scheduler_trace_ref =
-        trace_for_kinds(&selected_events, &[CanonicalTimeEventKind::Scheduler], "scheduler-choice-trace")?;
+        trace_for_kinds(&selected_events, &[EventKind::Scheduler], "scheduler-choice-trace")?;
     let entropy_trace_ref =
-        trace_for_kinds(&selected_events, &[CanonicalTimeEventKind::Entropy], "entropy-stream-trace")?;
+        trace_for_kinds(&selected_events, &[EventKind::Entropy], "entropy-stream-trace")?;
     let fault_plan_ref = trace_for_kinds(
         &selected_events,
-        &[CanonicalTimeEventKind::Fault, CanonicalTimeEventKind::ClockAnomaly],
+        &[EventKind::Fault, EventKind::ClockAnomaly],
         "fault-plan",
     )?;
-    canonical_fabric_time_run(FabricTimeRunReport {
+    run(RunReport {
         profile_ref,
         profile_kind: selection.as_str().to_string(),
         generation: FIXTURE_GENERATION,
@@ -231,22 +231,22 @@ fn run_report(
         fault_plan_ref,
         terminal_outcome_ref,
         final_time_ticks,
-        timer_events: count_events(&selected_events, &[CanonicalTimeEventKind::Timer])?,
-        scheduler_events: count_events(&selected_events, &[CanonicalTimeEventKind::Scheduler])?,
-        entropy_events: count_events(&selected_events, &[CanonicalTimeEventKind::Entropy])?,
+        timer_events: count_events(&selected_events, &[EventKind::Timer])?,
+        scheduler_events: count_events(&selected_events, &[EventKind::Scheduler])?,
+        entropy_events: count_events(&selected_events, &[EventKind::Entropy])?,
         deadline_lease_events: count_events(&selected_events, &[
-            CanonicalTimeEventKind::Deadline,
-            CanonicalTimeEventKind::Lease,
+            EventKind::Deadline,
+            EventKind::Lease,
         ])?,
-        fault_events: count_events(&selected_events, &[CanonicalTimeEventKind::Fault])?,
-        live_clock_observed: selection != FabricTimeFixtureSelection::DeterministicSimulation,
+        fault_events: count_events(&selected_events, &[EventKind::Fault])?,
+        live_clock_observed: selection != Selection::DeterministicSimulation,
         shared_conformance_passed: true,
         evidence_refs,
         non_claims: REQUIRED_TIME_NON_CLAIMS.to_vec(),
     })
 }
 
-fn run_live_scheduler_scenario(profile: &CanonicalTimeProfile) -> crate::error::Result<CanonicalTimeEvent> {
+fn run_live_scheduler_scenario(profile: &Profile) -> crate::error::Result<Event> {
     let key = RunnableKey {
         service_id: FIXTURE_SERVICE_ID.to_string(),
         generation: FIXTURE_GENERATION,
@@ -270,9 +270,9 @@ fn run_live_scheduler_scenario(profile: &CanonicalTimeProfile) -> crate::error::
     wake_adapter.route(&woken)?;
     parked
         .join()
-        .map_err(|_| crate::error::MoltenError::invalid_harness("live scheduler wake target panicked"))?;
+        .map_err(|_| crate::error::Failure::invalid_harness("live scheduler wake target panicked"))?;
     if !wake_adapter.unregister(&key) {
-        return Err(crate::error::MoltenError::invalid_harness("live scheduler wake target cleanup failed"));
+        return Err(crate::error::Failure::invalid_harness("live scheduler wake target cleanup failed"));
     }
     let selected = choose_runnable(
         &profile.profile,
@@ -282,5 +282,5 @@ fn run_live_scheduler_scenario(profile: &CanonicalTimeProfile) -> crate::error::
         Some(&key),
     )
     .map_err(|error| core_error("select live fixture runnable", error))?;
-    canonical_scheduler_selection(&profile.profile_ref, &selected)
+    scheduler_selection(&profile.profile_ref, &selected)
 }

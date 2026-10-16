@@ -2,7 +2,7 @@ use molten_core::content_store_adapter::*;
 
 use super::*;
 
-pub fn content_adapter_profile(
+pub fn profile(
     profile_id: &str,
     profile_ref: String,
     class: ContentAdapterClass,
@@ -56,11 +56,11 @@ pub fn content_adapter_profile(
     if issues.is_empty() {
         Ok(profile)
     } else {
-        Err(crate::error::MoltenError::invalid_harness(format!("content adapter profile denied: {issues:?}")))
+        Err(crate::error::Failure::invalid_harness(format!("content adapter profile denied: {issues:?}")))
     }
 }
 
-pub struct ContentCommandInput<'a> {
+pub struct CommandInput<'a> {
     pub operation_ref: String,
     pub operation: ContentOperation,
     pub manifest: &'a ContentManifestDescriptor,
@@ -72,10 +72,7 @@ pub struct ContentCommandInput<'a> {
     pub policy_refs: Vec<String>,
 }
 
-pub fn content_command(
-    profile: &ContentAdapterProfile,
-    input: ContentCommandInput<'_>,
-) -> crate::error::Result<ContentCommand> {
+pub fn command(profile: &ContentAdapterProfile, input: CommandInput<'_>) -> crate::error::Result<ContentCommand> {
     let (expected_bytes, expected_chunks) = expected_shape(input.manifest, input.range)?;
     let mut policy_refs = input.policy_refs;
     policy_refs.sort();
@@ -97,41 +94,37 @@ pub fn content_command(
     })
 }
 
-pub fn assemble_verified_content(
+pub fn assemble_verified(
     manifest: &ContentManifestDescriptor,
     state: &ContentPartialState,
     chunks: &[VerifiedChunkPayload],
 ) -> crate::error::Result<Vec<u8>> {
     if !content_is_available(manifest, state) {
-        return Err(crate::error::MoltenError::invalid_harness(
-            "content cannot be assembled before complete verification",
-        ));
+        return Err(crate::error::Failure::invalid_harness("content cannot be assembled before complete verification"));
     }
     if chunks.len() != manifest.chunks.len() {
-        return Err(crate::error::MoltenError::invalid_harness("verified payload count does not match manifest"));
+        return Err(crate::error::Failure::invalid_harness("verified payload count does not match manifest"));
     }
     let manifest_chunk_size = usize::try_from(manifest.chunk_size)
-        .map_err(|_| crate::error::MoltenError::invalid_harness("manifest chunk size does not fit usize"))?;
+        .map_err(|_| crate::error::Failure::invalid_harness("manifest chunk size does not fit usize"))?;
     let mut bytes = Vec::new();
     for (position, (descriptor, payload)) in manifest.chunks.iter().zip(chunks).enumerate() {
         if payload.position != position || payload.chunk_ref != descriptor.chunk_ref {
-            return Err(crate::error::MoltenError::invalid_harness(
-                "verified payload ordering does not match manifest",
-            ));
+            return Err(crate::error::Failure::invalid_harness("verified payload ordering does not match manifest"));
         }
         let payload_length = u64::try_from(payload.bytes.len())
-            .map_err(|_| crate::error::MoltenError::invalid_harness("verified payload length does not fit u64"))?;
+            .map_err(|_| crate::error::Failure::invalid_harness("verified payload length does not fit u64"))?;
         if payload_length != descriptor.length
             || crate::chunk_store::hash_chunk(&payload.bytes, manifest_chunk_size) != descriptor.chunk_ref
         {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "verified payload no longer matches canonical chunk identity",
             ));
         }
         bytes.extend_from_slice(&payload.bytes);
     }
     if u64::try_from(bytes.len()).ok() != Some(manifest.total_length) {
-        return Err(crate::error::MoltenError::invalid_harness("assembled content length does not match manifest"));
+        return Err(crate::error::Failure::invalid_harness("assembled content length does not match manifest"));
     }
     Ok(bytes)
 }
@@ -140,7 +133,7 @@ pub fn backend_protection_status(
     profile: &ContentAdapterProfile,
     manifest_ref: &str,
     protected: bool,
-) -> crate::error::Result<CanonicalContentArtifact<ContentEvent>> {
+) -> crate::error::Result<Artifact<ContentEvent>> {
     let terminal = ContentTerminal::Verified;
     let event = ContentEvent {
         schema: CONTENT_EVENT_SCHEMA.to_string(),
@@ -156,7 +149,7 @@ pub fn backend_protection_status(
         evidence_refs: Vec::new(),
         non_claims: REQUIRED_CONTENT_NON_CLAIMS.to_vec(),
     };
-    canonical_content_event(profile, &event)
+    bind_event(profile, &event)
 }
 
 fn expected_shape(
@@ -165,22 +158,21 @@ fn expected_shape(
 ) -> crate::error::Result<(u64, usize)> {
     match range {
         Some(range) => {
-            let refs = required_chunks_for_range(manifest, range).map_err(|issue| {
-                crate::error::MoltenError::invalid_harness(format!("content range denied: {issue:?}"))
-            })?;
+            let refs = required_chunks_for_range(manifest, range)
+                .map_err(|issue| crate::error::Failure::invalid_harness(format!("content range denied: {issue:?}")))?;
             Ok((range.length, refs.len()))
         }
         None => Ok((manifest.total_length, manifest.chunks.len())),
     }
 }
 
-pub fn redb_index_content_status(
+pub fn redb_index_status(
     profile: &ContentAdapterProfile,
     root: &crate::chunk_store::CapabilityChunkRoot,
     generation: u64,
-) -> crate::error::Result<CanonicalContentArtifact<ContentAdapterStatus>> {
+) -> crate::error::Result<Artifact<ContentAdapterStatus>> {
     let index = crate::chunk_store::index_status_with_root(root)?;
-    bounded_content_status(StatusInput {
+    bounded_status(StatusInput {
         profile,
         generation,
         active_operations: 0,
@@ -204,9 +196,7 @@ pub struct StatusInput<'a> {
     pub issues: Vec<ContentIssue>,
 }
 
-pub fn bounded_content_status(
-    input: StatusInput<'_>,
-) -> crate::error::Result<CanonicalContentArtifact<ContentAdapterStatus>> {
+pub fn bounded_status(input: StatusInput<'_>) -> crate::error::Result<Artifact<ContentAdapterStatus>> {
     let StatusInput {
         profile,
         generation,
@@ -229,5 +219,5 @@ pub fn bounded_content_status(
         issues,
         non_claims: REQUIRED_CONTENT_NON_CLAIMS.to_vec(),
     };
-    canonical_content_status(profile, &status)
+    crate::content_store_adapter::status(profile, &status)
 }

@@ -8,15 +8,15 @@ use redb::ReadableTableMetadata;
 type Path = std::path::Path;
 #[cfg(test)]
 type PathBuf = std::path::PathBuf;
-type StorePath = crate::local_store::LocalStorePath;
-type StoreEntryKind = crate::local_store::LocalStoreEntryKind;
+type Locator = crate::local_store::Locator;
+type EntryKind = crate::local_store::MemberKind;
 type CompoundClass = preserves::CompoundClass;
 type Record<T> = preserves::Record<T>;
 type Value<T> = preserves::Value<T>;
 type ValueClass = preserves::ValueClass;
 type Database = redb::Database;
 type TableDefinition<K, V> = redb::TableDefinition<'static, K, V>;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 const CHUNK_LINEAGE_SCHEMA: &str = crate::preserves_rail::CHUNK_LINEAGE_SCHEMA;
@@ -116,8 +116,8 @@ pub fn open_capability_chunk_root(root: &Path) -> Result<CapabilityChunkRoot> {
     crate::local_store::ChunkStoreRoot::open(root)
 }
 
-fn store_path(path: &str) -> Result<StorePath> {
-    StorePath::parse(path)
+fn path(path: &str) -> Result<Locator> {
+    Locator::parse(path)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -155,7 +155,7 @@ pub struct ChunkManifest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChunkStorePut {
+pub struct ChunkPut {
     pub manifest_ref: String,
     pub object_kind: String,
     pub total_len: u64,
@@ -166,7 +166,7 @@ pub struct ChunkStorePut {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChunkStoreVerify {
+pub struct ChunkVerify {
     pub manifest_ref: String,
     pub total_len: u64,
     pub chunk_refs: Vec<String>,
@@ -174,14 +174,14 @@ pub struct ChunkStoreVerify {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChunkStoreRead {
+pub struct ChunkRead {
     pub manifest_ref: String,
     pub bytes: Vec<u8>,
     pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChunkStoreRangeRead {
+pub struct ChunkRangeRead {
     pub manifest_ref: String,
     pub offset: u64,
     pub length: u64,
@@ -190,7 +190,7 @@ pub struct ChunkStoreRangeRead {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChunkStoreSync {
+pub struct ChunkSync {
     pub manifest_ref: String,
     pub missing_before: Vec<String>,
     pub fetched_chunks: Vec<String>,
@@ -198,7 +198,7 @@ pub struct ChunkStoreSync {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChunkStoreIrohPublish {
+pub struct ChunkIrohPublish {
     pub ticket: String,
     pub manifest_ref: String,
     pub manifest_blob_ref: String,
@@ -207,7 +207,7 @@ pub struct ChunkStoreIrohPublish {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChunkStoreIrohFetch {
+pub struct ChunkIrohFetch {
     pub ticket: String,
     pub manifest_ref: String,
     pub manifest_blob_ref: String,
@@ -231,7 +231,7 @@ struct IrohChunkTicket {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChunkStoreGc {
+pub struct ChunkGc {
     pub dry_run: bool,
     pub decision: String,
     pub removed_manifests: Vec<String>,
@@ -242,14 +242,14 @@ pub struct ChunkStoreGc {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ChunkStoreGcInput<'a> {
+pub struct ChunkGcInput<'a> {
     pub dry_run: bool,
     pub retention_evidence: &'a crate::retention::DestructiveEvidence,
     pub apply_refs: &'a [String],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChunkStorePin {
+pub struct ChunkPin {
     pub kind: String,
     pub reference: String,
     pub pinned: bool,
@@ -257,7 +257,7 @@ pub struct ChunkStorePin {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChunkStoreIndexStatus {
+pub struct ChunkIndexStatus {
     pub manifests: u64,
     pub chunks: u64,
     pub available_chunks: u64,
@@ -286,13 +286,13 @@ pub struct ChunkAvailabilityDecision {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChunkStoreIndexRebuild {
-    pub status: ChunkStoreIndexStatus,
+pub struct ChunkIndexRebuild {
+    pub status: ChunkIndexStatus,
     pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ChunkStoreReceiptCheck {
+pub struct ChunkReceiptCheck {
     pub name: String,
     pub status: String,
 }

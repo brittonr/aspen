@@ -362,6 +362,111 @@ fn duplicate_replay_is_stable_and_conflicting_operation_id_denies() {
     assert_eq!(denied.after_state_ref, first.after_state_ref);
 }
 
+// r[verify molten.audit_f08.original_binding]
+// r[verify molten.audit_f08.unavailable_result]
+#[test]
+fn audit_duplicate_claim_does_not_return_another_consumers_token() {
+    let (policy, manifest, claimed_state, original_token) = enqueue_and_claim();
+    let original_claim = request(&manifest, '2', ACTOR_ID, INITIAL_TICK, DeliveryOperation::Claim);
+    let original_operation = claimed_state.operations[&original_claim.operation_id].clone();
+    let mut expiry =
+        request(&manifest, '3', OTHER_ACTOR_ID, INITIAL_TICK + VISIBILITY_TICKS, DeliveryOperation::ExpireLease {
+            token: original_token.clone(),
+        });
+    expiry.authority_refs.push(policy.expiry_authority_ref.clone());
+    let expired = transition(&manifest, &policy, &claimed_state, &expiry);
+    assert_eq!(expired.kind, DeliveryTransitionKind::RetryScheduled);
+    let reclaim = request(
+        &manifest,
+        '4',
+        OTHER_ACTOR_ID,
+        INITIAL_TICK + VISIBILITY_TICKS + RETRY_TICKS,
+        DeliveryOperation::Claim,
+    );
+    let reclaimed = transition(&manifest, &policy, &expired.next_state, &reclaim);
+    assert_eq!(reclaimed.kind, DeliveryTransitionKind::Claimed);
+    let current_token = reclaimed.token.as_ref().expect("reclaimed token");
+    assert_eq!(current_token.consumer_id, OTHER_ACTOR_ID);
+    assert_ne!(current_token.token_ref, original_token.token_ref);
+
+    let duplicate = transition(&manifest, &policy, &reclaimed.next_state, &original_claim);
+    assert_eq!(duplicate.decision, DeliveryDecisionKind::DuplicateReplay);
+    assert_eq!(duplicate.operation_ref, original_operation.operation_ref);
+    assert_eq!(duplicate.prior_operation_ref, Some(original_operation.operation_ref));
+    assert_eq!(duplicate.token, None);
+    assert_eq!(duplicate.next_state, reclaimed.next_state);
+    assert!(duplicate.timer_intents.is_empty());
+    assert!(!duplicate.worker_dispatch_authorized);
+}
+
+// r[verify molten.audit_f08.original_binding]
+// r[verify molten.audit_f08.state_authority]
+#[test]
+fn duplicate_claim_returns_exact_original_but_enqueue_returns_no_token() {
+    let (policy, manifest, claimed_state, token) = enqueue_and_claim();
+    let claim = request(&manifest, '2', ACTOR_ID, INITIAL_TICK, DeliveryOperation::Claim);
+    let duplicate = transition(&manifest, &policy, &claimed_state, &claim);
+    let original_operation = &claimed_state.operations[&claim.operation_id];
+    assert_eq!(duplicate.decision, DeliveryDecisionKind::DuplicateReplay);
+    assert_eq!(duplicate.token, Some(token));
+    assert_eq!(duplicate.operation_ref, original_operation.operation_ref);
+    assert_eq!(duplicate.prior_operation_ref.as_deref(), Some(original_operation.operation_ref.as_str()));
+    assert_eq!(duplicate.next_state, claimed_state);
+    assert!(duplicate.timer_intents.is_empty());
+    assert!(!duplicate.worker_dispatch_authorized);
+
+    let enqueue = enqueue_request(&manifest, '1', 'a');
+    let duplicate = transition(&manifest, &policy, &claimed_state, &enqueue);
+    assert_eq!(duplicate.decision, DeliveryDecisionKind::DuplicateReplay);
+    assert_eq!(duplicate.token, None);
+    assert_eq!(duplicate.operation_ref, claimed_state.operations[&enqueue.operation_id].operation_ref);
+    assert_eq!(duplicate.next_state, claimed_state);
+
+    let mut changed = claim;
+    changed.actor_id = OTHER_ACTOR_ID.to_string();
+    let denied = transition(&manifest, &policy, &claimed_state, &changed);
+    assert_eq!(denied.issue, Some(DeliveryIssue::ConflictingDuplicateOperation));
+    assert_eq!(denied.next_state, claimed_state);
+}
+
+// r[verify molten.audit_f08.unavailable_result]
+#[test]
+fn duplicate_claim_after_completion_preserves_original_identity_without_token() {
+    let (policy, manifest, claimed_state, token) = enqueue_and_claim();
+    let claim = request(&manifest, '2', ACTOR_ID, INITIAL_TICK, DeliveryOperation::Claim);
+    let ack = request(&manifest, '3', ACTOR_ID, INITIAL_TICK + 1, DeliveryOperation::Acknowledge { token });
+    let completed = transition(&manifest, &policy, &claimed_state, &ack);
+    assert_eq!(completed.kind, DeliveryTransitionKind::Acknowledged);
+    for original in [&claim, &ack] {
+        let duplicate = transition(&manifest, &policy, &completed.next_state, original);
+        let saved = &completed.next_state.operations[&original.operation_id];
+        assert_eq!(duplicate.decision, DeliveryDecisionKind::DuplicateReplay);
+        assert_eq!(duplicate.operation_ref, saved.operation_ref);
+        assert_eq!(duplicate.prior_operation_ref.as_deref(), Some(saved.operation_ref.as_str()));
+        assert_eq!(duplicate.token, None);
+        assert_eq!(duplicate.next_state, completed.next_state);
+    }
+}
+
+// r[verify molten.audit_f08.original_binding]
+// r[verify molten.audit_f08.unavailable_result]
+#[test]
+fn duplicate_claim_cannot_substitute_same_owners_extended_token() {
+    let (policy, manifest, claimed_state, token) = enqueue_and_claim();
+    let claim = request(&manifest, '2', ACTOR_ID, INITIAL_TICK, DeliveryOperation::Claim);
+    let extension = request(&manifest, '3', ACTOR_ID, INITIAL_TICK + 1, DeliveryOperation::ExtendLease { token });
+    let extended = transition(&manifest, &policy, &claimed_state, &extension);
+    assert_eq!(extended.kind, DeliveryTransitionKind::LeaseExtended);
+    let duplicate = transition(&manifest, &policy, &extended.next_state, &claim);
+    assert_eq!(duplicate.decision, DeliveryDecisionKind::DuplicateReplay);
+    assert_eq!(duplicate.token, None);
+    assert_eq!(duplicate.operation_ref, claimed_state.operations[&claim.operation_id].operation_ref);
+    assert_eq!(duplicate.next_state, extended.next_state);
+    let replayed_extension = transition(&manifest, &policy, &extended.next_state, &extension);
+    assert_eq!(replayed_extension.token, extended.token);
+    assert_eq!(replayed_extension.operation_ref, extended.operation_ref);
+}
+
 // r[verify molten.coordination_delivery.content_refs]
 #[test]
 fn metadata_bounds_and_worker_admission_fail_before_payload_effects() {

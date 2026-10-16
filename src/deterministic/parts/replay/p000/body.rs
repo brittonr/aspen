@@ -69,7 +69,7 @@ fn put_bytes(
     object_kind: &str,
     bytes: &[u8],
     chunk_size: u64,
-) -> Result<crate::chunk_store::ChunkStorePut> {
+) -> Result<crate::chunk_store::ChunkPut> {
     crate::chunk_store::put_bytes(root, object_kind, bytes, chunk_size)
 }
 
@@ -78,7 +78,7 @@ fn range_read(
     manifest_ref: &str,
     offset: u64,
     length: u64,
-) -> Result<crate::chunk_store::ChunkStoreRangeRead> {
+) -> Result<crate::chunk_store::ChunkRangeRead> {
     crate::chunk_store::range_read(root, manifest_ref, offset, length)
 }
 
@@ -112,7 +112,7 @@ fn parse_canonical_bytes(bytes: &[u8]) -> Result<IoValue> {
 }
 
 #[cfg(test)]
-fn read_object(root: &Path, manifest_ref: &str) -> Result<crate::chunk_store::ChunkStoreRead> {
+fn read_object(root: &Path, manifest_ref: &str) -> Result<crate::chunk_store::ChunkRead> {
     crate::chunk_store::read_object(root, manifest_ref)
 }
 

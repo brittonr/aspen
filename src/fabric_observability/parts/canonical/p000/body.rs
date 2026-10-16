@@ -21,85 +21,85 @@ const ADAPTER_STATUS_RECORD: &str = "fabric-observation-adapter-status-v1";
 const SNAPSHOT_RECORD: &str = "fabric-observation-snapshot-v1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalArtifact<T> {
+pub struct Artifact<T> {
     pub artifact: T,
     pub artifact_ref: String,
     pub value: preserves::IOValue,
 }
 
 // r[impl molten.fabric_observability.model]
-pub fn canonical_observation_profile(
+pub fn observation_profile(
     profile: &ObservationProfile,
-) -> crate::error::Result<CanonicalArtifact<ObservationProfile>> {
+) -> crate::error::Result<Artifact<ObservationProfile>> {
     let issues = validate_observation_profile(profile);
     require_valid("observation profile", &issues)?;
-    canonical_artifact(profile.clone(), observation_profile_value(profile))
+    artifact(profile.clone(), observation_profile_value(profile))
 }
 
-pub fn canonical_metric_descriptor(
+pub fn metric_descriptor(
     profile: &ObservationProfile,
     descriptor: &MetricDescriptor,
-) -> crate::error::Result<CanonicalArtifact<MetricDescriptor>> {
+) -> crate::error::Result<Artifact<MetricDescriptor>> {
     let issues = validate_metric_descriptor(profile, descriptor);
     require_valid("metric descriptor", &issues)?;
-    canonical_artifact(descriptor.clone(), metric_descriptor_value(descriptor))
+    artifact(descriptor.clone(), metric_descriptor_value(descriptor))
 }
 
-pub fn canonical_metric_sample(
+pub fn metric_sample(
     profile: &ObservationProfile,
     descriptor: &MetricDescriptor,
     sample: &MetricSample,
     as_of_tick: u64,
-) -> crate::error::Result<CanonicalArtifact<MetricSample>> {
+) -> crate::error::Result<Artifact<MetricSample>> {
     let sanitized = validate_metric_sample(profile, descriptor, sample, as_of_tick)
         .map_err(|issues| validation_error("metric sample", &issues))?;
-    canonical_artifact(sanitized.clone(), metric_sample_value(&sanitized))
+    artifact(sanitized.clone(), metric_sample_value(&sanitized))
 }
 
-pub fn canonical_observation_event(
+pub fn observation_event(
     profile: &ObservationProfile,
     event: &ObservationEvent,
     as_of_tick: u64,
-) -> crate::error::Result<CanonicalArtifact<ObservationEvent>> {
+) -> crate::error::Result<Artifact<ObservationEvent>> {
     let sanitized =
         validate_event(profile, event, as_of_tick).map_err(|issues| validation_error("observation event", &issues))?;
-    canonical_artifact(sanitized.clone(), observation_event_value(&sanitized))
+    artifact(sanitized.clone(), observation_event_value(&sanitized))
 }
 
 // r[impl molten.fabric_observability.health_scope]
-pub fn canonical_health_input(
+pub fn health_input(
     profile: &ObservationProfile,
     input: &HealthInput,
     as_of_tick: u64,
-) -> crate::error::Result<CanonicalArtifact<HealthInput>> {
+) -> crate::error::Result<Artifact<HealthInput>> {
     let mut issues = validate_observation_profile(profile);
     validate_health_input(profile, input, &mut issues);
     if as_of_tick > input.context.valid_until_tick {
         issues.push(ObservabilityIssue::ObservationStale(input.context.source_id.clone()));
     }
     require_valid("health input", &issues)?;
-    canonical_artifact(input.clone(), health_input_value(input))
+    artifact(input.clone(), health_input_value(input))
 }
 
-pub fn canonical_readiness_policy(
+pub fn readiness_policy(
     profile: &ObservationProfile,
     policy: &ReadinessPolicy,
-) -> crate::error::Result<CanonicalArtifact<ReadinessPolicy>> {
+) -> crate::error::Result<Artifact<ReadinessPolicy>> {
     let mut issues = validate_observation_profile(profile);
     validate_readiness_policy(profile, policy, &mut issues);
     require_valid("readiness policy", &issues)?;
-    canonical_artifact(policy.clone(), readiness_policy_value(policy))
+    artifact(policy.clone(), readiness_policy_value(policy))
 }
 
-pub fn canonical_health_decision(decision: &HealthDecision) -> crate::error::Result<CanonicalArtifact<HealthDecision>> {
-    canonical_artifact(decision.clone(), health_decision_value(decision))
+pub fn health_decision(decision: &HealthDecision) -> crate::error::Result<Artifact<HealthDecision>> {
+    artifact(decision.clone(), health_decision_value(decision))
 }
 
 // r[impl molten.fabric_observability.integrity_readonly]
-pub fn canonical_integrity_plan(
+pub fn integrity_plan(
     profile: &ObservationProfile,
     plan: &IntegrityPlan,
-) -> crate::error::Result<CanonicalArtifact<IntegrityPlan>> {
+) -> crate::error::Result<Artifact<IntegrityPlan>> {
     let probe = evaluate_integrity_plan(profile, plan, &[], &ScanCompletion {
         scanned_items: 0,
         declared_items: plan.targets.len(),
@@ -114,69 +114,69 @@ pub fn canonical_integrity_plan(
         .cloned()
         .collect::<Vec<_>>();
     require_valid("integrity plan", &structural_issues)?;
-    canonical_artifact(plan.clone(), integrity_plan_value(plan))
+    artifact(plan.clone(), integrity_plan_value(plan))
 }
 
-pub fn canonical_scan_observation(
+pub fn scan_observation(
     plan: &IntegrityPlan,
     observation: &ScanObservation,
-) -> crate::error::Result<CanonicalArtifact<ScanObservation>> {
+) -> crate::error::Result<Artifact<ScanObservation>> {
     let issues = validate_scan_observation(plan, observation);
     require_valid("scan observation", &issues)?;
-    canonical_artifact(observation.clone(), scan_observation_value(observation))
+    artifact(observation.clone(), scan_observation_value(observation))
 }
 
-pub fn canonical_integrity_result(
+pub fn integrity_result(
     profile: &ObservationProfile,
     result: &IntegrityResult,
-) -> crate::error::Result<CanonicalArtifact<IntegrityResult>> {
+) -> crate::error::Result<Artifact<IntegrityResult>> {
     let issues = validate_integrity_result(profile, result);
     require_valid("integrity result", &issues)?;
-    canonical_artifact(result.clone(), integrity_result_value(result))
+    artifact(result.clone(), integrity_result_value(result))
 }
 
 // r[impl molten.fabric_observability.adapter_contract]
-pub fn canonical_observation_adapter_profile(
+pub fn observation_adapter_profile(
     observation_profile: &ObservationProfile,
     adapter: &ObservationAdapterProfile,
-) -> crate::error::Result<CanonicalArtifact<ObservationAdapterProfile>> {
+) -> crate::error::Result<Artifact<ObservationAdapterProfile>> {
     let issues = validate_adapter_profile(observation_profile, adapter);
     require_valid("observation adapter profile", &issues)?;
-    canonical_artifact(adapter.clone(), adapter_profile_value(adapter))
+    artifact(adapter.clone(), adapter_profile_value(adapter))
 }
 
-pub fn canonical_adapter_outcome(
+pub fn adapter_outcome(
     profile: &ObservationProfile,
     adapter: &ObservationAdapterProfile,
     outcome: &AdapterOutcome,
-) -> crate::error::Result<CanonicalArtifact<AdapterOutcome>> {
+) -> crate::error::Result<Artifact<AdapterOutcome>> {
     let issues = validate_adapter_outcome(profile, adapter, outcome);
     require_valid("adapter outcome", &issues)?;
-    canonical_artifact(outcome.clone(), adapter_outcome_value(outcome))
+    artifact(outcome.clone(), adapter_outcome_value(outcome))
 }
 
-pub fn canonical_adapter_status(
+pub fn adapter_status(
     profile: &ObservationProfile,
     adapter: &ObservationAdapterProfile,
     status: &ObservationAdapterStatus,
-) -> crate::error::Result<CanonicalArtifact<ObservationAdapterStatus>> {
+) -> crate::error::Result<Artifact<ObservationAdapterStatus>> {
     let issues = validate_adapter_status(profile, adapter, status);
     require_valid("adapter status", &issues)?;
-    canonical_artifact(status.clone(), adapter_status_value(status))
+    artifact(status.clone(), adapter_status_value(status))
 }
 
 // r[impl molten.fabric_observability.health_scope]
-pub fn canonical_observation_snapshot(
+pub fn observation_snapshot(
     profile: &ObservationProfile,
     snapshot: &ObservationSnapshot,
     as_of_tick: u64,
-) -> crate::error::Result<CanonicalArtifact<ObservationSnapshot>> {
+) -> crate::error::Result<Artifact<ObservationSnapshot>> {
     let issues = validate_snapshot(profile, snapshot, as_of_tick);
     require_valid("observation snapshot", &issues)?;
-    canonical_artifact(snapshot.clone(), observation_snapshot_value(snapshot))
+    artifact(snapshot.clone(), observation_snapshot_value(snapshot))
 }
 
-pub fn fabric_observability_port_descriptors(profile_ref: &str) -> Vec<crate::fabric::FabricPortDescriptor> {
+pub fn port_descriptors(profile_ref: &str) -> Vec<crate::fabric::FabricPortDescriptor> {
     vec![
         observation_port_descriptor(profile_ref),
         integrity_port_descriptor(profile_ref),

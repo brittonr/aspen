@@ -46,7 +46,7 @@ pub struct AdmissionEvidence {
 }
 
 /// Build one bounded declared-surface admission receipt.
-pub fn build_admission_evidence(input: AdmissionInput) -> super::super::model::ComponentResult<AdmissionEvidence> {
+pub fn build_admission_evidence(input: AdmissionInput) -> super::super::model::Result<AdmissionEvidence> {
     validate_input_bounds(&input)?;
     let non_claims = ADMISSION_NON_CLAIMS.iter().map(|value| (*value).to_string()).collect();
     let mut receipt = AdmissionEvidence {
@@ -59,15 +59,15 @@ pub fn build_admission_evidence(input: AdmissionInput) -> super::super::model::C
 }
 
 /// Validate one declared-surface admission receipt end to end.
-pub fn validate_admission_evidence(receipt: &AdmissionEvidence) -> super::super::model::ComponentResult<()> {
+pub fn validate_admission_evidence(receipt: &AdmissionEvidence) -> super::super::model::Result<()> {
     validate_input_bounds(&receipt.input)?;
     if receipt.non_claims != ADMISSION_NON_CLAIMS.iter().map(|value| (*value).to_string()).collect::<Vec<_>>() {
-        return Err(super::super::model::ComponentDenial::new(
+        return Err(super::super::model::Denial::new(
             "component import admission receipt non-claims were extended or weakened",
         ));
     }
     if receipt.receipt_ref != evidence_identity(receipt)? {
-        return Err(super::super::model::ComponentDenial::new(
+        return Err(super::super::model::Denial::new(
             "component import admission receipt identity is stale or tampered",
         ));
     }
@@ -75,11 +75,11 @@ pub fn validate_admission_evidence(receipt: &AdmissionEvidence) -> super::super:
 }
 
 /// Reject receipts whose labels promote admission beyond its claims.
-pub fn validate_non_claims(receipt: &AdmissionEvidence) -> super::super::model::ComponentResult<()> {
+pub fn validate_non_claims(receipt: &AdmissionEvidence) -> super::super::model::Result<()> {
     validate_admission_evidence(receipt)?;
     for label in &receipt.input.labels {
         if FORBIDDEN_ADMISSION_CLAIMS.contains(&label.as_str()) {
-            return Err(super::super::model::ComponentDenial::new(format!(
+            return Err(super::super::model::Denial::new(format!(
                 "component import admission receipt overclaims {label}"
             )));
         }
@@ -113,7 +113,7 @@ pub fn admission_evidence_value(receipt: &AdmissionEvidence) -> preserves::IOVal
     ])
 }
 
-fn validate_input_bounds(input: &AdmissionInput) -> super::super::model::ComponentResult<()> {
+fn validate_input_bounds(input: &AdmissionInput) -> super::super::model::Result<()> {
     let fields = [
         ("manifest-ref", input.manifest_ref.as_str()),
         ("wit-package", input.wit_package.as_str()),
@@ -125,19 +125,19 @@ fn validate_input_bounds(input: &AdmissionInput) -> super::super::model::Compone
     ];
     for (label, field) in fields {
         if field.len() > MAX_RECEIPT_FIELD_BYTES {
-            return Err(super::super::model::ComponentDenial::new(format!(
+            return Err(super::super::model::Denial::new(format!(
                 "component import admission receipt {label} exceeds the bounded payload size"
             )));
         }
     }
     if input.blockers.len() > MAX_RECEIPT_BLOCKERS {
-        return Err(super::super::model::ComponentDenial::new(
+        return Err(super::super::model::Denial::new(
             "component import admission receipt blocker count exceeds the declared bound",
         ));
     }
     for blocker in &input.blockers {
         if blocker.len() > MAX_RECEIPT_FIELD_BYTES {
-            return Err(super::super::model::ComponentDenial::new(
+            return Err(super::super::model::Denial::new(
                 "component import admission receipt packs raw bytes beyond the declared bound",
             ));
         }
@@ -151,9 +151,9 @@ fn normalize_input(mut input: AdmissionInput) -> AdmissionInput {
     input
 }
 
-fn evidence_identity(receipt: &AdmissionEvidence) -> super::super::model::ComponentResult<String> {
+fn evidence_identity(receipt: &AdmissionEvidence) -> super::super::model::Result<String> {
     crate::preserves_rail::canonical_hash(&admission_evidence_value(receipt)).map_err(|error| {
-        super::super::model::ComponentDenial::new(format!("component import admission receipt hashing failed: {error}"))
+        super::super::model::Denial::new(format!("component import admission receipt hashing failed: {error}"))
     })
 }
 

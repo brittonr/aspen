@@ -4,7 +4,7 @@ Node-state containment is about preserving an acquired authority across operatio
 
 ## Acquisition changes the meaning of a root
 
-An operator-selected host path is input to an imperative bootstrap shell. After `NodeStateRoot::open` or `open_existing`, the operative resource is an open `cap_std::fs::Dir`. In the [authority implementation](../../../crates/molten-node-host/src/node/state/authority.rs), `NodeStateRoot` contains an `Arc<NodeStateInner>`, and that inner object owns the directory. Cloning the root shares that acquired authority; it does not resolve the bootstrap pathname again.
+An operator-selected host path is input to an imperative bootstrap shell. After `DirectoryRoot::open` or `open_existing`, the operative resource is an open `cap_std::fs::Dir`. In the [authority implementation](../../../crates/molten-node-host/src/node/state/authority.rs), `DirectoryRoot` contains an `Arc<Inner>`, and that inner object owns the directory. Cloning the root shares that acquired authority; it does not resolve the bootstrap pathname again.
 
 This distinction matters when the host directory tree changes. A textual root can be renamed and replaced by a different directory without changing its spelling. Code that later performs ambient I/O using the old spelling can reach the replacement. Code carrying the acquired directory continues to operate relative to its retained authority. The latter is the contract's relevant containment property, not a claim that all descendants are immutable or that concurrent writers have disappeared.
 
@@ -12,11 +12,11 @@ The bootstrap itself remains an effectful boundary. `open` validates the bootstr
 
 ## Namespace identity is more than a prefix
 
-The root derives named views such as identity, ledger, control inbox, and control outbox. A `NodeStateNamespace` carries the root identity, namespace kind, logical scope, and its own directory handle. Its methods route bounded reads, restricted writes, enumeration, and removal through that view. See the [namespace implementation](../../../crates/molten-node-host/src/node/state/namespace.rs).
+The root derives named views such as identity, ledger, control inbox, and control outbox. A `Scope` carries the root identity, namespace kind, logical scope, and its own directory handle. Its methods route bounded reads, restricted writes, enumeration, and removal through that view. See the [namespace implementation](../../../crates/molten-node-host/src/node/state/namespace.rs).
 
 The namespace kind is not equivalent to a unique physical directory name. For example, the inspected mapping sends both `Identity` and `Secrets` to `identity`, and both `ControlIngress` and `Ingress` to `control/iroh-ingress`. Nevertheless, entry validation compares namespace kinds as well as root identity and scope. A physical-directory coincidence is therefore insufficient to establish that an enumerated entry belongs to another logical view.
 
-`NodeStateEntry` records its originating root, namespace, scope, logical path, name, and observed kind. Before `read_entry` or `remove_entry`, `validate_entry` checks shared-root pointer identity, namespace equality, and scope equality. Regular-file operations additionally reject entries whose recorded kind is not regular, and then use the namespace filesystem operations. Enumeration is not a blanket authorization to act through any root with a matching filename.
+`Entry` records its originating root, namespace, scope, logical path, name, and observed kind. Before `read_entry` or `remove_entry`, `validate_entry` checks shared-root pointer identity, namespace equality, and scope equality. Regular-file operations additionally reject entries whose recorded kind is not regular, and then use the namespace filesystem operations. Enumeration is not a blanket authorization to act through any root with a matching filename.
 
 This process-local pointer comparison is authority provenance, not canonical artifact identity. It is neither a stable serialization format nor a Rust-layout identity claim. Canonical receipts do not derive identity from host addresses or diagnostic paths.
 

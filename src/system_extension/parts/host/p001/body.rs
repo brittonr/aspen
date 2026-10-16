@@ -1,11 +1,11 @@
 
-impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
+impl<E: SystemExtensionExecutor> Dispatcher<E> {
     // r[impl molten.system_extension.execution_profiles]
-    pub fn new(admitted: super::CanonicalAdmittedSystemExtensionManifest, executor: E) -> crate::error::Result<Self> {
+    pub fn new(admitted: super::AdmittedManifest, executor: E) -> crate::error::Result<Self> {
         let actual = executor.execution_profile();
         let expected = admitted.manifest().execution_profile;
         if actual != expected {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
+            return Err(crate::error::Failure::invalid_harness(format!(
                 "system-extension execution profile mismatch: executor={} manifest={}",
                 actual.as_str(),
                 expected.as_str()
@@ -32,7 +32,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
 
     // r[impl molten.system_extension.native_host.recovery]
     pub fn from_recovered_state(
-        admitted: super::CanonicalAdmittedSystemExtensionManifest,
+        admitted: super::AdmittedManifest,
         executor: E,
         input: RecoveredState,
     ) -> crate::error::Result<Self> {
@@ -47,17 +47,17 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         let actual = executor.execution_profile();
         let expected = admitted.manifest().execution_profile;
         if actual != expected {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "recovered system-extension executor profile mismatch",
             ));
         }
         if state.generation < admitted.manifest().initial_generation || state.phase == super::LifecyclePhase::Absent {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "recovered system-extension state is not compatible with the admitted manifest",
             ));
         }
         if !usage.is_idle() {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "recovered system-extension state contains live resource usage",
             ));
         }
@@ -100,11 +100,11 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         self.semantic_state_ref.as_deref()
     }
 
-    pub fn evidence(&self) -> &[HostEvidence] {
+    pub fn evidence(&self) -> &[Evidence] {
         &self.evidence
     }
 
-    pub fn manifest(&self) -> &super::CanonicalAdmittedSystemExtensionManifest {
+    pub fn manifest(&self) -> &super::AdmittedManifest {
         &self.admitted
     }
 
@@ -136,7 +136,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         payload_ref: &str,
         accounted_bytes: u64,
         logical_tick: u64,
-    ) -> crate::error::Result<HostDispatchResult> {
+    ) -> crate::error::Result<DispatchResult> {
         let event = self.build_event(super::CallbackKind::Request, Some(payload_ref), accounted_bytes, logical_tick)?;
         self.dispatch(event)
     }
@@ -146,7 +146,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         payload_ref: &str,
         accounted_bytes: u64,
         logical_tick: u64,
-    ) -> crate::error::Result<HostDispatchResult> {
+    ) -> crate::error::Result<DispatchResult> {
         let event = self.build_event(super::CallbackKind::Message, Some(payload_ref), accounted_bytes, logical_tick)?;
         self.dispatch(event)
     }
@@ -154,7 +154,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
     // r[impl molten.system_extension.callbacks]
     // r[impl molten.system_extension.typed_effects]
     // r[impl molten.system_extension.backpressure]
-    pub fn dispatch(&mut self, event: super::CallbackEvent) -> crate::error::Result<HostDispatchResult> {
+    pub fn dispatch(&mut self, event: super::CallbackEvent) -> crate::error::Result<DispatchResult> {
         self.ensure_evidence_capacity(CALLBACK_FAILURE_EVIDENCE_ITEMS)?;
         let plan = super::plan_callback_dispatch(
             self.admitted.manifest(),
@@ -166,7 +166,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
         .map_err(|issues| validation_error("callback dispatch", &issues))?;
         self.usage = plan.next_usage;
         let Some(invocation) = plan.invocation else {
-            return Ok(HostDispatchResult::Deferred {
+            return Ok(DispatchResult::Deferred {
                 decision: plan.decision,
                 usage: self.usage,
             });
@@ -230,7 +230,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
                     self.semantic_state_ref = Some(state_ref.clone());
                 }
                 self.state.health = outcome.health;
-                let receipt = super::canonical_callback_receipt(super::CallbackReceiptInput {
+                let receipt = super::callback_receipt(super::CallbackReceiptInput {
                     manifest_ref: self.admitted.manifest_ref(),
                     extension_id: &self.admitted.manifest().extension_id,
                     service_id: &self.admitted.manifest().service_id,
@@ -242,7 +242,7 @@ impl<E: SystemExtensionExecutor> SystemExtensionHost<E> {
                 })?;
                 self.record_callback_receipt(receipt.clone())?;
                 self.record_current_readiness(&receipt.receipt_ref)?;
-                Ok(HostDispatchResult::Executed {
+                Ok(DispatchResult::Executed {
                     approved_effects: receipt.approved_effects.clone(),
                     receipt,
                     outcome,

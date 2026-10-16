@@ -16,8 +16,8 @@ const FIRST_SEQUENCE: u64 = 0;
 const EXPECTED_DURABILITY_PORT_COUNT: usize = 4;
 const SIMULATED_DELAY_TICKS: u64 = 3;
 
-pub(crate) fn profile(kind: DurableAdapterKind) -> CanonicalDurableProfile {
-    canonical_durable_profile(&DurableStateProfile {
+pub(crate) fn profile(kind: DurableAdapterKind) -> DurableProfile {
+    durable_profile(&DurableStateProfile {
         schema: DURABLE_STATE_PROFILE_SCHEMA.to_string(),
         profile_id: kind.as_str().to_string(),
         profile_ref: PROFILE_DECLARATION_REF.to_string(),
@@ -207,7 +207,7 @@ fn deterministic_adapter_models_precommit_and_postcommit_failures_without_implic
         SimulatedDurableStateAdapter::new(profile(DurableAdapterKind::DeterministicSimulation), descriptor())
             .expect("simulation adapter");
     let denied = adapter
-        .append(&append_request(DurabilityLevel::ProcessLoss), Some(&SimulatedDurabilityFault::CrashBeforeMutation))
+        .append(&append_request(DurabilityLevel::ProcessLoss), Some(&SimulatedFault::CrashBeforeMutation))
         .expect("precommit failure receipt");
     assert_eq!(denied.outcome, MutationOutcome::FailedBeforeMutation);
     assert!(adapter.state().durable_log.is_empty());
@@ -215,14 +215,14 @@ fn deterministic_adapter_models_precommit_and_postcommit_failures_without_implic
     let uncertain = adapter
         .append(
             &append_request(DurabilityLevel::ProcessLoss),
-            Some(&SimulatedDurabilityFault::ResponseLostAfterCommit),
+            Some(&SimulatedFault::ResponseLostAfterCommit),
         )
         .expect("postcommit response loss");
     assert_eq!(uncertain.outcome, MutationOutcome::Uncertain);
     assert!(uncertain.value.clone().collect_simple_record("fabric-durability-transition-v1", None).is_some());
     assert_eq!(adapter.state().durable_log.len(), 1);
     adapter
-        .inject_fault(&SimulatedDurabilityFault::DelayCompletion {
+        .inject_fault(&SimulatedFault::DelayCompletion {
             ticks: SIMULATED_DELAY_TICKS,
         })
         .expect("modeled latency");
@@ -252,7 +252,7 @@ fn deterministic_adapter_corruption_requires_quarantine_and_stale_generation_den
         permit_repair: false,
         permit_quarantine: true,
     });
-    let canonical = canonical_recovery_decision(&simulation, &state, decision).expect("recovery evidence");
+    let canonical = recovery_decision(&simulation, &state, decision).expect("recovery evidence");
     assert_eq!(canonical.decision.disposition, RecoveryDisposition::QuarantineRequired);
     let text = crate::preserves_rail::to_text(&canonical.value).expect("recovery text");
     assert!(text.contains("SnapshotCorrupt"));

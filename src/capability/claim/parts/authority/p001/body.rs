@@ -1,6 +1,6 @@
 
 // r[impl molten.claim_authority.downstream_consumption]
-pub fn decide_claim_use(input: &ClaimUseInput) -> Result<ClaimUseDecision> {
+pub fn decide_use(input: &UseInput) -> Result<UseDecision> {
     validate_ref(&input.required_selector_ref, "claim use selector ref")?;
     validate_ref(&input.subject_ref, "claim use subject ref")?;
     validate_ref(&input.freshness_ref, "claim use freshness ref")?;
@@ -46,7 +46,7 @@ pub fn decide_claim_use(input: &ClaimUseInput) -> Result<ClaimUseDecision> {
         field_sequence("caveats", string_values(&[EVIDENCE_ONLY_CAVEAT.to_string()])?),
     ]);
     let decision_ref = canonical_hash(&value)?;
-    Ok(ClaimUseDecision {
+    Ok(UseDecision {
         decision: decision.to_string(),
         diagnostics,
         value,
@@ -56,7 +56,7 @@ pub fn decide_claim_use(input: &ClaimUseInput) -> Result<ClaimUseDecision> {
 
 // r[impl molten.claim_authority.peer_diagnostics]
 // r[impl molten.claim_authority.peer_session_context]
-pub fn peer_claim_authority_diagnostic(input: &PeerClaimDiagnosticInput) -> Result<PeerClaimDiagnostic> {
+pub fn peer_diagnostic(input: &PeerDiagnosticInput) -> Result<PeerDiagnostic> {
     validate_ref(&input.peer_ref, "peer claim diagnostic peer ref")?;
     if let Some(bootstrap_ref) = input.bootstrap_ref.as_ref() {
         validate_ref(bootstrap_ref, "peer claim diagnostic bootstrap ref")?;
@@ -104,7 +104,7 @@ pub fn peer_claim_authority_diagnostic(input: &PeerClaimDiagnosticInput) -> Resu
         field_sequence("caveats", string_values(&[EVIDENCE_ONLY_CAVEAT.to_string()])?),
     ]);
     let diagnostic_ref = canonical_hash(&value)?;
-    Ok(PeerClaimDiagnostic {
+    Ok(PeerDiagnostic {
         decision: decision.to_string(),
         diagnostics,
         value,
@@ -113,7 +113,7 @@ pub fn peer_claim_authority_diagnostic(input: &PeerClaimDiagnosticInput) -> Resu
 }
 
 // r[impl molten.claim_authority.registry_readback]
-pub fn claim_readback_summary(value: &IoValue) -> Result<Option<String>> {
+pub fn readback_summary(value: &IoValue) -> Result<Option<String>> {
     if value.collect_simple_record("claim-subject-selector-v1", Some(8)).is_some() {
         return Ok(Some("claim subject selector (evidence candidate only)".to_string()));
     }
@@ -126,12 +126,12 @@ pub fn claim_readback_summary(value: &IoValue) -> Result<Option<String>> {
     Ok(None)
 }
 
-fn admission_diagnostics(input: &ClaimAdmissionInput, selector_ref: &str) -> Result<Vec<String>> {
+fn admission_diagnostics(input: &AdmissionInput, selector_ref: &str) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
     if is_broad_selector(&input.selector) && input.selector.caveats.is_empty() {
         diagnostics.push("broad-selector-without-visible-attenuation".to_string());
     }
-    let request = claim_capability_request(RequestInput {
+    let request = capability_request(RequestInput {
         holder_ref: &input.claim.holder_ref,
         session_ref: &input.claim.session_ref,
         context_ref: &input.claim.context_ref,
@@ -192,7 +192,7 @@ fn admission_diagnostics(input: &ClaimAdmissionInput, selector_ref: &str) -> Res
     Ok(diagnostics)
 }
 
-fn validate_admission_refs(input: &ClaimAdmissionInput) -> Result<()> {
+fn validate_admission_refs(input: &AdmissionInput) -> Result<()> {
     validate_refs(&input.ucan_verification_refs, "claim UCAN verification ref")?;
     validate_refs(&input.basalt_enforcement_refs, "claim Basalt enforcement ref")?;
     validate_refs(&input.freshness_refs, "claim freshness ref")?;
@@ -203,16 +203,16 @@ fn validate_admission_refs(input: &ClaimAdmissionInput) -> Result<()> {
     validate_refs(&input.local_fixture_grant_refs, "claim local fixture grant ref")
 }
 
-fn denied_claim_admission(
-    input: &ClaimAdmissionInput,
+fn denied_admission(
+    input: &AdmissionInput,
     selector_ref: String,
     diagnostics: Vec<String>,
-) -> Result<ClaimAdmission> {
-    let claim_value = authority_claim_value(&input.claim)?;
+) -> Result<Admission> {
+    let claim_value = value(&input.claim)?;
     let claim_ref = canonical_hash(&claim_value)?;
-    let value = claim_admission_value(input, DECISION_DENY, &diagnostics, &selector_ref, &claim_ref)?;
+    let value = admission_value(input, DECISION_DENY, &diagnostics, &selector_ref, &claim_ref)?;
     let receipt_ref = canonical_hash(&value)?;
-    Ok(ClaimAdmission {
+    Ok(Admission {
         decision: DECISION_DENY.to_string(),
         diagnostics,
         claim_ref,
@@ -222,8 +222,8 @@ fn denied_claim_admission(
     })
 }
 
-fn claim_admission_value(
-    input: &ClaimAdmissionInput,
+fn admission_value(
+    input: &AdmissionInput,
     decision: &str,
     diagnostics: &[String],
     selector_ref: &str,
@@ -266,7 +266,7 @@ fn claim_admission_value(
     ]))
 }
 
-fn selector_checks(selector: &ClaimSubjectSelector) -> Vec<(&'static str, &'static str)> {
+fn selector_checks(selector: &SubjectSelector) -> Vec<(&'static str, &'static str)> {
     vec![
         ("hash-agnostic-selector", "pass"),
         ("broad-selector-visible", status(!is_broad_selector(selector) || !selector.caveats.is_empty())),
@@ -277,6 +277,6 @@ fn selector_checks(selector: &ClaimSubjectSelector) -> Vec<(&'static str, &'stat
     ]
 }
 
-fn is_broad_selector(selector: &ClaimSubjectSelector) -> bool {
+fn is_broad_selector(selector: &SubjectSelector) -> bool {
     BROAD_SELECTOR_KINDS.iter().any(|kind| *kind == selector.selector_kind)
 }

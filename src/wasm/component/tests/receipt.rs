@@ -2,21 +2,16 @@ use super::super::*;
 
 const OVER_BOUND_RECEIPT_REF_COUNT: usize = 129;
 
-fn receipt_input(
-    fixture: &super::support::ComponentFixture,
-    stage: ComponentReceiptStage,
-    decision: ComponentReceiptDecision,
-) -> ComponentReceiptInput {
-    let denial_class = (decision == ComponentReceiptDecision::Deny)
-        .then(|| ComponentDenialClass::ComponentAdmissionDenial.as_str().to_string());
-    ComponentReceiptInput {
+fn input(fixture: &super::support::Fixture, stage: Stage, decision: Decision) -> Input {
+    let denial_class = (decision == Decision::Deny).then(|| DenialClass::ComponentAdmissionDenial.as_str().to_string());
+    Input {
         stage,
         decision,
         evidence_scope: EvidenceScope::Production,
-        consumer: ComponentConsumer::Actor,
+        consumer: Consumer::Actor,
         component_ref: fixture.bundle.component.content_ref.clone(),
         wit_ref: fixture.bundle.wit.content_ref.clone(),
-        profile_ref: component_profile_ref(&fixture.profile),
+        profile_ref: r#ref(&fixture.profile),
         runtime_configuration_ref: super::support::fixture_ref("runtime-configuration"),
         bundle_ref: Some(fixture.bundle.bundle_ref.clone()),
         imports: Vec::new(),
@@ -39,44 +34,41 @@ fn receipt_input(
 }
 
 #[test]
-fn every_component_stage_emits_a_canonical_profile_bound_receipt() {
+fn every_stage_emits_a_canonical_profile_bound() {
     // r[verify molten.wasm_component.receipts]
-    let fixture = super::support::ComponentFixture::new(ComponentConsumer::Actor);
+    let fixture = super::support::Fixture::new(Consumer::Actor);
     for stage in [
-        ComponentReceiptStage::Inspection,
-        ComponentReceiptStage::Instantiation,
-        ComponentReceiptStage::Execution,
-        ComponentReceiptStage::Hostcall,
-        ComponentReceiptStage::Denial,
-        ComponentReceiptStage::Migration,
+        Stage::Inspection,
+        Stage::Instantiation,
+        Stage::Execution,
+        Stage::Hostcall,
+        Stage::Denial,
+        Stage::Migration,
     ] {
-        let decision = if stage == ComponentReceiptStage::Denial {
-            ComponentReceiptDecision::Deny
+        let decision = if stage == Stage::Denial {
+            Decision::Deny
         } else {
-            ComponentReceiptDecision::Pass
+            Decision::Pass
         };
-        let mut input = receipt_input(&fixture, stage, decision);
-        if matches!(
-            stage,
-            ComponentReceiptStage::Instantiation | ComponentReceiptStage::Execution | ComponentReceiptStage::Hostcall
-        ) {
+        let mut input = input(&fixture, stage, decision);
+        if matches!(stage, Stage::Instantiation | Stage::Execution | Stage::Hostcall) {
             input.parent_refs = vec![super::support::fixture_ref("parent-stage")];
         }
-        if stage == ComponentReceiptStage::Execution {
+        if stage == Stage::Execution {
             input.input_ref = Some(super::support::fixture_ref("input"));
             input.output_ref = Some(super::support::fixture_ref("output"));
             input.fuel_limit = Some(fixture.profile.resources.fuel);
             input.fuel_remaining = Some(fixture.profile.resources.fuel);
         }
-        if stage == ComponentReceiptStage::Hostcall {
+        if stage == Stage::Hostcall {
             input.imports = vec!["molten:fixture/effect@1.0.0".to_string()];
             input.capabilities = vec!["fixture-effect".to_string()];
             input.recorded_effect_refs = vec![super::support::fixture_ref("recorded-effect")];
             input.input_ref = Some(super::support::fixture_ref("hostcall-input"));
             input.output_ref = Some(super::support::fixture_ref("hostcall-output"));
         }
-        let receipt = build_component_receipt(input).expect("component receipt");
-        validate_component_receipt(&receipt).expect("receipt validates");
+        let receipt = build(input).expect("component receipt");
+        validate(&receipt).expect("receipt validates");
         assert!(super::super::model::valid_content_ref(&receipt.receipt_ref));
     }
 }
@@ -85,68 +77,59 @@ fn every_component_stage_emits_a_canonical_profile_bound_receipt() {
 fn stale_cross_profile_and_overclaiming_receipts_fail_closed() {
     // r[verify molten.wasm_component.receipts]
     // r[verify molten.wasm_component.nonclaims]
-    let fixture = super::support::ComponentFixture::new(ComponentConsumer::Actor);
-    let expected_input = receipt_input(&fixture, ComponentReceiptStage::Inspection, ComponentReceiptDecision::Pass);
-    let receipt = build_component_receipt(expected_input.clone()).expect("receipt");
+    let fixture = super::support::Fixture::new(Consumer::Actor);
+    let expected_input = input(&fixture, Stage::Inspection, Decision::Pass);
+    let receipt = build(expected_input.clone()).expect("receipt");
 
-    let mut missing_evidence =
-        receipt_input(&fixture, ComponentReceiptStage::Inspection, ComponentReceiptDecision::Pass);
+    let mut missing_evidence = input(&fixture, Stage::Inspection, Decision::Pass);
     missing_evidence.valence_evidence_refs.clear();
-    assert!(build_component_receipt(missing_evidence).is_err());
+    assert!(build(missing_evidence).is_err());
 
-    let mut over_bound = receipt_input(&fixture, ComponentReceiptStage::Inspection, ComponentReceiptDecision::Pass);
+    let mut over_bound = input(&fixture, Stage::Inspection, Decision::Pass);
     over_bound.policy_refs = vec![super::support::fixture_ref("over-bound-policy"); OVER_BOUND_RECEIPT_REF_COUNT];
-    assert!(build_component_receipt(over_bound).is_err());
+    assert!(build(over_bound).is_err());
 
-    let missing_hostcall = receipt_input(&fixture, ComponentReceiptStage::Hostcall, ComponentReceiptDecision::Pass);
-    assert!(build_component_receipt(missing_hostcall).is_err());
+    let missing_hostcall = input(&fixture, Stage::Hostcall, Decision::Pass);
+    assert!(build(missing_hostcall).is_err());
 
-    let mut unknown_denial = receipt_input(&fixture, ComponentReceiptStage::Denial, ComponentReceiptDecision::Deny);
+    let mut unknown_denial = input(&fixture, Stage::Denial, Decision::Deny);
     unknown_denial.trap_class = Some("guest-controlled-class".to_string());
     unknown_denial.diagnostics = vec!["guest-controlled-class".to_string()];
-    assert!(build_component_receipt(unknown_denial).is_err());
+    assert!(build(unknown_denial).is_err());
 
-    let mut raw_denial = receipt_input(&fixture, ComponentReceiptStage::Denial, ComponentReceiptDecision::Deny);
+    let mut raw_denial = input(&fixture, Stage::Denial, Decision::Deny);
     raw_denial.diagnostics = vec!["raw runtime diagnostic".to_string()];
-    assert!(build_component_receipt(raw_denial).is_err());
+    assert!(build(raw_denial).is_err());
 
     let mut self_consistent_stale = receipt.clone();
     self_consistent_stale.input.profile_ref = super::support::fixture_ref("other-profile");
-    self_consistent_stale.receipt_ref =
-        crate::preserves_rail::canonical_hash(&component_receipt_value(&self_consistent_stale))
-            .expect("self-consistent stale receipt hash");
-    assert!(validate_component_receipt_against(&self_consistent_stale, &expected_input).is_err());
+    self_consistent_stale.receipt_ref = crate::preserves_rail::canonical_hash(&value(&self_consistent_stale))
+        .expect("self-consistent stale receipt hash");
+    assert!(validate_against(&self_consistent_stale, &expected_input).is_err());
 
     let mut stale = receipt.clone();
     stale.input.profile_ref = super::support::fixture_ref("other-profile");
-    assert!(validate_component_receipt(&stale).is_err());
+    assert!(validate(&stale).is_err());
 
-    let mut wrong_parent_input =
-        receipt_input(&fixture, ComponentReceiptStage::Instantiation, ComponentReceiptDecision::Pass);
+    let mut wrong_parent_input = input(&fixture, Stage::Instantiation, Decision::Pass);
     wrong_parent_input.parent_refs = vec![super::support::fixture_ref("wrong-parent")];
-    let wrong_parent = build_component_receipt(wrong_parent_input).expect("self-consistent wrong parent receipt");
-    assert!(validate_component_receipt_chain(&[receipt.clone(), wrong_parent]).is_err());
+    let wrong_parent = build(wrong_parent_input).expect("self-consistent wrong parent receipt");
+    assert!(validate_chain(&[receipt.clone(), wrong_parent]).is_err());
     assert!(!replay_receipts_match(&[], &[]));
 
     let mut overclaim = receipt;
     overclaim.non_claims.retain(|claim| claim != "not-behavioral-correctness");
-    overclaim.receipt_ref =
-        crate::preserves_rail::canonical_hash(&component_receipt_value(&overclaim)).expect("tampered receipt hash");
-    assert!(validate_component_receipt(&overclaim).is_err());
+    overclaim.receipt_ref = crate::preserves_rail::canonical_hash(&value(&overclaim)).expect("tampered receipt hash");
+    assert!(validate(&overclaim).is_err());
 }
 
 #[test]
-fn operator_readback_and_replay_keep_component_evidence_distinct() {
+fn operator_readback_and_replay_keep_evidence_distinct() {
     // r[verify molten.wasm_component.receipts]
     // r[verify molten.wasm_component.migration]
-    let fixture = super::support::ComponentFixture::new(ComponentConsumer::Actor);
-    let receipt = build_component_receipt(receipt_input(
-        &fixture,
-        ComponentReceiptStage::Migration,
-        ComponentReceiptDecision::Pass,
-    ))
-    .expect("migration receipt");
-    let summary = component_receipt_summary(&receipt);
+    let fixture = super::support::Fixture::new(Consumer::Actor);
+    let receipt = build(input(&fixture, Stage::Migration, Decision::Pass)).expect("migration receipt");
+    let summary = summary(&receipt);
     assert!(summary.contains("wasm component migration pass"));
     assert!(summary.contains("non-normative"));
     assert!(!summary.contains("molten.wasm.abi.v1"));

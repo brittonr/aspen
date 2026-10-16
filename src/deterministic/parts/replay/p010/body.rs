@@ -7,7 +7,7 @@ fn parse_replay_rollup_receipt(value: &IoValue, rollup_ref: &str) -> Result<Pars
     }
     let fields = value
         .collect_simple_record("deterministic-replay-rollup-v1", Some(REPLAY_ROLLUP_LEGACY_FIELD_COUNT))
-        .ok_or_else(|| crate::error::MoltenError::invalid_harness("expected <deterministic-replay-rollup-v1 ...>"))?;
+        .ok_or_else(|| crate::error::Failure::invalid_harness("expected <deterministic-replay-rollup-v1 ...>"))?;
     parse_replay_rollup_fields(&fields, rollup_ref, false)
 }
 

@@ -1,0 +1,33 @@
+{
+  "attempt": "5/20",
+  "command": "env TMPDIR=<task-owned-temporary-directory> nix build .#checks.x86_64-linux.nextest --no-update-lock-file --no-link --print-out-paths -L",
+  "output": "/nix/store/pnw04i1dcsfh0a8g64qpyh3n9hg0aghw-molten-nextest",
+  "receipt_ref": "blake3:9ccc269bef6559310085c6893fe20b1effe7787feeadc314f77c6ba3de6ca537",
+  "counts": {
+    "total": 1694,
+    "passed": 1694,
+    "failed": 0,
+    "skipped": 0
+  },
+  "executed_restored_suites": {
+    "content_replication": 12,
+    "fabric_simulation_boundary": 3
+  },
+  "feature_only_extent": {
+    "present_in_hermetic_binary_metadata": true,
+    "hermetic_default_cases": 0,
+    "separate_cargo_executable_extents_cases_passed": 6
+  },
+  "separate_cargo_command": "env TMPDIR=<task-owned-temporary-directory> nix develop -c cargo test -p molten --features executable-extents --test content_replication --test fabric_simulation_boundary --test executable_extent --offline --locked",
+  "source_corpus_inventory": {
+    "rust_files": 1890,
+    "glob_queries": 36,
+    "admitted_truncated_partitions": 0
+  },
+  "non_claims": [
+    "not a full flake-check pass",
+    "not active-change acceptance or sync authority",
+    "default Nix run does not execute feature-only extent cases",
+    "Nix store path is a local verification locator, not a product dependency"
+  ]
+}

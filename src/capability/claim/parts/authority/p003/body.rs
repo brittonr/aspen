@@ -11,8 +11,8 @@ mod tests {
         vec![local_ref(label)]
     }
 
-    fn selector() -> ClaimSubjectSelector {
-        ClaimSubjectSelector {
+    fn selector() -> SubjectSelector {
+        SubjectSelector {
             selector_kind: SELECTOR_EXACT_REF.to_string(),
             selector_value: local_ref("subject"),
             subject_kind: "artifact".to_string(),
@@ -22,8 +22,8 @@ mod tests {
         }
     }
 
-    fn claim(selector_ref: String) -> AuthorityClaim {
-        AuthorityClaim {
+    fn sample(selector_ref: String) -> Statement {
+        Statement {
             issuer_ref: local_ref("issuer"),
             holder_ref: local_ref("holder"),
             session_ref: local_ref("session"),
@@ -70,7 +70,7 @@ mod tests {
             revocation_refs: Vec::new(),
             evidence_refs: refs("proofset-evidence"),
         };
-        let request = claim_capability_request(RequestInput {
+        let request = capability_request(RequestInput {
             holder_ref: &local_ref("holder"),
             session_ref: &local_ref("session"),
             context_ref: &local_ref("context"),
@@ -84,13 +84,13 @@ mod tests {
         crate::capability_tokens::admit_capability(&proofset, &request).expect("capability admission")
     }
 
-    fn admission_input() -> ClaimAdmissionInput {
+    fn admission_input() -> AdmissionInput {
         let selector = selector();
         let selector_ref =
-            canonical_hash(&claim_subject_selector_value(&selector).expect("selector")).expect("selector ref");
-        ClaimAdmissionInput {
+            canonical_hash(&subject_selector_value(&selector).expect("selector")).expect("selector ref");
+        AdmissionInput {
             selector,
-            claim: claim(selector_ref.clone()),
+            claim: sample(selector_ref.clone()),
             at_tick: 1,
             capability_admission: Some(admitted_capability(&selector_ref)),
             ucan_verification_refs: refs("ucan"),
@@ -112,7 +112,7 @@ mod tests {
     // r[verify molten.claim_authority.positive_negative_tests]
     #[test]
     fn admitted_external_claim_binds_capability_ucan_and_basalt_path() {
-        let admission = admit_authority_claim(&admission_input()).expect("claim admission");
+        let admission = admit(&admission_input()).expect("claim admission");
         assert_eq!(admission.decision, DECISION_PASS);
         assert!(
             crate::preserves_rail::to_text(&admission.value)
@@ -130,7 +130,7 @@ mod tests {
         input.transport_observation_refs = refs("transport");
         input.registry_discovery_refs = refs("registry");
         input.local_fixture_grant_refs = refs("fixture-grant");
-        let admission = admit_authority_claim(&input).expect("claim admission");
+        let admission = admit(&input).expect("claim admission");
         assert_eq!(admission.decision, DECISION_DENY);
         assert!(admission.diagnostics.iter().any(|diagnostic| diagnostic == "missing-claim-capability-admission"));
         assert!(
@@ -160,9 +160,9 @@ mod tests {
         input.selector.selector_value = "cluster:friend".to_string();
         input.selector.caveats.clear();
         let selector_ref =
-            canonical_hash(&claim_subject_selector_value(&input.selector).expect("selector")).expect("selector ref");
+            canonical_hash(&subject_selector_value(&input.selector).expect("selector")).expect("selector ref");
         input.claim.subject_selector_ref = selector_ref;
-        let admission = admit_authority_claim(&input).expect("claim admission");
+        let admission = admit(&input).expect("claim admission");
         assert_eq!(admission.decision, DECISION_DENY);
         assert!(
             admission
@@ -174,9 +174,9 @@ mod tests {
 
     // r[verify molten.claim_authority.downstream_consumption]
     #[test]
-    fn downstream_claim_use_is_exact_and_wrong_kind_denies() {
-        let admission = admit_authority_claim(&admission_input()).expect("claim admission");
-        let use_decision = decide_claim_use(&ClaimUseInput {
+    fn downstream_use_is_exact_and_wrong_kind_denies() {
+        let admission = admit(&admission_input()).expect("claim admission");
+        let use_decision = decide_use(&UseInput {
             admission: admission.clone(),
             required_selector_ref: admission.selector_ref.clone(),
             required_claim_kind: "class-membership".to_string(),
@@ -190,7 +190,7 @@ mod tests {
         assert_eq!(use_decision.decision, DECISION_PASS);
 
         let required_selector_ref = admission.selector_ref.clone();
-        let wrong_kind = decide_claim_use(&ClaimUseInput {
+        let wrong_kind = decide_use(&UseInput {
             admission,
             required_selector_ref,
             required_claim_kind: "release-channel-attestation".to_string(),
@@ -208,19 +208,19 @@ mod tests {
     // r[verify molten.claim_authority.registry_readback]
     // r[verify molten.claim_authority.registry_tests]
     #[test]
-    fn registry_readback_classifies_without_authority() {
-        let selector_value = claim_subject_selector_value(&selector()).expect("selector");
+    fn registry_readback_classifies_without() {
+        let selector_value = subject_selector_value(&selector()).expect("selector");
         assert_eq!(crate::ledger::artifact_kind(&selector_value), "claim-subject-selector");
-        let summary = claim_readback_summary(&selector_value).expect("summary").expect("some summary");
+        let summary = readback_summary(&selector_value).expect("summary").expect("some summary");
         assert!(summary.contains("evidence candidate only"));
     }
 
     // r[verify molten.claim_authority.peer_diagnostics]
     // r[verify molten.claim_authority.peer_diagnostic_tests]
     #[test]
-    fn peer_claim_diagnostics_separate_transport_from_claim_authority() {
-        let admission = admit_authority_claim(&admission_input()).expect("claim admission");
-        let pass = peer_claim_authority_diagnostic(&PeerClaimDiagnosticInput {
+    fn peer_diagnostics_separate_transport_from() {
+        let admission = admit(&admission_input()).expect("claim admission");
+        let pass = peer_diagnostic(&PeerDiagnosticInput {
             peer_ref: local_ref("peer"),
             bootstrap_ref: Some(local_ref("bootstrap")),
             session_ref: Some(local_ref("session")),
@@ -233,7 +233,7 @@ mod tests {
         assert_eq!(pass.decision, DECISION_PASS);
         assert!(pass.diagnostics.iter().any(|diagnostic| diagnostic == "peer-transport-observed-context-only"));
 
-        let deny = peer_claim_authority_diagnostic(&PeerClaimDiagnosticInput {
+        let deny = peer_diagnostic(&PeerDiagnosticInput {
             peer_ref: local_ref("peer"),
             bootstrap_ref: Some(local_ref("bootstrap")),
             session_ref: Some(local_ref("session")),

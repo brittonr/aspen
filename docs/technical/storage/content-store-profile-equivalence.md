@@ -38,7 +38,7 @@ If transport then disconnects after the first verified occurrence, `classify_con
 
 Suggested cross-profile review compares the same manifest and supported command, verifies rejection before unsupported I/O, and checks corruption, truncation, duplicate occurrences, reordering, cancellation, and restart bindings. Keep profile identity in evidence rather than declaring all adapters interchangeable. These are suggested exercises; this article reports no execution.
 
-For live claims, the governing document explicitly distinguishes `publish_live_iroh_chunks` and `execute_live_iroh_stream_get` from older local-copy compatibility helpers. Compatibility helper success is not live transport evidence.
+For live claims, the governing document explicitly distinguishes `publish_chunks` and `execute_stream_get` from older local-copy compatibility helpers. Compatibility helper success is not live transport evidence.
 
 Availability is not authorization. Backend protection effects do not grant read, reveal, retention, or deletion authority. The pure read and deletion admission functions inspect their separate authority records; neither profile equivalence nor a verified chunk upgrades those records. This article claims no uniform durability, confidentiality, provenance, performance, remote trust, or release readiness across profiles.
 

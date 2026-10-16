@@ -1,0 +1,23 @@
+{
+  "command": [
+    "nix",
+    "develop",
+    "--no-update-lock-file",
+    "-c",
+    "cargo",
+    "run",
+    "--offline",
+    "--locked",
+    "--",
+    "fabric-time",
+    "run-fixture",
+    "--profile",
+    "both",
+    "--out",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-13-retry-arithmetic-acceptance/fabric-time-cli"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "exit_code": 0,
+  "stdout": "fabric-time fixture ok profile=both report=blake3:b5300153e68cb7775b6f0e8c8ebc6f689f3a4e663a50c7a17a31b42dc0dfc35e evidence=34 live-domain=monotonic simulation-domain=virtual entropy-source=unix-dev-urandom out=/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-13-retry-arithmetic-acceptance/fabric-time-cli\n",
+  "stderr": "    Blocking waiting for file lock on build directory\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build \u2014 compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] \u2192 set KACHE_CACHE_DIR to a fast, local, single-machine path\n   Compiling rand_chacha v0.3.1\n   Compiling rand_chacha v0.9.0\n   Compiling ahash v0.8.12\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build \u2014 compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] \u2192 set KACHE_CACHE_DIR to a fast, local, single-machine path\n   Compiling rand v0.8.6\n   Compiling hashbrown v0.14.5\n   Compiling rand v0.9.4\n   Compiling num-bigint-dig v0.8.6\n   Compiling dashmap v6.2.1\n   Compiling lasso v0.7.3\n   Compiling rsa v0.9.10\n   Compiling steel-parser v0.8.2\n   Compiling secretspec v0.17.0\n   Compiling jsonwebtoken v11.0.0\n   Compiling steel-core v0.8.2\n   Compiling basalt v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)\n   Compiling molten-core v0.1.0 (/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-core)\n   Compiling molten-node-host v0.1.0 (/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-node-host)\n   Compiling molten v0.1.0 (/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4m 35s\n     Running `/home/brittonr/.cargo-target/debug/molten fabric-time run-fixture --profile both --out /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-13-retry-arithmetic-acceptance/fabric-time-cli`\n"
+}

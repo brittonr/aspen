@@ -12,18 +12,18 @@ struct RecordingBatchHandler {
 }
 
 impl CommittedBatchHandler for RecordingBatchHandler {
-    fn restore_snapshot(&mut self, _snapshot: &ApplicationSnapshotRestore) -> crate::error::Result<String> {
+    fn restore_snapshot(&mut self, _snapshot: &SnapshotRestore) -> crate::error::Result<String> {
         self.calls += 1;
         if self.fail {
-            return Err(crate::error::MoltenError::invalid_harness("injected application failure"));
+            return Err(crate::error::Failure::invalid_harness("injected application failure"));
         }
         Ok(super::tests::test_ref("application-snapshot-handler-evidence"))
     }
 
-    fn apply_batch(&mut self, _commands: &[ApplicationCommand]) -> crate::error::Result<String> {
+    fn apply_batch(&mut self, _commands: &[Command]) -> crate::error::Result<String> {
         self.calls += 1;
         if self.fail {
-            return Err(crate::error::MoltenError::invalid_harness("injected application failure"));
+            return Err(crate::error::Failure::invalid_harness("injected application failure"));
         }
         Ok(super::tests::test_ref("application-handler-evidence"))
     }
@@ -31,10 +31,10 @@ impl CommittedBatchHandler for RecordingBatchHandler {
 
 // r[verify molten.fabric_consistency.live_service_ports]
 #[test]
-fn application_port_applies_one_contiguous_admitted_batch() {
+fn application_applies_one_contiguous_admitted_batch() {
     let schema_ref = super::tests::test_ref("application-command-schema");
     let handler = RecordingBatchHandler::default();
-    let mut port = application_port(schema_ref.clone(), handler).expect("application port");
+    let mut port = application(schema_ref.clone(), handler).expect("application port");
     let entries = vec![entry(FIRST_INDEX, &schema_ref), entry(SECOND_INDEX, &schema_ref)];
 
     let receipt_ref = port.apply_committed(&entries).expect("committed batch");
@@ -45,10 +45,10 @@ fn application_port_applies_one_contiguous_admitted_batch() {
 
 // r[verify molten.fabric_consistency.live_service_ports]
 #[test]
-fn application_port_restores_bound_snapshot_once() {
+fn application_restores_bound_snapshot_once() {
     let schema_ref = super::tests::test_ref("snapshot-command-schema");
     let handler = RecordingBatchHandler::default();
-    let mut port = application_port(schema_ref, handler).expect("application port");
+    let mut port = application(schema_ref, handler).expect("application port");
     let mut snapshot = ReplicaSnapshot {
         snapshot_ref: String::new(),
         group_binding_ref: super::tests::test_ref("application-group"),
@@ -76,17 +76,17 @@ fn application_port_restores_bound_snapshot_once() {
 
 // r[verify molten.fabric_consistency.live_service_ports]
 #[test]
-fn application_port_denies_gap_and_handler_failure_without_advancing_index() {
+fn application_denies_gap_and_handler_failure_without_advancing_index() {
     let schema_ref = super::tests::test_ref("application-command-schema-negative");
     let handler = RecordingBatchHandler::default();
-    let mut gap_port = application_port(schema_ref.clone(), handler).expect("application port");
+    let mut gap_port = application(schema_ref.clone(), handler).expect("application port");
     let gap_error = gap_port.apply_committed(&[entry(SECOND_INDEX, &schema_ref)]).expect_err("gap must deny");
     assert!(gap_error.to_string().contains("noncontiguous"));
     assert_eq!(gap_port.handler().calls, 0);
     assert_eq!(gap_port.last_applied_index(), 0);
 
     let failing_handler = RecordingBatchHandler { calls: 0, fail: true };
-    let mut failing_port = application_port(schema_ref.clone(), failing_handler).expect("failing application port");
+    let mut failing_port = application(schema_ref.clone(), failing_handler).expect("failing application port");
     let failure = failing_port
         .apply_committed(&[entry(FIRST_INDEX, &schema_ref)])
         .expect_err("handler failure must retain index");
@@ -97,17 +97,17 @@ fn application_port_denies_gap_and_handler_failure_without_advancing_index() {
 
 // r[verify molten.fabric_consistency.live_service_ports]
 #[test]
-fn channel_control_port_publishes_bound_receipt_and_reports_closed_supervisor() {
+fn channel_control_publishes_bound_receipt_and_reports_closed_supervisor() {
     let (sender, mut receiver) = tokio::sync::mpsc::channel(CONTROL_TEST_CAPACITY);
     let config = control_config();
-    let mut port = ChannelReplicaControlPort::new(config.clone(), sender).expect("control port");
+    let mut port = ChannelReplicaPort::new(config.clone(), sender).expect("control port");
     let request_ref = super::tests::test_ref("proposal-control-request");
     let receipt_ref = port
         .proposal_outcome(&request_ref, ProposalDisposition::Committed, Some(FIRST_INDEX))
         .expect("proposal observation");
     let observation = receiver.try_recv().expect("supervision observation");
     assert_eq!(observation.receipt_ref, receipt_ref);
-    assert!(matches!(observation.kind, ReplicaControlObservationKind::Proposal {
+    assert!(matches!(observation.kind, ReplicaObservationKind::Proposal {
         disposition: ProposalDisposition::Committed,
         committed_index: Some(FIRST_INDEX),
         ..
@@ -122,7 +122,7 @@ fn channel_control_port_publishes_bound_receipt_and_reports_closed_supervisor() 
 #[test]
 fn full_supervision_queue_denies_publication_without_enqueueing() {
     let (sender, mut receiver) = tokio::sync::mpsc::channel(CONTROL_TEST_CAPACITY);
-    let mut port = ChannelReplicaControlPort::new(control_config(), sender).expect("control port");
+    let mut port = ChannelReplicaPort::new(control_config(), sender).expect("control port");
     let receipt_refs = (0..CONTROL_TEST_CAPACITY)
         .map(|_| port.lifecycle_changed(ReplicaLifecycle::Draining).expect("observation within capacity"))
         .collect::<Vec<_>>();
@@ -134,7 +134,7 @@ fn full_supervision_queue_denies_publication_without_enqueueing() {
     for receipt_ref in receipt_refs {
         let observation = receiver.try_recv().expect("queued observation");
         assert_eq!(observation.receipt_ref, receipt_ref);
-        assert_eq!(observation.kind, ReplicaControlObservationKind::Lifecycle {
+        assert_eq!(observation.kind, ReplicaObservationKind::Lifecycle {
             lifecycle: ReplicaLifecycle::Draining,
         });
     }
@@ -143,21 +143,21 @@ fn full_supervision_queue_denies_publication_without_enqueueing() {
 
 // r[verify molten.fabric_consistency.live_service_ports]
 #[test]
-fn channel_control_port_denies_zero_generation_before_publication() {
+fn channel_control_denies_zero_generation_before_publication() {
     let (sender, _receiver) = tokio::sync::mpsc::channel(CONTROL_TEST_CAPACITY);
     let mut config = control_config();
     config.service_generation = 0;
-    let result = ChannelReplicaControlPort::new(config, sender);
+    let result = ChannelReplicaPort::new(config, sender);
     let error = result.err().expect("zero generation must deny");
     assert!(error.to_string().contains("generation must be positive"));
 }
 
-fn application_port(
+fn application(
     schema_ref: String,
     handler: RecordingBatchHandler,
-) -> crate::error::Result<AdmittedReplicaApplicationPort<RecordingBatchHandler>> {
-    AdmittedReplicaApplicationPort::new(
-        ReplicaApplicationConfig {
+) -> crate::error::Result<AdmittedReplicaPort<RecordingBatchHandler>> {
+    AdmittedReplicaPort::new(
+        ServiceReplicaConfig {
             group_binding_ref: super::tests::test_ref("application-group"),
             application_manifest_ref: super::tests::test_ref("application-manifest"),
             handler_ref: super::tests::test_ref("application-handler"),
@@ -178,8 +178,8 @@ fn entry(index: u64, schema_ref: &str) -> ReplicatedEntry {
     }
 }
 
-fn control_config() -> ReplicaControlConfig {
-    ReplicaControlConfig {
+fn control_config() -> ReplicaConfig {
+    ReplicaConfig {
         service_id: "raft-service".to_string(),
         service_generation: SERVICE_GENERATION,
         supervision_ref: super::tests::test_ref("raft-supervision-binding"),

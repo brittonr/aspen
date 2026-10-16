@@ -1,0 +1,7 @@
+{
+  "method": "Complete specialized glob enumeration; recursively split every capped partition, include hidden and ignored sources, no sampled paths.",
+  "files": 1897,
+  "glob_queries": 95,
+  "source_root": "src",
+  "truncated": false
+}

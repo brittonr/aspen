@@ -1,0 +1,18 @@
+{
+  "command": [
+    "nix",
+    "develop",
+    "--no-update-lock-file",
+    "-c",
+    "cargo",
+    "test",
+    "-p",
+    "octet-lint-metadata",
+    "--lib",
+    "--locked"
+  ],
+  "cwd": "/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015",
+  "exit_code": 0,
+  "stdout": "\nrunning 13 tests\ntest identity::tests::exact_core_compatibility_and_outside_scopes_are_distinct ... ok\ntest identity::tests::heuristic_candidates_never_replace_exact_scope_classification ... ok\ntest identity::tests::malformed_catalog_fails_closed_with_deterministic_diagnostics ... ok\ntest identity::tests::inventory_receipt_validation_rejects_stale_counts_hashes_and_order ... ok\ntest identity::tests::frozen_pilot_receipts_are_valid_and_reviewed ... ok\ntest identity::tests::refined_wrapper_contract_accepts_checked_private_construction ... ok\ntest identity::tests::malformed_json_and_unknown_enum_values_are_rejected ... ok\ntest identity::tests::refined_wrapper_contract_reports_every_supported_bypass ... ok\ntest identity::tests::marker_generic_constructor_policy_preserves_checked_and_marker_only_shapes ... ok\ntest strict_profile::tests::unknown_profile_lists_supported_ids_in_deterministic_order ... ok\ntest strict_profile::tests::malformed_catalog_reports_duplicate_unknown_and_scope_errors ... ok\ntest strict_profile::tests::embedded_catalog_accepts_every_shipped_profile ... ok\ntest identity::tests::embedded_catalog_is_valid_and_inventory_only ... ok\n\ntest result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+  "stderr": "building '/nix/store/bxgkjxfk15nkmkk3vaa7mmbcaxbp0107-octet-standards-0.1.0.drv' on 'ssh-ng://root@aspen1.local'...\nbuilding '/nix/store/bxgkjxfk15nkmkk3vaa7mmbcaxbp0107-octet-standards-0.1.0.drv'...\ncopying 1 paths...\ncopying path '/nix/store/jbriwc8jxzlrjknmb6czf6gk11ih2vy2-octet-standards-0.1.0' from 'ssh-ng://root@aspen1.local'...\nbuilding '/nix/store/pcz2i7dn923c4bk7h1mcd252v77y8yyi-nix-shell-env.drv'...\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build \u2014 compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] \u2192 set KACHE_CACHE_DIR to a fast, local, single-machine path\n   Compiling octet-lint-metadata v0.1.0 (/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015/crates/octet-lint-metadata)\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build \u2014 compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] \u2192 set KACHE_CACHE_DIR to a fast, local, single-machine path\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.36s\n     Running unittests src/lib.rs (/home/brittonr/.cargo-target/debug/deps/octet_lint_metadata-12357472fe5282bd)\n"
+}

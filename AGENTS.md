@@ -21,7 +21,7 @@ Functional-core / imperative-shell layering across four crates:
 |---|---|
 | `molten` (root, `src/`) | Facade + adapters + CLI. Mounts ~85 domain modules under stable public names; re-exports pure cores and node-host |
 | `crates/molten-core` | Pure laws (fabric/world/capability/policy/planning). No filesystem, process, network, clock, tokio, or Preserves deps — stdlib + blake3/serde + pinned git cores only |
-| `crates/molten-node-host` | Capability-rooted node state + typed local stores (cap-std). Owns canonical `MoltenError`/`Result`, `node_state`, `local_store`; the root crate re-exports them |
+| `crates/molten-node-host` | Capability-rooted node state + typed local stores (cap-std). Owns canonical `Failure`/`Result`, `node_state`, `local_store`; the root crate re-exports them |
 | `crates/molten-release-policy` | Binary: Nickel release profile + repo observation → pure `validate_release_dependencies` |
 
 `crates/aspen-*` directories are vestigial (wip/fixtures only, not workspace members) — never extend them. All active code uses `molten-*` names.
@@ -109,13 +109,13 @@ Pre-commit hooks run `git diff --check`, `cargo fmt --check`, and `cargo octet c
 
 - **Module aliasing**: public module names ≠ directory names. `src/lib.rs` mounts dirs via `#[path]` under internal names, then `compat_module!(public, internal)` re-exports (e.g. `src/error/mod.rs` → `molten::error` via `failures`; `deterministic/replay.rs` → `playback`). Same pattern in `src/main.rs` (`object_port` / `cli_artifact`). Always resolve a `molten::*` path through `src/lib.rs` before editing; grep both names.
 - **Parts assembly**: much code lives in `src/<module>/parts/<x>/pNNN/body.rs` files stitched with `include!` (see `src/preserves/rail.rs`, `src/chunk/store.rs`). Edit part files in NNN order; the `mod.rs` you are reading may be mostly empty.
-- **Errors**: canonical `MoltenError` (manual, stringly enum + Display + `From<io::Error>`) lives in `crates/molten-node-host/src/error/mod.rs` and is re-exported everywhere. Scoped subsystem errors use snafu with `#[snafu(display(...))]`. Fabric ports have their own `FabricPortError`/`FabricPortResult<T>` vocabulary with conversions both ways. Never introduce a second error convention.
+- **Errors**: canonical `Failure` (manual, stringly enum + Display + `From<io::Error>`) lives in `crates/molten-node-host/src/error/mod.rs` and is re-exported everywhere. Scoped subsystem errors use snafu with `#[snafu(display(...))]`. Fabric ports have their own `FabricPortError`/`FabricPortResult<T>` vocabulary with conversions both ways. Never introduce a second error convention.
 - **Async**: tokio multi-thread runtime is built in the imperative shell; `runtime.block_on` at the CLI/lib boundary. `tokio::spawn`/`select!`/`time::sleep` only inside live adapters. Pure cores and most tests stay sync (determinism-first).
 - **Ports / DI**: effects go through small port traits in `fabric_*/ports.rs` returning `FabricPortResult<T>`, with `live/` and `simulation.rs` implementations behind the same trait. Thread explicit `*Input` structs to functions (e.g. `ControlLiveServeInput`). FS authority is cap-std (`cap-std`/`cap-fs-ext`) rooted in node-host only.
 - **Identity & naming**: schema id consts `"molten.<domain>.<thing>.v1"`; canonical projections named `Canonical<Thing> { report, <thing>_ref, value: IOValue }`; booleans use predicate prefixes (Octet `bool_naming`); imports are item-granular, grouped Std/External/Crate.
 - **Traceability markers**: `// r[impl molten.<req>]` / `// r[verify ...]` comments link code to `.cairn/specs/` requirement ids; `tools/tracey/inherited_debt_guard.rs` denies new uncovered or dangling refs. Add markers when implementing spec'd requirements.
 - **tigerstyle**: registered via `#![register_tool(tigerstyle)]` (crate roots and integration test binaries); suppress with `#![allow(tigerstyle::..., reason = "...")]` — reason required.
-- **Purity boundary**: nothing in `molten-core` may read files, spawn, print, access clocks, or do network I/O. Boundary source-scan tests in `tests/` (`fabric_simulation_boundary.rs` etc.) enforce this by `include_str!`-ing real sources and asserting forbidden terms absent — keep them passing.
+- **Purity boundary**: nothing in `molten-core` may read files, spawn, print, access clocks, or do network I/O. Boundary source-scan tests in `tests/` (`fabric_simulation_boundary/main.rs` etc.) enforce this by `include_str!`-ing real sources and asserting forbidden terms absent — keep them passing.
 - **Preserve compatibility**: pure cores avoid a Preserves dependency; canonical projection happens at the root-crate boundary.
 
 ## Important Files
@@ -125,7 +125,7 @@ Pre-commit hooks run `git diff --check`, `cargo fmt --check`, and `cargo octet c
 | `src/main.rs` → `src/main/root.rs` → `src/main/root/command.rs` | `molten` binary: clap `Cli`/`Top`/`Test` tree (~19 top, ~40 test subcommands), dispatch |
 | `src/lib.rs` | Facade: `compat_module!` aliases, `#[path]` mounts, `core_api` re-export of `molten_core` |
 | `crates/molten-core/src/lib.rs` | Pure decision cores; header documents the purity contract |
-| `crates/molten-node-host/src/{lib.rs,error/mod.rs}` | Node state authority, `MoltenError` |
+| `crates/molten-node-host/src/{lib.rs,error/mod.rs}` | Node state authority, `Failure` |
 | `crates/molten-release-policy/src/main.rs` | Release-dependency validator binary |
 | `Cargo.toml` | Workspace, features (`doltlite-oracle`, `executable-extents`, `profiler*`, `world-snapshot-vm-cohort`), rev-pinned git deps, `[workspace.metadata.octet]` scope |
 | `flake.nix` + `build-plan.json` (+ `release-policy-build-plan.json`) | Nix build: unit2nix unit graphs (no IFD), dev shell, ~100 checks |
@@ -135,7 +135,7 @@ Pre-commit hooks run `git diff --check`, `cargo fmt --check`, and `cargo octet c
 | `tests/evidence-matrix.ncl` | Traceability matrix source |
 | `license-policy.tsv` + `tools/check-license-boundary.rs` | License boundary (workspace source is AGPL-3.0-or-later) |
 
-Load-bearing docs (read before touching their domain): `docs/architecture.md` (master map; runtime dataspace changes must be documented here), `docs/distributed-system-fabric.md` (ownership law), `docs/fabric-port-ownership.md` (port inventory), `docs/modularity-boundaries.md` (crate purity + dependency classes), `docs/node-state-filesystem-authority.md` (node-host authority), `docs/nickel-toolchain.md` (pinned Nickel cohort), `docs/proof-workflow.md` (proof checklist for Cairn changes), `docs/test-workspace-authority.md` (`TestWorkspace` RAII temp roots), `docs/distributed-testing.md` (evidence layers), `docs/reproducible-dependencies.md` (pin-update procedure), `docs/world-*.md` (world-state lifecycle protocols).
+Load-bearing docs (read before touching their domain): `docs/architecture.md` (master map; runtime dataspace changes must be documented here), `docs/distributed-system-fabric.md` (ownership law), `docs/fabric-port-ownership.md` (port inventory), `docs/modularity-boundaries.md` (crate purity + dependency classes), `docs/node-state-filesystem-authority.md` (node-host authority), `docs/nickel-toolchain.md` (pinned Nickel cohort), `docs/proof-workflow.md` (proof checklist for Cairn changes), `docs/test-workspace-authority.md` (`Workspace` RAII temp roots), `docs/distributed-testing.md` (evidence layers), `docs/reproducible-dependencies.md` (pin-update procedure), `docs/world-*.md` (world-state lifecycle protocols).
 
 ## Runtime/Tooling Preferences
 
@@ -153,7 +153,7 @@ Load-bearing docs (read before touching their domain): `docs/architecture.md` (m
 Two layers:
 
 1. **In-crate tests** (the bulk): `src/**/tests.rs` and `src/**/parts/**/body.rs` — `#[test]` (sync, default), `#[hegel::test]` property tests, `#[tokio::test]` only for live raft/iroh/transport shells.
-2. **Integration binaries** (`tests/*.rs`, ~10 active): `cliharness.rs` (spawns the real `molten` binary, asserts stdout + canonical `.preserves` receipts, assembled from `include!` parts p000–p022), `nativesystemextension.rs`, `worldcommit.rs`, `executable_extent.rs`, `content_replication.rs`, source-scan boundary tests, `moltennodehostfacade.rs`, feature-gated `doltlite_oracle.rs` (`--features doltlite-oracle`, `#[ignore]` live oracle).
+2. **Integration binaries** (auto-discovered `tests/*.rs` and `tests/*/main.rs` plus explicit `Cargo.toml` targets, ~10 active): `cliharness.rs` (spawns the real `molten` binary, asserts stdout + canonical `.preserves` receipts, assembled from `include!` parts p000–p022), `nativesystemextension.rs`, `worldcommit.rs`, `executable_extent/main.rs` (target `executable_extent`), `content_replication/main.rs` (target `content_replication`), source-scan boundary tests including `fabric_simulation_boundary/main.rs` (target `fabric_simulation_boundary`), `moltennodehostfacade.rs`, feature-gated `doltlite_oracle.rs` (`--features doltlite-oracle`, `#[ignore]` live oracle).
 
 Fixtures are checked-in canonical data consumed via `include_str!` from `tests/fixtures/`; `examples/*.preserves` are harness suites for `molten test run`.
 

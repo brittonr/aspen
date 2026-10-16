@@ -68,7 +68,7 @@ impl ReplacementPolicy {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MaterializationMemberKind {
+pub enum MemberKind {
     RegularFile,
     Directory,
     Symlink,
@@ -76,7 +76,7 @@ pub enum MaterializationMemberKind {
     Special,
 }
 
-impl MaterializationMemberKind {
+impl MemberKind {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::RegularFile => "regular-file",
@@ -89,17 +89,17 @@ impl MaterializationMemberKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MaterializationPath {
+pub struct Path {
     normalized: String,
 }
 
-impl MaterializationPath {
+impl Path {
     pub fn parse(value: &str, max_path_bytes: u64) -> crate::error::Result<Self> {
         Self::parse_within(value, crate::bounded::usize_from_u64(max_path_bytes, "materialization path byte bound")?)
     }
 
     pub(crate) fn parse_within(value: &str, max_path_bytes: usize) -> crate::error::Result<Self> {
-        validate_materialization_path(value, max_path_bytes)?;
+        validate_path(value, max_path_bytes)?;
         Ok(Self {
             normalized: value.to_string(),
         })
@@ -119,7 +119,7 @@ impl MaterializationPath {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MaterializationPolicy {
+pub struct Policy {
     pub profile: String,
     pub replacement: ReplacementPolicy,
     pub max_members: usize,
@@ -129,7 +129,7 @@ pub struct MaterializationPolicy {
     pub reserved_top_level_names: Vec<String>,
 }
 
-impl MaterializationPolicy {
+impl Policy {
     pub fn bounded(profile: &str, replacement: ReplacementPolicy) -> crate::error::Result<Self> {
         validate_profile(profile)?;
         Ok(Self {
@@ -162,38 +162,38 @@ impl MaterializationPolicy {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MaterializationMemberInput {
+pub struct MemberInput {
     pub logical_path: String,
-    pub kind: MaterializationMemberKind,
+    pub kind: MemberKind,
     pub expected_content_ref: String,
     pub expected_size: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MaterializationMember {
-    pub logical_path: MaterializationPath,
-    pub kind: MaterializationMemberKind,
+pub struct Member {
+    pub logical_path: Path,
+    pub kind: MemberKind,
     pub expected_content_ref: String,
     pub expected_size: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MaterializationPlan {
+pub struct Plan {
     pub profile: String,
     pub replacement: ReplacementPolicy,
-    pub members: Vec<MaterializationMember>,
+    pub members: Vec<Member>,
     pub total_bytes: u64,
     pub plan_ref: String,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MaterializationPayload {
+pub struct Payload {
     pub logical_path: String,
     pub bytes: Vec<u8>,
 }
 
-impl MaterializationPayload {
+impl Payload {
     pub fn new(logical_path: impl Into<String>, bytes: impl Into<Vec<u8>>) -> Self {
         Self {
             logical_path: logical_path.into(),
@@ -201,10 +201,10 @@ impl MaterializationPayload {
         }
     }
 
-    pub fn member_input(&self) -> crate::error::Result<MaterializationMemberInput> {
-        Ok(MaterializationMemberInput {
+    pub fn member_input(&self) -> crate::error::Result<MemberInput> {
+        Ok(MemberInput {
             logical_path: self.logical_path.clone(),
-            kind: MaterializationMemberKind::RegularFile,
+            kind: MemberKind::RegularFile,
             expected_content_ref: crate::preserves_rail::content_ref_from_bytes(&self.bytes),
             expected_size: u64::try_from(self.bytes.len())
                 .map_err(|_| invalid("materialization payload size does not fit u64"))?,
@@ -213,20 +213,20 @@ impl MaterializationPayload {
 }
 
 pub fn plan_payloads(
-    policy: &MaterializationPolicy,
-    payloads: &[MaterializationPayload],
-) -> crate::error::Result<MaterializationPlan> {
+    policy: &Policy,
+    payloads: &[Payload],
+) -> crate::error::Result<Plan> {
     let inputs = payloads
         .iter()
-        .map(MaterializationPayload::member_input)
+        .map(Payload::member_input)
         .collect::<crate::error::Result<Vec<_>>>()?;
-    plan_materialization(policy, &inputs)
+    plan(policy, &inputs)
 }
 
-pub fn plan_materialization(
-    policy: &MaterializationPolicy,
-    inputs: &[MaterializationMemberInput],
-) -> crate::error::Result<MaterializationPlan> {
+pub fn plan(
+    policy: &Policy,
+    inputs: &[MemberInput],
+) -> crate::error::Result<Plan> {
     // r[impl molten.filesystem_materialization.plan]
     let mut policy = policy.clone();
     policy.reserved_top_level_names.sort();
@@ -251,7 +251,7 @@ pub fn plan_materialization(
     let mut seen = std::collections::BTreeSet::new();
     let mut total_bytes = 0u64;
     for input in inputs {
-        let logical_path = MaterializationPath::parse_within(&input.logical_path, policy.max_path_bytes)?;
+        let logical_path = Path::parse_within(&input.logical_path, policy.max_path_bytes)?;
         validate_member_input(&policy, &reserved, &logical_path, input)?;
         total_bytes = total_bytes
             .checked_add(input.expected_size)
@@ -265,7 +265,7 @@ pub fn plan_materialization(
         if !seen.insert(logical_path.clone()) {
             return Err(invalid(format!("duplicate normalized materialization member: {}", logical_path.as_str())));
         }
-        members.push(MaterializationMember {
+        members.push(Member {
             logical_path,
             kind: input.kind,
             expected_content_ref: input.expected_content_ref.clone(),
@@ -273,9 +273,9 @@ pub fn plan_materialization(
         });
     }
     members.sort_by(|left, right| left.logical_path.cmp(&right.logical_path));
-    let value = materialization_plan_value(&policy, &members, total_bytes)?;
+    let value = plan_value(&policy, &members, total_bytes)?;
     let plan_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(MaterializationPlan {
+    Ok(Plan {
         profile: policy.profile.clone(),
         replacement: policy.replacement,
         members,

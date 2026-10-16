@@ -1,8 +1,8 @@
 
 /// The profile, tool, identity, finding, and non-claim checks of one structural audit scan, in
 /// receipt order.
-fn audit_checks(input: &AstGrepScanInput) -> Vec<ReceiptCheck> {
-    let profile_validation = validate_ast_grep_profile(&input.profile);
+fn audit_checks(input: &ScanInput) -> Vec<ReceiptCheck> {
+    let profile_validation = validate_profile(&input.profile);
     let known_rule_ids =
         input.profile.rules.iter().map(|rule| rule.id.as_str()).collect::<std::collections::BTreeSet<_>>();
     let is_findings_known = input.findings.iter().all(|finding| known_rule_ids.contains(finding.rule_id.as_str()));
@@ -67,7 +67,7 @@ fn audit_checks(input: &AstGrepScanInput) -> Vec<ReceiptCheck> {
     checks
 }
 
-pub fn requires_fresh_scan(receipt: &AstGrepAuditReceipt, current_rule_bundle_hash: &str) -> bool {
+pub fn requires_fresh_scan(receipt: &AuditReceipt, current_rule_bundle_hash: &str) -> bool {
     // r[impl aspen.ast_grep_runtime_authority_audits.identity]
     receipt.rule_bundle_hash != current_rule_bundle_hash
 }
@@ -201,7 +201,7 @@ fn has_all_required_non_claims(non_claims: &[String]) -> bool {
     REQUIRED_NON_CLAIMS.iter().all(|required| non_claims.contains(required))
 }
 
-fn finding_rule_ids(findings: &[AstGrepFinding]) -> Vec<String> {
+fn finding_rule_ids(findings: &[Finding]) -> Vec<String> {
     findings
         .iter()
         .map(|finding| finding.rule_id.clone())

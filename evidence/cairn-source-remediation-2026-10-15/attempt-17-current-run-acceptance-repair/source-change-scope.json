@@ -1,0 +1,11 @@
+{
+  "comparison": "Actual BLAKE3 per-file inputs from attempt 16 and attempt 17",
+  "bound_inputs": 1903,
+  "changed_paths": [
+    "src/node/parts/runtime/tests/m000/p003/body.rs",
+    "src/node/parts/runtime/tests/m000/p005/body.rs"
+  ],
+  "added_or_removed_paths": [],
+  "change": "Borrowed one-element receipt slices replace two Clippy-reported clones and one equivalent reused cloned slice in the same test. No production Rust, dependency, toolchain, policy or gate implementation changed.",
+  "verification": "Fresh full ordered acceptance is running in bg_45; no reuse of a producer pass for modified source is claimed."
+}

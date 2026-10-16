@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "node",
+    "--help"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T17:47:44.333151+00:00",
+  "elapsed_seconds": 0.012,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "Usage: molten node <COMMAND>\n\nCommands:\n  init                                 \n  run                                  \n  run-loop                             \n  serve                                \n  status                               \n  stop                                 \n  show                                 \n  control-request                      \n  provenance-fixture                   \n  authority-grant-fixture              \n  authority-grant-import               \n  supervisor-policy-fixture            \n  live-ticket-export                   \n  live-ticket-import                   \n  live-peer-admit                      \n  control-submit                       \n  control-dispatch                     \n  control-ingress-build                \n  control-ingress-live-build           \n  control-ingress-live-loopback        \n  control-ingress-live-send            \n  live-workflow-bundle                 \n  live-workflow-bundle-export          \n  live-workflow-bundle-verify          \n  live-workflow-bundle-gate            \n  live-workflow-bundle-apply           \n  live-workflow-bundle-reconcile       \n  live-workflow-bundle-ack-export      \n  live-workflow-bundle-ack-import      \n  live-workflow-bundle-protocol-gate   \n  live-workflow-bundle-import          \n  control-ingress-publish              \n  control-ingress-deliver              \n  control-deny                         \n  iroh-router-fixture                  \n  iroh-frame-fixture                   \n  network-diagnostics-fixture          \n  metrics-snapshot-fixture             \n  port-mapping-fixture                 \n  external-diagnostics-bridge-fixture  \n  shutdown                             \n  health                               \n  help                                 Print this message or the help of the given subcommand(s)\n\nOptions:\n  -h, --help  Print help\n",
+  "stderr": ""
+}

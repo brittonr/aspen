@@ -110,7 +110,7 @@
         evidence_refs: &mut Vec<String>,
         reference_index_refs: &mut Vec<String>,
     ) {
-        policy_refs.push(store_admission(
+        policy_refs.push(admission(
             root,
             crate::retention::ADMISSION_KIND_POLICY,
             label,
@@ -121,7 +121,7 @@
             &[],
             true,
         ));
-        authority_refs.push(store_admission(
+        authority_refs.push(admission(
             root,
             crate::retention::ADMISSION_KIND_AUTHORITY,
             label,
@@ -132,7 +132,7 @@
             &[],
             true,
         ));
-        evidence_refs.push(store_admission(
+        evidence_refs.push(admission(
             root,
             crate::retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
             label,
@@ -143,7 +143,7 @@
             &[],
             true,
         ));
-        reference_index_refs.push(store_admission(
+        reference_index_refs.push(admission(
             root,
             crate::retention::ADMISSION_KIND_REFERENCE_INDEX,
             label,
@@ -156,7 +156,7 @@
         ));
     }
 
-    fn store_admission(
+    fn admission(
         root: &std::path::Path,
         kind: &str,
         label: &str,

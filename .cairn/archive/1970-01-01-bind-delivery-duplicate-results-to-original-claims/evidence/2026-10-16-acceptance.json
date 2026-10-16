@@ -1,0 +1,314 @@
+{
+  "attempt": "15/20",
+  "change": "bind-delivery-duplicate-results-to-original-claims",
+  "date": "2026-10-16",
+  "result": "Recorded behavioral, source/feature/Nix and change-scoped receipt-backed acceptance pass; native lifecycle sync/archive remain separate until their actual receipts exist.",
+  "authority": {
+    "implementation_and_local_lifecycle": "Authorized bounded Cairn completion campaign.",
+    "molten_remote_publication": false
+  },
+  "immediate_outcome": "Exact duplicate claims retain only the original operation/token identity; unavailable historical tokens remain absent without substituting later claims or granting completion authority.",
+  "durable_capability": "Normal core/service/Redb-reopen/canonical regressions, documented unavailable-token consumer contract, and actual native positive/expected-deny receipt-backed F08 coverage.",
+  "maintenance_owner": "Molten coordination-delivery maintainers own reconstruction and consumer semantics; node-host maintainers own capability-rooted filesystem mechanisms.",
+  "execution_records": "evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance",
+  "source_binding": {
+    "record": "reviewed-f08-source-content-hashes.json",
+    "paths": [
+      "src/lib.rs",
+      "src/parts/lib/p000/body.rs",
+      "src/coordination_delivery/mod.rs",
+      "src/coordination_delivery/service.rs",
+      "src/coordination_delivery/store.rs",
+      "src/coordination_delivery/ports.rs",
+      "src/coordination_delivery/records.rs",
+      "crates/molten-core/src/coordination_delivery/transition.rs",
+      "crates/molten-core/src/coordination_delivery/transition/support.rs",
+      "crates/molten-core/src/coordination_delivery/transition/completion.rs",
+      "crates/molten-core/src/coordination_delivery/identity.rs",
+      "src/coordination_delivery/tests/local.rs",
+      "src/coordination_delivery/tests/contracts/records.rs",
+      "crates/molten-core/src/coordination_delivery/tests.rs",
+      "Cargo.toml",
+      "Cargo.lock",
+      "flake.lock",
+      "rust-toolchain.toml"
+    ],
+    "new_product_source_edit_in_attempt_15": false,
+    "reuse_basis": "Attempt 13 exercised the same unchanged product Rust source after the earlier F08 correction. Subsequent completed F12/F01 work changed lifecycle specifications, docs and evidence, not this product implementation. The transient Cargo example was removed; the successful consumer was external to product sources.",
+    "actual_consumer": "The pinned repository rustc compiled against the actual Cargo library molten-630cfac42a3e1cbf; Cargo fingerprint records profiler-disabled and dependency info records this exact worktree as CARGO_MANIFEST_DIR. Exact library, consumer, source-input and compiler BLAKE3 identities are retained."
+  },
+  "historical_evidence": "evidence/2026-10-15-verification.md and its original failed-before reproduction, strict-ci denial and controlled-memory smoke remain unchanged. Their old not-archive-ready state describes that earlier checkpoint.",
+  "normal_suite": {
+    "reused_attempt": "13/20",
+    "execution_rows": [
+      "test coordination_delivery::tests::multiprocess::child_process ... ok",
+      "test coordination_delivery::tests::local::stopped_or_mismatched_system_extension_host_denies_before_storage ... ok",
+      "test coordination_delivery::tests::records::canonical_receipt_is_stable_and_rejects_authority_overclaims ... ok",
+      "test coordination_delivery::tests::records::status_identity_is_ordered_bounded_and_payload_free ... ok",
+      "test coordination_delivery::tests::profile::nickel_matches_the_rust_policy_and_manifest_projection ... ok",
+      "test coordination_delivery::tests::simulation::unsupported_fault_is_a_bounded_error_not_a_private_scheduler ... ok",
+      "test coordination_delivery::tests::uncertain::stale_expected_state_never_calls_compare_and_commit ... ok",
+      "test coordination_delivery::tests::simulation::duplicate_fault_reuses_the_same_core_operation_record ... ok",
+      "test coordination_delivery::tests::local::service_commits_then_schedules_claim_timer_and_publishes_bounded_status ... ok",
+      "test coordination_delivery::tests::uncertain::stale_commit_observation_does_not_schedule_follow_up_effects ... ok",
+      "test coordination_delivery::tests::uncertain::unknown_before_apply_reconciles_without_blind_retry ... ok",
+      "test coordination_delivery::tests::simulation::crash_restart_preserves_claim_and_partitioned_ack_cannot_complete_it ... ok",
+      "test coordination_delivery::tests::uncertain::timer_failure_does_not_rewrite_a_durable_commit ... ok",
+      "test coordination_delivery::tests::uncertain::unknown_after_apply_reconciles_then_schedules_exact_timer_once ... ok",
+      "test coordination_delivery::tests::local::capability_rooted_store_reopens_exact_committed_state ... ok",
+      "test coordination_delivery::tests::records::unavailable_duplicate_round_trips_without_rewriting_original ... ok",
+      "test coordination_delivery::tests::local::duplicate_and_denied_service_requests_preserve_state_and_effects ... ok",
+      "test coordination_delivery::tests::local::duplicate_claim_after_redb_reopen_never_returns_reclaimed_token ... ok",
+      "test coordination_delivery::tests::multiprocess::restart_recovers_claim_and_fences_stale_consumer ... ok",
+      "test coordination_delivery::tests::policy_manifest_and_state_have_stable_exact_identities ... ok",
+      "test coordination_delivery::tests::policy_drift_wall_clock_and_missing_port_fail_closed ... ok",
+      "test coordination_delivery::tests::duplicate_replay_is_stable_and_conflicting_operation_id_denies ... ok",
+      "test coordination_delivery::tests::metadata_bounds_and_worker_admission_fail_before_payload_effects ... ok",
+      "test coordination_delivery::tests::enqueue_claim_and_ack_form_a_fenced_logical_lease ... ok",
+      "test coordination_delivery::tests::delegated_completion_needs_the_exact_policy_authority ... ok",
+      "test coordination_delivery::tests::status_is_bounded_and_never_renders_payloads ... ok",
+      "test coordination_delivery::tests::duplicate_claim_returns_exact_original_but_enqueue_returns_no_token ... ok",
+      "test coordination_delivery::tests::expiry_requires_current_logical_time_and_exact_expiry_authority ... ok",
+      "test coordination_delivery::tests::duplicate_claim_after_completion_preserves_original_identity_without_token ... ok",
+      "test coordination_delivery::tests::stale_currentness_wrong_owner_and_expired_ack_preserve_state ... ok",
+      "test coordination_delivery::tests::duplicate_claim_cannot_substitute_same_owners_extended_token ... ok",
+      "test coordination_delivery::tests::audit_duplicate_claim_does_not_return_another_consumers_token ... ok",
+      "test coordination_delivery::tests::redrive_and_cleanup_require_distinct_authorities ... ok",
+      "test coordination_delivery::tests::retry_waits_for_logical_time_then_exhaustion_enters_the_dlq ... ok"
+    ],
+    "all_targets": {
+      "passed": 2095,
+      "failed": 0,
+      "record": "cargo-workspace-all-targets-and-doc.txt"
+    },
+    "doctests": {
+      "passed": 7,
+      "failed": 0,
+      "record": "cargo-workspace-all-targets-and-doc.txt"
+    },
+    "compatible_features": {
+      "passed": 4209,
+      "failed": 0,
+      "ignored": 1,
+      "enabled": [
+        "doltlite-oracle",
+        "executable-extents",
+        "profiler-perf",
+        "profiler-alloc",
+        "world-snapshot-vm-cohort"
+      ],
+      "disabled": [
+        "profiler-disabled"
+      ],
+      "record": "cargo-explicit-compatible-feature-cohorts.txt"
+    },
+    "records": [
+      "cargo-workspace-all-targets-and-doc.txt",
+      "cargo-explicit-compatible-feature-cohorts.txt"
+    ],
+    "boundary": "Root/core/service/canonical/real-Redb tests ran; generated historical records are not an imported frozen pre-change receipt corpus."
+  },
+  "shared_source_and_nix": {
+    "reused_attempt": "13/20",
+    "record_directory": "evidence/cairn-source-remediation-2026-10-15/attempt-13-retry-arithmetic-acceptance",
+    "configured_octet": {
+      "workspace": "clean, zero findings",
+      "library": "clean, zero findings",
+      "configured_workspace_scope": [
+        "molten",
+        "molten-node-host"
+      ],
+      "targets": "workspace metadata all-targets; second producer molten --lib",
+      "unchanged_gate": "strict-ci",
+      "canonical_gate_receipt": "blake3:6e7ee8961b4e805d94aedbd4c8c7740905b6dfa7683600bddecd8f6b7ebf841e",
+      "artifact_import": "blake3:f31ea3e591ef61a52549d23d260865e10fd1be657177c63bac3a66d3d07c1ebc",
+      "imported_artifacts": 6,
+      "remediation_plan": "blake3:70046c44ddc91019d9ee642f1f2ae9188342f45010b5dd751efc7429e99f26dd"
+    },
+    "clippy_and_format": {
+      "result": "pass",
+      "scope": "workspace all-targets default, explicit enabled cohort, profiler-disabled cohort; -D warnings; cargo fmt --all --check",
+      "record": "clippy-all-cohorts-and-format.txt"
+    },
+    "repository_nix": {
+      "result": "pass",
+      "target": "x86_64-linux",
+      "reported_checks": 674,
+      "hermetic_nextest_passed": 1693,
+      "record": "nix-flake-check.txt"
+    },
+    "delivery_checks": [
+      "coordination-delivery-profile",
+      "coordination-delivery-schema-inventory",
+      "coordination-delivery-octet-deny-all"
+    ],
+    "scope": "Recorded shared execution, not a rerun; x86_64-linux only. The isolated deny-all check does not prove all molten-core Octet cleanliness. One external optional test remained ignored."
+  },
+  "actual_public_service": {
+    "outcomes": "public-consumer-outcomes.json",
+    "positive_run": "public-consumer-positive-current-library.json",
+    "positive_exit": 0,
+    "expected_deny_run": "public-consumer-expected-deny-current-library.json",
+    "expected_deny_exit": 1,
+    "cases": 26,
+    "canonical_packed_results": 52,
+    "durable_adapter": "Capability-rooted coordination_delivery::Local with real Redb load/compare-and-commit and two close/reopen state comparisons.",
+    "controls": [
+      "Immediate original-token replay",
+      "Tokenless enqueue replay",
+      "Changed-request duplicate conflict",
+      "Wrong owner",
+      "Recomputed stale fencing token",
+      "Expired completion",
+      "Authorized expiry and later-consumer reclaim",
+      "Original claim replay after durable reopen returns no token",
+      "Replay/evidence refs do not grant completion authority",
+      "Exact delegated-completion authority remains valid",
+      "Completed-item and acknowledgement replay preserve original identities",
+      "Terminal-token use denies without mutation",
+      "Same-owner extension replaces token; original claim becomes unavailable; exact extension replay remains available"
+    ],
+    "no_mutation": "Every duplicate/denied result compares the full reloaded durable PublishedState, revision/state refs, compare-and-commit count, complete timer/status observations and no worker/exactly-once permission flags.",
+    "canonical_compatibility": "Every produced receipt parses and recanonicalizes to identical bytes. Native framed receipt refs and independent raw canonical-packed BLAKE3 refs remain separate.",
+    "repeatability": "Independent fresh-root positive and expected-deny runs yielded identical 26 case lines and pairwise identical packed artifacts.",
+    "controlled_boundaries": "Explicit fixture host/manifest/time facts and controlled timer/status ports; not live scheduling, worker effects or installed-host admission.",
+    "harness_failures_preserved": [
+      "public-consumer-compile.json",
+      "public-consumer-positive.json",
+      "resolved-consumer-build-selection.json",
+      "receipt-identity-distinction.json"
+    ]
+  },
+  "receipt_backed_traceability": {
+    "scope": "Exactly the four F08 delta requirement identities, extracted from their actual native spec; not an all-repository or release-coverage assertion.",
+    "requirement_map": "requirement-evidence-map.json",
+    "verification_receipts": [
+      {
+        "requirement": "molten.audit_f08.original_binding",
+        "kind": "positive",
+        "target": "crates/molten-core/src/coordination_delivery/transition/support.rs",
+        "cases": [
+          "immediate-replay",
+          "reclaimed-a-replay"
+        ],
+        "path": "evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/verification-runs/original_binding-positive.preserves",
+        "actual_run_exit": 0,
+        "native_emission": "verification-run receipt=blake3:cc17cb5c40ab1df3bc4008ffe5c196cb52bb47f0dea037343b8d5412a5db4086 decision=pass requirement=molten.audit_f08.original_binding kind=positive"
+      },
+      {
+        "requirement": "molten.audit_f08.original_binding",
+        "kind": "negative",
+        "target": "crates/molten-core/src/coordination_delivery/transition/support.rs",
+        "cases": [
+          "conflicting-duplicate"
+        ],
+        "path": "evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/verification-runs/original_binding-negative.preserves",
+        "actual_run_exit": 1,
+        "native_emission": "verification-run receipt=blake3:2adee6316fb589a46698cb45ec7ee6658b620e50759bdc466b7e1b6abbfb3151 decision=deny requirement=molten.audit_f08.original_binding kind=negative"
+      },
+      {
+        "requirement": "molten.audit_f08.unavailable_result",
+        "kind": "positive",
+        "target": "crates/molten-core/src/coordination_delivery/transition/support.rs",
+        "cases": [
+          "reclaimed-a-replay",
+          "completed-a-replay",
+          "extended-original-replay"
+        ],
+        "path": "evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/verification-runs/unavailable_result-positive.preserves",
+        "actual_run_exit": 0,
+        "native_emission": "verification-run receipt=blake3:8f670068ffb20776a3188c46be62f1cd575df4e6968ac300435718db04bbf73a decision=pass requirement=molten.audit_f08.unavailable_result kind=positive"
+      },
+      {
+        "requirement": "molten.audit_f08.unavailable_result",
+        "kind": "negative",
+        "target": "crates/molten-core/src/coordination_delivery/transition/support.rs",
+        "cases": [
+          "old-token-after-reclaim",
+          "terminal-token-denied",
+          "pre-extension-token-denied"
+        ],
+        "path": "evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/verification-runs/unavailable_result-negative.preserves",
+        "actual_run_exit": 1,
+        "native_emission": "verification-run receipt=blake3:65f3cdf443240d0dd2779c9e1813bb4c8ba5c644130b93d391a9fa5bafb13d56 decision=deny requirement=molten.audit_f08.unavailable_result kind=negative"
+      },
+      {
+        "requirement": "molten.audit_f08.state_authority",
+        "kind": "positive",
+        "target": "src/coordination_delivery/service.rs",
+        "cases": [
+          "delegated-completion",
+          "immediate-replay"
+        ],
+        "path": "evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/verification-runs/state_authority-positive.preserves",
+        "actual_run_exit": 0,
+        "native_emission": "verification-run receipt=blake3:4d4b5aa35e446dfeb316414ff8e7c2b92f2930624ef2589462590045b9b1a30d decision=pass requirement=molten.audit_f08.state_authority kind=positive"
+      },
+      {
+        "requirement": "molten.audit_f08.state_authority",
+        "kind": "negative",
+        "target": "src/coordination_delivery/service.rs",
+        "cases": [
+          "wrong-owner",
+          "stale-fence",
+          "replay-does-not-authorize",
+          "evidence-does-not-authorize"
+        ],
+        "path": "evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/verification-runs/state_authority-negative.preserves",
+        "actual_run_exit": 1,
+        "native_emission": "verification-run receipt=blake3:3d0bab2246e2ac258953c33d95bcc07d0860a6fe137744ec2c27dbdd6db615c2 decision=deny requirement=molten.audit_f08.state_authority kind=negative"
+      },
+      {
+        "requirement": "molten.audit_f08.validation_claims",
+        "kind": "positive",
+        "target": "src/coordination_delivery/tests/contracts/records.rs",
+        "cases": [
+          "extension-replay",
+          "completed-b-replay"
+        ],
+        "path": "evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/verification-runs/validation_claims-positive.preserves",
+        "actual_run_exit": 0,
+        "native_emission": "verification-run receipt=blake3:b01aeb1a1b6a41cca276f420fdfa9a3df25b95a00572ed386f72e998c1e591de decision=pass requirement=molten.audit_f08.validation_claims kind=positive"
+      },
+      {
+        "requirement": "molten.audit_f08.validation_claims",
+        "kind": "negative",
+        "target": "src/coordination_delivery/tests/contracts/records.rs",
+        "cases": [
+          "expired-completion",
+          "conflicting-duplicate"
+        ],
+        "path": "evidence/cairn-source-remediation-2026-10-15/attempt-15-delivery-result-acceptance/verification-runs/validation_claims-negative.preserves",
+        "actual_run_exit": 1,
+        "native_emission": "verification-run receipt=blake3:146c03206ebd8bd68a31b0573f796bc6f240b420def6a366694cf0ed624d6a2f decision=deny requirement=molten.audit_f08.validation_claims kind=negative"
+      }
+    ],
+    "actual_observation_binding": "Positive receipts bind actual process exit 0; negative receipts bind actual expected-deny process exit 1, canonical denied outcomes and real no-mutation observations. No passing test process was relabeled negative.",
+    "native_gate": "native-f08-receipt-backed-traceability.json",
+    "manifest_ref": "blake3:ef7b714b208e58227bb0da69c901120f47eb2815b9e246d944d9567d56800938",
+    "require_receipt_backed": true,
+    "covered": [
+      "molten.audit_f08.original_binding",
+      "molten.audit_f08.state_authority",
+      "molten.audit_f08.unavailable_result",
+      "molten.audit_f08.validation_claims"
+    ],
+    "missing_positive": 0,
+    "missing_negative": 0,
+    "stale": 0,
+    "compatibility_only": 0,
+    "exemptions": []
+  },
+  "review": {
+    "core": "Complete duplicate request identity must match; only a current token whose exact token_ref equals the original saved operation token_ref can be returned. No historical token retention was added.",
+    "service": "Duplicate/denied transitions use the no-commit path before compare-and-commit, timers and status publication.",
+    "independent_completion": "Current token, owner/delegated authority, deadline and fencing checks remain separate from historical operation evidence.",
+    "wire_compatibility": "No exported signature or v1 canonical receipt shape changed; token remains optional on the transition and is not invented as a canonical receipt field.",
+    "current_native_validation": "pre-closeout-strict-validation.json valid; pre-closeout-live-guard.json pass with the exact inherited baseline and zero dangling references."
+  },
+  "non_claims": [
+    "Wrong response evidence is not an authority bypass.",
+    "No live worker/scheduler effects, external exactly-once, global liveness, arbitrary system correctness or release eligibility.",
+    "No completed status for other active Cairns, mainline integration or Molten remote push."
+  ]
+}

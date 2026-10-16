@@ -1,0 +1,241 @@
+{
+  "cases": [
+    {
+      "case": "positive",
+      "phase": "public-cargo-octet",
+      "command": [
+        "/tmp/molten-attempts-6-7-l6bgn98w/octet-provider/bin/cargo-octet",
+        "check",
+        "--output-format",
+        "json",
+        "--artifact-dir",
+        "/tmp/molten-attempts-6-7-l6bgn98w/nominal-corrected-cases/positive/artifacts",
+        "--",
+        "--lib",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "findings": [],
+      "status": {
+        "status": "clean",
+        "exit_code": 0,
+        "output_format": "json",
+        "metadata": {
+          "tool_name": "cargo-octet",
+          "tool_version": "0.1.0",
+          "rustc_version": "rustc 1.96.0-nightly (ac7f9ec7d 2026-03-20)",
+          "toolchain": "nightly-2026-03-21-x86_64-unknown-linux-gnu",
+          "profile_name": "workspace-metadata",
+          "profile_hash": "b3:32221f9b641614d915c89e39e3947269f5b6f2ad4080e463ca682bddbb0dd0c4",
+          "config_hash": "b3:fde173476f40c82deae6adff03f5b7a6e6719fb41a2004ab63c1647a0269569c"
+        },
+        "total_findings": 0,
+        "warning_findings": 0,
+        "error_findings": 0,
+        "autofixable_findings": 0,
+        "cargo_process_exit": {
+          "classification": "success",
+          "code": 0
+        }
+      },
+      "stdout": "",
+      "stderr": "--- octet summary ---\nStatus: clean\nFindings: 0\nWarnings: 0\nErrors: 0\nAutofixable: 0\nTool: cargo-octet 0.1.0\nToolchain: nightly-2026-03-21-x86_64-unknown-linux-gnu\nProfile: workspace-metadata\nConfig hash: b3:fde173476f40c82deae6adff03f5b7a6e6719fb41a2004ab63c1647a0269569c\nProfile hash: b3:32221f9b641614d915c89e39e3947269f5b6f2ad4080e463ca682bddbb0dd0c4\n---\n"
+    },
+    {
+      "case": "raw-field",
+      "phase": "plain-rustc",
+      "command": [
+        "/nix/store/1yvh3d6y3fj3xk2dgwczrp1dj5svd92c-rust-default-1.96.0-nightly-2026-03-21/bin/rustc",
+        "--crate-name",
+        "nominal_smoke",
+        "--edition=2024",
+        "--crate-type=lib",
+        "/tmp/molten-attempts-6-7-l6bgn98w/nominal-corrected-cases/raw-field/crates/molten-core/src/nominal.rs",
+        "--out-dir",
+        "/tmp/molten-attempts-6-7-l6bgn98w/nominal-corrected-cases/raw-field/plain"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "raw-field",
+      "phase": "public-cargo-octet",
+      "command": [
+        "/tmp/molten-attempts-6-7-l6bgn98w/octet-provider/bin/cargo-octet",
+        "check",
+        "--output-format",
+        "json",
+        "--artifact-dir",
+        "/tmp/molten-attempts-6-7-l6bgn98w/nominal-corrected-cases/raw-field/artifacts",
+        "--",
+        "--lib",
+        "--offline"
+      ],
+      "exit_code": 2,
+      "findings": [
+        {
+          "version": 2,
+          "index": "F1",
+          "stable_id": "b3:5e14edc1a528a0d0",
+          "semantic_id": "b3:5e14edc1a528a0d0",
+          "identity_status": "computed",
+          "normalized_snippet_hash": "b3:d8c93170d99553be778ddf881070601d2a9c9dbe25e2f80fe06765e39689e56f",
+          "config_hash": "b3:fde173476f40c82deae6adff03f5b7a6e6719fb41a2004ab63c1647a0269569c",
+          "cache_status": "disabled",
+          "lint": "raw_domain_value",
+          "group": "tigerstyle::structure",
+          "severity": "error",
+          "file": "crates/molten-core/src/nominal.rs",
+          "line": 237,
+          "column": 5,
+          "message": "registered domain value `AuthorityReferenceSet::holder` uses raw `string` storage in core scope `molten.nominal-reference.principal`",
+          "suggestion": null,
+          "applicability": null,
+          "principle": "Nominal Domain Types",
+          "effect_family": "failure",
+          "evidence_tier": "static_lint",
+          "crate_name": "molten_nominal_smoke"
+        }
+      ],
+      "status": {
+        "status": "integration-failure",
+        "exit_code": 2,
+        "output_format": "json",
+        "metadata": {
+          "tool_name": "cargo-octet",
+          "tool_version": "0.1.0",
+          "rustc_version": "rustc 1.96.0-nightly (ac7f9ec7d 2026-03-20)",
+          "toolchain": "nightly-2026-03-21-x86_64-unknown-linux-gnu",
+          "profile_name": "workspace-metadata",
+          "profile_hash": "b3:32221f9b641614d915c89e39e3947269f5b6f2ad4080e463ca682bddbb0dd0c4",
+          "config_hash": "b3:fde173476f40c82deae6adff03f5b7a6e6719fb41a2004ab63c1647a0269569c"
+        },
+        "total_findings": 1,
+        "warning_findings": 0,
+        "error_findings": 1,
+        "autofixable_findings": 0,
+        "cargo_process_exit": {
+          "classification": "exit-code",
+          "code": 101
+        }
+      },
+      "stdout": "{\"version\":2,\"index\":\"F1\",\"stable_id\":\"b3:5e14edc1a528a0d0\",\"semantic_id\":\"b3:5e14edc1a528a0d0\",\"identity_status\":\"computed\",\"normalized_snippet_hash\":\"b3:d8c93170d99553be778ddf881070601d2a9c9dbe25e2f80fe06765e39689e56f\",\"config_hash\":\"b3:fde173476f40c82deae6adff03f5b7a6e6719fb41a2004ab63c1647a0269569c\",\"cache_status\":\"disabled\",\"lint\":\"raw_domain_value\",\"group\":\"tigerstyle::structure\",\"severity\":\"error\",\"file\":\"crates/molten-core/src/nominal.rs\",\"line\":237,\"column\":5,\"message\":\"registered domain value `AuthorityReferenceSet::holder` uses raw `string` storage in core scope `molten.nominal-reference.principal`\",\"suggestion\":null,\"applicability\":null,\"principle\":\"Nominal Domain Types\",\"effect_family\":\"failure\",\"evidence_tier\":\"static_lint\",\"crate_name\":\"molten_nominal_smoke\"}\n",
+      "stderr": "--- octet summary ---\nStatus: integration-failure\nFindings: 1\nWarnings: 0\nErrors: 1\nAutofixable: 0\nTool: cargo-octet 0.1.0\nToolchain: nightly-2026-03-21-x86_64-unknown-linux-gnu\nProfile: workspace-metadata\nConfig hash: b3:fde173476f40c82deae6adff03f5b7a6e6719fb41a2004ab63c1647a0269569c\nProfile hash: b3:32221f9b641614d915c89e39e3947269f5b6f2ad4080e463ca682bddbb0dd0c4\n\nBy crate:\n  molten_nominal_smoke        1\n\nBy effect:\n  failure        1\n\nBy lint:\n  raw_domain_value        1\n\nIndex:\n  F1  raw_domain_value molten_nominal_smoke  crates/molten-core/src/nominal.rs:237\n---\n"
+    },
+    {
+      "case": "raw-alias",
+      "phase": "plain-rustc",
+      "command": [
+        "/nix/store/1yvh3d6y3fj3xk2dgwczrp1dj5svd92c-rust-default-1.96.0-nightly-2026-03-21/bin/rustc",
+        "--crate-name",
+        "nominal_smoke",
+        "--edition=2024",
+        "--crate-type=lib",
+        "/tmp/molten-attempts-6-7-l6bgn98w/nominal-corrected-cases/raw-alias/crates/molten-core/src/nominal.rs",
+        "--out-dir",
+        "/tmp/molten-attempts-6-7-l6bgn98w/nominal-corrected-cases/raw-alias/plain"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "case": "raw-alias",
+      "phase": "public-cargo-octet",
+      "command": [
+        "/tmp/molten-attempts-6-7-l6bgn98w/octet-provider/bin/cargo-octet",
+        "check",
+        "--output-format",
+        "json",
+        "--artifact-dir",
+        "/tmp/molten-attempts-6-7-l6bgn98w/nominal-corrected-cases/raw-alias/artifacts",
+        "--",
+        "--lib",
+        "--offline"
+      ],
+      "exit_code": 2,
+      "findings": [
+        {
+          "version": 2,
+          "index": "F1",
+          "stable_id": "b3:48c3ca12456d5d96",
+          "semantic_id": "b3:48c3ca12456d5d96",
+          "identity_status": "computed",
+          "normalized_snippet_hash": "b3:aa6edd6ee0d963eb83db9c2856182084802094633865cdd8b71f65e7e2d187cd",
+          "config_hash": "b3:fde173476f40c82deae6adff03f5b7a6e6719fb41a2004ab63c1647a0269569c",
+          "cache_status": "disabled",
+          "lint": "primitive_domain_alias",
+          "group": "tigerstyle::structure",
+          "severity": "error",
+          "file": "crates/molten-core/src/nominal.rs",
+          "line": 135,
+          "column": 1,
+          "message": "domain alias `PrincipalRef` resolves to primitive storage declared by `molten.nominal-reference.principal`",
+          "suggestion": null,
+          "applicability": null,
+          "principle": "Nominal Domain Types",
+          "effect_family": "failure",
+          "evidence_tier": "static_lint",
+          "crate_name": "molten_nominal_smoke"
+        },
+        {
+          "version": 2,
+          "index": "F2",
+          "stable_id": "b3:f9cf4ea007f193c3",
+          "semantic_id": "b3:f9cf4ea007f193c3",
+          "identity_status": "computed",
+          "normalized_snippet_hash": "b3:02feec414576c46c55b70874567f565c6700ae99d941f5ad31d56ceea5f90559",
+          "config_hash": "b3:fde173476f40c82deae6adff03f5b7a6e6719fb41a2004ab63c1647a0269569c",
+          "cache_status": "disabled",
+          "lint": "raw_domain_value",
+          "group": "tigerstyle::structure",
+          "severity": "error",
+          "file": "crates/molten-core/src/nominal.rs",
+          "line": 239,
+          "column": 5,
+          "message": "registered domain value `AuthorityReferenceSet::holder` uses raw `string` storage in core scope `molten.nominal-reference.principal`",
+          "suggestion": null,
+          "applicability": null,
+          "principle": "Nominal Domain Types",
+          "effect_family": "failure",
+          "evidence_tier": "static_lint",
+          "crate_name": "molten_nominal_smoke"
+        }
+      ],
+      "status": {
+        "status": "integration-failure",
+        "exit_code": 2,
+        "output_format": "json",
+        "metadata": {
+          "tool_name": "cargo-octet",
+          "tool_version": "0.1.0",
+          "rustc_version": "rustc 1.96.0-nightly (ac7f9ec7d 2026-03-20)",
+          "toolchain": "nightly-2026-03-21-x86_64-unknown-linux-gnu",
+          "profile_name": "workspace-metadata",
+          "profile_hash": "b3:32221f9b641614d915c89e39e3947269f5b6f2ad4080e463ca682bddbb0dd0c4",
+          "config_hash": "b3:fde173476f40c82deae6adff03f5b7a6e6719fb41a2004ab63c1647a0269569c"
+        },
+        "total_findings": 2,
+        "warning_findings": 0,
+        "error_findings": 2,
+        "autofixable_findings": 0,
+        "cargo_process_exit": {
+          "classification": "exit-code",
+          "code": 101
+        }
+      },
+      "stdout": "{\"version\":2,\"index\":\"F1\",\"stable_id\":\"b3:48c3ca12456d5d96\",\"semantic_id\":\"b3:48c3ca12456d5d96\",\"identity_status\":\"computed\",\"normalized_snippet_hash\":\"b3:aa6edd6ee0d963eb83db9c2856182084802094633865cdd8b71f65e7e2d187cd\",\"config_hash\":\"b3:fde173476f40c82deae6adff03f5b7a6e6719fb41a2004ab63c1647a0269569c\",\"cache_status\":\"disabled\",\"lint\":\"primitive_domain_alias\",\"group\":\"tigerstyle::structure\",\"severity\":\"error\",\"file\":\"crates/molten-core/src/nominal.rs\",\"line\":135,\"column\":1,\"message\":\"domain alias `PrincipalRef` resolves to primitive storage declared by `molten.nominal-reference.principal`\",\"suggestion\":null,\"applicability\":null,\"principle\":\"Nominal Domain Types\",\"effect_family\":\"failure\",\"evidence_tier\":\"static_lint\",\"crate_name\":\"molten_nominal_smoke\"}\n{\"version\":2,\"index\":\"F2\",\"stable_id\":\"b3:f9cf4ea007f193c3\",\"semantic_id\":\"b3:f9cf4ea007f193c3\",\"identity_status\":\"computed\",\"normalized_snippet_hash\":\"b3:02feec414576c46c55b70874567f565c6700ae99d941f5ad31d56ceea5f90559\",\"config_hash\":\"b3:fde173476f40c82deae6adff03f5b7a6e6719fb41a2004ab63c1647a0269569c\",\"cache_status\":\"disabled\",\"lint\":\"raw_domain_value\",\"group\":\"tigerstyle::structure\",\"severity\":\"error\",\"file\":\"crates/molten-core/src/nominal.rs\",\"line\":239,\"column\":5,\"message\":\"registered domain value `AuthorityReferenceSet::holder` uses raw `string` storage in core scope `molten.nominal-reference.principal`\",\"suggestion\":null,\"applicability\":null,\"principle\":\"Nominal Domain Types\",\"effect_family\":\"failure\",\"evidence_tier\":\"static_lint\",\"crate_name\":\"molten_nominal_smoke\"}\n",
+      "stderr": "--- octet summary ---\nStatus: integration-failure\nFindings: 2\nWarnings: 0\nErrors: 2\nAutofixable: 0\nTool: cargo-octet 0.1.0\nToolchain: nightly-2026-03-21-x86_64-unknown-linux-gnu\nProfile: workspace-metadata\nConfig hash: b3:fde173476f40c82deae6adff03f5b7a6e6719fb41a2004ab63c1647a0269569c\nProfile hash: b3:32221f9b641614d915c89e39e3947269f5b6f2ad4080e463ca682bddbb0dd0c4\n\nBy crate:\n  molten_nominal_smoke        2\n\nBy effect:\n  failure        2\n\nBy lint:\n  primitive_domain_alias        1\n  raw_domain_value              1\n\nIndex:\n  F1  primitive_domain_alias molten_nominal_smoke  crates/molten-core/src/nominal.rs:135\n  F2  raw_domain_value       molten_nominal_smoke  crates/molten-core/src/nominal.rs:239\n---\n"
+    }
+  ],
+  "attempt": "7/20",
+  "scope": "Development override only; actual nominal core module and textual part in a dependency-free crate preserving the declared physical path. Not immutable provider adoption, a full-workspace pass, or lifecycle acceptance.",
+  "harness_input_error": {
+    "argument": "--format",
+    "observed_stderr": "error: unsupported argument before `--`: `--format`\n",
+    "verification_claim": false,
+    "repair": "Use the public check CLI-supported --output-format json option."
+  },
+  "command_harness": "import json\nimport os\nimport pathlib\nimport shutil\nimport subprocess\nimport sys\n\nsource = pathlib.Path(sys.argv[1])\nroot = pathlib.Path(sys.argv[2])\nchecker = pathlib.Path(sys.argv[3])\nrustc = pathlib.Path(sys.argv[4])\noriginal = source.joinpath(\"crates/molten-core/src/nominal.rs\").read_text()\nconfig = source.joinpath(\"dylint.toml\").read_text()\nrecords = []\n\n\ndef replace_once(text, before, after):\n    assert text.count(before) == 1, (before, text.count(before))\n    return text.replace(before, after, 1)\n\n\nvariants = {\"positive\": original}\nvariants[\"raw-field\"] = replace_once(original, \"pub holder: PrincipalRef,\", \"pub holder: String,\")\nalias = replace_once(original, \"macro_rules! domains {\", \"\"\"macro_rules! domains {\n    (@alias PrincipalRef, $family:ident, $marker:ident) => { String };\n    (@alias $alias:ident, $family:ident, $marker:ident) => { $family<$marker> };\"\"\")\nalias = replace_once(alias, \"pub type $alias = $family<$marker>;\", \"pub type $alias = domains!(@alias $alias, $family, $marker);\")\nvariants[\"raw-alias\"] = replace_once(alias, \"AdmittedReference::Principal(PrincipalRef::new(value)?)\", \"AdmittedReference::Principal(String::from(value))\")\n\nfor name, content in variants.items():\n    fixture = root / name\n    member = fixture / \"crates/molten-core/src/nominal.rs\"\n    member.parent.mkdir(parents=True, exist_ok=True)\n    member.write_text(content)\n    parts = pathlib.Path(\"crates/molten-core/src/parts/nominal\")\n    shutil.copytree(source / parts, fixture / parts, dirs_exist_ok=True)\n    (fixture / \"dylint.toml\").write_text(config)\n    (fixture / \"Cargo.toml\").write_text('''[package]\nname = \"molten-nominal-smoke\"\nversion = \"0.0.0\"\nedition = \"2024\"\n[lib]\npath = \"crates/molten-core/src/nominal.rs\"\n[workspace]\n[workspace.metadata.octet]\ndefault_scope = [\"-p\", \"molten-nominal-smoke\"]\ncargo_check_args = [\"--lib\", \"--offline\"]\n''')\n    environment = os.environ.copy()\n    environment.update(CARGO_HOME=str(fixture / \".cargo-home\"), CARGO_TARGET_DIR=str(fixture / \"target\"))\n    for variable in [\"RUSTC_WRAPPER\", \"RUSTC_WORKSPACE_WRAPPER\", \"DYLINT_LIBS\"]:\n        environment.pop(variable, None)\n    locked = subprocess.run([str(rustc.with_name(\"cargo\")), \"generate-lockfile\", \"--offline\"], cwd=fixture, env=environment, capture_output=True, text=True, timeout=120)\n    if locked.returncode:\n        raise RuntimeError(locked.stderr)\n    if name != \"positive\" and not (fixture / \"plain\").exists():\n        plain_output = fixture / \"plain\"\n        plain_output.mkdir()\n        argv = [str(rustc), \"--crate-name\", \"nominal_smoke\", \"--edition=2024\", \"--crate-type=lib\", str(member), \"--out-dir\", str(plain_output)]\n        completed = subprocess.run(argv, cwd=fixture, env=environment, capture_output=True, text=True, timeout=120)\n        records.append({\"case\": name, \"phase\": \"plain-rustc\", \"command\": argv, \"exit_code\": completed.returncode, \"stdout\": completed.stdout, \"stderr\": completed.stderr})\n    artifacts = fixture / \"artifacts\"\n    argv = [str(checker), \"check\", \"--output-format\", \"json\", \"--artifact-dir\", str(artifacts), \"--\", \"--lib\", \"--offline\"]\n    completed = subprocess.run(argv, cwd=fixture, env=environment, capture_output=True, text=True, timeout=180)\n    result_file = artifacts / \"results.jsonl\"\n    findings = [json.loads(line) for line in result_file.read_text().splitlines() if line.strip()] if result_file.exists() else []\n    status_file = artifacts / \"status.json\"\n    status = json.loads(status_file.read_text()) if status_file.exists() else None\n    records.append({\"case\": name, \"phase\": \"public-cargo-octet\", \"command\": argv, \"exit_code\": completed.returncode, \"findings\": findings, \"status\": status, \"stdout\": completed.stdout, \"stderr\": completed.stderr})\nprint(json.dumps({\"cases\": records}, indent=2))\n"
+}

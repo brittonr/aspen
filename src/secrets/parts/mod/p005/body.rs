@@ -54,10 +54,9 @@ fn fixture_receipts(core: &FixtureCore) -> Result<FixtureReceipts> {
     })
 }
 
-fn fixture_retention(core: &FixtureCore) -> Result<crate::retention::Evaluation> {
-    let retention_root = secrets_fixture_retention_root(&core.secret.secret_ref)?;
+fn fixture_retention(core: &FixtureCore, retention_root: &std::path::Path) -> Result<crate::retention::Evaluation> {
     crate::retention::evaluate(crate::retention::EvaluationInput {
-        root: &retention_root,
+        root: retention_root,
         object_ref: &core.secret.secret_ref,
         object_kind: "secret-ref",
         retention_class: crate::retention::CLASS_PRIVATE_SECRET_REF,
@@ -102,8 +101,8 @@ fn fixture_private_bundle(core: &FixtureCore, receipts: &FixtureReceipts) -> Res
     parse_private_bundle_profile(&value)
 }
 
-fn fixture_tail(core: &FixtureCore, receipts: &FixtureReceipts) -> Result<FixtureTail> {
-    let retention = fixture_retention(core)?;
+fn fixture_tail(core: &FixtureCore, receipts: &FixtureReceipts, retention_root: &std::path::Path) -> Result<FixtureTail> {
+    let retention = fixture_retention(core, retention_root)?;
     let cleanup = fixture_cleanup(core, &retention)?;
     let private_bundle = fixture_private_bundle(core, receipts)?;
     Ok(FixtureTail {
@@ -163,10 +162,12 @@ fn fixture_report(core: &FixtureCore, receipts: &FixtureReceipts, tail: &Fixture
     Ok((value, value_ref))
 }
 
-pub fn run_secrets_fixture() -> Result<SecretsFixtureRun> {
+/// Produces the confidentiality fixture using an explicitly admitted, isolated retention
+/// scratch root. The caller owns the root's allocation and lifetime.
+pub fn run_secrets_fixture(retention_root: &std::path::Path) -> Result<SecretsFixtureRun> {
     let core = fixture_core()?;
     let receipts = fixture_receipts(&core)?;
-    let tail = fixture_tail(&core, &receipts)?;
+    let tail = fixture_tail(&core, &receipts, retention_root)?;
     let (report_value, report_ref) = fixture_report(&core, &receipts, &tail)?;
     let mut evidence_values = fixture_evidence_values(&core, &receipts, &tail)?;
     evidence_values.push_limited(report_value.clone(), MAX_SECRET_MARKERS, "secrets fixture evidence")?;

@@ -52,7 +52,7 @@ fn projected_observations(count: u64) -> Vec<ChaosControlChainObservation> {
 
 // r[verify molten.consensus.chaoscontrol_chain_observation]
 #[test]
-fn genesis_and_first_transition_match_the_archived_chaoscontrol_framing() {
+fn genesis_and_first_transition_match_the_archived_framing() {
     let projector =
         ChaosControlChainProjector::bind(lossless_profile(), TEST_INITIAL_STATE_REF).expect("projector binds");
     assert_eq!(projector.genesis_digest(), TEST_GENESIS_DIGEST);
@@ -118,7 +118,7 @@ fn projection_denies_an_observation_that_bypasses_the_committed_application_path
     let mut fabricated = committed_apply(1);
     fabricated.application_receipt_ref = "not-a-content-ref".to_string();
     let error = projector.project(&fabricated).expect_err("fabricated observation is denied");
-    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::Failure::InvalidHarness(_)));
 }
 
 // r[verify molten.consensus.chaoscontrol_chain_observation]
@@ -128,7 +128,7 @@ fn projection_denies_noncontiguous_committed_apply_order() {
         ChaosControlChainProjector::bind(lossless_profile(), TEST_INITIAL_STATE_REF).expect("projector binds");
     projector.project(&committed_apply(1)).expect("projection succeeds");
     let error = projector.project(&committed_apply(3)).expect_err("changed order is denied");
-    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::Failure::InvalidHarness(_)));
     assert_eq!(projector.next_command_index(), 2);
 }
 
@@ -139,7 +139,7 @@ fn projection_denies_duplicated_committed_apply() {
         ChaosControlChainProjector::bind(lossless_profile(), TEST_INITIAL_STATE_REF).expect("projector binds");
     projector.project(&committed_apply(1)).expect("projection succeeds");
     let error = projector.project(&committed_apply(1)).expect_err("duplicate apply is denied");
-    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::Failure::InvalidHarness(_)));
     assert_eq!(projector.projected_count(), 1);
 }
 
@@ -152,7 +152,7 @@ fn projection_denies_rollback_to_an_earlier_command_index() {
     let mut rollback = committed_apply(1);
     rollback.command_bytes = b"rewritten-command".to_vec();
     let error = projector.project(&rollback).expect_err("rollback is denied");
-    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::Failure::InvalidHarness(_)));
 }
 
 // r[verify molten.consensus.chaoscontrol_chain_observation]
@@ -163,7 +163,7 @@ fn projection_denies_malformed_references() {
     let mut malformed = committed_apply(1);
     malformed.application_state_ref = "blake3:NOTHEX".to_string();
     let error = projector.project(&malformed).expect_err("malformed ref is denied");
-    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::Failure::InvalidHarness(_)));
 }
 
 // r[verify molten.consensus.chaoscontrol_chain_observation]
@@ -175,7 +175,7 @@ fn projection_denies_a_stale_lifecycle_generation() {
     let mut stale = committed_apply(2);
     stale.lifecycle_generation = 0;
     let error = projector.project(&stale).expect_err("stale generation is denied");
-    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::Failure::InvalidHarness(_)));
 }
 
 // r[verify molten.consensus.chaoscontrol_chain_observation]
@@ -185,13 +185,13 @@ fn sampled_profile_cannot_support_conformance_projection() {
     profile.observation_mode = ChaosControlObservationMode::Sampled;
     let mut projector = ChaosControlChainProjector::bind(profile, TEST_INITIAL_STATE_REF).expect("projector binds");
     let error = projector.project(&committed_apply(1)).expect_err("sampled projection cannot support conformance");
-    assert!(matches!(error, crate::error::MoltenError::InvalidHarness(_)));
+    assert!(matches!(error, crate::error::Failure::InvalidHarness(_)));
 }
 
 // r[verify molten.consensus.chaoscontrol_chain_observation]
 #[test]
 fn lossless_ledger_reports_ready_when_every_observation_arrives() {
-    let mut ledger = ChaosControlObservationLedger::new(ChaosControlObservationMode::Lossless);
+    let mut ledger = ChaosControlObservation::new(ChaosControlObservationMode::Lossless);
     for observation in projected_observations(3) {
         let status = ledger.ingest(&observation).expect("ingest succeeds");
         assert_eq!(status, ChaosControlIngestStatus::Appended);
@@ -202,7 +202,7 @@ fn lossless_ledger_reports_ready_when_every_observation_arrives() {
 // r[verify molten.consensus.chaoscontrol_chain_observation]
 #[test]
 fn lossless_ledger_blocks_conformance_on_an_observation_gap_without_safety_rejection() {
-    let mut ledger = ChaosControlObservationLedger::new(ChaosControlObservationMode::Lossless);
+    let mut ledger = ChaosControlObservation::new(ChaosControlObservationMode::Lossless);
     let observations = projected_observations(3);
     ledger.ingest(&observations[0]).expect("ingest succeeds");
     ledger.ingest(&observations[2]).expect("ingest succeeds");
@@ -215,7 +215,7 @@ fn lossless_ledger_blocks_conformance_on_an_observation_gap_without_safety_rejec
 // r[verify molten.consensus.chaoscontrol_chain_observation]
 #[test]
 fn ledger_suppresses_identical_duplicate_reports() {
-    let mut ledger = ChaosControlObservationLedger::new(ChaosControlObservationMode::Lossless);
+    let mut ledger = ChaosControlObservation::new(ChaosControlObservationMode::Lossless);
     let observations = projected_observations(2);
     ledger.ingest(&observations[0]).expect("ingest succeeds");
     let status = ledger.ingest(&observations[0]).expect("re-ingest succeeds");
@@ -227,7 +227,7 @@ fn ledger_suppresses_identical_duplicate_reports() {
 // r[verify molten.consensus.chaoscontrol_chain_observation]
 #[test]
 fn ledger_records_rollback_as_a_persistent_safety_violation() {
-    let mut ledger = ChaosControlObservationLedger::new(ChaosControlObservationMode::Lossless);
+    let mut ledger = ChaosControlObservation::new(ChaosControlObservationMode::Lossless);
     let observations = projected_observations(3);
     ledger.ingest(&observations[0]).expect("ingest succeeds");
     let mut rewritten = observations[0].clone();

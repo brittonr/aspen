@@ -26,13 +26,13 @@ impl std::fmt::Debug for ChildProcessPlan {
 
 #[derive(Clone)]
 pub(crate) struct ProcessWorkspace {
-    _workspace: TestWorkspace,
+    _workspace: Workspace,
     plan: ChildProcessPlan,
 }
 
 impl ProcessWorkspace {
-    pub(crate) fn new(logical_label: &str) -> TestSupportResult<Self> {
-        let workspace = TestWorkspace::new(logical_label)?;
+    pub(crate) fn new(logical_label: &str) -> FixtureResult<Self> {
+        let workspace = Workspace::new(logical_label)?;
         let state = workspace.state()?;
         let plan = workspace.process_bridge().plan(&state)?;
         Ok(Self {
@@ -69,7 +69,7 @@ impl AsRef<std::path::Path> for ProcessWorkspace {
     }
 }
 
-pub(crate) fn process_workspace(logical_label: &str) -> TestSupportResult<ProcessWorkspace> {
+pub(crate) fn process_workspace(logical_label: &str) -> FixtureResult<ProcessWorkspace> {
     ProcessWorkspace::new(logical_label)
 }
 
@@ -85,35 +85,35 @@ impl AsRef<std::ffi::OsStr> for ProcessWorkspace {
 }
 
 pub(crate) struct AdversarialSetup<'a> {
-    workspace: &'a TestWorkspace,
+    workspace: &'a Workspace,
 }
 
 impl AdversarialSetup<'_> {
     pub(crate) fn corrupt<R: WorkspaceRoleMarker>(
         &self,
-        target: &TestRoot<R>,
+        target: &Root<R>,
         path: &WorkspacePath,
         bytes: &[u8],
-    ) -> TestSupportResult<()> {
+    ) -> FixtureResult<()> {
         ensure_workspace_owns_root(self.workspace, target)?;
         target.write(path, bytes)
     }
 
     pub(crate) fn remove<R: WorkspaceRoleMarker>(
         &self,
-        target: &TestRoot<R>,
+        target: &Root<R>,
         path: &WorkspacePath,
-    ) -> TestSupportResult<()> {
+    ) -> FixtureResult<()> {
         ensure_workspace_owns_root(self.workspace, target)?;
         target.dir.remove_file(path.as_path())
     }
 
     pub(crate) fn replace<R: WorkspaceRoleMarker>(
         &self,
-        target: &TestRoot<R>,
+        target: &Root<R>,
         path: &WorkspacePath,
         bytes: &[u8],
-    ) -> TestSupportResult<()> {
+    ) -> FixtureResult<()> {
         ensure_workspace_owns_root(self.workspace, target)?;
         match target.dir.symlink_metadata(path.as_path()) {
             Ok(metadata) if metadata.is_dir() => target.dir.remove_dir_all(path.as_path())?,
@@ -127,10 +127,10 @@ impl AdversarialSetup<'_> {
     #[cfg(unix)]
     pub(crate) fn set_mode<R: WorkspaceRoleMarker>(
         &self,
-        target: &TestRoot<R>,
+        target: &Root<R>,
         path: &WorkspacePath,
         mode: u32,
-    ) -> TestSupportResult<()> {
+    ) -> FixtureResult<()> {
         use cap_std::fs::PermissionsExt;
 
         ensure_workspace_owns_root(self.workspace, target)?;
@@ -140,10 +140,10 @@ impl AdversarialSetup<'_> {
     #[cfg(unix)]
     pub(crate) fn symlink_to_host<R: WorkspaceRoleMarker>(
         &self,
-        target: &TestRoot<R>,
+        target: &Root<R>,
         link: &WorkspacePath,
         destination: &std::path::Path,
-    ) -> TestSupportResult<()> {
+    ) -> FixtureResult<()> {
         ensure_workspace_owns_root(self.workspace, target)?;
         create_parent(&target.dir, link.as_path())?;
         let target_root = self.workspace.process_bridge().plan(target)?;
@@ -154,7 +154,7 @@ impl AdversarialSetup<'_> {
 pub(crate) fn validate_portable_evidence(
     fields: &[&str],
     diagnostic_paths: &[&std::path::Path],
-) -> TestSupportResult<()> {
+) -> FixtureResult<()> {
     for field in fields {
         for diagnostic_path in diagnostic_paths {
             let rendered = diagnostic_path.to_string_lossy();
@@ -170,7 +170,7 @@ fn plan_artifact_export(
     artifact_label: &str,
     source: &str,
     destination: &str,
-) -> TestSupportResult<ArtifactExportPlan> {
+) -> FixtureResult<ArtifactExportPlan> {
     validate_logical_label(artifact_label)?;
     Ok(ArtifactExportPlan {
         artifact_label: artifact_label.to_string(),
@@ -180,16 +180,16 @@ fn plan_artifact_export(
 }
 
 fn ensure_workspace_owns_root<R: WorkspaceRoleMarker>(
-    workspace: &TestWorkspace,
-    root: &TestRoot<R>,
-) -> TestSupportResult<()> {
+    workspace: &Workspace,
+    root: &Root<R>,
+) -> FixtureResult<()> {
     if workspace.inner.workspace_id != root.inner.workspace_id {
         return Err(permission_denied("test root belongs to a different workspace"));
     }
     Ok(())
 }
 
-fn validate_logical_label(label: &str) -> TestSupportResult<()> {
+fn validate_logical_label(label: &str) -> FixtureResult<()> {
     if label.is_empty() {
         return Err(invalid_input("test workspace logical label cannot be empty"));
     }
@@ -202,7 +202,7 @@ fn validate_logical_label(label: &str) -> TestSupportResult<()> {
     Ok(())
 }
 
-fn validate_workspace_path(value: &str) -> TestSupportResult<()> {
+fn validate_workspace_path(value: &str) -> FixtureResult<()> {
     if value.is_empty() {
         return Err(invalid_input("test workspace path cannot be empty"));
     }
@@ -232,7 +232,7 @@ fn validate_workspace_path(value: &str) -> TestSupportResult<()> {
     Ok(())
 }
 
-fn create_parent(dir: &cap_std::fs::Dir, path: &std::path::Path) -> TestSupportResult<()> {
+fn create_parent(dir: &cap_std::fs::Dir, path: &std::path::Path) -> FixtureResult<()> {
     let Some(parent) = path.parent() else {
         return Ok(());
     };
@@ -251,7 +251,7 @@ fn workspace_identity(logical_label: &str, diagnostic_host_path: &std::path::Pat
 }
 
 #[cfg(unix)]
-fn diagnostic_host_path(dir: &cap_std::fs::Dir) -> TestSupportResult<std::path::PathBuf> {
+fn diagnostic_host_path(dir: &cap_std::fs::Dir) -> FixtureResult<std::path::PathBuf> {
     use std::os::fd::AsRawFd;
 
     let descriptor_path = std::path::PathBuf::from(format!("/proc/self/fd/{}", dir.as_raw_fd()));
@@ -259,7 +259,7 @@ fn diagnostic_host_path(dir: &cap_std::fs::Dir) -> TestSupportResult<std::path::
 }
 
 #[cfg(not(unix))]
-fn diagnostic_host_path(_dir: &cap_std::fs::Dir) -> TestSupportResult<std::path::PathBuf> {
+fn diagnostic_host_path(_dir: &cap_std::fs::Dir) -> FixtureResult<std::path::PathBuf> {
     Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
         "test child-process path bridge is not implemented for this host",

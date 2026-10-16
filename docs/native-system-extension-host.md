@@ -40,7 +40,7 @@ The decoder rejects missing bytes, identity drift, malformed values, non-canonic
 
 ## Bounded execution
 
-`NativeProcessSystemExtensionExecutor` invokes callbacks only through `ExecutionFabricPort`. It does not call `std::process::Command`.
+`system_extension::Process` invokes callbacks only through `ExecutionFabricPort`. It does not call `std::process::Command`.
 
 The executor persists callback intent before value reads or process execution. It materializes payload and state through `NativeCallbackValuePort`.
 
@@ -48,7 +48,7 @@ After execution, it admits all returned values and effect metadata. It persists 
 
 A definite publication rejection becomes terminal. Uncertain publication remains unknown and blocks automatic retry and dependent provider routing.
 
-`InMemoryNativeCallbackValuePort` is a conformance adapter only. A deployment adapter must provide bounded reads, durable exact publication, and explicit acceptance uncertainty.
+`InMemoryCallbackValuePort` is a conformance adapter only. A deployment adapter must provide bounded reads, durable exact publication, and explicit acceptance uncertainty.
 
 The process adapter clears the environment and applies exact input, output, timeout, polling, teardown, and process-group bounds.
 
@@ -63,7 +63,7 @@ The native instance record contains:
 - unresolved and completed callback, publication, ingress, and effect operations;
 - evidence references and ingress state.
 
-`DurableNativeHostJournal` stores canonical instance records through the existing Redb durability adapter. Restart reloads the latest exact instance record.
+`system_extension::Durable` stores canonical instance records through the existing Redb durability adapter. Restart reloads the latest exact instance record.
 
 Startup classifies unresolved work as not started, running observed, terminal, unknown, or stale. Unknown work remains reconciliation-required and does not retry automatically.
 
@@ -89,7 +89,7 @@ The host commits ingress intent before publishing the exact payload bytes. It di
 
 Transport delivery does not prove payload publication or callback acceptance.
 
-`NativeServiceClient` is the local pilot client. A future Iroh adapter can implement the same application-owned port.
+`system_extension::Client` is the local pilot client. A future Iroh adapter can implement the same application-owned port.
 
 ## Operator workflow
 

@@ -46,9 +46,7 @@ pub fn node_health_input(input: HealthProjectionInput<'_>, node_decision: &str) 
         "unavailable" | "stopped" => HealthState::Unavailable,
         "deny" | "failed" => HealthState::Failed,
         other => {
-            return Err(crate::error::MoltenError::invalid_harness(format!(
-                "unsupported node health decision {other}"
-            )));
+            return Err(crate::error::Failure::invalid_harness(format!("unsupported node health decision {other}")));
         }
     };
     Ok(HealthInput {
@@ -71,7 +69,7 @@ pub struct CounterSampleInput<'a> {
 }
 
 // r[impl molten.fabric_observability.adapter_contract]
-pub fn runtime_counter_sample(input: CounterSampleInput<'_>) -> crate::error::Result<CanonicalArtifact<MetricSample>> {
+pub fn runtime_counter_sample(input: CounterSampleInput<'_>) -> crate::error::Result<Artifact<MetricSample>> {
     let CounterSampleInput {
         profile,
         descriptor,
@@ -81,7 +79,7 @@ pub fn runtime_counter_sample(input: CounterSampleInput<'_>) -> crate::error::Re
         value,
         as_of_tick,
     } = input;
-    canonical_metric_sample(
+    metric_sample(
         profile,
         descriptor,
         &MetricSample {
@@ -115,7 +113,7 @@ pub struct SnapshotBuildInput<'a> {
 pub fn bounded_operator_snapshot(
     profile: &ObservationProfile,
     input: SnapshotBuildInput<'_>,
-) -> crate::error::Result<CanonicalArtifact<ObservationSnapshot>> {
+) -> crate::error::Result<Artifact<ObservationSnapshot>> {
     let snapshot = ObservationSnapshot {
         schema: OBSERVATION_SNAPSHOT_SCHEMA.to_string(),
         snapshot_id: input.snapshot_id.to_string(),
@@ -132,7 +130,7 @@ pub fn bounded_operator_snapshot(
         evidence_refs: sorted_refs(input.evidence_refs),
         non_claims: REQUIRED_OBSERVABILITY_NON_CLAIMS.to_vec(),
     };
-    canonical_observation_snapshot(profile, &snapshot, input.as_of_tick)
+    observation_snapshot(profile, &snapshot, input.as_of_tick)
 }
 
 fn projection_context(input: &HealthProjectionInput<'_>) -> ObservationContext {

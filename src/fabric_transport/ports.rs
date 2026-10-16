@@ -5,7 +5,7 @@
     reason = "the transport port exposes explicit domain command and transition types"
 )]
 
-use super::CanonicalTransportTransition;
+use super::Transition;
 use super::TransportCommand;
 use crate::fabric::FabricPortResult;
 
@@ -13,5 +13,5 @@ use crate::fabric::FabricPortResult;
 
 pub trait TransportCommandShell {
     fn profile_id(&self) -> &str;
-    fn execute_command(&mut self, command: &TransportCommand) -> FabricPortResult<CanonicalTransportTransition>;
+    fn execute_command(&mut self, command: &TransportCommand) -> FabricPortResult<Transition>;
 }

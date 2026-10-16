@@ -6,7 +6,7 @@ const EXECUTION_RECEIPT_RECORD: &str = "fabric-execution-receipt-v1";
 const EXECUTION_STREAM_RECORD: &str = "fabric-execution-stream-v1";
 const NO_VALUE: &str = "none";
 
-pub(super) fn execution_profile_value(profile: &AdmittedExecutionProfile) -> preserves::IOValue {
+pub(super) fn profile_value(profile: &AdmittedExecutionProfile) -> preserves::IOValue {
     let descriptor = &profile.descriptor;
     crate::preserves_rail::record(EXECUTION_PROFILE_RECORD, vec![
         field("schema", crate::preserves_rail::string(&descriptor.schema)),
@@ -49,7 +49,7 @@ pub(super) fn execution_profile_value(profile: &AdmittedExecutionProfile) -> pre
     ])
 }
 
-pub(super) fn execution_request_value(plan: &AdmittedExecutionPlan, profile_admission_ref: &str) -> preserves::IOValue {
+pub(super) fn request_value(plan: &AdmittedExecutionPlan, profile_admission_ref: &str) -> preserves::IOValue {
     let request = &plan.request;
     crate::preserves_rail::record(EXECUTION_REQUEST_RECORD, vec![
         field("schema", crate::preserves_rail::string(&request.schema)),
@@ -120,12 +120,12 @@ pub(super) fn execution_request_value(plan: &AdmittedExecutionPlan, profile_admi
     ])
 }
 
-pub(super) fn execution_receipt_value(
-    request: &CanonicalExecutionRequest,
-    profile: &CanonicalExecutionProfile,
-    process: &ExecutionProcessObservation,
-    stdout_publication: &ExecutionStreamPublication,
-    stderr_publication: &ExecutionStreamPublication,
+pub(super) fn receipt_value(
+    request: &Request,
+    profile: &Profile,
+    process: &ProcessObservation,
+    stdout_publication: &StreamPublication,
+    stderr_publication: &StreamPublication,
 ) -> preserves::IOValue {
     crate::preserves_rail::record(EXECUTION_RECEIPT_RECORD, vec![
         field("schema", crate::preserves_rail::string(EXECUTION_RECEIPT_SCHEMA)),
@@ -150,8 +150,8 @@ pub(super) fn execution_receipt_value(
             ),
         ),
         field("disposition", crate::preserves_rail::string(process.disposition.as_str())),
-        field("stdout", execution_stream_value(&process.stdout, stdout_publication)),
-        field("stderr", execution_stream_value(&process.stderr, stderr_publication)),
+        field("stdout", stream_value(&process.stdout, stdout_publication)),
+        field("stderr", stream_value(&process.stderr, stderr_publication)),
         field(
             "non-claims",
             crate::preserves_rail::sequence(
@@ -164,15 +164,12 @@ pub(super) fn execution_receipt_value(
     ])
 }
 
-fn execution_stream_value(
-    stream: &RetainedExecutionStream,
-    publication: &ExecutionStreamPublication,
-) -> preserves::IOValue {
+fn stream_value(stream: &RetainedStream, publication: &StreamPublication) -> preserves::IOValue {
     let (publication_state, content_ref, publication_receipt_ref, diagnostic_code) = match publication {
-        ExecutionStreamPublication::Published(published) => {
+        StreamPublication::Published(published) => {
             ("published", published.content_ref.as_str(), published.publication_receipt_ref.as_str(), NO_VALUE)
         }
-        ExecutionStreamPublication::Failed { diagnostic_code } => ("failed", NO_VALUE, NO_VALUE, *diagnostic_code),
+        StreamPublication::Failed { diagnostic_code } => ("failed", NO_VALUE, NO_VALUE, *diagnostic_code),
     };
     crate::preserves_rail::record(EXECUTION_STREAM_RECORD, vec![
         field("role", crate::preserves_rail::string(&stream.role)),

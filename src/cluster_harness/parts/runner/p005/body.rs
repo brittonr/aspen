@@ -14,16 +14,16 @@ fn collect_run_files_from(
     let mut pending = vec![current.to_path_buf()];
     while let Some(next) = pending.pop() {
         if next.is_dir() {
-            for entry in std::fs::read_dir(&next).map_err(crate::error::MoltenError::from)? {
-                let entry = entry.map_err(crate::error::MoltenError::from)?;
-                let file_type = entry.file_type().map_err(crate::error::MoltenError::from)?;
+            for entry in std::fs::read_dir(&next).map_err(crate::error::Failure::from)? {
+                let entry = entry.map_err(crate::error::Failure::from)?;
+                let file_type = entry.file_type().map_err(crate::error::Failure::from)?;
                 if file_type.is_dir() {
                     pending.push(entry.path());
                 } else if file_type.is_file() || file_type.is_symlink() {
                     let relative = entry
                         .path()
                         .strip_prefix(root)
-                        .map_err(|_| crate::error::MoltenError::invalid_harness("cluster run file escaped root"))?
+                        .map_err(|_| crate::error::Failure::invalid_harness("cluster run file escaped root"))?
                         .to_string_lossy()
                         .replace(std::path::MAIN_SEPARATOR, "/");
                     files.push_item(relative);
@@ -62,19 +62,19 @@ fn add_verification_companion_diagnostic(
 
 fn write_preserves_path(path: &std::path::Path, value: &IoValue) -> crate::error::Result<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(crate::error::MoltenError::from)?;
+        std::fs::create_dir_all(parent).map_err(crate::error::Failure::from)?;
     }
-    std::fs::write(path, crate::preserves_rail::to_text(value)?).map_err(crate::error::MoltenError::from)
+    std::fs::write(path, crate::preserves_rail::to_text(value)?).map_err(crate::error::Failure::from)
 }
 
 fn read_preserves_path(path: &std::path::Path) -> crate::error::Result<IoValue> {
     if !is_regular_file_without_symlink(path) {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "expected regular non-symlink Preserves file at {}",
             path.display()
         )));
     }
-    let text = std::fs::read_to_string(path).map_err(crate::error::MoltenError::from)?;
+    let text = std::fs::read_to_string(path).map_err(crate::error::Failure::from)?;
     crate::preserves_rail::parse_text(&text)
 }
 

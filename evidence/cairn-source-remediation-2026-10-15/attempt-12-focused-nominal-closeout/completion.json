@@ -1,0 +1,33 @@
+{
+  "attempt": "12/20",
+  "status": "accepted, natively synced and archived in dedicated Molten worktree",
+  "change": "adopt-octet-nominal-domain-enforcement",
+  "archive": ".cairn/archive/1970-01-01-adopt-octet-nominal-domain-enforcement",
+  "provider_revision": "3f7abb641ee604f54629da415bc7686f89662065",
+  "accepted_scope_decision": "User explicitly approved focused nominal acceptance; whole-core warning-only debt remains retained.",
+  "source_runtime_and_compatibility_evidence": ".cairn/archive/1970-01-01-adopt-octet-nominal-domain-enforcement/evidence",
+  "native_receipts": [
+    "sync-reviewed-plan.json",
+    "sync-execute.json",
+    "sync-plan-identity-review.json",
+    "archive-reviewed-plan.json",
+    "archive-execute.json",
+    "archive-plan-identity-review.json"
+  ],
+  "archive_preserved_files": 19,
+  "independent_b3sum_before_and_after_equal": true,
+  "strict_native_validation_valid": true,
+  "strict_native_validation_findings": [],
+  "live_traceability_guard_passed": true,
+  "remaining_active_worktree_changes": 51,
+  "canonical_checkout_integrated": false,
+  "molten_remote_push": false,
+  "immediate_outcome": "Published exact nominal enforcement is adopted, exercised, reviewed, and natively closed without relabeling the frozen verifier pilot.",
+  "durable_capability": "Repeatable actual-source clean and type-correct regression checks under the single provider catalog, with explicit independent historical replay provenance.",
+  "maintenance_owner": "Molten nominal-reference/build maintainers and Octet embedded catalog/lint maintainers",
+  "non_claims": [
+    "Whole molten-core Octet remains warning-only with 985 findings; this approval does not waive another change acceptance.",
+    "No blanket full-workspace, optional-backend, production, authority, freshness, or release-readiness claim.",
+    "Native envelope plan hashes and source/destination archive action strings are mode dependent; semantic mutation linkage is explicitly reviewed."
+  ]
+}

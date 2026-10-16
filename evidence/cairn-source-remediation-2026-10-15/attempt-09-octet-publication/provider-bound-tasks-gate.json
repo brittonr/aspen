@@ -1,0 +1,113 @@
+{
+  "command": [
+    "/nix/store/ynjawpza9ci9i8ha7f3ywaqwbd60m83k-cairn-0.1.0/bin/cairn",
+    "gate",
+    "tasks",
+    "adopt-molten-nominal-reference-domains",
+    "--root",
+    ".",
+    "--policy",
+    "/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015/cairn-policy/generated/cairn-policy.json"
+  ],
+  "cwd": "/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015",
+  "exit_code": 0,
+  "stdout": "{\n  \"acceptance_ids\": [],\n  \"change\": \"adopt-molten-nominal-reference-domains\",\n  \"evidence_summary\": {\n    \"docs_only\": 0,\n    \"fixture\": 0,\n    \"formal\": 0,\n    \"mode\": \"advisory\",\n    \"model\": 0,\n    \"probe\": 0,\n    \"property\": 0\n  },\n  \"input_hash\": \"dfa531c8cd582dd97d85284274993584746efd6e0d06fadd882610feaf44a888\",\n  \"issues\": [],\n  \"layout\": \"cairn\",\n  \"non_claims\": [\n    \"workflow state proves only the selected policy graph and observed structural artifact facts\",\n    \"workflow instructions do not prove artifact truth, review quality, or implementation correctness\",\n    \"workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates\",\n    \"workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts\"\n  ],\n  \"policy\": \"octet-default\",\n  \"policy_hash\": \"62e40f642e798bfaf5a68a495a7456bcf4e9fd8106ae2f52a24100967b39df5d\",\n  \"probe_evidence\": {\n    \"declarations_present\": false,\n    \"probes\": []\n  },\n  \"profile_identity_hash\": \"5b5467ca44e5099cb3ceb57183e13a123476f86cb17bbc3a127924956084e9ad\",\n  \"receipt_hash\": \"2673e0d868bfd4bbf935a8d6101d8002060684e3dac0b5877c37ea094857646c\",\n  \"review_receipt_hashes\": [],\n  \"spec_effect\": \"delta\",\n  \"stage\": \"tasks\",\n  \"substance\": [\n    {\n      \"checkbox_tasks\": 0,\n      \"kind\": \"design\",\n      \"malformed_dependency_markers\": 0,\n      \"path\": \"./.cairn/changes/adopt-molten-nominal-reference-domains/design.md\",\n      \"requirement_blocks\": 0,\n      \"scenario_blocks\": 0,\n      \"substantive_lines\": 48,\n      \"substantive_requirement_blocks\": 0,\n      \"substantive_tasks\": 0,\n      \"task_done\": 0,\n      \"task_in_progress\": 0,\n      \"task_todo\": 0\n    },\n    {\n      \"checkbox_tasks\": 0,\n      \"kind\": \"proposal\",\n      \"malformed_dependency_markers\": 0,\n      \"path\": \"./.cairn/changes/adopt-molten-nominal-reference-domains/proposal.md\",\n      \"requirement_blocks\": 0,\n      \"scenario_blocks\": 0,\n      \"substantive_lines\": 30,\n      \"substantive_requirement_blocks\": 0,\n      \"substantive_tasks\": 0,\n      \"task_done\": 0,\n      \"task_in_progress\": 0,\n      \"task_todo\": 0\n    },\n    {\n      \"checkbox_tasks\": 0,\n      \"kind\": \"delta_spec\",\n      \"malformed_dependency_markers\": 0,\n      \"path\": \"./.cairn/changes/adopt-molten-nominal-reference-domains/specs/type-driven-domain-modeling/spec.md\",\n      \"requirement_blocks\": 3,\n      \"scenario_blocks\": 5,\n      \"substantive_lines\": 36,\n      \"substantive_requirement_blocks\": 3,\n      \"substantive_tasks\": 0,\n      \"task_done\": 0,\n      \"task_in_progress\": 0,\n      \"task_todo\": 0\n    },\n    {\n      \"checkbox_tasks\": 8,\n      \"kind\": \"tasks\",\n      \"malformed_dependency_markers\": 0,\n      \"path\": \"./.cairn/changes/adopt-molten-nominal-reference-domains/tasks.md\",\n      \"requirement_blocks\": 0,\n      \"scenario_blocks\": 0,\n      \"substantive_lines\": 14,\n      \"substantive_requirement_blocks\": 0,\n      \"substantive_tasks\": 8,\n      \"task_done\": 0,\n      \"task_in_progress\": 0,\n      \"task_todo\": 8\n    }\n  ],\n  \"valid\": true,\n  \"verdict\": \"PASS\",\n  \"workflow_profile\": \"spec-driven\",\n  \"workflow_profile_compatibility_fallback\": false,\n  \"workflow_profile_source\": \"change_create\",\n  \"workflow_profile_version\": 1\n}\n",
+  "stderr": "",
+  "result": {
+    "acceptance_ids": [],
+    "change": "adopt-molten-nominal-reference-domains",
+    "evidence_summary": {
+      "docs_only": 0,
+      "fixture": 0,
+      "formal": 0,
+      "mode": "advisory",
+      "model": 0,
+      "probe": 0,
+      "property": 0
+    },
+    "input_hash": "dfa531c8cd582dd97d85284274993584746efd6e0d06fadd882610feaf44a888",
+    "issues": [],
+    "layout": "cairn",
+    "non_claims": [
+      "workflow state proves only the selected policy graph and observed structural artifact facts",
+      "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+      "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+      "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+    ],
+    "policy": "octet-default",
+    "policy_hash": "62e40f642e798bfaf5a68a495a7456bcf4e9fd8106ae2f52a24100967b39df5d",
+    "probe_evidence": {
+      "declarations_present": false,
+      "probes": []
+    },
+    "profile_identity_hash": "5b5467ca44e5099cb3ceb57183e13a123476f86cb17bbc3a127924956084e9ad",
+    "receipt_hash": "2673e0d868bfd4bbf935a8d6101d8002060684e3dac0b5877c37ea094857646c",
+    "review_receipt_hashes": [],
+    "spec_effect": "delta",
+    "stage": "tasks",
+    "substance": [
+      {
+        "checkbox_tasks": 0,
+        "kind": "design",
+        "malformed_dependency_markers": 0,
+        "path": "./.cairn/changes/adopt-molten-nominal-reference-domains/design.md",
+        "requirement_blocks": 0,
+        "scenario_blocks": 0,
+        "substantive_lines": 48,
+        "substantive_requirement_blocks": 0,
+        "substantive_tasks": 0,
+        "task_done": 0,
+        "task_in_progress": 0,
+        "task_todo": 0
+      },
+      {
+        "checkbox_tasks": 0,
+        "kind": "proposal",
+        "malformed_dependency_markers": 0,
+        "path": "./.cairn/changes/adopt-molten-nominal-reference-domains/proposal.md",
+        "requirement_blocks": 0,
+        "scenario_blocks": 0,
+        "substantive_lines": 30,
+        "substantive_requirement_blocks": 0,
+        "substantive_tasks": 0,
+        "task_done": 0,
+        "task_in_progress": 0,
+        "task_todo": 0
+      },
+      {
+        "checkbox_tasks": 0,
+        "kind": "delta_spec",
+        "malformed_dependency_markers": 0,
+        "path": "./.cairn/changes/adopt-molten-nominal-reference-domains/specs/type-driven-domain-modeling/spec.md",
+        "requirement_blocks": 3,
+        "scenario_blocks": 5,
+        "substantive_lines": 36,
+        "substantive_requirement_blocks": 3,
+        "substantive_tasks": 0,
+        "task_done": 0,
+        "task_in_progress": 0,
+        "task_todo": 0
+      },
+      {
+        "checkbox_tasks": 8,
+        "kind": "tasks",
+        "malformed_dependency_markers": 0,
+        "path": "./.cairn/changes/adopt-molten-nominal-reference-domains/tasks.md",
+        "requirement_blocks": 0,
+        "scenario_blocks": 0,
+        "substantive_lines": 14,
+        "substantive_requirement_blocks": 0,
+        "substantive_tasks": 8,
+        "task_done": 0,
+        "task_in_progress": 0,
+        "task_todo": 8
+      }
+    ],
+    "valid": true,
+    "verdict": "PASS",
+    "workflow_profile": "spec-driven",
+    "workflow_profile_compatibility_fallback": false,
+    "workflow_profile_source": "change_create",
+    "workflow_profile_version": 1
+  }
+}

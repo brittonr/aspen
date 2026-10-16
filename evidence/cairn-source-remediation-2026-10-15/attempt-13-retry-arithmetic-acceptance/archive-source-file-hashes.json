@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "b3sum",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/.cairn/changes/saturate-exponential-retry-arithmetic/design.md",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/.cairn/changes/saturate-exponential-retry-arithmetic/evidence/2026-10-16-acceptance.json",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/.cairn/changes/saturate-exponential-retry-arithmetic/evidence/verification.md",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/.cairn/changes/saturate-exponential-retry-arithmetic/metadata.json",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/.cairn/changes/saturate-exponential-retry-arithmetic/proposal.md",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/.cairn/changes/saturate-exponential-retry-arithmetic/specs/fabric-time-scheduling/spec.md",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/.cairn/changes/saturate-exponential-retry-arithmetic/tasks.md"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T16:48:17.443977+00:00",
+  "elapsed_seconds": 0.002,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "ec537f89903e4cbcbbc5c282e7c54cd85894f47a97797b6d5267d6a862de9388  /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/.cairn/changes/saturate-exponential-retry-arithmetic/design.md\n8a80f6d09e2680c5b2e376fef001374d3ee0c11b5ee66604850a94cb3424f442  /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/.cairn/changes/saturate-exponential-retry-arithmetic/evidence/2026-10-16-acceptance.json\n83dfa4d2fdeff146a9482485cef5ee5d46bfee5efa47a8725e9becb574a6e7fb  /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/.cairn/changes/saturate-exponential-retry-arithmetic/evidence/verification.md\ndf8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db  /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/.cairn/changes/saturate-exponential-retry-arithmetic/metadata.json\n0572a9cf80c29416bb397aead23dfdf818dbedc3be4f7fd0621e872ed4285969  /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/.cairn/changes/saturate-exponential-retry-arithmetic/proposal.md\n54aea66dedea7b54e880117926a7df28afda26b73e3f841785fd51a332f853f7  /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/.cairn/changes/saturate-exponential-retry-arithmetic/specs/fabric-time-scheduling/spec.md\nb3700ae9252efbaa26eb98c75213aeea9ae5255b4e0fb46dab4f44396d350370  /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/.cairn/changes/saturate-exponential-retry-arithmetic/tasks.md\n",
+  "stderr": ""
+}

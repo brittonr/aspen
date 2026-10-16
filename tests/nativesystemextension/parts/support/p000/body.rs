@@ -72,14 +72,14 @@ impl ExecutionOutputPublisher for Publisher {
     fn publish(
         &mut self,
         operation_ref: &str,
-        stream: &RetainedExecutionStream,
-    ) -> Result<PublishedExecutionStream, ExecutionOutputPublicationError> {
+        stream: &RetainedStream,
+    ) -> Result<PublishedStream, OutputPublicationError> {
         let content_ref = molten::preserves_rail::content_ref_from_bytes(&stream.retained_bytes);
         let receipt_ref = molten::preserves_rail::content_ref_from_bytes(
             format!("{operation_ref}\0{}\0{content_ref}", stream.role).as_bytes(),
         );
         self.published.push(content_ref.clone());
-        Ok(PublishedExecutionStream {
+        Ok(PublishedStream {
             content_ref,
             publication_receipt_ref: receipt_ref,
         })
@@ -94,7 +94,7 @@ pub struct EffectPort {
 impl FabricEffectPort for EffectPort {
     fn route(
         &mut self,
-        binding: &CanonicalFabricPortBinding,
+        binding: &CanonicalPortBinding,
         effect: &TypedEffectRequest,
     ) -> FabricPortResult<PortEffectOutput> {
         if binding.binding.key.port_id != EFFECT_PORT_ID
@@ -119,19 +119,19 @@ impl FabricEffectPort for EffectPort {
     }
 }
 
-pub type Port = LiveExecutionAdapter<Publisher>;
-pub type Journal = InMemoryNativeHostJournal;
-pub type Service = NativeSystemExtensionService<Port, Journal>;
+pub type Port = Adapter<Publisher>;
+pub type Journal = InMemory;
+pub type Service = Supervisor<Port, Journal>;
 
 #[derive(Clone)]
 pub struct Cohort {
     pub native_profile: AdmittedNativeHostProfile,
     pub executable: AdmittedNativeExecutable,
-    pub admitted: CanonicalAdmittedSystemExtensionManifest,
-    pub execution_profile: CanonicalExecutionProfile,
-    pub template: NativeExecutionTemplate,
+    pub admitted: AdmittedManifest,
+    pub execution_profile: Profile,
+    pub template: ExecutionTemplate,
     pub journal: std::sync::Arc<std::sync::Mutex<Journal>>,
-    pub values: SharedNativeCallbackValuePort,
+    pub values: SharedCallbackValuePort,
 }
 
 impl Cohort {
@@ -140,7 +140,7 @@ impl Cohort {
         let executable_bytes = std::fs::read(&executable_path).or_fail("read native fixture executable")?;
         let executable_bytes_ref = molten::preserves_rail::content_ref_from_bytes(&executable_bytes);
         let execution_profile =
-            canonical_admit_execution_profile(&execution_profile_descriptor()).or_fail("execution profile")?;
+            admit_profile(&execution_profile_descriptor()).or_fail("execution profile")?;
         let native_profile =
             admit_native_host_profile(&native_profile(&execution_profile)).or_fail("native host profile")?;
         let admitted = admitted_manifest()?;
@@ -170,7 +170,7 @@ impl Cohort {
             execution_profile,
             template,
             journal: std::sync::Arc::new(std::sync::Mutex::new(Journal::empty())),
-            values: shared_native_callback_value_port(InMemoryNativeCallbackValuePort::empty()),
+            values: shared_callback_value_port(InMemoryCallbackValuePort::empty()),
         })
     }
 
@@ -205,9 +205,9 @@ impl Cohort {
     }
 
     pub fn install(&self) -> TestResult<Service> {
-        let port = LiveExecutionAdapter::new(self.execution_profile.clone(), Publisher::default())
+        let port = Adapter::new(self.execution_profile.clone(), Publisher::default())
             .or_fail("live execution adapter")?;
-        NativeSystemExtensionService::install(
+        Supervisor::install(
             self.admission(),
             port,
             self.journal.clone(),
@@ -219,9 +219,9 @@ impl Cohort {
 
     pub fn recovered(&self, instance: NativeInstanceRecord) -> TestResult<Service> {
         let instance = std::sync::Arc::new(std::sync::Mutex::new(instance));
-        let port = LiveExecutionAdapter::new(self.execution_profile.clone(), Publisher::default())
+        let port = Adapter::new(self.execution_profile.clone(), Publisher::default())
             .or_fail("live execution adapter")?;
-        let executor = NativeProcessSystemExtensionExecutor::new(
+        let executor = Process::new(
             port,
             self.journal.clone(),
             self.values.clone(),
@@ -229,7 +229,7 @@ impl Cohort {
             self.template.clone(),
         )
         .or_fail("recovered native executor")?;
-        NativeSystemExtensionService::from_recovered(self.admission(), executor, self.journal.clone(), instance)
+        Supervisor::from_recovered(self.admission(), executor, self.journal.clone(), instance)
             .or_fail("recover native service")
     }
 }

@@ -1,7 +1,7 @@
 use super::*;
 
-pub(super) fn transport_profile(kind: TransportAdapterKind) -> Result<CanonicalTransportProfile> {
-    canonical_transport_profile(&TransportProfile {
+pub(super) fn transport_profile(kind: TransportAdapterKind) -> Result<Profile> {
+    profile(&TransportProfile {
         schema: TRANSPORT_PROFILE_SCHEMA.to_string(),
         profile_id: format!("content-replication-{}", kind.as_str()),
         profile_ref: PROFILE_REF.to_string(),
@@ -99,10 +99,10 @@ pub(super) fn send_command(
     action: &Action,
     payload: &[u8],
 ) -> Result<TransportCommand> {
-    let payload_bytes = u64::try_from(payload.len())
-        .map_err(|_| MoltenError::invalid_harness("replication payload length exceeds u64"))?;
-    let attempt = usize::try_from(action.attempt)
-        .map_err(|_| MoltenError::invalid_harness("replication attempt exceeds usize"))?;
+    let payload_bytes =
+        u64::try_from(payload.len()).map_err(|_| Failure::invalid_harness("replication payload length exceeds u64"))?;
+    let attempt =
+        usize::try_from(action.attempt).map_err(|_| Failure::invalid_harness("replication attempt exceeds usize"))?;
     Ok(TransportCommand::SendFrame {
         operation_id: action.operation_id.clone(),
         session_id: session_id.clone(),
@@ -114,8 +114,7 @@ pub(super) fn send_command(
 }
 
 pub(super) fn observed_tick(position: usize) -> Result<u64> {
-    let position =
-        u64::try_from(position).map_err(|_| MoltenError::invalid_harness("replication position exceeds u64"))?;
+    let position = u64::try_from(position).map_err(|_| Failure::invalid_harness("replication position exceeds u64"))?;
     Ok(INITIAL_TICK.saturating_add(position))
 }
 

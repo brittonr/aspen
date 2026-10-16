@@ -4,37 +4,37 @@ use crate::fabric_transport::*;
 const MAX_EFFECT_TIMEOUT_SECONDS: u64 = 300;
 
 #[derive(Debug, Clone)]
-pub struct IrohCrossProcessEffectClientConfig {
-    pub capability: IrohEndpointCapability,
+pub struct IrohClientConfig {
+    pub capability: EndpointCapability,
     pub bind_addr: std::net::SocketAddr,
-    pub endpoint: CanonicalCrossProcessEndpoint,
+    pub endpoint: Endpoint,
     pub expected: ExpectedEndpointBinding,
     pub admission: EndpointAdmissionState,
     pub timeout: std::time::Duration,
 }
 
-pub struct RegisteredCrossProcessTransportEffectPort {
-    control: RegisteredTransportEffectPort<IrohTransportAdapter>,
-    profile: CanonicalTransportProfile,
+pub struct Registered {
+    control: RegisteredTransportEffectPort<IrohAdapter>,
+    profile: Profile,
     protocol: ProtocolDescriptor,
-    client: IrohCrossProcessEffectClientConfig,
+    client: IrohClientConfig,
     payloads: std::collections::BTreeMap<String, Vec<u8>>,
     queued_payload_bytes: u64,
     routed_requests: std::collections::BTreeSet<String>,
-    latest_frame_evidence: Option<CrossProcessFrameEvidence>,
+    latest_frame_evidence: Option<FrameEvidence>,
 }
 
-impl RegisteredCrossProcessTransportEffectPort {
+impl Registered {
     // r[impl molten.fabric_transport.cross_process_session]
     // r[impl molten.fabric_transport.distinct_process_evidence]
     pub fn new(
-        context: ExtensionTransportContext,
-        profile: CanonicalTransportProfile,
+        context: ExtensionContext,
+        profile: Profile,
         protocol: ProtocolDescriptor,
-        client: IrohCrossProcessEffectClientConfig,
+        client: IrohClientConfig,
     ) -> crate::error::Result<Self> {
-        validate_effect_client_config(&profile, &protocol, &client)?;
-        let adapter = IrohTransportAdapter::new(profile.clone())?;
+        validate_client_config(&profile, &protocol, &client)?;
+        let adapter = IrohAdapter::new(profile.clone())?;
         let control = RegisteredTransportEffectPort::new(adapter, context, profile.clone())?;
         Ok(Self {
             control,
@@ -58,17 +58,17 @@ impl RegisteredCrossProcessTransportEffectPort {
             admit_registered_payload(&self.profile.profile, &request_ref, &command, payload.as_deref())?;
         if let Some(payload) = &admitted_payload {
             let payload_bytes = u64::try_from(payload.len())
-                .map_err(|_| crate::error::MoltenError::invalid_harness("queued payload size does not fit u64"))?;
+                .map_err(|_| crate::error::Failure::invalid_harness("queued payload size does not fit u64"))?;
             let next_queued = self
                 .queued_payload_bytes
                 .checked_add(payload_bytes)
-                .ok_or_else(|| crate::error::MoltenError::invalid_harness("queued payload accounting overflow"))?;
+                .ok_or_else(|| crate::error::Failure::invalid_harness("queued payload accounting overflow"))?;
             let queued_count = u64::try_from(self.payloads.len())
-                .map_err(|_| crate::error::MoltenError::invalid_harness("queued payload count does not fit u64"))?;
+                .map_err(|_| crate::error::Failure::invalid_harness("queued payload count does not fit u64"))?;
             if queued_count >= self.profile.profile.limits.max_queued_events
                 || next_queued > self.profile.profile.limits.max_queued_bytes
             {
-                return Err(crate::error::MoltenError::invalid_harness(
+                return Err(crate::error::Failure::invalid_harness(
                     "cross-process effect payload queue exceeds the admitted profile",
                 ));
             }
@@ -76,28 +76,28 @@ impl RegisteredCrossProcessTransportEffectPort {
         self.control.register(request_ref.clone(), command)?;
         if let Some(payload) = admitted_payload {
             let payload_bytes = u64::try_from(payload.len())
-                .map_err(|_| crate::error::MoltenError::invalid_harness("queued payload size does not fit u64"))?;
+                .map_err(|_| crate::error::Failure::invalid_harness("queued payload size does not fit u64"))?;
             let prior = self.payloads.insert(request_ref, payload);
             debug_assert!(prior.is_none());
             self.queued_payload_bytes = self
                 .queued_payload_bytes
                 .checked_add(payload_bytes)
-                .ok_or_else(|| crate::error::MoltenError::invalid_harness("queued payload accounting overflow"))?;
+                .ok_or_else(|| crate::error::Failure::invalid_harness("queued payload accounting overflow"))?;
         }
         Ok(())
     }
 
-    pub fn adapter(&self) -> &IrohTransportAdapter {
+    pub fn adapter(&self) -> &IrohAdapter {
         self.control.adapter()
     }
 
-    pub fn latest_frame_evidence(&self) -> Option<&CrossProcessFrameEvidence> {
+    pub fn latest_frame_evidence(&self) -> Option<&FrameEvidence> {
         self.latest_frame_evidence.as_ref()
     }
 
     fn route_effect(
         &mut self,
-        binding: &crate::fabric::CanonicalFabricPortBinding,
+        binding: &crate::fabric::CanonicalPortBinding,
         effect: &crate::system_extension::TypedEffectRequest,
     ) -> crate::fabric::FabricPortResult<crate::system_extension::PortEffectOutput> {
         if self.routed_requests.contains(&effect.request_ref) {
@@ -116,14 +116,14 @@ impl RegisteredCrossProcessTransportEffectPort {
             ..
         } = command
         else {
-            return Ok(effect_output(effect, submitted.transition_ref));
+            return Ok(output(effect, submitted.transition_ref));
         };
         if submitted.decision != TransportTransitionDecision::Applied {
             self.remove_payload(&effect.request_ref)?;
-            return Ok(effect_output(effect, submitted.transition_ref));
+            return Ok(output(effect, submitted.transition_ref));
         }
         let payload = self.remove_payload(&effect.request_ref)?;
-        let exchange = run_effect_exchange(ExchangeInput {
+        let exchange = run_exchange(ExchangeInput {
             profile: &self.profile,
             protocol: &self.protocol,
             client: &self.client,
@@ -141,7 +141,7 @@ impl RegisteredCrossProcessTransportEffectPort {
                     TransportFailureClass::AdapterFailure,
                 )
                 .map_err(crate::fabric::FabricPortError::transport)?;
-                return Ok(effect_output(effect, failed.transition_ref));
+                return Ok(output(effect, failed.transition_ref));
             }
         };
         self.latest_frame_evidence = Some(evidence.clone());
@@ -153,7 +153,7 @@ impl RegisteredCrossProcessTransportEffectPort {
                 TransportFailureClass::MalformedInput,
             )
             .map_err(crate::fabric::FabricPortError::transport)?;
-            return Ok(effect_output(effect, failed.transition_ref));
+            return Ok(output(effect, failed.transition_ref));
         }
         let acknowledged = self.control.adapter_mut().execute_command(&TransportCommand::AcknowledgeFrame {
             operation_id,
@@ -161,7 +161,7 @@ impl RegisteredCrossProcessTransportEffectPort {
             stream_id,
             payload_bytes,
         })?;
-        Ok(effect_output(effect, acknowledged.transition_ref))
+        Ok(output(effect, acknowledged.transition_ref))
     }
 
     fn remove_payload(&mut self, request_ref: &str) -> crate::fabric::FabricPortResult<Vec<u8>> {
@@ -180,34 +180,34 @@ impl RegisteredCrossProcessTransportEffectPort {
 
 // r[impl molten.fabric_transport.cross_process_session]
 // r[impl molten.fabric_transport.distinct_process_evidence]
-impl crate::system_extension::FabricEffectPort for RegisteredCrossProcessTransportEffectPort {
+impl crate::system_extension::FabricEffectPort for Registered {
     fn route(
         &mut self,
-        binding: &crate::fabric::CanonicalFabricPortBinding,
+        binding: &crate::fabric::CanonicalPortBinding,
         effect: &crate::system_extension::TypedEffectRequest,
     ) -> crate::fabric::FabricPortResult<crate::system_extension::PortEffectOutput> {
         self.route_effect(binding, effect)
     }
 }
 
-fn validate_effect_client_config(
-    profile: &CanonicalTransportProfile,
+fn validate_client_config(
+    profile: &Profile,
     protocol: &ProtocolDescriptor,
-    client: &IrohCrossProcessEffectClientConfig,
+    client: &IrohClientConfig,
 ) -> crate::error::Result<()> {
     if profile.profile.adapter_kind != TransportAdapterKind::IrohLive {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "cross-process effect port requires an iroh-live profile",
         ));
     }
     if client.timeout.is_zero() || client.timeout > std::time::Duration::from_secs(MAX_EFFECT_TIMEOUT_SECONDS) {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "cross-process effect timeout must be between one nanosecond and {MAX_EFFECT_TIMEOUT_SECONDS} seconds"
         )));
     }
     admit_endpoint_import(&profile.profile, protocol, &client.endpoint.descriptor, &client.expected, client.admission)
         .map_err(|issues| {
-            crate::error::MoltenError::invalid_harness(format!("cross-process effect endpoint denied: {issues:?}"))
+            crate::error::Failure::invalid_harness(format!("cross-process effect endpoint denied: {issues:?}"))
         })?;
     Ok(())
 }
@@ -229,28 +229,28 @@ fn admit_registered_payload(
             Some(payload),
         ) => {
             let observed_bytes = u64::try_from(payload.len()).map_err(|_| {
-                crate::error::MoltenError::invalid_harness("cross-process effect payload size does not fit u64")
+                crate::error::Failure::invalid_harness("cross-process effect payload size does not fit u64")
             })?;
             if observed_bytes == 0
                 || observed_bytes != *payload_bytes
                 || observed_bytes > profile.limits.max_frame_bytes
             {
-                return Err(crate::error::MoltenError::invalid_harness(
+                return Err(crate::error::Failure::invalid_harness(
                     "cross-process effect payload length does not match its admitted command",
                 ));
             }
-            let expected_ref = cross_process_frame_ref(request_ref, payload);
+            let expected_ref = frame_ref(request_ref, payload);
             if payload_ref != &expected_ref {
-                return Err(crate::error::MoltenError::invalid_harness(
+                return Err(crate::error::Failure::invalid_harness(
                     "cross-process effect payload ref does not match its request-bound bytes",
                 ));
             }
             Ok(Some(payload.to_vec()))
         }
-        (TransportCommand::SendFrame { .. }, None) => Err(crate::error::MoltenError::invalid_harness(
+        (TransportCommand::SendFrame { .. }, None) => Err(crate::error::Failure::invalid_harness(
             "cross-process send effect requires explicitly registered payload bytes",
         )),
-        (_, Some(_)) => Err(crate::error::MoltenError::invalid_harness(
+        (_, Some(_)) => Err(crate::error::Failure::invalid_harness(
             "cross-process non-send effect must not register payload bytes",
         )),
         (_, None) => Ok(None),
@@ -258,9 +258,9 @@ fn admit_registered_payload(
 }
 
 struct ExchangeInput<'a> {
-    profile: &'a CanonicalTransportProfile,
+    profile: &'a Profile,
     protocol: &'a ProtocolDescriptor,
-    client: &'a IrohCrossProcessEffectClientConfig,
+    client: &'a IrohClientConfig,
     session_id: &'a ScopedTransportId,
     request_ref: &'a str,
     payload: &'a [u8],

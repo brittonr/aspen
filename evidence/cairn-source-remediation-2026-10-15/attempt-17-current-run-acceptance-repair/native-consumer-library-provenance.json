@@ -1,0 +1,47 @@
+{
+  "selected_artifact": {
+    "reason": "compiler-artifact",
+    "package_id": "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015#molten@0.1.0",
+    "manifest_path": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/Cargo.toml",
+    "target": {
+      "kind": [
+        "lib"
+      ],
+      "crate_types": [
+        "lib"
+      ],
+      "name": "molten",
+      "src_path": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/lib.rs",
+      "edition": "2024",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "profile": {
+      "opt_level": "0",
+      "debuginfo": 2,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": false
+    },
+    "features": [],
+    "filenames": [
+      "/home/brittonr/.cargo-target/debug/libmolten.rlib",
+      "/home/brittonr/.cargo-target/debug/deps/libmolten-eedc9fe3eee9b5e0.rmeta"
+    ],
+    "executable": null,
+    "fresh": false
+  },
+  "library": "/home/brittonr/.cargo-target/debug/libmolten.rlib",
+  "library_bytes": "blake3:c558b5423c5f6c6e983920fa60a768d03d1ff7be61e2676233029ae247cc1e9d",
+  "binary": "/home/brittonr/.cargo-target/debug/molten",
+  "binary_bytes": "blake3:7db326c7098fbf2d1da8d726e25f61d9d6eec0920342bde6afddd1d15b211042",
+  "native_link_paths": [
+    "native=/home/brittonr/.cargo-target/debug/build/ittapi-sys-52c0fa2348937635/out",
+    "native=/home/brittonr/.cargo-target/debug/build/ring-276cf05f9a8ea79c/out",
+    "native=/home/brittonr/.cargo-target/debug/build/wasmtime-d0fdb53f930bf3e5/out",
+    "native=/home/brittonr/.cargo-target/debug/build/wasmtime-internal-jit-debug-8bd8121b82d70d8e/out",
+    "native=/home/brittonr/.cargo-target/debug/build/zstd-sys-c4c60fcb248aed68/out"
+  ],
+  "compiler_record": "actual-rust-toolchain.json"
+}

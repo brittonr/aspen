@@ -1,13 +1,13 @@
 const RUNNING_STATUS: &str = "running";
 
 #[derive(Debug, clap::Subcommand)]
-pub(crate) enum ClusterCommand {
-    Init(ClusterInit),
-    Start(ClusterRoot),
-    Status(ClusterRoot),
-    Stop(ClusterRoot),
-    HarnessRun(ClusterHarnessRun),
-    HarnessVerify(ClusterHarnessVerify),
+pub(crate) enum Command {
+    Init(Init),
+    Start(Root),
+    Status(Root),
+    Stop(Root),
+    HarnessRun(HarnessRun),
+    HarnessVerify(HarnessVerify),
     FabricTransportRun(FabricTransportRun),
     FabricTransportVerify(FabricTransportVerify),
     #[command(name = "fabric-transport-listener-child", hide = true)]
@@ -17,7 +17,7 @@ pub(crate) enum ClusterCommand {
 }
 
 #[derive(Debug, clap::Args)]
-pub(crate) struct ClusterInit {
+pub(crate) struct Init {
     #[arg(long)]
     state_root: std::path::PathBuf,
     #[arg(long = "node")]
@@ -27,13 +27,13 @@ pub(crate) struct ClusterInit {
 }
 
 #[derive(Debug, clap::Args)]
-pub(crate) struct ClusterRoot {
+pub(crate) struct Root {
     #[arg(long)]
     state_root: std::path::PathBuf,
 }
 
 #[derive(Debug, clap::Args)]
-pub(crate) struct ClusterHarnessRun {
+pub(crate) struct HarnessRun {
     #[arg(long)]
     fixture: std::path::PathBuf,
     #[arg(long)]
@@ -49,7 +49,7 @@ pub(crate) struct ClusterHarnessRun {
 }
 
 #[derive(Debug, clap::Args)]
-pub(crate) struct ClusterHarnessVerify {
+pub(crate) struct HarnessVerify {
     #[arg(long)]
     run_dir: std::path::PathBuf,
 }
@@ -78,30 +78,30 @@ pub(crate) struct FabricTransportChild {
     run_dir: std::path::PathBuf,
 }
 
-pub(crate) fn run(command: ClusterCommand) -> molten::error::Result<()> {
+pub(crate) fn run(command: Command) -> molten::error::Result<()> {
     match command {
-        ClusterCommand::Init(input) => init(input),
-        ClusterCommand::Start(input) => start(input),
-        ClusterCommand::Status(input) => status(input),
-        ClusterCommand::Stop(input) => stop(input),
-        ClusterCommand::HarnessRun(input) => harness_run(input),
-        ClusterCommand::HarnessVerify(input) => harness_verify(input),
-        ClusterCommand::FabricTransportRun(input) => fabric_transport_run(input),
-        ClusterCommand::FabricTransportVerify(input) => fabric_transport_verify(input),
-        ClusterCommand::FabricTransportListenerChild(input) => {
+        Command::Init(input) => init(input),
+        Command::Start(input) => start(input),
+        Command::Status(input) => status(input),
+        Command::Stop(input) => stop(input),
+        Command::HarnessRun(input) => harness_run(input),
+        Command::HarnessVerify(input) => harness_verify(input),
+        Command::FabricTransportRun(input) => fabric_transport_run(input),
+        Command::FabricTransportVerify(input) => fabric_transport_verify(input),
+        Command::FabricTransportListenerChild(input) => {
             molten::cluster_harness::run_distinct_process_listener_child(&input.run_dir)
         }
-        ClusterCommand::FabricTransportClientChild(input) => {
+        Command::FabricTransportClientChild(input) => {
             molten::cluster_harness::run_distinct_process_client_child(&input.run_dir)
         }
     }
 }
 
 // r[impl molten.testing.receipt_first_cluster_harness.cli_receipt_surface]
-fn harness_run(input: ClusterHarnessRun) -> molten::error::Result<()> {
+fn harness_run(input: HarnessRun) -> molten::error::Result<()> {
     let node_binary = input.node_binary.map_or_else(std::env::current_exe, Ok)?;
     let execution =
-        molten::cluster_harness::execute_cluster_harness(&molten::cluster_harness::ClusterHarnessExecutionInput {
+        molten::cluster_harness::execute(&molten::cluster_harness::ExecutionInput {
             fixture_path: input.fixture,
             state_root: input.state_root,
             output_directory: input.run_dir,
@@ -120,7 +120,7 @@ fn harness_run(input: ClusterHarnessRun) -> molten::error::Result<()> {
         println!("cluster harness failure_bundle={bundle_ref} evidence_scope=diagnostic-only");
     }
     if execution.decision != "pass" {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "cluster harness run denied: {}",
             execution.diagnostics.join(",")
         )));
@@ -129,8 +129,8 @@ fn harness_run(input: ClusterHarnessRun) -> molten::error::Result<()> {
 }
 
 // r[impl molten.testing.receipt_first_cluster_harness.run_artifact_directory]
-fn harness_verify(input: ClusterHarnessVerify) -> molten::error::Result<()> {
-    let verification = molten::cluster_harness::verify_cluster_run_directory(&input.run_dir)?;
+fn harness_verify(input: HarnessVerify) -> molten::error::Result<()> {
+    let verification = molten::cluster_harness::verify_run_directory(&input.run_dir)?;
     println!(
         "cluster harness verify decision={} index={} verification={} run_dir={}",
         verification.decision,
@@ -139,7 +139,7 @@ fn harness_verify(input: ClusterHarnessVerify) -> molten::error::Result<()> {
         input.run_dir.display()
     );
     if verification.decision != "pass" {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "cluster harness verification denied: {}",
             verification.receipt.diagnostics.join(",")
         )));
@@ -150,8 +150,8 @@ fn harness_verify(input: ClusterHarnessVerify) -> molten::error::Result<()> {
 // r[impl molten.fabric_transport.distinct_process_evidence]
 fn fabric_transport_run(input: FabricTransportRun) -> molten::error::Result<()> {
     let process_binary = input.process_binary.map_or_else(std::env::current_exe, Ok)?;
-    let execution = molten::cluster_harness::execute_distinct_process_transport_run(
-        &molten::cluster_harness::DistinctProcessTransportRunInput {
+    let execution = molten::cluster_harness::execute_distinct_process_run(
+        &molten::cluster_harness::DistinctProcessRunInput {
             run_directory: input.run_dir,
             process_binary,
             child_timeout_ms: input.child_timeout_ms,
@@ -168,7 +168,7 @@ fn fabric_transport_run(input: FabricTransportRun) -> molten::error::Result<()> 
         execution.run_directory.display()
     );
     if execution.decision != "pass" {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "fabric transport distinct-process run denied: {}",
             execution.diagnostics.join(",")
         )));
@@ -178,7 +178,7 @@ fn fabric_transport_run(input: FabricTransportRun) -> molten::error::Result<()> 
 
 // r[impl molten.fabric_transport.distinct_process_evidence]
 fn fabric_transport_verify(input: FabricTransportVerify) -> molten::error::Result<()> {
-    let verification = molten::cluster_harness::verify_distinct_process_transport_run(&input.run_dir)?;
+    let verification = molten::cluster_harness::verify_distinct_process_run(&input.run_dir)?;
     println!(
         "fabric transport distinct-process verify decision={} parent={} verification={} run_dir={}",
         verification.decision,
@@ -187,7 +187,7 @@ fn fabric_transport_verify(input: FabricTransportVerify) -> molten::error::Resul
         input.run_dir.display()
     );
     if verification.decision != "pass" {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(molten::error::Failure::invalid_harness(format!(
             "fabric transport distinct-process verification denied: {}",
             verification.diagnostics.join(",")
         )));
@@ -195,9 +195,9 @@ fn fabric_transport_verify(input: FabricTransportVerify) -> molten::error::Resul
     Ok(())
 }
 
-fn init(input: ClusterInit) -> molten::error::Result<()> {
-    let plan = molten::cluster::plan_cluster(&input.state_root, &input.nodes)?;
-    prepare_cluster_init(&plan, input.force)?;
+fn init(input: Init) -> molten::error::Result<()> {
+    let plan = molten::cluster::plan(&input.state_root, &input.nodes)?;
+    prepare_init(&plan, input.force)?;
     let mut initialized_count = 0usize;
     for node in &plan.nodes {
         let init = molten::node_daemon::init_local(&molten::node_daemon::InitInput {
@@ -213,13 +213,13 @@ fn init(input: ClusterInit) -> molten::error::Result<()> {
             init.identity_receipt_ref
         );
     }
-    write_cluster_manifest(&plan)?;
+    write_manifest(&plan)?;
     println!("cluster init nodes={} state_root={}", initialized_count, plan.state_root.display());
     Ok(())
 }
 
-fn start(input: ClusterRoot) -> molten::error::Result<()> {
-    let plan = read_cluster_plan(&input.state_root)?;
+fn start(input: Root) -> molten::error::Result<()> {
+    let plan = read_plan(&input.state_root)?;
     for node in &plan.nodes {
         if let Some(status) = current_running_status(&node.state_root)? {
             println!(
@@ -246,8 +246,8 @@ fn start(input: ClusterRoot) -> molten::error::Result<()> {
     Ok(())
 }
 
-fn status(input: ClusterRoot) -> molten::error::Result<()> {
-    let plan = read_cluster_plan(&input.state_root)?;
+fn status(input: Root) -> molten::error::Result<()> {
+    let plan = read_plan(&input.state_root)?;
     for node in &plan.nodes {
         let status = molten::node_daemon::status_local(&molten::node_daemon::StatusInput {
             state_root: &node.state_root,
@@ -265,8 +265,8 @@ fn status(input: ClusterRoot) -> molten::error::Result<()> {
     Ok(())
 }
 
-fn stop(input: ClusterRoot) -> molten::error::Result<()> {
-    let plan = read_cluster_plan(&input.state_root)?;
+fn stop(input: Root) -> molten::error::Result<()> {
+    let plan = read_plan(&input.state_root)?;
     for node in plan.nodes.iter().rev() {
         let stop = molten::node_daemon::stop_local(&molten::node_daemon::StopInput {
             state_root: &node.state_root,

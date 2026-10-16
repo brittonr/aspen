@@ -6,7 +6,6 @@
 //! r[impl molten.authority.nominal_references.artifact_core]
 //! r[impl molten.authority.nominal_references.evidence_core]
 //! r[impl molten.authority.nominal_references.compatibility]
-//! r[impl molten.authority.nominal_references.octet]
 
 #![allow(
     tigerstyle::path_segment_repetition,
@@ -15,6 +14,7 @@
 
 pub use molten_core::nominal::*;
 
+// r[impl molten.authority.nominal_references.octet.validation]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthorityWireDto {
     pub holder: String,
@@ -181,26 +181,8 @@ where F: Fn(&str) -> Result<CanonicalRef<D>, ReferenceError> {
     values.iter().map(|value| constructor(value).map_err(reference_error)).collect()
 }
 
-fn reference_error(error: ReferenceError) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(format!("nominal reference admission failed: {error:?}"))
-}
-
-pub fn nominal_domain_declarations() -> &'static [(&'static str, &'static str)] {
-    &[
-        ("authority-holder", "PrincipalRef"),
-        ("node-control-node", "NodeRef"),
-        ("effect-session", "SessionRef"),
-        ("authority-context", "AuthorityContextRef"),
-        ("delegation", "DelegationRef"),
-        ("revocation", "RevocationRef"),
-        ("key", "KeyRef"),
-        ("policy", "PolicyRef"),
-        ("resource", "ResourceRef"),
-        ("evidence", "EvidenceRef"),
-        ("artifact", "ArtifactRef"),
-        ("operation", "OperationRef"),
-        ("receipt", "ReceiptRef"),
-    ]
+fn reference_error(error: ReferenceError) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("nominal reference admission failed: {error:?}"))
 }
 
 #[cfg(test)]
@@ -208,7 +190,6 @@ mod tests {
     use super::*;
 
     const HASH: &str = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    const MIGRATED_DOMAIN_COUNT: usize = 13;
 
     fn authority_wire() -> AuthorityWireDto {
         AuthorityWireDto {
@@ -224,6 +205,7 @@ mod tests {
         }
     }
 
+    // r[verify molten.authority.nominal_references.octet.validation]
     // r[verify molten.authority.nominal_references.wire_boundary.valid]
     #[test]
     fn authority_wire_roundtrip_preserves_exact_fields() {
@@ -284,13 +266,5 @@ mod tests {
         };
         let core = admit_historical_wire(&wire).expect("historical refs");
         assert!(historical_replay_is_evidence_only(&core));
-    }
-
-    #[test]
-    fn declarations_cover_each_migrated_nominal_domain() {
-        let declarations = nominal_domain_declarations();
-        assert_eq!(declarations.len(), MIGRATED_DOMAIN_COUNT);
-        assert!(declarations.iter().any(|row| row == &("policy", "PolicyRef")));
-        assert!(declarations.iter().any(|row| row == &("artifact", "ArtifactRef")));
     }
 }

@@ -1,0 +1,120 @@
+{
+  "scope": "Exactly four F14 requirements from fresh actual CLI executions.",
+  "receipts": [
+    {
+      "requirement": "molten.audit_f14.current_binding",
+      "kind": "positive",
+      "target": "src/node/parts/daemon/p058/body.rs",
+      "actual_run_record": "final-cli-positive.json",
+      "actual_run_exit": 0,
+      "cases": [
+        "current-shutdown-stops",
+        "historical-duplicate-keeps-active-lock",
+        "duplicate-retains-original-dispatch-ref",
+        "new-request-stops-current-run",
+        "legacy-control-and-shutdown-stay-readable"
+      ],
+      "native_receipt": "evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/verification-runs/current_binding-positive.preserves",
+      "native_emission": "verification-run receipt=blake3:ace9c727860f7237d6c6eff255b6e7ab10e586bc183f63f488810fda7d2e3d9f decision=pass requirement=molten.audit_f14.current_binding kind=positive\n"
+    },
+    {
+      "requirement": "molten.audit_f14.current_binding",
+      "kind": "negative",
+      "target": "src/node/parts/daemon/p058/body.rs",
+      "actual_run_record": "final-reviewed-cli-expected-deny.json",
+      "actual_run_exit": 1,
+      "cases": [
+        "unreadable-completion-rejects-active-status-without-lifecycle-mutation",
+        "unresolved-historical-completion-propagates-service-denial-without-shutdown"
+      ],
+      "native_receipt": "evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/verification-runs/current_binding-negative.preserves",
+      "native_emission": "verification-run receipt=blake3:046679c53c1759c0b8cad88c944b54926857ef6f5e91672a4c1c8d985f8eaf88 decision=deny requirement=molten.audit_f14.current_binding kind=negative\n"
+    },
+    {
+      "requirement": "molten.audit_f14.duplicate_scope",
+      "kind": "positive",
+      "target": "src/node/parts/runtime/p008/body.rs",
+      "actual_run_record": "final-cli-positive.json",
+      "actual_run_exit": 0,
+      "cases": [
+        "current-shutdown-stops",
+        "historical-duplicate-keeps-active-lock",
+        "duplicate-retains-original-dispatch-ref",
+        "new-request-stops-current-run",
+        "legacy-control-and-shutdown-stay-readable"
+      ],
+      "native_receipt": "evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/verification-runs/duplicate_scope-positive.preserves",
+      "native_emission": "verification-run receipt=blake3:5bc02512aea809a3fbc7018105f5fb2fa6face95bcaa5ffb382dbc5df4086b87 decision=pass requirement=molten.audit_f14.duplicate_scope kind=positive\n"
+    },
+    {
+      "requirement": "molten.audit_f14.duplicate_scope",
+      "kind": "negative",
+      "target": "src/node/parts/runtime/p008/body.rs",
+      "actual_run_record": "final-reviewed-cli-expected-deny.json",
+      "actual_run_exit": 1,
+      "cases": [
+        "unreadable-completion-rejects-active-status-without-lifecycle-mutation",
+        "unresolved-historical-completion-propagates-service-denial-without-shutdown"
+      ],
+      "native_receipt": "evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/verification-runs/duplicate_scope-negative.preserves",
+      "native_emission": "verification-run receipt=blake3:93fd845c1460d54fe7482a0becfbfee977fb948139870c2a252fba3d52c4778c decision=deny requirement=molten.audit_f14.duplicate_scope kind=negative\n"
+    },
+    {
+      "requirement": "molten.audit_f14.preserve_state",
+      "kind": "positive",
+      "target": "src/node/parts/daemon/p058/body.rs",
+      "actual_run_record": "final-cli-positive.json",
+      "actual_run_exit": 0,
+      "cases": [
+        "current-shutdown-stops",
+        "historical-duplicate-keeps-active-lock",
+        "duplicate-retains-original-dispatch-ref",
+        "new-request-stops-current-run",
+        "legacy-control-and-shutdown-stay-readable"
+      ],
+      "native_receipt": "evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/verification-runs/preserve_state-positive.preserves",
+      "native_emission": "verification-run receipt=blake3:ec360d4f3c3e457ac20e9d7a0335abb738d0cc69f2472687448db931dd14ae58 decision=pass requirement=molten.audit_f14.preserve_state kind=positive\n"
+    },
+    {
+      "requirement": "molten.audit_f14.preserve_state",
+      "kind": "negative",
+      "target": "src/node/parts/daemon/p058/body.rs",
+      "actual_run_record": "final-reviewed-cli-expected-deny.json",
+      "actual_run_exit": 1,
+      "cases": [
+        "unreadable-completion-rejects-active-status-without-lifecycle-mutation",
+        "unresolved-historical-completion-propagates-service-denial-without-shutdown"
+      ],
+      "native_receipt": "evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/verification-runs/preserve_state-negative.preserves",
+      "native_emission": "verification-run receipt=blake3:192ba26607d0070b04b4d3e9c62fcfbaee30c10ecab66cae0e9c3d1d77ad06e3 decision=deny requirement=molten.audit_f14.preserve_state kind=negative\n"
+    },
+    {
+      "requirement": "molten.audit_f14.validation",
+      "kind": "positive",
+      "target": "src/node/parts/daemon/p020/body.rs",
+      "actual_run_record": "final-reviewed-cli-positive-canonical-pending.json",
+      "actual_run_exit": 0,
+      "cases": [
+        "denied-repeat-stop-does-not-invalidate-immutable-current-completion",
+        "completed-shutdown-remains-stopped-despite-pending-work-denial"
+      ],
+      "native_receipt": "evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/verification-runs/validation-positive.preserves",
+      "native_emission": "verification-run receipt=blake3:55e9700858221c2c0ebad9ff36567e3d63c343b01aef50435b6231cd56f23d96 decision=pass requirement=molten.audit_f14.validation kind=positive\n"
+    },
+    {
+      "requirement": "molten.audit_f14.validation",
+      "kind": "negative",
+      "target": "src/node/parts/daemon/p020/body.rs",
+      "actual_run_record": "final-reviewed-cli-expected-deny.json",
+      "actual_run_exit": 1,
+      "cases": [
+        "unreadable-completion-rejects-active-status-without-lifecycle-mutation",
+        "unresolved-historical-completion-propagates-service-denial-without-shutdown"
+      ],
+      "native_receipt": "evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/verification-runs/validation-negative.preserves",
+      "native_emission": "verification-run receipt=blake3:a9383e4da8f04af6c45127de56aea1988c44c9af2f24e1ad6b2c42dbfb7be56c decision=deny requirement=molten.audit_f14.validation kind=negative\n"
+    }
+  ],
+  "additional_expected_denial_run": "final-cli-expected-deny.json",
+  "non_claim": "No release, external adapter or whole-system proof."
+}

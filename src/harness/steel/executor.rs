@@ -13,7 +13,7 @@ type Suite = super::schema::Suite;
 type RunReceipt<'a> = super::schema::SteelExecutionReceiptInput<'a>;
 type ResourceReceipt = super::schema::SteelResourceReceiptInput;
 type SourceConfig = super::schema::SteelExecutorConfig;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 fn validate_bound_request(hostcall_request: &PreservesValue, operation: &str) -> Result<()> {

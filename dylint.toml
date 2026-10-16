@@ -1,2 +1,3 @@
 [octet]
 disabled_lints = []
+nominal_domain_mode = "deny"

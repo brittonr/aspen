@@ -162,7 +162,7 @@ fn port_requirement(spec: &TestPortSpec) -> crate::fabric::FabricPortRequirement
     }
 }
 
-fn host_without(omitted_port_id: Option<&str>) -> crate::system_extension::SystemExtensionHost<TestExecutor> {
+fn host_without(omitted_port_id: Option<&str>) -> crate::system_extension::Dispatcher<TestExecutor> {
     let specs = port_specs().into_iter().filter(|spec| Some(spec.port_id) != omitted_port_id).collect::<Vec<_>>();
     let descriptors = specs.iter().map(port_descriptor).collect::<Vec<_>>();
     let requirements = specs.iter().map(port_requirement).collect::<Vec<_>>();
@@ -184,7 +184,7 @@ fn host_without(omitted_port_id: Option<&str>) -> crate::system_extension::Syste
         admission_evidence: crate::fabric::REQUIRED_SYSTEM_EXTENSION_EVIDENCE.to_vec(),
     })
     .expect("system-extension tier");
-    let admitted = crate::system_extension::canonical_admit_system_extension_manifest(
+    let admitted = crate::system_extension::admit_manifest(
         &crate::system_extension::SystemExtensionManifestInput {
             schema: crate::system_extension::SYSTEM_EXTENSION_MANIFEST_SCHEMA.to_string(),
             extension_id: "extension-live-raft".to_string(),
@@ -225,17 +225,17 @@ fn host_without(omitted_port_id: Option<&str>) -> crate::system_extension::Syste
         &[crate::system_extension::ExecutionProfile::InProcessNative],
     )
     .expect("admitted live Raft host manifest");
-    crate::system_extension::SystemExtensionHost::new(admitted, TestExecutor).expect("live Raft host")
+    crate::system_extension::Dispatcher::new(admitted, TestExecutor).expect("live Raft host")
 }
 
-fn active_group_for_host(host: &crate::system_extension::SystemExtensionHost<TestExecutor>) -> ConsistencyGroupBinding {
+fn active_group_for_host(host: &crate::system_extension::Dispatcher<TestExecutor>) -> Group {
     active_group_for_host_with_policies(host, host.manifest().manifest().policy_refs.clone())
 }
 
 fn active_group_for_host_with_policies(
-    host: &crate::system_extension::SystemExtensionHost<TestExecutor>,
+    host: &crate::system_extension::Dispatcher<TestExecutor>,
     policy_refs: Vec<String>,
-) -> ConsistencyGroupBinding {
+) -> Group {
     let mut input = binding_input();
     input.group_id = "group:live-raft".to_string();
     input.extension_id = host.manifest().manifest().extension_id.clone();
@@ -244,19 +244,19 @@ fn active_group_for_host_with_policies(
     input.engine_algorithm_profile = LIVE_RAFT_ALGORITHM_PROFILE.to_string();
     input.engine_implementation_profile = LIVE_RAFT_IMPLEMENTATION_PROFILE.to_string();
     input.policy_refs = policy_refs;
-    let declared = canonical_consistency_group_binding(input).expect("declared live group");
-    let plan = plan_consistency_operation(
+    let declared = canonical_group(input).expect("declared live group");
+    let plan = plan(
         &declared,
-        command_for(&declared, ConsistencyOperation::Open {
+        command_for(&declared, Request::Open {
             mode: GroupOpenMode::Create,
         }),
     )
     .expect("live group open plan");
-    let outcome = normalized_success(&declared, &plan, ConsistencyOutcomeKind::Opened);
-    apply_consistency_outcome(&declared, &plan, &outcome).expect("active live group")
+    let outcome = normalized_success(&declared, &plan, Kind::Opened);
+    apply_outcome(&declared, &plan, &outcome).expect("active live group")
 }
 
-fn profile(group: &ConsistencyGroupBinding) -> ReplicaProfile {
+fn profile(group: &Group) -> ReplicaProfile {
     ReplicaProfile {
         profile_ref: test_ref("replica-profile"),
         group_binding_ref: group.binding_ref.clone(),
@@ -280,7 +280,7 @@ fn profile(group: &ConsistencyGroupBinding) -> ReplicaProfile {
     }
 }
 
-fn membership(group: &ConsistencyGroupBinding) -> StaticMembership {
+fn membership(group: &Group) -> StaticMembership {
     StaticMembership {
         membership_ref: group.membership_ref.clone(),
         config_epoch: group.config_epoch,

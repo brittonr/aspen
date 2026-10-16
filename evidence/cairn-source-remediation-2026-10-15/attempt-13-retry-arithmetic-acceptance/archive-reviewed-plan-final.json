@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "/tmp/molten-attempts-6-7-l6bgn98w/cairn-provider/bin/cairn",
+    "archive",
+    "saturate-exponential-retry-arithmetic",
+    "--root",
+    ".",
+    "--policy",
+    "/home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-16T16:49:06.814977+00:00",
+  "elapsed_seconds": 0.024,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\n  \"acceptance_ids\": [],\n  \"actions\": [\n    {\n      \"description\": \"move active change to archive: saturate-exponential-retry-arithmetic\",\n      \"kind\": \"archive_change\",\n      \"path\": \"./.cairn/changes/saturate-exponential-retry-arithmetic\"\n    }\n  ],\n  \"blocked\": false,\n  \"change\": \"saturate-exponential-retry-arithmetic\",\n  \"cross_repo_dependencies\": {\n    \"blocked_count\": 0,\n    \"dependency_count\": 0,\n    \"input_hash\": \"db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37\",\n    \"non_claims\": [\n      \"dependency satisfaction proves presented receipt linkage only\",\n      \"dependency satisfaction does not prove upstream correctness or remote trust\",\n      \"dependency satisfaction does not prove downstream integration correctness or release eligibility\"\n    ],\n    \"policy_hash\": \"c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d\",\n    \"receipt_hash\": \"a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311\",\n    \"rows\": [],\n    \"satisfied_count\": 0,\n    \"schema\": \"cairn.cross-repo-dependency-receipt.v1\",\n    \"valid\": true,\n    \"verdict\": \"PASS\"\n  },\n  \"cross_repo_evidence_issues\": [],\n  \"dry_run\": true,\n  \"input_hash\": \"e4d9dbfe01121566a95df45c5f8b236c8f2620ee566f5a70addf6209dee2ea6f\",\n  \"layout\": \"cairn\",\n  \"mutated\": false,\n  \"mutation_manifest\": null,\n  \"non_claims\": [\n    \"workflow state proves only the selected policy graph and observed structural artifact facts\",\n    \"workflow instructions do not prove artifact truth, review quality, or implementation correctness\",\n    \"workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates\",\n    \"workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts\"\n  ],\n  \"plan_hash\": \"2ef73ba3638db78a77e9361451bff2b2fc82832580f507dd18609c99cfa55df0\",\n  \"policy\": \"cairn-default\",\n  \"policy_hash\": \"c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d\",\n  \"profile_identity_hash\": \"d3d930803e8e912b19d2e7413460c6ee70baab7fe397297307a904a972654bba\",\n  \"reasons\": [],\n  \"receipt_hash\": \"3152329b97f11be1fafa291b5f12cb58590634fc25aa374c3789fbc9809bbffd\",\n  \"review_receipt_hashes\": [],\n  \"spec_effect\": \"delta\",\n  \"workflow_profile\": \"spec-driven\",\n  \"workflow_profile_compatibility_fallback\": false,\n  \"workflow_profile_source\": \"change_create\",\n  \"workflow_profile_version\": 1\n}\n",
+  "stderr": ""
+}

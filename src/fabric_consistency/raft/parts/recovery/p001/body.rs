@@ -1,5 +1,5 @@
 
-fn install_recovery_snapshot(
+fn install_snapshot(
     state: &mut ReplicaState,
     durable_commit_index: u64,
     snapshot: Option<ReplicaSnapshot>,
@@ -13,13 +13,13 @@ fn install_recovery_snapshot(
         || snapshot.fencing_epoch != state.profile.fencing_epoch
         || snapshot.last_included_index > durable_commit_index
     {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "live Raft recovered snapshot binding or boundary mismatch",
         ));
     }
     for index in snapshot.completed_requests.values() {
         if *index == INITIAL_COMMIT_INDEX || *index > snapshot.last_included_index {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "recovered snapshot completed request index is out of range",
             ));
         }
@@ -37,7 +37,7 @@ fn support_last_log_index(state: &ReplicaState) -> u64 {
     )
 }
 
-fn recovery_ref(
+fn r#ref(
     state: &ReplicaState,
     durable_record_refs: &[String],
     snapshot_bytes: Option<&[u8]>,

@@ -1,9 +1,9 @@
 
 impl SimulatedDurableStateAdapter {
     // r[impl molten.fabric_durability.live_sim_parity]
-    pub fn new(profile: CanonicalDurableProfile, descriptor: DurableNamespaceDescriptor) -> crate::error::Result<Self> {
+    pub fn new(profile: DurableProfile, descriptor: DurableNamespaceDescriptor) -> crate::error::Result<Self> {
         if profile.profile.adapter_kind != DurableAdapterKind::DeterministicSimulation {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "simulated durability adapter requires a deterministic-simulation profile",
             ));
         }
@@ -27,13 +27,13 @@ impl SimulatedDurableStateAdapter {
     pub fn append(
         &mut self,
         request: &AppendRequest,
-        fault: Option<&SimulatedDurabilityFault>,
-    ) -> crate::error::Result<CanonicalDurableTransition> {
+        fault: Option<&SimulatedFault>,
+    ) -> crate::error::Result<TransitionEnvelope> {
         if matches!(
             fault,
-            Some(SimulatedDurabilityFault::CrashBeforeMutation | SimulatedDurabilityFault::CapacityExhausted)
+            Some(SimulatedFault::CrashBeforeMutation | SimulatedFault::CapacityExhausted)
         ) {
-            let operation = if matches!(fault, Some(SimulatedDurabilityFault::CapacityExhausted)) {
+            let operation = if matches!(fault, Some(SimulatedFault::CapacityExhausted)) {
                 "simulated-capacity-exhausted-before-append"
             } else {
                 "simulated-crash-before-append"
@@ -42,13 +42,13 @@ impl SimulatedDurableStateAdapter {
         }
         let mut transition = append_log(&self.profile.profile, &self.state, request)
             .map_err(|issues| adapter_validation_error("simulated append", &issues))?;
-        if matches!(fault, Some(SimulatedDurabilityFault::ResponseLostAfterCommit)) {
+        if matches!(fault, Some(SimulatedFault::ResponseLostAfterCommit)) {
             transition.outcome = MutationOutcome::Uncertain;
             transition.operation = "simulated-response-loss-after-append".to_string();
             transition.retry_safe = false;
             transition.reconciliation_required = true;
         }
-        let canonical = canonical_durable_transition(&self.profile, &transition)?;
+        let canonical = durable_transition(&self.profile, &transition)?;
         self.state = transition.next;
         Ok(canonical)
     }
@@ -57,10 +57,10 @@ impl SimulatedDurableStateAdapter {
         &mut self,
         generation: u64,
         durability: DurabilityLevel,
-    ) -> crate::error::Result<CanonicalDurableTransition> {
+    ) -> crate::error::Result<TransitionEnvelope> {
         let transition = flush_log(&self.profile.profile, &self.state, generation, durability)
             .map_err(|issues| adapter_validation_error("simulated flush", &issues))?;
-        let canonical = canonical_durable_transition(&self.profile, &transition)?;
+        let canonical = durable_transition(&self.profile, &transition)?;
         self.state = transition.next;
         Ok(canonical)
     }
@@ -68,13 +68,13 @@ impl SimulatedDurableStateAdapter {
     pub fn apply_batch(
         &mut self,
         request: &AtomicBatchRequest,
-        fault: Option<&SimulatedDurabilityFault>,
-    ) -> crate::error::Result<CanonicalDurableTransition> {
+        fault: Option<&SimulatedFault>,
+    ) -> crate::error::Result<TransitionEnvelope> {
         if matches!(
             fault,
-            Some(SimulatedDurabilityFault::CrashBeforeMutation | SimulatedDurabilityFault::CapacityExhausted)
+            Some(SimulatedFault::CrashBeforeMutation | SimulatedFault::CapacityExhausted)
         ) {
-            let operation = if matches!(fault, Some(SimulatedDurabilityFault::CapacityExhausted)) {
+            let operation = if matches!(fault, Some(SimulatedFault::CapacityExhausted)) {
                 "simulated-capacity-exhausted-before-batch"
             } else {
                 "simulated-crash-before-batch"
@@ -83,13 +83,13 @@ impl SimulatedDurableStateAdapter {
         }
         let mut transition = apply_atomic_batch(&self.profile.profile, &self.state, request)
             .map_err(|issues| adapter_validation_error("simulated batch", &issues))?;
-        if matches!(fault, Some(SimulatedDurabilityFault::ResponseLostAfterCommit)) {
+        if matches!(fault, Some(SimulatedFault::ResponseLostAfterCommit)) {
             transition.outcome = MutationOutcome::Uncertain;
             transition.operation = "simulated-response-loss-after-batch".to_string();
             transition.retry_safe = false;
             transition.reconciliation_required = true;
         }
-        let canonical = canonical_durable_transition(&self.profile, &transition)?;
+        let canonical = durable_transition(&self.profile, &transition)?;
         self.state = transition.next;
         Ok(canonical)
     }
@@ -99,19 +99,19 @@ impl SimulatedDurableStateAdapter {
         generation: u64,
         retain_from_sequence: u64,
         authority_ref: Option<&str>,
-    ) -> crate::error::Result<CanonicalDurableTransition> {
+    ) -> crate::error::Result<TransitionEnvelope> {
         let transition =
             truncate_log(&self.profile.profile, &self.state, generation, retain_from_sequence, authority_ref)
                 .map_err(|issues| adapter_validation_error("simulated truncate", &issues))?;
-        let canonical = canonical_durable_transition(&self.profile, &transition)?;
+        let canonical = durable_transition(&self.profile, &transition)?;
         self.state = transition.next;
         Ok(canonical)
     }
 
-    pub fn create_snapshot(&mut self, request: &SnapshotRequest) -> crate::error::Result<CanonicalDurableTransition> {
+    pub fn create_snapshot(&mut self, request: &SnapshotRequest) -> crate::error::Result<TransitionEnvelope> {
         let transition = create_snapshot(&self.profile.profile, &self.state, request)
             .map_err(|issues| adapter_validation_error("simulated snapshot", &issues))?;
-        let canonical = canonical_durable_transition(&self.profile, &transition)?;
+        let canonical = durable_transition(&self.profile, &transition)?;
         self.state = transition.next;
         Ok(canonical)
     }
@@ -119,24 +119,24 @@ impl SimulatedDurableStateAdapter {
     pub fn apply_effect(
         &mut self,
         command: &EffectTransactionCommand,
-    ) -> crate::error::Result<CanonicalDurableTransition> {
+    ) -> crate::error::Result<TransitionEnvelope> {
         let transition = apply_effect_transaction(&self.profile.profile, &self.state, command)
             .map_err(|issues| adapter_validation_error("simulated effect", &issues))?;
-        let canonical = canonical_durable_transition(&self.profile, &transition)?;
+        let canonical = durable_transition(&self.profile, &transition)?;
         self.state = transition.next;
         Ok(canonical)
     }
 
     pub fn inject_fault(
         &mut self,
-        fault: &SimulatedDurabilityFault,
-    ) -> crate::error::Result<CanonicalDurableTransition> {
+        fault: &SimulatedFault,
+    ) -> crate::error::Result<TransitionEnvelope> {
         let transition = match fault {
-            SimulatedDurabilityFault::DelayCompletion { ticks } => {
+            SimulatedFault::DelayCompletion { ticks } => {
                 self.simulated_ticks = self
                     .simulated_ticks
                     .checked_add(*ticks)
-                    .ok_or_else(|| crate::error::MoltenError::invalid_harness("simulated durability time overflow"))?;
+                    .ok_or_else(|| crate::error::Failure::invalid_harness("simulated durability time overflow"))?;
                 DurableTransition {
                     next: self.state.clone(),
                     outcome: MutationOutcome::Validated,
@@ -147,8 +147,8 @@ impl SimulatedDurableStateAdapter {
                     reconciliation_required: false,
                 }
             }
-            SimulatedDurabilityFault::ProcessCrash => simulate_process_crash(&self.state),
-            SimulatedDurabilityFault::CorruptSnapshot { snapshot_ref } => {
+            SimulatedFault::ProcessCrash => simulate_process_crash(&self.state),
+            SimulatedFault::CorruptSnapshot { snapshot_ref } => {
                 let next = mark_snapshot_corrupt(&self.state, snapshot_ref)
                     .map_err(|issue| adapter_validation_error("corrupt snapshot", &[issue]))?;
                 DurableTransition {
@@ -161,21 +161,21 @@ impl SimulatedDurableStateAdapter {
                     reconciliation_required: true,
                 }
             }
-            SimulatedDurabilityFault::CrashBeforeMutation
-            | SimulatedDurabilityFault::ResponseLostAfterCommit
-            | SimulatedDurabilityFault::CapacityExhausted => {
-                return Err(crate::error::MoltenError::invalid_harness(
+            SimulatedFault::CrashBeforeMutation
+            | SimulatedFault::ResponseLostAfterCommit
+            | SimulatedFault::CapacityExhausted => {
+                return Err(crate::error::Failure::invalid_harness(
                     "operation-scoped durability fault requires append or batch execution",
                 ));
             }
         };
-        let canonical = canonical_durable_transition(&self.profile, &transition)?;
+        let canonical = durable_transition(&self.profile, &transition)?;
         self.state = transition.next;
         Ok(canonical)
     }
 
-    pub fn recovery(&self, inventory: &RecoveryInventory) -> crate::error::Result<CanonicalRecoveryDecision> {
-        canonical_recovery_decision(&self.profile, &self.state, evaluate_recovery(&self.state, inventory))
+    pub fn recovery(&self, inventory: &RecoveryInventory) -> crate::error::Result<RecoveryEnvelope> {
+        recovery_decision(&self.profile, &self.state, evaluate_recovery(&self.state, inventory))
     }
 
     fn synthetic_transition(
@@ -184,8 +184,8 @@ impl SimulatedDurableStateAdapter {
         operation: &str,
         retry_safe: bool,
         reconciliation_required: bool,
-    ) -> crate::error::Result<CanonicalDurableTransition> {
-        canonical_durable_transition(&self.profile, &DurableTransition {
+    ) -> crate::error::Result<TransitionEnvelope> {
+        durable_transition(&self.profile, &DurableTransition {
             next: self.state.clone(),
             outcome,
             operation: operation.to_string(),
@@ -202,7 +202,7 @@ impl DurableCommandShell for RedbDurableStateAdapter {
         &self.profile.profile.profile_id
     }
 
-    fn execute_command(&mut self, command: &DurablePortCommand) -> FabricPortResult<CanonicalDurableTransition> {
+    fn execute_command(&mut self, command: &DurablePortCommand) -> FabricPortResult<TransitionEnvelope> {
         let result = match command {
             DurablePortCommand::Append(request) => self.append(request),
             DurablePortCommand::Flush { generation, durability } => self.flush(*generation, *durability),
@@ -224,7 +224,7 @@ impl DurableCommandShell for SimulatedDurableStateAdapter {
         &self.profile.profile.profile_id
     }
 
-    fn execute_command(&mut self, command: &DurablePortCommand) -> FabricPortResult<CanonicalDurableTransition> {
+    fn execute_command(&mut self, command: &DurablePortCommand) -> FabricPortResult<TransitionEnvelope> {
         let result = match command {
             DurablePortCommand::Append(request) => self.append(request, None),
             DurablePortCommand::Flush { generation, durability } => self.flush(*generation, *durability),

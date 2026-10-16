@@ -1,8 +1,8 @@
 
-impl<'a> IrohEd25519FileAdapter<'a> {
+impl<'a> IrohEd25519<'a> {
     pub fn rotate(&self, request: &KeyRotationRequest) -> crate::error::Result<CompletedProductionRotation> {
         if request.overlap != RotationOverlapPolicy::None {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "capability-file crypto adapter supports no-overlap rotation only",
             ));
         }
@@ -31,7 +31,7 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         &self,
         purpose: KeyPurpose,
         receipt_refs: Vec<String>,
-    ) -> crate::error::Result<CryptoStatusReadback> {
+    ) -> crate::error::Result<StatusReadback> {
         let currentness = if is_revoked(self.namespace, purpose)? {
             KeyCurrentness::Revoked
         } else {
@@ -45,14 +45,14 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         purpose: KeyPurpose,
         currentness: KeyCurrentness,
         receipt_refs: Vec<String>,
-    ) -> crate::error::Result<CryptoStatusReadback> {
+    ) -> crate::error::Result<StatusReadback> {
         let path = key_path(purpose)?;
-        let crate::node_state::NodeStateFileObservation::Regular(file) = self.namespace.observe_file(&path)? else {
-            return Err(crate::error::MoltenError::invalid_harness("production key status is unavailable"));
+        let crate::node_state::FileObservation::Regular(file) = self.namespace.observe_file(&path)? else {
+            return Err(crate::error::Failure::invalid_harness("production key status is unavailable"));
         };
         let permission_status = permission_status(&file);
         let record = decode_key_record(&file.read_bounded(crate::node_state::MAX_NODE_SECRET_BYTES)?)?;
-        canonical_crypto_status(&AdapterDiagnosticInput {
+        status(&AdapterDiagnosticInput {
             profile_ref: self.profile.profile.profile_ref.clone(),
             purpose,
             generation: Some(record.generation),
@@ -71,7 +71,7 @@ impl<'a> IrohEd25519FileAdapter<'a> {
     #[cfg(test)]
     pub(crate) fn load_transport_secret(&self, handle: &OpaqueKeyHandle) -> crate::error::Result<iroh::SecretKey> {
         if handle.purpose != KeyPurpose::TransportEndpoint {
-            return Err(crate::error::MoltenError::invalid_harness(
+            return Err(crate::error::Failure::invalid_harness(
                 "only transport-purpose handles may configure an Iroh endpoint",
             ));
         }
@@ -83,7 +83,7 @@ impl<'a> IrohEd25519FileAdapter<'a> {
         if current.handle.handle.handle_ref != handle.handle_ref
             || current.handle.handle.generation != handle.generation
         {
-            return Err(crate::error::MoltenError::invalid_harness("stale transport key handle denied"));
+            return Err(crate::error::Failure::invalid_harness("stale transport key handle denied"));
         }
         Ok(self.load_current_record(KeyPurpose::TransportEndpoint)?.secret_key)
     }
@@ -91,8 +91,8 @@ impl<'a> IrohEd25519FileAdapter<'a> {
     fn load_current_record(&self, purpose: KeyPurpose) -> crate::error::Result<KeyRecord> {
         let path = key_path(purpose)?;
         let observation = self.namespace.observe_file(&path)?;
-        let crate::node_state::NodeStateFileObservation::Regular(file) = observation else {
-            return Err(crate::error::MoltenError::invalid_harness("current production key is unavailable"));
+        let crate::node_state::FileObservation::Regular(file) = observation else {
+            return Err(crate::error::Failure::invalid_harness("current production key is unavailable"));
         };
         require_restricted_permission(permission_status(&file))?;
         decode_key_record(&file.read_bounded(crate::node_state::MAX_NODE_SECRET_BYTES)?)
@@ -141,7 +141,7 @@ pub fn fixture_blake3_profile(profile_ref: String) -> CryptoAdapterProfile {
     }
 }
 
-pub(crate) fn transport_key_path() -> crate::error::Result<crate::node_state::NodeStatePath> {
+pub(crate) fn transport_key_path() -> crate::error::Result<crate::node_state::RelativePath> {
     key_path(KeyPurpose::TransportEndpoint)
 }
 
@@ -170,7 +170,7 @@ pub(crate) fn transport_endpoint_material(
     let key_record = decode_key_record(record_bytes)?;
     let public_key = key_record.secret_key.public();
     let public_key_ref = crate::preserves_rail::content_ref_from_bytes(public_key.as_bytes());
-    let profile = canonical_crypto_profile(&production_ed25519_profile(
+    let profile = profile(&production_ed25519_profile(
         crate::preserves_rail::content_ref_from_bytes(NODE_TRANSPORT_PROFILE_LABEL),
         crate::preserves_rail::content_ref_from_bytes(NODE_TRANSPORT_ENTROPY_LABEL),
     ))?;
@@ -181,7 +181,7 @@ pub(crate) fn transport_endpoint_material(
         &public_key_ref,
         backend_ref,
     )?;
-    let handle = canonical_key_handle(KeyHandleInput {
+    let handle = key_handle(KeyHandleInput {
         profile: &profile,
         purpose: KeyPurpose::TransportEndpoint,
         generation: key_record.generation,
@@ -200,38 +200,38 @@ pub(crate) fn transport_endpoint_material(
     })
 }
 
-pub(crate) fn load_transport_secret_for_identity(
-    namespace: &crate::node_state::NodeStateNamespace,
+pub(crate) fn load_transport_secret_for(
+    namespace: &crate::node_state::Scope,
     expected_endpoint_id: &str,
     expected_handle_ref: &str,
     backend_ref: &str,
 ) -> crate::error::Result<iroh::SecretKey> {
     require_not_revoked(namespace, KeyPurpose::TransportEndpoint)?;
     let observation = namespace.observe_file(&transport_key_path()?)?;
-    let crate::node_state::NodeStateFileObservation::Regular(file) = observation else {
-        return Err(crate::error::MoltenError::invalid_harness("persisted transport key is unavailable"));
+    let crate::node_state::FileObservation::Regular(file) = observation else {
+        return Err(crate::error::Failure::invalid_harness("persisted transport key is unavailable"));
     };
     require_restricted_permission(permission_status(&file))?;
     let bytes = file.read_bounded(crate::node_state::MAX_NODE_SECRET_BYTES)?;
     let material = transport_endpoint_material(&bytes, backend_ref)?;
     if material.endpoint_id != expected_endpoint_id || material.handle_ref != expected_handle_ref {
-        return Err(crate::error::MoltenError::invalid_harness(
+        return Err(crate::error::Failure::invalid_harness(
             "persisted transport key does not match admitted node identity",
         ));
     }
     Ok(decode_key_record(&bytes)?.secret_key)
 }
 
-fn key_path(purpose: KeyPurpose) -> crate::error::Result<crate::node_state::NodeStatePath> {
-    crate::node_state::NodeStatePath::parse(key_file_name(purpose))
+fn key_path(purpose: KeyPurpose) -> crate::error::Result<crate::node_state::RelativePath> {
+    crate::node_state::RelativePath::parse(key_name(purpose))
 }
 
-fn revocation_path(purpose: KeyPurpose) -> crate::error::Result<crate::node_state::NodeStatePath> {
-    let path = format!("{}{REVOCATION_MARKER_SUFFIX}", key_file_name(purpose));
-    crate::node_state::NodeStatePath::parse(&path)
+fn revocation_path(purpose: KeyPurpose) -> crate::error::Result<crate::node_state::RelativePath> {
+    let path = format!("{}{REVOCATION_MARKER_SUFFIX}", key_name(purpose));
+    crate::node_state::RelativePath::parse(&path)
 }
 
-const fn key_file_name(purpose: KeyPurpose) -> &'static str {
+const fn key_name(purpose: KeyPurpose) -> &'static str {
     match purpose {
         KeyPurpose::TransportEndpoint => "node-endpoint.secret",
         KeyPurpose::FederationOrigin => "crypto-federation-origin.key",
@@ -241,19 +241,19 @@ const fn key_file_name(purpose: KeyPurpose) -> &'static str {
     }
 }
 
-fn is_revoked(namespace: &crate::node_state::NodeStateNamespace, purpose: KeyPurpose) -> crate::error::Result<bool> {
+fn is_revoked(namespace: &crate::node_state::Scope, purpose: KeyPurpose) -> crate::error::Result<bool> {
     match namespace.observe_file(&revocation_path(purpose)?)? {
-        crate::node_state::NodeStateFileObservation::Missing => Ok(false),
-        crate::node_state::NodeStateFileObservation::Regular(file) => {
+        crate::node_state::FileObservation::Missing => Ok(false),
+        crate::node_state::FileObservation::Regular(file) => {
             require_restricted_permission(permission_status(&file))?;
             let marker = file.read_bounded(crate::node_state::MAX_NODE_SECRET_BYTES)?;
             if marker.is_empty() {
-                return Err(crate::error::MoltenError::invalid_harness("cryptographic key revocation marker is empty"));
+                return Err(crate::error::Failure::invalid_harness("cryptographic key revocation marker is empty"));
             }
             Ok(true)
         }
-        crate::node_state::NodeStateFileObservation::NonRegular(kind) => {
-            Err(crate::error::MoltenError::invalid_harness(format!(
+        crate::node_state::FileObservation::NonRegular(kind) => {
+            Err(crate::error::Failure::invalid_harness(format!(
                 "cryptographic key revocation marker must be a regular file, got {kind:?}"
             )))
         }
@@ -261,18 +261,18 @@ fn is_revoked(namespace: &crate::node_state::NodeStateNamespace, purpose: KeyPur
 }
 
 fn require_not_revoked(
-    namespace: &crate::node_state::NodeStateNamespace,
+    namespace: &crate::node_state::Scope,
     purpose: KeyPurpose,
 ) -> crate::error::Result<()> {
     if is_revoked(namespace, purpose)? {
-        return Err(crate::error::MoltenError::invalid_harness(format!("{} key is revoked", purpose.as_str())));
+        return Err(crate::error::Failure::invalid_harness(format!("{} key is revoked", purpose.as_str())));
     }
     Ok(())
 }
 
 fn require_current_handle(requested: &OpaqueKeyHandle, current: &OpaqueKeyHandle) -> crate::error::Result<()> {
     if requested != current {
-        return Err(crate::error::MoltenError::invalid_harness("stale or mismatched cryptographic key handle denied"));
+        return Err(crate::error::Failure::invalid_harness("stale or mismatched cryptographic key handle denied"));
     }
     Ok(())
 }

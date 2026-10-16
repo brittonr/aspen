@@ -1,0 +1,8 @@
+{
+  "nix_binary_unavailable": "/nix/store/14k2l03wskva1ii3hwbx6p0li78aq9i9-rust_molten-0.1.0/bin/molten",
+  "observation": "The previously realized Nix output is no longer available following the reported automatic garbage collection; no Nix result is rerun or replaced by a fake executable.",
+  "actual_cli": "/home/brittonr/.cargo-target/debug/molten",
+  "build_evidence": "../attempt-13-retry-arithmetic-acceptance/cargo-explicit-compatible-feature-cohorts.txt",
+  "scope": "Use the real Cargo executable produced by the just-completed all-target feature runs; retain its exact content hash. This is local verification, not a Nix/release identity.",
+  "environment": "Existing pinned compiler is available; no host Nix/cache/GC settings are changed."
+}

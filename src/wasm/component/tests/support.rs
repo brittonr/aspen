@@ -16,33 +16,33 @@ const FIXTURE_RESULT_POINTER_ADDRESS: i32 = 2_052;
 const FIXTURE_RESULT_LENGTH_ADDRESS: i32 = 2_056;
 const FIXTURE_HEAP_ADDRESS: i32 = 4_096;
 
-pub struct ComponentFixture {
-    pub profile: ComponentRuntimeProfile,
+pub struct Fixture {
+    pub profile: RuntimeProfile,
     pub component_bytes: Vec<u8>,
     pub wit_bytes: Vec<u8>,
-    pub bundle: MantleComponentBundle,
-    pub envelope: ComponentAdmissionEnvelope,
-    pub facts: ComponentArtifactFacts,
+    pub bundle: MantleBundle,
+    pub envelope: AdmissionEnvelope,
+    pub facts: ArtifactFacts,
     pub import_manifest: DeclaredManifest,
 }
 
-impl ComponentFixture {
-    pub fn new(consumer: ComponentConsumer) -> Self {
-        let profile = supported_component_profile().expect("supported component profile");
-        let component_bytes = identity_component_bytes();
+impl Fixture {
+    pub fn new(consumer: Consumer) -> Self {
+        let profile = supported().expect("supported component profile");
+        let component_bytes = identity_bytes();
         let wit_bytes =
             include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/wit/molten-component-runtime/runtime.wit")).to_vec();
         let component = MaterializedObjectIdentity::measure(&component_bytes).expect("component identity");
         let wit = MaterializedObjectIdentity::measure(&wit_bytes).expect("WIT identity");
-        let mut bundle = MantleComponentBundle {
+        let mut bundle = MantleBundle {
             schema_id: MANTLE_COMPONENT_BUNDLE_SCHEMA.to_string(),
             bundle_ref: String::new(),
             component,
             wit,
-            artifact_kind: WasmArtifactKind::Component,
+            artifact_kind: ArtifactKind::Component,
             consumer,
             expected_profile_id: profile.profile_id.clone(),
-            expected_cohort_ref: component_profile_ref(&profile),
+            expected_cohort_ref: r#ref(&profile),
             build_cohort_ref: fixture_ref("mantle-build-cohort"),
             octet_report_ref: fixture_ref("octet-report"),
             stage_receipt_refs: vec![fixture_ref("mantle-stage")],
@@ -51,7 +51,7 @@ impl ComponentFixture {
             has_precompiled_bytes: false,
         };
         bundle.bundle_ref = mantle_bundle_ref(&bundle);
-        let envelope = ComponentAdmissionEnvelope {
+        let envelope = AdmissionEnvelope {
             schema_id: COMPONENT_ADMISSION_ENVELOPE_SCHEMA.to_string(),
             bundle_ref: bundle.bundle_ref.clone(),
             valence_sidecar_refs: vec![fixture_ref("valence-sidecar")],
@@ -80,8 +80,8 @@ impl ComponentFixture {
         self.envelope.bundle_ref = self.bundle.bundle_ref.clone();
     }
 
-    pub fn source(&self) -> ComponentArtifactSource<'_> {
-        ComponentArtifactSource::Mantle {
+    pub fn source(&self) -> ArtifactSource<'_> {
+        ArtifactSource::Mantle {
             bundle: &self.bundle,
             envelope: &self.envelope,
             component_bytes: &self.component_bytes,
@@ -89,8 +89,8 @@ impl ComponentFixture {
         }
     }
 
-    pub fn request<'a>(&'a self, input: &'a preserves::IOValue) -> ComponentExecutionRequest<'a> {
-        ComponentExecutionRequest {
+    pub fn request<'a>(&'a self, input: &'a preserves::IOValue) -> ExecutionRequest<'a> {
+        ExecutionRequest {
             profile: &self.profile,
             requested_profile: RequestedExecutionProfile::ComponentV1,
             evidence_scope: EvidenceScope::Production,
@@ -103,11 +103,11 @@ impl ComponentFixture {
     }
 }
 
-pub fn valid_facts(profile: &ComponentRuntimeProfile) -> ComponentArtifactFacts {
-    ComponentArtifactFacts {
-        artifact_kind: WasmArtifactKind::Component,
+pub fn valid_facts(profile: &RuntimeProfile) -> ArtifactFacts {
+    ArtifactFacts {
+        artifact_kind: ArtifactKind::Component,
         declared_profile_id: profile.profile_id.clone(),
-        declared_cohort_ref: component_profile_ref(profile),
+        declared_cohort_ref: r#ref(profile),
         declared_world: profile.wit.world.clone(),
         imports: Vec::new(),
         exports: vec![COMPONENT_INVOKE_EXPORT.to_string()],
@@ -118,12 +118,12 @@ pub fn valid_facts(profile: &ComponentRuntimeProfile) -> ComponentArtifactFacts 
             "reference-types".to_string(),
             "simd".to_string(),
         ],
-        memory: ComponentGrowthFacts {
+        memory: GrowthFacts {
             initial: FIXED_MEMORY_BYTES,
             maximum: Some(FIXED_MEMORY_BYTES),
             strategy: GrowthStrategy::Fixed,
         },
-        table: ComponentGrowthFacts {
+        table: GrowthFacts {
             initial: FIXED_TABLE_ELEMENTS,
             maximum: Some(FIXED_TABLE_ELEMENTS),
             strategy: GrowthStrategy::Fixed,
@@ -134,7 +134,7 @@ pub fn valid_facts(profile: &ComponentRuntimeProfile) -> ComponentArtifactFacts 
     }
 }
 
-pub fn valid_import_manifest(profile: &ComponentRuntimeProfile) -> DeclaredManifest {
+pub fn valid_import_manifest(profile: &RuntimeProfile) -> DeclaredManifest {
     build_manifest(ManifestInput {
         profile_id: profile.profile_id.clone(),
         wit_package: profile.wit.package.clone(),
@@ -153,8 +153,8 @@ pub fn fixture_ref(label: &str) -> String {
     super::super::model::content_ref(label.as_bytes())
 }
 
-pub fn identity_component_bytes() -> Vec<u8> {
-    component_bytes_with_guest(FIXED_MEMORY_LIMITS, "", &identity_invoke_body())
+pub fn identity_bytes() -> Vec<u8> {
+    bytes_with_guest(FIXED_MEMORY_LIMITS, "", &identity_invoke_body())
 }
 
 fn identity_invoke_body() -> String {
@@ -172,13 +172,13 @@ fn identity_invoke_body() -> String {
     )
 }
 
-pub fn over_limit_memory_component_bytes() -> (Vec<u8>, u64) {
-    let bytes = component_bytes_with_guest(OVER_LIMIT_MEMORY_LIMITS, "", &identity_invoke_body());
+pub fn over_limit_memory_bytes() -> (Vec<u8>, u64) {
+    let bytes = bytes_with_guest(OVER_LIMIT_MEMORY_LIMITS, "", &identity_invoke_body());
     let declared_bytes = OVER_LIMIT_MEMORY_PAGES * FIXED_MEMORY_BYTES;
     (bytes, declared_bytes)
 }
 
-pub fn invalid_output_component_bytes() -> Vec<u8> {
+pub fn invalid_output_bytes() -> Vec<u8> {
     let data = format!(r#"(data (i32.const {FIXTURE_INVALID_OUTPUT_ADDRESS}) "\ff")"#);
     let invoke_body = format!(
         "i32.const {FIXTURE_RESULT_ADDRESS}\n\
@@ -192,19 +192,19 @@ pub fn invalid_output_component_bytes() -> Vec<u8> {
          i32.store\n\
          i32.const {FIXTURE_RESULT_ADDRESS}"
     );
-    component_bytes_with_guest(FIXED_MEMORY_LIMITS, &data, &invoke_body)
+    bytes_with_guest(FIXED_MEMORY_LIMITS, &data, &invoke_body)
 }
 
-pub fn fuel_exhaustion_component_bytes() -> Vec<u8> {
-    component_bytes_with_guest(FIXED_MEMORY_LIMITS, "", "(loop $forever (br $forever))\nunreachable")
+pub fn fuel_exhaustion_bytes() -> Vec<u8> {
+    bytes_with_guest(FIXED_MEMORY_LIMITS, "", "(loop $forever (br $forever))\nunreachable")
 }
 
-pub fn dynamic_growth_component_bytes() -> Vec<u8> {
+pub fn dynamic_growth_bytes() -> Vec<u8> {
     let invoke_body = format!("i32.const {FIXTURE_RESULT_ADDRESS}");
-    component_bytes_with_guest(GROWING_MEMORY_LIMITS, "", &invoke_body)
+    bytes_with_guest(GROWING_MEMORY_LIMITS, "", &invoke_body)
 }
 
-fn component_bytes_with_guest(memory_limits: &str, extra_guest_items: &str, invoke_body: &str) -> Vec<u8> {
+fn bytes_with_guest(memory_limits: &str, extra_guest_items: &str, invoke_body: &str) -> Vec<u8> {
     let wat = format!(
         r#"(component
   (core module $guest

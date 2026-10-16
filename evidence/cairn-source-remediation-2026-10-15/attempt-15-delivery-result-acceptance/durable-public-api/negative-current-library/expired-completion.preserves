@@ -1,0 +1,5 @@
+´³.molten-coordination-delivery-commit-receipt-v1´³schema±.molten.coordination-delivery-commit-receipt.v1„´³queue-id±queue:delivery„´³request-ref±Gblake3:42ee06569a1b779d9e40a655b8a48bc0f5a1ce690e414e00f4c249b1cbbd9a3f„´³operation-ref±Gblake3:208d33d5a5c27678df67f800e3a8f59d7c6f4a3af5290f2e6009a7bffff93f8b„´³before-state-ref±Gblake3:4b7ff88568153c7c15c657cad0f7bcc0339a0c20fe42338fe2fee3e910f7fed7„´³after-state-ref±Gblake3:4b7ff88568153c7c15c657cad0f7bcc0339a0c20fe42338fe2fee3e910f7fed7„´³revision°„´³status±denied„´³currentness±linearizable„´³
+durability±unknown„´³engine-epoch°„´³
+timer-refsµ„„´³failed-timer-refsµ„„´³
+status-ref´³none„„´³issue´³some±delivery-lease-expired„„´³authorizes-future-mutation´³false„„´³authorizes-worker-effects´³false„„´³claims-exactly-once´³false„„´³
+non-claimsµ±*delivery-evidence-does-not-grant-authority±5delivery-evidence-does-not-prove-exactly-once-effects±4delivery-evidence-does-not-prove-payload-correctness±0delivery-evidence-does-not-prove-global-ordering±<delivery-evidence-does-not-prove-store-or-broker-correctness±8delivery-evidence-does-not-establish-release-eligibility„„„

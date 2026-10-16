@@ -27,8 +27,8 @@ const LENGTH_PREFIX_BYTES: u64 = 4;
 const PAYLOAD: &[u8] = b"bounded-live-iroh-frame";
 const EXPECTED_EVENT_KINDS: usize = 3;
 
-fn profile(kind: TransportAdapterKind) -> CanonicalTransportProfile {
-    canonical_transport_profile(&TransportProfile {
+fn profile(kind: TransportAdapterKind) -> Profile {
+    crate::fabric_transport::profile(&TransportProfile {
         schema: TRANSPORT_PROFILE_SCHEMA.to_string(),
         profile_id: kind.as_str().to_string(),
         profile_ref: PROFILE_DECLARATION_REF.to_string(),
@@ -158,7 +158,7 @@ fn canonical_profile_descriptor_and_readback_are_bounded_and_payload_free() {
     assert!(profile_text.contains("does-not-prove-durable-delivery"));
     assert!(!profile_text.contains("iroh::Connection"));
 
-    let mut adapter = DeterministicTransportAdapter::new(profile).expect("simulated adapter");
+    let mut adapter = DeterministicAdapter::new(profile).expect("simulated adapter");
     let _events = apply_setup(&mut adapter);
     let status = adapter.status().expect("transport status");
     let status_text = crate::preserves_rail::to_text(&status.value).expect("status text");
@@ -173,8 +173,8 @@ fn canonical_profile_descriptor_and_readback_are_bounded_and_payload_free() {
 // r[verify molten.fabric_transport.final_validation]
 #[test]
 fn live_and_simulated_shells_emit_the_same_adapter_neutral_setup_trace() {
-    let mut live = IrohTransportAdapter::new(profile(TransportAdapterKind::IrohLive)).expect("Iroh adapter");
-    let mut simulated = DeterministicTransportAdapter::new(profile(TransportAdapterKind::DeterministicSimulation))
+    let mut live = IrohAdapter::new(profile(TransportAdapterKind::IrohLive)).expect("Iroh adapter");
+    let mut simulated = DeterministicAdapter::new(profile(TransportAdapterKind::DeterministicSimulation))
         .expect("simulated adapter");
     let live_trace = apply_setup(&mut live);
     let simulated_trace = apply_setup(&mut simulated);
@@ -190,8 +190,8 @@ fn live_and_simulated_shells_emit_the_same_adapter_neutral_setup_trace() {
 // r[verify molten.fabric_transport.final_validation]
 #[test]
 fn shared_adapter_conformance_covers_flow_control_datagrams_cancellation_drain_and_cleanup() {
-    let mut live = IrohTransportAdapter::new(profile(TransportAdapterKind::IrohLive)).expect("Iroh adapter");
-    let mut simulated = DeterministicTransportAdapter::new(profile(TransportAdapterKind::DeterministicSimulation))
+    let mut live = IrohAdapter::new(profile(TransportAdapterKind::IrohLive)).expect("Iroh adapter");
+    let mut simulated = DeterministicAdapter::new(profile(TransportAdapterKind::DeterministicSimulation))
         .expect("simulated adapter");
     let live_result = run_shared_conformance(&mut live);
     let simulated_result = run_shared_conformance(&mut simulated);

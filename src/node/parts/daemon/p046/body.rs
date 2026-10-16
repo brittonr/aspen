@@ -25,12 +25,12 @@ fn compatibility_request_entry<'a>(state_root: &Path, request_path: Option<&'a P
         .file_name()
         .and_then(std::ffi::OsStr::to_str)
         .ok_or_else(|| MoltenError::invalid_harness("node control compatibility request entry must be UTF-8"))?;
-    crate::node_state::NodeStatePath::parse(CONTROL_INBOX_DIR)?.join_segment(entry)?;
+    crate::node_state::RelativePath::parse(CONTROL_INBOX_DIR)?.join_segment(entry)?;
     Ok(Some(entry))
 }
 
 pub fn dispatch_control_request_with_root(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::DirectoryRoot,
     request_entry: Option<&str>,
 ) -> Result<ControlDispatch> {
     ensure_state_layout(root)?;
@@ -39,13 +39,13 @@ pub fn dispatch_control_request_with_root(
         Some(name) => pending_control_request_by_name(root, name)?,
         None => first_pending_control_request(root)?,
     };
-    dispatch_pending_control_request(root, pending)
+    dispatch_pending_control_request(root, pending).map(|observed| observed.dispatch)
 }
 
 fn dispatch_pending_control_request(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::DirectoryRoot,
     pending: PendingControlRequest,
-) -> Result<ControlDispatch> {
+) -> Result<ObservedControlDispatch> {
     let inbox = root.control_inbox()?;
     let bytes = inbox.read_entry(&pending.entry, crate::node_state::MAX_NODE_STATE_FILE_BYTES)?;
     let observed_ref = crate::preserves_rail::content_ref_from_bytes(&bytes);
@@ -63,7 +63,10 @@ fn dispatch_pending_control_request(
     if let Some(prior) = prior_dispatch_for_request(root, &request)? {
         archive_dispatched_request(root, &pending.entry, &request.value)?;
         write_dispatch_queue_receipt(root, &request, "duplicate-dispatch")?;
-        return Ok(prior);
+        return Ok(ObservedControlDispatch {
+            dispatch: prior,
+            is_duplicate: true,
+        });
     }
     let dispatch = match request.operation.as_str() {
         "status" => dispatch_status_request(root, &request)?,
@@ -77,40 +80,29 @@ fn dispatch_pending_control_request(
     };
     archive_dispatched_request(root, &pending.entry, &request.value)?;
     write_dispatch_queue_receipt(root, &request, "dispatch")?;
-    Ok(dispatch)
+    Ok(ObservedControlDispatch {
+        dispatch,
+        is_duplicate: false,
+    })
 }
 
 pub fn run_control_loop(input: &ControlLoopInput<'_>) -> Result<ControlLoop> {
     validate_state_root(input.state_root)?;
-    let root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let root = crate::node_state::DirectoryRoot::open(input.state_root)?;
     run_control_loop_with_root(&root, input.max_requests)
 }
 
 pub fn run_control_loop_with_root(
-    root: &crate::node_state::NodeStateRoot,
+    root: &crate::node_state::DirectoryRoot,
     maximum_requests: u64,
 ) -> Result<ControlLoop> {
     ensure_state_layout(root)?;
     let max_requests = validate_loop_request_limit(maximum_requests)?;
-    require_active_lock(root)?;
+    let binding = require_active_lock(root)?;
     let startup = current_startup_receipt(root)?;
     let lock_value = read_preserves(root, &fixed_node_path(CONTROL_LOCK_FILE)?)?;
     let lock_ref = crate::preserves_rail::canonical_hash(&lock_value)?;
-    let initial_diagnostics = Vec::new();
-    let heartbeat_value = heartbeat_receipt_value(&HeartbeatReceiptValueInput {
-        startup_receipt_ref: &startup.receipt_ref,
-        lock_ref: &lock_ref,
-        loop_sequence: 0,
-        processed_count: 0,
-        diagnostics: &initial_diagnostics,
-    })?;
-    let heartbeat_receipt_ref = crate::preserves_rail::canonical_hash(&heartbeat_value)?;
-    write_preserves(
-        root,
-        &control_heartbeat_receipt_path(&heartbeat_receipt_ref)?,
-        &heartbeat_value,
-    )?;
-    import_artifact(root, &heartbeat_value)?;
+    let (heartbeat_receipt_ref, heartbeat_value) = write_control_loop_heartbeat(root, &startup.receipt_ref, &lock_ref)?;
 
     let mut processed_request_refs = Vec::with_capacity(max_requests);
     let mut dispatch_receipt_refs = Vec::with_capacity(max_requests);
@@ -120,19 +112,32 @@ pub fn run_control_loop_with_root(
         let Some(pending) = next_pending_control_request(root)? else {
             break;
         };
-        let dispatched = dispatch_pending_control_request(root, pending)?;
-        let control = crate::node_runtime::parse_control_receipt(&dispatched.control_receipt_value)?;
-        processed_request_refs.push(dispatched.request_ref.clone());
-        dispatch_receipt_refs.push(dispatched.control_receipt_ref.clone());
-        if dispatched.operation == "shutdown" && control.decision == "pass" {
-            has_stopped = true;
-            break;
+        let observed = dispatch_pending_control_request(root, pending)?;
+        let lifecycle = classify_control_dispatch_run(root, &binding, &observed)?;
+        processed_request_refs.push(observed.dispatch.request_ref);
+        dispatch_receipt_refs.push(observed.dispatch.control_receipt_ref);
+        match lifecycle {
+            crate::node_runtime::NodeRunLifecycle::Stopped => {
+                has_stopped = true;
+                break;
+            }
+            crate::node_runtime::NodeRunLifecycle::Active => {}
+            crate::node_runtime::NodeRunLifecycle::Unresolved => {
+                crate::bounded::push(
+                    &mut diagnostics,
+                    "node control shutdown has unresolved current-run observations".to_string(),
+                    2,
+                    "node control loop diagnostics",
+                )?;
+                break;
+            }
         }
     }
     if processed_request_refs.len() == max_requests && next_pending_control_request(root)?.is_some() {
         diagnostics.push("node control loop reached max requests with pending inbox entries".to_string());
     }
-    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let is_denied = !diagnostics.is_empty();
+    let decision = if is_denied { "deny" } else { "pass" };
     let loop_value = loop_receipt_value(&LoopReceiptValueInput {
         decision,
         startup_receipt_ref: &startup.receipt_ref,
@@ -154,5 +159,6 @@ pub fn run_control_loop_with_root(
         processed_request_refs,
         dispatch_receipt_refs,
         has_stopped,
+        is_denied,
     })
 }

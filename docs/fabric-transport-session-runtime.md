@@ -19,9 +19,9 @@ Every protocol descriptor binds the extension and service identity, active gener
 
 `src/fabric_transport/` provides adapter shells over the same transition core:
 
-- `IrohTransportAdapter` owns canonical live-Iroh state transitions. Its same-process loopback remains a diagnostic conformance rail, not distributed-runtime evidence.
-- `RegisteredCrossProcessTransportEffectPort` routes an admitted `SendFrame` through the typed `FabricEffectPort`, an exact imported endpoint descriptor, and a distinct Iroh peer without exposing Iroh-specific branches to the consuming extension.
-- `DeterministicTransportAdapter` runs the same command algebra while explicitly injecting overload, refusal, partition, timeout, disconnect, and adapter-failure observations.
+- `IrohAdapter` owns canonical live-Iroh state transitions. Its same-process loopback remains a diagnostic conformance rail, not distributed-runtime evidence.
+- `Registered` routes an admitted `SendFrame` through the typed `FabricEffectPort`, an exact imported endpoint descriptor, and a distinct Iroh peer without exposing Iroh-specific branches to the consuming extension.
+- `DeterministicAdapter` runs the same command algebra while explicitly injecting overload, refusal, partition, timeout, disconnect, and adapter-failure observations.
 
 The registered ports require the exact bound port, profile, request ref, service identity, and active generation before execution. Cross-process sends additionally require request-bound payload bytes registered under the profile's queue/frame limits. Each request is consumed once; the shell never retries automatically. Successful exchange returns the canonical acknowledgement transition. Adapter or malformed-exchange failure returns a canonical failed-session transition.
 

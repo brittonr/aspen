@@ -1,0 +1,12 @@
+{
+  "command": [
+    "git",
+    "push",
+    "origin",
+    "HEAD:refs/heads/cairn/molten-nominal-adoption-20261015"
+  ],
+  "cwd": "/home/brittonr/git/octet-worktrees/molten-nominal-adoption-20261015",
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "remote: \nremote: Create a pull request for 'cairn/molten-nominal-adoption-20261015' on GitHub by visiting:        \nremote:      https://github.com/OnixResearch/octet/pull/new/cairn/molten-nominal-adoption-20261015        \nremote: \nTo github.com:OnixResearch/octet.git\n * [new branch]      HEAD -> cairn/molten-nominal-adoption-20261015\n"
+}

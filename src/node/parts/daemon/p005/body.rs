@@ -30,7 +30,7 @@ pub fn parse_control_authority_grant(value: &IoValue) -> Result<ControlAuthority
 
 pub fn import_control_authority_grant(state_root: &Path, grant_value: &IoValue) -> Result<ControlAuthorityGrant> {
     validate_state_root(state_root)?;
-    let root = crate::node_state::NodeStateRoot::open(state_root)?;
+    let root = crate::node_state::DirectoryRoot::open(state_root)?;
     ensure_state_layout(&root)?;
     let grant = parse_control_authority_grant(grant_value)?;
     import_artifact(&root, grant_value)?;
@@ -116,13 +116,13 @@ pub fn parse_control_live_ticket(value: &IoValue) -> Result<ControlLiveTicket> {
 }
 
 pub fn export_control_live_ticket(input: &ControlLiveTicketExportInput<'_>) -> Result<ControlLiveTicket> {
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::DirectoryRoot::open(input.state_root)?;
     validate_state_root(input.state_root)?;
     validate_node_id(input.topic)?;
     ensure_state_layout(&state_root)?;
     let identity = crate::node_identity::parse_identity(&read_preserves(
         &state_root,
-        &crate::node_state::NodeStatePath::parse(IDENTITY_FILE)?,
+        &crate::node_state::RelativePath::parse(IDENTITY_FILE)?,
     )?)?;
     let address_refs = Vec::new();
     let value = control_live_ticket_value(&ControlLiveTicketInput {
@@ -141,7 +141,7 @@ pub fn export_control_live_ticket(input: &ControlLiveTicketExportInput<'_>) -> R
 }
 
 pub fn admit_control_live_peer(input: &ControlLivePeerAdmitInput<'_>) -> Result<ControlLivePeerAdmission> {
-    let state_root = crate::node_state::NodeStateRoot::open(input.state_root)?;
+    let state_root = crate::node_state::DirectoryRoot::open(input.state_root)?;
     validate_state_root(input.state_root)?;
     validate_node_id(input.peer_id)?;
     validate_ingress_refs(input.policy_refs, "node control live peer admission policy ref")?;
@@ -151,7 +151,7 @@ pub fn admit_control_live_peer(input: &ControlLivePeerAdmitInput<'_>) -> Result<
     import_artifact(&state_root, input.ticket_value)?;
     let identity = crate::node_identity::parse_identity(&read_preserves(
         &state_root,
-        &crate::node_state::NodeStatePath::parse(IDENTITY_FILE)?,
+        &crate::node_state::RelativePath::parse(IDENTITY_FILE)?,
     )?)?;
     let mut diagnostics = Vec::new();
     if ticket.node_id != identity.node_id {

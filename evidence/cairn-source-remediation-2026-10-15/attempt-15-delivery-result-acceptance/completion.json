@@ -1,0 +1,85 @@
+{
+  "attempt": "15/20",
+  "change": "bind-delivery-duplicate-results-to-original-claims",
+  "result": "Recorded acceptance passed; reviewed, natively synced and archived in the dedicated Molten worktree.",
+  "repository": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "archive": ".cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims",
+  "acceptance": ".cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/evidence/2026-10-16-acceptance.json",
+  "immediate_outcome": "Exact duplicate claims retain only the original operation/token identity; unavailable historical tokens remain absent without substituting later claims or granting completion authority.",
+  "durable_capability": "Normal core/service/Redb-reopen/canonical regressions, documented unavailable-token consumer contract, and actual native positive/expected-deny receipt-backed F08 coverage.",
+  "maintenance_owner": "Molten coordination-delivery maintainers own reconstruction and consumer semantics; node-host maintainers own capability-rooted filesystem mechanisms.",
+  "runtime": {
+    "actual_public_api_outcomes": 26,
+    "canonical_packed_artifacts": 52,
+    "positive_exit": 0,
+    "expected_deny_exit": 1,
+    "repeatability": "Two independent fresh capability roots produced identical complete case outputs and pairwise identical canonical bytes.",
+    "actual_adapter": "Real Local/Redb commit/load and durable reopen, with controlled timer/status observations.",
+    "outcomes": "public-consumer-outcomes.json",
+    "source_and_crate_graph_selection": "resolved-consumer-build-selection.json",
+    "compile_features": "[\"profiler-disabled\"]"
+  },
+  "receipt_backed_traceability": {
+    "accepted_spec": ".cairn/specs/delivery/spec.md",
+    "accepted_spec_manifest_ref": "blake3:8cea789672382c9db6b75e022dbad3326fb92c476d5eac692e668438b9fb4602",
+    "pre_sync_manifest_ref": "blake3:ef7b714b208e58227bb0da69c901120f47eb2815b9e246d944d9567d56800938",
+    "required_coverage": "receipt-backed",
+    "covered": [
+      "molten.audit_f08.original_binding",
+      "molten.audit_f08.state_authority",
+      "molten.audit_f08.unavailable_result",
+      "molten.audit_f08.validation_claims"
+    ],
+    "missing_positive": 0,
+    "missing_negative": 0,
+    "stale": 0,
+    "compatibility_only": 0,
+    "map": "requirement-evidence-map.json",
+    "native_accepted_run": "native-f08-accepted-receipt-backed-traceability.json"
+  },
+  "shared_acceptance_reuse": {
+    "attempt": "13/20",
+    "record": "../attempt-13-retry-arithmetic-acceptance/completion.json",
+    "basis": "Attempt 13 exercised the same unchanged product Rust source after the earlier F08 correction. Subsequent completed F12/F01 work changed lifecycle specifications, docs and evidence, not this product implementation. The transient Cargo example was removed; the successful consumer was external to product sources."
+  },
+  "native_sync": {
+    "preview": "sync-reviewed-plan.json",
+    "execution": "sync-execute.json",
+    "input_hash": "835745bf109bc436bfc862ef260351ac81610a7dd59b1314dc47e6022ccd693e",
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "accepted_before_hash": "48bf8a98e95e56e26bbb5103903cb6a8430fad72a2f689d32edcd720e079ee15",
+    "accepted_after_hash": "7391e994f15fc18cc2d45922948f48f3b8f6cab70d967085661cc670115b2465",
+    "mutation_matches_reviewed_preflight": true
+  },
+  "native_archive": {
+    "preview": "archive-reviewed-plan.json",
+    "execution": "archive-execute.json",
+    "input_hash": "863f5d0c1aab31c4410e2cf05fef1b040e45084e4a5c00b6bf48601fa89127b8",
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "profile_identity_hash": "729b5ca67c2e72c05484cc22bf0f600336b5f679cd4726e97f7b1242f0c21956",
+    "action_mode_note": "Preview action.path names the source and execute action.path names the native destination; kind, description and input/policy/profile identities match.",
+    "preserved_members": 10,
+    "independent_b3sum_matches_native_manifests": true,
+    "active_source_path_absent": true
+  },
+  "post_archive": {
+    "strict_cairn_valid": true,
+    "live_guard_verdict": "pass",
+    "dangling": 0,
+    "inherited_uncovered": 1924,
+    "remaining_active_changes": 48
+  },
+  "non_claims": [
+    "Wrong response evidence is not an authority bypass.",
+    "No live worker/scheduler effects, external exactly-once, global liveness, arbitrary system correctness or release eligibility.",
+    "No completed status for other active Cairns, mainline integration or Molten remote push."
+  ],
+  "mainline_integration": false,
+  "molten_remote_push": false,
+  "cleanup": {
+    "task_owned_external_source_binaries_and_redb_scratch_removed": true,
+    "transient_workspace_example_removed": true,
+    "exact_driver_inputs_and_actual_execution_evidence_retained": true,
+    "superseded_owned_nix_runner_cancelled": "bg_24"
+  }
+}

@@ -4,6 +4,7 @@
 //! generators, files, clocks, Iroh objects, or cryptographic library types.
 
 mod admission;
+#[path = "artifact/auth.rs"]
 mod artifact_auth;
 mod model;
 mod rotation;

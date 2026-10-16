@@ -6,29 +6,29 @@ use super::*;
 const EXECUTION_SOURCE_RECORD: &str = "fabric-execution-source-v1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalExecutionProfile {
+pub struct Profile {
     pub profile: AdmittedExecutionProfile,
     pub profile_ref: String,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalExecutionRequest {
+pub struct Request {
     pub plan: AdmittedExecutionPlan,
     pub request_ref: String,
     pub value: preserves::IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalExecutionReceipt {
+pub struct Receipt {
     pub receipt_ref: String,
     pub request_ref: String,
     pub profile_ref: String,
     pub operation_ref: String,
     pub generation: u64,
-    pub process: ExecutionProcessObservation,
-    pub stdout_publication: ExecutionStreamPublication,
-    pub stderr_publication: ExecutionStreamPublication,
+    pub process: ProcessObservation,
+    pub stdout_publication: StreamPublication,
+    pub stderr_publication: StreamPublication,
     pub non_claims: Vec<ExecutionNonClaim>,
     pub value: preserves::IOValue,
 }
@@ -46,9 +46,7 @@ pub struct BoundedExecSourceCohort {
 }
 
 // r[impl molten.fabric_execution.component_pin]
-pub fn canonical_bounded_exec_source_cohort(
-    platform: ExecutionPlatform,
-) -> crate::error::Result<BoundedExecSourceCohort> {
+pub fn bounded_exec_source_cohort(platform: ExecutionPlatform) -> crate::error::Result<BoundedExecSourceCohort> {
     let value = crate::preserves_rail::record(EXECUTION_SOURCE_RECORD, vec![
         field("repository", crate::preserves_rail::string(BOUNDED_EXEC_REPOSITORY)),
         field("revision", crate::preserves_rail::string(BOUNDED_EXEC_REVISION)),
@@ -80,14 +78,12 @@ pub fn canonical_bounded_exec_source_cohort(
 
 // r[impl molten.fabric_execution.port_contract]
 // r[impl molten.fabric_execution.nonclaims]
-pub fn canonical_admit_execution_profile(
-    descriptor: &ExecutionProfileDescriptor,
-) -> crate::error::Result<CanonicalExecutionProfile> {
+pub fn admit_profile(descriptor: &ExecutionProfileDescriptor) -> crate::error::Result<Profile> {
     let profile =
         admit_execution_profile(descriptor).map_err(|issues| validation_error("execution profile", &issues))?;
-    let value = execution_profile_value(&profile);
+    let value = profile_value(&profile);
     let profile_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalExecutionProfile {
+    Ok(Profile {
         profile,
         profile_ref,
         value,
@@ -96,18 +92,18 @@ pub fn canonical_admit_execution_profile(
 
 // r[impl molten.fabric_execution.request]
 // r[impl molten.fabric_execution.authority]
-pub fn canonical_admit_execution_request(
-    profile: &CanonicalExecutionProfile,
+pub fn admit_request(
+    profile: &Profile,
     request: &ExecutionRequest,
     authority: &ExecutionAuthorityFacts,
     resources: ExecutionResourceGrant,
     active_generation: u64,
-) -> crate::error::Result<CanonicalExecutionRequest> {
+) -> crate::error::Result<Request> {
     let plan = admit_execution_request(&profile.profile, request, authority, resources, active_generation)
         .map_err(|issues| validation_error("execution request", &issues))?;
-    let value = execution_request_value(&plan, &profile.profile_ref);
+    let value = request_value(&plan, &profile.profile_ref);
     let request_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalExecutionRequest {
+    Ok(Request {
         plan,
         request_ref,
         value,
@@ -116,13 +112,13 @@ pub fn canonical_admit_execution_request(
 
 // r[impl molten.fabric_execution.output]
 // r[impl molten.fabric_execution.lifecycle]
-pub fn canonical_execution_receipt(
-    request: &CanonicalExecutionRequest,
-    profile: &CanonicalExecutionProfile,
-    process: ExecutionProcessObservation,
-    stdout_publication: ExecutionStreamPublication,
-    stderr_publication: ExecutionStreamPublication,
-) -> crate::error::Result<CanonicalExecutionReceipt> {
+pub fn receipt(
+    request: &Request,
+    profile: &Profile,
+    process: ProcessObservation,
+    stdout_publication: StreamPublication,
+    stderr_publication: StreamPublication,
+) -> crate::error::Result<Receipt> {
     admit_execution_completion(
         &request.plan.request.identity(),
         &request.plan.request.identity(),
@@ -130,9 +126,9 @@ pub fn canonical_execution_receipt(
         request.plan.request.generation,
     )
     .map_err(|issues| validation_error("execution completion", &issues))?;
-    let value = execution_receipt_value(request, profile, &process, &stdout_publication, &stderr_publication);
+    let value = receipt_value(request, profile, &process, &stdout_publication, &stderr_publication);
     let receipt_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(CanonicalExecutionReceipt {
+    Ok(Receipt {
         receipt_ref,
         request_ref: request.request_ref.clone(),
         profile_ref: profile.profile_ref.clone(),
@@ -147,7 +143,7 @@ pub fn canonical_execution_receipt(
 }
 
 // r[impl molten.fabric_execution.port_contract]
-pub fn fabric_execution_port_descriptor(profile: &CanonicalExecutionProfile) -> crate::fabric::FabricPortDescriptor {
+pub fn fabric_execution_port_descriptor(profile: &Profile) -> crate::fabric::FabricPortDescriptor {
     let (determinism, replay) = match profile.profile.descriptor.kind {
         ExecutionProfileKind::LiveBoundedProcess => {
             (crate::fabric::DeterminismClass::ExternalEffect, crate::fabric::ReplayClass::RecordedEffectRequired)
@@ -195,6 +191,6 @@ pub fn fabric_execution_port_descriptor(profile: &CanonicalExecutionProfile) -> 
     }
 }
 
-fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> crate::error::MoltenError {
-    crate::error::MoltenError::invalid_harness(format!("{label} denied: {issues:?}"))
+fn validation_error(label: &str, issues: &impl std::fmt::Debug) -> crate::error::Failure {
+    crate::error::Failure::invalid_harness(format!("{label} denied: {issues:?}"))
 }

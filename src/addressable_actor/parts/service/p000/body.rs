@@ -6,7 +6,7 @@ const MAX_ACTOR_STATUS_EVENTS: usize = 64;
 const UNKNOWN_EFFECT_OPERATION_PREFIX: &str = "unknown-effect:";
 
 #[derive(Clone, Debug)]
-pub struct ActorHostBindingFacts {
+pub struct HostBindingFacts {
     pub schema: String,
     pub actor_key_ref: String,
     pub profile_ref: String,
@@ -25,53 +25,53 @@ pub struct ActorHostBindingFacts {
 }
 
 #[derive(Clone, Debug)]
-pub struct ActorServiceRequest<'a> {
+pub struct Request<'a> {
     pub profile: &'a AddressableActorProfile,
     pub actor_key: &'a ActorKey,
-    pub host_binding: &'a ActorHostBindingFacts,
-    pub expected: ExpectedActorState,
+    pub host_binding: &'a HostBindingFacts,
+    pub expected: ExpectedState,
     pub request: &'a ActorRequest,
     pub requested_engine_epoch: u64,
 }
 
 #[derive(Clone, Debug)]
-pub struct ActorServiceOutcome {
+pub struct Outcome {
     pub transition: ActorTransition,
-    pub receipt: CanonicalActorCommitReceipt,
-    pub commit_observation: Option<ActorCommitObservation>,
-    pub effect_observations: Vec<ActorEffectObservation>,
-    pub status_observation: ActorStatusObservation,
-    pub final_state: PublishedActorState,
+    pub receipt: CanonicalCommitReceipt,
+    pub commit_observation: Option<CommitObservation>,
+    pub effect_observations: Vec<EffectObservation>,
+    pub status_observation: StatusObservation,
+    pub final_state: PublishedState,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ActorServiceError {
-    Port(ActorPortError),
+pub enum Error {
+    Port(PortError),
     Profile(ActorIssue),
     Host(ActorIssue),
     Receipt(String),
     Status(ActorIssue),
 }
 
-pub type ActorServiceResult<T> = std::result::Result<T, ActorServiceError>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 // r[impl molten.addressable_actor.lifecycle]
 // r[impl molten.addressable_actor.authority]
 // r[impl molten.addressable_actor.delivery]
-pub fn apply_actor_request(
+pub fn apply_request(
     commit_port: &mut impl ActorCommitPort,
     effect_port: &mut impl ActorEffectPort,
     status_port: &mut impl ActorStatusPort,
-    service: &ActorServiceRequest<'_>,
-) -> ActorServiceResult<ActorServiceOutcome> {
-    validate_service_profile(service)?;
-    let observed = commit_port.load(&service.request.actor_key_ref).map_err(ActorServiceError::Port)?;
+    service: &Request<'_>,
+) -> Result<Outcome> {
+    validate_profile(service)?;
+    let observed = commit_port.load(&service.request.actor_key_ref).map_err(Error::Port)?;
     let state = current_published_state(observed.as_ref(), service);
     validate_host_binding(service, &state)?;
     if !expected_matches(&service.expected, observed.as_ref()) {
         return no_commit_outcome(
             stale_transition(&state, service.request),
-            ActorServiceStatus::Stale,
+            ServiceStatus::Stale,
             service,
             status_port,
         );
@@ -83,8 +83,8 @@ pub fn apply_actor_request(
         return no_commit_outcome(transition, status, service, status_port);
     }
 
-    let planned = PublishedActorState::from_state(transition.next_state.clone());
-    let commit_request = ActorCommitRequest {
+    let planned = PublishedState::from_state(transition.next_state.clone());
+    let commit_request = CommitRequest {
         actor_key_ref: service.request.actor_key_ref.clone(),
         expected: service.expected.clone(),
         next: planned.clone(),
@@ -107,7 +107,7 @@ pub fn apply_actor_request(
             effect_observations.push(observation);
             if let Some(stop_status) = stopping_status(disposition) {
                 status = stop_status;
-                if disposition == ActorEffectDisposition::Unknown {
+                if disposition == EffectDisposition::Unknown {
                     final_state = record_unknown_effect_state(commit_port, service, &final_state, effect)?;
                 }
                 break;
@@ -124,7 +124,7 @@ pub fn apply_actor_request(
         effects: &effect_observations,
         status_observation: &status_observation,
     })?;
-    Ok(ActorServiceOutcome {
+    Ok(Outcome {
         transition,
         receipt,
         commit_observation: Some(commit_observation),
@@ -136,7 +136,7 @@ pub fn apply_actor_request(
 
 /// The committed actor state, or a dormant state for the requested actor when nothing is committed
 /// yet.
-fn current_published_state(observed: Option<&PublishedActorState>, service: &ActorServiceRequest<'_>) -> ActorState {
+fn current_published_state(observed: Option<&PublishedState>, service: &Request<'_>) -> ActorState {
     observed.map_or_else(
         || {
             ActorState::dormant(
@@ -151,11 +151,11 @@ fn current_published_state(observed: Option<&PublishedActorState>, service: &Act
     )
 }
 
-const fn no_commit_status(decision: ActorDecision) -> ActorServiceStatus {
+const fn no_commit_status(decision: ActorDecision) -> ServiceStatus {
     match decision {
-        ActorDecision::Denied => ActorServiceStatus::Denied,
-        ActorDecision::DuplicateReplay => ActorServiceStatus::DuplicateReplay,
-        ActorDecision::Unknown | ActorDecision::Applied => ActorServiceStatus::Unknown,
+        ActorDecision::Denied => ServiceStatus::Denied,
+        ActorDecision::DuplicateReplay => ServiceStatus::DuplicateReplay,
+        ActorDecision::Unknown | ActorDecision::Applied => ServiceStatus::Unknown,
     }
 }
 
@@ -165,14 +165,14 @@ const fn no_commit_status(decision: ActorDecision) -> ActorServiceStatus {
 fn admitted_effect_observation(
     effect_port: &mut impl ActorEffectPort,
     effect: &ActorEffectIntent,
-) -> std::ops::ControlFlow<(ActorServiceStatus, ActorEffectObservation), ActorEffectObservation> {
+) -> std::ops::ControlFlow<(ServiceStatus, EffectObservation), EffectObservation> {
     let admission = match effect_port.observe_admission(effect) {
         Ok(admission) => admission,
         Err(error) => {
             let (status, disposition) = if error.outcome_unknown {
-                (ActorServiceStatus::EffectOutcomeUnknown, ActorEffectDisposition::Unknown)
+                (ServiceStatus::EffectOutcomeUnknown, EffectDisposition::Unknown)
             } else {
-                (ActorServiceStatus::EffectAdmissionDenied, ActorEffectDisposition::AdmissionDenied)
+                (ServiceStatus::EffectAdmissionDenied, EffectDisposition::AdmissionDenied)
             };
             return std::ops::ControlFlow::Break((
                 status,
@@ -181,10 +181,10 @@ fn admitted_effect_observation(
         }
     };
     if !admission.admits(effect) {
-        return std::ops::ControlFlow::Break((ActorServiceStatus::EffectAdmissionDenied, ActorEffectObservation {
+        return std::ops::ControlFlow::Break((ServiceStatus::EffectAdmissionDenied, EffectObservation {
             effect_ref: effect.effect_ref.clone(),
             admission_ref: admission.admission_ref,
-            disposition: ActorEffectDisposition::AdmissionDenied,
+            disposition: EffectDisposition::AdmissionDenied,
             outcome_ref: None,
         }));
     }
@@ -194,17 +194,17 @@ fn admitted_effect_observation(
         {
             observation
         }
-        Ok(_crossed) => ActorEffectObservation {
+        Ok(_crossed) => EffectObservation {
             effect_ref: effect.effect_ref.clone(),
             admission_ref: admission.admission_ref,
-            disposition: ActorEffectDisposition::Failed,
+            disposition: EffectDisposition::Failed,
             outcome_ref: None,
         },
         Err(error) => {
             let disposition = if error.outcome_unknown {
-                ActorEffectDisposition::Unknown
+                EffectDisposition::Unknown
             } else {
-                ActorEffectDisposition::Failed
+                EffectDisposition::Failed
             };
             synthetic_effect_observation(effect, disposition, error.code)
         }
@@ -213,32 +213,32 @@ fn admitted_effect_observation(
 
 /// The service status an executed effect's disposition stops the effect sequence with, if it stops
 /// it.
-const fn stopping_status(disposition: ActorEffectDisposition) -> Option<ActorServiceStatus> {
+const fn stopping_status(disposition: EffectDisposition) -> Option<ServiceStatus> {
     match disposition {
-        ActorEffectDisposition::Succeeded => None,
-        ActorEffectDisposition::AdmissionDenied => Some(ActorServiceStatus::EffectAdmissionDenied),
-        ActorEffectDisposition::Failed => Some(ActorServiceStatus::EffectFailed),
-        ActorEffectDisposition::Unknown => Some(ActorServiceStatus::EffectOutcomeUnknown),
+        EffectDisposition::Succeeded => None,
+        EffectDisposition::AdmissionDenied => Some(ServiceStatus::EffectAdmissionDenied),
+        EffectDisposition::Failed => Some(ServiceStatus::EffectFailed),
+        EffectDisposition::Unknown => Some(ServiceStatus::EffectOutcomeUnknown),
     }
 }
 
-fn validate_service_profile(service: &ActorServiceRequest<'_>) -> ActorServiceResult<()> {
+fn validate_profile(service: &Request<'_>) -> Result<()> {
     if let Some(issue) = validate_addressable_actor_profile(service.profile).into_iter().next() {
-        return Err(ActorServiceError::Profile(issue));
+        return Err(Error::Profile(issue));
     }
     if let Some(issue) = validate_actor_key(service.actor_key).into_iter().next() {
-        return Err(ActorServiceError::Profile(issue));
+        return Err(Error::Profile(issue));
     }
     if identify_actor_key(service.actor_key) != service.request.actor_key_ref
         || identify_addressable_actor_profile(service.profile) != service.host_binding.profile_ref
         || service.requested_engine_epoch == 0
     {
-        return Err(ActorServiceError::Profile(ActorIssue::ProfileIdentityMismatch));
+        return Err(Error::Profile(ActorIssue::ProfileIdentityMismatch));
     }
     Ok(())
 }
 
-fn validate_host_binding(service: &ActorServiceRequest<'_>, state: &ActorState) -> ActorServiceResult<()> {
+fn validate_host_binding(service: &Request<'_>, state: &ActorState) -> Result<()> {
     let host = service.host_binding;
     if host.schema != ACTOR_HOST_BINDING_SCHEMA
         || host.actor_key_ref != state.actor_key_ref
@@ -253,7 +253,7 @@ fn validate_host_binding(service: &ActorServiceRequest<'_>, state: &ActorState) 
         || !host.resources_admitted
         || !host.adapter_admitted
     {
-        return Err(ActorServiceError::Host(ActorIssue::AdmissionDenied));
+        return Err(Error::Host(ActorIssue::AdmissionDenied));
     }
     let extension = molten_core::system_extension::LifecycleState {
         generation: host.system_extension_generation,
@@ -263,21 +263,21 @@ fn validate_host_binding(service: &ActorServiceRequest<'_>, state: &ActorState) 
         checkpoint_ref: host.system_extension_checkpoint_ref.clone(),
     };
     if let Some(issue) = validate_system_extension_binding(state, &extension).into_iter().next() {
-        return Err(ActorServiceError::Host(issue));
+        return Err(Error::Host(issue));
     }
     Ok(())
 }
 
 fn commit_with_reconciliation(
     commit_port: &mut impl ActorCommitPort,
-    request: &ActorCommitRequest,
-) -> ActorServiceResult<(ActorServiceStatus, ActorCommitObservation)> {
+    request: &CommitRequest,
+) -> Result<(ServiceStatus, CommitObservation)> {
     match commit_port.compare_and_commit(request) {
-        Ok(observation) if observation.disposition == ActorCommitDisposition::Unknown => {
+        Ok(observation) if observation.disposition == CommitDisposition::Unknown => {
             reconcile_unknown_commit(commit_port, request, Some(observation))
         }
         Ok(observation) => Ok((status_from_observation(&observation, request), observation)),
         Err(error) if error.outcome_unknown => reconcile_unknown_commit(commit_port, request, None),
-        Err(error) => Err(ActorServiceError::Port(error)),
+        Err(error) => Err(Error::Port(error)),
     }
 }

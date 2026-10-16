@@ -20,7 +20,7 @@ type Suite = super::schema::Suite;
 type AbiReceipt = super::schema::WasmAbiReceiptInput;
 type ExecReceipt<'a> = super::schema::WasmExecutionReceiptInput<'a>;
 type ModuleConfig = super::schema::WasmExecutorConfig;
-type MoltenError = crate::error::MoltenError;
+type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
 
 fn validate_bound_request(hostcall_request: &PreservesValue, operation: &str) -> Result<()> {

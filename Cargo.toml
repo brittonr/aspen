@@ -45,6 +45,18 @@ name = "doltlite_oracle"
 path = "tests/doltlite_oracle.rs"
 required-features = ["doltlite-oracle"]
 
+[[test]]
+name = "content_replication"
+path = "tests/content_replication/main.rs"
+
+[[test]]
+name = "executable_extent"
+path = "tests/executable_extent/main.rs"
+
+[[test]]
+name = "fabric_simulation_boundary"
+path = "tests/fabric_simulation_boundary/main.rs"
+
 [[bin]]
 name = "molten-native-extension-fixture"
 path = "src/bin/molten-native-extension-fixture.rs"
@@ -68,7 +80,7 @@ executable-extent-linux = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "
 molten-core = { path = "crates/molten-core" }
 molten-node-host = { path = "crates/molten-node-host" }
 cairn = { git = "ssh://git@github.com/OnixResearch/cairn.git", rev = "3b4c280b893f2709aebea21fc51a4f9eeba3fe3b", package = "cairn-core" }
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
 iroh = "1.0.0"
 iroh-blobs = "0.103.0"
 iroh-docs = "0.101.0"
@@ -90,6 +102,7 @@ steel-core = "0.8.2"
 tar = "0.4"
 
 syndicate = "0.44.0-rc.3"
+tempfile = "3"
 toml = "0.9"
 tracing = "0.1"
 trellis = { git = "ssh://git@github.com/OnixResearch/basalt.git", rev = "89675cd4f585f837323c049e4a25f7b94c903038", version = "0.2.0", package = "verified-logic" }

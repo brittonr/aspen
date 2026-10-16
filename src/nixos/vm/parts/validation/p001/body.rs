@@ -1,7 +1,7 @@
 
 pub fn validate_nixos_vm_fault_evidence(
-    input: &NixosVmFaultEvidenceValidationInput<'_>,
-) -> Result<NixosVmFaultEvidenceValidation> {
+    input: &NixosVmFaultEvidenceInput<'_>,
+) -> Result<NixosVmFaultEvidence> {
     let topology = parse_topology(input.topology_value)?;
     let topology_ref = crate::preserves_rail::canonical_hash(input.topology_value)?;
     let descriptors = parse_fault_descriptors(input.descriptor_values)?;
@@ -9,11 +9,11 @@ pub fn validate_nixos_vm_fault_evidence(
     let descriptor_refs = canonical_refs(input.descriptor_values)?;
     let receipt_refs = canonical_refs(input.receipt_values)?;
     let diagnostics =
-        fault_validation_diagnostics(&topology, &topology_ref, &descriptors, &descriptor_refs, &receipts)?;
+        fault_diagnostics(&topology, &topology_ref, &descriptors, &descriptor_refs, &receipts)?;
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" }.to_string();
-    let value = vm_fault_validation_value(&decision, &topology_ref, &descriptor_refs, &receipt_refs, &diagnostics)?;
+    let value = vm_fault_value(&decision, &topology_ref, &descriptor_refs, &receipt_refs, &diagnostics)?;
     let validation_ref = crate::preserves_rail::canonical_hash(&value)?;
-    Ok(NixosVmFaultEvidenceValidation {
+    Ok(NixosVmFaultEvidence {
         decision,
         diagnostics,
         topology_ref,
@@ -75,7 +75,7 @@ fn vm_evidence_manifest_value_inner(
     ]))
 }
 
-struct ValidationContext<'a> {
+struct Context<'a> {
     topology: &'a ParsedTopology,
     topology_ref: &'a str,
     nodes: &'a [ParsedNodeEvidence],
@@ -89,7 +89,7 @@ struct ValidationContext<'a> {
     expected_child_receipts: &'a [NixosVmExpectedChildReceipt],
 }
 
-struct ValidationValueInput<'a> {
+struct ValueInput<'a> {
     decision: &'a str,
     diagnostics: &'a [String],
     topology_ref: &'a str,
@@ -99,7 +99,7 @@ struct ValidationValueInput<'a> {
     child_artifact_refs: &'a [String],
 }
 
-fn validation_diagnostics(input: ValidationContext<'_>) -> Result<Vec<String>> {
+fn diagnostics(input: Context<'_>) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
     push_if(&mut diagnostics, input.test_run.decision != "pass", "vm-test-run-not-pass")?;
     push_if(

@@ -1,6 +1,6 @@
 pub fn rollup_replay_receipts(inputs: &[ReplayRollupInput]) -> Result<ReplayRollupReceipt> {
     if inputs.len() > MAX_REPLAY_ROLLUP_INPUTS {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "replay rollup input count exceeds {MAX_REPLAY_ROLLUP_INPUTS}"
         )));
     }
@@ -67,7 +67,7 @@ pub fn rollup_replay_receipts(inputs: &[ReplayRollupInput]) -> Result<ReplayRoll
 
 pub fn index_replay_evidence(inputs: &[ReplayIndexInput]) -> Result<ReplayIndexReceipt> {
     if inputs.len() > MAX_REPLAY_INDEX_INPUTS {
-        return Err(crate::error::MoltenError::invalid_harness(format!(
+        return Err(crate::error::Failure::invalid_harness(format!(
             "replay index input count exceeds {MAX_REPLAY_INDEX_INPUTS}"
         )));
     }
