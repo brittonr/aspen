@@ -31,7 +31,7 @@ The packages are plans only. No implementation task is complete, and no fix, arc
 | F11: terminal runnable records accumulate without a bound | Medium | Core reproduction | [bound-terminal-scheduler-retention](../../.cairn/changes/bound-terminal-scheduler-retention/proposal.md) |
 | F12: exponential retry wraps to zero | Medium | Core reproduction | [saturate-exponential-retry-arithmetic](../../.cairn/archive/1970-01-01-saturate-exponential-retry-arithmetic/proposal.md) |
 | F13: merge publication confuses absent and generated roots | Medium | Source | [distinguish-absent-world-merge-roots](../../.cairn/changes/distinguish-absent-world-merge-roots/proposal.md) |
-| F14: historical shutdown success becomes a current stopped observation | Medium | Source | [bind-shutdown-observations-to-current-node-run](../../.cairn/changes/bind-shutdown-observations-to-current-node-run/proposal.md) |
+| F14: historical shutdown success becomes a current stopped observation | Medium | Source | [bind-shutdown-observations-to-current-node-run](../../.cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/proposal.md) |
 
 ## Integration Groups
 

@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "b3sum",
+    ".cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/design.md",
+    ".cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/tasks.md",
+    ".cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/proposal.md",
+    ".cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/metadata.json",
+    ".cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/evidence/resumed-acceptance.json",
+    ".cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/evidence/2026-10-16-attempt-17-blocked.json",
+    ".cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/specs/node-runtime/spec.md"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T04:04:26.168219+00:00",
+  "elapsed_seconds": 0.003,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "9f5ffea59e65184dd76168f66f9071f103067a22a6576bdd4ecaa2cdb16e5214  .cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/design.md\nf1097b65b76e2b30d5681e798a9c86af9219d9dd6896ed89e952c227009be34f  .cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/tasks.md\n8552303c5790a0d0bfac3003849ca77339b8c068d163302a658ce2e5a3b6925c  .cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/proposal.md\ndf8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db  .cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/metadata.json\n945c33e047eee8b3c98cf6cca0123e4b66b96f5162d094d61b63ffccb9e180f8  .cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/evidence/resumed-acceptance.json\n096b600ccf73fca9c71957823d512bf94c26cc744191d7b8c959e4bee6a5f4ec  .cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/evidence/2026-10-16-attempt-17-blocked.json\n7f2568b9078e8940a3e359812f347b9acb4cc632f0fc99d08af45db7efd0ffe5  .cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/specs/node-runtime/spec.md\n",
+  "stderr": ""
+}

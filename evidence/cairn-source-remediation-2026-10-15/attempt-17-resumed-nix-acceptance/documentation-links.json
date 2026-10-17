@@ -1,0 +1,86 @@
+{
+  "checked": 16,
+  "all_resolved": true,
+  "links": [
+    {
+      "source": "docs/audits/logical-bugs-2026-09-08.md",
+      "target": "../../.cairn/archive/1970-01-01-fix-node-shutdown-admission/proposal.md",
+      "resolved": ".cairn/archive/1970-01-01-fix-node-shutdown-admission/proposal.md"
+    },
+    {
+      "source": "docs/audits/logical-bugs-2026-09-08.md",
+      "target": "../../.cairn/changes/require-node-startup-source-gate-evidence/proposal.md",
+      "resolved": ".cairn/changes/require-node-startup-source-gate-evidence/proposal.md"
+    },
+    {
+      "source": "docs/audits/logical-bugs-2026-09-08.md",
+      "target": "../../.cairn/changes/recover-ingress-enqueue-after-dedup/proposal.md",
+      "resolved": ".cairn/changes/recover-ingress-enqueue-after-dedup/proposal.md"
+    },
+    {
+      "source": "docs/audits/logical-bugs-2026-09-08.md",
+      "target": "../../.cairn/changes/repair-lost-replicas-after-prior-success/proposal.md",
+      "resolved": ".cairn/changes/repair-lost-replicas-after-prior-success/proposal.md"
+    },
+    {
+      "source": "docs/audits/logical-bugs-2026-09-08.md",
+      "target": "../../.cairn/changes/preserve-replica-fault-domains-during-cleanup/proposal.md",
+      "resolved": ".cairn/changes/preserve-replica-fault-domains-during-cleanup/proposal.md"
+    },
+    {
+      "source": "docs/audits/logical-bugs-2026-09-08.md",
+      "target": "../../.cairn/changes/admit-world-merge-migrations-before-execution/proposal.md",
+      "resolved": ".cairn/changes/admit-world-merge-migrations-before-execution/proposal.md"
+    },
+    {
+      "source": "docs/audits/logical-bugs-2026-09-08.md",
+      "target": "../../.cairn/changes/preserve-under-replicated-status-without-targets/proposal.md",
+      "resolved": ".cairn/changes/preserve-under-replicated-status-without-targets/proposal.md"
+    },
+    {
+      "source": "docs/audits/logical-bugs-2026-09-08.md",
+      "target": "../../.cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/proposal.md",
+      "resolved": ".cairn/archive/1970-01-01-bind-delivery-duplicate-results-to-original-claims/proposal.md"
+    },
+    {
+      "source": "docs/audits/logical-bugs-2026-09-08.md",
+      "target": "../../.cairn/changes/resume-blocked-scheduler-runnables/proposal.md",
+      "resolved": ".cairn/changes/resume-blocked-scheduler-runnables/proposal.md"
+    },
+    {
+      "source": "docs/audits/logical-bugs-2026-09-08.md",
+      "target": "../../.cairn/changes/enforce-scheduler-queue-bounds-on-yield/proposal.md",
+      "resolved": ".cairn/changes/enforce-scheduler-queue-bounds-on-yield/proposal.md"
+    },
+    {
+      "source": "docs/audits/logical-bugs-2026-09-08.md",
+      "target": "../../.cairn/changes/bound-terminal-scheduler-retention/proposal.md",
+      "resolved": ".cairn/changes/bound-terminal-scheduler-retention/proposal.md"
+    },
+    {
+      "source": "docs/audits/logical-bugs-2026-09-08.md",
+      "target": "../../.cairn/archive/1970-01-01-saturate-exponential-retry-arithmetic/proposal.md",
+      "resolved": ".cairn/archive/1970-01-01-saturate-exponential-retry-arithmetic/proposal.md"
+    },
+    {
+      "source": "docs/audits/logical-bugs-2026-09-08.md",
+      "target": "../../.cairn/changes/distinguish-absent-world-merge-roots/proposal.md",
+      "resolved": ".cairn/changes/distinguish-absent-world-merge-roots/proposal.md"
+    },
+    {
+      "source": "docs/audits/logical-bugs-2026-09-08.md",
+      "target": "../../.cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/proposal.md",
+      "resolved": ".cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/proposal.md"
+    },
+    {
+      "source": ".cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/design.md",
+      "target": "evidence/resumed-acceptance.json",
+      "resolved": ".cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/evidence/resumed-acceptance.json"
+    },
+    {
+      "source": ".cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/tasks.md",
+      "target": "evidence/resumed-acceptance.json",
+      "resolved": ".cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/evidence/resumed-acceptance.json"
+    }
+  ]
+}

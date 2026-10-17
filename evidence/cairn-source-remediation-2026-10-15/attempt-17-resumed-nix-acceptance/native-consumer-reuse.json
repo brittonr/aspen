@@ -1,0 +1,11 @@
+{
+  "binary": "/home/brittonr/.cache/molten-publication-recovery-dx_uhdn4/retained-executables-qe73_4fu/0-molten-f14-current-run-16-restored-se51n6m8-traceability",
+  "binary_blake3": "ec58304982edeb8b2a924439fa034f81940d260d236fc306cf4a09062f039b57",
+  "compile_receipt": "../attempt-16-current-run-shutdown-observation/native-traceability-consumer-compile.json",
+  "source_retained_in": "../attempt-16-current-run-shutdown-observation/execution-drivers.json",
+  "consumer_source_identical_to_attempt17": true,
+  "unchanged_traceability_implementation_basis": "../attempt-17-current-run-acceptance-repair/source-change-scope.json records only borrowed slices in two runtime test bodies between attempts 16 and 17. The requirement-traceability implementation did not change.",
+  "scope": "Reuse the existing real native consumer to evaluate changed accepted-spec input and the unchanged eight execution receipts; not a new compile or a claim of identical whole-library bytes across builds.",
+  "failed_new_compile_record": "native-accepted-traceability-consumer-compile.json",
+  "status": "Awaiting required Nix acceptance and spec sync before accepted-manifest emission."
+}

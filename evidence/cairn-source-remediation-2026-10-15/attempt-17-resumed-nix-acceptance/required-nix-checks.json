@@ -1,0 +1,34 @@
+{
+  "argv": [
+    "env",
+    "TMPDIR=/home/brittonr/.cache/molten-publication-recovery-dx_uhdn4/tmp-kdcmvw4g",
+    "nix",
+    "build",
+    "--no-update-lock-file",
+    "--no-link",
+    "--print-out-paths",
+    "-L",
+    ".#checks.x86_64-linux.node-state-authority",
+    ".#checks.x86_64-linux.nextest"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "exit_code": 0,
+  "elapsed_seconds": 651.24,
+  "timed_out": false,
+  "job": "bg_95",
+  "complete_combined_output": "required-nix-build-output.txt",
+  "outputs": {
+    "node-state-authority": "/nix/store/vg2zdk7z340whpzz1bijgkf4n7cy7x3l-molten-node-state-authority",
+    "nextest": "/nix/store/vk210bcgzqvpmr0lq5im77x3b1nl8dar-molten-nextest"
+  },
+  "nextest": {
+    "run": 1716,
+    "passed": 1716,
+    "skipped": 0,
+    "ci_test_run_receipt": "blake3:bc660b19ac58e502f7f4624e1157eabdb31b3787c71bfb62dafbdf83d5947a41",
+    "decision": "pass",
+    "observed_builder": "aspen1.local through the existing Nix builder configuration"
+  },
+  "source_commit_before_lifecycle_changes": "e21722ad3b2ea7c6040eda3b8d33dca0f33e037f",
+  "recorded_at": "2026-10-17T03:51:40.491637+00:00"
+}

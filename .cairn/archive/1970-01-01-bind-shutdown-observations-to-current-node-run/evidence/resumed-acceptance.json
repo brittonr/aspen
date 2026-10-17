@@ -1,0 +1,57 @@
+{
+  "attempt": "17/20 resumed acceptance",
+  "change": "bind-shutdown-observations-to-current-node-run",
+  "result": "Required behavioral, source, compatible-feature and Nix acceptance passed; final native lifecycle operations require separate reviewed execution.",
+  "source_commit": "e21722ad3b2ea7c6040eda3b8d33dca0f33e037f",
+  "production_or_test_rust_changes_in_resume": [],
+  "prior_source_and_behavior_acceptance": "evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/attempt-result.json",
+  "fresh_nix_acceptance": "evidence/cairn-source-remediation-2026-10-15/attempt-17-resumed-nix-acceptance/required-nix-checks.json",
+  "normal_suites": {
+    "workspace_all_targets_passed": 2118,
+    "workspace_doctests_passed": 7,
+    "enabled_feature_tests_passed": 2137,
+    "enabled_feature_ignored": 1,
+    "profiler_disabled_tests_passed": 2118
+  },
+  "configured_octet": {
+    "workspace": "clean, zero findings",
+    "library": "clean, zero findings",
+    "strict_ci_gate_ref": "blake3:ab8f48249b87c5caeedf35eb796ad79e245bac83fd1ef4b6a3bb692294ab23c0",
+    "record": "evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/ordered-strict-ci-gate.json"
+  },
+  "clippy": "Default, compatible-feature and profiler-disabled cohorts passed with denied warnings.",
+  "behavior": {
+    "actual_cases": 15,
+    "actual_cli_commands": 89,
+    "canonical_observations": 8,
+    "record": "evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/runtime-and-suite-summary.json"
+  },
+  "required_nix": {
+    "node_state_authority": "pass",
+    "nextest": "pass",
+    "nextest_tests_run": 1716,
+    "nextest_passed": 1716,
+    "nextest_skipped": 0,
+    "ci_test_run_receipt_ref": "blake3:bc660b19ac58e502f7f4624e1157eabdb31b3787c71bfb62dafbdf83d5947a41",
+    "elapsed_seconds": 651.24
+  },
+  "receipt_backed_pre_sync_coverage": {
+    "requirements": 4,
+    "positive_receipts": 4,
+    "expected_deny_receipts": 4,
+    "missing": 0,
+    "stale": 0,
+    "record": "evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/native-f14-pre-sync-receipt-backed-traceability.json"
+  },
+  "review": "evidence/cairn-source-remediation-2026-10-15/attempt-17-resumed-nix-acceptance/independent-acceptance-review.json",
+  "reuse_basis": "This resume changed only lifecycle artifacts and evidence after the published attempt-17 checkpoint; executable sources, dependencies, toolchain, fixtures and policy are unchanged. No unexecuted source or runtime check is claimed fresh.",
+  "historical_failure_preserved": "evidence/2026-10-16-attempt-17-blocked.json",
+  "immediate_outcome": "Historical shutdown duplicates remain suppressed without falsely stopping the active current run.",
+  "durable_capability": "Ordinary core/daemon regressions, canonical run/completion linkage, executed CLI positive/deny scenarios and bounded receipt-backed requirement coverage.",
+  "maintenance_owner": "Molten node-runtime maintainers own decisions; node-host maintainers own capability-rooted observations.",
+  "non_claims": [
+    "No physical process termination, crash durability, remote shutdown authority, whole-system liveness or release eligibility.",
+    "A passing receipt does not itself authorize sync/archive; final gates, review and native mutation results are separate.",
+    "No completion claim for other active Cairn changes."
+  ]
+}

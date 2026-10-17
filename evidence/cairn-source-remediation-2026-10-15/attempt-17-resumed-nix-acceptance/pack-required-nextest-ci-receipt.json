@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "/home/brittonr/.cache/molten-publication-recovery-dx_uhdn4/retained-executables-qe73_4fu/0-molten-f14-current-run-16-restored-se51n6m8-traceability",
+    "pack",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-resumed-nix-acceptance/required-nextest-ci-test-run-receipt.preserves",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-resumed-nix-acceptance/required-nextest-ci-test-run-receipt.packed"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T03:53:54.982223+00:00",
+  "elapsed_seconds": 0.004,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": ""
+}

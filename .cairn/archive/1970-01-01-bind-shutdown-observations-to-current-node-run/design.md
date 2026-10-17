@@ -98,3 +98,20 @@ Node-runtime maintainers retain lifecycle semantics; node-host maintainers retai
 observation mechanics. The final acceptance task remains unchecked pending host GC
 remediation and the unchanged required checks.
 
+## Resumed acceptance after host recovery
+
+The unchanged `node-state-authority` and `nextest` Nix checks completed successfully
+in 651.24 seconds. Hermetic nextest executed 1,716 tests, all passing with no skips,
+and emitted canonical CI receipt
+`blake3:bc660b19ac58e502f7f4624e1157eabdb31b3787c71bfb62dafbdf83d5947a41`.
+The retained packed receipt and its Cargo metadata, binary metadata and JUnit
+members match their native BLAKE3 references.
+
+[Resumed acceptance](evidence/resumed-acceptance.json) records the unchanged
+attempt-17 source and runtime cohort and the new required Nix execution. The
+earlier failed attempt is preserved. Final native review, gates, sync, accepted-spec
+traceability and archive identities are recorded under
+`evidence/cairn-source-remediation-2026-10-15/attempt-17-resumed-nix-acceptance/`.
+Passing checks do not themselves authorize lifecycle mutation or widen the existing
+physical-termination, crash-durability, remote-authority and liveness nonclaims.
+

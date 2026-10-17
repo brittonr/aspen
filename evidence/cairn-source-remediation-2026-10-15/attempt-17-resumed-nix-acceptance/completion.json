@@ -1,0 +1,61 @@
+{
+  "attempt": "17/20 resumed acceptance",
+  "change": "bind-shutdown-observations-to-current-node-run",
+  "result": "Recorded acceptance passed; review condition resolved; natively synced and archived in the dedicated Molten worktree.",
+  "archive": ".cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run",
+  "acceptance": ".cairn/archive/1970-01-01-bind-shutdown-observations-to-current-node-run/evidence/resumed-acceptance.json",
+  "review": "resolved-closure-review.json",
+  "nix": {
+    "checks": [
+      "node-state-authority",
+      "nextest"
+    ],
+    "passed": 1716,
+    "skipped": 0,
+    "ci_receipt_ref": "blake3:bc660b19ac58e502f7f4624e1157eabdb31b3787c71bfb62dafbdf83d5947a41"
+  },
+  "native_sync": {
+    "preview": "sync-reviewed-plan.json",
+    "execution": "sync-execute.json",
+    "input_hash": "a359b5dd88ac55b17e333c1df80a0c39552d567b9c5fd739d9cf74cc206b2be2",
+    "reviewed_hashes_match": true,
+    "accepted_spec_hash": "fa8f75b993e2d87fff4d0ff7d56e632630a4121dcf4ca701046e0c6d8a77b5d5"
+  },
+  "accepted_requirement_coverage": {
+    "record": "native-f14-accepted-receipt-backed-traceability.json",
+    "receipt": "f14-accepted-traceability.preserves",
+    "ref": "blake3:91eca5d610ddf3c01fc1348ff3849c43284689dcf447411e502b5155ec2e5183",
+    "positive": 4,
+    "expected_deny": 4,
+    "missing": 0,
+    "stale": 0
+  },
+  "native_archive": {
+    "preview": "archive-reviewed-plan.json",
+    "execution": "archive-execute.json",
+    "input_hash": "d5ce85310b73f45dcf36e38ef7776894241bceae1bb74bfec8ce39eb1e6cfcef",
+    "reviewed_hashes_match": true,
+    "mode_dependent_action_path": "Preview identifies active source; execute identifies native archive destination. Both are bounded to this package, with unchanged input, policy and profile identities.",
+    "preserved_members": 7,
+    "independent_member_hashes_match": true
+  },
+  "post_archive": {
+    "strict_cairn_valid": true,
+    "live_guard": "pass",
+    "inherited_uncovered": 1924,
+    "dangling": 0,
+    "remaining_active_changes": 47
+  },
+  "implementation_attempts_consumed": 17,
+  "attempt_cap": 20,
+  "new_implementation_attempt": false,
+  "maintenance_owner": "Molten node-runtime maintainers own lifecycle decisions; node-host maintainers own capability-rooted observations.",
+  "immediate_outcome": "Historical duplicate success cannot falsely stop the current active run.",
+  "durable_capability": "Canonical run/completion linkage, core/daemon regressions, actual positive/deny CLI scenarios and receipt-backed accepted-requirement coverage.",
+  "repeatability": "Exact argv, canonical artifacts, source/consumer bindings, native lifecycle plans and independent archive-content hashes are retained.",
+  "non_claims": [
+    "No physical termination, crash durability, remote shutdown authority, whole-system liveness or release eligibility.",
+    "No acceptance of other active Cairn changes.",
+    "No remote push performed by this continuation."
+  ]
+}

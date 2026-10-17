@@ -1,0 +1,12 @@
+{
+  "observed": "The first target file read succeeded, but selected-file read metadata does not include resolvedPath. The checker stopped before any commit or staging.",
+  "target": "../../.cairn/archive/1970-01-01-fix-node-shutdown-admission/proposal.md",
+  "metadata_keys": [
+    "truncation",
+    "totalLines",
+    "displayContent",
+    "fileSize",
+    "meta"
+  ],
+  "correction": "Use the successful typed selected-file displayContent and integer totalLines; do not mistake an absent optional metadata key for a broken link."
+}

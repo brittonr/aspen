@@ -1,0 +1,8 @@
+{
+  "canonical_receipt_ref": "blake3:bc660b19ac58e502f7f4624e1157eabdb31b3787c71bfb62dafbdf83d5947a41",
+  "packed_receipt_and_all_three_member_refs_match": true,
+  "native_junit_bytes": 390777,
+  "retained_junit_bytes": 390777,
+  "hash_command": "required-nextest-receipt-content-hashes-verified.json",
+  "copy_note": "Retained complete typed raw payloads in bounded line segments, preserving the newline between adjacent selected ranges. Default/rendered truncation was detected before lifecycle mutation; native BLAKE3 refs verify the corrected complete bytes."
+}

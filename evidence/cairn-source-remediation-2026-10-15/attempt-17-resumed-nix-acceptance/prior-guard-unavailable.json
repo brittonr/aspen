@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "/tmp/molten-current-tracey-guard-uynhmg2f/tracey-guard",
+    "--root",
+    ".",
+    "--baseline",
+    "evidence/tracey/inherited-debt-baseline.txt"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "result": "process-not-started",
+  "observed_error": "FileNotFoundError: [Errno 2] No such file or directory: '/tmp/molten-current-tracey-guard-uynhmg2f/tracey-guard'",
+  "resolution": "Compile the repository-owned unchanged standalone guard in the pinned shell; preserve the inherited baseline unchanged."
+}

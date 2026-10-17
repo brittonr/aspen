@@ -1,0 +1,27 @@
+{
+  "change": "bind-shutdown-observations-to-current-node-run",
+  "review": "independent-acceptance-review.json",
+  "blocking_findings": [],
+  "parent_owned_required_nix_condition": "Satisfied by required-nix-checks.json and the retained canonical passing CI receipt; 1716 passed, zero skips.",
+  "final_proposal_design_tasks_gates": "PASS; exact current-package native invocations retained.",
+  "pre_sync_strict_cairn_validation": "valid=true",
+  "pre_sync_live_inherited_guard": "verdict=pass; dangling=0; unchanged 1924-entry inherited baseline.",
+  "sync_plan_review": {
+    "blocked": false,
+    "input_hash": "a359b5dd88ac55b17e333c1df80a0c39552d567b9c5fd739d9cf74cc206b2be2",
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "profile_identity_hash": "409d2ef93a16b43ba2406929f393d8ec2cc0467954c2cd63f92421a3392edd33",
+    "actions": [
+      {
+        "description": "merge delta spec into main specs: ./.cairn/changes/bind-shutdown-observations-to-current-node-run/specs/node-runtime/spec.md",
+        "kind": "sync_delta_spec",
+        "path": "./.cairn/changes/bind-shutdown-observations-to-current-node-run/specs/node-runtime/spec.md"
+      }
+    ]
+  },
+  "decision": "The recorded review condition is satisfied. Execute only this reviewed F14 native sync plan, then verify accepted coverage before a separately reviewed native archive.",
+  "non_claims": [
+    "No acceptance of other active changes.",
+    "No source-gate, remote-push or release authority follows from lifecycle receipts."
+  ]
+}

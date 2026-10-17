@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "/nix/store/hgx9knp5q29b0lfw7isvc5ba1caayyjj-cairn-0.1.0/bin/cairn",
+    "archive",
+    "bind-shutdown-observations-to-current-node-run",
+    "--root",
+    ".",
+    "--policy",
+    "/nix/store/xpl4byf12mpb7lda9zf83z9grc0na189-source/cairn-policy/generated/cairn-policy.json"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T04:03:07.036236+00:00",
+  "elapsed_seconds": 0.074,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "{\n  \"acceptance_ids\": [],\n  \"actions\": [\n    {\n      \"description\": \"move active change to archive: bind-shutdown-observations-to-current-node-run\",\n      \"kind\": \"archive_change\",\n      \"path\": \"./.cairn/changes/bind-shutdown-observations-to-current-node-run\"\n    }\n  ],\n  \"blocked\": false,\n  \"change\": \"bind-shutdown-observations-to-current-node-run\",\n  \"cross_repo_dependencies\": {\n    \"blocked_count\": 0,\n    \"dependency_count\": 0,\n    \"input_hash\": \"db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37\",\n    \"non_claims\": [\n      \"dependency satisfaction proves presented receipt linkage only\",\n      \"dependency satisfaction does not prove upstream correctness or remote trust\",\n      \"dependency satisfaction does not prove downstream integration correctness or release eligibility\"\n    ],\n    \"policy_hash\": \"c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d\",\n    \"receipt_hash\": \"a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311\",\n    \"rows\": [],\n    \"satisfied_count\": 0,\n    \"schema\": \"cairn.cross-repo-dependency-receipt.v1\",\n    \"valid\": true,\n    \"verdict\": \"PASS\"\n  },\n  \"cross_repo_evidence_issues\": [],\n  \"dry_run\": true,\n  \"input_hash\": \"d5ce85310b73f45dcf36e38ef7776894241bceae1bb74bfec8ce39eb1e6cfcef\",\n  \"layout\": \"cairn\",\n  \"mutated\": false,\n  \"mutation_manifest\": null,\n  \"non_claims\": [\n    \"workflow state proves only the selected policy graph and observed structural artifact facts\",\n    \"workflow instructions do not prove artifact truth, review quality, or implementation correctness\",\n    \"workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates\",\n    \"workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts\"\n  ],\n  \"plan_hash\": \"68ed58a1bc2a82a50060c3150fceda8ecc0da6ba1bb364dfaba2b2d228a520ff\",\n  \"policy\": \"cairn-default\",\n  \"policy_hash\": \"c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d\",\n  \"profile_identity_hash\": \"409d2ef93a16b43ba2406929f393d8ec2cc0467954c2cd63f92421a3392edd33\",\n  \"reasons\": [],\n  \"receipt_hash\": \"053ead7366e826d5217be3e2b5fcc17778640d49a0fd36d3cee76fc9e14b4111\",\n  \"review_receipt_hashes\": [],\n  \"spec_effect\": \"delta\",\n  \"workflow_profile\": \"spec-driven\",\n  \"workflow_profile_compatibility_fallback\": false,\n  \"workflow_profile_source\": \"change_create\",\n  \"workflow_profile_version\": 1\n}\n",
+  "stderr": ""
+}

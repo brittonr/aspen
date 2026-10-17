@@ -1,0 +1,7 @@
+{
+  "source_artifact": "artifact://973",
+  "source_log": "/home/brittonr/.omp/agent/sessions/-git-OnixResearch-aspen/2026-10-15T17-47-46-479Z_01a140ad-5faf-7599-8f93-cc88719aa0a6/973.bash.log",
+  "source_and_retained_blake3": "blake3:93cde95ff5a54e94626e323775e1033c7ee128a093ed3dd98ce0f6bfc3818349",
+  "retained": "required-nix-build-output.txt",
+  "byte_identical": true
+}

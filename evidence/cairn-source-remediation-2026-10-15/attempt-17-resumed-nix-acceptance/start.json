@@ -1,0 +1,25 @@
+{
+  "attempt": "17/20 resumed acceptance",
+  "implementation_attempts_consumed": 17,
+  "new_implementation_attempt": false,
+  "change": "bind-shutdown-observations-to-current-node-run",
+  "source_commit": "e21722ad3b2ea7c6040eda3b8d33dca0f33e037f",
+  "source_changes_before_acceptance": [],
+  "required_nix_argv": [
+    "nix",
+    "build",
+    "--no-update-lock-file",
+    "--no-link",
+    "--print-out-paths",
+    "-L",
+    ".#checks.x86_64-linux.node-state-authority",
+    ".#checks.x86_64-linux.nextest"
+  ],
+  "job": "bg_95",
+  "host_recovery_record": "/home/brittonr/.cache/molten-publication-recovery-dx_uhdn4/recovery-result.json",
+  "prior_failed_attempt_record": "../attempt-17-current-run-acceptance-repair/ordered-relevant-nix-checks.json",
+  "native_provider": "/nix/store/hgx9knp5q29b0lfw7isvc5ba1caayyjj-cairn-0.1.0/bin/cairn",
+  "native_policy": "/nix/store/xpl4byf12mpb7lda9zf83z9grc0na189-source/cairn-policy/generated/cairn-policy.json",
+  "status": "Acceptance running; no sync/archive or passing Nix result claimed.",
+  "started_at": "2026-10-17T03:45:51.689991+00:00"
+}

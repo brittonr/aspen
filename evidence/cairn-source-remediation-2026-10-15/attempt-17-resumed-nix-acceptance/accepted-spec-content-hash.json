@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "b3sum",
+    ".cairn/specs/node-runtime/spec.md"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T04:03:06.600071+00:00",
+  "elapsed_seconds": 0.006,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "fa8f75b993e2d87fff4d0ff7d56e632630a4121dcf4ca701046e0c6d8a77b5d5  .cairn/specs/node-runtime/spec.md\n",
+  "stderr": ""
+}

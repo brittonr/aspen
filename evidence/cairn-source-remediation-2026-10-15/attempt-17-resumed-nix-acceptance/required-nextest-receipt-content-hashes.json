@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "b3sum",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-resumed-nix-acceptance/required-nextest-ci-test-run-receipt.packed",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-resumed-nix-acceptance/required-nextest-junit.xml",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-resumed-nix-acceptance/required-nextest-cargo-metadata.json",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-resumed-nix-acceptance/required-nextest-binaries-metadata.json",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-resumed-nix-acceptance/required-nix-build-output.txt"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T03:53:54.987430+00:00",
+  "elapsed_seconds": 0.004,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "bc660b19ac58e502f7f4624e1157eabdb31b3787c71bfb62dafbdf83d5947a41  /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-resumed-nix-acceptance/required-nextest-ci-test-run-receipt.packed\n0a4e103149e82d39237959216318b6f188593c4816c9a571c5a3834e1ad95bbc  /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-resumed-nix-acceptance/required-nextest-junit.xml\n136b6936d086f2f23cb48635e32cebe23fbc90b09e835c6de5a604604426f3ec  /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-resumed-nix-acceptance/required-nextest-cargo-metadata.json\nac5638d1dfcffea7821b7a8221838d3f05b0a01e0e3bdc089d003a8fa8450d70  /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-resumed-nix-acceptance/required-nextest-binaries-metadata.json\na7739bb9c55d721fda6f5ecb0d72a45a9a08be3be226a2f75c7c2e041cfa3640  /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-resumed-nix-acceptance/required-nix-build-output.txt\n",
+  "stderr": ""
+}

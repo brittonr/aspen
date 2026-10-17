@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "b3sum",
+    "/home/brittonr/.cache/molten-publication-recovery-dx_uhdn4/retained-executables-qe73_4fu/0-molten-f14-current-run-16-restored-se51n6m8-traceability"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T04:02:44.014108+00:00",
+  "elapsed_seconds": 0.126,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "ec58304982edeb8b2a924439fa034f81940d260d236fc306cf4a09062f039b57  /home/brittonr/.cache/molten-publication-recovery-dx_uhdn4/retained-executables-qe73_4fu/0-molten-f14-current-run-16-restored-se51n6m8-traceability\n",
+  "stderr": ""
+}

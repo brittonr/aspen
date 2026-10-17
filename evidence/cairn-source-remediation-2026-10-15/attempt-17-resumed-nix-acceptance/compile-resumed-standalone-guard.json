@@ -1,0 +1,21 @@
+{
+  "argv": [
+    "nix",
+    "develop",
+    "--no-write-lock-file",
+    "-c",
+    "rustc",
+    "--edition=2024",
+    "tools/tracey/inherited_debt_guard.rs",
+    "-O",
+    "-o",
+    "/tmp/molten-resumed-tracey-t6lyat54/tracey-guard"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T04:00:22.560643+00:00",
+  "elapsed_seconds": 11.296,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "copying path '/nix/store/w8ips6hmg6gy2bjd2wz2ha5c0rvhanmw-source' from 'http://100.100.103.95:5000'...\ncopying path '/nix/store/3gij654smll9xp7937mbf4d9gk3gz1xh-cargo-octet-0.1.0' from 'http://100.100.103.95:5000'...\ncopying path '/nix/store/178f27ph50xmw8b48pr7vpg1vklm8ap4-octet-0.1.0' from 'http://100.100.103.95:5000'...\ncopying path '/nix/store/m1cyjspix8ss5r7q5b3pwy6nq2lxim15-octet-ui-library' from 'http://100.100.103.95:5000'...\nbuilding '/nix/store/bkjf9sr9m81vyz9lyg3w4385q706mp9s-cargo-octet-0.1.0.drv'...\nbuilding '/nix/store/zc01l6qmmdl37nmpsb4hz9b41jikvk9a-nix-shell-env.drv'...\n"
+}

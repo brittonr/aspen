@@ -1,0 +1,130 @@
+{
+   "rust-binaries" : {
+      "molten::nix-test/0/cliharness" : {
+         "binary-id" : "molten::nix-test/0/cliharness",
+         "binary-name" : "cliharness",
+         "binary-path" : "/nix/store/zvp69r5pn6gxkjw466ll05nld71h8c7f-rust_molten-0.1.0-test/tests/cliharness",
+         "build-platform" : "target",
+         "kind" : "test",
+         "package-id" : "path+file:///build/source#molten@0.1.0"
+      },
+      "molten::nix-test/1/content_replication" : {
+         "binary-id" : "molten::nix-test/1/content_replication",
+         "binary-name" : "content_replication",
+         "binary-path" : "/nix/store/zvp69r5pn6gxkjw466ll05nld71h8c7f-rust_molten-0.1.0-test/tests/content_replication",
+         "build-platform" : "target",
+         "kind" : "test",
+         "package-id" : "path+file:///build/source#molten@0.1.0"
+      },
+      "molten::nix-test/10/nativesystemextension" : {
+         "binary-id" : "molten::nix-test/10/nativesystemextension",
+         "binary-name" : "nativesystemextension",
+         "binary-path" : "/nix/store/zvp69r5pn6gxkjw466ll05nld71h8c7f-rust_molten-0.1.0-test/tests/nativesystemextension",
+         "build-platform" : "target",
+         "kind" : "test",
+         "package-id" : "path+file:///build/source#molten@0.1.0"
+      },
+      "molten::nix-test/11/worldcommit" : {
+         "binary-id" : "molten::nix-test/11/worldcommit",
+         "binary-name" : "worldcommit",
+         "binary-path" : "/nix/store/zvp69r5pn6gxkjw466ll05nld71h8c7f-rust_molten-0.1.0-test/tests/worldcommit",
+         "build-platform" : "target",
+         "kind" : "test",
+         "package-id" : "path+file:///build/source#molten@0.1.0"
+      },
+      "molten::nix-test/2/devfunctionprofilingboundary" : {
+         "binary-id" : "molten::nix-test/2/devfunctionprofilingboundary",
+         "binary-name" : "devfunctionprofilingboundary",
+         "binary-path" : "/nix/store/zvp69r5pn6gxkjw466ll05nld71h8c7f-rust_molten-0.1.0-test/tests/devfunctionprofilingboundary",
+         "build-platform" : "target",
+         "kind" : "test",
+         "package-id" : "path+file:///build/source#molten@0.1.0"
+      },
+      "molten::nix-test/3/executable_extent" : {
+         "binary-id" : "molten::nix-test/3/executable_extent",
+         "binary-name" : "executable_extent",
+         "binary-path" : "/nix/store/zvp69r5pn6gxkjw466ll05nld71h8c7f-rust_molten-0.1.0-test/tests/executable_extent",
+         "build-platform" : "target",
+         "kind" : "test",
+         "package-id" : "path+file:///build/source#molten@0.1.0"
+      },
+      "molten::nix-test/4/fabric_simulation_boundary" : {
+         "binary-id" : "molten::nix-test/4/fabric_simulation_boundary",
+         "binary-name" : "fabric_simulation_boundary",
+         "binary-path" : "/nix/store/zvp69r5pn6gxkjw466ll05nld71h8c7f-rust_molten-0.1.0-test/tests/fabric_simulation_boundary",
+         "build-platform" : "target",
+         "kind" : "test",
+         "package-id" : "path+file:///build/source#molten@0.1.0"
+      },
+      "molten::nix-test/5/fabricboundarycompat" : {
+         "binary-id" : "molten::nix-test/5/fabricboundarycompat",
+         "binary-name" : "fabricboundarycompat",
+         "binary-path" : "/nix/store/zvp69r5pn6gxkjw466ll05nld71h8c7f-rust_molten-0.1.0-test/tests/fabricboundarycompat",
+         "build-platform" : "target",
+         "kind" : "test",
+         "package-id" : "path+file:///build/source#molten@0.1.0"
+      },
+      "molten::nix-test/6/molten" : {
+         "binary-id" : "molten::nix-test/6/molten",
+         "binary-name" : "molten",
+         "binary-path" : "/nix/store/zvp69r5pn6gxkjw466ll05nld71h8c7f-rust_molten-0.1.0-test/tests/molten",
+         "build-platform" : "target",
+         "kind" : "test",
+         "package-id" : "path+file:///build/source#molten@0.1.0"
+      },
+      "molten::nix-test/7/molten-bc836586d7" : {
+         "binary-id" : "molten::nix-test/7/molten-bc836586d7",
+         "binary-name" : "molten-bc836586d7",
+         "binary-path" : "/nix/store/zvp69r5pn6gxkjw466ll05nld71h8c7f-rust_molten-0.1.0-test/tests/molten-bc836586d7",
+         "build-platform" : "target",
+         "kind" : "test",
+         "package-id" : "path+file:///build/source#molten@0.1.0"
+      },
+      "molten::nix-test/8/molten-native-extension-fixture" : {
+         "binary-id" : "molten::nix-test/8/molten-native-extension-fixture",
+         "binary-name" : "molten-native-extension-fixture",
+         "binary-path" : "/nix/store/zvp69r5pn6gxkjw466ll05nld71h8c7f-rust_molten-0.1.0-test/tests/molten-native-extension-fixture",
+         "build-platform" : "target",
+         "kind" : "test",
+         "package-id" : "path+file:///build/source#molten@0.1.0"
+      },
+      "molten::nix-test/9/moltennodehostfacade" : {
+         "binary-id" : "molten::nix-test/9/moltennodehostfacade",
+         "binary-name" : "moltennodehostfacade",
+         "binary-path" : "/nix/store/zvp69r5pn6gxkjw466ll05nld71h8c7f-rust_molten-0.1.0-test/tests/moltennodehostfacade",
+         "build-platform" : "target",
+         "kind" : "test",
+         "package-id" : "path+file:///build/source#molten@0.1.0"
+      }
+   },
+   "rust-build-meta" : {
+      "base-output-directories" : [
+         "tests"
+      ],
+      "build-script-info" : {},
+      "build-script-out-dirs" : {},
+      "linked-paths" : [],
+      "non-test-binaries" : {},
+      "platforms" : {
+         "host" : {
+            "libdir" : {
+               "path" : "/nix/store/c7qcfda063a1d95gfprn2xlhcvrpp1fl-rust-default-1.98.0-nightly-2026-05-26/lib/rustlib/x86_64-unknown-linux-gnu/lib",
+               "status" : "available"
+            },
+            "platform" : {
+               "target-features" : "unknown",
+               "triple" : "x86_64-unknown-linux-gnu"
+            }
+         },
+         "targets" : []
+      },
+      "target-directory" : "/nix/store/zvp69r5pn6gxkjw466ll05nld71h8c7f-rust_molten-0.1.0-test",
+      "target-platform" : null,
+      "target-platforms" : [
+         {
+            "target-features" : "unknown",
+            "triple" : "x86_64-unknown-linux-gnu"
+         }
+      ]
+   }
+}
