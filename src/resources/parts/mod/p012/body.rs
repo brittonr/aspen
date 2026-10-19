@@ -117,8 +117,50 @@ pub fn validate_status_condition(
     Ok(())
 }
 
+// r[impl molten.lifecycle.gc_cleanup_gates.bounded_facts]
+const MAX_DELETION_FACT_BYTES: usize = MAX_ANNOTATION_VALUE_LENGTH;
+
+fn validate_deletion_gate_facts(input: &DeletionGateInput) -> Result<()> {
+    // Admission must precede formatting or cloning any caller-supplied fact.
+    for (label, count, maximum) in [
+        ("owner refs", input.owner_refs.len(), MAX_OWNER_REFS),
+        ("finalizers", input.finalizers.len(), MAX_FINALIZERS),
+        ("finalizer cleanup receipts", input.finalizer_cleanup_receipts.len(), MAX_EVIDENCE_REFS),
+        ("live owner refs", input.live_owner_refs.len(), MAX_EVIDENCE_REFS),
+        ("pin refs", input.pin_refs.len(), MAX_EVIDENCE_REFS),
+        ("retention policy refs", input.retention_policy_refs.len(), MAX_EVIDENCE_REFS),
+        ("deletion authority refs", input.deletion_authority_refs.len(), MAX_EVIDENCE_REFS),
+    ] {
+        if count > maximum {
+            return Err(MoltenError::invalid_harness(format!(
+                "deletion gate {label} count {count} exceeds maximum {maximum}"
+            )));
+        }
+    }
+    let facts = std::iter::once(input.resource_ref.as_str())
+        .chain(
+            input
+                .owner_refs
+                .iter()
+                .flat_map(|owner| [owner.resource_ref.as_str(), owner.resource_type.as_str()]),
+        )
+        .chain(input.finalizers.iter().map(String::as_str))
+        .chain(input.finalizer_cleanup_receipts.iter().map(String::as_str))
+        .chain(input.live_owner_refs.iter().map(String::as_str))
+        .chain(input.pin_refs.iter().map(String::as_str))
+        .chain(input.retention_policy_refs.iter().map(String::as_str))
+        .chain(input.deletion_authority_refs.iter().map(String::as_str));
+    if facts.into_iter().any(|fact| fact.len() > MAX_DELETION_FACT_BYTES) {
+        return Err(MoltenError::invalid_harness(format!(
+            "deletion gate fact exceeds maximum {MAX_DELETION_FACT_BYTES} bytes"
+        )));
+    }
+    Ok(())
+}
+
 /// Evaluate deletion eligibility from owner refs, finalizers, pins, retention, and authority.
 pub fn evaluate_deletion_gate(input: &DeletionGateInput) -> Result<DeletionDecision> {
+    validate_deletion_gate_facts(input)?;
     let mut cleared =
         Vec::with_capacity(input.owner_refs.len() + input.finalizers.len() + input.deletion_authority_refs.len());
     let mut unresolved = Vec::with_capacity(
