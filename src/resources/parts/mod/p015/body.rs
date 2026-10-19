@@ -4,6 +4,15 @@ pub fn evaluate_placement(
     request: &PlacementRequest,
     explicit_target_properties: &[(String, String)],
 ) -> PlacementDecision {
+    if request.constraints.len() > MAX_CONSTRAINTS {
+        return PlacementDecision {
+            decision: "deny".to_string(),
+            target_ref: None,
+            quota_consumed: None,
+            diagnostics: vec![format!("constraint count {} exceeds maximum {MAX_CONSTRAINTS}", request.constraints.len())],
+        };
+    }
+
     // Check constraints against explicit target properties
     let mut diagnostics = Vec::with_capacity(request.constraints.len());
 

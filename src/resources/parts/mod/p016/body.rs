@@ -48,6 +48,16 @@ pub fn schedule_retry(
 pub fn validate_reconcile_completion(
     input: &ReconcileCompletionInput,
 ) -> ReconcileCompletionDecision {
+    if input.required_effect_intents.len() > MAX_EFFECT_INTENTS {
+        return ReconcileCompletionDecision {
+            pass: false,
+            diagnostics: vec![format!(
+                "required effect intent count {} exceeds maximum {MAX_EFFECT_INTENTS}",
+                input.required_effect_intents.len(),
+            )],
+        };
+    }
+
     let mut diagnostics = Vec::new();
     let mut is_pass = true;
 
