@@ -278,6 +278,77 @@ Do not add `#[allow]` to work around either. Record the decision instead, or cha
   moving files.
 - Pueue is the right runner for probes, clippy, and Nix work. Report task id and log path.
 
+## Caller-built chunk manifest admission
+
+The source-owned parser caps manifest chunks at `MAX_CHUNK_STORE_CHUNKS =
+65,536`, but public `ChunkManifest` fields permit an external Rust caller to
+bypass parsing. Both `verify_remote_range_readback` and
+`plan_chunk_traversal_sync` now invoke the same count preflight in
+`validate_chunk_manifest_identity`, before allocating range refs or traversal
+plans. A 65,537-chunk value is denied by the parser's existing count
+diagnostic; exactly 65,536 chunks remain eligible for the previous
+manifest-ref and content-ref checks, strategy validation, and verified
+readback. This is not a full authenticity proof for a caller-built manifest,
+nor a waiver of other full-catalog Octet warnings. The change-local Cairn is
+`preflight-caller-built-chunk-manifest`; the isolated owner starts at clean
+canonical HEAD and the detached 64-package composition is a separate
+integration target.
+
+The same remote readback helper now preflights its separate caller-supplied
+`chunk_bytes` tuple count at 65,536 before building a lookup. Its
+`BTreeMap<&str, &[u8]>` borrows the caller's refs and byte slices instead of
+cloning every supplied byte buffer, including irrelevant extras; lookup keeps
+last-duplicate-wins behavior. Exactly 65,536 tuples with one four-byte
+required chunk remain eligible; 65,537 are denied before byte copying, and
+an admitted overflowing range still fails its existing range check. Required
+byte buffers and aggregated verified output use the existing 1 GiB
+`MAX_CHUNK_STORE_OBJECT_BYTES` boundary before hashing or appending, so
+caller-supplied chunk size and declared range length cannot create an
+unbounded output allocation; no new count or byte policy was added.
+
+## Additional caller-built input preflights
+
+The same F09/F10 review found public producers that skipped an existing
+source-owned count or byte envelope. These now preflight the existing bound
+before cloning, formatting, or traversing caller-built values:
+
+- `consensus_placement_report` denies more than `MAX_RAFT_MEMBERS = 32`
+  admitted members before diagnostics or cloning (`preflight-raft-placement-members`).
+- `build_benchmark_run` and `validate_benchmark_run` deny more than the
+  reviewed three benchmark phase groups before normalization, diagnostics, or
+  hashing (`preflight-performance-phase-count`).
+- `verify_remote_range_readback` and `plan_chunk_traversal_sync` apply the
+  parser's 65,536-chunk manifest bound to caller-built manifests and the
+  65,536 supplied-chunk tuple bound (`preflight-caller-built-chunk-manifest`).
+- `RedbDurableStateAdapter::open` preflights persisted record count and
+  borrowed per-record byte budgets against the current profile before owning
+  legacy log values (`preflight-redb-durable-log-restore`).
+- `evaluate_placement` and `validate_reconcile_completion` deny one-past the
+  existing 64-constraint and 128-effect-intent bounds before diagnostics
+  (`preflight-resource-lifecycle-growth`).
+- `prepare_world_for_manifest` admits the simulated world before constructing
+  or activating reference extension hosts (`preflight-simulation-world-before-hosts`).
+- `validate_probe_results` denies more than `MAX_REFS = 1,024` probes before
+  cloning status refs (`bound-lifecycle-probe-results`).
+- `load_prolly_snapshot` validates the supplied profile before any block read
+  or traversal allocation (`preflight-prolly-snapshot-profile`).
+- `evaluate_build_verification_binding` applies the existing 64-ref envelope to
+  direct receipts and forged build-record refs before binding
+  (`preflight-direct-provenance-binding`).
+- `evaluate_deletion_gate` applies the existing owner, finalizer, evidence-ref,
+  and fact-byte envelopes before deciding cleanup
+  (`bound-resource-deletion-facts`).
+- `parse_manifest`, direct `plan`, and the cluster CLI manifest read enforce
+  `MAX_CLUSTER_MANIFEST_BYTES = 1,048,576`, the 512-node lifecycle bound, and
+  the one-megabyte fixture read before harness output-root preparation
+  (`preflight-cluster-harness-fixture-bytes`).
+
+Exact-limit admitted shapes keep their prior behavior and error order; each
+change package carries its own positive, negative, and smoke evidence. These
+checks bound local intake and allocation only. They are not authenticity,
+authorization, profile-correctness, or release evidence for caller-built
+values.
+
 ## Authority limits
 
 The session that wrote this had authority to edit source, run focused checks, and commit locally on

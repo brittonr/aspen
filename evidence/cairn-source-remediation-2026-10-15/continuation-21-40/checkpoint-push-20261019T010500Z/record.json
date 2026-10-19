@@ -1,0 +1,77 @@
+{
+  "recorded_at": "2026-10-19T01:05:00Z",
+  "kind": "checkpoint-commit-and-mainline-push",
+  "user_selection": "Commit now, push molten now",
+  "commit": {
+    "hash": "0aa997b68b8da0d2c5f2197c89fa242fd11bd4c7",
+    "short": "0aa997b68",
+    "branch": "change/guided-goal-completion-20261015",
+    "message": "Record F09/F10 scheduler implementation and acceptance evidence",
+    "files_changed": 517,
+    "insertions": 315432,
+    "deletions": 971,
+    "contents": "F09/F10 fabric-time core and shell composition, receiver corrections, .cairn change evidence, attempts 18-20 records, host recovery and scope evidence"
+  },
+  "hooks": {
+    "on_commit": {
+      "git_diff_whitespace_check": "Passed",
+      "cargo_fmt_check": "Passed",
+      "cargo_octet_check": "Passed"
+    },
+    "on_push": {
+      "git_diff_whitespace_check": "Passed",
+      "cargo_fmt_check": "Passed",
+      "cargo_octet_check": "Passed",
+      "cairn_validate": "Passed only with an explicit CAIRN_ROOT store path; the hook's default sibling path fails"
+    },
+    "default_path_failures": [
+      {
+        "cairn_root": "../cairn relative to the worktree, i.e. /home/brittonr/git/aspen-worktrees/cairn",
+        "error": "error: opening file \"/home/brittonr/git/aspen-worktrees/cairn\": No such file or directory",
+        "disposition": "no such sibling checkout exists for this worktree"
+      },
+      {
+        "cairn_root": "/home/brittonr/git/OnixResearch/cairn",
+        "error": "error: file '/socket' has an unsupported type (while fetching the input 'path:/home/brittonr/git/OnixResearch/cairn')",
+        "disposition": "the sibling checkout currently cannot be fetched as a Nix path input; I did not delete or rename anything in that repository",
+        "note": "No file named socket was visible at the checkout root when inspected; the offending entry was not located and remains a host/sibling-repository cleanup item"
+      }
+    ],
+    "workaround": {
+      "cairn_root": "/nix/store/xpl4byf12mpb7lda9zf83z9grc0na189-source",
+      "rationale": "Immutable store copy of the sibling Cairn source; the same provider policy locator this campaign already validated against",
+      "validation_result": {
+        "changes": 47,
+        "issues": [],
+        "findings": [],
+        "policy": "cairn-default",
+        "policy_selection_source": "explicit",
+        "receipt_hash": "5bed8b1c0797ec8cf4d4f498af0ac671b43de66d56dbda34149426a1ba87a519",
+        "exit_code": 0
+      }
+    }
+  },
+  "push": {
+    "command": "CAIRN_ROOT=/nix/store/xpl4byf12mpb7lda9zf83z9grc0na189-source git push origin HEAD:molten",
+    "result": "1d78d08ce..0aa997b68  HEAD -> molten",
+    "fast_forward": true,
+    "remote_readback": "git ls-remote origin refs/heads/molten -> 0aa997b68b8da0d2c5f2197c89fa242fd11bd4c7",
+    "local_mainline_ref": "not updated: 'git fetch origin molten:molten' refused because refs/heads/molten is checked out at /home/brittonr/git/OnixResearch/aspen; that checkout was left untouched"
+  },
+  "state_after_push": {
+    "worktree_head": "0aa997b68",
+    "worktree_clean": true,
+    "long_window_run": "bg_158 still executing; the three-check recorder log has produced no build or copy output yet",
+    "acceptance_open": [
+      "F09/F10 required Nix checks",
+      "repository flake gate",
+      "F09/F10 sync and archive"
+    ]
+  },
+  "limits": [
+    "Publication occurred ahead of the documented gate order (validation, review, sync, archive) by explicit user decision; the published mainline therefore carries not-yet-accepted F09/F10 work",
+    "No lifecycle completion, release, or readiness claim is made by this push",
+    "The Cairn validation that gated the push was non-strict, as the installed pre-push hook defines"
+  ],
+  "maintenance_owner": "Host operator or Cairn maintainers own the stray unsupported socket in the sibling Cairn checkout, which breaks the default pre-push hook path"
+}
