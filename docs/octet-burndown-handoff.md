@@ -31,9 +31,22 @@ cohorts, Clippy with denied warnings, formatting, and the passing repository Nix
 gate on `x86_64-linux`. This is reuse of recorded execution, not a new matrix run.
 
 Current strict Cairn validation and the unchanged live traceability guard pass
-after archival; 48 active changes remain. This is local, unintegrated evidence,
-not completion of those changes, whole-core Octet warning-debt removal, arbitrary
-live-adapter shutdown, a release, or authorization for a Molten remote push.
+after archival; 48 active changes remained at that checkpoint. This is local,
+unintegrated evidence, not completion of those changes, whole-core Octet
+warning-debt removal, arbitrary live-adapter shutdown, a release, or
+authorization for a Molten remote push.
+
+On 2026-10-19, thirteen fully checked packages were synced and archived:
+`bound-lifecycle-probe-results`, `bound-offline-cluster-run-index`,
+`bound-resource-deletion-facts`, `complete-owned-license-package-policy`, and
+the nine caller-built input preflights (`preflight-caller-built-chunk-manifest`,
+`preflight-cluster-harness-fixture-bytes`, `preflight-direct-provenance-binding`,
+`preflight-performance-phase-count`, `preflight-prolly-snapshot-profile`,
+`preflight-raft-placement-members`, `preflight-redb-durable-log-restore`,
+`preflight-resource-lifecycle-growth`, `preflight-simulation-world-before-hosts`).
+Strict Cairn validation then reported 47 active changes and zero issues
+(`receipt_hash blake3:e5f3a1b6a3c35e3d925da91c9e599be7bbaa9ded7f44ca64f4c3ec17b0f78057`).
+The two F09/F10 packages retain their final Nix acceptance task.
 
 ### Earlier source checkpoint (attempt 5/20)
 
