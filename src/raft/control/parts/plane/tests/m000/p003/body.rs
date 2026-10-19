@@ -69,6 +69,58 @@
         assert_leaderless_progress_requires_evidence(majority_input);
     }
 
+    #[test]
+    fn consensus_placement_member_count_preflight_preserves_admitted_behavior() {
+        let members = (0..MAX_RAFT_MEMBERS)
+            .map(|index| test_ref(&format!("member-{index}")))
+            .collect::<Vec<_>>();
+        let input = ConsensusPlacementInput {
+            group_id: DEFAULT_GROUP_ID.to_string(),
+            candidate_members: members.clone(),
+            admitted_members: members.clone(),
+            fault_domain_refs: (0..MAX_RAFT_MEMBERS)
+                .map(|index| test_ref(&format!("domain-{index}")))
+                .collect(),
+            fault_domain_policy_ref: test_ref("fault-policy"),
+            membership_refs: vec![test_ref("membership")],
+            placement_policy_refs: vec![test_ref("placement-policy")],
+            majority_reachable: true,
+            latency_diagnostics: Vec::new(),
+            denied_candidates: Vec::new(),
+            refresh_refs: Vec::new(),
+        };
+        let exact = consensus_placement_report(&input).expect("exactly 32 members");
+        assert_eq!(exact.decision, RAFT_DECISION_PASS);
+        assert_eq!(exact.admitted_members, members);
+        assert!(exact.diagnostics.is_empty());
+
+        let mut duplicate = input.clone();
+        duplicate.admitted_members[1] = members[0].clone();
+        let duplicate_report = consensus_placement_report(&duplicate).expect("duplicate member retains existing behavior");
+        assert_eq!(duplicate_report.decision, RAFT_DECISION_PASS);
+        assert_eq!(duplicate_report.admitted_members[0], duplicate_report.admitted_members[1]);
+
+        let mut invalid_candidate = input.clone();
+        invalid_candidate.candidate_members[0] = "invalid".to_string();
+        let error = consensus_placement_report(&invalid_candidate).expect_err("admitted count still checks candidate refs");
+        assert!(error.to_string().contains("expected canonical content ref for consensus placement candidate member ref"));
+        let mut invalid_admitted = input.clone();
+        invalid_admitted.admitted_members[0] = "invalid".to_string();
+        let error = consensus_placement_report(&invalid_admitted).expect_err("admitted count still checks admitted refs");
+        assert!(error.to_string().contains("expected canonical content ref for consensus placement admitted member ref"));
+
+        let mut excess_admitted = input.clone();
+        excess_admitted.admitted_members.push(test_ref("extra"));
+        let error = consensus_placement_report(&excess_admitted).expect_err("33 admitted members must reject before diagnostics");
+        assert!(error.to_string().contains("consensus placement admitted members count 33 exceeds maximum 32"));
+
+        let mut larger_candidate_pool = input;
+        larger_candidate_pool.candidate_members.push(test_ref("extra"));
+        let larger_pool = consensus_placement_report(&larger_candidate_pool).expect("33 candidates do not expand admitted membership");
+        assert_eq!(larger_pool.decision, RAFT_DECISION_PASS);
+        assert_eq!(larger_pool.admitted_members.len(), MAX_RAFT_MEMBERS);
+    }
+
     /// A stale linearizable read is denied for freshness, and the same read at local-stale consistency passes.
     fn assert_stale_reads_classified(majority_input: &ConsensusSimulationInput) {
         let stale_input = ConsensusSimulationInput {

@@ -84,6 +84,7 @@ pub struct ConsensusSimulationReceipt {
 // r[impl molten.consensus.replica_placement_evidence]
 pub fn consensus_placement_report(input: &ConsensusPlacementInput) -> Result<ConsensusPlacementReport> {
     validate_group_id(&input.group_id)?;
+    ensure_count_at_most(input.admitted_members.len(), MAX_RAFT_MEMBERS, "consensus placement admitted members")?;
     validate_refs(&input.candidate_members, "consensus placement candidate member ref")?;
     validate_refs(&input.admitted_members, "consensus placement admitted member ref")?;
     validate_refs(&input.fault_domain_refs, "consensus placement fault domain ref")?;
