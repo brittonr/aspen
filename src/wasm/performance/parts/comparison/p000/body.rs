@@ -3,6 +3,7 @@ const NORMAL_95_MULTIPLIER_MILLI: u128 = 1_960;
 const MILLI_SCALE: u128 = 1_000;
 const BINARY_SEARCH_HALVING_SHIFT: u32 = 1;
 const MAX_RECORDED_EFFECT_REFS: usize = 128;
+const EXCESS_PHASE_GROUPS: &str = "benchmark run exceeds reviewed suite phase count";
 
 #[derive(Debug, Clone)]
 pub struct BenchmarkRunInput<'a> {
@@ -21,6 +22,9 @@ pub fn build_benchmark_run(
     super::profile::validate(input.profile)?;
     validate_suite_instance(input.profile, input.suite)?;
     validate_run_inputs(&input)?;
+    if input.phases.len() > input.suite.phases.len() {
+        return Err(super::model::Denial::new(EXCESS_PHASE_GROUPS));
+    }
     let phases = normalize_phase_groups(input.profile, input.suite, input.phases)?;
     let mut run = super::model::BenchmarkRun {
         suite_ref: super::profile::suite_ref(input.suite),
@@ -47,6 +51,9 @@ pub fn build_benchmark_run(
 }
 
 pub fn validate_benchmark_run(run: &super::model::BenchmarkRun) -> super::model::Result<()> {
+    if run.phases.len() > super::model::PERFORMANCE_PHASE_COUNT {
+        return Err(super::model::Denial::new(EXCESS_PHASE_GROUPS));
+    }
     let mut blockers = [
         ("suite", run.suite_ref.as_str()),
         ("benchmark", run.benchmark_ref.as_str()),

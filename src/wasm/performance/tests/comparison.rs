@@ -115,3 +115,85 @@ fn incompatible_host_runtime_suite_and_undersampled_runs_are_never_ranked() {
         .is_err()
     );
 }
+
+#[test]
+fn phase_count_preflight_builder_preserves_admitted_shapes() {
+    let (profile, suite, artifact, _) = fixture();
+    let host = super::support::fixture_host(&suite, &artifact);
+    assert_eq!(suite.phases.len(), Phase::ALL.len());
+    let build = |phases: Vec<PhaseSamples>, benchmark_ref: String| {
+        build_benchmark_run(BenchmarkRunInput {
+            profile: &profile,
+            suite: &suite,
+            materialized: &artifact,
+            host: &host,
+            benchmark_ref,
+            recorded_effect_refs: vec![super::support::fixture_ref("recorded-host-effect")],
+            phases,
+        })
+    };
+
+    let mut unordered = super::support::phase_samples(super::support::BASELINE_SAMPLE_COUNTS);
+    unordered.swap(0, 2);
+    let exact = build(unordered, suite.workload_refs[0].clone()).expect("three phases normalize in suite order");
+    assert_eq!(exact.phases.iter().map(|phase| phase.phase).collect::<Vec<_>>(), Phase::ALL);
+    validate_benchmark_run(&exact).expect("exact reviewed phase count validates");
+
+    let mut malformed = super::support::phase_samples(super::support::BASELINE_SAMPLE_COUNTS);
+    malformed[0].event.clear();
+    let error =
+        build(malformed, suite.workload_refs[0].clone()).expect_err("admitted malformed phase shape still fails");
+    assert!(error.blockers.contains(&"benchmark compilation phase has no event or too few samples".to_string()));
+
+    let mut duplicate = super::support::phase_samples(super::support::BASELINE_SAMPLE_COUNTS);
+    duplicate[2] = duplicate[1].clone();
+    let error =
+        build(duplicate, suite.workload_refs[0].clone()).expect_err("three admitted groups retain duplicate rejection");
+    assert!(error.blockers.contains(&"benchmark phase/event groups must be sorted and unique".to_string()));
+    assert!(error.blockers.contains(&"benchmark run omits the execution phase".to_string()));
+
+    let mut missing = super::support::phase_samples(super::support::BASELINE_SAMPLE_COUNTS);
+    missing.pop();
+    let error = build(missing, suite.workload_refs[0].clone()).expect_err("two groups retain missing-phase error");
+    assert!(error.blockers.contains(&"benchmark run omits the execution phase".to_string()));
+
+    let mut excess = super::support::phase_samples(super::support::BASELINE_SAMPLE_COUNTS);
+    excess.push(excess[0].clone());
+    let error =
+        build(excess.clone(), "invalid".to_string()).expect_err("invalid workload still precedes phase-count check");
+    assert_eq!(error.blockers, vec!["benchmark workload identity is malformed or absent from the exact suite"]);
+    let error = build(excess, suite.workload_refs[0].clone()).expect_err("four groups are denied before normalization");
+    assert_eq!(error.blockers, vec!["benchmark run exceeds reviewed suite phase count"]);
+}
+
+#[test]
+fn phase_count_preflight_validator_preserves_admitted_shapes() {
+    let (profile, suite, artifact, _) = fixture();
+    let run = super::support::fixture_run(&profile, &suite, &artifact, super::support::BASELINE_SAMPLE_COUNTS);
+    assert_eq!(run.phases.len(), Phase::ALL.len());
+    validate_benchmark_run(&run).expect("three reviewed phase groups validate");
+
+    let mut malformed = run.clone();
+    malformed.phases[0].event.clear();
+    malformed.run_ref = benchmark_run_ref(&malformed);
+    let error = validate_benchmark_run(&malformed).expect_err("admitted malformed phase still fails");
+    assert!(error.blockers.contains(&"benchmark compilation phase has no event or too few samples".to_string()));
+
+    let mut duplicate = run.clone();
+    duplicate.phases[2] = duplicate.phases[1].clone();
+    duplicate.run_ref = benchmark_run_ref(&duplicate);
+    let error = validate_benchmark_run(&duplicate).expect_err("three admitted groups retain duplicate rejection");
+    assert!(error.blockers.contains(&"benchmark phase/event groups must be sorted and unique".to_string()));
+
+    let mut empty = run.clone();
+    empty.phases.clear();
+    empty.run_ref = benchmark_run_ref(&empty);
+    let error = validate_benchmark_run(&empty).expect_err("empty admitted run retains specific error");
+    assert_eq!(error.blockers, vec!["benchmark run has no phase samples"]);
+
+    let mut excess = run;
+    excess.phases.push(excess.phases[0].clone());
+    excess.run_ref = "invalid".to_string();
+    let error = validate_benchmark_run(&excess).expect_err("four forged groups are denied before formatting");
+    assert_eq!(error.blockers, vec!["benchmark run exceeds reviewed suite phase count"]);
+}
