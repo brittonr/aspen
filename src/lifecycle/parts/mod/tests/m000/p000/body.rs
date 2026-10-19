@@ -264,3 +264,30 @@
         assert!(ready.start_side_effect_admitted);
         assert!(ready.readiness_assertion.is_some());
     }
+
+    #[test]
+    fn probe_result_status_refs_obey_lifecycle_reference_bound() {
+        // r[verify molten.runtime_spine.lifecycle_probe_result_bound]
+        let probe = LifecycleProbe {
+            kind: ProbeKind::Readiness,
+            success: true,
+            observed_generation: 1,
+            probe_evidence_ref: content_ref_from_bytes(b"probe-ev"),
+            status_condition_ref: Some(content_ref_from_bytes(b"status-ref")),
+            policy_refs: vec![],
+        };
+        let mut probes = vec![probe; MAX_REFS];
+        assert_eq!(validate_probe_results(&probes, 1).expect("exact lifecycle ref limit").len(), MAX_REFS);
+        probes.push(probes[0].clone());
+        let error = validate_probe_results(&probes, 1).expect_err("additional status ref must be denied");
+        assert!(error.to_string().contains("probe results exceed lifecycle bound"));
+        probes.pop();
+        let valid_ref = probes[0].probe_evidence_ref.clone();
+        probes[0].probe_evidence_ref = "not-a-ref".to_string();
+        let error = validate_probe_results(&probes, 1).expect_err("admitted malformed probe must still deny");
+        assert!(error.to_string().contains("probe evidence ref"));
+        probes[0].probe_evidence_ref = valid_ref;
+        probes[0].observed_generation = 2;
+        let error = validate_probe_results(&probes, 1).expect_err("admitted future generation must still deny");
+        assert!(error.to_string().contains("probe observed generation 2 exceeds current 1"));
+    }

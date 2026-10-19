@@ -87,11 +87,17 @@ pub struct RestartDecision {
 // Pure core: probe validation
 // ---------------------------------------------------------------------------
 
+// r[impl molten.runtime_spine.lifecycle_probe_result_bound]
 /// Validate lifecycle probe results for a resource.
 pub fn validate_probe_results(
     probes: &[LifecycleProbe],
     current_generation: u64,
 ) -> Result<Vec<String>> {
+    // Every probe can add a status ref; use the existing lifecycle ref
+    // envelope before cloning any input into the returned collection.
+    if probes.len() > MAX_REFS {
+        return Err(MoltenError::invalid_harness("probe results exceed lifecycle bound"));
+    }
     let mut status_refs = Vec::with_capacity(probes.len());
 
     for probe in probes {
