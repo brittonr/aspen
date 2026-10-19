@@ -195,16 +195,22 @@ pub fn remote_byte_source_hint(input: &RemoteByteSourceHintInput<'_>) -> Result<
 
 pub fn verify_remote_range_readback(input: &RemoteRangeReadbackInput<'_>) -> Result<RemoteRangeReadbackReceipt> {
     validate_chunk_manifest_identity(input.manifest)?;
+    ensure_count_at_most(input.chunk_bytes.len(), MAX_CHUNK_STORE_CHUNKS, "remote byte-source supplied chunks")?;
     let mut diagnostics = Vec::with_capacity(CHUNK_SYNC_DIAGNOSTIC_CAPACITY);
     if input.hint.manifest_ref != input.manifest.manifest_ref {
         diagnostics.push("remote byte-source hint manifest does not match requested manifest".to_string());
     }
     let required_chunks = required_chunks_for_remote_range(input.manifest, input.offset, input.length, &mut diagnostics)?;
-    let supplied = input.chunk_bytes.iter().cloned().collect::<OrderedMap<_, _>>();
+    let supplied = input
+        .chunk_bytes
+        .iter()
+        .map(|(reference, chunk_bytes)| (reference.as_str(), chunk_bytes.as_slice()))
+        .collect::<OrderedMap<_, _>>();
     let mut bytes = Vec::new();
     for chunk_ref in &required_chunks {
-        match supplied.get(chunk_ref) {
+        match supplied.get(chunk_ref.as_str()) {
             Some(chunk_bytes) => {
+                ensure_count_at_most(chunk_bytes.len(), MAX_CHUNK_STORE_OBJECT_BYTES, "remote byte-source chunk bytes")?;
                 let chunk_size = usize::try_from(input.manifest.chunk_size).map_err(|error| {
                     MoltenError::invalid_harness(format!("remote byte-source chunk size cannot fit usize: {error}"))
                 })?;
@@ -212,7 +218,7 @@ pub fn verify_remote_range_readback(input: &RemoteRangeReadbackInput<'_>) -> Res
                 if actual_ref != *chunk_ref {
                     diagnostics.push(format!("remote byte-source chunk {chunk_ref} verified as {actual_ref}"));
                 } else {
-                    bytes.extend_from_slice(chunk_bytes);
+                    extend_bytes_bounded(&mut bytes, chunk_bytes, MAX_CHUNK_STORE_OBJECT_BYTES, "remote byte-source readback bytes")?;
                 }
             }
             None => diagnostics.push(format!("remote byte-source missing required chunk {chunk_ref}")),
@@ -245,6 +251,7 @@ pub fn verify_remote_range_readback(input: &RemoteRangeReadbackInput<'_>) -> Res
 }
 
 fn validate_chunk_manifest_identity(manifest: &ChunkManifest) -> Result<()> {
+    ensure_count_at_most(manifest.chunks.len(), MAX_CHUNK_STORE_CHUNKS, "chunk manifest chunks")?;
     validate_content_ref(&manifest.manifest_ref)?;
     validate_content_ref(&manifest.metadata_ref)?;
     validate_content_ref(&manifest.root_ref)?;
