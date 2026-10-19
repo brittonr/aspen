@@ -2,3 +2,4 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_durability/parts/adapt
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_durability/parts/adapters/p001/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_durability/parts/adapters/p002/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_durability/parts/adapters/p003/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_durability/parts/adapters/p004/body.rs"));

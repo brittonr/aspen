@@ -269,6 +269,7 @@ fn reference_only_and_substituted_v2_values_deny() {
 
 // r[verify molten.system_extension.native_host.semantic_state]
 // r[verify molten.system_extension.native_host.durability]
+// r[verify molten.fabric_durability.redb_restore_profile_admission]
 #[test]
 fn memory_and_redb_journals_roundtrip_exact_instance_across_restart() {
     let mut memory = InMemory::default();
@@ -288,4 +289,5 @@ fn memory_and_redb_journals_roundtrip_exact_instance_across_restart() {
         .expect("reopen native journal");
     let journal = Durable::new(adapter);
     assert_eq!(journal.latest_instance("native-fixture").expect("durable latest"), Some(instance()));
+    assert_eq!(journal.history("native-fixture").expect("durable history"), vec![instance()]);
 }

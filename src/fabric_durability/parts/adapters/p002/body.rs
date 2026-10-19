@@ -1,13 +1,31 @@
 
-fn load_state(database: &redb::Database, descriptor: DurableNamespaceDescriptor) -> crate::error::Result<DurableState> {
+// r[impl molten.fabric_durability.redb_restore_profile_admission]
+fn load_state(
+    database: &redb::Database,
+    profile: &DurableStateProfile,
+    descriptor: DurableNamespaceDescriptor,
+) -> crate::error::Result<DurableState> {
     let mut state = DurableState::empty(descriptor);
     let read = database.begin_read().map_err(adapter_error)?;
     {
         let table = read.open_table(LOG_TABLE).map_err(adapter_error)?;
+        let persisted_records = redb::ReadableTableMetadata::len(&table).map_err(adapter_error)?;
+        if persisted_records > profile.max_log_records {
+            return Err(adapter_validation_error("restore", &[DurabilityIssue::OperationLimitExceeded {
+                actual: persisted_records,
+                maximum: profile.max_log_records,
+            }]));
+        }
         for item in table.iter().map_err(adapter_error)? {
             let (sequence, bytes) = item.map_err(adapter_error)?;
-            let record = decode_log_record(sequence.value(), bytes.value())?;
-            state.durable_bytes = checked_adapter_add(state.durable_bytes, byte_count(record.value.len())?)?;
+            let (record, durable_bytes) = decode_log_record(
+                sequence.value(),
+                bytes.value(),
+                profile,
+                state.durable_bytes,
+                state.descriptor.quota_bytes,
+            )?;
+            state.durable_bytes = durable_bytes;
             state.durable_log.push(record);
         }
     }
@@ -146,28 +164,6 @@ fn effect_transaction_id(command: &EffectTransactionCommand) -> &str {
         | EffectTransactionCommand::MarkUncertain { transaction_id, .. }
         | EffectTransactionCommand::Reconcile { transaction_id, .. } => transaction_id,
     }
-}
-
-fn encode_log_record(record: &LogRecord) -> crate::error::Result<Vec<u8>> {
-    let mut bytes = Vec::new();
-    push_byte(&mut bytes, encode_level(record.durability));
-    push_blob(&mut bytes, record.value_ref.as_bytes())?;
-    push_blob(&mut bytes, &record.value)?;
-    Ok(bytes)
-}
-
-fn decode_log_record(sequence: u64, bytes: &[u8]) -> crate::error::Result<LogRecord> {
-    let mut cursor = ByteCursor::new(bytes);
-    let durability = decode_level(cursor.take_byte()?)?;
-    let value_ref = cursor.take_string()?;
-    let value = cursor.take_blob()?.to_vec();
-    cursor.finish()?;
-    Ok(LogRecord {
-        sequence,
-        value,
-        value_ref,
-        durability,
-    })
 }
 
 fn encode_versioned_value(value: &VersionedValue) -> crate::error::Result<Vec<u8>> {

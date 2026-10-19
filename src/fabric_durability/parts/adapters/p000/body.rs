@@ -72,7 +72,7 @@ impl RedbDurableStateAdapter {
         let database_file = root.root().open_database_file(&crate::local_store::Locator::parse(STORE_FILE)?)?;
         let database = redb::Database::builder().create_file(database_file).map_err(adapter_error)?;
         initialize_tables(&database)?;
-        let state = load_state(&database, descriptor)?;
+        let state = load_state(&database, &profile.profile, descriptor)?;
         Ok(Self {
             profile,
             state,
