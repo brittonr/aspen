@@ -29,7 +29,9 @@ fn prepare_reference_world() -> crate::error::Result<PreparedReferenceWorld> {
     prepare_world_for_manifest(&reference_world_manifest()?)
 }
 
+// r[impl molten.fabric_simulation.manifest_admission_before_host_creation]
 fn prepare_world_for_manifest(manifest: &SimulatedWorldManifest) -> crate::error::Result<PreparedReferenceWorld> {
+    let world = admit_world(manifest)?;
     let profiles = port_profiles();
     let descriptors = port_descriptors(&profiles);
     let operations = default_operations();
@@ -65,7 +67,7 @@ fn prepare_world_for_manifest(manifest: &SimulatedWorldManifest) -> crate::error
         admissions.insert(node.node_id.clone(), admitted);
     }
     Ok(PreparedReferenceWorld {
-        world: admit_world(manifest)?,
+        world,
         hosts,
         admissions,
         profiles,

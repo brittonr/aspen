@@ -163,6 +163,66 @@ fn malformed_run_decision_and_missing_adapter_fail_closed() {
 
 include!("tests/causal.rs");
 
+// r[verify molten.fabric_simulation.manifest_admission_before_host_creation]
+#[test]
+fn reference_world_preflights_node_bound_before_host_creation() {
+    let mut nodes_overflow = reference_world_manifest().expect("reference manifest");
+    let mut unsupported = nodes_overflow.nodes[0].clone();
+    unsupported.node_id = "unsupported-reference-node".to_string();
+    unsupported.service_id = "unsupported-reference-kind".to_string();
+    nodes_overflow.nodes.push(unsupported);
+    for index in nodes_overflow.nodes.len()..=MAX_WORLD_NODES {
+        let mut node = nodes_overflow.nodes[0].clone();
+        node.node_id = format!("overflow-node-{index}");
+        nodes_overflow.nodes.push(node);
+    }
+    assert_eq!(nodes_overflow.nodes.len(), MAX_WORLD_NODES + 1);
+    let nodes_error = run_reference_world(&nodes_overflow, DEFAULT_REFERENCE_SEED)
+        .expect_err("65 nodes must be denied before reference hosts are created");
+    assert!(
+        nodes_error.to_string().contains("TooManyItems { field: \"nodes\", actual: 65, maximum: 64 }"),
+        "expected the core node admission error, got {nodes_error}"
+    );
+}
+
+// r[verify molten.fabric_simulation.manifest_admission_before_host_creation]
+#[test]
+fn reference_world_preflights_workload_bound_before_host_creation() {
+    let mut workload_overflow = reference_world_manifest().expect("reference manifest");
+    workload_overflow.nodes[2].service_id = "unsupported-reference-kind".to_string();
+    let template = workload_overflow.workload[0].clone();
+    for index in workload_overflow.workload.len()..=MAX_WORLD_WORKLOAD_STEPS {
+        let mut step = template.clone();
+        step.sequence = u64::try_from(index).expect("workload index fits u64");
+        workload_overflow.workload.push(step);
+    }
+    assert_eq!(workload_overflow.workload.len(), MAX_WORLD_WORKLOAD_STEPS + 1);
+    workload_overflow.bounds.max_events =
+        u64::try_from(workload_overflow.workload.len()).expect("workload count fits u64");
+    let workload_error = run_reference_world(&workload_overflow, DEFAULT_REFERENCE_SEED)
+        .expect_err("4097 steps must be denied before reference hosts are created");
+    assert!(
+        workload_error
+            .to_string()
+            .contains("TooManyItems { field: \"workload\", actual: 4097, maximum: 4096 }"),
+        "expected the core workload admission error, got {workload_error}"
+    );
+}
+
+// r[verify molten.fabric_simulation.manifest_admission_before_host_creation]
+#[test]
+fn reference_world_keeps_admitted_manifest_service_error_order() {
+    let mut manifest = reference_world_manifest().expect("reference manifest");
+    manifest.nodes[2].service_id = "unsupported-reference-kind".to_string();
+    admit_world(&manifest).expect("the core does not require a reference implementation for each service");
+    let error = run_reference_world(&manifest, DEFAULT_REFERENCE_SEED)
+        .expect_err("admitted manifest with an unsupported reference service must still fail at host selection");
+    assert!(
+        error.to_string().contains("does not name a reference service"),
+        "expected the prior reference-service error, got {error}"
+    );
+}
+
 // r[verify molten.fabric_simulation.scheduler]
 #[test]
 fn reference_world_records_exactly_max_choices_and_denies_one_past() {
