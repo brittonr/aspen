@@ -1,0 +1,13 @@
+{
+  "recorded_at": "2026-10-18T21:47:45.999587+00:00",
+  "argv": [
+    "/run/current-system/sw/bin/df",
+    "-B1",
+    "/nix/store",
+    "/home/brittonr/.cargo-target"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "exit_code": 0,
+  "stdout": "Filesystem                1B-blocks          Used   Available Use% Mounted on\ndatapool/nix           283049852928  255759482880 27290370048  91% /nix/store\ndatapool/cargo-target 1559482073088 1532191703040 27290370048  99% /home/brittonr/.cargo-target\n",
+  "stderr": ""
+}

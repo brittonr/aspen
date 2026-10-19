@@ -1,0 +1,65 @@
+{
+  "status": "ownership-predicate-corrected-awaiting-operator-SIGKILL",
+  "recorded_at": "2026-10-17T21:45:07.641368+00:00",
+  "authorization": "targeted-worker-force-recovery-authorization.json",
+  "guard_preflight": "targeted-worker-ownership-correction-verification.json",
+  "operator_command": "/run/wrappers/bin/sudo -- /run/current-system/sw/bin/python3 /tmp/molten-cairn-continuation-rrpmy62t/recover-exact-store-worker.py --kill",
+  "operator_guard_properties": [
+    "Defaults to read-only check mode",
+    "Revalidates exact root UID, parent, command, lock device/inode and held WRITE ownership",
+    "Uses a held pidfd so PID reuse cannot redirect SIGKILL to a replacement process",
+    "Requires the explicit --kill flag; the old --terminate command is rejected",
+    "No escalation, fallback signal, daemon restart or deletion inside the guard",
+    "Requires a matching exact-owner held-WRITE observation; repeated matching rows do not invalidate that ownership fact"
+  ],
+  "required_before_retry": [
+    "Observe original worker exit and no held lock on exact device 0:31 inode 4193189",
+    "Revalidate all 1911 preserved source-content manifest entries",
+    "Keep source, dependency identities, normal Nix settings and acceptance targets unchanged"
+  ],
+  "source_binding_argv": [
+    "bash",
+    "/tmp/molten-cairn-continuation-rrpmy62t/with-cached-shell.sh",
+    "b3sum",
+    "--check",
+    "--quiet",
+    "evidence/cairn-source-remediation-2026-10-15/attempt-20-final-scheduler-acceptance/source-content-final-hashes.txt"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "nix_argv": [
+    "nix",
+    "build",
+    "--no-update-lock-file",
+    "--no-link",
+    "-L",
+    ".#checks.x86_64-linux.nextest",
+    ".#checks.x86_64-linux.clippy",
+    ".#checks.x86_64-linux.nextest-config"
+  ],
+  "deadline_seconds": 3500,
+  "recording_pattern": "/tmp/molten-cairn-continuation-rrpmy62t/record-command.py",
+  "recording_pattern_scope": "Existing command recorder; timeout control applies only to its owned command process group, never the shared root-owned daemon or worker",
+  "planned_result_directory": "after-targeted-worker-recovery",
+  "recurrence": "One explicitly authorized retry; stop and retain evidence if blocked again",
+  "maintenance_owner": "Workspace operator for the one-time host recovery; Molten maintainers for acceptance evidence",
+  "guard_cleanup": "Remove only the task-owned temporary signal guard after observing recovery",
+  "non_claims": [
+    "Signal delivery is not worker-exit proof",
+    "Host recovery is not passing Molten acceptance",
+    "Input identity is not behavioral correctness"
+  ],
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "signals_sent_by_assistant": false,
+  "nix_retried": false,
+  "acceptance_passed": false,
+  "prior_graceful_outcome": "targeted-worker-sigterm-outcome.json",
+  "risk": "Forced cancellation interrupts the pending store operation without graceful cleanup; safe cancellation is not proved",
+  "assistant_sent_signals": false,
+  "prior_guard_refusal": "targeted-worker-force-guard-refusal.json",
+  "authorization_consumed": false,
+  "authorization_status": "The reported --kill attempt refused before signal delivery; the existing single-worker SIGKILL authorization remains unused",
+  "verification": "Reported duplicate observations accepted in full-script no-signal smoke; absent/mismatched lock facts denied; current live check-only execution passed",
+  "signal_sent": false
+}

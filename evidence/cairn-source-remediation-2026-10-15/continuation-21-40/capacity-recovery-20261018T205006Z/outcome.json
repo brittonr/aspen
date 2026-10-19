@@ -1,0 +1,40 @@
+{
+  "recorded_at": "2026-10-18T21:49:25.698436+00:00",
+  "status": "approved-manifest-applied-capacity-condition-satisfied",
+  "authorization": "deletion-authorization.json",
+  "execution": "apply-run.json",
+  "unlink_manifest_result": "apply-result.json",
+  "approved_file_count": 12270,
+  "actual_removed_file_count": 12270,
+  "allocated_bytes_unlinked": 212270296064,
+  "capacity_before": "capacity-before-apply.json",
+  "capacity_after": "capacity-after.json",
+  "before_available_bytes": 27290370048,
+  "after_available_bytes": {
+    "/nix/store": 239535652864,
+    "/home/brittonr/.cargo-target": 239535652864
+  },
+  "after_available_gib": {
+    "/nix/store": 223.0849609375,
+    "/home/brittonr/.cargo-target": 223.0849609375
+  },
+  "observed_available_increase_bytes": {
+    "/nix/store": 212245282816,
+    "/home/brittonr/.cargo-target": 212245282816
+  },
+  "acceptance_threshold_bytes": 137438953472,
+  "capacity_condition_satisfied": true,
+  "source_or_pin_change": false,
+  "gc_threshold_change": false,
+  "shared_process_control": false,
+  "limit": "Dataset headroom is a point-in-time observation, not reserved capacity or proof that the preceding Nix timeout was caused by low capacity.",
+  "maintenance_owner": "Host operator owns cache-recovery authority; Molten maintainers own unchanged acceptance and retained execution evidence.",
+  "repeatability_evidence": [
+    "owned-cargo-guard-smoke.json",
+    "pre-apply-integrity.json",
+    "apply-run.json",
+    "apply-result.json",
+    "capacity-before-apply.json",
+    "capacity-after.json"
+  ]
+}

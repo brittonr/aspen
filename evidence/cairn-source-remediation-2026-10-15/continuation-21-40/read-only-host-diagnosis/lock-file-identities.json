@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "stat",
+    "-c",
+    "%n %d %i",
+    "/nix/var/nix/gc.lock",
+    "/nix/var/nix/db/big-lock",
+    "/nix/var/nix/current-load/main-lock"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T19:36:44.490311+00:00",
+  "elapsed_seconds": 0.012,
+  "exit_code": 0,
+  "stdout": "/nix/var/nix/gc.lock 31 22402385\n/nix/var/nix/db/big-lock 31 22406060\n/nix/var/nix/current-load/main-lock 31 22402919\n",
+  "stderr": "",
+  "read_only": true
+}

@@ -1,4 +1,6 @@
 pub mod capacity;
+mod decision;
+pub use decision::*;
 
 use super::AdmittedTimeProfile;
 use super::valid_time_id;
@@ -182,27 +184,14 @@ pub fn apply_scheduler_command(
     active_generation: u64,
     command: &SchedulerCommand,
 ) -> Result<SchedulerTransition, SchedulerError> {
-    validate_scheduler_state(profile, state, active_generation)?;
-    validate_scheduler_policy(profile, policy)?;
-    let key = command_key(command);
-    validate_key(key)?;
-    if key.generation != active_generation {
-        return Ok(discard_stale(state, key));
-    }
-    match command {
-        SchedulerCommand::Wake { key, priority } => wake(profile, policy, state, key, *priority),
-        SchedulerCommand::Yield { key } => yield_occurrence(profile, policy, state, key),
-        SchedulerCommand::Block { key } => block(state, key),
-        SchedulerCommand::Complete { key } => transition_phase(
-            state,
-            key,
-            RunnablePhase::Running,
-            RunnablePhase::Completed,
-            SchedulerAction::Completed,
-            false,
-        ),
-        SchedulerCommand::Cancel { key } => cancel(state, key),
-    }
+    let decision = preview_scheduler_command(profile, policy, state, active_generation, command, true)?;
+    let mut next = state.clone();
+    let action = decision.apply(&mut next, command.clone());
+    Ok(SchedulerTransition {
+        next,
+        action,
+        runnable: command_key(command).clone(),
+    })
 }
 
 pub fn choose_runnable(
@@ -212,82 +201,34 @@ pub fn choose_runnable(
     active_generation: u64,
     recorded_choice: Option<&RunnableKey>,
 ) -> Result<SchedulerSelection, SchedulerError> {
-    validate_scheduler_state(profile, state, active_generation)?;
-    validate_scheduler_policy(profile, policy)?;
-    let running = count_phase(state, RunnablePhase::Running)?;
-    if running >= profile.max_scheduler_concurrency {
-        return Err(SchedulerError::ConcurrencyLimitExceeded {
-            running,
-            maximum: profile.max_scheduler_concurrency,
-        });
-    }
-    let mut ready: Vec<&RunnableState> = state
-        .runnables
-        .iter()
-        .filter(|runnable| runnable.phase == RunnablePhase::Ready && runnable.key.generation == active_generation)
-        .collect();
-    if ready.is_empty() {
-        return Err(SchedulerError::NoReadyRunnable);
-    }
-    order_ready(&mut ready, policy.ordering, profile.fairness_bound_turns);
-    let deterministic_choice = ready[0].key.clone();
-    let selected = match policy.replay {
-        SchedulerReplayPolicy::Deterministic => {
-            if let Some(recorded) = recorded_choice
-                && recorded != &deterministic_choice
-            {
-                return Err(SchedulerError::UnexpectedReplayChoice {
-                    expected: deterministic_choice,
-                    actual: recorded.clone(),
-                });
-            }
-            ready[0].key.clone()
-        }
-        SchedulerReplayPolicy::RecordedChoiceRequired => {
-            let recorded = recorded_choice.ok_or(SchedulerError::ReplayChoiceRequired)?;
-            if !ready.iter().any(|runnable| &runnable.key == recorded) {
-                return Err(SchedulerError::UnexpectedReplayChoice {
-                    expected: ready[0].key.clone(),
-                    actual: recorded.clone(),
-                });
-            }
-            recorded.clone()
-        }
-    };
-    enforce_fairness(profile, &ready, &selected)?;
-
+    let decision = preview_runnable_choice(profile, policy, state, active_generation, recorded_choice, None)?;
+    let selected = state.runnables[decision.index].key.clone();
+    let choice_sequence = decision.choice_sequence;
+    let eligible_count = decision.eligible_count;
     let mut next = state.clone();
-    for runnable in &mut next.runnables {
-        if runnable.phase != RunnablePhase::Ready {
-            continue;
-        }
-        if runnable.key == selected {
-            runnable.phase = RunnablePhase::Running;
-            runnable.wait_turns = 0;
-        } else {
-            runnable.wait_turns = runnable.wait_turns.checked_add(1).ok_or(SchedulerError::Overflow)?;
-        }
-    }
-    next.choice_sequence = next.choice_sequence.checked_add(1).ok_or(SchedulerError::Overflow)?;
-    let eligible_count = u64::try_from(ready.len()).map_err(|_| SchedulerError::Overflow)?;
+    decision.apply(&mut next);
     Ok(SchedulerSelection {
-        choice_sequence: next.choice_sequence,
         next,
         selected,
+        choice_sequence,
         eligible_count,
     })
 }
 
 pub fn cleanup_scheduler_generation(state: &SchedulerState, generation: u64) -> SchedulerState {
     let mut next = state.clone();
-    for runnable in &mut next.runnables {
+    cleanup_scheduler_generation_in_place(&mut next, generation);
+    next
+}
+
+pub fn cleanup_scheduler_generation_in_place(state: &mut SchedulerState, generation: u64) {
+    for runnable in &mut state.runnables {
         if runnable.key.generation == generation
             && !matches!(runnable.phase, RunnablePhase::Completed | RunnablePhase::Cancelled)
         {
             runnable.phase = RunnablePhase::Cancelled;
         }
     }
-    next
 }
 
 // r[impl molten.audit_f10.shared_admission]
@@ -324,154 +265,6 @@ fn overload_action(policy: SchedulerPolicy) -> SchedulerAction {
         SchedulerOverloadPolicy::Reject => SchedulerAction::RejectedOverload,
         SchedulerOverloadPolicy::Backpressure => SchedulerAction::Backpressure,
     }
-}
-
-fn unchanged_transition(state: &SchedulerState, key: &RunnableKey, action: SchedulerAction) -> SchedulerTransition {
-    SchedulerTransition {
-        next: state.clone(),
-        action,
-        runnable: key.clone(),
-    }
-}
-
-// r[impl molten.audit_f09.resume]
-// r[impl molten.audit_f09.ordering]
-fn wake(
-    profile: &AdmittedTimeProfile,
-    policy: SchedulerPolicy,
-    state: &SchedulerState,
-    key: &RunnableKey,
-    priority: i32,
-) -> Result<SchedulerTransition, SchedulerError> {
-    if let Some(existing) = state.runnables.iter().find(|runnable| &runnable.key == key) {
-        if existing.phase != RunnablePhase::Blocked {
-            return Err(SchedulerError::DuplicateRunnable(key.clone()));
-        }
-        // A blocked occurrence already holds its active slot: only ready capacity applies.
-        if let Some(action) = ready_overload_action(profile, policy, state, false)? {
-            return Ok(unchanged_transition(state, key, action));
-        }
-        let mut next = state.clone();
-        let sequence = next.next_enqueue_sequence;
-        next.next_enqueue_sequence = sequence.checked_add(1).ok_or(SchedulerError::Overflow)?;
-        let runnable = find_runnable_mut(&mut next, key)?;
-        runnable.phase = RunnablePhase::Ready;
-        runnable.priority = priority;
-        runnable.enqueue_sequence = sequence;
-        runnable.wait_turns = 0;
-        return Ok(SchedulerTransition {
-            next,
-            action: SchedulerAction::Woken,
-            runnable: key.clone(),
-        });
-    }
-    if let Some(action) = ready_overload_action(profile, policy, state, true)? {
-        return Ok(unchanged_transition(state, key, action));
-    }
-    let mut next = state.clone();
-    let enqueue_sequence = next.next_enqueue_sequence;
-    next.next_enqueue_sequence = next.next_enqueue_sequence.checked_add(1).ok_or(SchedulerError::Overflow)?;
-    next.runnables.push(RunnableState {
-        key: key.clone(),
-        priority,
-        enqueue_sequence,
-        wait_turns: 0,
-        phase: RunnablePhase::Ready,
-    });
-    Ok(SchedulerTransition {
-        next,
-        action: SchedulerAction::Woken,
-        runnable: key.clone(),
-    })
-}
-
-// r[impl molten.audit_f10.queue]
-// r[impl molten.audit_f10.atomicity]
-fn yield_occurrence(
-    profile: &AdmittedTimeProfile,
-    policy: SchedulerPolicy,
-    state: &SchedulerState,
-    key: &RunnableKey,
-) -> Result<SchedulerTransition, SchedulerError> {
-    let phase = find_runnable(state, key)?.phase;
-    if phase != RunnablePhase::Running {
-        return Err(SchedulerError::InvalidPhase {
-            key: key.clone(),
-            expected: RunnablePhase::Running,
-            actual: phase,
-        });
-    }
-    // A running occurrence already holds its active slot: only ready capacity applies.
-    if let Some(action) = ready_overload_action(profile, policy, state, false)? {
-        return Ok(unchanged_transition(state, key, action));
-    }
-    transition_phase(state, key, RunnablePhase::Running, RunnablePhase::Ready, SchedulerAction::Yielded, true)
-}
-
-fn block(state: &SchedulerState, key: &RunnableKey) -> Result<SchedulerTransition, SchedulerError> {
-    let phase = find_runnable(state, key)?.phase;
-    if !matches!(phase, RunnablePhase::Ready | RunnablePhase::Running) {
-        return Err(SchedulerError::InvalidPhase {
-            key: key.clone(),
-            expected: RunnablePhase::Running,
-            actual: phase,
-        });
-    }
-    let mut next = state.clone();
-    find_runnable_mut(&mut next, key)?.phase = RunnablePhase::Blocked;
-    Ok(SchedulerTransition {
-        next,
-        action: SchedulerAction::Blocked,
-        runnable: key.clone(),
-    })
-}
-
-fn cancel(state: &SchedulerState, key: &RunnableKey) -> Result<SchedulerTransition, SchedulerError> {
-    let phase = find_runnable(state, key)?.phase;
-    if matches!(phase, RunnablePhase::Completed | RunnablePhase::Cancelled) {
-        return Err(SchedulerError::InvalidPhase {
-            key: key.clone(),
-            expected: RunnablePhase::Ready,
-            actual: phase,
-        });
-    }
-    let mut next = state.clone();
-    find_runnable_mut(&mut next, key)?.phase = RunnablePhase::Cancelled;
-    Ok(SchedulerTransition {
-        next,
-        action: SchedulerAction::Cancelled,
-        runnable: key.clone(),
-    })
-}
-
-fn transition_phase(
-    state: &SchedulerState,
-    key: &RunnableKey,
-    expected: RunnablePhase,
-    target: RunnablePhase,
-    action: SchedulerAction,
-    refresh_enqueue_sequence: bool,
-) -> Result<SchedulerTransition, SchedulerError> {
-    let actual = find_runnable(state, key)?.phase;
-    if actual != expected {
-        return Err(SchedulerError::InvalidPhase {
-            key: key.clone(),
-            expected,
-            actual,
-        });
-    }
-    let mut next = state.clone();
-    if refresh_enqueue_sequence {
-        let sequence = next.next_enqueue_sequence;
-        next.next_enqueue_sequence = sequence.checked_add(1).ok_or(SchedulerError::Overflow)?;
-        find_runnable_mut(&mut next, key)?.enqueue_sequence = sequence;
-    }
-    find_runnable_mut(&mut next, key)?.phase = target;
-    Ok(SchedulerTransition {
-        next,
-        action,
-        runnable: key.clone(),
-    })
 }
 
 fn validate_scheduler_policy(profile: &AdmittedTimeProfile, actual: SchedulerPolicy) -> Result<(), SchedulerError> {
@@ -524,89 +317,7 @@ fn command_key(command: &SchedulerCommand) -> &RunnableKey {
     }
 }
 
-fn discard_stale(state: &SchedulerState, key: &RunnableKey) -> SchedulerTransition {
-    SchedulerTransition {
-        next: state.clone(),
-        action: SchedulerAction::DiscardedStaleGeneration,
-        runnable: key.clone(),
-    }
-}
-
-fn find_runnable<'a>(state: &'a SchedulerState, key: &RunnableKey) -> Result<&'a RunnableState, SchedulerError> {
-    state
-        .runnables
-        .iter()
-        .find(|runnable| &runnable.key == key)
-        .ok_or_else(|| SchedulerError::UnknownRunnable(key.clone()))
-}
-
-fn find_runnable_mut<'a>(
-    state: &'a mut SchedulerState,
-    key: &RunnableKey,
-) -> Result<&'a mut RunnableState, SchedulerError> {
-    state
-        .runnables
-        .iter_mut()
-        .find(|runnable| &runnable.key == key)
-        .ok_or_else(|| SchedulerError::UnknownRunnable(key.clone()))
-}
-
 fn count_phase(state: &SchedulerState, phase: RunnablePhase) -> Result<u64, SchedulerError> {
     u64::try_from(state.runnables.iter().filter(|runnable| runnable.phase == phase).count())
         .map_err(|_| SchedulerError::Overflow)
-}
-
-fn order_ready(ready: &mut [&RunnableState], ordering: SchedulerOrdering, fairness_bound: Option<u64>) {
-    ready.sort_by(|left, right| {
-        let fairness = fairness_bound.map(|bound| {
-            let left_due = left.wait_turns >= bound;
-            let right_due = right.wait_turns >= bound;
-            right_due.cmp(&left_due).then_with(|| {
-                if left_due && right_due {
-                    right.wait_turns.cmp(&left.wait_turns)
-                } else {
-                    std::cmp::Ordering::Equal
-                }
-            })
-        });
-        fairness
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| match ordering {
-                SchedulerOrdering::Fifo => left.enqueue_sequence.cmp(&right.enqueue_sequence),
-                SchedulerOrdering::PriorityThenFifo => {
-                    right.priority.cmp(&left.priority).then_with(|| left.enqueue_sequence.cmp(&right.enqueue_sequence))
-                }
-            })
-            .then_with(|| left.key.cmp(&right.key))
-    });
-}
-
-fn enforce_fairness(
-    profile: &AdmittedTimeProfile,
-    ready: &[&RunnableState],
-    selected: &RunnableKey,
-) -> Result<(), SchedulerError> {
-    let Some(maximum) = profile.fairness_bound_turns else {
-        return Ok(());
-    };
-    let Some(overdue) = ready
-        .iter()
-        .filter(|runnable| runnable.wait_turns >= maximum)
-        .max_by_key(|runnable| runnable.wait_turns)
-    else {
-        return Ok(());
-    };
-    let selected_wait = ready
-        .iter()
-        .find(|runnable| &runnable.key == selected)
-        .map(|runnable| runnable.wait_turns)
-        .unwrap_or_default();
-    if selected_wait < overdue.wait_turns {
-        return Err(SchedulerError::FairnessBoundExceeded {
-            key: overdue.key.clone(),
-            wait_turns: overdue.wait_turns,
-            maximum,
-        });
-    }
-    Ok(())
 }

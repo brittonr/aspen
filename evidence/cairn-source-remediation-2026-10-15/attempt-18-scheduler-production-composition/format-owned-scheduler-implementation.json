@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "nix",
+    "develop",
+    "--no-write-lock-file",
+    "-c",
+    "cargo",
+    "fmt",
+    "--all"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T04:33:41.163890+00:00",
+  "elapsed_seconds": 9.58,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "copying path '/nix/store/178f27ph50xmw8b48pr7vpg1vklm8ap4-octet-0.1.0' from 'http://100.100.103.95:5000'...\ncopying path '/nix/store/m1cyjspix8ss5r7q5b3pwy6nq2lxim15-octet-ui-library' from 'http://100.100.103.95:5000'...\nbuilding '/nix/store/bkjf9sr9m81vyz9lyg3w4385q706mp9s-cargo-octet-0.1.0.drv'...\nbuilding '/nix/store/zc01l6qmmdl37nmpsb4hz9b41jikvk9a-nix-shell-env.drv'...\n"
+}

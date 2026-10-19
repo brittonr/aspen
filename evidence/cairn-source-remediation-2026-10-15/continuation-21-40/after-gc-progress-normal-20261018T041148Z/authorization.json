@@ -1,0 +1,19 @@
+{
+  "recorded_at": "2026-10-18T04:11:48.888336+00:00",
+  "user_selection": "Normal-settings sequence",
+  "scope": "Recheck preserved inputs; one unchanged normal-settings three-check retry; required repository flake gate only if all three pass",
+  "deadline_seconds_per_command": 3500,
+  "normal_nix_settings": true,
+  "automatic_gc_override": false,
+  "constraints": [
+    "No shared or unrelated process signals",
+    "Deadline termination only of the owned command process group",
+    "No daemon restart, manual shared-data deletion or host setting change",
+    "No source, dependency pin or toolchain change",
+    "No acceptance weakening or premature lifecycle closure"
+  ],
+  "prior_result": "../post-worker-recovery-outcome.json",
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false
+}

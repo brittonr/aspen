@@ -1,0 +1,128 @@
+{
+  "recorded_at": "2026-10-18T17:58:39.509218+00:00",
+  "status": "authorized-post-holder-exit-sequence-finished-nonpassing",
+  "authorization": "authorization.json",
+  "launch_record": "launch.json",
+  "job_handle": "bg_137",
+  "stage_one": {
+    "record": "ordered-relevant-nix-checks.json",
+    "argv": [
+      "nix",
+      "build",
+      "--no-update-lock-file",
+      "--no-link",
+      "-L",
+      ".#checks.x86_64-linux.nextest",
+      ".#checks.x86_64-linux.clippy",
+      ".#checks.x86_64-linux.nextest-config"
+    ],
+    "started_at": "2026-10-18T16:58:17.800968+00:00",
+    "elapsed_seconds": 3500.159,
+    "exit_code": 1,
+    "timed_out": true,
+    "stdout": "",
+    "stderr": "\nshutting down\u001b[Kerror: interrupted by the user\n",
+    "termination": "Existing recorder reached its 3500-second deadline and terminated only its owned command process group; interruption wording is not proof of manual operator cancellation",
+    "checks": [
+      "nextest",
+      "clippy",
+      "nextest-config"
+    ],
+    "passing_acceptance_established": false,
+    "behavioral_test_failure_established": false,
+    "server_side_cause_established": false,
+    "gc_wait_diagnostic_in_this_run": false
+  },
+  "stage_two": {
+    "argv": [
+      "nix",
+      "flake",
+      "check",
+      "--no-update-lock-file",
+      "-L",
+      "."
+    ],
+    "authorized_condition": "All three stage-one checks pass: exit_code 0 and timed_out false",
+    "condition_satisfied": false,
+    "started": false,
+    "disposition": "Not launched; required gate remains unchecked"
+  },
+  "source_identity": {
+    "before": "source-binding.json",
+    "before_exit_code": 0,
+    "after": "source-binding-after.json",
+    "after_exit_code": 0,
+    "preserved_source_inventory_matches_before_and_after": true,
+    "limit": "Identity evidence for the existing preserved source manifest, not a passing acceptance result"
+  },
+  "post_retry_storage": {
+    "record": "post-retry-headroom.json",
+    "observed_at": "2026-10-18T17:57:27.705038+00:00",
+    "dataset_available_bytes": 31001673728,
+    "dataset_available_gib": 28.87255859375,
+    "same_available_value_reported_for": [
+      "/nix/store",
+      "/home/brittonr/.cargo-target"
+    ],
+    "current_threshold_source": "/etc/nix/nix.conf:15-17",
+    "min_free_bytes": 107374182400,
+    "max_free_bytes": 137438953472,
+    "additional_dataset_available_gib_to_min_free": 71.12744140625,
+    "additional_dataset_available_gib_to_max_free": 99.12744140625,
+    "limits": [
+      "[INFERENCE] Below-min-free capacity can trigger automatic GC under normal settings; this does not establish the timeout cause",
+      "Shared headroom is not reserved build capacity",
+      "No fresh root holder scan or current store-lock-owner wait-state inspection performed after this retry"
+    ]
+  },
+  "prior_holder": {
+    "record": "../read-only-lock-owner-diagnosis-20261018T155954Z/identified-gc-holder-20261018T164706Z/diagnosis.json",
+    "historical_pid": 725672,
+    "journal_reap_at_utc": "2026-10-18T16:45:54+00:00",
+    "limit": "Historical PID is not a current inspection or signalling target; no current GC-holder identity is claimed"
+  },
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "last_recorded_active_molten_change_count": 47,
+  "prerequisite_disposition": "Do not start implementation attempt 21 before the required unchanged-source acceptance prerequisite passes",
+  "lifecycle_disposition": {
+    "F09_F10_remain_active": true,
+    "required_nix_tasks_remain_unchecked": true,
+    "repository_flake_gate_not_reached": true,
+    "post_nix_strict_cairn_validation_not_reached": true,
+    "synced_by_this_sequence": false,
+    "archived_by_this_sequence": false,
+    "completion_commit_created_by_this_sequence": false,
+    "remote_publication_performed": false
+  },
+  "mutations_and_authority": {
+    "product_source_changed": false,
+    "dependency_or_toolchain_pins_changed": false,
+    "historical_evidence_or_fixtures_rewritten": false,
+    "host_configuration_changed": false,
+    "automatic_gc_override": false,
+    "daemon_restarted": false,
+    "manual_shared_data_deletion": false,
+    "shared_process_control": false,
+    "deadline_control_only_of_owned_command_group": true
+  },
+  "next_boundary": "The single authorized retry is consumed. Host recovery or another diagnostic/acceptance operation requires a new material authorization; do not infer another Nix run or waive the failed prerequisite.",
+  "recommendation": "Operator-owned capacity recovery before another acceptance retry; alternatively authorize a bounded read-only diagnosis of the current live contention. Do not signal the historical holder.",
+  "non_claims": [
+    "No test failure inferred from interruption alone",
+    "No proved GC causation or deadlock",
+    "No demonstrated host recovery",
+    "No passing Nix acceptance or lifecycle completion"
+  ],
+  "maintenance_owner": "Molten maintainers retain the acceptance evidence; host operator owns Nix/ZFS recovery decisions",
+  "repeatability_evidence": [
+    "authorization.json",
+    "start.json",
+    "launch.json",
+    "ordered-relevant-nix-checks.json",
+    "source-binding.json",
+    "source-binding-after.json",
+    "post-retry-headroom.json"
+  ]
+}

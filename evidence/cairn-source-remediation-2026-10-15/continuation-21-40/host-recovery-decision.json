@@ -1,0 +1,29 @@
+{
+  "user_selection": "I\u2019ll repair the host",
+  "scope": "Keep implementation paused while the user repairs the Nix/store prerequisite externally; resume only after the user reports it ready",
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "prior_checkpoint": "post-command-local-retry-checkpoint.json",
+  "acceptance_unchanged": [
+    "nextest",
+    "clippy",
+    "nextest-config",
+    "remaining per-change required gates"
+  ],
+  "no_additional_authority_inferred": [
+    "No further acceptance retry now",
+    "No further command-local GC override",
+    "No persistent host settings change",
+    "No shared-data deletion",
+    "No unrelated-process termination",
+    "No acceptance weakening",
+    "No premature sync/archive or producer publication"
+  ],
+  "waiting_for": "The user to report the Nix/store host prerequisite repaired",
+  "non_claims": [
+    "Host repair not observed",
+    "Required Nix acceptance has not passed",
+    "Neither producer implementation nor Molten completion is established"
+  ]
+}

@@ -136,3 +136,86 @@ fn checked_increment(value: u64, label: &str) -> crate::error::Result<u64> {
 fn core_error(label: &str, error: impl std::fmt::Debug) -> crate::error::Failure {
     crate::error::Failure::invalid_harness(format!("{label}: {error:?}"))
 }
+
+fn scheduler_owner(profile: &Profile) -> crate::error::Result<SchedulerRuntime<SimulationSchedulerWakeAdapter>> {
+    let context = ExtensionTimeContext::for_application(
+        FIXTURE_SERVICE_ID.to_string(),
+        FIXTURE_GENERATION,
+        &profile.profile,
+    );
+    Ok(SchedulerRuntime::activate(
+        context,
+        profile.profile.clone(),
+        SimulationSchedulerWakeAdapter::activate(&profile.profile)?,
+    )?)
+}
+
+fn scheduler_command(
+    owner: &mut SchedulerRuntime<SimulationSchedulerWakeAdapter>,
+    command: SchedulerCommand,
+) -> crate::error::Result<SchedulerTransition> {
+    let key = match &command {
+        SchedulerCommand::Wake { key, .. }
+        | SchedulerCommand::Yield { key }
+        | SchedulerCommand::Block { key }
+        | SchedulerCommand::Complete { key }
+        | SchedulerCommand::Cancel { key } => key.clone(),
+    };
+    let action = owner.command(command)?;
+    let delivered = owner.effects_mut().drain_next();
+    if matches!(action, SchedulerAction::Woken | SchedulerAction::Yielded) {
+        let index = delivered
+            .ok_or_else(|| crate::error::Failure::invalid_harness("simulation consumer received no admitted wake"))?;
+        let index = usize::try_from(index)
+            .map_err(|_| crate::error::Failure::invalid_harness("simulation consumer index overflow"))?;
+        if owner.state().runnables[index].key != key
+            || owner.state().runnables[index].phase != RunnablePhase::Ready
+            || owner.capacity_state().queue_usage == 0
+        {
+            return Err(crate::error::Failure::invalid_harness(
+                "simulation consumer observed an uncommitted scheduler wake",
+            ));
+        }
+    } else if delivered.is_some() {
+        return Err(crate::error::Failure::invalid_harness("simulation consumer received a denied wake"));
+    }
+    Ok(SchedulerTransition {
+        next: owner.state().clone(),
+        action,
+        runnable: key,
+    })
+}
+
+/// Fills the scheduler queue to its admitted depth and requires one more wake to be rejected as
+/// overload.
+fn run_scheduler_saturation(
+    profile: &Profile,
+    events: &mut impl crate::bounded::VecSink<Event>,
+    counters: &mut ScenarioCounters,
+) -> crate::error::Result<()> {
+    let saturation_fault = Fault::SaturateSchedulerQueue;
+    let mut owner = scheduler_owner(profile)?;
+    for index in 0..profile.profile.max_scheduler_queue_depth {
+        let action = owner.command(SchedulerCommand::Wake { key: runnable_key(&format!("saturated-{index}")), priority: 0 })?;
+        let delivered = owner.effects_mut().drain_next().ok_or_else(|| crate::error::Failure::invalid_harness("saturation consumer received no admitted wake"))?;
+        let delivered = usize::try_from(delivered)
+            .map_err(|_| crate::error::Failure::invalid_harness("saturation consumer index overflow"))?;
+        if action != SchedulerAction::Woken || owner.state().runnables[delivered].phase != RunnablePhase::Ready || owner.capacity_state().queue_usage != index + 1 {
+            return Err(crate::error::Failure::invalid_harness("saturation consumer observed inconsistent committed usage"));
+        }
+    }
+    let overload = scheduler_command(&mut owner, SchedulerCommand::Wake { key: runnable_key("saturated-overflow"), priority: 0 })?;
+    validate_scheduler_fault_outcome(&saturation_fault, &overload)?;
+    events.push_item(scheduler_transition(&profile.profile_ref, &overload)?);
+    events.push_item(named_event(EventHeader {
+        profile_ref: &profile.profile_ref,
+        kind: EventKind::Fault,
+        generation: FIXTURE_GENERATION,
+        subject: "scheduler-queue",
+        action: "saturated",
+        ticks: profile.profile.max_scheduler_queue_depth,
+    })?);
+    counters.scheduler_events = checked_increment(counters.scheduler_events, "scheduler event count")?;
+    counters.fault_events = checked_increment(counters.fault_events, "fault event count")?;
+    Ok(())
+}

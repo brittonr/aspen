@@ -1,0 +1,30 @@
+{
+  "correction_complete": true,
+  "api_change": "SchedulerWakePort::deliver(&mut self, prepared: Self::Prepared, committed: SchedulerWakeCommit<'_>) -> FabricPortResult<()>. SchedulerWakeCommit borrows actual owner scheduler/capacity fields and includes occurrence: usize. Activation, command, choose, concrete registration and simulation drain APIs are unchanged.",
+  "changed_paths": [
+    "src/fabric_time/ports.rs",
+    "src/fabric_time/shell.rs",
+    "src/fabric_time/parts/adapters/p001/body.rs",
+    "src/fabric_time/tests/adapters/mod.rs",
+    "src/fabric_time/tests/adapters/fencing.rs",
+    "docs/fabric-time-scheduler-runtime.md"
+  ],
+  "observation_logic": [
+    "Owner constructs SchedulerWakeCommit directly from &self.capacity.scheduler and &self.capacity.state after publishing scheduler/capacity/Ready state; the production change is only borrowed references and an index, with no new allocation.",
+    "Behavioral test observer captures those actual borrowed fields at entry to deliver, before invoking the concrete ThreadSchedulerWakeAdapter or SimulationSchedulerWakeAdapter. It never reacquires the owner mutex to obtain the boundary observation.",
+    "Live boundary packets are consumed by the actual parked receiving worker after concrete thread delivery. Simulation observations are paired with indices independently drained from the actual simulation adapter.",
+    "The shared receiver predicate checks the boundary occurrence/key is Ready, actual active/Ready counts equal capacity usage, and generation/profile/release facts agree. Normal consumption also compares the captured boundary state with final owner state."
+  ],
+  "wrong_order_control": "receiving_boundary_rejects_real_delivery_before_publication covers both real concrete backends and both Running Yield / Blocked Wake. It previews the authoritative admitted command, prepares the actual target, then deliberately delivers using the same owner's real unpublished Running/Blocked fields through a cfg(test) disjoint-borrow accessor. The normal receiver predicate must return false for that concrete delivery; owner state must remain exactly unchanged. The subsequent normal owning command must pass the identical receiver predicate.",
+  "denied_delivery_accounting": [
+    "Removed the 20ms absence window entirely.",
+    "Each non-Woken/non-Yielded command and every choose synchronously checks cumulative prepare and deliver counts against consumed delivery sequences.",
+    "Accepted effects must be received before any new checkpoint control wake. Consumption then checkpoints, detecting additional/unaccounted preparation or delivery.",
+    "Live checkpoints are FIFO behind preceding real-delivery boundary packets. Receiver acknowledgement includes the exact checkpoint sequence and total consumed delivery count; an unexpected Delivery before the acknowledgement fails immediately.",
+    "A confirmation packet is sent only after the explicit control unpark returns. Receiver waits for that confirmation, drains any pending control permit with zero-duration park_timeout without drawing any absence inference, acknowledges, and re-enters park before processing later commands.",
+    "Successful Drop checkpoints before Stop; it cannot silently discard a final erroneous delivery. Panic teardown merely terminates the already-failed test without a second panic.",
+    "Timeouts now only bound failure to receive required positive progress/checkpoint acknowledgements, never infer absence of an effect."
+  ],
+  "migration": "Both concrete delivery implementations, owner callsite, behavioral observer and committed-uncertainty fault regression use the new delivery argument. Source inventory found no old deliver signatures or DENIED_OBSERVATION/RecvTimeoutError::Timeout absence checks in fabric_time.",
+  "verification": "No builds, tests, lint, formatter, lifecycle or git commands executed. Parent still owns formatting and the first post-edit acceptance campaign; no execution/pass claim is made."
+}

@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "/run/current-system/sw/bin/timeout",
+    "--signal=TERM",
+    "--kill-after=5s",
+    "20s",
+    "/run/wrappers/bin/sudo",
+    "-n",
+    "/run/current-system/sw/bin/python3",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/continuation-21-40/read-only-lock-owner-diagnosis-20261018T155954Z/inspect-lock-owners.py"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-18T16:20:28.505838+00:00",
+  "elapsed_seconds": 0.008,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "sudo: a password is required\n",
+  "read_only": true
+}

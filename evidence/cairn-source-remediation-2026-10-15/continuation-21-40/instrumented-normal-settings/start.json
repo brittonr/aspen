@@ -1,0 +1,60 @@
+{
+  "user_selection": "Instrument one bounded run",
+  "argv": [
+    "nix",
+    "--debug",
+    "--log-format",
+    "raw",
+    "build",
+    "--no-update-lock-file",
+    "--no-link",
+    "-L",
+    ".#checks.x86_64-linux.nextest",
+    ".#checks.x86_64-linux.clippy",
+    ".#checks.x86_64-linux.nextest-config"
+  ],
+  "launcher_argv": [
+    "bash",
+    "/tmp/molten-cairn-continuation-rrpmy62t/with-cached-shell.sh",
+    "nix",
+    "--debug",
+    "--log-format",
+    "raw",
+    "build",
+    "--no-update-lock-file",
+    "--no-link",
+    "-L",
+    ".#checks.x86_64-linux.nextest",
+    ".#checks.x86_64-linux.clippy",
+    ".#checks.x86_64-linux.nextest-config"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "deadline_seconds": 600,
+  "logging_only_additions": [
+    "--debug",
+    "--log-format",
+    "raw"
+  ],
+  "gc_override": false,
+  "normal_automatic_gc_may_run": true,
+  "source_binding": "source-binding.json",
+  "source_inputs": 1911,
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "client_snapshot_offsets_seconds": [
+    5,
+    60,
+    300,
+    590
+  ],
+  "stderr_retention": {
+    "first_bytes": 2097152,
+    "last_bytes_after_first": 524288
+  },
+  "stdout_retention": {
+    "first_bytes": 262144,
+    "last_bytes_after_first": 65536
+  },
+  "scope": "One instrumented unchanged-command run; no host configuration, daemon restart, manual shared-data deletion or unrelated-process termination"
+}

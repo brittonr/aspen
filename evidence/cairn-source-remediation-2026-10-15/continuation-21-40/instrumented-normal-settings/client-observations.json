@@ -1,0 +1,602 @@
+[
+  {
+    "scheduled_offset_seconds": 5,
+    "observed_at": "2026-10-17T19:58:37.950364+00:00",
+    "elapsed_seconds": 5.003,
+    "wrapper_pid": 2283898,
+    "client_selection": {
+      "argv": [
+        "ps",
+        "--ppid",
+        "2283898",
+        "-o",
+        "pid,comm,args",
+        "--no-headers"
+      ],
+      "exit_code": 0,
+      "stdout": "2283914 nix             nix --debug --log-format raw build --no-update-lock-file --no-link -L .#checks.x86_64-linux.nextest .#checks.x86_64-linux.clippy .#checks.x86_64-linux.nextest-config\n",
+      "stderr": ""
+    },
+    "nix_client_pids": [
+      2283914
+    ],
+    "proc_observations": [
+      {
+        "path": "/proc/2283914/wchan",
+        "result": {
+          "text": "[/proc/2283914/wchan#6924]\n1:unix_stream_read_generic",
+          "details": {
+            "totalLines": 1,
+            "displayContent": {
+              "text": "unix_stream_read_generic",
+              "startLine": 1,
+              "lineNumbers": [
+                1
+              ]
+            },
+            "fileSize": 0,
+            "meta": {
+              "source": {
+                "type": "path",
+                "value": "/proc/2283914/wchan"
+              }
+            }
+          }
+        }
+      },
+      {
+        "path": "/proc/2283914/syscall",
+        "result": {
+          "text": "[/proc/2283914/syscall#BD08]\n1:0 0x4 0x5c3d5190000 0x8000 0x0 0x0 0x0 0x744eef8ff0d8 0x74531509f922",
+          "details": {
+            "totalLines": 1,
+            "displayContent": {
+              "text": "0 0x4 0x5c3d5190000 0x8000 0x0 0x0 0x0 0x744eef8ff0d8 0x74531509f922",
+              "startLine": 1,
+              "lineNumbers": [
+                1
+              ]
+            },
+            "fileSize": 0,
+            "meta": {
+              "source": {
+                "type": "path",
+                "value": "/proc/2283914/syscall"
+              }
+            }
+          }
+        }
+      },
+      {
+        "path": "/proc/2283914/status:1-32",
+        "result": {
+          "text": "[/proc/2283914/status#5C4F]\n1:Name:\tnix\n2:Umask:\t0022\n3:State:\tS (sleeping)\n4:Tgid:\t2283914\n5:Ngid:\t0\n6:Pid:\t2283914\n7:PPid:\t2283898\n8:TracerPid:\t0\n9:Uid:\t1555\t1555\t1555\t1555\n10:Gid:\t998\t998\t998\t998\n11:FDSize:\t1024\n12:Groups:\t1 6 17 26 27 57 131 174 302 998 \n13:NStgid:\t2283914\n14:NSpid:\t2283914\n15:NSpgid:\t2283898\n16:NSsid:\t2283898\n17:Kthread:\t0\n18:VmPeak:\t18532548 kB\n19:VmSize:\t18463820 kB\n20:VmLck:\t       0 kB\n21:VmPin:\t       0 kB\n22:VmHWM:\t  316852 kB\n23:VmRSS:\t  316852 kB\n24:RssAnon:\t  291884 kB\n25:RssFile:\t   24968 kB\n26:RssShmem:\t       0 kB\n27:VmData:\t18395680 kB\n28:VmStk:\t     552 kB\n29:VmExe:\t    2168 kB\n30:VmLib:\t   41292 kB\n31:VmPTE:\t     832 kB\n32:VmSwap:\t       0 kB\n33:HugetlbPages:\t       0 kB\n34:CoreDumping:\t0\n35:THP_enabled:\t1\n\n[Showing lines 1-35 of 61. Use :36 to continue]",
+          "details": {
+            "truncation": {
+              "truncated": true,
+              "truncatedBy": "lines",
+              "totalLines": 61,
+              "totalBytes": 628,
+              "outputLines": 35,
+              "outputBytes": 628,
+              "lastLinePartial": false,
+              "firstLineExceedsLimit": false
+            },
+            "totalLines": 61,
+            "displayContent": {
+              "text": "Name:\tnix\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t2283914\nNgid:\t0\nPid:\t2283914\nPPid:\t2283898\nTracerPid:\t0\nUid:\t1555\t1555\t1555\t1555\nGid:\t998\t998\t998\t998\nFDSize:\t1024\nGroups:\t1 6 17 26 27 57 131 174 302 998 \nNStgid:\t2283914\nNSpid:\t2283914\nNSpgid:\t2283898\nNSsid:\t2283898\nKthread:\t0\nVmPeak:\t18532548 kB\nVmSize:\t18463820 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t  316852 kB\nVmRSS:\t  316852 kB\nRssAnon:\t  291884 kB\nRssFile:\t   24968 kB\nRssShmem:\t       0 kB\nVmData:\t18395680 kB\nVmStk:\t     552 kB\nVmExe:\t    2168 kB\nVmLib:\t   41292 kB\nVmPTE:\t     832 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1",
+              "startLine": 1,
+              "lineNumbers": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18,
+                19,
+                20,
+                21,
+                22,
+                23,
+                24,
+                25,
+                26,
+                27,
+                28,
+                29,
+                30,
+                31,
+                32,
+                33,
+                34,
+                35
+              ]
+            },
+            "fileSize": 0,
+            "meta": {
+              "source": {
+                "type": "path",
+                "value": "/proc/2283914/status"
+              },
+              "truncation": {
+                "direction": "head",
+                "truncatedBy": "lines",
+                "totalLines": 61,
+                "totalBytes": 628,
+                "outputLines": 35,
+                "outputBytes": 628,
+                "shownRange": {
+                  "start": 1,
+                  "end": 35
+                },
+                "nextOffset": 36
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "scheduled_offset_seconds": 60,
+    "observed_at": "2026-10-17T19:59:33.001979+00:00",
+    "elapsed_seconds": 60.055,
+    "wrapper_pid": 2283898,
+    "client_selection": {
+      "argv": [
+        "ps",
+        "--ppid",
+        "2283898",
+        "-o",
+        "pid,comm,args",
+        "--no-headers"
+      ],
+      "exit_code": 0,
+      "stdout": "2283914 nix             nix --debug --log-format raw build --no-update-lock-file --no-link -L .#checks.x86_64-linux.nextest .#checks.x86_64-linux.clippy .#checks.x86_64-linux.nextest-config\n",
+      "stderr": ""
+    },
+    "nix_client_pids": [
+      2283914
+    ],
+    "proc_observations": [
+      {
+        "path": "/proc/2283914/wchan",
+        "result": {
+          "text": "[/proc/2283914/wchan#6924]\n1:unix_stream_read_generic",
+          "details": {
+            "totalLines": 1,
+            "displayContent": {
+              "text": "unix_stream_read_generic",
+              "startLine": 1,
+              "lineNumbers": [
+                1
+              ]
+            },
+            "fileSize": 0,
+            "meta": {
+              "source": {
+                "type": "path",
+                "value": "/proc/2283914/wchan"
+              }
+            }
+          }
+        }
+      },
+      {
+        "path": "/proc/2283914/syscall",
+        "result": {
+          "text": "[/proc/2283914/syscall#BD08]\n1:0 0x4 0x5c3d5190000 0x8000 0x0 0x0 0x0 0x744eef8ff0d8 0x74531509f922",
+          "details": {
+            "totalLines": 1,
+            "displayContent": {
+              "text": "0 0x4 0x5c3d5190000 0x8000 0x0 0x0 0x0 0x744eef8ff0d8 0x74531509f922",
+              "startLine": 1,
+              "lineNumbers": [
+                1
+              ]
+            },
+            "fileSize": 0,
+            "meta": {
+              "source": {
+                "type": "path",
+                "value": "/proc/2283914/syscall"
+              }
+            }
+          }
+        }
+      },
+      {
+        "path": "/proc/2283914/status:1-32",
+        "result": {
+          "text": "[/proc/2283914/status#5C4F]\n1:Name:\tnix\n2:Umask:\t0022\n3:State:\tS (sleeping)\n4:Tgid:\t2283914\n5:Ngid:\t0\n6:Pid:\t2283914\n7:PPid:\t2283898\n8:TracerPid:\t0\n9:Uid:\t1555\t1555\t1555\t1555\n10:Gid:\t998\t998\t998\t998\n11:FDSize:\t1024\n12:Groups:\t1 6 17 26 27 57 131 174 302 998 \n13:NStgid:\t2283914\n14:NSpid:\t2283914\n15:NSpgid:\t2283898\n16:NSsid:\t2283898\n17:Kthread:\t0\n18:VmPeak:\t18532548 kB\n19:VmSize:\t18463820 kB\n20:VmLck:\t       0 kB\n21:VmPin:\t       0 kB\n22:VmHWM:\t  316852 kB\n23:VmRSS:\t  316852 kB\n24:RssAnon:\t  291884 kB\n25:RssFile:\t   24968 kB\n26:RssShmem:\t       0 kB\n27:VmData:\t18395680 kB\n28:VmStk:\t     552 kB\n29:VmExe:\t    2168 kB\n30:VmLib:\t   41292 kB\n31:VmPTE:\t     832 kB\n32:VmSwap:\t       0 kB\n33:HugetlbPages:\t       0 kB\n34:CoreDumping:\t0\n35:THP_enabled:\t1\n\n[Showing lines 1-35 of 61. Use :36 to continue]",
+          "details": {
+            "truncation": {
+              "truncated": true,
+              "truncatedBy": "lines",
+              "totalLines": 61,
+              "totalBytes": 628,
+              "outputLines": 35,
+              "outputBytes": 628,
+              "lastLinePartial": false,
+              "firstLineExceedsLimit": false
+            },
+            "totalLines": 61,
+            "displayContent": {
+              "text": "Name:\tnix\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t2283914\nNgid:\t0\nPid:\t2283914\nPPid:\t2283898\nTracerPid:\t0\nUid:\t1555\t1555\t1555\t1555\nGid:\t998\t998\t998\t998\nFDSize:\t1024\nGroups:\t1 6 17 26 27 57 131 174 302 998 \nNStgid:\t2283914\nNSpid:\t2283914\nNSpgid:\t2283898\nNSsid:\t2283898\nKthread:\t0\nVmPeak:\t18532548 kB\nVmSize:\t18463820 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t  316852 kB\nVmRSS:\t  316852 kB\nRssAnon:\t  291884 kB\nRssFile:\t   24968 kB\nRssShmem:\t       0 kB\nVmData:\t18395680 kB\nVmStk:\t     552 kB\nVmExe:\t    2168 kB\nVmLib:\t   41292 kB\nVmPTE:\t     832 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1",
+              "startLine": 1,
+              "lineNumbers": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18,
+                19,
+                20,
+                21,
+                22,
+                23,
+                24,
+                25,
+                26,
+                27,
+                28,
+                29,
+                30,
+                31,
+                32,
+                33,
+                34,
+                35
+              ]
+            },
+            "fileSize": 0,
+            "meta": {
+              "source": {
+                "type": "path",
+                "value": "/proc/2283914/status"
+              },
+              "truncation": {
+                "direction": "head",
+                "truncatedBy": "lines",
+                "totalLines": 61,
+                "totalBytes": 628,
+                "outputLines": 35,
+                "outputBytes": 628,
+                "shownRange": {
+                  "start": 1,
+                  "end": 35
+                },
+                "nextOffset": 36
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "scheduled_offset_seconds": 300,
+    "observed_at": "2026-10-17T20:03:33.047004+00:00",
+    "elapsed_seconds": 300.1,
+    "wrapper_pid": 2283898,
+    "client_selection": {
+      "argv": [
+        "ps",
+        "--ppid",
+        "2283898",
+        "-o",
+        "pid,comm,args",
+        "--no-headers"
+      ],
+      "exit_code": 0,
+      "stdout": "2283914 nix             nix --debug --log-format raw build --no-update-lock-file --no-link -L .#checks.x86_64-linux.nextest .#checks.x86_64-linux.clippy .#checks.x86_64-linux.nextest-config\n",
+      "stderr": ""
+    },
+    "nix_client_pids": [
+      2283914
+    ],
+    "proc_observations": [
+      {
+        "path": "/proc/2283914/wchan",
+        "result": {
+          "text": "[/proc/2283914/wchan#6924]\n1:unix_stream_read_generic\n\n[You have received this identical output 3 times. Re-reading '/proc/2283914/wchan' will not change it \u2014 use a narrower selector (path:A-B), or proceed with the edit.]",
+          "details": {
+            "totalLines": 1,
+            "displayContent": {
+              "text": "unix_stream_read_generic",
+              "startLine": 1,
+              "lineNumbers": [
+                1
+              ]
+            },
+            "fileSize": 0,
+            "meta": {
+              "source": {
+                "type": "path",
+                "value": "/proc/2283914/wchan"
+              }
+            }
+          }
+        }
+      },
+      {
+        "path": "/proc/2283914/syscall",
+        "result": {
+          "text": "[/proc/2283914/syscall#BD08]\n1:0 0x4 0x5c3d5190000 0x8000 0x0 0x0 0x0 0x744eef8ff0d8 0x74531509f922\n\n[You have received this identical output 3 times. Re-reading '/proc/2283914/syscall' will not change it \u2014 use a narrower selector (path:A-B), or proceed with the edit.]",
+          "details": {
+            "totalLines": 1,
+            "displayContent": {
+              "text": "0 0x4 0x5c3d5190000 0x8000 0x0 0x0 0x0 0x744eef8ff0d8 0x74531509f922",
+              "startLine": 1,
+              "lineNumbers": [
+                1
+              ]
+            },
+            "fileSize": 0,
+            "meta": {
+              "source": {
+                "type": "path",
+                "value": "/proc/2283914/syscall"
+              }
+            }
+          }
+        }
+      },
+      {
+        "path": "/proc/2283914/status:1-32",
+        "result": {
+          "text": "[/proc/2283914/status#5C4F]\n1:Name:\tnix\n2:Umask:\t0022\n3:State:\tS (sleeping)\n4:Tgid:\t2283914\n5:Ngid:\t0\n6:Pid:\t2283914\n7:PPid:\t2283898\n8:TracerPid:\t0\n9:Uid:\t1555\t1555\t1555\t1555\n10:Gid:\t998\t998\t998\t998\n11:FDSize:\t1024\n12:Groups:\t1 6 17 26 27 57 131 174 302 998 \n13:NStgid:\t2283914\n14:NSpid:\t2283914\n15:NSpgid:\t2283898\n16:NSsid:\t2283898\n17:Kthread:\t0\n18:VmPeak:\t18532548 kB\n19:VmSize:\t18463820 kB\n20:VmLck:\t       0 kB\n21:VmPin:\t       0 kB\n22:VmHWM:\t  316852 kB\n23:VmRSS:\t  316852 kB\n24:RssAnon:\t  291884 kB\n25:RssFile:\t   24968 kB\n26:RssShmem:\t       0 kB\n27:VmData:\t18395680 kB\n28:VmStk:\t     552 kB\n29:VmExe:\t    2168 kB\n30:VmLib:\t   41292 kB\n31:VmPTE:\t     832 kB\n32:VmSwap:\t       0 kB\n33:HugetlbPages:\t       0 kB\n34:CoreDumping:\t0\n35:THP_enabled:\t1\n\n[You have received this identical output 3 times. Re-reading '/proc/2283914/status:1-32' will not change it \u2014 use a narrower selector (path:A-B), or proceed with the edit.]\n\n[Showing lines 1-35 of 61. Use :36 to continue]",
+          "details": {
+            "truncation": {
+              "truncated": true,
+              "truncatedBy": "lines",
+              "totalLines": 61,
+              "totalBytes": 628,
+              "outputLines": 35,
+              "outputBytes": 628,
+              "lastLinePartial": false,
+              "firstLineExceedsLimit": false
+            },
+            "totalLines": 61,
+            "displayContent": {
+              "text": "Name:\tnix\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t2283914\nNgid:\t0\nPid:\t2283914\nPPid:\t2283898\nTracerPid:\t0\nUid:\t1555\t1555\t1555\t1555\nGid:\t998\t998\t998\t998\nFDSize:\t1024\nGroups:\t1 6 17 26 27 57 131 174 302 998 \nNStgid:\t2283914\nNSpid:\t2283914\nNSpgid:\t2283898\nNSsid:\t2283898\nKthread:\t0\nVmPeak:\t18532548 kB\nVmSize:\t18463820 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t  316852 kB\nVmRSS:\t  316852 kB\nRssAnon:\t  291884 kB\nRssFile:\t   24968 kB\nRssShmem:\t       0 kB\nVmData:\t18395680 kB\nVmStk:\t     552 kB\nVmExe:\t    2168 kB\nVmLib:\t   41292 kB\nVmPTE:\t     832 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1",
+              "startLine": 1,
+              "lineNumbers": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18,
+                19,
+                20,
+                21,
+                22,
+                23,
+                24,
+                25,
+                26,
+                27,
+                28,
+                29,
+                30,
+                31,
+                32,
+                33,
+                34,
+                35
+              ]
+            },
+            "fileSize": 0,
+            "meta": {
+              "source": {
+                "type": "path",
+                "value": "/proc/2283914/status"
+              },
+              "truncation": {
+                "direction": "head",
+                "truncatedBy": "lines",
+                "totalLines": 61,
+                "totalBytes": 628,
+                "outputLines": 35,
+                "outputBytes": 628,
+                "shownRange": {
+                  "start": 1,
+                  "end": 35
+                },
+                "nextOffset": 36
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "scheduled_offset_seconds": 590,
+    "observed_at": "2026-10-17T20:08:23.047098+00:00",
+    "elapsed_seconds": 590.1,
+    "wrapper_pid": 2283898,
+    "client_selection": {
+      "argv": [
+        "ps",
+        "--ppid",
+        "2283898",
+        "-o",
+        "pid,comm,args",
+        "--no-headers"
+      ],
+      "exit_code": 0,
+      "stdout": "2283914 nix             nix --debug --log-format raw build --no-update-lock-file --no-link -L .#checks.x86_64-linux.nextest .#checks.x86_64-linux.clippy .#checks.x86_64-linux.nextest-config\n",
+      "stderr": ""
+    },
+    "nix_client_pids": [
+      2283914
+    ],
+    "proc_observations": [
+      {
+        "path": "/proc/2283914/wchan",
+        "result": {
+          "text": "[/proc/2283914/wchan#6924]\n1:unix_stream_read_generic\n\n[You have received this identical output 4 times. Re-reading '/proc/2283914/wchan' will not change it \u2014 use a narrower selector (path:A-B), or proceed with the edit.]",
+          "details": {
+            "totalLines": 1,
+            "displayContent": {
+              "text": "unix_stream_read_generic",
+              "startLine": 1,
+              "lineNumbers": [
+                1
+              ]
+            },
+            "fileSize": 0,
+            "meta": {
+              "source": {
+                "type": "path",
+                "value": "/proc/2283914/wchan"
+              }
+            }
+          }
+        }
+      },
+      {
+        "path": "/proc/2283914/syscall",
+        "result": {
+          "text": "[/proc/2283914/syscall#BD08]\n1:0 0x4 0x5c3d5190000 0x8000 0x0 0x0 0x0 0x744eef8ff0d8 0x74531509f922\n\n[You have received this identical output 4 times. Re-reading '/proc/2283914/syscall' will not change it \u2014 use a narrower selector (path:A-B), or proceed with the edit.]",
+          "details": {
+            "totalLines": 1,
+            "displayContent": {
+              "text": "0 0x4 0x5c3d5190000 0x8000 0x0 0x0 0x0 0x744eef8ff0d8 0x74531509f922",
+              "startLine": 1,
+              "lineNumbers": [
+                1
+              ]
+            },
+            "fileSize": 0,
+            "meta": {
+              "source": {
+                "type": "path",
+                "value": "/proc/2283914/syscall"
+              }
+            }
+          }
+        }
+      },
+      {
+        "path": "/proc/2283914/status:1-32",
+        "result": {
+          "text": "[/proc/2283914/status#B0B9]\n1:Name:\tnix\n2:Umask:\t0022\n3:State:\tS (sleeping)\n4:Tgid:\t2283914\n5:Ngid:\t0\n6:Pid:\t2283914\n7:PPid:\t2283898\n8:TracerPid:\t0\n9:Uid:\t1555\t1555\t1555\t1555\n10:Gid:\t998\t998\t998\t998\n11:FDSize:\t1024\n12:Groups:\t1 6 17 26 27 57 131 174 302 998 \n13:NStgid:\t2283914\n14:NSpid:\t2283914\n15:NSpgid:\t2283898\n16:NSsid:\t2283898\n17:Kthread:\t0\n18:VmPeak:\t18532548 kB\n19:VmSize:\t18463820 kB\n20:VmLck:\t       0 kB\n21:VmPin:\t       0 kB\n22:VmHWM:\t  316852 kB\n23:VmRSS:\t  316852 kB\n24:RssAnon:\t  291884 kB\n25:RssFile:\t   24968 kB\n26:RssShmem:\t       0 kB\n27:VmData:\t18395680 kB\n28:VmStk:\t     552 kB\n29:VmExe:\t    2168 kB\n30:VmLib:\t   41292 kB\n31:VmPTE:\t     832 kB\n32:VmSwap:\t       0 kB\n33:HugetlbPages:\t       0 kB\n34:CoreDumping:\t0\n35:THP_enabled:\t1\n\n[Showing lines 1-35 of 61. Use :36 to continue]",
+          "details": {
+            "truncation": {
+              "truncated": true,
+              "truncatedBy": "lines",
+              "totalLines": 61,
+              "totalBytes": 628,
+              "outputLines": 35,
+              "outputBytes": 628,
+              "lastLinePartial": false,
+              "firstLineExceedsLimit": false
+            },
+            "totalLines": 61,
+            "displayContent": {
+              "text": "Name:\tnix\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t2283914\nNgid:\t0\nPid:\t2283914\nPPid:\t2283898\nTracerPid:\t0\nUid:\t1555\t1555\t1555\t1555\nGid:\t998\t998\t998\t998\nFDSize:\t1024\nGroups:\t1 6 17 26 27 57 131 174 302 998 \nNStgid:\t2283914\nNSpid:\t2283914\nNSpgid:\t2283898\nNSsid:\t2283898\nKthread:\t0\nVmPeak:\t18532548 kB\nVmSize:\t18463820 kB\nVmLck:\t       0 kB\nVmPin:\t       0 kB\nVmHWM:\t  316852 kB\nVmRSS:\t  316852 kB\nRssAnon:\t  291884 kB\nRssFile:\t   24968 kB\nRssShmem:\t       0 kB\nVmData:\t18395680 kB\nVmStk:\t     552 kB\nVmExe:\t    2168 kB\nVmLib:\t   41292 kB\nVmPTE:\t     832 kB\nVmSwap:\t       0 kB\nHugetlbPages:\t       0 kB\nCoreDumping:\t0\nTHP_enabled:\t1",
+              "startLine": 1,
+              "lineNumbers": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18,
+                19,
+                20,
+                21,
+                22,
+                23,
+                24,
+                25,
+                26,
+                27,
+                28,
+                29,
+                30,
+                31,
+                32,
+                33,
+                34,
+                35
+              ]
+            },
+            "fileSize": 0,
+            "meta": {
+              "source": {
+                "type": "path",
+                "value": "/proc/2283914/status"
+              },
+              "truncation": {
+                "direction": "head",
+                "truncatedBy": "lines",
+                "totalLines": 61,
+                "totalBytes": 628,
+                "outputLines": 35,
+                "outputBytes": 628,
+                "shownRange": {
+                  "start": 1,
+                  "end": 35
+                },
+                "nextOffset": 36
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+]

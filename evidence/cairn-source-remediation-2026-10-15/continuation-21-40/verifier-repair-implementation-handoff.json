@@ -1,0 +1,36 @@
+{
+  "recorded_at": "2026-10-17T22:50:47.103142+00:00",
+  "kind": "read-only-verifier-implementation-handoff",
+  "agent_report": "agent://VerifierPrereqMap/report",
+  "parent_checked_contracts": [
+    {
+      "path": "/home/brittonr/git/aspen-worktrees/mantle-prerequisite-20261017/.cairn/specs/wasm-component-consumer-verifier/spec.md",
+      "lines": "74-112"
+    },
+    {
+      "path": "/home/brittonr/git/aspen-worktrees/mantle-prerequisite-20261017/.cairn/changes/repair-consumer-verifier-admission-and-rooting/tasks.md",
+      "lines": "1-24"
+    },
+    {
+      "path": "/home/brittonr/git/aspen-worktrees/mantle-prerequisite-20261017/.cairn/changes/repair-consumer-verifier-admission-and-rooting/design.md",
+      "lines": "39-56"
+    }
+  ],
+  "accepted_boundary": "Pure bounded admission/member planning/observation and report decisions; one retained rooted no-follow measurement shell; structural acceptance never claims byte verification",
+  "required_complete_inventory": "Every declared member, including independent Wizer and AOT output objects, with duplicate/path/identity/length and aggregate bounds before file access",
+  "existing_reuse": "Retained cap_std directory and component-by-component cap_fs_ext no-follow mechanisms already exist in Mantle pin_import; do not copy its allocation-heavy product import logic",
+  "consumer_proof_needed": "Actual Kamacite plus a second independently owned consumer, from immutable source inputs without ambient sibling dependencies; producer fixtures are not independent consumer proof",
+  "remaining_input_work": [
+    "Exact consumer revisions and complete actor-WIT/runtime-profile bundle cohort",
+    "Reviewed immutable candidate acquisition and API/schema/features",
+    "Concrete second-consumer integration and positive/negative execution"
+  ],
+  "governance": "ADR 0114 is Proposed; the repair tasks require its review before implementation and reviewed status/documentation after executable proof. Generated plans and structural validation do not themselves approve implementation or publication.",
+  "publication_order": "Complete executable consumer and boundary proof, documentation and quality/no_std/Nix/native gates, independent review and implementation commit, sync/archive, required publication/readback, then Molten product pin migration",
+  "source_map_status": "Scout source observations, consistent with prior parent-checked input readbacks; not execution or publication proof",
+  "executions_performed": [],
+  "product_inputs_changed": false,
+  "new_source_attempt_started": false,
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40
+}

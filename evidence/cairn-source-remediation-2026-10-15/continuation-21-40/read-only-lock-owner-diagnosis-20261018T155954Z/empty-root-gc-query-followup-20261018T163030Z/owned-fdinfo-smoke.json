@@ -1,0 +1,27 @@
+{
+  "recorded_at": "2026-10-18T16:34:44.894011+00:00",
+  "scope": "Throwaway live smoke using only the evaluator process and its own temporary file; no root scan or Nix invocation",
+  "owned_pid": 3147161,
+  "locked_fd": 8,
+  "open_but_unlocked_fd": 9,
+  "kernel_fdinfo_held_rows": [
+    "lock:\t1: FLOCK  ADVISORY  WRITE 3147161 00:3e:1782131 0 EOF"
+  ],
+  "exclusive_flock_descriptor_identified": true,
+  "same_inode_open_only_descriptor_excluded": true,
+  "no_held_lock_reported_after_unlock": true,
+  "before_after_identity_guard_passed_for_owned_process": true,
+  "root_guard": {
+    "argv": [
+      "/run/current-system/sw/bin/python3",
+      "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/continuation-21-40/read-only-lock-owner-diagnosis-20261018T155954Z/empty-root-gc-query-followup-20261018T163030Z/inspect-gc-fdinfo.py"
+    ],
+    "exit_code": 2,
+    "stdout": "{\n  \"recorded_at\": \"2026-10-18T16:34:44.889735+00:00\",\n  \"read_only\": true,\n  \"target\": {\n    \"path\": \"/nix/var/nix/gc.lock\",\n    \"device\": \"0:31\",\n    \"inode\": 22402385\n  },\n  \"limits\": [\n    \"PID namespace visibility can still limit which processes are enumerable\",\n    \"Before/after metadata checks are not atomic\",\n    \"No observed holder or incomplete scan is not proof of recovery\",\n    \"A descriptor holder is not necessarily the original lock-acquiring PID\",\n    \"No cancellation, lock removal or acceptance authority is conferred\"\n  ],\n  \"status\": \"requires-operator-root-authentication\"\n}\n",
+    "stderr": ""
+  },
+  "limits": [
+    "Root-wide scan and production GC-inode discovery were not executed",
+    "The smoke does not reproduce or prove a PID-namespace-hidden production lock"
+  ]
+}

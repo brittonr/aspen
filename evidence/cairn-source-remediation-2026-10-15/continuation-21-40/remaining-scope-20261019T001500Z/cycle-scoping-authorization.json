@@ -1,0 +1,32 @@
+{
+  "recorded_at": "2026-10-19T00:20:00Z",
+  "user_selection": "Batch related changes per cycle",
+  "semantics": {
+    "cycle": "One change-directed implementation cycle may cover a coherent cluster of related changes; it counts as one attempt in the campaign ledger.",
+    "per_change_obligations_retained": [
+      "Each member change keeps its own proposal/design/tasks artifacts and its own acceptance checks and retained evidence",
+      "Acceptance criteria and required gates are never narrowed, waived, or merged across changes",
+      "Sync and archive remain per change and only after that change's acceptance passes"
+    ],
+    "ledger": "One attempt entry per cluster cycle, listing every member change, its acceptance results, and any member left unfinished with the blocking condition"
+  },
+  "inventory_basis": "inventory.json (47 active changes; 44 with zero checked tasks; 521 open tasks; 23 checked)",
+  "remaining_cycle_budget": {
+    "implementation_attempts_consumed": 20,
+    "authorized_implementation_attempt_cap": 40,
+    "remaining_cycles": 20,
+    "planned_clusters": 8
+  },
+  "unchanged_boundaries": [
+    "Molten repository only unless the prerequisite-chain authorization applies",
+    "No dependency or toolchain pin changes",
+    "No frozen fixture or historical archive/evidence rewrites",
+    "No remote publication without separate authorization",
+    "No host GC reconfiguration, unrelated-process termination, or shared-cache deletion",
+    "Every required change acceptance gate remains mandatory"
+  ],
+  "non_claims": [
+    "Batching does not reduce any change's acceptance requirements",
+    "Cluster size estimates are planning aids, not commitments about implementation effort"
+  ]
+}

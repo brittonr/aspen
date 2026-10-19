@@ -1,0 +1,44 @@
+{
+  "recorded_at": "2026-10-18T15:56:28.488094+00:00",
+  "client_pid_candidate": 2634273,
+  "candidate_source": "client-syscalls.log:13335 records the client interruption signal sender; journal correlation is required before treating this as daemon connection identity",
+  "observations": {
+    "connection_journal": {
+      "argv": [
+        "/run/current-system/sw/bin/journalctl",
+        "--unit=nix-daemon.service",
+        "--since=2026-10-18T15:44:25Z",
+        "--until=2026-10-18T15:44:29Z",
+        "--grep=2634273",
+        "--lines=12",
+        "--no-pager",
+        "--output=short-iso"
+      ],
+      "started_at": "2026-10-18T15:56:28.309960+00:00",
+      "elapsed_seconds": 0.056,
+      "exit_code": 0,
+      "stdout": "2026-10-18T11:44:26-04:00 britton-desktop nix-daemon[2631]: accepted connection from pid 2634273, user brittonr (trusted)\n",
+      "stderr": ""
+    },
+    "exact_worker_candidate": {
+      "argv": [
+        "/run/current-system/sw/bin/pgrep",
+        "--full",
+        "--list-full",
+        "--exact",
+        "nix-daemon 2634273"
+      ],
+      "started_at": "2026-10-18T15:56:28.365990+00:00",
+      "elapsed_seconds": 0.122,
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": ""
+    }
+  },
+  "read_only": true,
+  "scope": "Exact unprivileged post-run journal and worker-command lookup only; no attach or signals",
+  "limits": [
+    "A missing candidate is not proof of daemon health or root cause",
+    "A worker title alone would not authorize termination"
+  ]
+}

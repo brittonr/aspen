@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "stat",
+    "-c",
+    "%n %d %i",
+    "/nix/store/08w4wl60b1fn4li3q5vbv4khyqs7rhws-lib.sh.lock"
+  ],
+  "observed_at": "2026-10-17T20:10:31.029800+00:00",
+  "exit_code": 0,
+  "stdout": "/nix/store/08w4wl60b1fn4li3q5vbv4khyqs7rhws-lib.sh.lock 31 4193189\n",
+  "stderr": "",
+  "read_only": true
+}

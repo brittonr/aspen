@@ -1,0 +1,24 @@
+{
+  "argv": [
+    "cargo",
+    "test",
+    "--offline",
+    "--locked",
+    "-p",
+    "molten",
+    "--lib",
+    "--",
+    "fabric_time"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T04:48:46.582002+00:00",
+  "elapsed_seconds": 60.243,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "\nrunning 37 tests\ntest fabric_time::capacity::tests::allocation_failure_denies_without_smaller_fallback ... ok\ntest fabric_time::capacity::tests::steady_state_is_bounded_and_generation_fenced_without_growth ... ok\ntest fabric_time::capacity::tests::activation_reserves_the_complete_plan_before_use ... ok\ntest fabric_time::capacity::tests::exhaustion_release_and_observation_remain_scoped ... ok\ntest fabric_time::tests::canonical_profile_rejects_missing_non_claim ... ok\ntest fabric_time::tests::reference_matrix_preserves_plugin_extension_and_application_authority_boundaries ... ok\ntest fabric_time::tests::live_adapter_rejects_simulation_profile ... ok\ntest fabric_time::tests::extension_context_enforces_service_generation_resources_and_capability ... ok\ntest fabric_time::tests::extension_context_resumes_a_blocked_occurrence_at_the_active_limit ... ok\ntest fabric_time::tests::corrected_yield_admission_diverges_from_an_over_capacity_history ... ok\ntest fabric_time::tests::extension_context_reports_overload_for_yield_at_the_ready_bound ... ok\ntest fabric_time::tests::canonical_values_and_durations_bind_domain_and_profile ... ok\ntest fabric_time::tests::replay::rejects_invalid_planner_inputs_before_comparison ... ok\ntest fabric_time::tests::port_bindings_reject_silent_profile_substitution ... ok\ntest fabric_time::tests::retry_observation_denial_preserves_existing_events ... ok\ntest fabric_time::tests::replay::rejects_wrapped_history_without_rewriting_it ... ok\ntest fabric_time::tests::scheduler_adapters::post_commit_uncertainty_is_not_denial_or_automatic_retry ... ok\ntest fabric_time::tests::replay::rejects_each_changed_event_with_valid_canonical_identity ... ok\ntest fabric_time::tests::retry_observations_replay_exactly_and_differ_from_wrapped_history ... ok\ntest fabric_time::tests::replay::accepts_matching_saturated_and_fixed_observations ... ok\ntest fabric_time::tests::tick_deadline_denies_a_timeout_past_the_clock_domain ... ok\ntest fabric_time::tests::replay::rejects_missing_extra_reordered_and_tampered_observations ... ok\ntest fabric_time::tests::supervision_deadline_admits_the_supervision_bound_and_denies_one_past ... ok\ntest fabric_time::tests::tick_deadline_expires_exactly_at_its_timeout_on_the_virtual_clock ... ok\ntest fabric_time::tests::virtual_faults_are_explicit_and_timer_faults_do_not_bypass_core ... ok\ntest fabric_time::tests::scheduler_adapters::fallible_delivery_preparation_never_half_publishes ... ok\ntest fabric_time::tests::scheduler_adapters::replay_errors_preserve_owned_readiness_before_valid_selection ... ok\ntest fabric_time::tests::scheduler_adapters::resume_refreshes_fifo_priority_and_wait_accounting ... ok\ntest fabric_time::tests::scheduler_adapters::resume_and_yield_at_the_active_limit_before_host_wakes ... ok\ntest fabric_time::tests::scheduler_adapters::deny_invalid_and_overflowing_ready_transitions ... ok\ntest fabric_time::tests::scheduler_adapters::fence_stale_callbacks_without_current_generation_wakes ... ok\ntest fabric_time::tests::scheduler_adapters::receiving_boundary_rejects_real_delivery_before_publication ... ok\ntest fabric_time::tests::scheduler_adapters::terminal_history_cleanup_release_and_physical_exhaustion_stay_distinct ... ok\ntest fabric_time::tests::entropy_evidence_omits_output_bytes ... ok\ntest fabric_time::tests::scheduler_adapters::preserve_saturated_resume_and_yield_for_both_overload_policies ... ok\ntest fabric_time::tests::executable_fixture_exercises_both_profiles_and_bounded_evidence ... ok\ntest fabric_time::tests::deterministic_fixture_report_is_reproducible_despite_live_adapter_execution ... ok\n\ntest result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 1506 filtered out; finished in 0.01s\n\n",
+  "stderr": "   Compiling molten-core v0.1.0 (/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-core)\n   Compiling molten-node-host v0.1.0 (/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-node-host)\n   Compiling molten v0.1.0 (/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 00s\n     Running unittests src/lib.rs (/home/brittonr/.cargo-target/debug/deps/molten-e050671ac02166d9)\n",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

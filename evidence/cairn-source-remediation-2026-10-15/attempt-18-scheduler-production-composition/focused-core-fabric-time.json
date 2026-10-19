@@ -1,0 +1,24 @@
+{
+  "argv": [
+    "cargo",
+    "test",
+    "--offline",
+    "--locked",
+    "-p",
+    "molten-core",
+    "--lib",
+    "--",
+    "fabric_time"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T04:48:32.863441+00:00",
+  "elapsed_seconds": 13.696,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "\nrunning 41 tests\ntest fabric_time::scheduler::capacity::tests::zero_generation_relations_conversion_and_overflow_fail_closed ... ok\ntest fabric_time::scheduler::capacity::tests::use_is_bounded_profile_bound_and_generation_fenced ... ok\ntest fabric_time::scheduler::capacity::tests::exhaustion_underflow_release_and_observation_are_explicit ... ok\ntest fabric_time::scheduler::capacity::tests::valid_profile_produces_stable_checked_plan ... ok\ntest fabric_time::tests::admits_complete_profile_and_canonicalizes_sets ... ok\ntest fabric_time::tests::deadlines_respect_uncertainty_and_reject_wall_clock_domain ... ok\ntest fabric_time::tests::deterministic_entropy_stream_is_chunk_invariant_and_exhaustion_fails ... ok\ntest fabric_time::tests::deterministic_entropy_is_reproducible_and_secret_free_in_metadata ... ok\ntest fabric_time::tests::backpressure_profile_maps_denied_yield_to_backpressure ... ok\ntest fabric_time::tests::entropy_choices_are_bounded_and_production_bytes_are_exact ... ok\ntest fabric_time::tests::entropy_rejects_stale_generation_empty_requests_and_wrong_mode ... ok\ntest fabric_time::tests::explicit_conversion_requires_evidence_and_target_profile ... ok\ntest fabric_time::tests::exclusive_lease_actions_require_fresh_fencing ... ok\ntest fabric_time::tests::periodic_timer_coalesces_and_advances_past_observation ... ok\ntest fabric_time::tests::new_wake_denies_at_the_active_bound_while_ready_capacity_exists ... ok\ntest fabric_time::tests::one_shot_timer_fires_once_and_rejects_duplicate_poll ... ok\ntest fabric_time::tests::fairness_bound_prevents_indefinite_starvation_and_replay_mismatch_fails ... ok\ntest fabric_time::tests::rejects_incomplete_profile_and_hard_limit ... ok\ntest fabric_time::tests::retry_caps_valid_jitter_after_saturation ... ok\ntest fabric_time::tests::retry_plans_are_bounded_and_jitter_explicit ... ok\ntest fabric_time::tests::retry_exponential_delay_saturates_at_arithmetic_boundaries ... ok\ntest fabric_time::tests::retry_fixed_delay_and_rejections_remain_exact ... ok\ntest fabric_time::tests::retry_rejects_jitter_addition_overflow_before_the_cap ... ok\ntest fabric_time::tests::scheduler_rejects_duplicate_stale_and_illegal_transitions ... ok\ntest fabric_time::tests::scheduler_orders_records_and_replays_choices ... ok\ntest fabric_time::tests::stale_generation_wake_and_yield_discard_without_effects ... ok\ntest fabric_time::tests::simultaneous_timers_are_stably_ordered_and_retired_generations_are_cleaned ... ok\ntest fabric_time::tests::time_arithmetic_is_domain_typed_and_checked ... ok\ntest fabric_time::tests::timer_lateness_policy_records_drop_without_delivery ... ok\ntest fabric_time::tests::timer_admission_is_resource_bounded ... ok\ntest fabric_time::tests::timers_fence_generations_cancel_and_report_overload ... ok\ntest fabric_time::tests::wake_denies_non_blocked_duplicates_without_mutation ... ok\ntest fabric_time::tests::wake_resume_denies_when_the_ready_queue_is_full ... ok\ntest fabric_time::tests::wake_resume_enters_fifo_order_behind_older_ready_work ... ok\ntest fabric_time::tests::wake_resume_overflow_preserves_state ... ok\ntest fabric_time::tests::wake_resumes_a_blocked_occurrence_at_the_active_limit ... ok\ntest fabric_time::tests::wall_clock_anomalies_are_explicit ... ok\ntest fabric_time::tests::yield_admits_with_ready_capacity_and_takes_a_fresh_position ... ok\ntest fabric_time::tests::yield_denies_invalid_phase_and_exhausted_sequence_without_mutation ... ok\ntest fabric_time::tests::yield_denies_at_the_ready_bound_and_preserves_state ... ok\ntest fabric_time::tests::retry_exponential_matches_a_wide_integer_reference ... ok\n\ntest result: ok. 41 passed; 0 failed; 0 ignored; 0 measured; 351 filtered out; finished in 0.03s\n\n",
+  "stderr": "   Compiling molten-core v0.1.0 (/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-core)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.63s\n     Running unittests src/lib.rs (/home/brittonr/.cargo-target/debug/deps/molten_core-f8fdde17f157add4)\n",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "status": "blocked-awaiting-existing-operator-output",
+  "recorded_at": "2026-10-17T21:14:03.518603+00:00",
+  "operator_report": "done",
+  "operator_commands_accepted_as_completed": true,
+  "fresh_target_safety_record": "resumed-target-safety.json",
+  "exact_target_still_matches": true,
+  "privilege_observation_record": "resumed-privileged-process-wait.json",
+  "tool_session_result": "sudo: a password is required",
+  "privileged_file_descriptor_inspection_attempted": false,
+  "missing_prerequisite": "The non-sensitive stdout/stderr from the operator's already-completed privileged ps, lsof and lslocks commands; terminal output is not available through the current tool session",
+  "next_action": "Request the existing command output; do not ask the operator to repeat the completed commands or share credentials",
+  "additional_privileged_commands_after_failure": false,
+  "nix_retried": false,
+  "product_source_changed": false,
+  "host_configuration_changed": false,
+  "processes_signalled": false,
+  "locks_removed": false,
+  "lifecycle_closed": false,
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false
+}

@@ -1,0 +1,21 @@
+{
+  "argv": [
+    "cargo",
+    "test",
+    "--offline",
+    "--locked",
+    "--workspace",
+    "--doc"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T05:12:37.733918+00:00",
+  "elapsed_seconds": 4.803,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 7 tests\ntest crates/molten-core/src/parts/nominal/p000/body.rs - nominal::require_session (line 27) - compile fail ... ok\ntest crates/molten-core/src/parts/nominal/p000/body.rs - nominal::require_session (line 39) - compile fail ... ok\ntest crates/molten-core/src/parts/nominal/p000/body.rs - nominal::require_session (line 9) - compile fail ... ok\ntest crates/molten-core/src/parts/nominal/p000/body.rs - nominal::require_session (line 33) - compile fail ... ok\ntest crates/molten-core/src/parts/nominal/p000/body.rs - nominal::require_session (line 21) - compile fail ... ok\ntest crates/molten-core/src/parts/nominal/p000/body.rs - nominal::require_session (line 15) - compile fail ... ok\ntest crates/molten-core/src/parts/nominal/p000/body.rs - nominal::require_session (line 45) - compile fail ... ok\n\ntest result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+  "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.42s\n   Doc-tests molten\n   Doc-tests molten_core\n   Doc-tests molten_node_host\n   Doc-tests molten_release_policy\n",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

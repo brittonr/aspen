@@ -1,0 +1,54 @@
+{
+  "recorded_at": "2026-10-18T15:57:42.513519+00:00",
+  "status": "client-daemon-reply-wait-proved-server-cause-unresolved",
+  "execution_record": "run.json",
+  "elapsed_seconds": 600.065,
+  "exit_code": 1,
+  "timed_out": true,
+  "owned_client_evidence": {
+    "connection": {
+      "source": "client-syscalls.log:318-323",
+      "fd": 4,
+      "unix_socket": "/nix/var/nix/daemon-socket/socket",
+      "connect_return": 0,
+      "client_socket_inode": 829775252
+    },
+    "wait": {
+      "source": "client-syscalls.log:13333-13335",
+      "read_fd": 4,
+      "peer_socket_inode": 829762441,
+      "read_duration_seconds": 595.855429,
+      "result": "ERESTARTSYS at deadline interruption",
+      "preceding_poll": "POLLIN check on the same Unix stream returned 0"
+    },
+    "interpretation": "The directly traced client main thread spent the long final interval waiting for a reply on its daemon connection; the record does not reveal the daemon operation or internal wait",
+    "client_journal_correlation": {
+      "record": "post-trace-peer-followup.json",
+      "pid": 2634273,
+      "event": "2026-10-18T11:44:26-04:00 nix-daemon[2631]: accepted connection from pid 2634273, user brittonr (trusted)"
+    }
+  },
+  "post_exit_peer_observations": {
+    "socket_record": "post-trace-peer-socket.json",
+    "socket_rows": 0,
+    "worker_record": "post-trace-peer-followup.json",
+    "exact_worker_command": "nix-daemon 2634273",
+    "lookup_exit_code": 1,
+    "matching_worker_observed": false,
+    "limit": "No post-exit peer attribution is available from these snapshots; absence does not prove server health"
+  },
+  "source_binding_before": "source-binding-before.json",
+  "source_binding_after": "source-binding-after.json",
+  "source_binding_before_passed": true,
+  "source_binding_after_passed": true,
+  "recorded_manifest_entries": 1911,
+  "limits": [
+    "Only the client main thread was traced; no daemon worker or other thread was attached",
+    "Read and receive payloads were not decoded or retained by strace",
+    "GC wait, source-copy/path-lock wait, root worker deadlock and test execution are not established by this trace",
+    "Earlier GC writers and source-lock owners must not be attributed to this run without fresh causal evidence",
+    "No behavioral test failure or passing acceptance was established"
+  ],
+  "required_next_information": "Current server-side wait attribution and host recovery readiness; the client trace and permitted post-exit peer lookups cannot establish these",
+  "decision": "Do not launch the conditional flake gate, another blind Nix retry, or root-worker process control. Obtain a new bounded read-only host-diagnosis or operator-recovery decision."
+}

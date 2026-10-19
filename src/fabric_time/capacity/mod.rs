@@ -15,9 +15,9 @@ pub enum ActivationError {
 
 pub struct Runtime {
     plan: molten_core::fabric_time::capacity::Plan,
-    state: molten_core::fabric_time::capacity::UseState,
-    runnable_reservation: Vec<std::mem::MaybeUninit<molten_core::fabric_time::RunnableState>>,
-    queue_reservation: Vec<std::mem::MaybeUninit<molten_core::fabric_time::RunnableKey>>,
+    pub(super) state: molten_core::fabric_time::capacity::UseState,
+    pub(super) scheduler: molten_core::fabric_time::SchedulerState,
+    pub(super) ready: Vec<usize>,
 }
 
 impl Runtime {
@@ -39,12 +39,12 @@ impl Runtime {
 
     #[cfg(test)]
     fn runnable_capacity(&self) -> usize {
-        self.runnable_reservation.capacity()
+        self.scheduler.runnables.capacity()
     }
 
     #[cfg(test)]
     fn queue_capacity(&self) -> usize {
-        self.queue_reservation.capacity()
+        self.ready.capacity()
     }
 
     // r[impl molten.fabric_time.scheduler_capacity.steady_state]
@@ -67,8 +67,8 @@ impl Runtime {
     }
 
     pub fn release(&mut self) {
-        self.runnable_reservation = Vec::new();
-        self.queue_reservation = Vec::new();
+        self.scheduler.runnables = Vec::new();
+        self.ready = Vec::new();
         self.state = molten_core::fabric_time::capacity::release(&self.state);
     }
 }
@@ -102,11 +102,13 @@ where
         .map_err(|_| ActivationError::ReservationFailed(ReservationKind::Queue))?;
 
     let state = molten_core::fabric_time::capacity::UseState::activated(&plan);
+    let mut scheduler = molten_core::fabric_time::new_scheduler_state(profile, generation);
+    scheduler.runnables = runnable_reservation;
     Ok(Runtime {
         plan,
         state,
-        runnable_reservation,
-        queue_reservation,
+        scheduler,
+        ready: queue_reservation,
     })
 }
 

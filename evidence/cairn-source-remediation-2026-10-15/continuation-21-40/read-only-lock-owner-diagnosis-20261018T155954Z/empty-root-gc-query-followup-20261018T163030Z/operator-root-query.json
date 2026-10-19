@@ -1,0 +1,30 @@
+{
+  "received_at": "2026-10-18T16:30:30.155004+00:00",
+  "source": "User-provided root-command output in the live conversation; accepted without rerun",
+  "operator_execution_time": "Not supplied",
+  "argv": [
+    "/run/wrappers/bin/sudo",
+    "--",
+    "/run/current-system/sw/bin/timeout",
+    "--signal=TERM",
+    "--kill-after=5s",
+    "20s",
+    "/run/current-system/sw/bin/lslocks",
+    "--json",
+    "--notruncate",
+    "--filter",
+    "INODE == 22402385 and (MODE == \"READ\" or MODE == \"WRITE\")",
+    "--output",
+    "PID,COMMAND,TYPE,MODE,INODE,MAJ:MIN,PATH,BLOCKER,HOLDERS"
+  ],
+  "stdout_json": {
+    "locks": []
+  },
+  "exit_code": "Not separately supplied; do not infer from JSON alone",
+  "fact": "The operator root lslocks query emitted an empty held-lock list for the target inode",
+  "limits": [
+    "This does not establish whether the earlier blocked threads recovered",
+    "This does not prove no underlying lock exists or authorize lockfile removal",
+    "No user-provided observation was rerun to confirm it"
+  ]
+}

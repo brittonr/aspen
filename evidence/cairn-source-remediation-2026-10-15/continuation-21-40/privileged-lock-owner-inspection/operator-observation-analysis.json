@@ -1,0 +1,60 @@
+{
+  "status": "operator-observations-analyzed-targeted-recovery-decision-required",
+  "recorded_at": "2026-10-17T21:26:53.740607+00:00",
+  "operator_observations": "operator-provided-observations.json",
+  "socket_observations": "socket-endpoint-observations.json",
+  "confirmed_observations": [
+    "UID-0 worker PID 3449589, parent 2631, command nix-daemon 3449558, has its main thread in futex_do_wait",
+    "It retains FLOCK WRITE on store lock inode 4193189, path /nix/store/08w4wl60b1fn4li3q5vbv4khyqs7rhws-lib.sh.lock",
+    "It also retains its temproots WRITE lock and shared big-lock/SQLite read locks",
+    "The supplied listing reports gc.lock descriptors 15 and 18 open, without a reported held GC lock",
+    "The unprivileged socket snapshot found the two exact supplied socket inode rows; each reports peer address * 0 and no visible process attribution"
+  ],
+  "scoped_socket_snapshot": {
+    "argv": [
+      "ss",
+      "-xapne"
+    ],
+    "observed_at": "2026-10-17T21:25:44.809594+00:00",
+    "exit_code": 0,
+    "stdout_header": [
+      "Netid State  Recv-Q Send-Q                                                                                           Local Address:Port      Peer Address:Port     Process                                    "
+    ],
+    "matching_endpoint_lines": [
+      "u_str ESTAB  0      0                                                                                                            * 227468666            * 0         ---                                ",
+      "u_str ESTAB  0      0                                                                            /nix/var/nix/daemon-socket/socket 227471618            * 0         --- ino:131072 dev:0/31            "
+    ],
+    "stderr": "",
+    "selection": "Exact whitespace-delimited socket inode tokens 227471618 and 227468666 from the operator's supplied FD 8/16 observations",
+    "unrelated_socket_rows_not_retained": true,
+    "read_only": true,
+    "privilege_used": false
+  },
+  "limits": [
+    "A futex wait does not prove a deadlock, identify a specific mutex, or establish another thread's state",
+    "Peer address 0 and absent original client PID are consistent with lost peers but do not prove complete request ownership or exclude namespace/visibility limitations",
+    "No live peer was identified with available visibility; no additional process was inspected with privilege",
+    "The operator's cached direnv shell message is not Nix acceptance evidence",
+    "The exact worker's pending store operation would be cancelled by termination; its task ownership remains an inference, not a PID-bound original receipt"
+  ],
+  "decision": "A further blind build does not address the retained store-path lock. The smallest process-control recovery is an explicitly authorized operator-issued SIGTERM to the freshly revalidated exact worker only, with no automatic SIGKILL, no main-daemon restart, no lockfile removal and no retry until release is observed. Alternatively preserve read-only scope and collect operator-side per-thread/peer attribution.",
+  "authority_boundary": "Current authorization is read-only; signalling this root-owned worker and another Nix acceptance run require an explicit new recovery decision. Noninteractive sudo remains unavailable to the tool session.",
+  "acceptance": {
+    "passed": false,
+    "full_flake_gate_reached": false,
+    "post_nix_strict_cairn_validation_reached": false,
+    "last_recorded_active_molten_changes": 47
+  },
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "mutations": {
+    "product_source_changed": false,
+    "dependency_pins_changed": false,
+    "host_configuration_changed": false,
+    "processes_signalled": false,
+    "lock_removed": false,
+    "nix_retried_after_operator_output": false,
+    "lifecycle_closed": false
+  }
+}

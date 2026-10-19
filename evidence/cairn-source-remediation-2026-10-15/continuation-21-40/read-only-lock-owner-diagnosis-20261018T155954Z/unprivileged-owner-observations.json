@@ -1,0 +1,64 @@
+{
+  "recorded_at": "2026-10-18T16:21:31.686082+00:00",
+  "source": "Read-only process, /proc and sudo tool observations in this diagnosis",
+  "owner_processes": [
+    {
+      "pid": 92763,
+      "uid": 0,
+      "ppid": 2631,
+      "command": "nix-daemon 92736",
+      "start_ticks": 17230095,
+      "device": "0:31",
+      "inode": 3940983
+    },
+    {
+      "pid": 130832,
+      "uid": 0,
+      "ppid": 2631,
+      "command": "nix-daemon 130700",
+      "start_ticks": 17256828,
+      "device": "0:31",
+      "inode": 4053942
+    },
+    {
+      "pid": 2601744,
+      "uid": 0,
+      "ppid": 2631,
+      "command": "nix-daemon 2601693",
+      "start_ticks": 25667849,
+      "device": "0:31",
+      "inode": 4482053
+    },
+    {
+      "pid": 3432619,
+      "uid": 0,
+      "ppid": 2631,
+      "command": "nix-daemon 3432598",
+      "start_ticks": 21803025,
+      "device": "0:31",
+      "inode": 4632022
+    }
+  ],
+  "observations": {
+    "wchan": {
+      "92763": "0",
+      "130832": "0",
+      "2601744": "0",
+      "3432619": "0"
+    },
+    "first_owner_stack": {
+      "path": "/proc/92763/stack",
+      "result": "EACCES: permission denied"
+    },
+    "first_owner_fd_listing": {
+      "path": "/proc/92763/fd/",
+      "result": "Tool displayed an empty directory",
+      "limit": "Not proof that the root-owned process has no descriptors"
+    }
+  },
+  "limits": [
+    "Zero wchan values under restricted visibility do not identify the kernel wait",
+    "The four owner PIDs and process start ticks are snapshot facts, not cancellation authority",
+    "No root wait-state, kernel-stack or FD payload was obtained"
+  ]
+}

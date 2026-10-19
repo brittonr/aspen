@@ -1,0 +1,103 @@
+{
+  "source": "User-provided attachment in the live conversation; accepted without rerunning the scanner",
+  "snapshot": {
+    "recorded_at": "2026-10-18T16:45:26.035047+00:00",
+    "read_only": true,
+    "target": {
+      "path": "/nix/var/nix/gc.lock",
+      "device": "0:31",
+      "inode": 22402385
+    },
+    "limits": [
+      "PID namespace visibility can still limit which processes are enumerable",
+      "Before/after metadata checks are not atomic",
+      "No observed holder or incomplete scan is not proof of recovery",
+      "A descriptor holder is not necessarily the original lock-acquiring PID",
+      "No cancellation, lock removal or acceptance authority is conferred"
+    ],
+    "status": "bounded-read-only-scan-finished",
+    "counts": {
+      "processes_examined": 4643,
+      "descriptors_examined": 100624,
+      "gc_descriptors_seen": 7368
+    },
+    "holders": [
+      {
+        "status": "observed",
+        "before": {
+          "pid": 725672,
+          "ppid": 2631,
+          "start_ticks": 11617029,
+          "uid": 0,
+          "effective_uid": 0,
+          "command": "nix-daemon 724865"
+        },
+        "after": {
+          "pid": 725672,
+          "ppid": 2631,
+          "start_ticks": 11617029,
+          "uid": 0,
+          "effective_uid": 0,
+          "command": "nix-daemon 724865"
+        },
+        "held_descriptors_before": [
+          {
+            "fd": 19,
+            "fdinfo": "pos:\t0\nflags:\t02100002\nmnt_id:\t457\nino:\t22402385\nlock:\t1: FLOCK  ADVISORY  WRITE 725672 00:1f:22402385 0 EOF\n",
+            "held_lock_rows": [
+              "lock:\t1: FLOCK  ADVISORY  WRITE 725672 00:1f:22402385 0 EOF"
+            ]
+          }
+        ],
+        "held_descriptors_after": [
+          {
+            "fd": 19,
+            "fdinfo": "pos:\t0\nflags:\t02100002\nmnt_id:\t457\nino:\t22402385\nlock:\t1: FLOCK  ADVISORY  WRITE 725672 00:1f:22402385 0 EOF\n",
+            "held_lock_rows": [
+              "lock:\t1: FLOCK  ADVISORY  WRITE 725672 00:1f:22402385 0 EOF"
+            ]
+          }
+        ],
+        "waits": {
+          "main": {
+            "wchan": {"value": "futex_do_wait"},
+            "syscall": {"value": "202 0x773955329cd0 0x0 0x80000000 0x0 0x0 0x29 0x7ffe52668828 0x77395853d20d\n"},
+            "stack": {"value": "[<0>] futex_do_wait+0x4a/0x80\n[<0>] __futex_wait+0x8e/0xf0\n[<0>] futex_wait+0x78/0x120\n[<0>] do_futex+0xc5/0x190\n[<0>] __x64_sys_futex+0x12d/0x210\n[<0>] do_syscall_64+0xd6/0x7c0\n[<0>] entry_SYSCALL_64_after_hwframe+0x77/0x7f\n"}
+          },
+          "threads": [
+            {
+              "tid": 725672,
+              "comm": {"value": "nix-daemon\n"},
+              "wchan": {"value": "futex_do_wait"},
+              "syscall": {"value": "202 0x773955329cd0 0x0 0x80000000 0x0 0x0 0x29 0x7ffe52668828 0x77395853d20d\n"},
+              "stack": {"value": "[<0>] futex_do_wait+0x4a/0x80\n[<0>] __futex_wait+0x8e/0xf0\n[<0>] futex_wait+0x78/0x120\n[<0>] do_futex+0xc5/0x190\n[<0>] __x64_sys_futex+0x12d/0x210\n[<0>] do_syscall_64+0xd6/0x7c0\n[<0>] entry_SYSCALL_64_after_hwframe+0x77/0x7f\n"}
+            },
+            {
+              "tid": 725683,
+              "comm": {"value": "nix-daemon\n"},
+              "wchan": {"value": "0"},
+              "syscall": {"value": "running\n"},
+              "stack": {"value": ""}
+            },
+            {
+              "tid": 3768212,
+              "comm": {"value": "nix-daemon\n"},
+              "wchan": {"value": "poll_schedule_timeout.constprop.0"},
+              "syscall": {"value": "7 0x5c3d51d0020 0x2 0xffffffffffffffff 0x0 0x0 0x0 0x77394c7ae438 0x7739584c0922\n"},
+              "stack": {"value": "[<0>] poll_schedule_timeout.constprop.0+0x37/0x90\n[<0>] do_sys_poll+0x44b/0x5e0\n[<0>] __x64_sys_poll+0x52/0x190\n[<0>] do_syscall_64+0xd6/0x7c0\n[<0>] entry_SYSCALL_64_after_hwframe+0x77/0x7f\n"}
+            },
+            {
+              "tid": 555570,
+              "comm": {"value": "nix-daemon\n"},
+              "wchan": {"value": "unix_stream_read_generic"},
+              "syscall": {"value": "0 0x14 0x5c3dcd80000 0x8000 0x0 0x0 0x0 0x77394d7b00f8 0x7739584c0922\n"},
+              "stack": {"value": "[<0>] unix_stream_read_generic+0x6f9/0xcb0\n[<0>] unix_stream_recvmsg+0x87/0x90\n[<0>] sock_recvmsg+0x9e/0xa0\n[<0>] sock_read_iter+0x97/0x100\n[<0>] vfs_read+0x35b/0x390\n[<0>] ksys_read+0xbf/0xf0\n[<0>] do_syscall_64+0xd6/0x7c0\n[<0>] entry_SYSCALL_64_after_hwframe+0x77/0x7f\n"}
+            }
+          ],
+          "thread_limit_reached": false
+        }
+      }
+    ],
+    "scan_limit_reached": false
+  }
+}

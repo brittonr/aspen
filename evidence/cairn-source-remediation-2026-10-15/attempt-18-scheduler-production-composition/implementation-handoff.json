@@ -1,0 +1,70 @@
+{
+  "implemented": "Owning production scheduler/capacity/effect composition is implemented, including actual fixed runnable/Ready backing, shared core preview/apply decisions, concrete thread delivery, independently drained simulation delivery, and migrated fixture/conformance consumers.",
+  "source_citations": [
+    "src/fabric_time/shell.rs:108-160 \u2014 ExtensionTimeContext snapshot and owning consumers share authoritative command/choice admission.",
+    "src/fabric_time/shell.rs:252-350 \u2014 SchedulerRuntime owns context/profile/capacity/effects; stages decisions and exact usage, prepares effects, publishes, then delivers; includes cleanup and quiescent release.",
+    "src/fabric_time/ports.rs:25-33 \u2014 SchedulerWakePort preparation/delivery contract with FabricPortResult.",
+    "src/fabric_time/parts/adapters/p001/body.rs:196-261 \u2014 real thread target preparation/unpark and separately allocated/drained SimulationSchedulerWakeAdapter.",
+    "src/fabric_time/capacity/mod.rs:16-21,76-112 \u2014 activated capacity contains actual SchedulerState runnable storage and Ready-index backing, not MaybeUninit placeholders.",
+    "crates/molten-core/src/fabric_time/scheduler/decision.rs:20-148,164-254 \u2014 shared command/selection decisions without scheduler snapshot allocation; owner selection consumes initialized Ready backing.",
+    "crates/molten-core/src/fabric_time/scheduler/capacity/mod.rs:181-223 \u2014 existing apply_use shares numeric preview_use/publish_use with the owner, avoiding identity clones during valid owner transitions.",
+    "src/fabric_time/parts/fixture/p000/body.rs:249-270 \u2014 owning live executable fixture.",
+    "src/fabric_time/parts/fixture/p001/body.rs:156-246 \u2014 owning scheduler/replay/saturation fixture and receiving-side simulation drain.",
+    "src/fabric_time/parts/adapters/p001/body.rs:264-306 \u2014 conformance consumer uses the owner for both concrete delivery profiles."
+  ],
+  "api_for_parent_smoke": {
+    "activation": "SchedulerRuntime::activate(context: ExtensionTimeContext, profile: AdmittedTimeProfile, effects: P) -> Result<Self, SchedulerRuntimeError>",
+    "context": "System extensions: ExtensionTimeContext::from_host(&dispatcher). Existing application fixture/public smoke: ExtensionTimeContext::for_application(service_id: String, generation: u64, &profile).",
+    "command": "owner.command(SchedulerCommand) -> Result<SchedulerAction, SchedulerRuntimeError>; commands are consumed, transferring a new occurrence key into actual backing.",
+    "choose": "owner.choose(Option<&RunnableKey>) -> Result<SchedulerChoice, SchedulerRuntimeError>; SchedulerChoice has index, choice_sequence, eligible_count. Read selected identity at owner.state().runnables[choice.index].key.",
+    "simulation": "SimulationSchedulerWakeAdapter::activate(&profile) -> FabricPortResult<Self>; owner.effects_mut().drain_next() -> Option<usize> identifies a stable retained occurrence. Consumer reads owner.state()/capacity_state() after drain.",
+    "live": "ThreadSchedulerWakeAdapter::default(); register exact generation-qualified keys with a real worker Thread before commands, either before owner activation or through effects_mut().",
+    "observations": "state(), capacity_state(), backing_capacity(), effects_mut(); cleanup_generation(u64), release() return typed Result.",
+    "cli": "molten fabric-time run-fixture --profile both --out <fresh-directory>; molten fabric-time show <fresh-directory>/report.preserves"
+  },
+  "important_invariants": [
+    "No fallible operation remains between scheduler/capacity/Ready publication; only admitted Woken/Yielded decisions prepare and deliver effects.",
+    "Core denial, stale discard, invalid/duplicate phase, checked arithmetic failure, replay divergence and preparation failure preserve complete scheduler/capacity state and add no delivery.",
+    "Rejected Yield retains Running ownership; explicit later commands are required after queue space is freed.",
+    "Active usage is phase-derived from Ready/Running/Blocked; Ready usage is the actual bounded Ready queue. Selection, block, terminal transitions and cleanup publish their exact changes.",
+    "Logical plan bounds are enforced independently of allocator-rounded physical capacity; runnable and Ready backing never widens.",
+    "Terminal rows are retained, never purged/reused. Full retained history overloads new identities through the existing policy even when active usage is zero; this does not implement F11 reclamation.",
+    "Post-publication delivery error returns CommittedEffectUncertain with committed state preserved and no automatic retry."
+  ],
+  "regressions_updated": [
+    "Existing adapter regressions now drive owning APIs with actual receiving worker snapshots and independently consumed simulation deliveries.",
+    "Paired accepted/denied resume and Yield at active/Ready bounds under Reject and Backpressure; complete state/capacity equality and unchanged backing on denial.",
+    "FIFO/priority/wait refresh; stale callbacks versus current same-id target; wrong service/profile and owned capacity generation/profile/plan fences.",
+    "Invalid/duplicate commands, enqueue/choice overflow, deterministic replay divergence and required recorded-choice controls.",
+    "Terminal Complete/Cancel, generation cleanup, physical full-history overload, nonquiescent release denial and released-owner fencing.",
+    "Live missing-target preparation failure, simulation undrained-delivery preparation failure, explicit recovery after preparation succeeds, and committed effect uncertainty without retry.",
+    "Existing allocation-failure coverage now exercises both runnable and queue allocation failures through the activation mechanism that creates actual backing.",
+    "Removed obsolete direct-route regression and disconnected manually charged FIFO capacity test; their meaningful behavior is covered through the owner."
+  ],
+  "changed_files": [
+    "crates/molten-core/src/fabric_time/scheduler/mod.rs",
+    "crates/molten-core/src/fabric_time/scheduler/decision.rs (new)",
+    "crates/molten-core/src/fabric_time/scheduler/capacity/mod.rs",
+    "src/fabric_time/shell.rs",
+    "src/fabric_time/ports.rs",
+    "src/fabric_time/capacity/mod.rs",
+    "src/fabric_time/capacity/tests.rs",
+    "src/fabric_time/parts/adapters/p001/body.rs",
+    "src/fabric_time/parts/fixture/p000/body.rs",
+    "src/fabric_time/parts/fixture/p001/body.rs",
+    "src/fabric_time/parts/tests/p000/body.rs",
+    "src/fabric_time/tests/adapters/mod.rs",
+    "src/fabric_time/tests/adapters/capacity.rs",
+    "src/fabric_time/tests/adapters/fencing.rs",
+    "docs/fabric-time-scheduler-runtime.md",
+    "docs/architecture.md"
+  ],
+  "verification_and_remaining_limits": [
+    "No build, test, lint, formatter, lifecycle or git commands executed, as assigned. Parent must format once and run the single post-edit acceptance campaign; there is no passing post-edit claim.",
+    "Literal callsite inventory found no remaining fabric_time direct .route(), old wake-test helpers, MaybeUninit reservations or removed scheduler helper references.",
+    "Parent established this worktree is not indexed by the available rust-analyzer instance; empty LSP reference responses were not treated as absence of callers.",
+    "Finite retained-history/full-backing exhaustion is intentional and documented; no terminal reclamation or fresh-occurrence reuse is claimed.",
+    "Simulation transport must be explicitly drained; a full pending-delivery queue causes prepublication Prepare failure, not scheduler overload or hidden retry.",
+    "Real thread observations are bounded local progress evidence, not liveness/performance guarantees. Canonical observations/snapshots remain allocating operations outside the allocation-free valid owner transition path."
+  ]
+}

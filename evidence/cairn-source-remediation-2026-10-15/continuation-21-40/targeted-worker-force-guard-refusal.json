@@ -1,0 +1,23 @@
+{
+  "source": "Operator-provided terminal output; accepted without repeating the failed operation",
+  "authorization": "targeted-worker-force-recovery-authorization.json",
+  "operator_stdout": {
+    "pid": 3449589,
+    "mode": "kill",
+    "signal_sent": false,
+    "identity": ["0", "3449589", "2631", "nix-daemon 3449558"],
+    "lock_identity": [0, 31, 4193189],
+    "lock_rows": [
+      {"pid": 3449589, "type": "FLOCK", "mode": "WRITE", "inode": 4193189, "maj:min": "0:31", "blocker": null},
+      {"pid": 3449589, "type": "FLOCK", "mode": "WRITE", "inode": 4193189, "maj:min": "0:31", "blocker": null}
+    ],
+    "status": "refused-or-failed",
+    "error": "RuntimeError: Exact held WRITE lock is not validated; refusing to signal"
+  },
+  "problem": "Guard incorrectly requires exactly one matching observation rather than evidence that the exact authorized worker holds the exact WRITE lock",
+  "scope_of_correction": "Existential ownership predicate; preserve root UID, PID, parent, command, device, inode, lock type, held WRITE mode, blocker checks and pidfd-directed single SIGKILL",
+  "nix_retried": false,
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false
+}

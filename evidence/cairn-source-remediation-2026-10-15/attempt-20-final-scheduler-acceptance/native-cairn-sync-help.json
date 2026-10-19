@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "/nix/store/hgx9knp5q29b0lfw7isvc5ba1caayyjj-cairn-0.1.0/bin/cairn",
+    "sync",
+    "--help"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T06:39:27.282495+00:00",
+  "elapsed_seconds": 0.103,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "error: change not found: --help\n",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

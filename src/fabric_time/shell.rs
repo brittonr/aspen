@@ -13,6 +13,12 @@ use crate::fabric::FabricPortKey;
 use crate::system_extension::Dispatcher;
 use crate::system_extension::SystemExtensionExecutor;
 
+mod owned;
+
+pub use owned::SchedulerChoice;
+pub use owned::SchedulerRuntime;
+pub use owned::SchedulerRuntimeError;
+
 // r[impl molten.modularity.fabric_boundary.shell]
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +36,23 @@ pub struct ExtensionTimeContext {
 }
 
 impl ExtensionTimeContext {
+    /// Application-owned admitted service, without an extension manifest envelope.
+    /// System extensions must use `from_host` instead.
+    pub fn for_application(service_id: String, generation: u64, profile: &AdmittedTimeProfile) -> Self {
+        Self {
+            service_id,
+            generation,
+            max_timers: profile.max_timers,
+            max_runnables: profile.max_runnables,
+            max_concurrency: profile.max_scheduler_concurrency,
+            max_entropy_request_bytes: profile.max_entropy_request_bytes,
+            capability_refs: Vec::new(),
+            timer_profile: Some(profile.profile_id.clone()),
+            scheduler_profile: Some(profile.profile_id.clone()),
+            entropy_profile: None,
+        }
+    }
+
     pub fn from_host<E: SystemExtensionExecutor>(host: &Dispatcher<E>) -> Self {
         let manifest = host.manifest().manifest();
         Self {
@@ -95,38 +118,14 @@ impl ExtensionTimeContext {
         state: &SchedulerState,
         command: &SchedulerCommand,
     ) -> Result<SchedulerTransition> {
-        ensure_bound_profile(&self.scheduler_profile, profile, "scheduler")?;
-        let key = scheduler_command_key(command);
-        if key.service_id != self.service_id {
-            return Err(Failure::invalid_harness("runnable service identity mismatch"));
-        }
-        // A blocked occurrence already holds its active slot, so resume is not charged again.
-        if let SchedulerCommand::Wake { key: woken, .. } = command {
-            let is_resume = state
-                .runnables
-                .iter()
-                .any(|runnable| &runnable.key == woken && runnable.phase == RunnablePhase::Blocked);
-            if !is_resume {
-                let active = u64::try_from(
-                    state
-                        .runnables
-                        .iter()
-                        .filter(|runnable| {
-                            !matches!(runnable.phase, RunnablePhase::Completed | RunnablePhase::Cancelled)
-                        })
-                        .count(),
-                )
-                .map_err(|_| Failure::invalid_harness("runnable count overflow"))?;
-                if active >= self.max_runnables {
-                    return Err(Failure::invalid_harness(format!(
-                        "system-extension runnable limit {} exhausted",
-                        self.max_runnables
-                    )));
-                }
-            }
-        }
-        super::apply_scheduler_command(profile, policy, state, self.generation, command)
-            .map_err(|error| core_error("system-extension scheduler command", error))
+        let decision = self.preview_command(profile, policy, state, command, true).map_err(Failure::from)?;
+        let mut next = state.clone();
+        let action = decision.apply(&mut next, command.clone());
+        Ok(SchedulerTransition {
+            next,
+            action,
+            runnable: scheduler_command_key(command).clone(),
+        })
     }
 
     pub fn choose_runnable(
@@ -136,18 +135,77 @@ impl ExtensionTimeContext {
         state: &SchedulerState,
         recorded_choice: Option<&RunnableKey>,
     ) -> Result<SchedulerSelection> {
-        ensure_bound_profile(&self.scheduler_profile, profile, "scheduler")?;
-        let running =
-            u64::try_from(state.runnables.iter().filter(|runnable| runnable.phase == RunnablePhase::Running).count())
-                .map_err(|_| Failure::invalid_harness("running runnable count overflow"))?;
-        if running >= self.max_concurrency {
-            return Err(Failure::invalid_harness(format!(
-                "system-extension concurrency limit {} exhausted",
-                self.max_concurrency
+        let decision = self.preview_choice(profile, policy, state, recorded_choice, None).map_err(Failure::from)?;
+        let selected = state.runnables[decision.index].key.clone();
+        let choice_sequence = decision.choice_sequence;
+        let eligible_count = decision.eligible_count;
+        let mut next = state.clone();
+        decision.apply(&mut next);
+        Ok(SchedulerSelection {
+            next,
+            selected,
+            choice_sequence,
+            eligible_count,
+        })
+    }
+
+    fn preview_command(
+        &self,
+        profile: &AdmittedTimeProfile,
+        policy: SchedulerPolicy,
+        state: &SchedulerState,
+        command: &SchedulerCommand,
+        has_slot: bool,
+    ) -> std::result::Result<SchedulerCommandDecision, SchedulerRuntimeError> {
+        ensure_bound_profile(&self.scheduler_profile, profile, "scheduler")
+            .map_err(SchedulerRuntimeError::Admission)?;
+        if scheduler_command_key(command).service_id != self.service_id {
+            return Err(SchedulerRuntimeError::Admission(Failure::invalid_harness(
+                "runnable service identity mismatch",
             )));
         }
-        super::choose_runnable(profile, policy, state, self.generation, recorded_choice)
-            .map_err(|error| core_error("system-extension scheduler selection", error))
+        let decision = preview_scheduler_command(profile, policy, state, self.generation, command, has_slot)
+            .map_err(SchedulerRuntimeError::Core)?;
+        if decision.usage_change(state).0 > 0 {
+            let active = state
+                .runnables
+                .iter()
+                .filter(|runnable| {
+                    matches!(runnable.phase, RunnablePhase::Ready | RunnablePhase::Running | RunnablePhase::Blocked)
+                })
+                .count();
+            if u64::try_from(active).map_err(|_| SchedulerRuntimeError::Core(SchedulerError::Overflow))?
+                >= self.max_runnables
+            {
+                return Err(SchedulerRuntimeError::Admission(Failure::invalid_harness(
+                    "system-extension runnable limit exhausted",
+                )));
+            }
+        }
+        Ok(decision)
+    }
+
+    fn preview_choice(
+        &self,
+        profile: &AdmittedTimeProfile,
+        policy: SchedulerPolicy,
+        state: &SchedulerState,
+        recorded: Option<&RunnableKey>,
+        ready: Option<&[usize]>,
+    ) -> std::result::Result<SchedulerChoiceDecision, SchedulerRuntimeError> {
+        ensure_bound_profile(&self.scheduler_profile, profile, "scheduler")
+            .map_err(SchedulerRuntimeError::Admission)?;
+        let decision = preview_runnable_choice(profile, policy, state, self.generation, recorded, ready)
+            .map_err(SchedulerRuntimeError::Core)?;
+        let running = state.runnables.iter().filter(|runnable| runnable.phase == RunnablePhase::Running).count();
+        if u64::try_from(running).map_err(|_| SchedulerRuntimeError::Core(SchedulerError::Overflow))?
+            >= self.max_concurrency
+        {
+            return Err(SchedulerRuntimeError::Admission(Failure::invalid_harness(
+                "system-extension concurrency limit exhausted",
+            )));
+        }
+        Ok(decision)
     }
 
     pub fn open_entropy_stream(

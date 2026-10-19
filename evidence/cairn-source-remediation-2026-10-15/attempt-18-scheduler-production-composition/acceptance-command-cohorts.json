@@ -1,0 +1,177 @@
+{
+  "basis": "Prior passing attempt-17 exact commands plus authoritative F09/F10 full Nix acceptance; artifact paths will be fresh task-owned outputs, never historical rewrites.",
+  "prior_argv": {
+    "ordered-octet-workspace": [
+      "cargo",
+      "octet",
+      "check",
+      "--artifact-dir",
+      "target/octet-f14-cohort17-workspace"
+    ],
+    "ordered-octet-library": [
+      "cargo",
+      "octet",
+      "check",
+      "-p",
+      "molten",
+      "--artifact-dir",
+      "target/octet-f14-cohort17-library",
+      "--",
+      "--lib"
+    ],
+    "ordered-artifact-import": [
+      "cargo",
+      "run",
+      "--offline",
+      "--locked",
+      "--",
+      "test",
+      "octet",
+      "artifacts",
+      "import",
+      "--artifacts",
+      "target/octet-f14-cohort17-workspace",
+      "--ledger",
+      "target/octet-f14-cohort17-ledger",
+      "--receipt-out",
+      "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/ordered-artifact-ledger-receipt.preserves"
+    ],
+    "ordered-strict-ci-gate": [
+      "cargo",
+      "run",
+      "--offline",
+      "--locked",
+      "--",
+      "test",
+      "octet",
+      "gate",
+      "--artifacts",
+      "target/octet-f14-cohort17-workspace",
+      "--profile",
+      "strict-ci",
+      "--receipt-out",
+      "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/ordered-strict-ci-gate.preserves"
+    ],
+    "ordered-remediation-plan": [
+      "cargo",
+      "run",
+      "--offline",
+      "--locked",
+      "--",
+      "test",
+      "octet",
+      "remediation",
+      "plan",
+      "--artifacts",
+      "target/octet-f14-cohort17-workspace",
+      "--lib-artifacts",
+      "target/octet-f14-cohort17-library",
+      "--focused-object-corpus",
+      "target/octet-f14-cohort17-workspace/object-corpus-receipt.json",
+      "--receipt-out",
+      "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-17-current-run-acceptance-repair/ordered-remediation-plan.preserves"
+    ],
+    "ordered-workspace-all-targets": [
+      "cargo",
+      "test",
+      "--offline",
+      "--locked",
+      "--workspace",
+      "--all-targets"
+    ],
+    "ordered-workspace-doctests": [
+      "cargo",
+      "test",
+      "--offline",
+      "--locked",
+      "--workspace",
+      "--doc"
+    ],
+    "ordered-enabled-feature-tests": [
+      "cargo",
+      "test",
+      "--offline",
+      "--locked",
+      "--workspace",
+      "--all-targets",
+      "--features",
+      "doltlite-oracle,executable-extents,profiler-perf,profiler-alloc,world-snapshot-vm-cohort"
+    ],
+    "ordered-disabled-profiler-tests": [
+      "cargo",
+      "test",
+      "--offline",
+      "--locked",
+      "--workspace",
+      "--all-targets",
+      "--features",
+      "profiler-disabled"
+    ],
+    "ordered-default-clippy": [
+      "cargo",
+      "clippy",
+      "--offline",
+      "--locked",
+      "--workspace",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "ordered-enabled-clippy": [
+      "cargo",
+      "clippy",
+      "--offline",
+      "--locked",
+      "--workspace",
+      "--all-targets",
+      "--features",
+      "doltlite-oracle,executable-extents,profiler-perf,profiler-alloc,world-snapshot-vm-cohort",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "ordered-disabled-clippy": [
+      "cargo",
+      "clippy",
+      "--offline",
+      "--locked",
+      "--workspace",
+      "--all-targets",
+      "--features",
+      "profiler-disabled",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "ordered-format-check": [
+      "cargo",
+      "fmt",
+      "--all",
+      "--check"
+    ]
+  },
+  "object_corpus": "Use cargo octet object corpus receipt --output <fresh corpus receipt> with every current src/**/*.rs path, sorted; regenerate complete list after implementation, not a subset or stale before-edit file list.",
+  "required_additions": [
+    [
+      "nix",
+      "build",
+      "--no-update-lock-file",
+      "--no-link",
+      "--print-out-paths",
+      "-L",
+      ".#checks.x86_64-linux.nextest",
+      ".#checks.x86_64-linux.clippy",
+      ".#checks.x86_64-linux.nextest-config"
+    ],
+    [
+      "nix",
+      "flake",
+      "check",
+      "--no-update-lock-file",
+      "-L",
+      "."
+    ]
+  ],
+  "non_claim": "Command plan only, not execution or acceptance."
+}

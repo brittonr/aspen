@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "fabric-time",
+    "show",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-19-shared-scheduler-source-acceptance/cli-smoke/report.preserves"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T05:08:02.650752+00:00",
+  "elapsed_seconds": 0.011,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "fabric-time report ok profile=both generation=1 final-ticks=36 timers=5 scheduler=7 entropy=3 deadline-lease=5 faults=6 live-clock=true conformance=true report=blake3:60b5e5aec70f369150ea1a5ef21ae1d62b2f5c2c6ff9351304492b8f4cd8834b\n",
+  "stderr": "",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

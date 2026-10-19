@@ -1,0 +1,50 @@
+{
+  "records": {
+    "lock_identity": {
+      "argv": [
+        "stat",
+        "-c",
+        "%n %d %i",
+        "/nix/store/08w4wl60b1fn4li3q5vbv4khyqs7rhws-lib.sh.lock"
+      ],
+      "observed_at": "2026-10-17T21:09:56.222536+00:00",
+      "exit_code": 0,
+      "stdout": "/nix/store/08w4wl60b1fn4li3q5vbv4khyqs7rhws-lib.sh.lock 31 4193189\n",
+      "stderr": "",
+      "read_only": true
+    },
+    "lock_owners": {
+      "argv": [
+        "lslocks",
+        "--json",
+        "--notruncate",
+        "--filter",
+        "INODE == 4193189",
+        "--output",
+        "PID,COMMAND,TYPE,MODE,INODE,MAJ:MIN,PATH,BLOCKER"
+      ],
+      "observed_at": "2026-10-17T21:09:56.223576+00:00",
+      "exit_code": 0,
+      "stdout": "{\n   \"locks\": [\n      {\n         \"pid\": 3449589,\n         \"command\": \"nix-daemon\",\n         \"type\": \"FLOCK\",\n         \"mode\": \"WRITE\",\n         \"inode\": 4193189,\n         \"maj:min\": \"0:31\",\n         \"path\": \"/nix/store...\",\n         \"blocker\": null\n      }\n   ]\n}\n",
+      "stderr": "",
+      "read_only": true
+    },
+    "process_identity": {
+      "argv": [
+        "ps",
+        "-p",
+        "3449589",
+        "-f"
+      ],
+      "observed_at": "2026-10-17T21:09:57.058904+00:00",
+      "exit_code": 0,
+      "stdout": "UID          PID    PPID  C STIME TTY          TIME CMD\nroot     3449589    2631  0 03:24 ?        00:00:00 nix-daemon 3449558\n",
+      "stderr": "",
+      "read_only": true
+    }
+  },
+  "lock_identity_matches": true,
+  "lock_owner_matches": true,
+  "process_identity_matches": false,
+  "privileged_inspection_target_revalidated": false
+}

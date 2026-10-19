@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "journalctl",
+    "--unit=nix-daemon.service",
+    "--since=2026-10-17 18:55:20 UTC",
+    "--lines=40",
+    "--no-pager",
+    "--output=short-iso"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T19:38:11.999603+00:00",
+  "elapsed_seconds": 0.004,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "2026-10-17T14:55:20-04:00 britton-desktop nix-daemon[1200954]: unexpected Nix daemon error: error: interrupted by the user\n2026-10-17T14:55:20-04:00 britton-desktop nix-daemon[2631]: reaped child process 1200954, status = failed with exit code 1\n2026-10-17T15:01:44-04:00 britton-desktop nix-daemon[2631]: reaped child process 723163, status = succeeded\n2026-10-17T15:05:15-04:00 britton-desktop nix-daemon[1289094]: unexpected Nix daemon error: error: interrupted by the user\n2026-10-17T15:05:15-04:00 britton-desktop nix-daemon[2631]: reaped child process 1289094, status = failed with exit code 1\n2026-10-17T15:14:41-04:00 britton-desktop nix-daemon[2631]: reaped child process 723184, status = succeeded\n2026-10-17T15:26:47-04:00 britton-desktop nix-daemon[2631]: reaped child process 723190, status = succeeded\n2026-10-17T15:32:58-04:00 britton-desktop nix-daemon[2631]: accepted connection from pid 2082458, user brittonr (trusted)\n2026-10-17T15:33:01-04:00 britton-desktop nix-daemon[2631]: accepted connection from pid 2082818, user brittonr (trusted)\n2026-10-17T15:33:29-04:00 britton-desktop nix-daemon[2631]: accepted connection from pid 2086791, user brittonr (trusted)\n2026-10-17T15:33:29-04:00 britton-desktop nix-daemon[2631]: accepted connection from pid 2086996, user brittonr (trusted)\n2026-10-17T15:33:54-04:00 britton-desktop nix-daemon[2631]: accepted connection from pid 2090494, user brittonr (trusted)\n2026-10-17T15:33:55-04:00 britton-desktop nix-daemon[2631]: accepted connection from pid 2090731, user brittonr (trusted)\n2026-10-17T15:35:34-04:00 britton-desktop nix-daemon[2631]: accepted connection from pid 2103558, user brittonr (trusted)\n2026-10-17T15:36:49-04:00 britton-desktop nix-daemon[2631]: accepted connection from pid 2115506, user brittonr (trusted)\n2026-10-17T15:37:35-04:00 britton-desktop nix-daemon[2631]: accepted connection from pid 2121580, user brittonr (trusted)\n2026-10-17T15:37:56-04:00 britton-desktop nix-daemon[2631]: accepted connection from pid 2124380, user brittonr (trusted)\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "read_only": true
+}

@@ -185,41 +185,62 @@ pub fn apply_use(
     generation: u64,
     request: UseRequest,
 ) -> UseDecision {
-    if state.is_released {
-        return unchanged(state, UseDecisionKind::Released);
-    }
-    if state.plan_ref != plan.plan_ref {
-        return unchanged(state, UseDecisionKind::PlanMismatch);
-    }
-    if state.profile_ref != profile_ref || plan.profile_ref != profile_ref {
-        return unchanged(state, UseDecisionKind::ProfileMismatch);
-    }
-    if state.generation != generation || plan.generation != generation {
-        return unchanged(state, UseDecisionKind::StaleGeneration);
-    }
-    let Some(runnable_usage) = apply_delta(state.runnable_usage, request.runnable_delta) else {
-        return unchanged(state, delta_error(state.runnable_usage, request.runnable_delta));
+    let (runnable_usage, queue_usage) = match preview_use(plan, state, profile_ref, generation, request) {
+        Ok(usage) => usage,
+        Err(UseDecisionKind::Exhausted) => {
+            let mut next = state.clone();
+            next.exhaustion_count = next.exhaustion_count.saturating_add(1);
+            return UseDecision {
+                kind: UseDecisionKind::Exhausted,
+                next,
+            };
+        }
+        Err(kind) => return unchanged(state, kind),
     };
-    let Some(queue_usage) = apply_delta(state.queue_usage, request.queue_delta) else {
-        return unchanged(state, delta_error(state.queue_usage, request.queue_delta));
-    };
-    if runnable_usage > plan.runnable_slots || queue_usage > plan.queue_slots {
-        let mut next = state.clone();
-        next.exhaustion_count = next.exhaustion_count.saturating_add(1);
-        return UseDecision {
-            kind: UseDecisionKind::Exhausted,
-            next,
-        };
-    }
     let mut next = state.clone();
-    next.runnable_usage = runnable_usage;
-    next.queue_usage = queue_usage;
-    next.runnable_high_water = next.runnable_high_water.max(runnable_usage);
-    next.queue_high_water = next.queue_high_water.max(queue_usage);
+    publish_use(&mut next, (runnable_usage, queue_usage));
     UseDecision {
         kind: UseDecisionKind::Admit,
         next,
     }
+}
+
+/// Stage checked usage without allocating/copying identity-bearing state.
+pub fn preview_use(
+    plan: &Plan,
+    state: &UseState,
+    profile_ref: &str,
+    generation: u64,
+    request: UseRequest,
+) -> Result<(u64, u64), UseDecisionKind> {
+    if state.is_released {
+        return Err(UseDecisionKind::Released);
+    }
+    if state.plan_ref != plan.plan_ref {
+        return Err(UseDecisionKind::PlanMismatch);
+    }
+    if state.profile_ref != profile_ref || plan.profile_ref != profile_ref {
+        return Err(UseDecisionKind::ProfileMismatch);
+    }
+    if state.generation != generation || plan.generation != generation {
+        return Err(UseDecisionKind::StaleGeneration);
+    }
+    let runnable_usage = apply_delta(state.runnable_usage, request.runnable_delta)
+        .ok_or_else(|| delta_error(state.runnable_usage, request.runnable_delta))?;
+    let queue_usage = apply_delta(state.queue_usage, request.queue_delta)
+        .ok_or_else(|| delta_error(state.queue_usage, request.queue_delta))?;
+    if runnable_usage > plan.runnable_slots || queue_usage > plan.queue_slots {
+        return Err(UseDecisionKind::Exhausted);
+    }
+    Ok((runnable_usage, queue_usage))
+}
+
+/// Publish usage previously staged by `preview_use` for this state and plan.
+pub fn publish_use(state: &mut UseState, usage: (u64, u64)) {
+    state.runnable_usage = usage.0;
+    state.queue_usage = usage.1;
+    state.runnable_high_water = state.runnable_high_water.max(usage.0);
+    state.queue_high_water = state.queue_high_water.max(usage.1);
 }
 
 fn apply_delta(current: u64, delta: i64) -> Option<u64> {

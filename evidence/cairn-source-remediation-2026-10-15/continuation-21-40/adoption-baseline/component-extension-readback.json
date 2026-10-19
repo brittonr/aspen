@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "system-extension",
+    "show",
+    "--status",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/continuation-21-40/adoption-baseline/extension-fixture/status.preserves"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T15:34:53.365850+00:00",
+  "elapsed_seconds": 0.019,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "system-extension status extension=molten.fixture.system.echo service=molten.fixture.system.echo.service generation=3 phase=stopped profile=sandboxed-component health=stopped restarts=1 invocations=13 checkpoint=blake3:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee ref=blake3:471a477c67d5e32b467dadc57be91d02e19de225a6f11f934dc2c93a7588a431\n",
+  "stderr": "",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

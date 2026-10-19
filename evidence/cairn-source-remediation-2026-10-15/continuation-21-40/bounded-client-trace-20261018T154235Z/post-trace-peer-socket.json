@@ -1,0 +1,21 @@
+{
+  "argv": [
+    "/run/current-system/sw/bin/ss",
+    "--unix",
+    "--all",
+    "--processes",
+    "--extended",
+    "--numeric",
+    "( sport = :829762441 or dport = :829762441 )"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-18T15:55:57.370272+00:00",
+  "elapsed_seconds": 0.069,
+  "exit_code": 0,
+  "stdout": "Netid State Recv-Q Send-Q Local Address:Port Peer Address:PortProcess\n",
+  "stderr": "",
+  "source": "client-syscalls.log:13333-13334",
+  "read_only": true,
+  "scope": "One unprivileged post-run snapshot filtered to the peer inode observed by the owned client; no attachment or process control",
+  "limit": "A post-exit socket snapshot does not prove the server internal wait or worker task ownership"
+}

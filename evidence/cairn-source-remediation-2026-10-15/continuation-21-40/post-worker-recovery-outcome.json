@@ -1,0 +1,90 @@
+{
+  "recorded_at": "2026-10-17T23:13:17.452380+00:00",
+  "status": "authorized-retry-finished-nonpassing-next-run-requires-decision",
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "last_observed_active_molten_change_count": 47,
+  "source_binding": "targeted-worker-after-kill-source-binding.json",
+  "worker_recovery": "targeted-worker-post-sigkill-observation.json",
+  "required_nix_acceptance": {
+    "record": "after-targeted-worker-recovery/ordered-relevant-nix-checks.json",
+    "checks": [
+      "nextest",
+      "clippy",
+      "nextest-config"
+    ],
+    "started_at": "2026-10-17T22:05:41.724442+00:00",
+    "elapsed_seconds": 3500.13,
+    "exit_code": 1,
+    "timed_out": true,
+    "stdout": "",
+    "stderr": "running auto-GC to free 99332653056 bytes\nwaiting for the big garbage collector lock...\n\nshutting down\u001b[Kerror: interrupted by the user\n",
+    "termination": "The existing recorder deadline terminated only its owned command process group; the interruption text is not evidence of manual operator cancellation",
+    "passing_acceptance_established": false,
+    "repository_flake_gate": "Not reached",
+    "post_nix_strict_cairn_validation": "Not reached"
+  },
+  "read_only_followup": {
+    "observed_gc_file": "/nix/var/nix/gc.lock",
+    "device_inode": "0:31 / 22402385",
+    "earlier_held_writer": {
+      "pid": 723701,
+      "uid": 0,
+      "parent": 2631,
+      "command": "nix-daemon 722942"
+    },
+    "earlier_writer_snapshot": "artifact://1295",
+    "subsequent_global_snapshot": "post-recovery-gc-global-lock-snapshot.json",
+    "subsequent_global_rows": 0,
+    "latest_native_held_writer_filter": {
+      "argv": [
+        "/run/current-system/sw/bin/lslocks",
+        "--json",
+        "--notruncate",
+        "--filter",
+        "INODE == 22402385 and MODE == \"WRITE\"",
+        "--output",
+        "PID,COMMAND,TYPE,MODE,INODE,MAJ:MIN,PATH,BLOCKER"
+      ],
+      "exit_code": 0,
+      "locks": []
+    },
+    "capacity_and_owner_progress": "post-recovery-gc-natural-progress.json",
+    "latest_store_available_bytes": 45140672512,
+    "previous_writer_remains_present_and_cpu_advanced": true,
+    "limits": [
+      "No currently listed held GC writer at the last snapshot is not a guarantee that future automatic GC will not block",
+      "Owner lifetime and CPU do not prove GC completion, deadlock, task ownership or safe cancellation",
+      "Do not signal PID 723701 under the consumed PID 3449589 authorization"
+    ]
+  },
+  "prerequisite_research_only": [
+    "runtime-repair-implementation-handoff.json",
+    "verifier-repair-implementation-handoff.json"
+  ],
+  "lifecycle_disposition": {
+    "F09_F10_remain_active": true,
+    "required_Nix_tasks_remain_unchecked": true,
+    "synced": false,
+    "archived": false,
+    "completion_commit_created": false,
+    "remote_publication_performed": false
+  },
+  "mutations": {
+    "product_source_changed": false,
+    "dependency_pins_changed": false,
+    "historical_evidence_or_fixtures_rewritten": false,
+    "host_configuration_changed": false,
+    "daemon_restarted": false,
+    "shared_data_deleted": false,
+    "additional_processes_signalled": false,
+    "consumed_task_owned_signal_guard_removed": true
+  },
+  "required_next_decision": "The single authorized retry is consumed. Authorize another bounded normal-settings acceptance run after observed GC progress, a narrowly command-local GC-threshold exception, or operator-side host recovery. No further run is inferred.",
+  "non_claims": [
+    "No behavioral test failure established by the timeout",
+    "No Nix acceptance or lifecycle completion claim",
+    "Read-only producer source maps are not execution or publication evidence"
+  ]
+}

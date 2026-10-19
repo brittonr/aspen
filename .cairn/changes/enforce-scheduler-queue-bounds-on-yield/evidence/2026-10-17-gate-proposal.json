@@ -1,0 +1,59 @@
+{
+  "acceptance_ids": [],
+  "change": "enforce-scheduler-queue-bounds-on-yield",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "232cdae0c40082977a951a62e529c92a38a519cd60e02c36a19adbc2eb34dc85",
+  "issues": [],
+  "layout": "cairn",
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "policy_selection": {
+    "blake3": "7a67802377005c18ebded42899e7f564f5d87087b6c14ca70464b35886f340a9",
+    "installation_receipt": false,
+    "locator": "/nix/store/xpl4byf12mpb7lda9zf83z9grc0na189-source/cairn-policy/generated/cairn-policy.json",
+    "source": "explicit"
+  },
+  "probe_evidence": null,
+  "profile_identity_hash": "8c9d85c1431037158f582702faeb1331b5dde248ad130b62d2b3b8d441598cf8",
+  "receipt_hash": "d7400bf20d0a60fe5f431f48ce992accd800991c869023949d8a88fb978adc3b",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "stage": "proposal",
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/enforce-scheduler-queue-bounds-on-yield/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 22,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    }
+  ],
+  "task_ordering": null,
+  "valid": true,
+  "verdict": "PASS",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

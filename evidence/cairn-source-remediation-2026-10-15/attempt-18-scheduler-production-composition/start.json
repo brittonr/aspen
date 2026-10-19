@@ -1,0 +1,18 @@
+{
+  "attempt": "18/20",
+  "implementation_attempts_consumed": 18,
+  "attempt_cap": 20,
+  "change": "resume-blocked-scheduler-runnables",
+  "shared_runtime_consumer": "enforce-scheduler-queue-bounds-on-yield; its separate acceptance cycle is reserved as attempt 19, not claimed complete here.",
+  "prior_completion_commit": "99410daec",
+  "prior_change_remaining_active": 47,
+  "scope": "Finish the missing admitted scheduler/capacity/effect composition with concrete live and deterministic simulation dispatch, migrate fixture consumers, and retain all existing F09/F10 acceptance requirements.",
+  "source_baseline": "Attempt-17 executable sources remain unchanged before this baseline. Existing core corrections and their historical evidence are retained.",
+  "new_source_edits_before_baseline": false,
+  "future_assignment_token_investigation": "Read-only; no attempt-20 implementation started.",
+  "non_claims": [
+    "No inherited source or runtime check is represented as fresh acceptance.",
+    "No sibling, dependency pin, frozen-fixture or historical-evidence modification is authorized.",
+    "No remote push in this continuation."
+  ]
+}

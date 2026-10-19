@@ -1,0 +1,45 @@
+{
+  "argv": [
+    "nix",
+    "build",
+    "--no-update-lock-file",
+    "--no-link",
+    "-L",
+    ".#checks.x86_64-linux.nextest",
+    ".#checks.x86_64-linux.clippy",
+    ".#checks.x86_64-linux.nextest-config"
+  ],
+  "trace_argv": [
+    "/run/current-system/sw/bin/strace",
+    "-qq",
+    "-ttt",
+    "-T",
+    "-yy",
+    "-e",
+    "trace=connect,flock,fcntl,read,readv,recvfrom,recvmsg,poll,ppoll,select,pselect6,epoll_wait,epoll_pwait,futex",
+    "-e",
+    "raw=read,readv,recvfrom,recvmsg",
+    "-o",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/continuation-21-40/bounded-client-trace-20261018T154235Z/client-syscalls.log",
+    "--",
+    "nix",
+    "build",
+    "--no-update-lock-file",
+    "--no-link",
+    "-L",
+    ".#checks.x86_64-linux.nextest",
+    ".#checks.x86_64-linux.clippy",
+    ".#checks.x86_64-linux.nextest-config"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-18T15:44:25.631380+00:00",
+  "owned_tracer_pid": 2634265,
+  "owned_process_group": 2634265,
+  "deadline_seconds": 600,
+  "source_binding": "source-binding-before.json",
+  "trace_scope": "Directly launched client main thread only; no attach and no follow option",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "attempt": "19/20",
+  "implementation_attempts_consumed": 19,
+  "attempt_cap": 20,
+  "changes": [
+    "resume-blocked-scheduler-runnables",
+    "enforce-scheduler-queue-bounds-on-yield"
+  ],
+  "basis": "../attempt-18-scheduler-production-composition/attempt-result.json",
+  "scope": "Repair all 19 concrete strict-source warnings in the shared owning scheduler/adapter implementation and receiver harness, then re-run the complete recorded acceptance campaign and actual CLI smoke. Close either package only after passing its acceptance.",
+  "functional_changes": "None intended: preserve existing core decisions, phase/resource accounting, prepare-before-publish and commit-before-deliver, paired real receivers and deterministic denial evidence.",
+  "independent_slices": {
+    "production": "SchedulerSourceRepair19",
+    "receivers": "ReceiverSourceRepair19"
+  },
+  "future_attempt_20": "Assignment-token change remains pending; no source implementation has started.",
+  "boundaries": [
+    "Work only in the dedicated Molten worktree.",
+    "No sibling/pin/frozen-fixture/historical-evidence changes.",
+    "No remote publication."
+  ],
+  "non_claim": "Attempt start and plan, not verification or completion."
+}

@@ -1,0 +1,28 @@
+{
+  "recorded_at": "2026-10-18T05:13:48.396000+00:00",
+  "observed_lock_owner_pid": 724313,
+  "lock_source": "post-timeout-observations.json",
+  "observation": {
+    "argv": [
+      "/run/current-system/sw/bin/ps",
+      "-p",
+      "724313",
+      "-o",
+      "uid,pid,ppid,stat,wchan:48,etime,time,args",
+      "--no-headers"
+    ],
+    "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+    "started_at": "2026-10-18T05:13:48.381820+00:00",
+    "elapsed_seconds": 0.014,
+    "exit_code": 0,
+    "stdout": "    0  724313    2631 Ssl  -                                                 1-04:33:12 00:13:05 nix-daemon 723515\n",
+    "stderr": "",
+    "timed_out": false
+  },
+  "read_only": true,
+  "limits": [
+    "Presence, lifetime and CPU are not proof of deadlock or safe cancellation",
+    "The consumed PID 3449589 authorization does not authorize signalling this process",
+    "This post-timeout observation does not establish the completed client wait"
+  ]
+}

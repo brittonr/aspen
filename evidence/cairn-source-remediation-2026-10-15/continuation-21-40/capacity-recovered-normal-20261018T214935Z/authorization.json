@@ -1,0 +1,39 @@
+{
+  "recorded_at": "2026-10-18T21:50:01.115541+00:00",
+  "user_selection": "Reclaim cache and resume checks",
+  "authority_record": "../capacity-recovery-20261018T205006Z/deletion-authorization.json",
+  "capacity_evidence": "../capacity-recovery-20261018T205006Z/capacity-after.json",
+  "dataset_available_bytes": 239535652864,
+  "required_dataset_available_bytes": 137438953472,
+  "capacity_condition_satisfied": true,
+  "source_binding": "source-binding.json",
+  "source_binding_passed": true,
+  "normal_settings": true,
+  "source_and_pins_frozen": true,
+  "stage_one_argv": [
+    "nix",
+    "build",
+    "--no-update-lock-file",
+    "--no-link",
+    "-L",
+    ".#checks.x86_64-linux.nextest",
+    ".#checks.x86_64-linux.clippy",
+    ".#checks.x86_64-linux.nextest-config"
+  ],
+  "stage_one_deadline_seconds": 3500,
+  "stage_two_argv": [
+    "nix",
+    "flake",
+    "check",
+    "--no-update-lock-file",
+    "-L",
+    "."
+  ],
+  "stage_two_deadline_seconds": 3500,
+  "stage_two_condition": "Stage one exit_code 0, timed_out false, and unchanged preserved source binding",
+  "gc_threshold_override": false,
+  "shared_process_control": false,
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false
+}

@@ -1,0 +1,109 @@
+{
+  "complete": true,
+  "gitignore": false,
+  "member_count": 1901,
+  "new_sources": [
+    "src/fabric_time/parts/adapters/p003/body.rs",
+    "src/fabric_time/shell/owned.rs",
+    "src/fabric_time/tests/adapters/harness.rs",
+    "src/fabric_time/tests/adapters/receiver.rs"
+  ],
+  "removed_sources": [],
+  "queries": [
+    {
+      "patterns": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/*.rs",
+      "count": 5,
+      "truncated": false
+    },
+    {
+      "patterns": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/world_distribution/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/world_benchmark/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/dag_sync/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/live/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/schema/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/cluster_harness/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/fabric_crypto_identity/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/audit/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/world_snapshot/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/worldcommit/**/*.rs",
+      "count": 109,
+      "truncated": false
+    },
+    {
+      "patterns": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/world_merge/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/world_promotion/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/world_head/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/world_branch_authority/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/upgrades/**/*.rs",
+      "count": 57,
+      "truncated": false
+    },
+    {
+      "patterns": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/protocol/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/provenance/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/prolly_map/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/prod/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/preserves/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/plugin/**/*.rs",
+      "count": 99,
+      "truncated": false
+    },
+    {
+      "patterns": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/secrets/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/retention/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/resources/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/raft/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/remote/**/*.rs",
+      "count": 136,
+      "truncated": false
+    },
+    {
+      "patterns": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/world_state_oracle/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/world_operator/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/world_replay/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/world_faults/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/runtime/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/main/**/*.rs",
+      "count": 135,
+      "truncated": false
+    },
+    {
+      "patterns": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/executable_extent/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/local_store/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/error/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/wasm/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/fsm/**/*.rs",
+      "count": 75,
+      "truncated": false
+    },
+    {
+      "patterns": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/fabric_transport/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/fabric_time/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/fabric_simulation/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/fabric_observability/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/fabric_execution/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/fabric_membership/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/fabric_durability/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/fabric/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/evidence/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/eval/**/*.rs",
+      "count": 174,
+      "truncated": false
+    },
+    {
+      "patterns": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/nixos/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/lifecycle/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/ledger/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/job/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/harness/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/iroh/**/*.rs",
+      "count": 163,
+      "truncated": false
+    },
+    {
+      "patterns": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/typed/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/transcripts/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/test/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/testing/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/system_extension/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/service/**/*.rs",
+      "count": 151,
+      "truncated": false
+    },
+    {
+      "patterns": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/rewrites/**/*.rs",
+      "count": 6,
+      "truncated": false
+    },
+    {
+      "patterns": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/api/**/*.rs",
+      "count": 0,
+      "truncated": false
+    },
+    {
+      "patterns": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/cli/test/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/cli/evidence/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/cli/core/**/*.rs",
+      "count": 52,
+      "truncated": false
+    },
+    {
+      "patterns": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/propagation/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/federation/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/deterministic/**/*.rs",
+      "count": 35,
+      "truncated": false
+    },
+    {
+      "patterns": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/parts/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/peer/**/*.rs",
+      "count": 26,
+      "truncated": false
+    },
+    {
+      "patterns": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/cli/runtime/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/cli/ops/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/cli/workflow/**/*.rs",
+      "count": 180,
+      "truncated": false
+    },
+    {
+      "patterns": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/bounded/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/addressable_actor/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/artifacts/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/project/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/fabric_consistency/**/*.rs",
+      "count": 138,
+      "truncated": false
+    },
+    {
+      "patterns": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/effects/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/delivery/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/coordination_delivery/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/content_store_adapter/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/coordination/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/content_replication/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/chunk/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/capability/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/catalog/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/authority/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/bin/**/*.rs",
+      "count": 168,
+      "truncated": false
+    },
+    {
+      "patterns": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/operator/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/node/**/*.rs;/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/octet/**/*.rs",
+      "count": 192,
+      "truncated": false
+    }
+  ]
+}

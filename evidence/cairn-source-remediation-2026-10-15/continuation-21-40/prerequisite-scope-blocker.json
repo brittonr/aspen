@@ -1,0 +1,60 @@
+{
+  "status": "requires-user-scope-decision",
+  "authorized_implementation_attempt_cap": 40,
+  "implementation_attempts_consumed": 20,
+  "new_source_attempt_started": false,
+  "change": "adopt-shared-wasm-component-runtime",
+  "normative_prerequisite": {
+    "file": ".cairn/changes/adopt-shared-wasm-component-runtime/specs/wasm-component-runtime-adoption/spec.md",
+    "lines": "5-19",
+    "requirement": "molten.wasm_component_adoption.prerequisite",
+    "required": "Completed hardened-wasmtime-runtime and Mantle consumer-verifier publications at immutable revisions; incomplete or sibling-only prerequisites block cutover"
+  },
+  "required_pin_task": {
+    "file": ".cairn/changes/adopt-shared-wasm-component-runtime/tasks.md",
+    "line": 6,
+    "checked": false
+  },
+  "observed_producer_state": {
+    "repository": "/home/brittonr/git/OnixResearch/hardened-wasmtime-runtime",
+    "command": [
+      "/nix/store/hgx9knp5q29b0lfw7isvc5ba1caayyjj-cairn-0.1.0/bin/cairn",
+      "change",
+      "list",
+      "--root",
+      ".",
+      "--policy",
+      "/nix/store/xpl4byf12mpb7lda9zf83z9grc0na189-source/cairn-policy/generated/cairn-policy.json"
+    ],
+    "exit_code": 0,
+    "change": "extract-hardened-wasmtime-runtime",
+    "tasks": {
+      "done": 0,
+      "in_progress": 0,
+      "todo": 15,
+      "total": 15
+    },
+    "implementation_limit": "Current library describes a pure core and test-side strategy-parity rail; the product restricted-linking and instantiation shell is assigned to extraction",
+    "implementation_limit_source": "crates/hardened-wasmtime-runtime/src/lib.rs:1-7"
+  },
+  "dependency_observation": {
+    "searched_files": [
+      "Cargo.toml",
+      "Cargo.lock",
+      "flake.nix",
+      "flake.lock"
+    ],
+    "searched_names": [
+      "hardened-wasmtime",
+      "hardened_wasmtime"
+    ],
+    "matches": 0,
+    "limit": "Local manifests and locks only; this does not prove that no remote candidate revision exists"
+  },
+  "authority_conflict": [
+    "Sibling-repository changes are currently forbidden",
+    "Dependency/toolchain pin changes are currently forbidden",
+    "Remote publication is currently forbidden"
+  ],
+  "disposition": "No sibling edits, pin changes, requirement weakening, sync, archival or publication performed. Existing F09/F10 Nix acceptance continues on unchanged bound source."
+}

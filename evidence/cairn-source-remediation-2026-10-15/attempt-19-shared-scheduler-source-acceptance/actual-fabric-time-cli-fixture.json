@@ -1,0 +1,22 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/molten",
+    "fabric-time",
+    "run-fixture",
+    "--profile",
+    "both",
+    "--out",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-19-shared-scheduler-source-acceptance/cli-smoke"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T05:08:02.162061+00:00",
+  "elapsed_seconds": 0.02,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "fabric-time fixture ok profile=both report=blake3:60b5e5aec70f369150ea1a5ef21ae1d62b2f5c2c6ff9351304492b8f4cd8834b evidence=34 live-domain=monotonic simulation-domain=virtual entropy-source=unix-dev-urandom out=/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-19-shared-scheduler-source-acceptance/cli-smoke\n",
+  "stderr": "",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

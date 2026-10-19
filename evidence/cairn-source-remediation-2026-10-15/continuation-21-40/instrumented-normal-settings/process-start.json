@@ -1,0 +1,36 @@
+{
+  "started_at": "2026-10-17T19:58:32.946960+00:00",
+  "wrapper_pid": 2283898,
+  "process_group": 2283898,
+  "argv": [
+    "nix",
+    "--debug",
+    "--log-format",
+    "raw",
+    "build",
+    "--no-update-lock-file",
+    "--no-link",
+    "-L",
+    ".#checks.x86_64-linux.nextest",
+    ".#checks.x86_64-linux.clippy",
+    ".#checks.x86_64-linux.nextest-config"
+  ],
+  "launcher_argv": [
+    "bash",
+    "/tmp/molten-cairn-continuation-rrpmy62t/with-cached-shell.sh",
+    "nix",
+    "--debug",
+    "--log-format",
+    "raw",
+    "build",
+    "--no-update-lock-file",
+    "--no-link",
+    "-L",
+    ".#checks.x86_64-linux.nextest",
+    ".#checks.x86_64-linux.clippy",
+    ".#checks.x86_64-linux.nextest-config"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "deadline_seconds": 600,
+  "source_binding": "source-binding.json"
+}

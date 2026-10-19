@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "/run/current-system/sw/bin/ps",
+    "-L",
+    "-p",
+    "725672",
+    "-o",
+    "uid=,pid=,tid=,ppid=,etimes=,cputimes=,stat=,comm="
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-18T16:47:06.601463+00:00",
+  "elapsed_seconds": 0.003,
+  "exit_code": 1,
+  "stdout": "",
+  "stderr": "",
+  "read_only": true,
+  "scope": "New per-thread CPU progress baseline for the operator-identified current holder; not a repeat of the root scan"
+}

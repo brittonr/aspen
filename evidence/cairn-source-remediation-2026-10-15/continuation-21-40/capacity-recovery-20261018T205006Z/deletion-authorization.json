@@ -1,0 +1,52 @@
+{
+  "recorded_at": "2026-10-18T21:47:45.975018+00:00",
+  "user_selection": "Reclaim cache and resume checks",
+  "scope": "Unlink only the approved 12270-file cold single-link Cargo artifact manifest under the exact Seaglass debug/deps directory, with all three Cargo lock and exact inode/metadata guards",
+  "profile": "/home/brittonr/.cargo-target/repo-targets/seaglass/debug",
+  "dependency_directory": "/home/brittonr/.cargo-target/repo-targets/seaglass/debug/deps",
+  "manifest": "cold-deps-preview.json",
+  "manifest_blake3": "162a52028469e33e0d2c0ad28d1322ec306fe3886800beadf4430c27ad7b43f4",
+  "guard": "reclaim-cold-deps.py",
+  "guard_blake3": "910466754df7c7cc0a6e1005677ea42288d7187e0b3514537f77638569e99ef7",
+  "selected_file_count": 12270,
+  "preview_allocated_bytes": 212270296064,
+  "preserve": [
+    "All source trees and repository inputs",
+    "Proof/evidence directories and fixtures outside this exact dependency-cache scope",
+    "Hard-linked files, symbolic links and shared runtime libraries",
+    "Recent or unrecognized files",
+    "Cargo lock files and profile directory inodes",
+    "Active Workday builds"
+  ],
+  "acceptance_authorization": {
+    "only_after_dataset_available_bytes_at_least": 137438953472,
+    "normal_settings": true,
+    "stage_one_argv": [
+      "nix",
+      "build",
+      "--no-update-lock-file",
+      "--no-link",
+      "-L",
+      ".#checks.x86_64-linux.nextest",
+      ".#checks.x86_64-linux.clippy",
+      ".#checks.x86_64-linux.nextest-config"
+    ],
+    "stage_one_deadline_seconds": 3500,
+    "stage_two_argv": [
+      "nix",
+      "flake",
+      "check",
+      "--no-update-lock-file",
+      "-L",
+      "."
+    ],
+    "stage_two_deadline_seconds": 3500,
+    "stage_two_condition": "All three preceding checks pass: exit 0 and timed_out false"
+  },
+  "no_gc_threshold_override": true,
+  "no_shared_process_control": true,
+  "no_source_or_pin_change": true,
+  "new_source_attempt_started": false,
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40
+}

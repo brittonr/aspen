@@ -1,0 +1,81 @@
+{
+  "queries": [
+    {
+      "request": {
+        "action": "references",
+        "file": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/fabric_time/parts/adapters/p003/body.rs",
+        "line": 49,
+        "symbol": "drain_next",
+        "timeout": 30
+      },
+      "response": {
+        "text": "No references found",
+        "details": {
+          "xdev": {
+            "tool": "lsp",
+            "mode": "execute",
+            "args": {
+              "action": "references",
+              "file": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/fabric_time/parts/adapters/p003/body.rs",
+              "line": 49,
+              "symbol": "drain_next",
+              "timeout": 30
+            },
+            "tier": "read",
+            "inner": {
+              "serverName": "rust-analyzer",
+              "action": "references",
+              "success": true,
+              "request": {
+                "action": "references",
+                "file": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/fabric_time/parts/adapters/p003/body.rs",
+                "line": 49,
+                "symbol": "drain_next",
+                "timeout": 30
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "action": "references",
+        "file": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/fabric_time/shell/owned.rs",
+        "line": 63,
+        "symbol": "backing_capacity",
+        "timeout": 30
+      },
+      "response": {
+        "text": "LSP error: LSP error -32801: content modified",
+        "details": {
+          "xdev": {
+            "tool": "lsp",
+            "mode": "execute",
+            "args": {
+              "action": "references",
+              "file": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/fabric_time/shell/owned.rs",
+              "line": 63,
+              "symbol": "backing_capacity",
+              "timeout": 30
+            },
+            "tier": "read",
+            "inner": {
+              "serverName": "rust-analyzer",
+              "action": "references",
+              "success": false,
+              "request": {
+                "action": "references",
+                "file": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/fabric_time/shell/owned.rs",
+                "line": 63,
+                "symbol": "backing_capacity",
+                "timeout": 30
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "limit": "Target worktree is not indexed by the ready main-checkout server; empty results do not establish caller absence. Worker complete literal inventory and AST rename were required."
+}

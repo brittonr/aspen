@@ -1,0 +1,274 @@
+{
+  "attempt": 20,
+  "attempt_cap": 20,
+  "implementation_attempts_consumed": 20,
+  "status": "blocked-not-complete",
+  "worktree": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "changes": [
+    "resume-blocked-scheduler-runnables",
+    "enforce-scheduler-queue-bounds-on-yield"
+  ],
+  "source_repair": {
+    "path": "crates/molten-core/src/fabric_time/scheduler/decision.rs",
+    "change": "Compiler-supported equivalent collapsible-if merge; no lint allowance or source-policy weakening",
+    "blake3": "657e47f7d5adc81260e4595d54fe2f05e03a18e3ad8167399bd00be8f3514399",
+    "source_binding": "source-content-final-hashes.txt",
+    "review": "source-review.json"
+  },
+  "focused_tests": {
+    "focused-core-fabric-time": {
+      "exit_code": 0,
+      "totals": {
+        "passed": 41,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    "focused-shell-fabric-time": {
+      "exit_code": 0,
+      "totals": {
+        "passed": 37,
+        "failed": 0,
+        "ignored": 0
+      }
+    }
+  },
+  "workspace_and_clippy": {
+    "ordered-workspace-all-targets": {
+      "exit_code": 0,
+      "totals": {
+        "passed": 2121,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    "ordered-workspace-doctests": {
+      "exit_code": 0,
+      "totals": {
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    "ordered-enabled-feature-tests": {
+      "exit_code": 0,
+      "totals": {
+        "passed": 2140,
+        "failed": 0,
+        "ignored": 1
+      }
+    },
+    "ordered-disabled-profiler-tests": {
+      "exit_code": 0,
+      "totals": {
+        "passed": 2121,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    "ordered-default-clippy": {
+      "exit_code": 0,
+      "totals": {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    "ordered-enabled-clippy": {
+      "exit_code": 0,
+      "totals": {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    "ordered-disabled-clippy": {
+      "exit_code": 0,
+      "totals": {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    "ordered-format-check": {
+      "exit_code": 0,
+      "totals": {
+        "passed": 0,
+        "failed": 0,
+        "ignored": 0
+      }
+    }
+  },
+  "strict_source_gate": {
+    "status": "pass",
+    "workspace_producer": "clean; zero findings",
+    "library_producer": "clean; zero findings",
+    "receipt": "blake3:e50185287ffabbe677edc8207d1747ac4a3d731c9de6be3d9ff5e7e730d18ffa",
+    "object_corpus_members": 1901
+  },
+  "actual_cli": {
+    "profile": "both",
+    "live_clock": true,
+    "conformance": true,
+    "scheduler_steps": 7,
+    "report": "blake3:3e399a4e79d6e8b92a60a7eca98ef3e1d07f942dd33ebf48473b405468f7f8df",
+    "records": [
+      "actual-fabric-time-cli-fixture.json",
+      "actual-fabric-time-cli-readback.json",
+      "native-cli-executable-content-hash.json"
+    ]
+  },
+  "native_lifecycle": {
+    "strict_validation_exit": 0,
+    "strict_valid": true,
+    "strict_receipt_hash": "5bed8b1c0797ec8cf4d4f498af0ac671b43de66d56dbda34149426a1ba87a519",
+    "artifact_gates": [
+      {
+        "change": "resume-blocked-scheduler-runnables",
+        "stage": "proposal",
+        "exit_code": 0,
+        "valid": true,
+        "verdict": "PASS",
+        "receipt_hash": "beb79a8e2328abf1385418cd80dff18ff3fa110965b623ac08640caf2aa4c998"
+      },
+      {
+        "change": "resume-blocked-scheduler-runnables",
+        "stage": "design",
+        "exit_code": 0,
+        "valid": true,
+        "verdict": "PASS",
+        "receipt_hash": "34398c42b44e875d7083b272391a4a38eca7a36fb9240b423e722c3484f20c3e"
+      },
+      {
+        "change": "resume-blocked-scheduler-runnables",
+        "stage": "tasks",
+        "exit_code": 0,
+        "valid": true,
+        "verdict": "PASS",
+        "receipt_hash": "a225e7c302b6a7b21eb7dd59221fb8bf553befa1a661fd5dbb4ac49da5294298"
+      },
+      {
+        "change": "enforce-scheduler-queue-bounds-on-yield",
+        "stage": "proposal",
+        "exit_code": 0,
+        "valid": true,
+        "verdict": "PASS",
+        "receipt_hash": "d7400bf20d0a60fe5f431f48ce992accd800991c869023949d8a88fb978adc3b"
+      },
+      {
+        "change": "enforce-scheduler-queue-bounds-on-yield",
+        "stage": "design",
+        "exit_code": 0,
+        "valid": true,
+        "verdict": "PASS",
+        "receipt_hash": "6b04b7b4a390d94c285802825a22a4284f94371b9522e17c811726a8c849331c"
+      },
+      {
+        "change": "enforce-scheduler-queue-bounds-on-yield",
+        "stage": "tasks",
+        "exit_code": 0,
+        "valid": true,
+        "verdict": "PASS",
+        "receipt_hash": "01543a590afa3aac0689881fb2a0dabd5f803e9fe7fa68ecc47efcc16f1b842c"
+      }
+    ],
+    "limit": "Structural policy/artifact observations; not Nix or behavioral completion authority"
+  },
+  "nix": {
+    "relevant_checks": {
+      "argv": [
+        "nix",
+        "build",
+        "--no-update-lock-file",
+        "--no-link",
+        "-L",
+        ".#checks.x86_64-linux.nextest",
+        ".#checks.x86_64-linux.clippy",
+        ".#checks.x86_64-linux.nextest-config"
+      ],
+      "exit_code": 1,
+      "timed_out": true,
+      "elapsed_seconds": 3500.24,
+      "blocker": "Shared garbage-collector lock; the recorder terminated only its owned command at its deadline",
+      "record": "ordered-relevant-nix-checks.json"
+    },
+    "repository_flake_gate": "Not executed; ordered campaign stopped on relevant Nix prerequisite",
+    "host_gc_settings_changed": false,
+    "shared_cargo_cache_entries_deleted": false,
+    "unrelated_processes_stopped": false
+  },
+  "lifecycle_disposition": {
+    "both_changes_remain_active": true,
+    "nix_tasks_remain_unchecked": true,
+    "synced": false,
+    "archived": false,
+    "completion_commit_created": false,
+    "remote_push_performed": false
+  },
+  "remaining_active_change_count": 47,
+  "remaining_active_changes": [
+    "add-chaoscontrol-consensus-conformance",
+    "add-collaboration-scope-system-extension",
+    "add-consensus-fast-path-acceleration",
+    "add-linux-ebpf-observability-adapter",
+    "add-live-consensus-reliability-adapter",
+    "add-protocol-aware-simulation-oracles",
+    "add-world-head-rollback-witnessing",
+    "admit-facet-owner-scopes",
+    "admit-record-pattern-subset",
+    "admit-recovery-group-supervision",
+    "admit-time-sliced-component-execution",
+    "admit-typed-service-facades",
+    "admit-world-merge-migrations-before-execution",
+    "adopt-command-pattern-resource-reservation",
+    "adopt-shared-wasm-component-runtime",
+    "adopt-standalone-batch-orchestration",
+    "bind-promotion-logical-identity-across-restarts",
+    "bind-scheduler-completions-to-lease-epoch",
+    "bound-terminal-scheduler-retention",
+    "coalesce-assertion-notifications",
+    "committed-change-stream",
+    "differentiate-live-simulation-conformance",
+    "distinguish-absent-world-merge-roots",
+    "enforce-introduction-before-reference",
+    "enforce-scheduler-queue-bounds-on-yield",
+    "exercise-node-processes-under-faults",
+    "exercise-service-recovery-composition",
+    "federated-pull-system-extension",
+    "fence-runtime-local-work-across-restarts",
+    "harden-prolly-publication-integrity",
+    "harden-world-replay-observation-boundary",
+    "pilot-marble-object-store",
+    "pilot-spacewasm-core-runtime-profile",
+    "pilot-wrpc-component-transport",
+    "preserve-replica-fault-domains-during-cleanup",
+    "preserve-under-replicated-status-without-targets",
+    "prolly-storage-work-reduction",
+    "publish-withdrawable-service-demand",
+    "record-turn-causality-in-traces",
+    "recover-from-storage-faults",
+    "recover-ingress-enqueue-after-dedup",
+    "repair-lost-replicas-after-prior-success",
+    "repair-partial-replicas-without-complete-donor",
+    "require-node-startup-source-gate-evidence",
+    "resume-blocked-scheduler-runnables",
+    "store-declared-state-as-digest-named-records",
+    "unify-service-state-assertions"
+  ],
+  "backlog_record": "final-native-change-list.json",
+  "stop_reasons": [
+    "Agreed 20-implementation-attempt cap consumed",
+    "Required Nix acceptance is blocked, not waived"
+  ],
+  "required_next_decisions": [
+    "Resolve or authorize a bounded recovery of the host Nix GC/space prerequisite before retrying required Nix acceptance",
+    "Extend the implementation-attempt allowance before starting any further source cycle"
+  ],
+  "non_claims": [
+    "No global liveness or measured performance claim",
+    "No whole-system correctness or release eligibility claim",
+    "Unfinished assignment-token implementation is not supplied by reference-checker evidence",
+    "One ignored live external DoltLite cohort case is not executed evidence",
+    "No sibling repository, dependency/toolchain pin, frozen fixture, or historical archive/evidence mutation in this attempt"
+  ]
+}

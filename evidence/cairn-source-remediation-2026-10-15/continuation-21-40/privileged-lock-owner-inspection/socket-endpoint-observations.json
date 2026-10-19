@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "ss",
+    "-xapne"
+  ],
+  "observed_at": "2026-10-17T21:25:44.809594+00:00",
+  "exit_code": 0,
+  "stdout_header": [
+    "Netid State  Recv-Q Send-Q                                                                                           Local Address:Port      Peer Address:Port     Process                                    "
+  ],
+  "matching_endpoint_lines": [
+    "u_str ESTAB  0      0                                                                                                            * 227468666            * 0         ---                                ",
+    "u_str ESTAB  0      0                                                                            /nix/var/nix/daemon-socket/socket 227471618            * 0         --- ino:131072 dev:0/31            "
+  ],
+  "stderr": "",
+  "selection": "Exact whitespace-delimited socket inode tokens 227471618 and 227468666 from the operator's supplied FD 8/16 observations",
+  "unrelated_socket_rows_not_retained": true,
+  "read_only": true,
+  "privilege_used": false
+}

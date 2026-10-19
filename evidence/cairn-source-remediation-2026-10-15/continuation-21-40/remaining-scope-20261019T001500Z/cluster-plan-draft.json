@@ -1,0 +1,110 @@
+{
+  "recorded_at": "2026-10-19T00:22:00Z",
+  "kind": "draft-cluster-plan",
+  "basis": "inventory.json plus change names; membership is provisional until each cluster's proposals, designs, specs, and tasks are read at cycle start",
+  "ordering_rationale": "Consensus and replication integrity first (largest coupled surface), then scheduler completion, world/merge/replay, storage and publication, fault recovery, service-state assertions, runtime and component pilots, and finally pattern, protocol, observability, and evidence work",
+  "clusters": [
+    {
+      "id": "C1-consensus-replication",
+      "members": [
+        "add-consensus-fast-path-acceleration",
+        "add-live-consensus-reliability-adapter",
+        "add-chaoscontrol-consensus-conformance",
+        "repair-lost-replicas-after-prior-success",
+        "repair-partial-replicas-without-complete-donor",
+        "preserve-under-replicated-status-without-targets",
+        "preserve-replica-fault-domains-during-cleanup",
+        "bind-promotion-logical-identity-across-restarts"
+      ],
+      "note": "Raft-backed control-plane changes share membership, replica-status, and promotion-identity surfaces"
+    },
+    {
+      "id": "C2-scheduler-completion",
+      "members": [
+        "bind-scheduler-completions-to-lease-epoch",
+        "bound-terminal-scheduler-retention"
+      ],
+      "note": "Direct successors of the F09/F10 scheduler work already in acceptance; start only after those close"
+    },
+    {
+      "id": "C3-world-merge-replay",
+      "members": [
+        "add-world-head-rollback-witnessing",
+        "admit-world-merge-migrations-before-execution",
+        "distinguish-absent-world-merge-roots",
+        "harden-world-replay-observation-boundary",
+        "differentiate-live-simulation-conformance"
+      ]
+    },
+    {
+      "id": "C4-storage-publication",
+      "members": [
+        "harden-prolly-publication-integrity",
+        "prolly-storage-work-reduction",
+        "pilot-marble-object-store",
+        "committed-change-stream",
+        "store-declared-state-as-digest-named-records"
+      ]
+    },
+    {
+      "id": "C5-fault-recovery",
+      "members": [
+        "recover-from-storage-faults",
+        "recover-ingress-enqueue-after-dedup",
+        "exercise-node-processes-under-faults",
+        "exercise-service-recovery-composition",
+        "admit-recovery-group-supervision",
+        "fence-runtime-local-work-across-restarts"
+      ]
+    },
+    {
+      "id": "C6-service-state-assertions",
+      "members": [
+        "unify-service-state-assertions",
+        "publish-withdrawable-service-demand",
+        "admit-typed-service-facades",
+        "coalesce-assertion-notifications",
+        "admit-facet-owner-scopes"
+      ]
+    },
+    {
+      "id": "C7-runtime-component-pilots",
+      "members": [
+        "adopt-shared-wasm-component-runtime",
+        "pilot-spacewasm-core-runtime-profile",
+        "pilot-wrpc-component-transport",
+        "admit-time-sliced-component-execution",
+        "adopt-standalone-batch-orchestration"
+      ],
+      "note": "adopt-shared-wasm-component-runtime is prerequisite-gated on the hardened-wasmtime-runtime producer and Mantle consumer-verifier work; keep it behind the other members until those immutable publications exist"
+    },
+    {
+      "id": "C8-patterns-protocols-observability",
+      "members": [
+        "add-protocol-aware-simulation-oracles",
+        "admit-record-pattern-subset",
+        "enforce-introduction-before-reference",
+        "adopt-command-pattern-resource-reservation",
+        "record-turn-causality-in-traces",
+        "add-linux-ebpf-observability-adapter",
+        "require-node-startup-source-gate-evidence",
+        "add-collaboration-scope-system-extension",
+        "federated-pull-system-extension"
+      ]
+    }
+  ],
+  "member_count": 45,
+  "planned_cycles": 8,
+  "cycle_template": [
+    "Read every member's proposal, design, specs, and tasks and confirm membership and ordering",
+    "Record the cycle-scoping entry in the attempt ledger with the frozen source binding",
+    "Implement members with focused tests and enabled/disabled/profiler feature coverage as their tasks require",
+    "Run each member's recorded acceptance checks and required gates, retaining raw command records",
+    "Sync and archive each member only after its own acceptance passes; record unfinished members with their blocking condition"
+  ],
+  "limits": [
+    "Draft only; membership and order may change when member artifacts are read",
+    "No acceptance criteria are weakened by clustering",
+    "Eight cycles is an estimate; rework cycles consume the same budget"
+  ]
+}

@@ -1,0 +1,343 @@
+{
+  "record": "nix-daemon-locks.json",
+  "known_file_facts": [
+    {
+      "path": "/nix/var/nix/gc.lock",
+      "device": "0:31",
+      "inode": 22402385,
+      "unique_rows": 0,
+      "mode_counts": {},
+      "writer_or_waiter_rows": []
+    },
+    {
+      "path": "/nix/var/nix/db/big-lock",
+      "device": "0:31",
+      "inode": 22406060,
+      "unique_rows": 3655,
+      "mode_counts": {
+        "READ": 3655
+      },
+      "writer_or_waiter_rows": []
+    },
+    {
+      "path": "/nix/var/nix/current-load/main-lock",
+      "device": "0:31",
+      "inode": 22402919,
+      "unique_rows": 0,
+      "mode_counts": {},
+      "writer_or_waiter_rows": []
+    },
+    {
+      "path": "/nix/var/nix/db/db.sqlite",
+      "device": "0:31",
+      "inode": 22406061,
+      "unique_rows": 3665,
+      "mode_counts": {
+        "READ": 3665
+      },
+      "writer_or_waiter_rows": []
+    },
+    {
+      "path": "/nix/var/nix/db/db.sqlite-shm",
+      "device": "0:31",
+      "inode": 302491,
+      "unique_rows": 3658,
+      "mode_counts": {
+        "READ": 3658
+      },
+      "writer_or_waiter_rows": []
+    }
+  ],
+  "contended_files": [
+    {
+      "device": "0:31",
+      "inode": 3940983,
+      "rows": [
+        {
+          "blocker": 92763,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 3940983,
+          "maj:min": "0:31",
+          "mode": "WRITE*",
+          "path": "/nix/store...",
+          "pid": 337990,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        },
+        {
+          "blocker": 92763,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 3940983,
+          "maj:min": "0:31",
+          "mode": "WRITE*",
+          "path": "/nix/store...",
+          "pid": 129607,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        },
+        {
+          "blocker": 92763,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 3940983,
+          "maj:min": "0:31",
+          "mode": "WRITE*",
+          "path": "/nix/store...",
+          "pid": 114037,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        },
+        {
+          "blocker": 92763,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 3940983,
+          "maj:min": "0:31",
+          "mode": "WRITE*",
+          "path": "/nix/store...",
+          "pid": 107438,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        },
+        {
+          "blocker": null,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 3940983,
+          "maj:min": "0:31",
+          "mode": "WRITE",
+          "path": "/nix/store...",
+          "pid": 92763,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        }
+      ]
+    },
+    {
+      "device": "0:31",
+      "inode": 4053942,
+      "rows": [
+        {
+          "blocker": 130832,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 4053942,
+          "maj:min": "0:31",
+          "mode": "WRITE*",
+          "path": "/nix/store...",
+          "pid": 388688,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        },
+        {
+          "blocker": 130832,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 4053942,
+          "maj:min": "0:31",
+          "mode": "WRITE*",
+          "path": "/nix/store...",
+          "pid": 371594,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        },
+        {
+          "blocker": 130832,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 4053942,
+          "maj:min": "0:31",
+          "mode": "WRITE*",
+          "path": "/nix/store...",
+          "pid": 365808,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        },
+        {
+          "blocker": 130832,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 4053942,
+          "maj:min": "0:31",
+          "mode": "WRITE*",
+          "path": "/nix/store...",
+          "pid": 365798,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        },
+        {
+          "blocker": 130832,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 4053942,
+          "maj:min": "0:31",
+          "mode": "WRITE*",
+          "path": "/nix/store...",
+          "pid": 360296,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        },
+        {
+          "blocker": 130832,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 4053942,
+          "maj:min": "0:31",
+          "mode": "WRITE*",
+          "path": "/nix/store...",
+          "pid": 342925,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        },
+        {
+          "blocker": 130832,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 4053942,
+          "maj:min": "0:31",
+          "mode": "WRITE*",
+          "path": "/nix/store...",
+          "pid": 331921,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        },
+        {
+          "blocker": null,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 4053942,
+          "maj:min": "0:31",
+          "mode": "WRITE",
+          "path": "/nix/store...",
+          "pid": 130832,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        }
+      ]
+    },
+    {
+      "device": "0:31",
+      "inode": 4482053,
+      "rows": [
+        {
+          "blocker": 2601744,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 4482053,
+          "maj:min": "0:31",
+          "mode": "WRITE*",
+          "path": "/nix/store...",
+          "pid": 2601753,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        },
+        {
+          "blocker": null,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 4482053,
+          "maj:min": "0:31",
+          "mode": "WRITE",
+          "path": "/nix/store...",
+          "pid": 2601744,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        }
+      ]
+    },
+    {
+      "device": "0:31",
+      "inode": 4632022,
+      "rows": [
+        {
+          "blocker": 3432619,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 4632022,
+          "maj:min": "0:31",
+          "mode": "WRITE*",
+          "path": "/nix/store...",
+          "pid": 3476711,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        },
+        {
+          "blocker": 3432619,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 4632022,
+          "maj:min": "0:31",
+          "mode": "WRITE*",
+          "path": "/nix/store...",
+          "pid": 3453404,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        },
+        {
+          "blocker": 3432619,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 4632022,
+          "maj:min": "0:31",
+          "mode": "WRITE*",
+          "path": "/nix/store...",
+          "pid": 3447198,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        },
+        {
+          "blocker": 3432619,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 4632022,
+          "maj:min": "0:31",
+          "mode": "WRITE*",
+          "path": "/nix/store...",
+          "pid": 3439286,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        },
+        {
+          "blocker": null,
+          "command": "nix-daemon",
+          "end": 0,
+          "inode": 4632022,
+          "maj:min": "0:31",
+          "mode": "WRITE",
+          "path": "/nix/store...",
+          "pid": 3432619,
+          "start": 0,
+          "type": "FLOCK",
+          "snapshot_duplicate_rows": 1
+        }
+      ]
+    }
+  ],
+  "all_snapshot_counts": {
+    "unique_held_writer_rows": 3706,
+    "unique_nix_daemon_pids": 3690,
+    "distinct_contended_files": 4
+  },
+  "selection_policy": "Inspect bounded owners of actually contended locks and known global GC/dispatch locks, not every temp-root writer or shared database reader"
+}

@@ -1,0 +1,23 @@
+{
+  "argv": [
+    "git",
+    "add",
+    "--",
+    ".cairn/changes/resume-blocked-scheduler-runnables/tasks.md",
+    ".cairn/changes/enforce-scheduler-queue-bounds-on-yield/tasks.md",
+    ".cairn/changes/resume-blocked-scheduler-runnables/evidence/2026-10-17-final-acceptance.md",
+    ".cairn/changes/enforce-scheduler-queue-bounds-on-yield/evidence/2026-10-17-final-acceptance.md",
+    "evidence/cairn-source-remediation-2026-10-15/attempt-20-final-scheduler-acceptance"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T07:24:54.175846+00:00",
+  "elapsed_seconds": 0.039,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

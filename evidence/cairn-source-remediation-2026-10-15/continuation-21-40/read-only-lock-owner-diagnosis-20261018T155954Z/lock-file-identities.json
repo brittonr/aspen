@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "/run/current-system/sw/bin/stat",
+    "-Lc",
+    "%n %d %i",
+    "/nix/var/nix/gc.lock",
+    "/nix/var/nix/db/big-lock",
+    "/nix/var/nix/current-load/main-lock",
+    "/nix/var/nix/db/db.sqlite",
+    "/nix/var/nix/db/db.sqlite-shm"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-18T15:59:54.132647+00:00",
+  "elapsed_seconds": 0.002,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "/nix/var/nix/gc.lock 31 22402385\n/nix/var/nix/db/big-lock 31 22406060\n/nix/var/nix/current-load/main-lock 31 22402919\n/nix/var/nix/db/db.sqlite 31 22406061\n/nix/var/nix/db/db.sqlite-shm 31 302491\n",
+  "stderr": "",
+  "read_only": true
+}

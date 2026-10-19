@@ -1,0 +1,25 @@
+{
+  "confidence": 0.95,
+  "explanation": "Static inspection found the concrete adapters correctly prepared before publication and delivered afterward, with the fixture/conformance consumers migrated to the owner. However, two new receiver-harness flaws leave the explicitly required delivery-order and denied-delivery regressions unable to reliably reject incorrect behavior. No files were changed and no builds, tests, linters, formatters, or runtime checks were run.",
+  "findings": [
+    {
+      "body": "The receiving worker acquires the same owner mutex that `Harness::command` holds for the entire command (lines 134\u2013135). Consequently, even if the owner incorrectly calls the real thread adapter before publishing scheduler/capacity state, this receiver waits until the command finishes and then reports the committed snapshot, so `consume` passes. The simulation branch likewise drains its queue only after `command` returns, masking the same ordering regression. These observations establish eventual delivery and final accounting, not the required commit-before-effect order. Add a deterministic observation at the publication/delivery boundary, with a wrong-order negative control, rather than relying on snapshots taken behind the command lock.",
+      "confidence": 0.98,
+      "file_path": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/fabric_time/tests/adapters/mod.rs",
+      "line_end": 107,
+      "line_start": 104,
+      "priority": 2,
+      "title": "Observe effect ordering without waiting behind the command mutex"
+    },
+    {
+      "body": "A timeout here establishes only that the live worker has not reported within 20 ms, not that a denied/stale/invalid command emitted no wake. A wrongly emitted `unpark` can remain pending while the worker is descheduled; after this assertion passes, the next accepted wake can coalesce with that token and produce exactly the snapshot expected by `consume`. On final negative paths, `Drop` sets `stop` before waking/joining the worker, so an outstanding erroneous wake can also disappear without any report. This lets the central no-effects regression pass despite the prohibited effect. Replace the observation window with a deterministic receiver checkpoint/gate that accounts for each command before asserting absence.",
+      "confidence": 0.97,
+      "file_path": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/src/fabric_time/tests/adapters/mod.rs",
+      "line_end": 165,
+      "line_start": 160,
+      "priority": 2,
+      "title": "Synchronize denied-delivery checks with the live receiver"
+    }
+  ],
+  "overall_correctness": "incorrect"
+}

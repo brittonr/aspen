@@ -1,0 +1,30 @@
+{
+  "argv": [
+    "/run/current-system/sw/bin/timeout",
+    "--signal=TERM",
+    "--kill-after=5s",
+    "90s",
+    "bash",
+    "/tmp/molten-cairn-continuation-rrpmy62t/with-cached-shell.sh",
+    "cargo",
+    "clean",
+    "--package",
+    "molten",
+    "--profile",
+    "dev",
+    "--target-dir",
+    "/home/brittonr/.cargo-target",
+    "--frozen",
+    "--dry-run",
+    "--verbose"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-18T20:50:06.351041+00:00",
+  "elapsed_seconds": 0.049,
+  "exit_code": 101,
+  "dry_run": true,
+  "deletion_performed": false,
+  "stdout_record": "molten-clean-dry-run.stdout.log",
+  "stderr_record": "molten-clean-dry-run.stderr.log",
+  "scope": "Cargo-owned preview for the Molten package only; offline and locked; no artifact deletion"
+}

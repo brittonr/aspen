@@ -1,0 +1,24 @@
+{
+  "observed_after_formatter_environment_timeouts": {
+    "store_filesystem": "datapool/nix",
+    "store_size": "321G",
+    "store_used": "233G",
+    "available": "88G",
+    "cargo_target_filesystem": "datapool/cargo-target",
+    "cargo_target_size": "1.5T",
+    "cargo_target_used": "1.4T",
+    "cargo_target_available": "88G"
+  },
+  "nix_config": {
+    "min-free": 107374182400,
+    "max-free": 137438953472,
+    "min-free-check-interval": 5
+  },
+  "observed_launch_failure": "waiting for the big garbage collector lock",
+  "authority_limits": [
+    "No host GC settings changed",
+    "No unrelated processes stopped",
+    "No shared Cargo-cache entries deleted"
+  ],
+  "recovery": "Existing Nix-generated direnv shell activates without requesting a new Nix store operation; compiler output and recorded IN_NIX_SHELL/CARGO_TARGET_DIR match attempt 19."
+}

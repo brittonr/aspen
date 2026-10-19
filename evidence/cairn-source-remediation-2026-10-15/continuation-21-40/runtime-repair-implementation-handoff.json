@@ -1,0 +1,36 @@
+{
+  "recorded_at": "2026-10-17T22:47:09.835534+00:00",
+  "kind": "read-only-runtime-implementation-handoff",
+  "agent_report": "agent://RuntimePrereqMap/report",
+  "parent_checked_contracts": [
+    {
+      "path": "/home/brittonr/git/aspen-worktrees/wasmtime-prerequisite-20261017/.cairn/specs/hardened-wasmtime-runtime/spec.md",
+      "lines": "253-299"
+    },
+    {
+      "path": "/home/brittonr/git/aspen-worktrees/wasmtime-prerequisite-20261017/.cairn/changes/repair-component-runtime-admission-and-linking/tasks.md",
+      "lines": "1-23"
+    },
+    {
+      "path": "/home/brittonr/git/aspen-worktrees/wasmtime-prerequisite-20261017/.cairn/changes/repair-component-runtime-admission-and-linking/design.md",
+      "lines": "35-51"
+    }
+  ],
+  "accepted_consumer_clause_retained": "Aspen and an independent product; an Aspen world and one different Kamacite, Animus, or runtime world; product imports and DTOs stay in adapters",
+  "consumer_proof_needed": "A real Molten component world and a genuinely different independently owned world, not Site metadata or a core-module label",
+  "publication_order": "Producer and consumer proof, required quality/native gates, independent review, sync/archive, then accepted immutable publication and remote readback",
+  "candidate_transport_caution": "The accepted tasks do not separately authorize a pre-acceptance remote candidate publication; do not invent one if immutable consumer acquisition needs further authority",
+  "source_map_status": "Scout source observations, consistent with prior parent-checked input readbacks; not execution or publication proof",
+  "mechanism_cutover": [
+    "Admitted engine policy and exact artifact inspection",
+    "Real component and bounded typed consumer registration",
+    "All cumulative resources and mandatory engine-bound live deadline service",
+    "Stable distinct outcomes and owned cleanup",
+    "Every producer fixture and named consumer migrated without legacy bypass"
+  ],
+  "executions_performed": [],
+  "product_inputs_changed": false,
+  "new_source_attempt_started": false,
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40
+}

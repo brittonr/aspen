@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "bash",
+    "/tmp/molten-cairn-continuation-rrpmy62t/with-cached-shell.sh",
+    "b3sum",
+    "--check",
+    "--quiet",
+    "evidence/cairn-source-remediation-2026-10-15/attempt-20-final-scheduler-acceptance/source-content-final-hashes.txt"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-18T15:43:34.290750+00:00",
+  "elapsed_seconds": 0.254,
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "",
+  "manifest_entries": 1911,
+  "preserved_source_inventory_matches": true
+}

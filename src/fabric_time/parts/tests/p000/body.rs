@@ -243,28 +243,3 @@ fn extension_context_enforces_service_generation_resources_and_capability() {
     );
 }
 
-#[test]
-fn live_scheduler_wake_shell_routes_only_admitted_wake_transitions() {
-    let profile = simulation_profile();
-    let policy = SchedulerPolicy {
-        ordering: SchedulerOrdering::Fifo,
-        replay: SchedulerReplayPolicy::Deterministic,
-        overload: SchedulerOverloadPolicy::Reject,
-    };
-    let state = new_scheduler_state(&profile.profile, GENERATION);
-    let key = RunnableKey {
-        service_id: "wake-service".to_string(),
-        generation: GENERATION,
-        runnable_id: "wake-runnable".to_string(),
-    };
-    let transition = apply_scheduler_command(&profile.profile, policy, &state, GENERATION, &SchedulerCommand::Wake {
-        key: key.clone(),
-        priority: 0,
-    })
-    .expect("wake transition");
-    let mut adapter = ThreadSchedulerWakeAdapter::default();
-    assert!(adapter.route(&transition).is_err());
-    adapter.register(key.clone(), std::thread::current()).expect("register current thread");
-    adapter.route(&transition).expect("route admitted wake");
-    assert!(adapter.unregister(&key));
-}

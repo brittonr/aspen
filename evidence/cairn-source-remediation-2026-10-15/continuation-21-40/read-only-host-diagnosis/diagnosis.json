@@ -1,0 +1,174 @@
+{
+  "status": "read-only-diagnosis-complete-acceptance-still-blocked",
+  "recorded_at": "2026-10-17T19:42:08.181571+00:00",
+  "authorization": "../read-only-diagnosis-authorization.json",
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "acceptance_retried": false,
+  "observations": {
+    "service": {
+      "command": "systemctl show nix-daemon.service --property=ActiveState,SubState,MainPID,TasksCurrent,MemoryCurrent,ExecMainStartTimestamp --no-pager",
+      "active_state": "active",
+      "sub_state": "running",
+      "main_pid": 2631,
+      "tasks_current_at_observation": 7366,
+      "memory_current_bytes_at_observation": 4681240576,
+      "immediate_children": {
+        "command": "ps --ppid 2631 -o stat,comm --no-headers | sort | uniq -c",
+        "output": "3665 Ssl nix-daemon"
+      },
+      "limits": {
+        "tasks_max": 1048576,
+        "memory_high_bytes": 150323855360,
+        "memory_max": "infinity",
+        "limit_nofile": 1048576,
+        "limit_nproc": 763192,
+        "cpu_quota_per_second": "infinity"
+      },
+      "limits_and_population_are_not_proof_of_a_leak_or_timeout_cause": true
+    },
+    "wait_visibility": {
+      "paths": [
+        "/proc/2631/wchan",
+        "/proc/1072248/wchan"
+      ],
+      "observed_values": [
+        "0",
+        "0"
+      ],
+      "worker_stack": "/proc/1072248/stack",
+      "worker_stack_result": "EACCES: permission denied",
+      "limit": "No usable kernel wait/stack attribution for the root-owned daemon worker was obtained; no privilege escalation or attachment attempted"
+    },
+    "locks": {
+      "record": "targeted-lock-owners.json",
+      "observed_known_lock_summary": [
+        {
+          "path": "/nix/var/nix/gc.lock",
+          "inode": 22402385,
+          "mode_counts": {},
+          "writer_or_waiter_rows": [],
+          "rows_retained_in_raw_record": 0
+        },
+        {
+          "path": "/nix/var/nix/db/big-lock",
+          "inode": 22406060,
+          "mode_counts": {
+            "READ": 3679
+          },
+          "writer_or_waiter_rows": [],
+          "rows_retained_in_raw_record": 3679
+        },
+        {
+          "path": "/nix/var/nix/current-load/main-lock",
+          "inode": 22402919,
+          "mode_counts": {},
+          "writer_or_waiter_rows": [],
+          "rows_retained_in_raw_record": 0
+        }
+      ],
+      "database_record": "database-lock-owners.json",
+      "observed_database_lock_summary": [
+        {
+          "path": "/nix/var/nix/db/db.sqlite",
+          "device": "0:31",
+          "inode": 22406061,
+          "mode_counts": {
+            "READ": 3689
+          },
+          "writer_or_waiter_rows": [],
+          "rows_retained_in_raw_record": 3689
+        },
+        {
+          "path": "/nix/var/nix/db/db.sqlite-shm",
+          "device": "0:31",
+          "inode": 302491,
+          "mode_counts": {
+            "READ": 3662
+          },
+          "writer_or_waiter_rows": [],
+          "rows_retained_in_raw_record": 3662
+        },
+        {
+          "path": "/nix/var/nix/db/db.sqlite-wal",
+          "device": "0:31",
+          "inode": 302490,
+          "mode_counts": {},
+          "writer_or_waiter_rows": [],
+          "rows_retained_in_raw_record": 0
+        },
+        {
+          "path": "/home/brittonr/.cache/nix/fetcher-cache-v4.sqlite",
+          "device": "259:5",
+          "inode": 2940276,
+          "mode_counts": {
+            "READ": 15
+          },
+          "writer_or_waiter_rows": [],
+          "rows_retained_in_raw_record": 15
+        },
+        {
+          "path": "/home/brittonr/.cache/nix/fetcher-cache-v4.sqlite-shm",
+          "device": "259:5",
+          "inode": 2937129,
+          "mode_counts": {
+            "READ": 15
+          },
+          "writer_or_waiter_rows": [],
+          "rows_retained_in_raw_record": 15
+        }
+      ],
+      "limit": "Snapshots show shared database/big-lock readers and no visible writer/waiter for the selected known files. No visible gc.lock owner in the snapshot. These are not proof of the lock state during the earlier timed-out run, nor authority to remove locks or kill workers."
+    },
+    "journals": {
+      "records": [
+        "nix-service-units.json",
+        "nix-service-post-timeout-log.json"
+      ],
+      "matched_timeout_event": "2026-10-17T14:55:20-04:00 nix-daemon[1200954] reported interruption and the main daemon reaped it with exit code 1, matching the retained 3500-second recorder deadline",
+      "continued_activity": "The observed journal also records subsequent accepted connections and successful reaping of other workers",
+      "limit": "No blocking operation or failed behavioral test was identified by these messages"
+    },
+    "filesystem": {
+      "record": "store-dataset-capacity-properties.json",
+      "available_bytes_at_zfs_observation": 46768885760,
+      "available_gib": 43.56,
+      "nix_dataset_quota": 0,
+      "cargo_target_dataset_quota_bytes": 1610612736000,
+      "pool_health_record": "store-pool-health.json",
+      "pool_health_output": "pool 'datapool' is healthy",
+      "caller_store_mount": "ro,nosuid,nodev,noatime,xattr,posixacl,casesensitive",
+      "daemon_mountinfo_source": "/proc/2631/mountinfo:12",
+      "daemon_store_mount": "0:31 /store /nix/store rw,nosuid,nodev,noatime - zfs datapool/nix rw,xattr,posixacl,casesensitive",
+      "limit": "The caller's read-only store bind is not evidence that the daemon cannot write; its own namespace reports rw. Pool health does not prove latency or sufficient build headroom."
+    },
+    "declared_gc_configuration": {
+      "source": "/etc/nix/nix.conf:15-17",
+      "min_free_bytes": 107374182400,
+      "max_free_bytes": 137438953472,
+      "min_free_gib": 100,
+      "max_free_gib": 128,
+      "available_below_declared_minimum_by_gib": 56.44,
+      "inference": "[INFERENCE] This free-space/threshold mismatch can trigger automatic GC under normal settings; it does not establish that GC caused the timed-out acceptance run.",
+      "counterevidence_to_simple_threshold_fix": "../f09-f10-nix-command-local-retry/required-checks.json records the earlier min-free=0 retry also timing out after 3500.191 seconds, exit 1"
+    }
+  },
+  "decision": "Do not blindly retry or treat ordinary shared read locks as stale. Further attribution requires either an explicitly authorized instrumented run of the unchanged command or operator-level visibility into root-owned daemon workers and storage headroom. Current read-only authorization permits neither a new acceptance run nor host changes.",
+  "mutations": {
+    "product_source_changed": false,
+    "dependency_pins_changed": false,
+    "host_configuration_changed": false,
+    "services_restarted": false,
+    "shared_data_deleted": false,
+    "unrelated_processes_terminated": false,
+    "lifecycle_synced_or_archived": false
+  },
+  "maintenance_owner": "Host/Nix operator for platform recovery; Molten maintainers retain unchanged product acceptance",
+  "non_claims": [
+    "Timeout root cause remains unproved",
+    "No required acceptance result passed in this diagnosis",
+    "Last recorded Molten inventory remains 47 active changes",
+    "No source-cycle, publication, release-eligibility or whole-system-correctness claim"
+  ]
+}

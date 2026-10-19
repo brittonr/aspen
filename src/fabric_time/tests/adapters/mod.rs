@@ -28,64 +28,104 @@ fn context(profile: &AdmittedTimeProfile, generation: u64) -> ExtensionTimeConte
     ExtensionTimeContext::from_test_snapshot("test-service", generation, profile, Vec::new())
 }
 
-fn command(
-    context: &ExtensionTimeContext,
-    profile: &AdmittedTimeProfile,
-    state: &SchedulerState,
-    command: SchedulerCommand,
-) -> SchedulerTransition {
-    context
-        .apply_scheduler_command(profile, profile.scheduler_policy, state, &command)
-        .expect("scheduler transition")
-}
-
 fn event_action(event: &Event) -> String {
-    const FIELD_ARITY: usize = 2;
     let fields = event.value.collect_simple_record("fabric-time-event-v1", None).expect("canonical event");
     fields
         .iter()
         .find_map(|value| {
-            let field = value.collect_simple_record("field", Some(FIELD_ARITY))?;
+            let field = value.collect_simple_record("field", Some(2))?;
             (field[0].as_string().as_deref() == Some("action"))
-                .then(|| field[1].as_string().expect("string action").into_owned())
+                .then(|| field[1].as_string().expect("action").into_owned())
         })
         .expect("event action")
 }
 
-fn event(profile: &AdmittedTimeProfile, transition: &SchedulerTransition) -> Event {
-    scheduler_transition(&profile.profile_ref, transition).expect("canonical scheduler event")
+type Snapshot = (SchedulerState, molten_core::fabric_time::capacity::UseState);
+#[derive(Debug)]
+struct DeliveryBoundary {
+    snapshot: Snapshot,
+    occurrence: usize,
+    sequence: u64,
 }
 
-// Exercise the actual host wake, not only the route return value. Always release and join
-// the target before asserting, so a missing wake fails within a bound without leaking a thread.
-fn assert_live_wake(transition: &SchedulerTransition) {
-    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
-    let target = std::thread::spawn(move || {
-        std::thread::park();
-        sender.send(()).expect("report host wake");
-    });
-    let mut adapter = ThreadSchedulerWakeAdapter::default();
-    adapter
-        .register(transition.runnable.clone(), target.thread().clone())
-        .expect("register wake target");
-    let routed = adapter.route(transition);
-    let observed = receiver.recv_timeout(WAKE_TIMEOUT);
-    target.thread().unpark();
-    target.join().expect("wake target joined");
-    assert!(adapter.unregister(&transition.runnable));
-    routed.expect("route admitted wake");
-    observed.expect("admitted transition must wake the host target");
+enum ConcreteEffects {
+    Live(ThreadSchedulerWakeAdapter),
+    Simulation(SimulationSchedulerWakeAdapter),
+}
+struct Effects {
+    concrete: ConcreteEffects,
+    live_receiver: Option<std::sync::mpsc::SyncSender<ReceiverInput>>,
+    simulation_boundaries: std::collections::VecDeque<DeliveryBoundary>,
+    preparations: u64,
+    deliveries: u64,
+}
+enum Prepared {
+    Live(std::thread::Thread),
+    Simulation(u64),
+}
+impl SchedulerWakePort for Effects {
+    type Prepared = Prepared;
+    fn prepare(&mut self, key: &RunnableKey, index: usize) -> crate::fabric::FabricPortResult<Prepared> {
+        self.preparations += 1;
+        match &mut self.concrete {
+            ConcreteEffects::Live(port) => port.prepare(key, index).map(Prepared::Live),
+            ConcreteEffects::Simulation(port) => port.prepare(key, index).map(Prepared::Simulation),
+        }
+    }
+    fn deliver(
+        &mut self,
+        prepared: Prepared,
+        committed: SchedulerWakeCommit<'_>,
+    ) -> crate::fabric::FabricPortResult<()> {
+        self.deliveries += 1;
+        // Capture the actual borrowed owner fields AT delivery, before entering the
+        // concrete adapter. Never read state later behind the command mutex. This
+        // observation travels with that real delivery, not a predicted test result.
+        let boundary = DeliveryBoundary {
+            snapshot: (committed.scheduler.clone(), committed.capacity.clone()),
+            occurrence: committed.occurrence,
+            sequence: self.deliveries,
+        };
+        match (&mut self.concrete, prepared) {
+            (ConcreteEffects::Live(port), Prepared::Live(target)) => {
+                self.live_receiver
+                    .as_ref()
+                    .expect("live receiving mailbox")
+                    .send(ReceiverInput::Delivery(boundary))
+                    .expect("record real delivery boundary");
+                port.deliver(target, committed)
+            }
+            (ConcreteEffects::Simulation(port), Prepared::Simulation(index)) => {
+                self.simulation_boundaries.push_back(boundary);
+                port.deliver(index, committed)
+            }
+            _ => unreachable!("prepared transport matches owning port"),
+        }
+    }
 }
 
-fn assert_denied_wake(transition: &SchedulerTransition) {
-    // Register the exact target, so rejection cannot be explained by a missing registration.
-    let mut adapter = ThreadSchedulerWakeAdapter::default();
-    adapter
-        .register(transition.runnable.clone(), std::thread::current())
-        .expect("register denied target");
-    assert!(adapter.route(transition).is_err());
-    assert!(adapter.unregister(&transition.runnable));
+fn boundary_is_committed(boundary: &DeliveryBoundary, key: &RunnableKey) -> bool {
+    let (state, capacity) = &boundary.snapshot;
+    let Some(row) = state.runnables.get(boundary.occurrence) else {
+        return false;
+    };
+    let active = state
+        .runnables
+        .iter()
+        .filter(|row| matches!(row.phase, RunnablePhase::Ready | RunnablePhase::Running | RunnablePhase::Blocked))
+        .count();
+    let ready = state.runnables.iter().filter(|row| row.phase == RunnablePhase::Ready).count();
+    &row.key == key
+        && row.phase == RunnablePhase::Ready
+        && !capacity.is_released
+        && capacity.profile_ref == state.profile_ref
+        && capacity.generation == state.generation
+        && u64::try_from(active).ok() == Some(capacity.runnable_usage)
+        && u64::try_from(ready).ok() == Some(capacity.queue_usage)
 }
+
+include!("receiver.rs");
+include!("harness.rs");
 
 include!("capacity.rs");
 include!("fencing.rs");

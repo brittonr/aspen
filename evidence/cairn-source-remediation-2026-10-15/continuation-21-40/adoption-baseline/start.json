@@ -1,0 +1,13 @@
+{
+  "purpose": "Pre-cutover baseline for adopt-shared-wasm-component-runtime",
+  "source_basis": "../../attempt-20-final-scheduler-acceptance/attempt-result.json",
+  "implementation_attempts_consumed": 20,
+  "new_source_attempt_started": false,
+  "test_binary": "/home/brittonr/.cargo-target/debug/deps/molten-e050671ac02166d9",
+  "component_cases_discovered": 26,
+  "limits": [
+    "Current local runtime only",
+    "No shared-runtime parity or effect-hostcall adoption claim",
+    "No change completion or archival authority"
+  ]
+}

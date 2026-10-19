@@ -1,0 +1,63 @@
+{
+  "status": "blocked-not-complete",
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "last_observed_active_molten_change_count": 47,
+  "required_normal_settings_nix_acceptance": {
+    "record": "after-host-diagnostics-normal/required-checks.json",
+    "checks": ["nextest", "clippy", "nextest-config"],
+    "started_at": "2026-10-17T17:57:00.512510+00:00",
+    "elapsed_seconds": 3500.128,
+    "exit_code": 1,
+    "timed_out": true,
+    "stdout": "",
+    "stderr": "\nshutting down\u001b[Kerror: interrupted by the user\n",
+    "termination": "The retained recorder terminates its owned command process group at the 3500-second deadline; the interruption message is not evidence of manual user cancellation.",
+    "passing_acceptance_established": false,
+    "root_cause": "Not established by the command output",
+    "repository_flake_gate": "Not reached",
+    "post_nix_strict_cairn_validation": "Not reached"
+  },
+  "read_only_followup": {
+    "ps_attempt": {
+      "argv": ["ps", "-C", "nix-daemon,nix,nix-store,nix-build,nix-collect-garbage,zfs,zpool", "-o", "pid,ppid,stat,wchan:32,etimes,comm,args"],
+      "exit_code": 1,
+      "stderr": "ps: unsupported option '-C'",
+      "subsequent_help": "ps --help succeeded and documents PID selection, but the failed selection supplies no process-state evidence"
+    },
+    "lock_observation": {
+      "argv": ["lslocks", "--json", "-o", "PID,COMMAND,TYPE,MODE,PATH"],
+      "exit_code": 0,
+      "observation": "The visible output includes numerous nix-daemon lock entries whose paths are abbreviated. This observation alone does not identify this timeout's cause or authorize terminating a lock owner."
+    }
+  },
+  "completed_read_only_research": [
+    "verifier-consumer-inputs-readback.json",
+    "runtime-pilot-inputs-readback.json"
+  ],
+  "lifecycle_disposition": {
+    "f09_f10_remain_active": true,
+    "required_nix_tasks_remain_unchecked": true,
+    "synced": false,
+    "archived": false,
+    "completion_commit_created": false,
+    "remote_publication_performed": false
+  },
+  "mutations": {
+    "product_source_changed": false,
+    "dependency_pins_changed": false,
+    "historical_evidence_or_fixtures_rewritten": false,
+    "host_configuration_changed": false,
+    "daemon_restarted": false,
+    "shared_data_deleted": false,
+    "unrelated_processes_terminated": false
+  },
+  "current_blocker": "The single authorized normal-settings acceptance retry has completed without passing results. Required gates are not waived. Await the agreed human recovery decision before another acceptance retry or implementation attempt.",
+  "non_claims": [
+    "No behavioral test failure is established by the timeout",
+    "No GC-lock root cause is established by these observations",
+    "Source inspection is not independent consumer execution or producer publication evidence",
+    "No completion or release-eligibility claim"
+  ]
+}

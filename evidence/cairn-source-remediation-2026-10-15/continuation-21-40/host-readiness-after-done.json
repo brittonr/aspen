@@ -1,0 +1,49 @@
+{
+  "user_reply": "done",
+  "reply_context": "Requested read-only host diagnostics; no specific repair action was reported",
+  "status": "store-handshake-passes-acceptance-not-retested",
+  "store_capacity": {
+    "available_bytes": 51240632320,
+    "client_min_free_bytes": 107374182400,
+    "client_max_free_bytes": 137438953472,
+    "observation": "Available space remains below the configured client automatic-GC trigger"
+  },
+  "daemon_service": {
+    "active_state": "active",
+    "sub_state": "running",
+    "main_pid": 2631,
+    "tasks_current": 7328,
+    "tasks_max": 1048576,
+    "kill_mode": "control-group",
+    "timeout_stop": "5s",
+    "restart_risk": "Restarting this unit can terminate other work in its control group; no restart was performed or authorized"
+  },
+  "gc_lock_observation": {
+    "path": "/nix/var/nix/gc.lock",
+    "device_major_minor": "0:31",
+    "inode": 22402385,
+    "argv": ["lslocks", "--json", "--notruncate", "--output", "PID,COMMAND,TYPE,MODE,MAJ:MIN,INODE,PATH,BLOCKER", "--filter", "INODE == 22402385"],
+    "exit_code": 0,
+    "reported_locks": [],
+    "limit": "An empty current kernel-lock observation does not establish the earlier timeout cause or future build/GC progress"
+  },
+  "store_handshake": {
+    "argv": ["timeout", "--kill-after=5s", "30s", "nix", "store", "ping", "--store", "daemon"],
+    "exit_code": 0,
+    "stdout": "Store URL: daemon\nVersion: 2.36.0\nTrusted: 1\n",
+    "stderr": "warning: 'ping' is a deprecated alias for 'info'\n",
+    "limit": "Read-only daemon-store connectivity only; no evaluation, build, test, Clippy or acceptance success is established"
+  },
+  "journal_access": {
+    "sudo_noninteractive": "Denied: a password is required",
+    "unprivileged_journal": "Available; last 80 service lines read",
+    "causal_diagnosis_established": false
+  },
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "additional_acceptance_run_started": false,
+  "additional_gc_override_authorized": false,
+  "host_mutations_performed": false,
+  "next_decision": "Choose a new bounded unchanged acceptance run or retain the external-host-repair pause; do not infer additional command-local GC override permission"
+}

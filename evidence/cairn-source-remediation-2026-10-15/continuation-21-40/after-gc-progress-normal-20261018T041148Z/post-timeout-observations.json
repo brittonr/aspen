@@ -1,0 +1,76 @@
+{
+  "recorded_at": "2026-10-18T05:12:42.581885+00:00",
+  "observations": {
+    "source_binding": {
+      "argv": [
+        "bash",
+        "/tmp/molten-cairn-continuation-rrpmy62t/with-cached-shell.sh",
+        "b3sum",
+        "--check",
+        "--quiet",
+        "evidence/cairn-source-remediation-2026-10-15/attempt-20-final-scheduler-acceptance/source-content-final-hashes.txt"
+      ],
+      "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+      "started_at": "2026-10-18T05:12:41.372386+00:00",
+      "elapsed_seconds": 0.251,
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "timed_out": false
+    },
+    "store_headroom": {
+      "argv": [
+        "/run/current-system/sw/bin/df",
+        "-B1",
+        "/nix/store"
+      ],
+      "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+      "started_at": "2026-10-18T05:12:41.623893+00:00",
+      "elapsed_seconds": 0.002,
+      "exit_code": 0,
+      "stdout": "Filesystem        1B-blocks         Used   Available Use% Mounted on\ndatapool/nix   288526172160 256142868480 32383303680  89% /nix/store\n",
+      "stderr": "",
+      "timed_out": false
+    },
+    "gc_lock_identity": {
+      "argv": [
+        "/run/current-system/sw/bin/stat",
+        "-Lc",
+        "%d %i",
+        "/nix/var/nix/gc.lock"
+      ],
+      "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+      "started_at": "2026-10-18T05:12:41.626186+00:00",
+      "elapsed_seconds": 0.002,
+      "exit_code": 0,
+      "stdout": "31 22402385\n",
+      "stderr": "",
+      "timed_out": false
+    },
+    "currently_listed_gc_writers": {
+      "argv": [
+        "/run/current-system/sw/bin/lslocks",
+        "--json",
+        "--notruncate",
+        "--filter",
+        "INODE == 22402385 and MODE == \"WRITE\"",
+        "--output",
+        "PID,COMMAND,TYPE,MODE,INODE,MAJ:MIN,PATH,BLOCKER"
+      ],
+      "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+      "started_at": "2026-10-18T05:12:41.628560+00:00",
+      "elapsed_seconds": 0.953,
+      "exit_code": 0,
+      "stdout": "{\n   \"locks\": [\n      {\n         \"pid\": 724313,\n         \"command\": \"nix-daemon\",\n         \"type\": \"FLOCK\",\n         \"mode\": \"WRITE\",\n         \"inode\": 22402385,\n         \"maj:min\": \"0:31\",\n         \"path\": \"/nix/store...\",\n         \"blocker\": null\n      }\n   ]\n}\n",
+      "stderr": "",
+      "timed_out": false
+    }
+  },
+  "read_only": true,
+  "limits": [
+    "Post-timeout observations do not prove what blocked the completed command",
+    "No listed held GC writer does not rule out an earlier GC wait or another Nix wait",
+    "No privileged inspection or unrelated-process control",
+    "No additional acceptance command"
+  ]
+}

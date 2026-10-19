@@ -1,0 +1,36 @@
+{
+  "recorded_at": "2026-10-17T22:05:10.625237+00:00",
+  "source": "Post-SIGKILL functions.bash observations in this continuation",
+  "process": {
+    "argv": [
+      "/run/current-system/sw/bin/ps",
+      "-p",
+      "3449589,2631",
+      "-o",
+      "uid,pid,ppid,stat,args",
+      "--no-headers"
+    ],
+    "exit_code": 0,
+    "stdout": "    0    2631       1 Ssl  nix-daemon --daemon\n"
+  },
+  "lock": {
+    "argv": [
+      "/run/current-system/sw/bin/lslocks",
+      "--json",
+      "--notruncate",
+      "--filter",
+      "INODE == 4193189",
+      "--output",
+      "PID,COMMAND,TYPE,MODE,INODE,MAJ:MIN,PATH,BLOCKER"
+    ],
+    "exit_code": 0,
+    "locks": []
+  },
+  "original_worker_absent": true,
+  "exact_lock_released": true,
+  "main_daemon_2631_present": true,
+  "recovery_verified": true,
+  "successful_recovery_action": "Operator-issued guarded SIGKILL after SIGTERM had failed to stop the worker",
+  "no_automatic_safety_claim": "Exit and lock release do not prove store integrity or Molten acceptance",
+  "nix_retried": false
+}

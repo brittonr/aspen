@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "/home/brittonr/.cargo-target/debug/deps/molten-e050671ac02166d9",
+    "wasm_component",
+    "--test-threads=1"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T15:29:06.553610+00:00",
+  "elapsed_seconds": 0.225,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "\nrunning 26 tests\ntest wasm_component::tests::admission::identical_facts_produce_identical_pure_execution_plans ... ok\ntest wasm_component::tests::admission::rejects_over_resource_undeclared_wasi_and_unused_authority ... ok\ntest wasm_component::tests::admission::rejects_wrong_world_unsupported_feature_and_dynamic_growth ... ok\ntest wasm_component::tests::imports::drifted_manifest_denies_execution_before_instantiation ... ok\ntest wasm_component::tests::imports::drifting_world_partial_manifest_and_wasi_surface_fail_admission ... ok\ntest wasm_component::tests::imports::exact_manifest_world_and_import_set_admit_without_instantiation ... ok\ntest wasm_component::tests::imports::identical_surface_admissions_replay_to_identical_receipts ... ok\ntest wasm_component::tests::imports::missing_manifest_unsorted_surface_and_tampered_identity_fail_closed ... ok\ntest wasm_component::tests::imports::overclaim_labels_and_oversized_receipt_payloads_are_rejected ... ok\ntest wasm_component::tests::imports::undeclared_observed_import_and_tool_drift_fail_admission ... ok\ntest wasm_component::tests::materialization::complete_mantle_bundle_remeasures_actor_and_system_extension_bytes ... ok\ntest wasm_component::tests::materialization::loose_bytes_are_test_only_and_never_production_evidence ... ok\ntest wasm_component::tests::materialization::rejects_tampered_stale_incomplete_and_circular_bundles ... ok\ntest wasm_component::tests::profile::artifact_classifier_keeps_core_and_profiles_distinct_without_fallback ... ok\ntest wasm_component::tests::profile::export_binds_exact_toolchain_wit_and_determinism ... ok\ntest wasm_component::tests::profile::rejects_stale_partial_or_authority_bearing_cohort ... ok\ntest wasm_component::tests::receipt::every_stage_emits_a_canonical_profile_bound ... ok\ntest wasm_component::tests::receipt::operator_readback_and_replay_keep_evidence_distinct ... ok\ntest wasm_component::tests::receipt::stale_cross_profile_and_overclaiming_receipts_fail_closed ... ok\ntest wasm_component::tests::shell::denies_invalid_preserves_output_and_fuel_exhaustion ... ok\ntest wasm_component::tests::shell::denies_malformed_wrong_world_and_over_resource_requests_with_receipts ... ok\ntest wasm_component::tests::shell::identical_execution_replays_to_identical_canonical_evidence ... ok\ntest wasm_component::tests::shell::mantle_materialized_executes_through_generated_wit_bindings ... ok\ntest wasm_component::tests::shell::production_loose_bytes_and_core_module_requests_never_fall_back ... ok\ntest wasm_component::tests::shell::reinspects_resource_facts_and_rejects_actual_growth ... ok\ntest wasm_component::tests::shell::untrusted_runtime_text_cannot_spoof_canonical_denial_classes ... ok\n\ntest result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 1517 filtered out; finished in 0.21s\n\n",
+  "stderr": "",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "argv": [
+    "git",
+    "add",
+    "--",
+    "crates/molten-core/src/fabric_time/scheduler/capacity/mod.rs",
+    "crates/molten-core/src/fabric_time/scheduler/decision.rs",
+    "crates/molten-core/src/fabric_time/scheduler/mod.rs",
+    "docs/architecture.md",
+    "docs/fabric-time-scheduler-runtime.md",
+    "src/fabric_time/adapters.rs",
+    "src/fabric_time/capacity/mod.rs",
+    "src/fabric_time/capacity/tests.rs",
+    "src/fabric_time/parts/adapters/p001/body.rs",
+    "src/fabric_time/parts/adapters/p003/body.rs",
+    "src/fabric_time/parts/fixture/p000/body.rs",
+    "src/fabric_time/parts/fixture/p001/body.rs",
+    "src/fabric_time/parts/fixture/p003/body.rs",
+    "src/fabric_time/parts/tests/p000/body.rs",
+    "src/fabric_time/ports.rs",
+    "src/fabric_time/shell.rs",
+    "src/fabric_time/shell/owned.rs",
+    "src/fabric_time/tests/adapters/capacity.rs",
+    "src/fabric_time/tests/adapters/fencing.rs",
+    "src/fabric_time/tests/adapters/harness.rs",
+    "src/fabric_time/tests/adapters/mod.rs",
+    "src/fabric_time/tests/adapters/receiver.rs"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T05:01:01.049663+00:00",
+  "elapsed_seconds": 0.021,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

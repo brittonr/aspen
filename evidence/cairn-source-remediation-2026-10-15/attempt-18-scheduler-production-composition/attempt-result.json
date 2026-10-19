@@ -1,0 +1,51 @@
+{
+  "attempt": "18/20",
+  "implementation_attempts_consumed": 18,
+  "attempt_cap": 20,
+  "change": "resume-blocked-scheduler-runnables",
+  "shared_consumer": "enforce-scheduler-queue-bounds-on-yield",
+  "result": "Functional focused verification passed; strict source acceptance failed on warning-only producer status. Not accepted, synced or archived.",
+  "focused": {
+    "core": {
+      "passed": 41,
+      "failed": 0,
+      "record": "focused-core-fabric-time.json"
+    },
+    "shell": {
+      "passed": 37,
+      "failed": 0,
+      "record": "focused-shell-fabric-time.json"
+    }
+  },
+  "source": {
+    "producer_exit": 0,
+    "status": "warning-only",
+    "findings": 19,
+    "record": "ordered-octet-workspace.json",
+    "retained_status": "retained-octet-workspace-status.json",
+    "retained_summary": "retained-octet-workspace-summary.txt",
+    "full_library_producer_run": false,
+    "canonical_strict_ci_gate_run": false
+  },
+  "remaining_checks_not_executed": [
+    "library producer",
+    "object corpus and canonical strict-ci gate",
+    "workspace and feature cohorts",
+    "Clippy cohorts",
+    "required Nix checks and repository gate",
+    "actual CLI smoke",
+    "fresh lifecycle acceptance"
+  ],
+  "review": [
+    "core-decision-review.json",
+    "effect-delivery-review.json",
+    "receiver-correction-review.json"
+  ],
+  "source_binding": "source-content-final-hashes.txt",
+  "next": "Attempt 19 repairs local production and receiver source findings without suppressing policy or reducing scope. F09 remains blocked and F10 remains open.",
+  "non_claims": [
+    "No source-gate pass despite producer exit 0.",
+    "No runtime, Nix, lifecycle or archive completion inferred from focused tests.",
+    "No remote push or sibling edit."
+  ]
+}

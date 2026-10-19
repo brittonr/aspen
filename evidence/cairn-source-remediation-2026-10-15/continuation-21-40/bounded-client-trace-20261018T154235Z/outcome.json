@@ -1,0 +1,50 @@
+{
+  "recorded_at": "2026-10-18T15:57:42.520605+00:00",
+  "status": "authorized-client-trace-finished-nonpassing",
+  "authorization": "authorization.json",
+  "execution_record": "run.json",
+  "analysis": "trace-analysis.json",
+  "required_three_check_result": {
+    "exit_code": 1,
+    "timed_out": true,
+    "elapsed_seconds": 600.065,
+    "passing_acceptance_established": false
+  },
+  "repository_flake_gate": {
+    "executed": false,
+    "reason": "The explicitly required passing three-check prerequisite was not satisfied"
+  },
+  "post_nix_strict_cairn_validation": {
+    "executed": false,
+    "reason": "Required Nix acceptance remains incomplete"
+  },
+  "source_inventory_binding_passed_before_and_after": true,
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "last_observed_active_molten_change_count": 47,
+  "lifecycle_disposition": {
+    "F09_F10_remain_active": true,
+    "required_nix_tasks_remain_unchecked": true,
+    "synced": false,
+    "archived": false,
+    "completion_commit_created": false,
+    "remote_publication_performed": false
+  },
+  "mutations": {
+    "product_source_changed": false,
+    "dependency_or_toolchain_pins_changed": false,
+    "historical_evidence_or_fixtures_rewritten": false,
+    "host_configuration_changed": false,
+    "daemon_restarted": false,
+    "shared_data_deleted": false,
+    "shared_or_unrelated_processes_signalled": false,
+    "privileged_inspection_or_attachment_performed": false
+  },
+  "required_next_decision": "The single authorized 600-second client trace is consumed. Server-side diagnosis beyond unprivileged exact post-exit lookups, another Nix run or host recovery requires a new bounded decision; the 40-attempt source allowance does not imply it.",
+  "non_claims": [
+    "No GC or server deadlock root cause proved",
+    "No behavioral test failure established",
+    "No Nix acceptance or lifecycle completion"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "observed_at": "2026-10-17T21:32:29.903149+00:00",
+  "argv": [
+    "/run/current-system/sw/bin/python3",
+    "/tmp/molten-cairn-continuation-rrpmy62t/recover-exact-store-worker.py"
+  ],
+  "exit_code": 0,
+  "stdout": "{\n  \"pid\": 3449589,\n  \"mode\": \"check-only\",\n  \"signal_sent\": false,\n  \"identity\": [\n    \"0\",\n    \"3449589\",\n    \"2631\",\n    \"nix-daemon 3449558\"\n  ],\n  \"lock_identity\": [\n    0,\n    31,\n    4193189\n  ],\n  \"lock_rows\": [\n    {\n      \"pid\": 3449589,\n      \"type\": \"FLOCK\",\n      \"mode\": \"WRITE\",\n      \"inode\": 4193189,\n      \"maj:min\": \"0:31\",\n      \"blocker\": null\n    }\n  ],\n  \"status\": \"Exact target validated; no signal sent\"\n}\n",
+  "stderr": "",
+  "read_only": true,
+  "signals_sent_by_assistant": false,
+  "nix_retried": false,
+  "operator_command": "/run/wrappers/bin/sudo -- /run/current-system/sw/bin/python3 /tmp/molten-cairn-continuation-rrpmy62t/recover-exact-store-worker.py --terminate",
+  "operator_action_limit": "Guarded SIGTERM to the held pidfd for exact worker 3449589 only; no other process-control action"
+}

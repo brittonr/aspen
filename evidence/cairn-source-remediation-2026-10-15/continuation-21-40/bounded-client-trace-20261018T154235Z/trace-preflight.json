@@ -1,0 +1,28 @@
+{
+  "argv": [
+    "/run/current-system/sw/bin/strace",
+    "-qq",
+    "-ttt",
+    "-T",
+    "-yy",
+    "-e",
+    "trace=connect,flock,fcntl,read,readv,recvfrom,recvmsg,poll,ppoll,select,pselect6,epoll_wait,epoll_pwait,futex",
+    "-e",
+    "raw=read,readv,recvfrom,recvmsg",
+    "-o",
+    "/tmp/molten-owned-client-trace-itk9zj9d/ptrace-preflight.log",
+    "/run/current-system/sw/bin/true"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-18T15:43:34.272067+00:00",
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "",
+  "scope": "Trivial owned true process only; not acceptance evidence",
+  "binaries": {
+    "nix": "/run/current-system/sw/bin/nix",
+    "strace": "/run/current-system/sw/bin/strace",
+    "python3": "/run/current-system/sw/bin/python3",
+    "b3sum": "/run/current-system/sw/bin/b3sum"
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "recorded_at": "2026-10-19T00:05:00Z",
+  "user_selection": "Long-window run (12h)",
+  "scope": "One bounded long-window realization run of the unchanged required Nix checks with normal settings and frozen source and pins, followed by the identical 3500-second sequence to record acceptance, and the repository flake gate only if all three checks pass",
+  "basis": [
+    "../host-diagnosis-20261018T235500Z/diagnosis.json",
+    "../host-diagnosis-20261018T235500Z/evaluation-rate-addendum.json",
+    "../host-diagnosis-20261018T235500Z/blocked-gate-handoff.json",
+    "../capacity-recovered-normal-20261018T214935Z/ordered-relevant-nix-checks.json"
+  ],
+  "stage_one_long_window": {
+    "argv": [
+      "nix",
+      "build",
+      "--no-update-lock-file",
+      "--no-link",
+      "-L",
+      ".#checks.x86_64-linux.nextest",
+      ".#checks.x86_64-linux.clippy",
+      ".#checks.x86_64-linux.nextest-config"
+    ],
+    "deadline_seconds": 43200,
+    "recorder": "record-long-command.py",
+    "result": "ordered-relevant-nix-checks.json",
+    "log": "ordered-relevant-nix-checks.log",
+    "purpose": "Allow cold closure evaluation and realization to finish once under current host contention; this run is not itself the acceptance record"
+  },
+  "stage_two_acceptance_record": {
+    "argv": [
+      "nix",
+      "build",
+      "--no-update-lock-file",
+      "--no-link",
+      "-L",
+      ".#checks.x86_64-linux.nextest",
+      ".#checks.x86_64-linux.clippy",
+      ".#checks.x86_64-linux.nextest-config"
+    ],
+    "deadline_seconds": 3500,
+    "condition": "Run only after stage one completes with exit 0 and timed_out false; rerun the identical authorized sequence to record acceptance",
+    "result": "acceptance-three-checks.json"
+  },
+  "stage_three_repository_gate": {
+    "argv": [
+      "nix",
+      "flake",
+      "check",
+      "--no-update-lock-file",
+      "-L",
+      "."
+    ],
+    "deadline_seconds": 3500,
+    "condition": "Run only if stage two reports exit 0 and timed_out false and the preserved source binding still matches",
+    "result": "repository-flake-gate.json"
+  },
+  "boundaries": {
+    "normal_nix_settings": true,
+    "gc_threshold_override": false,
+    "shared_process_control": false,
+    "source_or_pin_change": false,
+    "foreign_workload_interference": false,
+    "daemon_restart": false,
+    "implementation_attempt_started": false
+  },
+  "non_claims": [
+    "The long window is a realization run, not acceptance evidence by itself",
+    "A passing long-window run does not waive the required identical 3500-second acceptance run or the repository flake gate",
+    "No source, pin, host configuration, service, or unrelated-process change is authorized by this record"
+  ],
+  "maintenance_owner": "Molten maintainers own the retained acceptance evidence; host operator owns daemon and pool state"
+}

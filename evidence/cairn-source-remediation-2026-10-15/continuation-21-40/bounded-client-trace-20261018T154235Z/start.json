@@ -1,0 +1,33 @@
+{
+  "prepared_at": "2026-10-18T15:44:19.890301+00:00",
+  "authorization": "authorization.json",
+  "source_binding": "source-binding-before.json",
+  "launcher_argv": [
+    "bash",
+    "/tmp/molten-cairn-continuation-rrpmy62t/with-cached-shell.sh",
+    "python3",
+    "/tmp/molten-owned-client-trace-itk9zj9d/run-client-trace.py",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/continuation-21-40/bounded-client-trace-20261018T154235Z"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "deadline_seconds": 600,
+  "trace_scope": "Directly launched owned Nix client main thread only; no -f, -p, privileged attach or unrelated process observation",
+  "trace_syscalls": "connect,flock,fcntl,read,readv,recvfrom,recvmsg,poll,ppoll,select,pselect6,epoll_wait,epoll_pwait,futex",
+  "raw_payload_syscalls": "read,readv,recvfrom,recvmsg",
+  "normal_nix_settings": true,
+  "conditional_repository_gate": {
+    "argv": [
+      "nix",
+      "flake",
+      "check",
+      "--no-update-lock-file",
+      "-L",
+      "."
+    ],
+    "deadline_seconds": 3500,
+    "condition": "Traced three-check result exits 0 and timed_out is false"
+  },
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false
+}

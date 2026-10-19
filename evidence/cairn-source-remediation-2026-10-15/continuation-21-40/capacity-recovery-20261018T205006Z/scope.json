@@ -1,0 +1,51 @@
+{
+  "recorded_at": "2026-10-18T20:50:06.346795+00:00",
+  "user_request": "fix this capacity issues please....",
+  "goal": "Recover actual shared dataset-available capacity above the configured Nix GC target without weakening thresholds",
+  "scope": "Inspect consumers and active writers, identify exact rebuildable artifacts, obtain required destructive-operation authority, then perform and verify bounded recovery",
+  "constraints": [
+    "No source or pin change",
+    "No deletion of historical evidence, product data or unrelated working trees",
+    "No whole shared-target wipe",
+    "No interference with live Workday builds",
+    "No shared-process signals or host GC threshold reduction",
+    "No new Nix acceptance retry inferred from capacity inspection"
+  ],
+  "observed_capacity_consumers": {
+    "cargo_target_used_bytes": 1530860822528,
+    "cargo_target_used_by_snapshots_bytes": 0,
+    "cargo_target_compressratio": "2.94",
+    "cargo_target_dedup": "off",
+    "cargo_target_quota_bytes": 1610612736000,
+    "pool_dataset_available_bytes_at_initial_zfs_observation": 29290110976,
+    "git_dataset_used_bytes": 906795905024,
+    "nix_dataset_used_bytes": 255759372288
+  },
+  "active_build_snapshot": {
+    "uids": [
+      1555
+    ],
+    "cargo_pids": [
+      4026205,
+      4026950
+    ],
+    "rustc_pids": [
+      4033471
+    ],
+    "observed_cwds": "/home/brittonr/git/workday-rs",
+    "limit": "Point-in-time metadata; do not signal these processes or infer inactivity at cleanup time"
+  },
+  "cargo_target_root": {
+    "path": "/home/brittonr/.cargo-target",
+    "uid": 1555,
+    "gid": 100,
+    "mode": "0755"
+  },
+  "one_time_exception": {
+    "reason": "Shared host capacity blocks the unchanged-source acceptance prerequisite for current Molten work",
+    "recurrence_decision": "Bounded recovery only; do not introduce an unreviewed automatic retention or deletion policy",
+    "revisit_trigger": "Dataset-available capacity falls below the configured Nix thresholds again",
+    "owner": "Host operator and Molten build maintainers",
+    "non_claim": "Reclaimed capacity alone is not passing product acceptance or a permanent retention guarantee"
+  }
+}

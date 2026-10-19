@@ -1,0 +1,21 @@
+{
+  "argv": [
+    "/run/current-system/sw/bin/timeout",
+    "--signal=TERM",
+    "--kill-after=5s",
+    "600s",
+    "/run/current-system/sw/bin/python3",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/continuation-21-40/capacity-recovery-20261018T205006Z/reclaim-cold-deps.py",
+    "--apply",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/continuation-21-40/capacity-recovery-20261018T205006Z/cold-deps-preview.json",
+    "--expected-blake3",
+    "162a52028469e33e0d2c0ad28d1322ec306fe3886800beadf4430c27ad7b43f4"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-18T21:48:22.250331+00:00",
+  "elapsed_seconds": 3.007,
+  "exit_code": 0,
+  "stdout_record": "apply-result.json",
+  "stderr_record": "apply.stderr.log",
+  "authorization": "deletion-authorization.json"
+}

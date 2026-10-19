@@ -1,0 +1,86 @@
+{
+  "status": "blocked-not-complete",
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "remaining_active_change_count": 47,
+  "inventory_observation": {
+    "command": "cairn change list --root . --policy /nix/store/xpl4byf12mpb7lda9zf83z9grc0na189-source/cairn-policy/generated/cairn-policy.json",
+    "producer": "/nix/store/hgx9knp5q29b0lfw7isvc5ba1caayyjj-cairn-0.1.0/bin/cairn",
+    "exit_code": 0,
+    "root": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015"
+  },
+  "exercised_local_runtime_baseline": {
+    "component_tests": "adoption-baseline/component-tests.json",
+    "component_tests_passed": 26,
+    "actual_component_extension_fixture": "adoption-baseline/component-extension-cli.json",
+    "canonical_status_readback": "adoption-baseline/component-extension-readback.json",
+    "observed_status": {
+      "extension": "molten.fixture.system.echo",
+      "generation": 3,
+      "phase": "stopped",
+      "restarts": 1,
+      "invocations": 13,
+      "status_ref": "blake3:471a477c67d5e32b467dadc57be91d02e19de225a6f11f934dc2c93a7588a431"
+    },
+    "limits": [
+      "Existing local runtime only; no shared-runtime adoption, new product hostcall, or consumer-parity claim",
+      "The full adoption baseline task remains unchecked"
+    ]
+  },
+  "required_nix_acceptance": {
+    "record": "f09-f10-nix-recovery/ordered-relevant-nix-checks.json",
+    "checks": ["nextest", "clippy", "nextest-config"],
+    "exit_code": 1,
+    "timed_out": true,
+    "elapsed_seconds": 3500.214,
+    "termination": "Recorder deadline terminated its owned command; stderr reports interruption",
+    "root_cause": "Not established by this run: stderr contains no GC-lock diagnostic",
+    "repository_flake_gate": "Not reached",
+    "post_nix_strict_cairn_validation": "Not reached"
+  },
+  "read_only_resource_observations": {
+    "available_store_bytes": 53764554752,
+    "effective_client_min_free_bytes": 107374182400,
+    "effective_client_max_free_bytes": 137438953472,
+    "records": ["current-nix-store-available.json", "current-nix-min-free.json", "current-nix-max-free.json"],
+    "inference": "Available space below the client minimum can trigger automatic GC; this does not establish the daemon settings, current lock owner, or this timeout's root cause"
+  },
+  "producer_source_review": {
+    "runtime_revision": "8d88e00504c112d81b3b6e11e88f6d7cad6c7e79",
+    "runtime_sources": [
+      "crates/hardened-wasmtime-shell/src/engine.rs:22-35 accepts a caller Wasmtime Config rather than admitted policy",
+      "crates/hardened-wasmtime-shell/src/invoke.rs:126-148 compiles core Modules despite PrepareOptions documenting components",
+      "crates/hardened-wasmtime-shell/src/invoke.rs:170-171 constructs an empty linker with no admitted product adapter registration",
+      "crates/hardened-wasmtime-shell/src/invoke.rs:168 permits an absent deadline with a maximum-budget sentinel"
+    ],
+    "mantle_revision": "d75158b00b080535f2ffea12430665ca3d57ea82",
+    "mantle_sources": [
+      "crates/mantle-wasm-consumer-verifier/src/shell.rs:58-60 stores a PathBuf rather than an opened root capability",
+      "crates/mantle-wasm-consumer-verifier/src/shell.rs:180-210 uses joined paths and final-component no-follow, then allocates member bytes",
+      "crates/mantle-wasm-consumer-verifier/src/shell.rs:121-123,165 checks total declared bytes after member reads",
+      "crates/mantle-wasm-consumer-verifier/src/facade.rs:50-56 labels structural-only success Verified",
+      "crates/mantle-wasm-consumer-verifier/src/facade.rs:94-109 omits optional AOT output from declared member readback",
+      "crates/mantle-wasm-consumer-verifier/tests/consumer_fixtures.rs:389,407 declares a dangling AOT output while expecting Verified"
+    ],
+    "producer_checks_executed": false,
+    "publication_acceptance_established": false,
+    "historical_archive_records_are_not_current_execution": true
+  },
+  "mutations_and_authority": {
+    "product_source_edits_in_this_resumption": false,
+    "dependency_pin_changes": false,
+    "historical_evidence_rewrites": false,
+    "new_archives": false,
+    "remote_publications": false,
+    "host_configuration_changes": false,
+    "command_local_gc_overrides": false,
+    "shared_cache_deletions": false,
+    "unrelated_processes_terminated": false
+  },
+  "current_consumer": "Molten adopt-shared-wasm-component-runtime",
+  "maintenance_owners": ["Molten runtime maintainers", "Mantle consumer-verifier maintainers", "hardened-wasmtime-runtime maintainers"],
+  "repeatability_evidence": "Preserved exact argv, working directory, environment fields, exit code, stdout, stderr, elapsed time, and canonical status readback",
+  "next_required_decision": "Authorize a bounded command-local Nix GC-threshold override, or repair the host prerequisite externally before another required Nix run",
+  "non_claims": ["No change completion", "No gate waiver", "No independent consumer publication proof", "No runtime isolation or whole-system correctness claim"]
+}

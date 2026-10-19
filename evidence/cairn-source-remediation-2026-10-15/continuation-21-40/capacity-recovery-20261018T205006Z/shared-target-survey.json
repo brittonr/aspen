@@ -1,0 +1,17 @@
+{
+  "source": "artifact://1362",
+  "argv": [
+    "/run/current-system/sw/bin/du",
+    "-x",
+    "-B1",
+    "--max-depth=1",
+    "/home/brittonr/.cargo-target"
+  ],
+  "elapsed_seconds": 143.36,
+  "exit_code": 1,
+  "complete": false,
+  "limit": "Some unrelated proof subdirectories were not readable; do not infer an exhaustive byte inventory",
+  "unreadable_directory_diagnostics": [],
+  "reported_row_count": 0,
+  "largest_reported_rows": []
+}

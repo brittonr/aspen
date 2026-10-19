@@ -1,0 +1,38 @@
+{
+  "request": {
+    "action": "references",
+    "file": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-core/src/fabric_time/scheduler/mod.rs",
+    "line": 178,
+    "symbol": "apply_scheduler_command",
+    "timeout": 90
+  },
+  "response": {
+    "text": "No references found",
+    "details": {
+      "xdev": {
+        "tool": "lsp",
+        "mode": "execute",
+        "args": {
+          "action": "references",
+          "file": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-core/src/fabric_time/scheduler/mod.rs",
+          "line": 178,
+          "symbol": "apply_scheduler_command",
+          "timeout": 90
+        },
+        "tier": "read",
+        "inner": {
+          "serverName": "rust-analyzer",
+          "action": "references",
+          "success": true,
+          "request": {
+            "action": "references",
+            "file": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-core/src/fabric_time/scheduler/mod.rs",
+            "line": 178,
+            "symbol": "apply_scheduler_command",
+            "timeout": 90
+          }
+        }
+      }
+    }
+  }
+}

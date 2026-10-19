@@ -1,0 +1,18 @@
+{
+  "scope": "The sole changed bound source member after attempt 19: crates/molten-core/src/fabric_time/scheduler/decision.rs",
+  "source_hash": "657e47f7d5adc81260e4595d54fe2f05e03a18e3ad8167399bd00be8f3514399",
+  "basis": [
+    "clippy-code-action.json",
+    "source-content-final-hashes.txt",
+    "../attempt-19-shared-scheduler-source-acceptance/postformat-source-review.json",
+    "source-and-smoke-result.json",
+    "workspace-and-clippy-result.json"
+  ],
+  "decision": "The compiler-supported nested-if merge retains conditional binding and short-circuit evaluation. Existing decision/state publication behavior is not expanded; no lint allowance, test deletion, source-scope reduction, alias or fallback is introduced.",
+  "executed_fairness_cases": [
+    "test fabric_time::tests::fairness_bound_prevents_indefinite_starvation_and_replay_mismatch_fails ... ok"
+  ],
+  "executed_acceptance": "Focused positive/negative core and shell regressions, actual both-profile CLI fixture/readback, configured source producers/strict gate, default and compatible feature workspace tests, three Clippy configurations and formatting passed.",
+  "owner": "Molten fabric-time maintainers",
+  "limits": "Bounded parent review, not a formal proof or completion authority. The unfinished assignment-token change is not implemented. Required Nix and final lifecycle acceptance remain separate obligations."
+}

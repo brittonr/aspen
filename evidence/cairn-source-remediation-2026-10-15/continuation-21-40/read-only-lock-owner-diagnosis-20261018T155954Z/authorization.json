@@ -1,0 +1,18 @@
+{
+  "recorded_at": "2026-10-18T15:59:54.128664+00:00",
+  "user_selection": "Read-only host diagnosis",
+  "scope": "Fresh Nix lock and storage snapshots, then bounded noninteractive privileged wait-state, FD and kernel-stack reads restricted to revalidated current Nix lock owners",
+  "constraints": [
+    "No ptrace or debugger attachment",
+    "No shared-process signals or process control",
+    "No Nix execution or acceptance rerun",
+    "No deletion, daemon restart or host configuration change",
+    "No product source, dependency/toolchain pin or historical evidence change",
+    "Do not infer lifecycle completion from diagnosis"
+  ],
+  "privilege": "Use noninteractive sudo only after current PID, process start identity and exact held-lock identity are verified; record and stop privileged inspection if unavailable",
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "prior_trace": "../bounded-client-trace-20261018T154235Z/trace-analysis.json"
+}

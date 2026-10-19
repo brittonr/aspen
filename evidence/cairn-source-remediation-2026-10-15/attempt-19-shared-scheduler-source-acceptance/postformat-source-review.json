@@ -1,0 +1,34 @@
+{
+  "review": "Parent inspected changed production and receiving boundaries; original command/choice law and prepare/publish/deliver sequence are preserved. Source-policy repair is not yet verified by Octet.",
+  "postformat_lines": {
+    "crates/molten-core/src/fabric_time/scheduler/capacity/mod.rs": 318,
+    "crates/molten-core/src/fabric_time/scheduler/decision.rs": 300,
+    "crates/molten-core/src/fabric_time/scheduler/mod.rs": 323,
+    "src/fabric_time/adapters.rs": 4,
+    "src/fabric_time/capacity/mod.rs": 116,
+    "src/fabric_time/capacity/tests.rs": 117,
+    "src/fabric_time/parts/adapters/p001/body.rs": 195,
+    "src/fabric_time/parts/adapters/p003/body.rs": 115,
+    "src/fabric_time/parts/fixture/p000/body.rs": 271,
+    "src/fabric_time/parts/fixture/p001/body.rs": 194,
+    "src/fabric_time/parts/fixture/p003/body.rs": 221,
+    "src/fabric_time/parts/tests/p000/body.rs": 245,
+    "src/fabric_time/ports.rs": 42,
+    "src/fabric_time/shell.rs": 274,
+    "src/fabric_time/shell/owned.rs": 237,
+    "src/fabric_time/tests/adapters/capacity.rs": 115,
+    "src/fabric_time/tests/adapters/fencing.rs": 242,
+    "src/fabric_time/tests/adapters/harness.rs": 166,
+    "src/fabric_time/tests/adapters/mod.rs": 131,
+    "src/fabric_time/tests/adapters/receiver.rs": 56
+  },
+  "public_simulation_delivery": "u64 transport prepared before publication; production consumers check conversion to native index; receiver compares the actual committed occurrence using checked u64 conversion.",
+  "receiver_bounds": {
+    "control_packets": 2,
+    "acknowledgements": 1,
+    "uncertainty_effects": 1,
+    "worker_exit": "explicit Stop-controlled while !is_stopped"
+  },
+  "reference_limits": "Worker lacked mounted LSP; complete literal inventory and AST private rename were used. Parent confirms current-symbol worktree queries but treats empty results as unindexed, never as caller absence.",
+  "execution": "Pending first postrepair acceptance"
+}

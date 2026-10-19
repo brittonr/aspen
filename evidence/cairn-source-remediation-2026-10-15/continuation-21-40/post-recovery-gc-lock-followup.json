@@ -1,0 +1,66 @@
+{
+  "recorded_at": "2026-10-17T23:09:15.193826+00:00",
+  "observations": {
+    "exact_gc_owner_lock": {
+      "argv": [
+        "/run/current-system/sw/bin/lslocks",
+        "--json",
+        "--notruncate",
+        "--pid",
+        "723701",
+        "--filter",
+        "INODE == 22402385",
+        "--output",
+        "PID,COMMAND,TYPE,MODE,INODE,MAJ:MIN,PATH,BLOCKER"
+      ],
+      "recorded_at": "2026-10-17T23:09:15.183097+00:00",
+      "exit_code": 0,
+      "stdout": "{\n   \"locks\": [\n\n   ]\n}\n",
+      "stderr": ""
+    },
+    "gc_owner_identity": {
+      "argv": [
+        "/run/current-system/sw/bin/ps",
+        "-p",
+        "723701",
+        "-o",
+        "uid,pid,ppid,stat,wchan:48,etime,time,args",
+        "--no-headers"
+      ],
+      "recorded_at": "2026-10-17T23:09:15.189654+00:00",
+      "exit_code": 0,
+      "stdout": "    0  723701    2631 Ssl  -                                                   22:28:39 00:05:06 nix-daemon 722942\n",
+      "stderr": ""
+    },
+    "reported_client_presence": {
+      "argv": [
+        "/run/current-system/sw/bin/ps",
+        "-p",
+        "722942",
+        "-o",
+        "uid,pid,ppid,stat,args",
+        "--no-headers"
+      ],
+      "recorded_at": "2026-10-17T23:09:15.193790+00:00",
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": ""
+    }
+  },
+  "known_lock_identity": {
+    "path": "/nix/var/nix/gc.lock",
+    "device": "0:31",
+    "inode": 22402385,
+    "source": "Post-timeout stat -Lc observation in this continuation"
+  },
+  "store_available_bytes": 45278429184,
+  "store_capacity_source": "Post-timeout df -B1 /nix/store: datapool/nix, total 301214334976, used 255935905792, available 45278429184",
+  "large_gc_waiter_snapshot": "artifact://1295",
+  "limits": [
+    "Blocked WRITE* rows are waiters, not held-lock owners",
+    "Long elapsed time is not proof of deadlock",
+    "Original task ownership and safe cancellation are not proved",
+    "No privileged inspection, signal, deletion, host reconfiguration or Nix retry under this followup"
+  ],
+  "read_only": true
+}

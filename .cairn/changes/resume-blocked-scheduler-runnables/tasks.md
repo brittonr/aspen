@@ -9,10 +9,10 @@ record implemented and exercised work; required acceptance blockers remain open.
 - [x] [serial] Coordinate F10 Ready admission ownership before core edits without a circular lifecycle dependency. Cite r[molten.audit_f09.queue].
 - [x] [serial] Implement pure blocked-resume classification, checked enqueue updates, supplied priority, and wait-account reset. Cite r[molten.audit_f09.resume] and r[molten.audit_f09.ordering].
 - [x] [serial] Remove the shell charge for an existing blocked occurrence while preserving the extension envelope for new work. Cite r[molten.audit_f09.resume].
-- [ ] [serial] Add positive and negative live/simulation adapter tests for effect order, overload, stale callbacks, and state preservation. Cite r[molten.audit_f09.validation].
+- [x] [serial] Add positive and negative live/simulation adapter tests for effect order, overload, stale callbacks, and state preservation. Cite r[molten.audit_f09.validation].
 - [x] [serial] Review F11 occurrence compatibility and record Wake, replay-divergence, and canonical receipt decisions in fabric-time docs. Cite r[molten.audit_f09.ordering] and r[molten.audit_f09.validation].
 - [x] [serial] Run the focused baseline and new tests after edits, including scheduler capacity and replay fixtures. Cite r[molten.audit_f09.validation].
-- [ ] [serial] Run focused Octet checks, the existing strict Octet gate, and Clippy with `-D warnings` across required targets and features. Cite r[molten.audit_f09.validation].
+- [x] [serial] Run focused Octet checks, the existing strict Octet gate, and Clippy with `-D warnings` across required targets and features. Cite r[molten.audit_f09.validation].
 - [ ] [serial] Run required workspace tests, relevant Nix checks, and the repository Nix gate without weakening existing scope. Cite r[molten.audit_f09.validation].
 - [x] [serial] Run native `.cairn/` validation and required change gates with tracked evidence and explicit executed-versus-static limits. Cite r[molten.audit_f09.validation].
 
@@ -26,3 +26,14 @@ prove the missing production scheduler/capacity/effect composition or independen
 simulation effect dispatcher. Required strict Octet acceptance denied the run;
 the compatible-feature and required Nix rails are not complete. No sync or
 archive is authorized by these partial results.
+
+## 2026-10-17 final bounded attempt
+
+Attempt 20 passed the focused core/shell suites, both clean Octet producers,
+the unchanged strict source gate, workspace and compatible-feature tests,
+all required Clippy configurations, formatting, and the actual both-profile CLI.
+The owning runtime and independent simulation delivery from attempts 18–19 are
+now exercised. Required Nix acceptance remains open; no sync or archive is
+authorized by these partial results. See
+[`evidence/2026-10-17-final-acceptance.md`](evidence/2026-10-17-final-acceptance.md).
+

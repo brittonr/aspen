@@ -1,0 +1,12 @@
+{
+  "activation": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/.direnv/flake-profile-a5d5b61aa8a61b7d9d765e1daf971a9a578f1cfa.rc",
+  "method": "Source the existing Nix-generated direnv shell cache; no Nix GC settings, host processes, inputs, pins or gates changed.",
+  "compiler_proof": "cached-shell-compiler-proof.json",
+  "compiler_stdout_and_recorded_environment_equal_attempt19": true,
+  "changed_bound_source_members": [
+    "crates/molten-core/src/fabric_time/scheduler/decision.rs"
+  ],
+  "bound_source_members": 1911,
+  "source_membership": "source-enumeration-final.json",
+  "limit": "Cached shell activation recovers Cargo and pinned producer execution; required Nix builds and the repository flake gate still require their own successful execution."
+}

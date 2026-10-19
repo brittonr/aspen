@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "b3sum",
+    "/home/brittonr/.cargo-target/debug/molten"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T06:54:05.259184+00:00",
+  "elapsed_seconds": 0.102,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "763c51b027388428e3ee76a812a32d5eea465471d9b1954afd5d3585eb8a62cf  /home/brittonr/.cargo-target/debug/molten\n",
+  "stderr": "",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

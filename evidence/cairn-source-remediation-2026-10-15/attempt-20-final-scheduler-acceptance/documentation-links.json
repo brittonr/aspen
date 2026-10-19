@@ -1,0 +1,36 @@
+{
+  "checked": [
+    {
+      "source": ".cairn/changes/resume-blocked-scheduler-runnables/tasks.md",
+      "target": "evidence/2026-10-15-verification.md",
+      "exists": true
+    },
+    {
+      "source": ".cairn/changes/resume-blocked-scheduler-runnables/tasks.md",
+      "target": "evidence/2026-10-17-final-acceptance.md",
+      "exists": true
+    },
+    {
+      "source": ".cairn/changes/resume-blocked-scheduler-runnables/evidence/2026-10-17-final-acceptance.md",
+      "target": "../../../../evidence/cairn-source-remediation-2026-10-15/attempt-20-final-scheduler-acceptance/",
+      "exists": true
+    },
+    {
+      "source": ".cairn/changes/enforce-scheduler-queue-bounds-on-yield/tasks.md",
+      "target": "evidence/2026-10-15-verification.md",
+      "exists": true
+    },
+    {
+      "source": ".cairn/changes/enforce-scheduler-queue-bounds-on-yield/tasks.md",
+      "target": "evidence/2026-10-17-final-acceptance.md",
+      "exists": true
+    },
+    {
+      "source": ".cairn/changes/enforce-scheduler-queue-bounds-on-yield/evidence/2026-10-17-final-acceptance.md",
+      "target": "../../../../evidence/cairn-source-remediation-2026-10-15/attempt-20-final-scheduler-acceptance/",
+      "exists": true
+    }
+  ],
+  "all_resolved": true,
+  "scope": "Four updated task/current-acceptance documents; path existence only, not target semantic correctness."
+}

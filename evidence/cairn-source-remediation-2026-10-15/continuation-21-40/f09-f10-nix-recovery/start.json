@@ -1,0 +1,16 @@
+{
+  "implementation_attempts_consumed": 20,
+  "authorized_cap": 40,
+  "new_source_attempt_started": false,
+  "basis": "../../attempt-20-final-scheduler-acceptance/attempt-result.json",
+  "scope": "Retry unchanged required Nix acceptance after the new user continuation and read-only host diagnosis; do not repeat already-passing source/functional checks on unchanged inputs.",
+  "new_observations": {
+    "available_space": "55G",
+    "gc_lock_file": "/nix/var/nix/gc.lock",
+    "gc_lock_inode": 22402385,
+    "gc_lock_owner": "root:root; mode 600",
+    "visible_matching_proc_locks": 0,
+    "limit": "No visible matching lock is not proof that the daemon can acquire it."
+  },
+  "authority": "No host config edits, unrelated-process termination, shared-cache deletion, gate waiver or remote publication"
+}

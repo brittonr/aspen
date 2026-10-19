@@ -1,0 +1,22 @@
+{
+  "status": "warning-only",
+  "exit_code": 0,
+  "output_format": "human",
+  "metadata": {
+    "tool_name": "cargo-octet",
+    "tool_version": "0.1.0",
+    "rustc_version": "rustc 1.96.0-nightly (ac7f9ec7d 2026-03-20)",
+    "toolchain": "nightly-2026-03-21-x86_64-unknown-linux-gnu",
+    "profile_name": "workspace-metadata",
+    "profile_hash": "b3:bdaab55d417efab9becf009dbf8e655a084da641a854331fc72bf76fab13e482",
+    "config_hash": "b3:f6d90d147080ec9c5ff594bf443aed65b8f60517ec0eecdda92502b1f6964268"
+  },
+  "total_findings": 19,
+  "warning_findings": 19,
+  "error_findings": 0,
+  "autofixable_findings": 0,
+  "cargo_process_exit": {
+    "classification": "success",
+    "code": 0
+  }
+}

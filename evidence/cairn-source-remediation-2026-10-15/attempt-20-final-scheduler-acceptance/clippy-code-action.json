@@ -1,0 +1,38 @@
+{
+  "reported_failure": "../attempt-19-shared-scheduler-source-acceptance/ordered-default-clippy.json",
+  "action": "Merge nested if",
+  "response": {
+    "text": "Applied \"Merge nested if\":\n  Workspace edit:\n    Applied 2 edit(s) to /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-core/src/fabric_time/scheduler/decision.rs",
+    "details": {
+      "xdev": {
+        "tool": "lsp",
+        "mode": "execute",
+        "args": {
+          "action": "code_actions",
+          "file": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-core/src/fabric_time/scheduler/decision.rs",
+          "line": 250,
+          "symbol": "if",
+          "query": "Merge nested if",
+          "apply": true,
+          "timeout": 30
+        },
+        "tier": "write",
+        "inner": {
+          "serverName": "rust-analyzer",
+          "action": "code_actions",
+          "success": true,
+          "request": {
+            "action": "code_actions",
+            "file": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-core/src/fabric_time/scheduler/decision.rs",
+            "line": 250,
+            "symbol": "if",
+            "query": "Merge nested if",
+            "apply": true,
+            "timeout": 30
+          }
+        }
+      }
+    }
+  },
+  "expected_semantics": "The selected wait count is read only when an overdue occurrence exists; the identical FairnessBoundExceeded fields are returned under the same guard."
+}

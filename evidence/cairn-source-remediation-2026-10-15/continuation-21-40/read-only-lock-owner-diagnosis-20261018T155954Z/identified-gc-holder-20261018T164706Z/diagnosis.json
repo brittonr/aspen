@@ -1,0 +1,169 @@
+{
+  "recorded_at": "2026-10-18T16:53:13.081158+00:00",
+  "status": "supplied-point-in-time-gc-holder-identified-then-journal-reported-reaped-store-contention-persists",
+  "authorization": "../authorization.json",
+  "operator_snapshot": {
+    "record": "operator-direct-fd-scan.json",
+    "source": "User-provided root reader output; not rerun",
+    "recorded_at": "2026-10-18T16:45:26.035047+00:00",
+    "gc_target": {
+      "path": "/nix/var/nix/gc.lock",
+      "device": "0:31",
+      "inode": 22402385
+    },
+    "held_writer_pid": 725672,
+    "parent_pid": 2631,
+    "uid": 0,
+    "start_ticks": 11617029,
+    "command": "nix-daemon 724865",
+    "held_fd": 19,
+    "identity_and_held_lock_matched_before_after": true,
+    "scan_limit_reached": false,
+    "observed_thread_states": [
+      "futex_do_wait",
+      "running",
+      "poll_schedule_timeout.constprop.0",
+      "unix_stream_read_generic on fd 20"
+    ],
+    "limit": "Observational before/after validation, not an atomic snapshot; no deadlock or no-progress finding"
+  },
+  "subsequent_liveness": {
+    "cpu_baseline_record": "cpu-baseline.json",
+    "cpu_baseline_at": "2026-10-18T16:47:06.601463+00:00",
+    "cpu_baseline_ps_exit_code": 1,
+    "cpu_baseline_ps_output_empty": true,
+    "proc_stat_read": "/proc/725672/stat not found",
+    "per_thread_cpu_delta_available": false,
+    "per_thread_cpu_delta_claimed": false,
+    "journal_record": "connection-and-exit-journal.json",
+    "journal_line": "2026-10-18T12:45:54-04:00 britton-desktop nix-daemon[2631]: reaped child process 725672, status = succeeded",
+    "journal_reap_time_utc": "2026-10-18T16:45:54+00:00",
+    "seconds_between_supplied_snapshot_and_journal_reap": 27.964953,
+    "worker_specific_journal_record": "worker-journal.json",
+    "worker_specific_journal_output": "-- No entries --",
+    "decision": "The snapshot owner is no longer available for CPU measurement. Do not use this historical PID as a current inspection or signalling target."
+  },
+  "post_exit_store_contention": {
+    "record": "post-exit-store-locks.json",
+    "observed_at": "2026-10-18T16:49:23.678892+00:00",
+    "raw_row_count": 28,
+    "raw_row_limit": "Rows for inode 4053942 repeat; repeated observations are not distinct owner identities",
+    "contended_inode_group_count": 4,
+    "distinct_waiting_pid_inode_pairs": 16,
+    "groups": [
+      {
+        "device": "0:31",
+        "inode": 3940983,
+        "held_writer_pid": 92763,
+        "waiting_writer_pids": [
+          107438,
+          114037,
+          129607,
+          337990
+        ]
+      },
+      {
+        "device": "0:31",
+        "inode": 4053942,
+        "held_writer_pid": 130832,
+        "waiting_writer_pids": [
+          331921,
+          342925,
+          360296,
+          365798,
+          365808,
+          371594,
+          388688
+        ]
+      },
+      {
+        "device": "0:31",
+        "inode": 4482053,
+        "held_writer_pid": 2601744,
+        "waiting_writer_pids": [
+          2601753
+        ]
+      },
+      {
+        "device": "0:31",
+        "inode": 4632022,
+        "held_writer_pid": 3432619,
+        "waiting_writer_pids": [
+          3439286,
+          3447198,
+          3453404,
+          3476711
+        ]
+      }
+    ],
+    "scope": "Only the four previously observed store-lock inodes; not a new root GC scan or whole-host no-lock finding",
+    "current_gc_holder_identified_by_this_observation": false,
+    "current_owner_thread_wait_states_reinspected": false
+  },
+  "post_exit_capacity": {
+    "headroom_record": "post-exit-store-headroom.json",
+    "observed_at": "2026-10-18T16:49:24.669182+00:00",
+    "dataset_available_bytes": 27443593216,
+    "dataset_available_gib": 25.558837890625,
+    "same_available_value_reported_for": [
+      "/nix/store",
+      "/home/brittonr/.cargo-target"
+    ],
+    "pool_record": "post-exit-pool-capacity.json",
+    "pool_free_bytes": 151409369088,
+    "pool_capacity_percent": 96,
+    "pool_fragmentation_percent": 79,
+    "pool_health": "ONLINE",
+    "current_threshold_source": "/etc/nix/nix.conf:15-17",
+    "min_free_bytes": 107374182400,
+    "max_free_bytes": 137438953472,
+    "additional_dataset_available_bytes_to_min_free": 79930589184,
+    "additional_dataset_available_gib_to_min_free": 74.441162109375,
+    "additional_dataset_available_bytes_to_max_free": 109995360256,
+    "additional_dataset_available_gib_to_max_free": 102.441162109375,
+    "limits": [
+      "Raw pool free bytes and dataset-available bytes are not interchangeable",
+      "Shared headroom is not reserved build capacity",
+      "[INFERENCE] Below-min-free capacity can trigger automatic GC under normal settings; it does not prove the reason for every remaining wait",
+      "Crossing a GC threshold would not prove acceptance can pass or all existing contention has cleared"
+    ]
+  },
+  "decision": "Recommend operator-owned capacity recovery before another unchanged acceptance retry. Current authority remains read-only; obtain a new material recovery/acceptance decision, rather than signal a historical PID or repeat the supplied scan.",
+  "authority_limits": [
+    "No shared-process control, daemon restart, deletion or host configuration change",
+    "No Nix execution or acceptance rerun under the current read-only authorization",
+    "Earlier timed-out acceptance stages remain nonpassing; conditional flake gates remain unlaunched",
+    "No source, dependency/toolchain pin or historical evidence change by this followup"
+  ],
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "last_recorded_active_molten_change_count": 47,
+  "lifecycle_disposition": {
+    "F09_F10_remain_active": true,
+    "required_nix_tasks_remain_unchecked": true,
+    "synced_by_this_followup": false,
+    "archived_by_this_followup": false,
+    "completion_commit_created_by_this_followup": false,
+    "remote_publication_performed": false
+  },
+  "non_claims": [
+    "No current GC holder discovery after the reap",
+    "No proved deadlock or server-side root cause",
+    "No demonstrated host recovery",
+    "No passing acceptance or lifecycle completion"
+  ],
+  "capability_contribution": {
+    "immediate_outcome": "A supplied direct FD observation identifies the GC lock holder; subsequent recorded process and journal observations explain its disappearance without signalling it",
+    "durable_contribution": "Append-only operator snapshot, exact command results and bounded interpretation distinguish historical lock ownership from current recovery authority",
+    "maintenance_owner": "Molten maintainers retain the evidence; host operator owns Nix/ZFS recovery decisions",
+    "repeatability_evidence": [
+      "operator-direct-fd-scan.json",
+      "cpu-baseline.json",
+      "connection-and-exit-journal.json",
+      "post-exit-store-locks.json",
+      "post-exit-store-headroom.json",
+      "post-exit-pool-capacity.json"
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "stat": {
+    "argv": [
+      "stat",
+      "-Lc",
+      "%n %u %a",
+      "/run/wrappers/bin/sudo",
+      "/run/current-system/sw/bin/ps",
+      "/run/current-system/sw/bin/lsof",
+      "/run/current-system/sw/bin/lslocks"
+    ],
+    "exit_code": 0,
+    "stdout": "/run/wrappers/bin/sudo 0 4511\n/run/current-system/sw/bin/ps 0 555\n/run/current-system/sw/bin/lsof 0 555\n/run/current-system/sw/bin/lslocks 0 555\n",
+    "stderr": ""
+  },
+  "resolved_paths": {
+    "argv": [
+      "readlink",
+      "-f",
+      "/run/wrappers/bin/sudo",
+      "/run/current-system/sw/bin/ps",
+      "/run/current-system/sw/bin/lsof",
+      "/run/current-system/sw/bin/lslocks"
+    ],
+    "exit_code": 0,
+    "stdout": "/run/wrappers/wrappers.dHQwNiF4Py/sudo\n/nix/store/symzmzrb5qzcwz9mpsrcppwq0r90mq5w-procps-4.0.7/bin/ps\n/nix/store/zhzdsqi4pw32zznkb1ry931zarphjfxb-lsof-4.99.7/bin/lsof\n/nix/store/zwv3i1aawb8zmxj029x7lyd0an5q4nj6-util-linux-2.42.2-bin/bin/lslocks\n",
+    "stderr": ""
+  },
+  "root_owned_not_group_or_other_writable": true,
+  "scope": "Only root-owned canonical host diagnostic binaries will be executed through sudo; no user-PATH executable will be elevated"
+}

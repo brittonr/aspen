@@ -1,0 +1,25 @@
+{
+  "argv": [
+    "timeout",
+    "--kill-after=5s",
+    "90s",
+    "nix",
+    "develop",
+    "--offline",
+    "--no-update-lock-file",
+    "--command",
+    "cargo",
+    "--version"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/wasmtime-prerequisite-20261017",
+  "started_at": "2026-10-17T16:47:21.934259+00:00",
+  "elapsed_seconds": 90.05,
+  "exit_code": 124,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "running auto-GC to free 83885031424 bytes\nwaiting for the big garbage collector lock...\n\nshutting down\u001b[Kerror: interrupted by the user\n",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

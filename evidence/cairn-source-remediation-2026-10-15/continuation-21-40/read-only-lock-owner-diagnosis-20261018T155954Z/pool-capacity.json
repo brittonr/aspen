@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "/run/current-system/sw/bin/zpool",
+    "list",
+    "-Hp",
+    "-o",
+    "name,size,alloc,free,frag,cap,health",
+    "datapool"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-18T15:59:55.370929+00:00",
+  "elapsed_seconds": 0.005,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "datapool\t3985729650688\t3835727482880\t150002167808\t80\t96\tONLINE\n",
+  "stderr": "",
+  "read_only": true
+}

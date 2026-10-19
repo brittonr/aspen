@@ -1,0 +1,139 @@
+{
+  "status": "concrete-store-path-blocker-identified-acceptance-not-passed",
+  "recorded_at": "2026-10-17T20:13:48.158676+00:00",
+  "execution_record": "run.json",
+  "elapsed_seconds": 600.093,
+  "timed_out": true,
+  "exit_code": -15,
+  "stderr_retention": {
+    "path": "stderr.log",
+    "total_bytes": 2095260,
+    "retained_bytes": 2095260,
+    "omitted_middle_bytes": 0,
+    "first_output_seconds": 0.044,
+    "last_output_seconds": 600.015
+  },
+  "preserved_source_binding": {
+    "record": "source-binding.json",
+    "matched_inputs": 1911
+  },
+  "phase_evidence": {
+    "source": "stderr.log:31927-31939",
+    "observations": [
+      "Nix evaluated the nextest derivation and reached source materialization for the pinned nixpkgs build-rust-crate/lib.sh",
+      "The expected store source path was absent and Nix began copying it to the store",
+      "The final sequence records daemon worker operation 7, a sent GC root, an acknowledged GC root, then locking path /nix/store/08w4wl60b1fn4li3q5vbv4khyqs7rhws-lib.sh",
+      "The subsequent messages are shutdown and interruption from the owned-command deadline, not a behavioral test failure"
+    ],
+    "limit": "The trace identifies the immediate source-copy/path-lock bottleneck, not why the existing lock-owning worker remains active"
+  },
+  "client_wait_evidence": {
+    "source": "client-observations.json",
+    "summary": [
+      {
+        "scheduled_offset_seconds": 5,
+        "elapsed_seconds": 5.003,
+        "nix_client_pids": [
+          2283914
+        ],
+        "wait_observations": {
+          "/proc/2283914/wchan": "unix_stream_read_generic",
+          "/proc/2283914/syscall": "0 0x4 0x5c3d5190000 0x8000 0x0 0x0 0x0 0x744eef8ff0d8 0x74531509f922"
+        },
+        "observation_error": null
+      },
+      {
+        "scheduled_offset_seconds": 60,
+        "elapsed_seconds": 60.055,
+        "nix_client_pids": [
+          2283914
+        ],
+        "wait_observations": {
+          "/proc/2283914/wchan": "unix_stream_read_generic",
+          "/proc/2283914/syscall": "0 0x4 0x5c3d5190000 0x8000 0x0 0x0 0x0 0x744eef8ff0d8 0x74531509f922"
+        },
+        "observation_error": null
+      },
+      {
+        "scheduled_offset_seconds": 300,
+        "elapsed_seconds": 300.1,
+        "nix_client_pids": [
+          2283914
+        ],
+        "wait_observations": {
+          "/proc/2283914/wchan": "unix_stream_read_generic",
+          "/proc/2283914/syscall": "0 0x4 0x5c3d5190000 0x8000 0x0 0x0 0x0 0x744eef8ff0d8 0x74531509f922"
+        },
+        "observation_error": null
+      },
+      {
+        "scheduled_offset_seconds": 590,
+        "elapsed_seconds": 590.1,
+        "nix_client_pids": [
+          2283914
+        ],
+        "wait_observations": {
+          "/proc/2283914/wchan": "unix_stream_read_generic",
+          "/proc/2283914/syscall": "0 0x4 0x5c3d5190000 0x8000 0x0 0x0 0x0 0x744eef8ff0d8 0x74531509f922"
+        },
+        "observation_error": null
+      }
+    ],
+    "interpretation": "At all four scheduled observations the Nix client was sleeping in unix_stream_read_generic; the recorded x86-64 syscall was read on file descriptor 4. This is consistent with waiting for a daemon reply, not execution of Molten tests."
+  },
+  "exact_store_lock": {
+    "path": "/nix/store/08w4wl60b1fn4li3q5vbv4khyqs7rhws-lib.sh.lock",
+    "identity_record": "blocked-source-lock-identity.json",
+    "owners_record": "blocked-source-lock-owners.json",
+    "device": "0:31",
+    "inode": 4193189,
+    "observed_owner_rows": [
+      {
+        "pid": 3449589,
+        "command": "nix-daemon",
+        "type": "FLOCK",
+        "mode": "WRITE",
+        "inode": 4193189,
+        "maj:min": "0:31",
+        "start": 0,
+        "end": 0,
+        "path": "/nix/store...",
+        "blocker": null
+      }
+    ],
+    "owner_process_observation": {
+      "command": "ps -p 3449558,3449589 -f",
+      "stdout": "UID     PID PPID C STIME TTY TIME  CMD\n  0 3449589 2631 0 03:24 ?   00:00 nix-daemon 3449558\n",
+      "client_pid_not_present_in_snapshot": 3449558
+    },
+    "owner_connection_journal": {
+      "command": "journalctl --unit=nix-daemon.service --grep=pid 3449558|3449589 --lines=20 --no-pager --output=short-iso",
+      "event": "2026-10-17T03:24:55-04:00 nix-daemon[2631]: accepted connection from pid 3449558, user brittonr (trusted)"
+    },
+    "possible_lineage": "[INFERENCE] The owner may belong to the original attempt-20 Nix command: its recorded start was 2026-10-17T07:24:54.345858+00:00, approximately one second before the connection. That old command record does not bind a client PID, so task ownership is not proved.",
+    "owner_stack_observation": {
+      "path": "/proc/3449589/stack",
+      "result": "EACCES: permission denied"
+    }
+  },
+  "decision": "Do not launch another blind retry, remove the held store lockfile, or restart the shared daemon. Next authority decision is privileged read-only inspection of the exact lock owner, or operator recovery of that specific connection with impact assessment. No root-owned worker has been signalled.",
+  "acceptance_disposition": {
+    "three_check_command_passed": false,
+    "full_repository_flake_gate_reached": false,
+    "post_nix_strict_cairn_validation_reached": false,
+    "f09_f10_remain_active": true,
+    "last_recorded_active_molten_changes": 47
+  },
+  "mutations": {
+    "product_source_changed": false,
+    "dependency_pins_changed": false,
+    "host_configuration_changed": false,
+    "daemon_restarted": false,
+    "store_lock_removed": false,
+    "unrelated_processes_terminated": false,
+    "lifecycle_synced_or_archived": false
+  },
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false
+}

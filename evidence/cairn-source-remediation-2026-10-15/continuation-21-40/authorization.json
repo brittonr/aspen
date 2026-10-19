@@ -1,0 +1,24 @@
+{
+  "user_reply": "continue",
+  "reply_to": "Authorize another 20 implementation attempts?",
+  "prior_cap": 20,
+  "authorized_total_cap": 40,
+  "implementation_attempts_consumed_at_continuation": 20,
+  "first_new_source_attempt": 21,
+  "current_action": "Recover required Nix acceptance for the unchanged F09/F10 source before starting another source cycle",
+  "unchanged_boundaries": [
+    "Molten repository only",
+    "No sibling-repository changes",
+    "No dependency/toolchain pin changes",
+    "No frozen fixture or historical archive/evidence rewrites",
+    "No remote publication",
+    "No host GC reconfiguration, unrelated-process termination, or shared-cache deletion inferred from this continuation",
+    "Every required change acceptance gate remains mandatory"
+  ],
+  "observed_resource_prerequisite": {
+    "available_from_df": "55G",
+    "store_filesystem": "datapool/nix",
+    "cargo_target_filesystem": "datapool/cargo-target"
+  },
+  "prior_acceptance": "../attempt-20-final-scheduler-acceptance/attempt-result.json"
+}

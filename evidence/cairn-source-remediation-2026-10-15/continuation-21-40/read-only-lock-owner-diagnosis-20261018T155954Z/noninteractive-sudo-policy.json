@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "/run/wrappers/bin/sudo",
+    "-n",
+    "-l"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-18T16:01:42.455302+00:00",
+  "elapsed_seconds": 0.007,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "Matching Defaults entries for brittonr on britton-desktop:\n    lecture=never, env_keep+=NIXOS_NO_CHECK, env_keep+=TERMINFO_DIRS, env_keep+=TERMINFO\n\nUser brittonr may run the following commands on britton-desktop:\n    (ALL : ALL) SETENV: ALL\n    (ALL : ALL) NOPASSWD: /nix/store/71prhnb572l5fmajpsjkvlb9kw9hl6jp-bpftrace-0.26.1/bin/bpftrace, /home/brittonr/.cargo-target/release/chaoscontrol-trace, /home/brittonr/.cargo-target/release/ebpf-trace-evidence-selftest, /nix/store/sm8d6jpilwdy3bw3yq2lv8rr8jld26pb-systemd-261.2/bin/systemctl stop qwen38-p150x2.service, /nix/store/sm8d6jpilwdy3bw3yq2lv8rr8jld26pb-systemd-261.2/bin/systemctl start qwen38-p150x2.service, /nix/store/zhzdsqi4pw32zznkb1ry931zarphjfxb-lsof-4.99.7/bin/lsof /dev/tenstorrent/1\n",
+  "stderr": "",
+  "read_only": true
+}

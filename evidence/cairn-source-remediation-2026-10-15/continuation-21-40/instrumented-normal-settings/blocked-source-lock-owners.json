@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "lslocks",
+    "--json",
+    "--notruncate",
+    "--filter",
+    "INODE == 4193189",
+    "--output",
+    "PID,COMMAND,TYPE,MODE,INODE,MAJ:MIN,START,END,PATH,BLOCKER"
+  ],
+  "observed_at": "2026-10-17T20:10:32.139112+00:00",
+  "exit_code": 0,
+  "stdout": "{\n   \"locks\": [\n      {\n         \"pid\": 3449589,\n         \"command\": \"nix-daemon\",\n         \"type\": \"FLOCK\",\n         \"mode\": \"WRITE\",\n         \"inode\": 4193189,\n         \"maj:min\": \"0:31\",\n         \"start\": 0,\n         \"end\": 0,\n         \"path\": \"/nix/store...\",\n         \"blocker\": null\n      }\n   ]\n}\n",
+  "stderr": "",
+  "read_only": true
+}

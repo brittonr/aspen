@@ -1,0 +1,52 @@
+{
+  "prepared_at": "2026-10-18T21:50:01.115560+00:00",
+  "authorization": "authorization.json",
+  "source_binding": "source-binding.json",
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "stage_one": {
+    "argv": [
+      "nix",
+      "build",
+      "--no-update-lock-file",
+      "--no-link",
+      "-L",
+      ".#checks.x86_64-linux.nextest",
+      ".#checks.x86_64-linux.clippy",
+      ".#checks.x86_64-linux.nextest-config"
+    ],
+    "launcher_argv": [
+      "bash",
+      "/tmp/molten-cairn-continuation-rrpmy62t/with-cached-shell.sh",
+      "python3",
+      "/tmp/molten-cairn-continuation-rrpmy62t/record-command.py",
+      "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/continuation-21-40/capacity-recovered-normal-20261018T214935Z/ordered-relevant-nix-checks.json",
+      "nix",
+      "build",
+      "--no-update-lock-file",
+      "--no-link",
+      "-L",
+      ".#checks.x86_64-linux.nextest",
+      ".#checks.x86_64-linux.clippy",
+      ".#checks.x86_64-linux.nextest-config"
+    ],
+    "result": "ordered-relevant-nix-checks.json",
+    "deadline_seconds": 3500
+  },
+  "stage_two": {
+    "argv": [
+      "nix",
+      "flake",
+      "check",
+      "--no-update-lock-file",
+      "-L",
+      "."
+    ],
+    "condition": "Stage one exit_code 0, timed_out false, and unchanged preserved source binding",
+    "result": "ordered-repository-nix-gate.json",
+    "deadline_seconds": 3500
+  },
+  "source_and_pins_frozen": true,
+  "normal_nix_settings": true,
+  "new_source_attempt_started": false,
+  "ready_to_launch": true
+}

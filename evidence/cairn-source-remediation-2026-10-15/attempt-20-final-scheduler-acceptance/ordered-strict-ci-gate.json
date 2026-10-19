@@ -1,0 +1,29 @@
+{
+  "argv": [
+    "cargo",
+    "run",
+    "--offline",
+    "--locked",
+    "--",
+    "test",
+    "octet",
+    "gate",
+    "--artifacts",
+    "target/octet-scheduler-cohort20-workspace",
+    "--profile",
+    "strict-ci",
+    "--receipt-out",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-20-final-scheduler-acceptance/ordered-strict-ci-gate.preserves"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T06:53:33.491094+00:00",
+  "elapsed_seconds": 0.903,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "octet gate receipt blake3:e50185287ffabbe677edc8207d1747ac4a3d731c9de6be3d9ff5e7e730d18ffa written to /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-20-final-scheduler-acceptance/ordered-strict-ci-gate.preserves\noctet gate pass receipt=blake3:e50185287ffabbe677edc8207d1747ac4a3d731c9de6be3d9ff5e7e730d18ffa\n",
+  "stderr": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.83s\n     Running `/home/brittonr/.cargo-target/debug/molten test octet gate --artifacts target/octet-scheduler-cohort20-workspace --profile strict-ci --receipt-out /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/attempt-20-final-scheduler-acceptance/ordered-strict-ci-gate.preserves`\n",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

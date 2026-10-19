@@ -1,0 +1,45 @@
+{
+  "observations": {
+    "gc_lock_file_identity": {
+      "argv": [
+        "/run/current-system/sw/bin/stat",
+        "-Lc",
+        "%n %d %i",
+        "/nix/var/nix/gc.lock"
+      ],
+      "recorded_at": "2026-10-17T23:11:07.436835+00:00",
+      "exit_code": 0,
+      "stdout": "/nix/var/nix/gc.lock 31 22402385\n",
+      "stderr": ""
+    },
+    "store_headroom": {
+      "argv": [
+        "/run/current-system/sw/bin/df",
+        "-B1",
+        "/nix/store"
+      ],
+      "recorded_at": "2026-10-17T23:11:07.439454+00:00",
+      "exit_code": 0,
+      "stdout": "Filesystem        1B-blocks         Used   Available Use% Mounted on\ndatapool/nix   301076578304 255935905792 45140672512  86% /nix/store\n",
+      "stderr": ""
+    },
+    "previous_gc_owner": {
+      "argv": [
+        "/run/current-system/sw/bin/ps",
+        "-p",
+        "723701",
+        "-o",
+        "uid,pid,ppid,stat,etime,time,args",
+        "--no-headers"
+      ],
+      "recorded_at": "2026-10-17T23:11:07.441320+00:00",
+      "exit_code": 0,
+      "stdout": "    0  723701    2631 Ssl     22:30:31 00:06:52 nix-daemon 722942\n",
+      "stderr": ""
+    }
+  },
+  "preceding_global_lock_snapshot": "post-recovery-gc-global-lock-snapshot.json",
+  "signals_sent": false,
+  "nix_retried": false,
+  "scope": "Resolve the observed change from held GC lock to empty global snapshot; no host mutation"
+}

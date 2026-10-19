@@ -1,0 +1,36 @@
+{
+  "provenance": "Operator-provided attachment; accepted as ground truth, not re-executed for confirmation",
+  "received_recorded_at": "2026-10-17T21:25:44.795574+00:00",
+  "command_observation_time": "Not supplied",
+  "target": {
+    "pid": 3449589,
+    "ppid": 2631,
+    "uid": 0,
+    "state": "Ssl",
+    "main_thread_wait_channel": "futex_do_wait",
+    "command": "nix-daemon 3449558"
+  },
+  "mapped_executable": "/nix/store/6rwk5j1qqk7na4la5m2ka34p734braxa-nix-2.36.0/bin/nix",
+  "selected_verbatim_ps_lsof_lslocks_lines": [
+    "3449589    2631     0 Ssl  futex_do_wait                                    nix-daemon 3449558",
+    "nix-daemo 3449589 root   8u  unix 0xffff8d94f846d100       0t0  227471618 /nix/var/nix/daemon-socket/socket type=STREAM (CONNECTED)",
+    "nix-daemo 3449589 root  14uW  REG               0,31    250717    4193587 /nix/var/nix/temproots/3449589",
+    "nix-daemo 3449589 root  15u   REG               0,31         0   22402385 /nix/var/nix/gc.lock",
+    "nix-daemo 3449589 root  16u  unix 0xffff8d8b9fd59f80       0t0  227468666 type=STREAM (CONNECTED)",
+    "nix-daemo 3449589 root  17uW  REG               0,31         0    4193189 /nix/store/08w4wl60b1fn4li3q5vbv4khyqs7rhws-lib.sh.lock",
+    "nix-daemo 3449589 root  18u   REG               0,31         0   22402385 /nix/var/nix/gc.lock",
+    "3449589 nix-daemon      FLOCK WRITE  4193189 /nix/store/08w4wl60b1fn4li3q5vbv4khyqs7rhws-lib.sh.lock",
+    "3449589 nix-daemon      FLOCK WRITE  4193587 /nix/var/nix/temproots/3449589",
+    "3449589 nix-daemon      FLOCK READ  22406060 /nix/var/nix/db/big-lock",
+    "3449589 nix-daemon      POSIX READ  22406061 /nix/var/nix/db/db.sqlite",
+    "3449589 nix-daemon      POSIX READ    302491 /nix/var/nix/db/db.sqlite-shm"
+  ],
+  "interpretation_limits": [
+    "futex_do_wait identifies a kernel wait mechanism, not the user-space mutex, a proven deadlock, or which other thread could make progress",
+    "Open gc.lock descriptors are not reported as held GC locks in the provided lock listing",
+    "Connected sockets do not establish that the original client process is still alive or that a surviving peer is absent",
+    "The main daemon PID 2631 and unrelated workers must not be restarted or signalled under the current read-only authority"
+  ],
+  "required_acceptance_passed": false,
+  "host_mutations_authorized": false
+}

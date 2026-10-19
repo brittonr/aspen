@@ -1,0 +1,41 @@
+{
+  "kind": "read-only-runtime-pilot-input-recovery",
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "product_inputs_changed": false,
+  "executions_performed": [],
+  "publication_requirement": {
+    "source": "/home/brittonr/git/aspen-worktrees/wasmtime-prerequisite-20261017/.cairn/specs/hardened-wasmtime-runtime/spec.md:253-290",
+    "required": "Exact positive and negative fixtures must match under independent execution. Molten and an independent product must preserve their own world/import/DTO adapters. Cargo and Nix must bind the same full reviewed runtime and Wasmtime identities."
+  },
+  "parent_checked_observations": [
+    {
+      "source": "/home/brittonr/git/OnixResearch/site/pilots/hwr-consumer/src/lib.rs:18-65",
+      "observation": "The named independently owned pilot exists and invokes the public runtime API in source. Its guest is an import-free core module exporting memory and run, returning SI. Site world/import identifiers appear only as metadata; the source explicitly says the linker links nothing. This does not establish execution of a Site component or product import."
+    },
+    {
+      "source": "/home/brittonr/git/OnixResearch/site/pilots/hwr-consumer/Cargo.toml:1-13",
+      "observation": "The pilot is a standalone Cargo workspace and pins both runtime crates to the full Radicle revision 391ce7efd032792b6b6e3d95665f88b06b24c0d3. This is a declaration, not verification of remote availability or an accepted repaired publication."
+    }
+  ],
+  "research_handoff_observations_not_executed": [
+    "The named pilot is excluded from the main Site workspace and flake; their results cannot stand in for its execution",
+    "The included profile still declares Molten actor identity and no allowed imports",
+    "No concrete Site component/WIT, typed import implementation, named-pilot command receipt or matching Nix consumer cohort was located in the cited pilot input set",
+    "Adjacent content-transform core-module evidence is not a substitute for this named independent component pilot"
+  ],
+  "remaining_prerequisites": [
+    "An executable independent Site component/world and real consumer-owned adapter behavior",
+    "Reviewed immutable repaired-runtime bindings with matching Cargo/Nix cohort evidence",
+    "Actual independent component/import and declared boundary execution with exact commands, outcomes, resource and cleanup observations",
+    "All existing producer repair acceptance gates before stable publication and Molten pin migration"
+  ],
+  "limits": [
+    "Source inspection is not current pilot execution or acceptance evidence",
+    "Historical archive assertions and abbreviated revisions do not prove the repaired cohort",
+    "Do not substitute an unrelated consumer or rewrite historical evidence",
+    "Keep Molten product inputs frozen while the authorized normal-settings Nix retry is pending",
+    "Do not start implementation attempt 21 before the required unchanged-source acceptance prerequisite passes"
+  ]
+}

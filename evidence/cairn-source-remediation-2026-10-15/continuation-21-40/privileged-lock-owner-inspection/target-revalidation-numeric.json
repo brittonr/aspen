@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "ps",
+    "-p",
+    "3449589",
+    "-o",
+    "uid,pid,ppid,args",
+    "--no-headers"
+  ],
+  "observed_at": "2026-10-17T21:10:34.066813+00:00",
+  "exit_code": 0,
+  "stdout": "    0 3449589    2631 nix-daemon 3449558\n",
+  "stderr": "",
+  "lock_identity_matches": true,
+  "lock_owner_matches": true,
+  "numeric_process_identity_matches": true,
+  "privileged_inspection_target_revalidated": true,
+  "prior_guard_failure": "ps -f rendered UID as root rather than numeric 0; this command requests numeric UID explicitly instead of inferring a target substitution"
+}

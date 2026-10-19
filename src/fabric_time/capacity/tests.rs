@@ -53,15 +53,11 @@ fn activation_reserves_the_complete_plan_before_use() {
 #[test]
 fn allocation_failure_denies_without_smaller_fallback() {
     let profile = profile();
-    let result = activate_with(&profile, GENERATION, |kind, _slots| {
-        if kind == ReservationKind::Queue {
-            Err(())
-        } else {
-            Ok(())
-        }
-    });
-
-    assert!(matches!(result, Err(ActivationError::ReservationFailed(ReservationKind::Queue))));
+    for failed_kind in [ReservationKind::Runnables, ReservationKind::Queue] {
+        let result =
+            activate_with(&profile, GENERATION, |kind, _slots| if kind == failed_kind { Err(()) } else { Ok(()) });
+        assert!(matches!(result, Err(ActivationError::ReservationFailed(kind)) if kind == failed_kind));
+    }
 }
 
 // r[verify molten.fabric_time.scheduler_capacity.steady_state]
@@ -118,44 +114,4 @@ fn exhaustion_release_and_observation_remain_scoped() {
     assert_eq!(runtime.queue_capacity(), 0);
     assert!(observation.non_claims.contains(&"does-not-prove-global-latency"));
     assert!(observation.non_claims.contains(&"does-not-prove-whole-runtime-zero-allocation"));
-}
-
-#[test]
-fn accounting_preserves_existing_fifo_selection() {
-    let profile = profile();
-    let mut runtime = Runtime::activate(&profile, GENERATION).expect("activation");
-    let key = molten_core::fabric_time::RunnableKey {
-        service_id: "service.scheduler".to_string(),
-        generation: GENERATION,
-        runnable_id: "runnable-a".to_string(),
-    };
-    let state = molten_core::fabric_time::new_scheduler_state(&profile, GENERATION);
-    let capacity_decision =
-        runtime.apply(&profile.profile_ref, GENERATION, molten_core::fabric_time::capacity::UseRequest {
-            runnable_delta: 1,
-            queue_delta: 1,
-        });
-    assert_eq!(capacity_decision, molten_core::fabric_time::capacity::UseDecisionKind::Admit);
-    let transition = molten_core::fabric_time::apply_scheduler_command(
-        &profile,
-        profile.scheduler_policy,
-        &state,
-        GENERATION,
-        &molten_core::fabric_time::SchedulerCommand::Wake {
-            key: key.clone(),
-            priority: 0,
-        },
-    )
-    .expect("wake");
-    let selection = molten_core::fabric_time::choose_runnable(
-        &profile,
-        profile.scheduler_policy,
-        &transition.next,
-        GENERATION,
-        Some(&key),
-    )
-    .expect("selection");
-
-    assert_eq!(selection.selected, key);
-    assert_eq!(selection.choice_sequence, 1);
 }

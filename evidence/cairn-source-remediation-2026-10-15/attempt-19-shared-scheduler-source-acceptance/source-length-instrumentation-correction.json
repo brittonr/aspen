@@ -1,0 +1,18 @@
+{
+  "issue": "Initial parent preflight accidentally asserted the Root-only repair file limit over unchanged molten-core files as well.",
+  "correction": "Restrict this manual source-policy preflight to files in the two actual source-repair slices. No product failure, source mutation, or acceptance run occurred.",
+  "actual_repair_lengths": {
+    "src/fabric_time/adapters.rs": 4,
+    "src/fabric_time/parts/adapters/p001/body.rs": 195,
+    "src/fabric_time/parts/adapters/p003/body.rs": 115,
+    "src/fabric_time/parts/fixture/p001/body.rs": 194,
+    "src/fabric_time/parts/fixture/p003/body.rs": 221,
+    "src/fabric_time/shell.rs": 274,
+    "src/fabric_time/shell/owned.rs": 237,
+    "src/fabric_time/tests/adapters/fencing.rs": 242,
+    "src/fabric_time/tests/adapters/harness.rs": 166,
+    "src/fabric_time/tests/adapters/mod.rs": 131,
+    "src/fabric_time/tests/adapters/receiver.rs": 56
+  },
+  "all_repaired_files_within_limit": true
+}

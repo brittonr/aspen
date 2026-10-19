@@ -1,0 +1,102 @@
+{
+  "recorded_at": "2026-10-18T16:36:19.534688+00:00",
+  "status": "empty-root-lslocks-preserved-direct-fdinfo-discovery-prepared",
+  "operator_root_evidence": "operator-root-query.json",
+  "operator_root_query_rerun": false,
+  "earlier_operator_thread_evidence": "../operator-snapshot-followup-20261018T162444Z/operator-owner-snapshot-excerpt.json",
+  "source_findings": [
+    {
+      "source": "https://github.com/util-linux/util-linux/blob/v2.42.2/misc-utils/lslocks.c#L512-L573",
+      "observed_installed_version": "lslocks from util-linux 2.42.2",
+      "fact": "Upstream get_pids_locks collects fdinfo lock rows as fallback; get_proc_locks creates the emitted lock list by iterating /proc/locks. FD-only entries are not appended independently.",
+      "limit": "Installed version matches the source tag; local vendor patches were not audited"
+    },
+    {
+      "source": "https://github.com/gregkh/linux/blob/v6.18.50/fs/locks.c#L2208-L2240",
+      "fact": "locks_translate_pid preserves the recorded flock PID in the initial PID namespace; namespace translation can otherwise yield zero for a nonvisible or dead owner."
+    },
+    {
+      "source": "https://github.com/gregkh/linux/blob/v6.18.50/fs/locks.c#L2858-L2868",
+      "fact": "locks_show returns before printing the lock or its blocked descendants when the root lock PID translates to zero."
+    },
+    {
+      "source": "https://github.com/gregkh/linux/blob/v6.18.50/fs/locks.c#L2910-L2940",
+      "fact": "__show_fd_locks walks locks held by the specific file description and prints their metadata directly through lock_get_status, without the locks_show visibility-return condition."
+    }
+  ],
+  "interpretation": "[INFERENCE] PID-namespace visibility or lock-owner lifetime could account for blocked flock calls without an emitted /proc/locks/lslocks row. This is a supported mechanism, not a proved explanation of this host.",
+  "prepared_next_observation": {
+    "script": "inspect-gc-fdinfo.py",
+    "content_identity": "blake3:997ec6b2c4422f8621b5af0949eecda5d8130830537ffdeeec5e09d247dc22c5",
+    "argv": [
+      "/run/wrappers/bin/sudo",
+      "--",
+      "/run/current-system/sw/bin/timeout",
+      "--signal=TERM",
+      "--kill-after=5s",
+      "20s",
+      "/run/current-system/sw/bin/python3",
+      "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/continuation-21-40/read-only-lock-owner-diagnosis-20261018T155954Z/empty-root-gc-query-followup-20261018T163030Z/inspect-gc-fdinfo.py"
+    ],
+    "scope": "Enumerate numeric process/FD metadata; retain only held FLOCK records on device 0:31 inode 22402385, then read waits only for same-identity processes with revalidated held FD records. No dependence on /proc/locks.",
+    "bounds": {
+      "soft_scan_seconds": 15,
+      "outer_deadline_seconds": 20,
+      "max_processes": 16384,
+      "max_descriptors": 262144,
+      "max_threads_per_observed_holder": 16
+    },
+    "guards": [
+      "Expected host boot ID",
+      "Expected GC path device/inode",
+      "Pinned process directories",
+      "Before/after process identity and held descriptor metadata"
+    ],
+    "limits": [
+      "Namespace visibility remains a possible limit even for a direct scan",
+      "Open-only GC descriptors are not reported as lock holders",
+      "A no-holder result, scan limit or read error is not recovery evidence"
+    ],
+    "root_production_scan_executed": false
+  },
+  "verification": {
+    "record": "owned-fdinfo-smoke.json",
+    "executed": [
+      "A live exclusive flock on a task-owned temporary file was identified through fdinfo",
+      "A second open-only descriptor for the same inode was excluded",
+      "The process stopped being reported as a holder after the task-owned flock was released",
+      "The nonroot top-level guard returned exit 2 without a production scan"
+    ],
+    "temporary_input_removed": "/tmp/molten-gc-fdinfo-smoke-sdo4sudp",
+    "unexercised": [
+      "Root-wide production GC scan",
+      "PID-namespace-hidden production lock scenario"
+    ]
+  },
+  "remaining_prerequisite": "Authenticated operator execution of the prepared direct FD-info reader; assistant noninteractive sudo authentication is not available and is not retried here",
+  "maintenance_owner": "Host/Nix operator owns platform diagnosis and recovery; Molten maintainers retain unchanged acceptance authority",
+  "capability_contribution": "Repeatable bounded GC-inode FD-lock metadata observation independent of global lock-list emission",
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "lifecycle": {
+    "F09_F10_remain_active": true,
+    "required_nix_tasks_remain_unchecked": true,
+    "synced": false,
+    "archived": false,
+    "remote_publication_performed": false
+  },
+  "mutations": {
+    "product_source_or_pins_changed": false,
+    "shared_host_state_changed": false,
+    "shared_processes_signalled": false,
+    "acceptance_rerun": false,
+    "new_evidence_and_reader_created": true,
+    "owned_smoke_lock_released_and_scratch_removed": true
+  },
+  "non_claims": [
+    "No deadlock, stale lock or recovery proved",
+    "No GC lock holder identified yet",
+    "No test acceptance or lifecycle completion"
+  ]
+}

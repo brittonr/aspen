@@ -1,0 +1,28 @@
+{
+  "recorded_at": "2026-10-17T21:38:20.755037+00:00",
+  "status": "SIGTERM-delivered-worker-still-live-lock-still-held",
+  "operator_signal_record": "targeted-worker-operator-sigterm.json",
+  "post_signal_observation": "targeted-worker-post-sigterm-observation.json",
+  "additional_grace_seconds": 30.029,
+  "worker_exit_observed": false,
+  "held_write_lock": {
+    "pid": 3449589,
+    "device": "0:31",
+    "inode": 4193189
+  },
+  "main_daemon_observed_present": {
+    "pid": 2631,
+    "command": "nix-daemon --daemon"
+  },
+  "required_next_decision": "Separately authorize exact-worker forced cancellation, or preserve read-only scope",
+  "SIGKILL_authorized": false,
+  "repeat_SIGTERM_attempted": false,
+  "daemon_restarted": false,
+  "lockfile_removed": false,
+  "nix_retried": false,
+  "acceptance_passed": false,
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "limit": "The observations prove failure to exit and release the lock during the bounded grace period, not a proven deadlock or safe forced cancellation"
+}

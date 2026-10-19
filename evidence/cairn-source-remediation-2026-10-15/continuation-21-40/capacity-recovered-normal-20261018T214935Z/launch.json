@@ -1,0 +1,20 @@
+{
+  "recorded_at": "2026-10-18T21:50:17.685690+00:00",
+  "authorization": "authorization.json",
+  "plan": "start.json",
+  "source_binding": "source-binding.json",
+  "source_binding_passed": true,
+  "capacity_condition_satisfied": true,
+  "job_handle": "bg_146",
+  "async_job_accepted": true,
+  "completion_observed": false,
+  "stage_one_result": "ordered-relevant-nix-checks.json",
+  "deadline_seconds": 3500,
+  "stage_two_started": false,
+  "stage_two_condition": "Stage one exit_code == 0 and timed_out == false; preserved input binding must still match",
+  "normal_nix_settings": true,
+  "source_and_pins_frozen": true,
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false
+}

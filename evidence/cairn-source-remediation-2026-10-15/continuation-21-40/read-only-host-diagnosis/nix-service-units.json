@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "systemctl",
+    "list-units",
+    "--all",
+    "--no-pager",
+    "--plain",
+    "nix*"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T19:38:11.981133+00:00",
+  "elapsed_seconds": 0.013,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "UNIT                        LOAD   ACTIVE   SUB     DESCRIPTION\nnix-store.mount             loaded active   mounted /nix/store\nnix.mount                   loaded active   mounted /nix\nnix-cleanup-gcroots.service loaded inactive dead    nix-cleanup-gcroots.service\nnix-daemon.service          loaded active   running Nix Daemon\nnix-daemon.socket           loaded active   running Nix Daemon Socket\nnix-cleanup-gcroots.timer   loaded active   waiting nix-cleanup-gcroots.timer\n\nLegend: LOAD   \u2192 Reflects whether the unit definition was properly loaded.\n        ACTIVE \u2192 The high-level unit activation state, i.e. generalization of SUB.\n        SUB    \u2192 The low-level unit activation state, values depend on unit type.\n\n6 loaded units listed.\nTo show all installed unit files use 'systemctl list-unit-files'.\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "read_only": true
+}

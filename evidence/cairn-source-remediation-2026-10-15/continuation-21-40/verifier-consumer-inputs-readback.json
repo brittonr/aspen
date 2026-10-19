@@ -1,0 +1,40 @@
+{
+  "kind": "read-only-verifier-consumer-input-recovery",
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "product_inputs_changed": false,
+  "executions_performed": [],
+  "publication_requirement": {
+    "source": "/home/brittonr/git/aspen-worktrees/mantle-prerequisite-20261017/.cairn/specs/wasm-component-consumer-verifier/spec.md:80-105",
+    "required": "Kamacite and another independently owned consumer must pass through the published facade from immutable inputs; sibling-worktree evidence is insufficient. Complete-bundle positive and declared negative boundaries remain mandatory."
+  },
+  "parent_checked_observations": [
+    {
+      "source": "/home/brittonr/git/OnixResearch/kamacite/docs/wasm-component-adapter.md:20-40",
+      "observation": "Current documented handoff remeasures selected WIT and final portable component bytes, not the complete member closure. External verifier integration and a matching pinned Molten actor bundle remain explicit blockers. The frozen hello fixture is not executable adapter evidence."
+    },
+    {
+      "source": "/home/brittonr/git/aspen-worktrees/mantle-prerequisite-20261017/crates/mantle-wasm-consumer-verifier/tests/consumer_fixtures.rs:332-410",
+      "observation": "The current producer-owned second-consumer fixture constructs its graph locally, declares an AOT output using dangling_object, and nevertheless asserts Verified. It is neither independent consumer proof nor proof of complete declared-output readback."
+    },
+    {
+      "source": "/home/brittonr/git/aspen-worktrees/mantle-prerequisite-20261017/.cairn/changes/repair-consumer-verifier-admission-and-rooting/tasks.md:19-24",
+      "observation": "Repair tasks still require real complete-bundle and boundary scenarios, immutable Kamacite and second-consumer execution, quality/native gates, independent review, implementation commit and accepted publication/readback before updating Molten's pin."
+    }
+  ],
+  "remaining_prerequisites": [
+    "Accepted immutable repaired verifier source and acquisition/API/schema/feature evidence",
+    "Actual Kamacite facade integration and immutable consumer execution evidence",
+    "Complete consumer-owned member closure including every declared Wizer/AOT output",
+    "Matching Molten actor materialization cohort where the Kamacite adapter requires it",
+    "A real second independently owned consumer executing the facade from immutable inputs"
+  ],
+  "limits": [
+    "Read-only source inspection is not test, build, publication or acceptance evidence",
+    "Do not rewrite historical fixtures, archives or failed evidence",
+    "Do not convert producer-owned fixture labels into independent-consumer proof",
+    "Keep Molten product inputs frozen while the authorized normal-settings Nix retry is pending",
+    "Do not start implementation attempt 21 before the required unchanged-source acceptance prerequisite passes"
+  ]
+}

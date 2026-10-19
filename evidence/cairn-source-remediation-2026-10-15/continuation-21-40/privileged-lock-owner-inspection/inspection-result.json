@@ -1,0 +1,69 @@
+{
+  "status": "blocked-noninteractive-privilege-unavailable",
+  "recorded_at": "2026-10-17T21:12:04.810494+00:00",
+  "authorization": "../privileged-lock-owner-inspection-authorization.json",
+  "target_pid": 3449589,
+  "target_revalidated": true,
+  "target_identity_record": "target-revalidation-numeric.json",
+  "trusted_diagnostic_programs": "trusted-programs.json",
+  "privilege_probe_record": "privileged-process-wait.json",
+  "privilege_probe": {
+    "argv": [
+      "/run/wrappers/bin/sudo",
+      "-n",
+      "--",
+      "/run/current-system/sw/bin/ps",
+      "-p",
+      "3449589",
+      "-o",
+      "pid,ppid,uid,stat,wchan:48,args",
+      "--no-headers"
+    ],
+    "observed_at": "2026-10-17T21:11:03.715217+00:00",
+    "elapsed_seconds": 0.016,
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "sudo: a password is required\n",
+    "timed_out": false,
+    "read_only": true,
+    "target_pid": 3449589
+  },
+  "observed_boundary": "sudo -n returned exit 1: sudo: a password is required",
+  "instructions_followed": [
+    "Stopped privileged inspection immediately after the noninteractive authentication failure",
+    "No password was requested through chat or tool input",
+    "No alternative privilege path, debugger attachment, signals, restart, deletion or Nix retry was attempted"
+  ],
+  "privileged_process_observation_obtained": false,
+  "privileged_file_descriptor_observation_attempted": false,
+  "next_required_prerequisite": "Operator-authenticated read-only wait-state and file-descriptor observations for the revalidated exact lock owner, or separately authorized operator recovery of that connection",
+  "operator_read_only_commands": [
+    "/run/wrappers/bin/sudo -- /run/current-system/sw/bin/ps -p 3449589 -o pid,ppid,uid,stat,wchan:48,args",
+    "/run/wrappers/bin/sudo -- /run/current-system/sw/bin/lsof -nP -a -p 3449589",
+    "/run/wrappers/bin/sudo -- /run/current-system/sw/bin/lslocks --pid 3449589 --notruncate --output PID,COMMAND,TYPE,MODE,INODE,PATH"
+  ],
+  "operator_limits": [
+    "Verify PID 3449589 is still UID 0, parent 2631, command nix-daemon 3449558 before collecting its descriptors",
+    "Authenticate only in the operator terminal, not chat",
+    "These commands do not authorize signalling the worker, removing a lockfile or restarting the shared daemon"
+  ],
+  "acceptance_disposition": {
+    "required_nix_checks_remain_unpassed": true,
+    "full_flake_gate_not_reached": true,
+    "post_nix_strict_cairn_validation_not_reached": true,
+    "f09_f10_remain_active": true,
+    "last_recorded_active_molten_changes": 47
+  },
+  "mutations": {
+    "product_source_changed": false,
+    "dependency_pins_changed": false,
+    "host_configuration_changed": false,
+    "daemon_restarted": false,
+    "lock_removed": false,
+    "unrelated_processes_terminated": false,
+    "lifecycle_synced_or_archived": false
+  },
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false
+}

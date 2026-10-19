@@ -158,109 +158,37 @@ fn run_scheduler_scenario(
     events: &mut impl crate::bounded::VecSink<Event>,
     counters: &mut ScenarioCounters,
 ) -> crate::error::Result<()> {
-    let policy = SchedulerPolicy {
-        ordering: SchedulerOrdering::PriorityThenFifo,
-        replay: SchedulerReplayPolicy::Deterministic,
-        overload: SchedulerOverloadPolicy::Reject,
-    };
-    let mut state = new_scheduler_state(&profile.profile, FIXTURE_GENERATION);
+    let mut owner = scheduler_owner(profile)?;
     let low = runnable_key("low");
     let high = runnable_key("high");
     for (key, priority) in [(low.clone(), 0), (high.clone(), 1)] {
-        let transition =
-            apply_scheduler_command(&profile.profile, policy, &state, FIXTURE_GENERATION, &SchedulerCommand::Wake {
-                key,
-                priority,
-            })
-            .map_err(|error| core_error("wake fixture runnable", error))?;
+        let transition = scheduler_command(&mut owner, SchedulerCommand::Wake { key, priority })?;
         events.push_item(scheduler_transition(&profile.profile_ref, &transition)?);
-        state = transition.next;
         counters.scheduler_events = checked_increment(counters.scheduler_events, "scheduler event count")?;
     }
-    let selection = choose_runnable(&profile.profile, policy, &state, FIXTURE_GENERATION, Some(&high))
-        .map_err(|error| core_error("select fixture runnable", error))?;
-    let replay = choose_runnable(&profile.profile, policy, &state, FIXTURE_GENERATION, Some(&selection.selected))
-        .map_err(|error| core_error("replay fixture selection", error))?;
-    if replay.selected != selection.selected {
-        return Err(crate::error::Failure::invalid_harness(
-            "deterministic scheduler replay selected a different runnable",
-        ));
-    }
-    if !matches!(
-        choose_runnable(&profile.profile, policy, &state, FIXTURE_GENERATION, Some(&low),),
-        Err(SchedulerError::UnexpectedReplayChoice { .. })
-    ) {
+    let before_choice_sequence = owner.state().choice_sequence;
+    if !matches!(owner.choose(Some(&low)), Err(SchedulerRuntimeError::Core(SchedulerError::UnexpectedReplayChoice { .. }))) {
         return Err(crate::error::Failure::invalid_harness("fixture scheduler accepted a divergent replay choice"));
     }
+    let choice = owner.choose(Some(&high))?;
+    let selection = SchedulerSelection { next: owner.state().clone(), selected: high, choice_sequence: choice.choice_sequence, eligible_count: choice.eligible_count };
     events.push_item(named_event(EventHeader {
         profile_ref: &profile.profile_ref,
         kind: EventKind::Scheduler,
         generation: FIXTURE_GENERATION,
         subject: "scheduler-replay",
         action: "divergence-detected",
-        ticks: state.choice_sequence,
+        ticks: before_choice_sequence,
     })?);
     counters.scheduler_events = checked_increment(counters.scheduler_events, "scheduler event count")?;
     events.push_item(scheduler_selection(&profile.profile_ref, &selection)?);
     counters.scheduler_events = checked_increment(counters.scheduler_events, "scheduler event count")?;
 
-    let yielded = apply_scheduler_command(
-        &profile.profile,
-        policy,
-        &selection.next,
-        FIXTURE_GENERATION,
-        &SchedulerCommand::Yield {
-            key: selection.selected,
-        },
-    )
-    .map_err(|error| core_error("yield fixture runnable", error))?;
+    let yielded = scheduler_command(&mut owner, SchedulerCommand::Yield { key: selection.selected })?;
     events.push_item(scheduler_transition(&profile.profile_ref, &yielded)?);
     counters.scheduler_events = checked_increment(counters.scheduler_events, "scheduler event count")?;
 
-    run_scheduler_saturation(profile, policy, events, counters)
+    run_scheduler_saturation(profile, events, counters)
 }
 
-/// Fills the scheduler queue to its admitted depth and requires one more wake to be rejected as
-/// overload.
-fn run_scheduler_saturation(
-    profile: &Profile,
-    policy: SchedulerPolicy,
-    events: &mut impl crate::bounded::VecSink<Event>,
-    counters: &mut ScenarioCounters,
-) -> crate::error::Result<()> {
-    let saturation_fault = Fault::SaturateSchedulerQueue;
-    let mut saturated = new_scheduler_state(&profile.profile, FIXTURE_GENERATION);
-    for index in 0..profile.profile.max_scheduler_queue_depth {
-        saturated = apply_scheduler_command(
-            &profile.profile,
-            policy,
-            &saturated,
-            FIXTURE_GENERATION,
-            &SchedulerCommand::Wake {
-                key: runnable_key(&format!("saturated-{index}")),
-                priority: 0,
-            },
-        )
-        .map_err(|error| core_error("saturate fixture scheduler", error))?
-        .next;
-    }
-    let overload =
-        apply_scheduler_command(&profile.profile, policy, &saturated, FIXTURE_GENERATION, &SchedulerCommand::Wake {
-            key: runnable_key("saturated-overflow"),
-            priority: 0,
-        })
-        .map_err(|error| core_error("probe saturated fixture scheduler", error))?;
-    validate_scheduler_fault_outcome(&saturation_fault, &overload)?;
-    events.push_item(scheduler_transition(&profile.profile_ref, &overload)?);
-    events.push_item(named_event(EventHeader {
-        profile_ref: &profile.profile_ref,
-        kind: EventKind::Fault,
-        generation: FIXTURE_GENERATION,
-        subject: "scheduler-queue",
-        action: "saturated",
-        ticks: profile.profile.max_scheduler_queue_depth,
-    })?);
-    counters.scheduler_events = checked_increment(counters.scheduler_events, "scheduler event count")?;
-    counters.fault_events = checked_increment(counters.fault_events, "fault event count")?;
-    Ok(())
-}
+

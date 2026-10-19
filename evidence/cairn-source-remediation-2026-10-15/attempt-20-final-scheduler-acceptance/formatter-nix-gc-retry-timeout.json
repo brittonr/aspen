@@ -1,0 +1,8 @@
+{
+  "stage": "Nix dev-shell launch, before formatter or recorder execution",
+  "outer_timeout_seconds": 3600,
+  "output": "running auto-GC to free 31925338112 bytes\nwaiting for the big garbage collector lock...",
+  "formatter_executed": false,
+  "acceptance_executed": false,
+  "source_cycle": "Still attempt 20/20; no additional source repair or acceptance cycle has started."
+}

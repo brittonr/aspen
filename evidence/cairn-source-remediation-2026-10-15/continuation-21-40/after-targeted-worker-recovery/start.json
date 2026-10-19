@@ -1,0 +1,42 @@
+{
+  "prepared_at": "2026-10-17T22:05:36.420045+00:00",
+  "authorization": "../targeted-worker-force-recovery-authorization.json",
+  "recovery_proof": "../targeted-worker-post-sigkill-observation.json",
+  "source_binding": "../targeted-worker-after-kill-source-binding.json",
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "argv": [
+    "nix",
+    "build",
+    "--no-update-lock-file",
+    "--no-link",
+    "-L",
+    ".#checks.x86_64-linux.nextest",
+    ".#checks.x86_64-linux.clippy",
+    ".#checks.x86_64-linux.nextest-config"
+  ],
+  "launcher_argv": [
+    "bash",
+    "/tmp/molten-cairn-continuation-rrpmy62t/with-cached-shell.sh",
+    "python3",
+    "/tmp/molten-cairn-continuation-rrpmy62t/record-command.py",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/continuation-21-40/after-targeted-worker-recovery/ordered-relevant-nix-checks.json",
+    "nix",
+    "build",
+    "--no-update-lock-file",
+    "--no-link",
+    "-L",
+    ".#checks.x86_64-linux.nextest",
+    ".#checks.x86_64-linux.clippy",
+    ".#checks.x86_64-linux.nextest-config"
+  ],
+  "deadline_seconds": 3500,
+  "normal_nix_settings": true,
+  "automatic_gc_override": false,
+  "single_authorized_retry": true,
+  "temporary_signal_guard_removed": true,
+  "result": "ordered-relevant-nix-checks.json",
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "acceptance_passed": false
+}

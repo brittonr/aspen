@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "df",
+    "--block-size=1",
+    "--output=avail,target",
+    "/nix/store"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T15:35:30.303931+00:00",
+  "elapsed_seconds": 0.003,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "      Avail Mounted on\n53764554752 /nix/store\n",
+  "stderr": "",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

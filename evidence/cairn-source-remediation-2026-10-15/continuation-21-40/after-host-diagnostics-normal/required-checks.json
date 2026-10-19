@@ -1,0 +1,23 @@
+{
+  "argv": [
+    "nix",
+    "build",
+    "--no-update-lock-file",
+    "--no-link",
+    "-L",
+    ".#checks.x86_64-linux.nextest",
+    ".#checks.x86_64-linux.clippy",
+    ".#checks.x86_64-linux.nextest-config"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T17:57:00.512510+00:00",
+  "elapsed_seconds": 3500.128,
+  "exit_code": 1,
+  "timed_out": true,
+  "stdout": "",
+  "stderr": "\nshutting down\u001b[Kerror: interrupted by the user\n",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

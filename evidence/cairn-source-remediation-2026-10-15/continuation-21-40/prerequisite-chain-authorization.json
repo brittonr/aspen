@@ -1,0 +1,25 @@
+{
+  "user_selection": "Authorize prerequisite chain",
+  "supersedes_only": [
+    "Sibling-repository changes are currently forbidden",
+    "Dependency/toolchain pin changes are currently forbidden",
+    "Remote publication is currently forbidden for required producer publications only"
+  ],
+  "scope": "Only required prerequisite-repository work, reviewed immutable dependency-pin updates, and required producer publications after their acceptance gates",
+  "current_known_producers": [
+    "hardened-wasmtime-runtime",
+    "Mantle consumer verifier"
+  ],
+  "authorized_implementation_attempt_cap": 40,
+  "implementation_attempts_consumed": 20,
+  "new_source_attempt_started": false,
+  "unchanged_boundaries": [
+    "No unrelated repository work",
+    "Preserve historical archives and evidence",
+    "Preserve frozen fixtures unless separately authorized",
+    "No Molten remote publication",
+    "No inferred host GC reconfiguration, unrelated-process termination, or shared-cache deletion",
+    "No acceptance weakening or premature archival"
+  ],
+  "basis": "prerequisite-scope-blocker.json"
+}

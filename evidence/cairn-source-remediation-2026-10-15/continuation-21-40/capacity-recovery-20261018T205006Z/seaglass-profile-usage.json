@@ -1,0 +1,23 @@
+{
+  "argv": [
+    "/run/current-system/sw/bin/timeout",
+    "--signal=TERM",
+    "--kill-after=5s",
+    "60s",
+    "/etc/profiles/per-user/brittonr/bin/lsof",
+    "-nP",
+    "-a",
+    "-u1555",
+    "+D",
+    "/home/brittonr/.cargo-target/repo-targets/seaglass/debug",
+    "-Fpcfn"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-18T21:03:01.141823+00:00",
+  "elapsed_seconds": 1.973,
+  "exit_code": 1,
+  "stdout": "",
+  "stderr": "lsof: WARNING: can't stat() overlay file system /var/lib/docker/overlay2/f047a0d1084ef5053a9a655e0249dd015f60063c0c3c38439ddbb34a8d7725c8/merged\n      Output information may be incomplete.\nlsof: WARNING: can't stat() nsfs file system /run/docker/netns/49dac6319581\n      Output information may be incomplete.\n",
+  "read_only": true,
+  "scope": "Current UID 1555 process references to the exact cold profile; not a whole-host or future-use guarantee"
+}

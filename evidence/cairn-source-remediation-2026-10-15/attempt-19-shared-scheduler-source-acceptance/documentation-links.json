@@ -1,0 +1,67 @@
+{
+  "checked": 12,
+  "all_resolved": true,
+  "links": [
+    {
+      "source": "docs/fabric-time-scheduler-runtime.md",
+      "target": "../src/fabric_time/shell/owned.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/fabric-time-scheduler-runtime.md",
+      "target": "../src/fabric_time/ports.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/fabric-time-scheduler-runtime.md",
+      "target": "../src/fabric_time/parts/adapters/p003/body.rs",
+      "exists": true
+    },
+    {
+      "source": "docs/fabric-time-scheduler-runtime.md",
+      "target": "../evidence/cairn-source-remediation-2026-10-15/attempt-19-shared-scheduler-source-acceptance/actual-fabric-time-cli-readback.json",
+      "exists": true
+    },
+    {
+      "source": "docs/fabric-time-scheduler-runtime.md",
+      "target": "../.cairn/archive/1970-01-01-saturate-exponential-retry-arithmetic/evidence/2026-10-16-acceptance.json",
+      "exists": true
+    },
+    {
+      "source": "docs/architecture.md",
+      "target": "distributed-system-fabric.md",
+      "exists": true
+    },
+    {
+      "source": "docs/architecture.md",
+      "target": "fabric-execution.md",
+      "exists": true
+    },
+    {
+      "source": "docs/architecture.md",
+      "target": "system-extension-runtime.md",
+      "exists": true
+    },
+    {
+      "source": "docs/architecture.md",
+      "target": "fabric-time-scheduler-runtime.md",
+      "exists": true
+    },
+    {
+      "source": "docs/architecture.md",
+      "target": "handbook/node-workflows/node-artifact-and-state-root-reference.md",
+      "exists": true
+    },
+    {
+      "source": "docs/architecture.md",
+      "target": "handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md",
+      "exists": true
+    },
+    {
+      "source": "docs/architecture.md",
+      "target": "../.cairn/archive/1970-01-01-fix-node-shutdown-admission/evidence/2026-10-16-acceptance.json",
+      "exists": true
+    }
+  ],
+  "scope": "Local file targets in changed runtime/architecture documentation; not remote availability or semantic correctness."
+}

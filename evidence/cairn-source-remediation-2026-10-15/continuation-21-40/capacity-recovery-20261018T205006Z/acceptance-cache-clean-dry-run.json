@@ -1,0 +1,29 @@
+{
+  "argv": [
+    "/run/current-system/sw/bin/timeout",
+    "--signal=TERM",
+    "--kill-after=5s",
+    "180s",
+    "bash",
+    "/tmp/molten-cairn-continuation-rrpmy62t/with-cached-shell.sh",
+    "cargo",
+    "clean",
+    "--profile",
+    "dev",
+    "--target-dir",
+    "/home/brittonr/.cargo-target/repo-targets/aspen-f09f10-acceptance-4e31cee",
+    "--frozen",
+    "--dry-run",
+    "--verbose"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-18T20:56:07.630508+00:00",
+  "elapsed_seconds": 0.398,
+  "exit_code": 0,
+  "dry_run": true,
+  "deletion_performed": false,
+  "existing_cache_tag": "/home/brittonr/.cargo-target/repo-targets/aspen-f09f10-acceptance-4e31cee/CACHEDIR.TAG",
+  "scope": "Existing isolated Molten acceptance cache, dev profile only; preserve sibling Octet evidence and fabric-time fixtures",
+  "stdout_record": "acceptance-cache-clean-dry-run.stdout.log",
+  "stderr_record": "acceptance-cache-clean-dry-run.stderr.log"
+}

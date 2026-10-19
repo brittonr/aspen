@@ -1,0 +1,53 @@
+{
+  "started_at": "2026-10-17T21:36:54.916578+00:00",
+  "maximum_wait_seconds": 30,
+  "signals_sent": false,
+  "pidfd_events": [],
+  "worker_exit_observed": false,
+  "elapsed_seconds": 30.029,
+  "post_wait_observations": {
+    "process": {
+      "argv": [
+        "/run/current-system/sw/bin/ps",
+        "-p",
+        "3449589,2631",
+        "-o",
+        "uid,pid,ppid,stat,wchan:48,args",
+        "--no-headers"
+      ],
+      "exit_code": 0,
+      "stdout": "    0 3449589    2631 Ssl  -                                                nix-daemon 3449558\n    0    2631       1 Ssl  -                                                nix-daemon --daemon\n",
+      "stderr": ""
+    },
+    "lock": {
+      "argv": [
+        "/run/current-system/sw/bin/lslocks",
+        "--json",
+        "--notruncate",
+        "--filter",
+        "INODE == 4193189",
+        "--output",
+        "PID,COMMAND,TYPE,MODE,INODE,MAJ:MIN,PATH,BLOCKER"
+      ],
+      "exit_code": 0,
+      "stdout": "{\n   \"locks\": [\n      {\n         \"pid\": 3449589,\n         \"command\": \"nix-daemon\",\n         \"type\": \"FLOCK\",\n         \"mode\": \"WRITE\",\n         \"inode\": 4193189,\n         \"maj:min\": \"0:31\",\n         \"path\": \"/nix/store...\",\n         \"blocker\": null\n      }\n   ]\n}\n",
+      "stderr": ""
+    }
+  },
+  "recorded_at": "2026-10-17T21:37:25.810697+00:00",
+  "exact_lock_holders": [
+    {
+      "pid": 3449589,
+      "command": "nix-daemon",
+      "type": "FLOCK",
+      "mode": "WRITE",
+      "inode": 4193189,
+      "maj:min": "0:31",
+      "path": "/nix/store...",
+      "blocker": null
+    }
+  ],
+  "recovery_verified": false,
+  "nix_retried": false,
+  "acceptance_passed": false
+}

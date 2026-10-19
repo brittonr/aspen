@@ -1,0 +1,99 @@
+{
+  "recorded_at": "2026-10-18T16:21:31.689694+00:00",
+  "status": "read-only-host-facts-complete-privileged-owner-details-blocked",
+  "authorization": "authorization.json",
+  "observations": {
+    "lock_snapshot": {
+      "record": "nix-daemon-locks.json",
+      "summary": "contention-summary.json",
+      "time": "2026-10-18T15:59:54.142596+00:00",
+      "held_gc_writer_listed": false,
+      "global_database_and_big_lock_observation": "Only shared READ locks listed for the selected known database/big-lock files; these are not presumed stale",
+      "contended_file_count": 4,
+      "blocked_writer_rows": 16,
+      "owner_pids": [
+        92763,
+        130832,
+        2601744,
+        3432619
+      ],
+      "exact_owner_identity_record": "selected-owner-identities.json",
+      "limit": "Current lock snapshots cannot identify the daemon operation from the completed client trace"
+    },
+    "storage": {
+      "headroom_record": "store-headroom.json",
+      "headroom_bytes": 25993019392,
+      "dataset_properties_record": "dataset-capacity-properties.json",
+      "shared_dataset_available_bytes": 25993093120,
+      "cargo_target_quota_bytes": 1610612736000,
+      "pool_capacity_record": "pool-capacity.json",
+      "pool_capacity_percent": 96,
+      "pool_fragmentation_percent": 80,
+      "pool_health_record": "pool-health.json",
+      "pool_health": "ONLINE; pool is healthy",
+      "limits": [
+        "Shared pool headroom is not reserved build capacity",
+        "ONLINE/healthy status is not a latency or sufficient-space guarantee"
+      ]
+    },
+    "declared_gc_thresholds": {
+      "source": "/etc/nix/nix.conf:15-17",
+      "min_free_bytes": 107374182400,
+      "max_free_bytes": 137438953472,
+      "inference": "[INFERENCE] Available capacity below min-free can trigger automatic GC under normal settings; it does not prove that GC caused the completed client wait"
+    },
+    "privilege": {
+      "unwrapped_binary_record": "unwrapped-sudo-preflight.json",
+      "installed_wrapper_record": "installed-sudo-preflight.json",
+      "policy_record": "noninteractive-sudo-policy.json",
+      "actual_guarded_reader_record": "guarded-privileged-reader.json",
+      "actual_guarded_reader_exit_code": 1,
+      "actual_guarded_reader_stderr": "sudo: a password is required\n",
+      "privileged_reader_executed": false,
+      "unprivileged_limit_record": "unprivileged-owner-observations.json"
+    }
+  },
+  "guarded_operator_handoff": {
+    "script": "inspect-lock-owners.py",
+    "content_identity_record": "guarded-reader-blake3.json",
+    "nonroot_guard_exercised": "reader-nonroot-guard.json",
+    "nonroot_guard_exit_code": 2,
+    "privileged_success_path_exercised": false,
+    "boot_id": "5b739154-922b-42bf-9559-d4c444746adb",
+    "fixed_maximum_owners": 4,
+    "maximum_threads_per_owner": 16,
+    "maximum_fd_metadata_entries_per_owner": 64,
+    "read_scope": "Only proc metadata and kernel stacks for exact held-lock owners; no FD target data, environment values, ptrace or process control",
+    "guards": [
+      "Same boot ID",
+      "Exact PID, UID, parent, process start ticks and command",
+      "Exact device/inode held FLOCK WRITE row",
+      "Before/after owner and lock revalidation; changed targets are skipped with payload discarded"
+    ],
+    "limits": [
+      "Before/after validation is observational, not an atomic snapshot",
+      "Changed owners must not be replaced automatically"
+    ]
+  },
+  "missing_prerequisite": "Operator authentication for the approved root-owned process metadata reads, or the guarded reader JSON produced by an authenticated operator",
+  "decision": "Stop privileged inspection at the authentication boundary. Do not rerun acceptance, change GC settings, delete shared data or signal any lock owner.",
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "last_observed_active_molten_change_count": 47,
+  "lifecycle_disposition": {
+    "F09_F10_remain_active": true,
+    "required_nix_tasks_remain_unchecked": true,
+    "synced": false,
+    "archived": false,
+    "completion_commit_created": false,
+    "remote_publication_performed": false
+  },
+  "host_or_product_mutations": false,
+  "non_claims": [
+    "No server-side root cause proved",
+    "No stale-lock or deadlock determination",
+    "No privileged kernel-stack or FD facts obtained",
+    "No passing acceptance or lifecycle completion"
+  ]
+}

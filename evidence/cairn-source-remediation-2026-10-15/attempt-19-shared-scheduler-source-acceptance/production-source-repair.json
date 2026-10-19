@@ -1,0 +1,41 @@
+{
+  "changed_paths": [
+    "src/fabric_time/shell.rs",
+    "src/fabric_time/shell/owned.rs",
+    "src/fabric_time/adapters.rs",
+    "src/fabric_time/parts/adapters/p001/body.rs",
+    "src/fabric_time/parts/adapters/p003/body.rs",
+    "src/fabric_time/parts/fixture/p001/body.rs",
+    "src/fabric_time/parts/fixture/p003/body.rs"
+  ],
+  "changes": [
+    "Moved SchedulerRuntime, SchedulerChoice, and SchedulerRuntimeError into private shell::owned; shell re-exports the same primary public names without aliases.",
+    "Moved scheduler wake adapters and scheduler conformance into the included adapters/p003 part.",
+    "Simulation pending indices, Prepared, and public drain_next now use u64. prepare still accepts usize and performs checked usize-to-u64 conversion before publication.",
+    "Removed pending_count: complete literal inventory found no callers.",
+    "Restricted backing_capacity to #[cfg(test)] pub(crate); inventoried callers are only tests/adapters/capacity.rs.",
+    "Migrated production conformance and both fixture drain consumers to checked usize::try_from before native indexing.",
+    "AST-renamed private fixture_scheduler_owner/fixture_scheduler_command to scheduler_owner/scheduler_command at all seven declaration/call sites.",
+    "Moved fixture scheduler helpers and saturation scenario into existing fixture/p003 to retain formatting headroom."
+  ],
+  "preserved": [
+    "SchedulerWakePort::prepare input and SchedulerWakeCommit::occurrence remain usize.",
+    "Actual borrowed scheduler/capacity fields are still delivered only after scheduler, capacity, and ready-index publication.",
+    "Scheduler laws and valid owning-path allocation behavior remain unchanged by the edits."
+  ],
+  "source_lengths": {
+    "shell.rs": 275,
+    "shell/owned.rs": 237,
+    "parts/adapters/p001/body.rs": 195,
+    "parts/adapters/p003/body.rs": 115,
+    "parts/fixture/p001/body.rs": 194,
+    "parts/fixture/p003/body.rs": 221,
+    "note": "Lengths are from edit-tool output, before formatting; sources have room for formatting expansion."
+  },
+  "reference_discovery": "xd://lsp is not mounted in this worker. Used complete repository literal inventory instead, then ast_edit for both private helper renames. Historical evidence references were intentionally untouched. Coordinated Prepared=u64 and drain_next=Option<u64> with ReceiverSourceRepair19.",
+  "verification": "No builds, tests, lint, formatter, or other checks run, as assigned. Parent owns final campaign.",
+  "static_risks": [
+    "Compilation, post-format lengths, and Octet clearance remain unverified until the parent campaign.",
+    "Documentation links currently pointing at shell.rs and adapters/p001/body.rs should be updated by the parent documentation owner to shell/owned.rs and adapters/p003/body.rs where appropriate."
+  ]
+}

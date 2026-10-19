@@ -1,0 +1,90 @@
+{
+  "recorded_at": "2026-10-19T00:02:00Z",
+  "kind": "evaluation-throughput-and-plan-sizing-addendum",
+  "parent": "diagnosis.json",
+  "measurements": [
+    {
+      "probe": "single-check dry-run, warm eval cache",
+      "argv": [
+        "nix",
+        "build",
+        "--dry-run",
+        "-v",
+        "--no-update-lock-file",
+        "-L",
+        ".#checks.x86_64-linux.nextest-config"
+      ],
+      "evaluating_file_lines": 688,
+      "seconds": 4,
+      "rate_per_s": 172,
+      "completed": true
+    },
+    {
+      "probe": "single-check dry-run with evaluation cache disabled",
+      "argv": [
+        "nix",
+        "build",
+        "--dry-run",
+        "-v",
+        "--option",
+        "eval-cache",
+        "false",
+        "--no-update-lock-file",
+        "-L",
+        ".#checks.x86_64-linux.nextest-config"
+      ],
+      "evaluating_file_lines": 688,
+      "seconds": 2,
+      "rate_per_s": 344,
+      "completed": true
+    },
+    {
+      "probe": "three-check dry-run, bounded 60s sample",
+      "argv": [
+        "nix",
+        "build",
+        "--dry-run",
+        "-v",
+        "--no-update-lock-file",
+        "-L",
+        ".#checks.x86_64-linux.nextest",
+        ".#checks.x86_64-linux.clippy",
+        ".#checks.x86_64-linux.nextest-config"
+      ],
+      "evaluating_file_lines": 697,
+      "seconds": 60,
+      "rate_per_s": 11,
+      "completed": false
+    },
+    {
+      "probe": "three-check dry-run, bounded 150s with verbose evaluation",
+      "result": "deadline reached; no build, copy, or summary output; last visible evaluation files were nixpkgs pkgs/build-support/rust/build-rust-crate/*.nix"
+    },
+    {
+      "probe": "three-check dry-run, bounded 400s without verbose output",
+      "result": "deadline reached; empty output, exit 124"
+    }
+  ],
+  "interpretation": "[INFERENCE] Three-check closure evaluation advances at about 11 files/s against 172-344 files/s for the warm single check. A closure of 10k-50k files therefore needs roughly 15-75 minutes of evaluation alone, before any realization begins. The 3500-second acceptance window is consumed before the first build or copy line, which matches the empty output of all five failed runs.",
+  "contending_workload": {
+    "command": "nix flake check --no-write-lock-file -L path:/var/tmp/kiln-public-cutover-20261018-b66y33zr/clean-source",
+    "client_pid": 1503394,
+    "parent_pid": 1503332,
+    "observed_elapsed_seconds": 4418,
+    "ownership": "not owned by this session; left untouched",
+    "relevance": "[INFERENCE] With cores=4 and max-jobs=4, a concurrent multi-hour Nix build shares the same CPU budget as this session's evaluation"
+  },
+  "limits": [
+    "Verbose line counts approximate per-file work; cache-hit lines are not distinguishable from newly evaluated files",
+    "Rates are point-in-time samples under contention and are not a benchmark",
+    "No claim that contention alone caused the timeout; no claim that a long window will pass"
+  ],
+  "mutations": {
+    "product_source_changed": false,
+    "dependency_or_toolchain_pins_changed": false,
+    "host_configuration_changed": false,
+    "services_restarted": false,
+    "shared_data_deleted": false,
+    "unrelated_processes_terminated": false
+  }
+}

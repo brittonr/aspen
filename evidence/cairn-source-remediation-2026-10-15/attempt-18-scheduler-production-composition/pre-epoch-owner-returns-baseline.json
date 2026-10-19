@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "/tmp/molten-owner-returns-baseline-ald54ioj/owner-returns"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T04:25:05.831347+00:00",
+  "elapsed_seconds": 0.001,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "owner-returns baseline: A@1 -> B@2 -> A@3; token-free Complete by A accepted; phase=completed; current_epoch=3; service_claims_current_lease=true\n",
+  "stderr": ""
+}

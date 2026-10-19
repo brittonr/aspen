@@ -1,0 +1,660 @@
+{
+  "recorded_at": "2026-10-19T00:09:40.452272+00:00",
+  "kind": "read-only-active-change-inventory",
+  "source": ".cairn/changes directory listing and tasks.md checkbox counts; case-insensitive match for nix/nextest/clippy/octet references",
+  "corrects": "Earlier version of this file used a case-sensitive match and reported no check references",
+  "active_change_count": 47,
+  "total_open_tasks": 521,
+  "total_checked_tasks": 23,
+  "changes_with_zero_checked_tasks": [
+    "add-chaoscontrol-consensus-conformance",
+    "add-collaboration-scope-system-extension",
+    "add-consensus-fast-path-acceleration",
+    "add-linux-ebpf-observability-adapter",
+    "add-live-consensus-reliability-adapter",
+    "add-world-head-rollback-witnessing",
+    "admit-facet-owner-scopes",
+    "admit-record-pattern-subset",
+    "admit-recovery-group-supervision",
+    "admit-time-sliced-component-execution",
+    "admit-typed-service-facades",
+    "admit-world-merge-migrations-before-execution",
+    "adopt-command-pattern-resource-reservation",
+    "adopt-shared-wasm-component-runtime",
+    "adopt-standalone-batch-orchestration",
+    "bind-promotion-logical-identity-across-restarts",
+    "bind-scheduler-completions-to-lease-epoch",
+    "bound-terminal-scheduler-retention",
+    "coalesce-assertion-notifications",
+    "committed-change-stream",
+    "differentiate-live-simulation-conformance",
+    "distinguish-absent-world-merge-roots",
+    "enforce-introduction-before-reference",
+    "exercise-node-processes-under-faults",
+    "exercise-service-recovery-composition",
+    "federated-pull-system-extension",
+    "fence-runtime-local-work-across-restarts",
+    "harden-prolly-publication-integrity",
+    "harden-world-replay-observation-boundary",
+    "pilot-marble-object-store",
+    "pilot-spacewasm-core-runtime-profile",
+    "pilot-wrpc-component-transport",
+    "preserve-replica-fault-domains-during-cleanup",
+    "preserve-under-replicated-status-without-targets",
+    "prolly-storage-work-reduction",
+    "publish-withdrawable-service-demand",
+    "record-turn-causality-in-traces",
+    "recover-from-storage-faults",
+    "recover-ingress-enqueue-after-dedup",
+    "repair-lost-replicas-after-prior-success",
+    "repair-partial-replicas-without-complete-donor",
+    "require-node-startup-source-gate-evidence",
+    "store-declared-state-as-digest-named-records",
+    "unify-service-state-assertions"
+  ],
+  "changes_with_evidence": [
+    "enforce-scheduler-queue-bounds-on-yield",
+    "resume-blocked-scheduler-runnables"
+  ],
+  "changes": [
+    {
+      "change": "add-chaoscontrol-consensus-conformance",
+      "open_tasks": 17,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": false,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "consensus",
+        "testing-harness"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "add-collaboration-scope-system-extension",
+      "open_tasks": 24,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "collaboration-scope"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "add-consensus-fast-path-acceleration",
+      "open_tasks": 18,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "consensus"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "add-linux-ebpf-observability-adapter",
+      "open_tasks": 19,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": false,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "linux-ebpf-observability"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "add-live-consensus-reliability-adapter",
+      "open_tasks": 19,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": false,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "consensus",
+        "testing-harness"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "add-protocol-aware-simulation-oracles",
+      "open_tasks": 20,
+      "checked_tasks": 1,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "fabric-simulation"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "add-world-head-rollback-witnessing",
+      "open_tasks": 14,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "world-commit"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "admit-facet-owner-scopes",
+      "open_tasks": 8,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "runtime-spine"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "admit-record-pattern-subset",
+      "open_tasks": 9,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "runtime-spine"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "admit-recovery-group-supervision",
+      "open_tasks": 9,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "system-extension-runtime"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "admit-time-sliced-component-execution",
+      "open_tasks": 8,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "wasm-component-runtime"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "admit-typed-service-facades",
+      "open_tasks": 10,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "system-extension-runtime"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "admit-world-merge-migrations-before-execution",
+      "open_tasks": 10,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "world-commit"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "adopt-command-pattern-resource-reservation",
+      "open_tasks": 10,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "fabric-time-scheduling"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "adopt-shared-wasm-component-runtime",
+      "open_tasks": 14,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "wasm-component-runtime-adoption"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "adopt-standalone-batch-orchestration",
+      "open_tasks": 11,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "batch-orchestration-adoption"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "bind-promotion-logical-identity-across-restarts",
+      "open_tasks": 8,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "world-commit"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "bind-scheduler-completions-to-lease-epoch",
+      "open_tasks": 8,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "fabric-simulation"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "bound-terminal-scheduler-retention",
+      "open_tasks": 14,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "fabric-time-scheduling"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "coalesce-assertion-notifications",
+      "open_tasks": 6,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "runtime-spine"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "committed-change-stream",
+      "open_tasks": 10,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "committed-change-stream"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "differentiate-live-simulation-conformance",
+      "open_tasks": 9,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "fabric-simulation"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "distinguish-absent-world-merge-roots",
+      "open_tasks": 10,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "world-commit"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "enforce-introduction-before-reference",
+      "open_tasks": 9,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "runtime-spine"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "enforce-scheduler-queue-bounds-on-yield",
+      "open_tasks": 1,
+      "checked_tasks": 11,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "fabric-time-scheduling"
+      ],
+      "evidence_files": [
+        "2026-10-15-gate-design.json",
+        "2026-10-15-gate-proposal.json",
+        "2026-10-15-gate-tasks.json",
+        "2026-10-15-verification.md",
+        "2026-10-17-final-acceptance.md",
+        "2026-10-17-final-gate-design.json",
+        "2026-10-17-final-gate-proposal.json",
+        "2026-10-17-final-gate-tasks.json",
+        "2026-10-17-gate-design.json",
+        "2026-10-17-gate-proposal.json",
+        "2026-10-17-gate-tasks.json",
+        "verification.md"
+      ]
+    },
+    {
+      "change": "exercise-node-processes-under-faults",
+      "open_tasks": 9,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "testing-harness"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "exercise-service-recovery-composition",
+      "open_tasks": 6,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "testing-harness"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "federated-pull-system-extension",
+      "open_tasks": 13,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "federated-pull-sync"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "fence-runtime-local-work-across-restarts",
+      "open_tasks": 9,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "system-extension-runtime"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "harden-prolly-publication-integrity",
+      "open_tasks": 9,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "prolly-publication-integrity"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "harden-world-replay-observation-boundary",
+      "open_tasks": 13,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "world-commit"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "pilot-marble-object-store",
+      "open_tasks": 12,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "marble-object-store"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "pilot-spacewasm-core-runtime-profile",
+      "open_tasks": 10,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "spacewasm-core-runtime"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "pilot-wrpc-component-transport",
+      "open_tasks": 9,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "component-rpc-pilot"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "preserve-replica-fault-domains-during-cleanup",
+      "open_tasks": 14,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "content-replication"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "preserve-under-replicated-status-without-targets",
+      "open_tasks": 13,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "content-replication"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "prolly-storage-work-reduction",
+      "open_tasks": 11,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "prolly-storage-work-reduction"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "publish-withdrawable-service-demand",
+      "open_tasks": 8,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "runtime-spine"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "record-turn-causality-in-traces",
+      "open_tasks": 8,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "runtime-spine"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "recover-from-storage-faults",
+      "open_tasks": 15,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "consensus",
+        "durable-state-ports"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "recover-ingress-enqueue-after-dedup",
+      "open_tasks": 15,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "node-runtime"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "repair-lost-replicas-after-prior-success",
+      "open_tasks": 13,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "content-replication"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "repair-partial-replicas-without-complete-donor",
+      "open_tasks": 8,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "content-replication"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "require-node-startup-source-gate-evidence",
+      "open_tasks": 14,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "node-runtime"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "resume-blocked-scheduler-runnables",
+      "open_tasks": 1,
+      "checked_tasks": 11,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "fabric-time-scheduling"
+      ],
+      "evidence_files": [
+        "2026-10-15-gate-design.json",
+        "2026-10-15-gate-proposal.json",
+        "2026-10-15-gate-tasks.json",
+        "2026-10-15-verification.md",
+        "2026-10-17-final-acceptance.md",
+        "2026-10-17-final-gate-design.json",
+        "2026-10-17-final-gate-proposal.json",
+        "2026-10-17-final-gate-tasks.json",
+        "2026-10-17-gate-design.json",
+        "2026-10-17-gate-proposal.json",
+        "2026-10-17-gate-tasks.json",
+        "verification.md"
+      ]
+    },
+    {
+      "change": "store-declared-state-as-digest-named-records",
+      "open_tasks": 7,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "durable-state-ports"
+      ],
+      "evidence_files": []
+    },
+    {
+      "change": "unify-service-state-assertions",
+      "open_tasks": 9,
+      "checked_tasks": 0,
+      "mentions_nix_or_octet_check": true,
+      "has_proposal": true,
+      "has_design": true,
+      "spec_dirs": [
+        "runtime-spine"
+      ],
+      "evidence_files": []
+    }
+  ],
+  "scope_note": "Only resume-blocked-scheduler-runnables and enforce-scheduler-queue-bounds-on-yield carry implementation progress; the other 45 active changes have at most one checked task, so their implementation cycles are still ahead.",
+  "limits": [
+    "Read-only inventory; not lifecycle authority or acceptance evidence",
+    "Checkbox counts approximate implementation state and do not measure difficulty",
+    "No change was modified, archived, or validated by this inventory"
+  ]
+}

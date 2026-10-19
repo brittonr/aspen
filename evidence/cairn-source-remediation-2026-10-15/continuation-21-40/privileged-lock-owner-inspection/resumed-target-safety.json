@@ -1,0 +1,37 @@
+{
+  "operator_report": "done",
+  "operator_commands_accepted_as_completed": true,
+  "observed_at": "2026-10-17T21:13:26.877673+00:00",
+  "purpose": "Fresh exact-target safety validation before privileged reads, not confirmation that the operator ran the reported commands",
+  "records": {
+    "process": {
+      "argv": [
+        "/run/current-system/sw/bin/ps",
+        "-p",
+        "3449589",
+        "-o",
+        "uid,pid,ppid,args",
+        "--no-headers"
+      ],
+      "exit_code": 0,
+      "stdout": "    0 3449589    2631 nix-daemon 3449558\n",
+      "stderr": ""
+    },
+    "lock": {
+      "argv": [
+        "/run/current-system/sw/bin/lslocks",
+        "--json",
+        "--notruncate",
+        "--filter",
+        "INODE == 4193189",
+        "--output",
+        "PID,COMMAND,TYPE,MODE,INODE,MAJ:MIN,PATH,BLOCKER"
+      ],
+      "exit_code": 0,
+      "stdout": "{\n   \"locks\": [\n      {\n         \"pid\": 3449589,\n         \"command\": \"nix-daemon\",\n         \"type\": \"FLOCK\",\n         \"mode\": \"WRITE\",\n         \"inode\": 4193189,\n         \"maj:min\": \"0:31\",\n         \"path\": \"/nix/store...\",\n         \"blocker\": null\n      }\n   ]\n}\n",
+      "stderr": ""
+    }
+  },
+  "process_matches": true,
+  "lock_matches": true
+}

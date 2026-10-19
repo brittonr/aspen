@@ -1,0 +1,51 @@
+{
+  "recorded_at": "2026-10-18T16:00:59.872763+00:00",
+  "owners": [
+    {
+      "pid": 92763,
+      "uid": 0,
+      "ppid": 2631,
+      "command": "nix-daemon 92736",
+      "start_ticks": 17230095,
+      "device": "0:31",
+      "inode": 3940983
+    },
+    {
+      "pid": 130832,
+      "uid": 0,
+      "ppid": 2631,
+      "command": "nix-daemon 130700",
+      "start_ticks": 17256828,
+      "device": "0:31",
+      "inode": 4053942
+    },
+    {
+      "pid": 2601744,
+      "uid": 0,
+      "ppid": 2631,
+      "command": "nix-daemon 2601693",
+      "start_ticks": 25667849,
+      "device": "0:31",
+      "inode": 4482053
+    },
+    {
+      "pid": 3432619,
+      "uid": 0,
+      "ppid": 2631,
+      "command": "nix-daemon 3432598",
+      "start_ticks": 21803025,
+      "device": "0:31",
+      "inode": 4632022
+    }
+  ],
+  "basis": [
+    "contention-summary.json",
+    "read-only ps and /proc/PID/stat observations"
+  ],
+  "scope": "Four current held owners of contended exclusive locks; no broad inspection of thousands of ordinary temp-root writers",
+  "limits": [
+    "PID, command and start ticks must be revalidated before privileged reads",
+    "Exact device/inode held-lock tuple must still match",
+    "No worker attribution to the completed acceptance run is inferred"
+  ]
+}

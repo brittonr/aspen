@@ -1,0 +1,13 @@
+{
+  "recorded_at": "2026-10-19T00:35:00Z",
+  "kind": "delegation-availability-failure",
+  "observation": "Both read-only discovery scouts (C1ConsensusDiscovery, C2SchedulerDiscovery) failed within ~600ms with a model-pool quota error before reading any file",
+  "error": "[underclass/gpt-6.1-sol] 429 all subscriptions for this model are out of quota; retry when the pool resets retry-after-ms=502402000",
+  "derived_reset_window": "About 5.8 days from 2026-10-19 (approximately 2026-10-24T13:00Z); derived from retry-after-ms=502402000, not authoritative",
+  "impact": "Subagent delegation is unavailable for the remaining workload; cluster discovery and implementation must be performed in-session",
+  "mitigation": "C2 (scheduler completion) discovery performed directly in-session because it is the smallest cluster and closest to the in-flight F09/F10 work; C1-C8 discovery deferred to each cycle start",
+  "non_claims": [
+    "No agent output was produced or relied upon",
+    "No repository file was read or modified by the failed scouts"
+  ]
+}

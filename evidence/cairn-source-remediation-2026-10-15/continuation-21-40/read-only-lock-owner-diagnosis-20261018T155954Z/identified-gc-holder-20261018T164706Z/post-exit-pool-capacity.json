@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "/run/current-system/sw/bin/zpool",
+    "list",
+    "-Hp",
+    "-o",
+    "name,size,alloc,free,frag,cap,health",
+    "datapool"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-18T16:49:24.674386+00:00",
+  "elapsed_seconds": 0.008,
+  "exit_code": 0,
+  "stdout": "datapool\t3985729650688\t3834320281600\t151409369088\t79\t96\tONLINE\n",
+  "stderr": "",
+  "read_only": true,
+  "scope": "One new downstream-state/capacity observation after the journal-proved holder exit; no repeat of the supplied root scan"
+}

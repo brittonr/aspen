@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "/run/current-system/sw/bin/b3sum",
+    "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/continuation-21-40/read-only-lock-owner-diagnosis-20261018T155954Z/inspect-lock-owners.py"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-18T16:21:31.681609+00:00",
+  "elapsed_seconds": 0.002,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "4e9fa01b0629f3de2beab5bdd3a35fc4db4899f498764e118b284a4f641c70a3  /home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/continuation-21-40/read-only-lock-owner-diagnosis-20261018T155954Z/inspect-lock-owners.py\n",
+  "stderr": "",
+  "read_only": true
+}

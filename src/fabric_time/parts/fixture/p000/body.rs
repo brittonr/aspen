@@ -252,35 +252,20 @@ fn run_live_scheduler_scenario(profile: &Profile) -> crate::error::Result<Event>
         generation: FIXTURE_GENERATION,
         runnable_id: "live-wakeup".to_string(),
     };
-    let state = new_scheduler_state(&profile.profile, FIXTURE_GENERATION);
-    let woken = apply_scheduler_command(
-        &profile.profile,
-        profile.profile.scheduler_policy,
-        &state,
-        FIXTURE_GENERATION,
-        &SchedulerCommand::Wake {
-            key: key.clone(),
-            priority: 0,
-        },
-    )
-    .map_err(|error| core_error("wake live fixture runnable", error))?;
+    let context = ExtensionTimeContext::for_application(FIXTURE_SERVICE_ID.to_string(), FIXTURE_GENERATION, &profile.profile);
+    let mut owner = SchedulerRuntime::activate(context, profile.profile.clone(), ThreadSchedulerWakeAdapter::default())?;
     let parked = std::thread::spawn(std::thread::park);
-    let mut wake_adapter = ThreadSchedulerWakeAdapter::default();
-    wake_adapter.register(key.clone(), parked.thread().clone())?;
-    wake_adapter.route(&woken)?;
-    parked
-        .join()
-        .map_err(|_| crate::error::Failure::invalid_harness("live scheduler wake target panicked"))?;
-    if !wake_adapter.unregister(&key) {
+    let registration = owner.effects_mut().register(key.clone(), parked.thread().clone());
+    let result = registration.map_err(SchedulerRuntimeError::Admission).and_then(|()| owner.command(SchedulerCommand::Wake { key: key.clone(), priority: 0 }));
+    if result.is_err() { parked.thread().unpark(); }
+    parked.join().map_err(|_| crate::error::Failure::invalid_harness("live scheduler wake target panicked"))?;
+    result?;
+    if !owner.effects_mut().unregister(&key) {
         return Err(crate::error::Failure::invalid_harness("live scheduler wake target cleanup failed"));
     }
-    let selected = choose_runnable(
-        &profile.profile,
-        profile.profile.scheduler_policy,
-        &woken.next,
-        FIXTURE_GENERATION,
-        Some(&key),
-    )
-    .map_err(|error| core_error("select live fixture runnable", error))?;
-    scheduler_selection(&profile.profile_ref, &selected)
+    let choice = owner.choose(Some(&key))?;
+    scheduler_selection(&profile.profile_ref, &SchedulerSelection {
+        next: owner.state().clone(), selected: key,
+        choice_sequence: choice.choice_sequence, eligible_count: choice.eligible_count,
+    })
 }

@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/run/current-system/sw/bin/stat",
+    "-c",
+    "%d\t%i\t%u\t%g\t%f\t%s\t%Y\t%Z\t%n",
+    "/home/brittonr/.cargo-target/repo-targets/seaglass/debug",
+    "/home/brittonr/.cargo-target/repo-targets/seaglass/debug/.cargo-lock",
+    "/home/brittonr/.cargo-target/repo-targets/seaglass/debug/.cargo-build-lock",
+    "/home/brittonr/.cargo-target/repo-targets/seaglass/debug/.cargo-artifact-lock"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "recorded_at": "2026-10-18T21:03:03.124021+00:00",
+  "exit_code": 0,
+  "stdout": "45\t2680167\t1555\t998\t41ed\t110\t1791956057\t1791956057\t/home/brittonr/.cargo-target/repo-targets/seaglass/debug\n45\t2680169\t1555\t998\t81a4\t0\t1790968757\t1790968757\t/home/brittonr/.cargo-target/repo-targets/seaglass/debug/.cargo-lock\n45\t2680168\t1555\t998\t81a4\t0\t1790968757\t1790968757\t/home/brittonr/.cargo-target/repo-targets/seaglass/debug/.cargo-build-lock\n45\t2680170\t1555\t998\t81a4\t0\t1790968757\t1790968757\t/home/brittonr/.cargo-target/repo-targets/seaglass/debug/.cargo-artifact-lock\n",
+  "stderr": ""
+}

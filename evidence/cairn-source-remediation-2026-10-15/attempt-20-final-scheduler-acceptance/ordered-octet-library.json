@@ -1,0 +1,24 @@
+{
+  "argv": [
+    "cargo",
+    "octet",
+    "check",
+    "-p",
+    "molten",
+    "--artifact-dir",
+    "target/octet-scheduler-cohort20-library",
+    "--",
+    "--lib"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T06:50:05.464967+00:00",
+  "elapsed_seconds": 100.128,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "    Blocking waiting for file lock on build directory\n   Compiling zerocopy v0.8.48\n   Compiling build-script-build v0.8.48\n   Compiling zerocopy v0.8.48\n    Checking ppv-lite86 v0.2.21\n    Checking ahash v0.8.12\n    Checking hashbrown v0.14.5\n   Compiling ahash v0.8.12\n    Checking rand_chacha v0.3.1\n    Checking rand_chacha v0.9.0\n   Compiling ppv_lite86 v0.2.21\n   Compiling rand_chacha v0.9.0\n   Compiling rand_chacha v0.3.1\n    Checking rand v0.8.6\n    Checking rand v0.9.4\n   Compiling rand v0.8.6\n    Checking num-bigint-dig v0.8.6\n   Compiling rand v0.9.4\n   Compiling num_bigint_dig v0.8.6\n    Checking rsa v0.9.10\n   Compiling hashbrown v0.14.5\n    Checking dashmap v6.2.1\n   Compiling rsa v0.9.10\n    Checking secretspec v0.17.0\n    Checking jsonwebtoken v11.0.0\n   Compiling dashmap v6.2.1\n    Checking lasso v0.7.3\n   Compiling jsonwebtoken v11.0.0\n   Compiling lasso v0.7.3\n    Checking steel-parser v0.8.2\n   Compiling secretspec v0.17.0\n    Checking basalt v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)\n   Compiling steel_parser v0.8.2\n    Checking steel-core v0.8.2\n   Compiling basalt v0.1.0\n    Checking molten-core v0.1.0 (/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-core)\n   Compiling steel v0.8.2\n   Compiling molten_core v0.1.0\n    Checking molten-node-host v0.1.0 (/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-node-host)\n   Compiling molten_node_host v0.1.0\n    Checking molten v0.1.0 (/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015)\n   Compiling molten v0.1.0\n    Finished    Finished checking\n `dev` profile [unoptimized + debuginfo] target(s) in 1m 40s\n--- octet summary ---\nStatus: clean\nFindings: 0\nWarnings: 0\nErrors: 0\nAutofixable: 0\nTool: cargo-octet 0.1.0\nToolchain: nightly-2026-03-21-x86_64-unknown-linux-gnu\nProfile: workspace-metadata\nConfig hash: b3:7e5ddc24bd10c119cbb858ca382e7f0f4cbd629a2fe1075ec8402936da19d71a\nProfile hash: b3:2aad1f1f1a78bc9277fdb6abe27b39a261cacbd0e2d280f548667b61f852dbbd\n---\n",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

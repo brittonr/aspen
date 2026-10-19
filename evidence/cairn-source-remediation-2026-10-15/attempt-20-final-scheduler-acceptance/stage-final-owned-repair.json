@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "git",
+    "add",
+    "--",
+    "crates/molten-core/src/fabric_time/scheduler/decision.rs"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T06:38:16.570824+00:00",
+  "elapsed_seconds": 0.015,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

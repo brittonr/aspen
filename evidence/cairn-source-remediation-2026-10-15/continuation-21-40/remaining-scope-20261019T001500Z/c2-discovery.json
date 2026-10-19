@@ -1,0 +1,96 @@
+{
+  "recorded_at": "2026-10-19T00:40:00Z",
+  "kind": "in-session-cycle-discovery",
+  "cluster": "C2-scheduler-completion",
+  "discovery_method": "Direct reads of .cairn/changes/<name>/{proposal.md,tasks.md}; subagent delegation was unavailable (quota)",
+  "changes": [
+    {
+      "change": "bind-scheduler-completions-to-lease-epoch",
+      "purpose": "Give the reference scheduler's Complete operation an assignment token derived at lease time from job, owner, and lease epoch, reject mismatched completions even when the owner matches, and add an independent stale-completion checker over transition history.",
+      "requirements": [
+        "r[molten.fabric_simulation.assignment_token]",
+        "r[molten.fabric_simulation.stale_completion_check]"
+      ],
+      "tasks_total": 9,
+      "task_groups": [
+        "State machine change: token on Complete, BLAKE3 domain-separated derivation, typed StaleAssignmentToken rejection, positive/negative fixtures (owner-returns, wrong token, reuse, epoch overflow), update every Complete call site",
+        "Independent check: pure history-derived assignment-epoch checker, deliberately broken scheduler variant must fail the checker, retain owner-returns regression",
+        "Validation and closeout: focused reference-service and fabric-simulation tests, formatting, Clippy, Octet, Cairn validation, proposal/design/tasks gates, plus retained non-claims"
+      ],
+      "acceptance_commands_named_in_artifacts": [],
+      "required_gates": [
+        "focused reference-service and fabric-simulation tests",
+        "formatting",
+        "Clippy with -D warnings",
+        "Octet checks and the existing strict Octet gate",
+        "native .cairn/ validation and proposal/design/tasks gates"
+      ],
+      "depends_on_changes": [],
+      "external_prereqs": [],
+      "primary_surfaces": [
+        "crates/molten-core reference scheduler state machine and operations",
+        "reference operation fixtures",
+        "simulation composition invariant evaluation inputs and tests"
+      ],
+      "risks": "Owner-returns ABA trace must be rejected by token, not owner; every Complete call site must migrate or the migration is incomplete",
+      "independence_note": "Proposal states add-protocol-aware-simulation-oracles provides the independent-evaluation direction but this change stays implementable without it"
+    },
+    {
+      "change": "bound-terminal-scheduler-retention",
+      "purpose": "Bound terminal scheduler retention deterministically after an executed defect kept two terminal records under an active limit of one, with replay-safe reclamation and independent fresh-occurrence fencing so evicted work cannot be resurrected.",
+      "requirements": [
+        "r[molten.audit_f11.retention]",
+        "r[molten.audit_f11.freshness]",
+        "r[molten.audit_f11.atomicity]",
+        "r[molten.audit_f11.validation]"
+      ],
+      "tasks_total": 14,
+      "task_highlights": [
+        "Baseline the smallest existing scheduler, capacity, and shell tests before core edits",
+        "Named finite retention bound, occurrence sequence, high-water fence, and compatibility boundary reviewed with the fabric-time maintainer",
+        "Old-callback-after-eviction, duplicate issuance, logical-name reuse, and sequence-exhaustion tests with rejected-state equality",
+        "Deterministic retention and checked occurrence admission in the pure core without an unbounded retired-ID collection",
+        "Update checked capacity planning and shell reservations without hidden capacity growth",
+        "Preserve F09 blocked occurrence identity and F10 shared Ready admission during retention integration",
+        "Docs for schema/cohort compatibility, deterministic replay, evicted-history readback, receipt non-claims",
+        "Focused Octet checks, existing strict Octet gate, Clippy across required targets and features",
+        "Required workspace tests, relevant Nix checks, and the repository Nix gate without weakening existing checks",
+        "Native .cairn/ validation and required gates with tracked evidence"
+      ],
+      "executed_defect": "audit_terminal_runnables_remain_bounded observed two retained records at max_runnables = 1 on source revision fa1ced3e808861d8ce59f02a6fd6b13b655f5147; core baseline 359 passing tests",
+      "required_gates": [
+        "focused core, capacity, and shell tests",
+        "replay across eviction and stale-callback injection",
+        "focused Octet checks, existing strict Octet gate, Clippy with -D warnings",
+        "required workspace tests, relevant Nix checks, repository Nix gate",
+        "native .cairn/ validation and required gates"
+      ],
+      "depends_on_changes": [
+        "resume-blocked-scheduler-runnables (F09) blocked-occurrence identity must be preserved",
+        "enforce-scheduler-queue-bounds-on-yield (F10) shared Ready admission must be preserved"
+      ],
+      "external_prereqs": [],
+      "primary_surfaces": [
+        "crates/molten-core/src/fabric_time/scheduler/mod.rs",
+        "crates/molten-core/src/fabric_time/scheduler/decision.rs",
+        "scheduler service and preallocated capacity shell adapters",
+        "fabric-time documentation"
+      ],
+      "risks": "Retention interacts with the F09/F10 surfaces modified in attempt 20; ABA reuse and hidden capacity growth are the named failure modes"
+    }
+  ],
+  "cluster_notes": {
+    "coupling": "Both members change the same fabric-time scheduler core and share focused test, Octet, Clippy, workspace, Nix, and Cairn validation rails; the retention change explicitly must preserve the F09/F10 semantics introduced by the changes now in acceptance.",
+    "recommended_order": [
+      "Resolve any F09/F10 acceptance fallout first, because both members touch the same files and requirement refs",
+      "bind-scheduler-completions-to-lease-epoch (smaller, self-contained token and checker work)",
+      "bound-terminal-scheduler-retention (larger, retention plus capacity planning and shell reservations, needs the F09/F10 semantics settled)"
+    ],
+    "unsatisfied_prerequisites": "None external to Molten; both changes are implementable in-repo, but no member may start before the authorized F09/F10 acceptance prerequisite passes"
+  },
+  "non_claims": [
+    "Discovery only; no implementation started and no acceptance criteria evaluated",
+    "Task counts are from tasks.md at the time of reading and do not measure effort",
+    "No command from either change was executed"
+  ]
+}

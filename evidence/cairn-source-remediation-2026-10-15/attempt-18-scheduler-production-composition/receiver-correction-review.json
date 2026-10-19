@@ -1,0 +1,28 @@
+{
+  "scope": "Bounded parent review of the receiver corrections against effect-delivery-review.json; static evidence only.",
+  "source_binding": "source-content-final-hashes.txt",
+  "result": "Both reported receiver-evidence gaps are resolved in source. Runtime acceptance is still pending.",
+  "resolved_findings": [
+    {
+      "finding": "Observe effect ordering without waiting behind the command mutex",
+      "evidence": [
+        "src/fabric_time/shell.rs:359-370 constructs SchedulerWakeCommit from the actual owned scheduler/capacity fields after scheduler, capacity and Ready publication.",
+        "src/fabric_time/tests/adapters/mod.rs:Effects::deliver captures those borrowed actual fields before invoking the selected concrete adapter, rather than acquiring the owner mutex later.",
+        "src/fabric_time/tests/adapters/fencing.rs:203-240 deliberately executes each concrete delivery with the same owner's real unpublished Running/Blocked fields, requires the normal receiver predicate to reject it, and then requires normal publication to pass."
+      ]
+    },
+    {
+      "finding": "Synchronize denied-delivery checks with the live receiver",
+      "evidence": [
+        "src/fabric_time/tests/adapters/mod.rs:Harness::command, choose and no_delivery compare complete preparation/delivery sequences to consumed deliveries at each non-delivering boundary.",
+        "The live receiver acknowledges FIFO checkpoints only after earlier delivery packets and the completed control-unpark confirmation; acknowledgement includes checkpoint and delivery sequences.",
+        "Harness::receive_boundary requires positive progress before any control wake; successful Drop checkpoints before Stop. Timeouts bound required progress only, never infer absence."
+      ]
+    }
+  ],
+  "limits": [
+    "No new build/test/lint or runtime pass is asserted by this review.",
+    "The selected concrete adapter remains an explicitly supplied application-owned mechanism.",
+    "Bounded local receiver progress is not global liveness, performance or whole-system correctness."
+  ]
+}

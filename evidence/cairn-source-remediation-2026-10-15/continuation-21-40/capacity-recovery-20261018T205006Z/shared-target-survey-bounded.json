@@ -1,0 +1,200 @@
+{
+  "source": "artifact://1362:raw:1-679",
+  "argv": [
+    "/run/current-system/sw/bin/du",
+    "-x",
+    "-B1",
+    "--max-depth=1",
+    "/home/brittonr/.cargo-target"
+  ],
+  "elapsed_seconds": 143.36,
+  "exit_code": 1,
+  "complete": false,
+  "limit": "Some unrelated proof subdirectories were not readable; hard links are counted once during this traversal; not an exhaustive independently reclaimable-byte inventory",
+  "unreadable_directory_diagnostics": [
+    "du: cannot read directory '/home/brittonr/.cargo-target/casita-castore-parity-proof-20261004/tmp/nix-shell.aFSXLn/crunch-builds/3f4e0f68-200c-473d-8e66-b6a5b5f1ed36-FHM9iv/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/casita-castore-parity-proof-20261004/tmp/nix-shell.kvPwGk/crunch-builds/0fe27ec7-5d9d-4e9d-b228-dc6dbab0252c-naccOC/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-casita-t42-parity-20261005-run/tmp/nix-shell.gMGvIe/crunch-builds/d17d094a-af53-435b-baaf-22b630abb268-qiedNZ/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-casita-t42-parity-20261005-run/tmp/nix-shell.DpXfCj/crunch-builds/1521e110-f940-4a66-8105-52ee7d041ad6-IbydxI/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-casita-t42-parity-20261005-run/tmp/nix-shell.wz2HzS/crunch-builds/202d1c37-b04e-4a7c-804d-322bf8fb9140-xd5Umu/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-casita-t42-parity-20261005-run/tmp/nix-shell.wz2HzS/crunch-builds/dce894e9-7c31-49c7-a535-40ddd5f3ef9a-HsZwsS/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/tmp/crunch-builds/470abfb0-4a5d-4e08-88ec-01da0d35d7a6-Avu2u6/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/tmp/crunch-builds/04e0c9e6-87ad-46ab-9dac-9b6784f884ac-AailNm/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/tmp/crunch-builds/c18748bd-58ae-4d83-83d4-5467399422d5-8yERmH/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/tmp/crunch-builds/75e872fc-c9b5-488e-9960-116fe8a3b012-VRiadY/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-integrated-final-yzLA5LVP/tmp/crunch-builds/29e3d9e1-b62d-4380-b433-7b36a2c13ce7-LLpJ1S/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-prepublication-repair-tmp-20261003/nix-shell.pG3Ky4/crunch-builds/2349d9d0-6ed5-4aa5-a47e-7ae01ec896dc-e6cTgK/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-prepublication-repair-tmp-20261003/nix-shell.aGJWof/crunch-builds/69f01a36-a08f-43d7-9f2c-9a9258aa481f-q1PJrA/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-prepublication-repair-tmp-20261003/nix-shell.aGJWof/crunch-builds/dc27783d-23d6-4912-9983-6fe23afc6871-OKX9vJ/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-integrated-cli-PT7twP1R/tmp/crunch-builds/23961e9e-484f-4b10-bc37-0dccdbf318b2-I95bVz/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-integrated-cli-PT7twP1R/tmp/crunch-builds/4ec932a7-0877-401b-ad8d-d062535fd16e-mdR7Ln/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-integrated-cli-PT7twP1R/tmp/crunch-builds/f463c75d-45a0-4db1-888b-13fbceb94417-IFhFf2/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-integrated-cli-PT7twP1R/tmp/crunch-builds/31f693e2-d03a-4061-abb7-5f78e454155e-vwEJk3/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-integrated-cli-PT7twP1R/tmp/crunch-builds/a932f4a5-aee7-45da-a7e4-9c2224ec49de-YCWAXc/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/tmp/nix-shell.XPDrCB/crunch-builds/00b464b6-6c68-4051-badf-3fe4dfe1a4b0-wQnTK1/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/tmp/nix-shell.GDzvy5/crunch-builds/cb6d0334-8c2c-4379-b4ed-01bdc8dc87b0-ngWYEo/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/tmp/nix-shell.JaXOlX/crunch-builds-local/cdda38f4-8a4b-4979-b344-c40612ffe9bf-0692Ay/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/tmp/nix-shell.JaXOlX/crunch-builds/75859000-c116-4d49-9f48-05780ca5250b-GEwpW8/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/tmp/nix-shell.4LOysK/crunch-builds/e54e85f7-b875-4987-9f82-8e36ab543bb7-XoDqVN/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/tmp/nix-shell.SJSgyW/crunch-builds/ea7b607b-d367-45d1-b875-20010b4a49c8-bEBTXl/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/tmp/nix-shell.v98umc/crunch-builds/30f8147a-d496-42f1-acd3-c92ade5fa04b-HOxFLE/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/tmp/nix-shell.HgqTiO/crunch-builds/8ae1d897-c31d-43d4-ad43-d114f99fcf65-dIn6oB/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/logs/tiger-private-icGav1Wx/tmp/crunch-builds/e9368dfb-2c2f-413d-8de1-e2df475dfb8d-FMGRky/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/logs/tiger-private-icGav1Wx/tmp/crunch-builds/afe6bbf2-c898-41fc-9190-d800ff257c47-EtaTYR/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/logs/tiger-private-icGav1Wx/tmp/crunch-builds/17b8af3b-36ac-44d7-88c6-bac8ed1e95b0-BJdrQz/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/logs/tiger-private-icGav1Wx/tmp/crunch-builds/fa7f1b9a-30ec-41ae-a726-0cc275bb692d-hEccgi/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249/logs/tiger-private-icGav1Wx/tmp/crunch-builds/4a39a4e2-7542-42f8-b0b2-f56d6adf2763-mPzG9c/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/tmp/nix-shell.n3zwlL/crunch-builds/4cd7b025-b5d0-47ff-9595-f4dec485bab5-dmjsTP/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/parity-tmp/nix-shell.z2gQe5/crunch-builds/86219154-a949-4c7e-b73e-c19d3f740dc0-wTEbh0/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/parity-tmp/nix-shell.z2gQe5/crunch-builds/c9ddc843-e438-468d-8670-d8f3abd7cca3-dhKEQm/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/parity-tmp/nix-shell.z2gQe5/crunch-builds/f3d0fe0e-2d74-468f-889f-08eeb31a9425-EHEq1r/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/888f14f0-c821-46be-bd95-1afb7b817131-CkezcX/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/69ba6bab-616f-4f87-86ca-95353d657d35-mrNrCV/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/e24c608c-2dff-41fc-8890-294c01c517d0-Tb3zuq/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/02d0b25d-838a-49a8-a1d6-de7a65b15040-85x6BC/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/6136f56d-6fa1-45ec-8f00-b24bdebade28-lBiCpN/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/c91fcf23-ba21-4e90-bae0-81df3f43be19-CUKhHT/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/4d1e5d23-3366-4141-a86b-cb3de2931b44-lsNnlh/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/9428be49-d405-4602-875f-656d0dc66db0-HDYbSW/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/ea9517dc-7444-45f1-bc65-f267614944ef-pvrwSp/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/af9f4a53-46bf-4801-bcfb-aaa74f6bea60-rHQtDt/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/cfa7dbd8-5aab-4a40-a5b2-1be9c4640f09-zsUWiv/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/92effb44-6b05-46b3-bc96-d4535299d91b-JQlec9/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/000172fb-50ff-458e-9d06-82b70590ca87-lSreEy/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/29347dc2-51c1-4277-9643-7a4cdee9d7f8-sFJ6ko/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/83087386-7782-4955-9224-590b4188660c-HcOJPh/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/e71df66d-f56c-4833-bfce-b590e44c425c-wqtkUl/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/097910d4-d919-49f3-b298-f959684e4429-5Kyels/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/b1d47829-66e3-43ad-94a2-c98f08d9282d-139cj6/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/a3f60866-5cb1-4b62-a923-15b87217153d-djyhUh/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/92c2228e-74e8-4758-89e6-dc39bb68f4f0-OVduje/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/8e5cf10a-4929-4a20-8f27-6f3f265e8b33-vTHTU0/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/314dfd56-2f35-4508-9593-565e2d70295a-dVxCZd/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/c87419e2-80ea-4d68-b0ff-408affc97f47-nQKm8h/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/be84f081-9ec5-47d9-b492-a31283705bca-1r2SLg/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/9552dc6d-1919-4e90-9551-1cf35b94e707-BDlCc5/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/157c59ca-baf6-40e1-aeec-3467fcf543bc-pOVnF4/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/39997bb6-9645-435a-9d54-2b59794f9dcd-xH6HGL/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/a378af82-ebd0-4c01-9997-ff374ed3b553-VcaAOt/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/9822c041-f089-41d4-8c60-265418f51706-U8wblc/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/f9ee204d-65cd-45ef-98cd-e5930af82a95-3TGZHM/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/c1c52928-5ba7-460c-ae68-bfb67bdd86e3-4c4pGF/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/951d8252-2212-4bdd-9667-8feda784b891-nlrBI7/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/2317b894-96dd-427d-9af7-417d4aa0823d-5CIEGd/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/8385765a-0f3b-4c06-8d5f-dc9221f75a45-1CTeYm/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/96c098a0-2ca4-4833-9cba-f5c326e459f0-Jf2FCb/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/fd98a11b-8412-41df-9484-9a8513b65bd5-ay8YEo/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/63abb0c4-1cd1-48f1-992d-58d1e50185c4-7T8ZJb/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/55919180-9b14-4e7a-8fd4-36f50c21cc20-HqjD3H/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/92dd595f-20dc-47ee-9161-4a79fbc9b14f-cfR8Gl/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/c7754b33-7e66-4000-ae04-c082e04e87e3-T0oN1B/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/5569bb89-8ff4-4e5a-ae50-23eee6c0c670-BXthPh/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/9c344840-1663-46d4-82d8-a693b631bf2e-WQeIfa/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/bc0d45cf-1248-41ab-af6e-791d59585815-dX1XB6/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/7356c6a4-e86d-40c2-ad36-bd75e3195033-TcykUO/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/54b880d3-0c42-46cf-970a-e935a374c879-9s7XnD/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/2a9ec6dc-0302-4c35-bbbf-0de7a6284805-mq2nAy/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/906fc614-370f-4c79-af6d-69ff77225214-hdusXB/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/b151893b-1a94-4a67-8224-b21cafde3e3b-CJJY94/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/261bb653-21b5-435c-b95a-8beead6a4c5f-42y8X7/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/e20bf4c4-52fc-43ed-807b-7435ebd257e2-vHLYX5/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/d4b90460-040a-44cb-ab0f-5ec8f65f3ffa-oRSsbf/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/c017581c-3276-41e1-a5bf-94897486a17a-nmjv9U/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/37a342bc-6dc2-4fa3-83d9-3efe7f14bed1-NHdFaJ/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/01629ac0-a1d3-4fe3-8df4-508907f9b67b-P1FG52/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds/6495d25e-dabd-4a71-b355-010987b64425-WnBG3c/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/.tmpYLqDvO/d4e4dc3d-cc9f-4ca7-8ce0-1fa1b9ced489-9bURbp/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-test-builds/65ac5524-a594-403c-8249-f3c88e8575e8-tmlSzB/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-test-ca-builds/c5eae677-febd-48dc-833e-6957db0be381-cN8Xtg/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds-local/aa4e112d-c10f-40a4-af8e-b31ff518a7bc-aj26du/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-t2-private-fixed-20261005/quality-tmp/nix-shell.m5JkVN/crunch-builds-local/1687cc12-39b9-4dae-b484-cb01b0185220-OAeJUB/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/casita-cache-revocation-after-20261004/tmp/nix-shell.EGn41d/crunch-builds/5737fd2f-2424-4604-84ce-17e69918f6b2-ASGW7m/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004/runs/action-result-t216-20261004/tmp/nix-shell.rtAafD/crunch-builds/0cd25fb7-407b-491a-9ef4-dcc975ebae1d-bchMft/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp/nix-shell.KpDH6n/crunch-builds/e797eb32-4bce-4513-b5ea-e4ef4dfcd2f9-ghVHGw/overlay_workdir/work': Permission denied",
+    "du: cannot read directory '/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb/tmp/nix-shell.VQL0du/crunch-builds/59d2c4a6-48cb-46c8-b7f9-fad09527599c-7Fezrd/overlay_workdir/work': Permission denied"
+  ],
+  "reported_row_count": 579,
+  "largest_reported_rows": [
+    {
+      "allocated_bytes_reported": 1532104769024,
+      "path": "/home/brittonr/.cargo-target"
+    },
+    {
+      "allocated_bytes_reported": 665318440448,
+      "path": "/home/brittonr/.cargo-target/debug"
+    },
+    {
+      "allocated_bytes_reported": 344934010880,
+      "path": "/home/brittonr/.cargo-target/repo-targets"
+    },
+    {
+      "allocated_bytes_reported": 138542928896,
+      "path": "/home/brittonr/.cargo-target/mantle-rust-script-pin-20261004"
+    },
+    {
+      "allocated_bytes_reported": 39763339264,
+      "path": "/home/brittonr/.cargo-target/mantle-v2-cairn-dev46"
+    },
+    {
+      "allocated_bytes_reported": 23890885120,
+      "path": "/home/brittonr/.cargo-target/mantle-backend-selection-evidence-3uhbppvb"
+    },
+    {
+      "allocated_bytes_reported": 12614370816,
+      "path": "/home/brittonr/.cargo-target/mantle-bootstrap-pins-20261006"
+    },
+    {
+      "allocated_bytes_reported": 12505832960,
+      "path": "/home/brittonr/.cargo-target/wasm32-unknown-unknown"
+    },
+    {
+      "allocated_bytes_reported": 10781611520,
+      "path": "/home/brittonr/.cargo-target/workday-core"
+    },
+    {
+      "allocated_bytes_reported": 9832800768,
+      "path": "/home/brittonr/.cargo-target/mantle-casita-tigerstyle-20261005"
+    },
+    {
+      "allocated_bytes_reported": 9832670208,
+      "path": "/home/brittonr/.cargo-target/mantle-service-readiness-tigerstyle-corrective-20261006-e257"
+    },
+    {
+      "allocated_bytes_reported": 9832637440,
+      "path": "/home/brittonr/.cargo-target/mantle-live-tigerstyle-source-e257"
+    },
+    {
+      "allocated_bytes_reported": 9832517632,
+      "path": "/home/brittonr/.cargo-target/mantle-remote-worker-demand-20261006"
+    },
+    {
+      "allocated_bytes_reported": 9832498176,
+      "path": "/home/brittonr/.cargo-target/mantle-live-proof-source-b958"
+    },
+    {
+      "allocated_bytes_reported": 9832384000,
+      "path": "/home/brittonr/.cargo-target/mantle-service-readiness-tigerstyle-corrective-20261006"
+    },
+    {
+      "allocated_bytes_reported": 9316536320,
+      "path": "/home/brittonr/.cargo-target/x86_64-pc-windows-gnu"
+    },
+    {
+      "allocated_bytes_reported": 9154294272,
+      "path": "/home/brittonr/.cargo-target/eib-live-worktree"
+    },
+    {
+      "allocated_bytes_reported": 8749431808,
+      "path": "/home/brittonr/.cargo-target/mantle-v2-source-candidate-DY5UW249"
+    },
+    {
+      "allocated_bytes_reported": 8219525632,
+      "path": "/home/brittonr/.cargo-target/worktrees"
+    },
+    {
+      "allocated_bytes_reported": 7828520960,
+      "path": "/home/brittonr/.cargo-target/mantle-casita-gc-private-20261004"
+    }
+  ],
+  "supersedes_interpretation": "shared-target-survey.json was based on a blocked unbounded artifact read; use this bounded extraction instead"
+}

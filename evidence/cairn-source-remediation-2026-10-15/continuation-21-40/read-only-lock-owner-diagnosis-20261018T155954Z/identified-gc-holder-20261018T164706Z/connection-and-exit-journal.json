@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "/run/current-system/sw/bin/journalctl",
+    "--unit=nix-daemon.service",
+    "--grep=725672|724865",
+    "--lines=40",
+    "--no-pager",
+    "--output=short-iso"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-18T16:47:56.790345+00:00",
+  "elapsed_seconds": 0.418,
+  "exit_code": 0,
+  "stdout": "2026-10-18T12:45:54-04:00 britton-desktop nix-daemon[2631]: reaped child process 725672, status = succeeded\n2026-10-16T20:40:36-04:00 britton-desktop nix-daemon[2631]: accepted connection from pid 724865, user brittonr (trusted)\n",
+  "stderr": "",
+  "read_only": true
+}

@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "stat",
+    "-c",
+    "%n %d %i",
+    "/nix/var/nix/db/db.sqlite",
+    "/nix/var/nix/db/db.sqlite-shm",
+    "/nix/var/nix/db/db.sqlite-wal",
+    "/home/brittonr/.cache/nix/fetcher-cache-v4.sqlite",
+    "/home/brittonr/.cache/nix/fetcher-cache-v4.sqlite-shm"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T19:40:36.969237+00:00",
+  "exit_code": 0,
+  "stdout": "/nix/var/nix/db/db.sqlite 31 22406061\n/nix/var/nix/db/db.sqlite-shm 31 302491\n/nix/var/nix/db/db.sqlite-wal 31 302490\n/home/brittonr/.cache/nix/fetcher-cache-v4.sqlite 66309 2940276\n/home/brittonr/.cache/nix/fetcher-cache-v4.sqlite-shm 66309 2937129\n",
+  "stderr": "",
+  "read_only": true
+}

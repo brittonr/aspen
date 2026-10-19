@@ -1,0 +1,10 @@
+{
+  "user_selection": "Instrument one bounded run",
+  "scope": "One 600-second instrumented normal-settings Nix build of the unchanged nextest, clippy and nextest-config checks, recording Nix phases and client wait-state observations",
+  "authorized_effects": ["Normal Nix build/store effects", "Normal automatic GC may run", "Terminate only the owned diagnostic command group at its deadline"],
+  "constraints": ["No GC override", "No host configuration change", "No daemon restart", "No manual shared-data deletion", "No unrelated-process termination", "No product-source or dependency-pin changes", "No acceptance weakening", "No premature sync/archive/publication"],
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "basis": "read-only-host-diagnosis/diagnosis.json"
+}

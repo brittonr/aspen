@@ -1,0 +1,66 @@
+{
+  "ordered-workspace-all-targets": {
+    "exit_code": 0,
+    "totals": {
+      "passed": 2121,
+      "failed": 0,
+      "ignored": 0
+    }
+  },
+  "ordered-workspace-doctests": {
+    "exit_code": 0,
+    "totals": {
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0
+    }
+  },
+  "ordered-enabled-feature-tests": {
+    "exit_code": 0,
+    "totals": {
+      "passed": 2140,
+      "failed": 0,
+      "ignored": 1
+    }
+  },
+  "ordered-disabled-profiler-tests": {
+    "exit_code": 0,
+    "totals": {
+      "passed": 2121,
+      "failed": 0,
+      "ignored": 0
+    }
+  },
+  "ordered-default-clippy": {
+    "exit_code": 0,
+    "totals": {
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    }
+  },
+  "ordered-enabled-clippy": {
+    "exit_code": 0,
+    "totals": {
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    }
+  },
+  "ordered-disabled-clippy": {
+    "exit_code": 0,
+    "totals": {
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    }
+  },
+  "ordered-format-check": {
+    "exit_code": 0,
+    "totals": {
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    }
+  }
+}

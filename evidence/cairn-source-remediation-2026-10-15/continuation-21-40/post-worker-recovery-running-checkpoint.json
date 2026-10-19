@@ -1,0 +1,24 @@
+{
+  "recorded_at": "2026-10-17T22:10:03.780901+00:00",
+  "status": "single-authorized-normal-settings-retry-running",
+  "background_job": "bg_133",
+  "start": "after-targeted-worker-recovery/start.json",
+  "result_pending": "after-targeted-worker-recovery/ordered-relevant-nix-checks.json",
+  "recovery_verified": true,
+  "preserved_source_inputs_verified": true,
+  "temporary_signal_guard_removed": true,
+  "source_attempt_21_started": false,
+  "required_after_this_run_if_passing": [
+    "Required repository Nix flake gate from both F09/F10 tasks line 16",
+    "Post-Nix strict native Cairn validation and evidence-backed review/sync/archive"
+  ],
+  "independent_producer_prerequisites": [
+    "Required hardened-wasmtime-runtime repair, independent component consumer execution and immutable publication",
+    "Required Mantle verifier repair, immutable Kamacite and second-consumer execution and accepted publication"
+  ],
+  "producer_authority": "prerequisite-chain-authorization.json",
+  "product_input_freeze": "Keep Molten inputs unchanged; do not start attempt 21 before unchanged-source acceptance prerequisites pass",
+  "acceptance_passed": false,
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40
+}

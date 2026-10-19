@@ -1,0 +1,108 @@
+{
+  "status": "blocked-not-complete",
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "molten_active_changes_from_preserved_inventory": 47,
+  "inventory_basis": "f09-f10-nix-recovery/current-native-change-list.json; no Molten archive or change removal in this continuation",
+  "required_nix_retry": {
+    "record": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/continuation-21-40/f09-f10-nix-command-local-retry/required-checks.json",
+    "argv": [
+      "nix",
+      "build",
+      "--option",
+      "min-free",
+      "0",
+      "--no-update-lock-file",
+      "--no-link",
+      "-L",
+      ".#checks.x86_64-linux.nextest",
+      ".#checks.x86_64-linux.clippy",
+      ".#checks.x86_64-linux.nextest-config"
+    ],
+    "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+    "elapsed_seconds": 3500.191,
+    "exit_code": 1,
+    "timed_out": true,
+    "stdout": "",
+    "stderr": "\nshutting down\u001b[Kerror: interrupted by the user\n",
+    "passing_acceptance_established": false,
+    "root_cause": "Not established by this command; stderr only reports interruption at the recorder deadline",
+    "single_command_local_override_authorization_consumed": true,
+    "further_override_or_retry_authorized": false
+  },
+  "runtime_producer_environment_probe": {
+    "record": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/evidence/cairn-source-remediation-2026-10-15/continuation-21-40/runtime-producer-environment-probe.json",
+    "argv": [
+      "timeout",
+      "--kill-after=5s",
+      "90s",
+      "nix",
+      "develop",
+      "--offline",
+      "--no-update-lock-file",
+      "--command",
+      "cargo",
+      "--version"
+    ],
+    "elapsed_seconds": 90.05,
+    "exit_code": 124,
+    "observation": "GNU timeout returned 124 after 90 seconds; stderr explicitly reports automatic GC and waiting for the big garbage collector lock",
+    "scope_limit": "This separate probe does not establish the Molten Nix retry's root cause or the lock owner"
+  },
+  "prerequisite_repair_contracts": [
+    {
+      "change": "repair-component-runtime-admission-and-linking",
+      "record": "/home/brittonr/git/aspen-worktrees/wasmtime-prerequisite-20261017/.cairn/changes/repair-component-runtime-admission-and-linking/evidence/contract-validation.json",
+      "exit_code": 0,
+      "valid": true,
+      "issues": [],
+      "receipt_hash": "fc94373555604a81015066b8687582fb01a7c67cab62bd7d4bf101a856873dd4",
+      "implementation_acceptance_claimed": false
+    },
+    {
+      "change": "repair-consumer-verifier-admission-and-rooting",
+      "record": "/home/brittonr/git/aspen-worktrees/mantle-prerequisite-20261017/.cairn/changes/repair-consumer-verifier-admission-and-rooting/evidence/contract-validation.json",
+      "exit_code": 0,
+      "valid": true,
+      "issues": [],
+      "receipt_hash": "4770e4adbf7e897ad2f64feed8ec85b84865a782ee07584b1af9a89d3126f9a5",
+      "implementation_acceptance_claimed": false
+    }
+  ],
+  "contract_scope": {
+    "runtime_requirements": 17,
+    "mantle_verifier_requirements": 8,
+    "delta_creation": "Existing accepted requirement bodies copied verbatim under MODIFIED Requirements; no accepted base specification edited",
+    "mantle_decision": "Proposed ADR 0114; no implementation or publication approval implied",
+    "all_product_implementation_tasks_remain_unchecked": true,
+    "implementation_or_independent_consumer_acceptance_claimed": false
+  },
+  "actions_by_this_continuation": {
+    "molten_product_source_edits": false,
+    "producer_product_source_edits": false,
+    "dependency_pin_changes": false,
+    "new_archives": false,
+    "remote_publications": false,
+    "historical_evidence_rewrites": false,
+    "host_configuration_changes": false,
+    "shared_cache_deletions": false,
+    "unrelated_processes_terminated": false
+  },
+  "read_only_lock_inspection": "Unprivileged lslocks output redacted many root-owned paths; no GC-lock owner or causal diagnosis established",
+  "current_consumer": "Molten adopt-shared-wasm-component-runtime",
+  "maintenance_owners": [
+    "Molten runtime maintainers",
+    "hardened-wasmtime-runtime maintainers",
+    "Mantle consumer-verifier maintainers"
+  ],
+  "repeatability_evidence": "Exact argv, cwd, stdout, stderr, deadline outcome and strict native Cairn validation receipts are preserved in the cited records",
+  "next_required_decision": "Host prerequisite recovery or explicitly authorized bounded diagnosis/retry; do not infer further GC overrides or weaken acceptance",
+  "non_claims": [
+    "No Molten completion",
+    "No acceptance-gate waiver",
+    "No producer implementation completion",
+    "No stable publication readiness",
+    "No established root cause for the Molten timeout"
+  ]
+}

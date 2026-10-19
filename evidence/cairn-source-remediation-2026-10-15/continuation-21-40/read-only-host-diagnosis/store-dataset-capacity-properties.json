@@ -1,0 +1,20 @@
+{
+  "argv": [
+    "zfs",
+    "get",
+    "-Hp",
+    "available,used,quota,refquota,reservation,refreservation",
+    "datapool/nix",
+    "datapool/cargo-target"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T19:38:12.017219+00:00",
+  "elapsed_seconds": 0.005,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "datapool/cargo-target\tavailable\t46768885760\t-\ndatapool/cargo-target\tused\t1512176648192\t-\ndatapool/cargo-target\tquota\t1610612736000\tlocal\ndatapool/cargo-target\trefquota\t0\tdefault\ndatapool/cargo-target\treservation\t0\tdefault\ndatapool/cargo-target\trefreservation\t0\tdefault\ndatapool/nix\tavailable\t46768885760\t-\ndatapool/nix\tused\t255483228160\t-\ndatapool/nix\tquota\t0\tdefault\ndatapool/nix\trefquota\t0\tdefault\ndatapool/nix\treservation\t0\tdefault\ndatapool/nix\trefreservation\t0\tdefault\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "read_only": true
+}

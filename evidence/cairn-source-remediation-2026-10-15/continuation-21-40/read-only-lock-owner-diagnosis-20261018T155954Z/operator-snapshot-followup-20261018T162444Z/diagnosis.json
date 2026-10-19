@@ -1,0 +1,79 @@
+{
+  "recorded_at": "2026-10-18T16:28:08.741390+00:00",
+  "status": "operator-proved-store-lock-to-gc-lock-dependency-holder-unresolved",
+  "source_excerpt": "operator-owner-snapshot-excerpt.json",
+  "operator_source_recorded_at": "2026-10-18T16:22:49.745898+00:00",
+  "new_facts": [
+    "All four fixed owner identities and exact exclusive store-lock tuples passed the operator reader before and after inspection",
+    "Each owner has a thread in locks_lock_inode_wait, with x86-64 syscall 73 (flock), operation 0x2 (LOCK_EX)",
+    "The blocked fd is 18 for PID 92763 and 19 for PIDs 130832, 2601744 and 3432619; each fd targets /nix/var/nix/gc.lock inode 22402385",
+    "Each main thread is in futex_do_wait; these futex waits alone do not prove a deadlock"
+  ],
+  "dependency_chain": {
+    "store_lock_waiters": "16 blocked writer rows in the earlier contention-summary snapshot",
+    "store_lock_owners": [
+      92763,
+      130832,
+      2601744,
+      3432619
+    ],
+    "next_wait_target": {
+      "path": "/nix/var/nix/gc.lock",
+      "device": "0:31",
+      "inode": 22402385,
+      "requested_mode": "exclusive blocking flock"
+    },
+    "gc_lock_holder": "Not yet identified"
+  },
+  "fresh_kernel_observations": {
+    "unfiltered_lock_record": "unfiltered-gc-locks.json",
+    "unprivileged_exact_gc_rows": 0,
+    "direct_proc_locks_search": "No GC-inode row was returned; a later multi-inode search did return all four store-lock groups, so the proc file itself was searchable",
+    "privileged_query_attempt": "privileged-exact-gc-lock-query.json",
+    "privileged_query_executed": false,
+    "privileged_query_stderr": "sudo: a password is required\n",
+    "limit": "The empty later unprivileged GC-lock snapshot does not invalidate the operator-provided earlier blocking syscall and FD evidence or prove safe lock removal"
+  },
+  "operator_handoff": {
+    "argv": [
+      "/run/wrappers/bin/sudo",
+      "--",
+      "/run/current-system/sw/bin/timeout",
+      "--signal=TERM",
+      "--kill-after=5s",
+      "20s",
+      "/run/current-system/sw/bin/lslocks",
+      "--json",
+      "--notruncate",
+      "--filter",
+      "INODE == 22402385 and (MODE == \"READ\" or MODE == \"WRITE\")",
+      "--output",
+      "PID,COMMAND,TYPE,MODE,INODE,MAJ:MIN,PATH,BLOCKER,HOLDERS"
+    ],
+    "shell": "fish-compatible; no Bourne-style variable assignment",
+    "scope": "New bounded root lock-table query of this exact inode, requesting held rows and descriptor-holder metadata; not a repeat of the four-owner reader",
+    "column_support": "HOLDERS was confirmed by lslocks --list-columns",
+    "if_empty": "Preserve the empty JSON result; do not infer lock release, safe cancellation or readiness from it"
+  },
+  "remaining_information": "The holder or holders of the GC lock and their current wait; no worker may be signalled from the evidence so far",
+  "acceptance_causal_limit": "This proves the next wait target of the four supplied workers, not which server operation blocked the already-completed acceptance client",
+  "decision": "Do not kill the four downstream workers, remove lock files, restart the daemon or launch another Nix retry on this evidence. Continue read-only owner discovery with operator authentication.",
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "lifecycle": {
+    "F09_F10_remain_active": true,
+    "required_nix_tasks_remain_unchecked": true,
+    "synced": false,
+    "archived": false,
+    "remote_publication_performed": false
+  },
+  "mutations": {
+    "source_or_pins_changed": false,
+    "host_configuration_changed": false,
+    "shared_data_deleted": false,
+    "shared_processes_signalled": false,
+    "acceptance_rerun": false,
+    "operator_reader_rerun": false
+  }
+}

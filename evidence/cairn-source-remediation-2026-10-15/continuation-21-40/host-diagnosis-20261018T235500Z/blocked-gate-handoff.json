@@ -1,0 +1,87 @@
+{
+  "recorded_at": "2026-10-19T00:03:00Z",
+  "kind": "blocked-gate-handoff",
+  "blocked_gate": {
+    "change_requirements": [
+      "resume-blocked-scheduler-runnables: task 'Run required workspace tests, relevant Nix checks, and the repository Nix gate without weakening existing scope.' (unchecked)",
+      "enforce-scheduler-queue-bounds-on-yield: task 'Run required workspace tests, relevant Nix checks, and the repository Nix gate without weakening existing checks.' (unchecked)"
+    ],
+    "authorized_sequence": "nix build --no-update-lock-file --no-link -L .#checks.x86_64-linux.nextest .#checks.x86_64-linux.clippy .#checks.x86_64-linux.nextest-config then nix flake check --no-update-lock-file -L .",
+    "status": "nonpassing; no Nix acceptance evidence produced"
+  },
+  "attempt_log": [
+    {
+      "record": "../../after-gc-progress-normal-20261018T041148Z/outcome.json",
+      "result": "timed out, empty output"
+    },
+    {
+      "record": "../bounded-client-trace-20261018T154235Z/trace-analysis.json",
+      "result": "600s traced client waited 595.855s on the daemon socket for a reply; server-side cause unresolved"
+    },
+    {
+      "record": "../after-targeted-worker-recovery/ordered-relevant-nix-checks.json",
+      "result": "timed out after worker recovery"
+    },
+    {
+      "record": "../post-holder-exit-normal-20261018T165808Z/outcome.json",
+      "result": "exit 1, timed_out true, 3500.159s, empty output; flake gate not launched"
+    },
+    {
+      "record": "../capacity-recovered-normal-20261018T214935Z/ordered-relevant-nix-checks.json",
+      "result": "exit 1, timed_out true, 3500.125s, empty output; capacity 223.08 GiB free, above the 128 GiB launch threshold; flake gate not launched"
+    }
+  ],
+  "established_facts": [
+    "Dataset capacity 223.08 GiB free, above min-free 100 GiB and max-free 128 GiB",
+    "Store write 0.101s, store read 2.7 GB/s, daemon path-info 0.083s",
+    "All four configured substituters answer 200 in 11-47 ms",
+    "Single-check evaluation completes in 4s warm; three-check evaluation advances ~11 files/s under current contention",
+    "3665 nix-daemon worker children, 3572 older than 24h, 3633 with client PIDs that no longer exist; 3666 temproots entries",
+    "3657/3658/3677 shared FLOCK READ rows on big-lock, db.sqlite and db.sqlite-shm; gc.lock and main-lock show 0 rows; writes still succeed, so lock starvation is not established",
+    "A foreign multi-hour 'nix flake check' for the kiln public cutover shares the daemon, max-jobs=4 and cores=4; z_wr_iss x32 and arc_evict x7 kernel threads show ZFS write pressure",
+    "Daemon journal shows no error, GC, or substitution failure across the failing window"
+  ],
+  "decision_options": [
+    {
+      "option": "long-window realization and acceptance",
+      "detail": "Run the same three-check command once with a long bound (for example 12 hours) so evaluation and realization can finish, then rerun the identical 3500-second sequence to record the acceptance evidence; run the repository flake gate only if all three checks pass.",
+      "requires": "user authorization for the longer bound and the sustained host load"
+    },
+    {
+      "option": "wait for a quiet host, then retry unchanged",
+      "detail": "Pause Nix work until the foreign kiln flake check completes and an operator clears the 3633 orphaned nix-daemon workers (for example by restarting nix-daemon), then rerun the unchanged 3500-second sequence.",
+      "requires": "operator action (service restart) and coordination with the foreign workload"
+    },
+    {
+      "option": "evaluation-only warm first",
+      "detail": "Warm evaluation only (drvPath evaluation, no builds) for a bounded interval, measure whether evaluation alone completes, then choose between the two options above.",
+      "requires": "user authorization for the bounded interval"
+    },
+    {
+      "option": "stop with the gate blocked",
+      "detail": "Record the blockage in the two changes' evidence and leave both changes active without sync or archive.",
+      "requires": "user agreement to leave the objective incomplete"
+    }
+  ],
+  "mutations_and_authority": {
+    "product_source_changed": false,
+    "dependency_or_toolchain_pins_changed": false,
+    "host_configuration_changed": false,
+    "services_restarted": false,
+    "shared_data_deleted": false,
+    "unrelated_processes_terminated": false,
+    "store_paths_added_by_probes": [
+      "/nix/store/1q2s3qwj59hw96kpb1d48b8j8dclgd8m-molten-probe-20261018"
+    ],
+    "implementation_attempts_consumed": 20,
+    "authorized_implementation_attempt_cap": 40,
+    "new_source_attempt_started": false
+  },
+  "non_claims": [
+    "No passing Nix acceptance or repository flake gate result",
+    "No behavioral test failure",
+    "No proven single root cause for the timeouts",
+    "No lifecycle sync, archive, completion commit, or remote publication"
+  ],
+  "maintenance_owner": "Host/Nix operator owns daemon worker population, service restarts, and coordination with the foreign kiln workload; Molten maintainers retain F09/F10 acceptance criteria and retained evidence"
+}

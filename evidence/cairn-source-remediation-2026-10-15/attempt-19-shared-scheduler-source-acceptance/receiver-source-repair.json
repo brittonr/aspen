@@ -1,0 +1,24 @@
+{
+  "status": "implemented",
+  "changed_paths": [
+    "src/fabric_time/tests/adapters/mod.rs",
+    "src/fabric_time/tests/adapters/harness.rs",
+    "src/fabric_time/tests/adapters/receiver.rs",
+    "src/fabric_time/tests/adapters/fencing.rs"
+  ],
+  "boundaries": {
+    "mod.rs": "131 lines; shared profile/key/context helpers, concrete effects wrapper, committed-boundary predicate, include assembly",
+    "harness.rs": "166 lines; owner construction, commands, consumption/checkpoint accounting, final checkpoint-before-Stop teardown",
+    "receiver.rs": "56 lines; receiving protocol and real park/unpark worker with explicit Stop-controlled while !is_stopped exit",
+    "capacity.rs": "115 lines; unchanged behavior regressions",
+    "fencing.rs": "242 lines; existing regressions retained, uncertainty transport bounded"
+  },
+  "channel_capacities": {
+    "control_input": 2,
+    "receiver_output": 1,
+    "uncertainty_transport": 1
+  },
+  "protocol": "Control capacity accommodates checkpoint plus post-unpark release-confirmation simultaneously. Delivery and output acknowledgements remain consumed before the next command. Preserved FIFO acknowledgement, completed-control-unpark confirmation, concrete delivery progress before control wake, prepare/deliver sequence accounting, wrong-order negative control, and final checkpoint-before-Stop. Mailbox traffic does not replace the concrete adapter wake.",
+  "simulation_contract": "Prepared::Simulation now carries u64; drained u64 index is compared against checked u64::try_from(boundary.occurrence). Production peer confirmed prepare input and committed occurrence remain usize.",
+  "verification": "wc -l confirmed every receiver source file is <=300 lines. No builds, tests, lints, formatters, lifecycle, or git commands run, as instructed; runtime acceptance remains for parent campaign."
+}

@@ -1,0 +1,73 @@
+{
+  "argv": [
+    "nix",
+    "--debug",
+    "--log-format",
+    "raw",
+    "build",
+    "--no-update-lock-file",
+    "--no-link",
+    "-L",
+    ".#checks.x86_64-linux.nextest",
+    ".#checks.x86_64-linux.clippy",
+    ".#checks.x86_64-linux.nextest-config"
+  ],
+  "launcher_argv": [
+    "bash",
+    "/tmp/molten-cairn-continuation-rrpmy62t/with-cached-shell.sh",
+    "nix",
+    "--debug",
+    "--log-format",
+    "raw",
+    "build",
+    "--no-update-lock-file",
+    "--no-link",
+    "-L",
+    ".#checks.x86_64-linux.nextest",
+    ".#checks.x86_64-linux.clippy",
+    ".#checks.x86_64-linux.nextest-config"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T19:58:32.946960+00:00",
+  "ended_at": "2026-10-17T20:08:33.040439+00:00",
+  "elapsed_seconds": 600.093,
+  "deadline_seconds": 600,
+  "exit_code": -15,
+  "timed_out": true,
+  "deadline_action": "SIGTERM sent only to owned command process group",
+  "wrapper_pid": 2283898,
+  "nix_client_pids_observed": [
+    2283914
+  ],
+  "source_binding": "source-binding.json",
+  "streams": {
+    "stdout": {
+      "path": "stdout.log",
+      "total_bytes": 0,
+      "retained_bytes": 0,
+      "omitted_middle_bytes": 0,
+      "first_output_seconds": null,
+      "last_output_seconds": null
+    },
+    "stderr": {
+      "path": "stderr.log",
+      "total_bytes": 2095260,
+      "retained_bytes": 2095260,
+      "omitted_middle_bytes": 0,
+      "first_output_seconds": 0.044,
+      "last_output_seconds": 600.015
+    }
+  },
+  "client_observations": "client-observations.json",
+  "snapshot_count": 4,
+  "stream_errors": [],
+  "driver_error": null,
+  "gc_override": false,
+  "normal_automatic_gc_may_run": true,
+  "product_inputs_changed": false,
+  "host_configuration_changed": false,
+  "unrelated_processes_terminated": false,
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false
+}

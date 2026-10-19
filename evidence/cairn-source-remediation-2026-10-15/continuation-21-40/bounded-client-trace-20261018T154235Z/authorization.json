@@ -1,0 +1,21 @@
+{
+  "recorded_at": "2026-10-18T15:43:34.545192+00:00",
+  "user_selection": "Bounded client trace",
+  "scope": "One 600-second normal-settings run of the unchanged nextest, clippy and nextest-config Nix checks, tracing only the directly launched client main thread",
+  "conditional_next_stage": "Run the required repository flake gate with a 3500-second deadline only if the traced three-check run exits 0 without timeout",
+  "trace_privilege": "Unprivileged strace launching a new owned Nix client; no attach and no following of children or other threads",
+  "trace_payload_policy": "Raw pointer-form read/receive arguments; no read or receive payload bytes retained by strace",
+  "normal_nix_settings": true,
+  "constraints": [
+    "No privileged inspection or attachment",
+    "No shared or unrelated process signals",
+    "Deadline termination limited to the new owned command process group",
+    "No host setting change, daemon restart or manual shared-data deletion",
+    "No source, dependency or toolchain pin change",
+    "No acceptance weakening or premature lifecycle closure"
+  ],
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "prior_result": "../after-gc-progress-normal-20261018T041148Z/outcome.json"
+}

@@ -1,0 +1,42 @@
+{
+  "attempt": "20/20",
+  "source": {
+    "focused-core-fabric-time": {
+      "exit_code": 0,
+      "totals": {
+        "passed": 41,
+        "failed": 0,
+        "ignored": 0
+      }
+    },
+    "focused-shell-fabric-time": {
+      "exit_code": 0,
+      "totals": {
+        "passed": 37,
+        "failed": 0,
+        "ignored": 0
+      }
+    }
+  },
+  "producers": {
+    "workspace": "clean; zero findings",
+    "library": "clean; zero findings"
+  },
+  "strict_ci": "pass; ordered-strict-ci-gate.preserves",
+  "object_corpus_members": 1901,
+  "actual_cli": {
+    "profile": "both",
+    "live_clock": true,
+    "conformance": true,
+    "scheduler_steps": 7,
+    "report": "blake3:3e399a4e79d6e8b92a60a7eca98ef3e1d07f942dd33ebf48473b405468f7f8df"
+  },
+  "remaining": "Workspace/feature/Clippy, required Nix and final lifecycle acceptance are not established by this source-and-smoke record.",
+  "owner": "Molten fabric-time maintainers",
+  "non_claims": [
+    "No global liveness claim",
+    "No measured performance claim",
+    "No whole-system correctness claim",
+    "No archive or release authorization"
+  ]
+}

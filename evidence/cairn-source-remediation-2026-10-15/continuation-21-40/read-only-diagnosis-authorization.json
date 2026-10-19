@@ -1,0 +1,9 @@
+{
+  "user_selection": "Continue read-only diagnosis",
+  "scope": "Bounded process, lock, service-log and filesystem diagnosis after the normal-settings Nix acceptance timeout",
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "constraints": ["No acceptance retry", "No source or pin changes", "No host configuration changes", "No service restart", "No shared-data deletion", "No process termination", "No acceptance weakening or lifecycle closeout"],
+  "basis": "post-normal-retry-checkpoint.json"
+}

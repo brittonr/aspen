@@ -1,0 +1,14 @@
+{
+  "attempt": "20/20",
+  "implementation_attempts_consumed": 20,
+  "attempt_cap": 20,
+  "changes": [
+    "resume-blocked-scheduler-runnables",
+    "enforce-scheduler-queue-bounds-on-yield"
+  ],
+  "basis": "../attempt-19-shared-scheduler-source-acceptance/attempt-result.json",
+  "source_change": "Collapse the reported nested fairness guard using equivalent short-circuit let-chain semantics, without lint allowances or behavior changes.",
+  "acceptance": "Re-run the complete recorded source, focused/workspace/feature, Clippy, Nix and lifecycle scope; exercise the actual CLI; close only after passing acceptance.",
+  "assignment_token_change": "Not implemented; no attempt remains available for its source cycle under the current cap.",
+  "publication": "Local only; no sibling, pin, frozen fixture or historical evidence changes."
+}

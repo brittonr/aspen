@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "zpool",
+    "status",
+    "-x",
+    "datapool"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T19:38:12.005998+00:00",
+  "elapsed_seconds": 0.008,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "pool 'datapool' is healthy\n",
+  "stderr": "",
+  "stdout_truncated": false,
+  "stderr_truncated": false,
+  "read_only": true
+}

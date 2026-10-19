@@ -1,0 +1,42 @@
+{
+  "recorded_at": "2026-10-19T00:07:00Z",
+  "authorization": "authorization.json",
+  "source_binding": "source-binding.json",
+  "source_binding_passed": true,
+  "user_selection": "Long-window run (12h)",
+  "job_handle": "bg_158",
+  "async_job_accepted": true,
+  "stage_one_long_window": {
+    "argv": [
+      "nix",
+      "build",
+      "--no-update-lock-file",
+      "--no-link",
+      "-L",
+      ".#checks.x86_64-linux.nextest",
+      ".#checks.x86_64-linux.clippy",
+      ".#checks.x86_64-linux.nextest-config"
+    ],
+    "launcher": "bash /tmp/molten-cairn-continuation-rrpmy62t/with-cached-shell.sh python3 record-long-command.py",
+    "record": "ordered-relevant-nix-checks.json",
+    "log": "ordered-relevant-nix-checks.log",
+    "deadline_seconds": 43200,
+    "purpose": "Realize the unchanged required checks once so the identical 3500-second acceptance run can record a result"
+  },
+  "completion_observed": false,
+  "stage_two_started": false,
+  "stage_two_condition": "Stage one exit_code 0 and timed_out false; preserved source binding must still match",
+  "stage_three_started": false,
+  "stage_three_condition": "Stage two exit_code 0 and timed_out false",
+  "normal_nix_settings": true,
+  "gc_threshold_override": false,
+  "source_and_pins_frozen": true,
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "boundaries_observed_during_wait": [
+    "No tracked-file edits while the run is in flight",
+    "No sync or archive before acceptance passes",
+    "No GC override, service restart, or unrelated-process control"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "recorded_at": "2026-10-18T16:28:08.747086+00:00",
+  "argv": [
+    "/run/wrappers/bin/sudo",
+    "--",
+    "/run/current-system/sw/bin/timeout",
+    "--signal=TERM",
+    "--kill-after=5s",
+    "20s",
+    "/run/current-system/sw/bin/lslocks",
+    "--json",
+    "--notruncate",
+    "--filter",
+    "INODE == 22402385 and (MODE == \"READ\" or MODE == \"WRITE\")",
+    "--output",
+    "PID,COMMAND,TYPE,MODE,INODE,MAJ:MIN,PATH,BLOCKER,HOLDERS"
+  ],
+  "run_by": "Authenticated operator only; assistant noninteractive invocation requires a password",
+  "scope": "Read-only exact GC-inode held-lock and descriptor-holder lookup with a 20-second deadline",
+  "no_signals_to_inspected_processes": true,
+  "acceptance_or_process_control_authority": false
+}

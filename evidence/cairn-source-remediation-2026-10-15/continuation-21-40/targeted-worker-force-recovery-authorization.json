@@ -1,0 +1,21 @@
+{
+  "user_selection": "Operator SIGKILL, then retry",
+  "basis": "targeted-worker-sigterm-outcome.json",
+  "scope_exception": "Separate authorization for one operator-issued forced cancellation of the exact root-owned worker after graceful SIGTERM failed to stop it",
+  "target_pid": 3449589,
+  "expected_uid": 0,
+  "expected_parent_pid": 2631,
+  "expected_command": "nix-daemon 3449558",
+  "expected_lock_path": "/nix/store/08w4wl60b1fn4li3q5vbv4khyqs7rhws-lib.sh.lock",
+  "expected_lock_device": "0:31",
+  "expected_lock_inode": 4193189,
+  "process_action": "One operator-issued SIGKILL through a held pidfd after fresh exact identity and held WRITE-lock validation",
+  "risk": "Interrupts the pending store operation without graceful cleanup; ownership of the original operation and safe cancellation are not proved",
+  "after_release": "Verify worker exit and exact lock release, rebind the preserved source inputs, then run the same single unchanged normal-settings three-check Nix retry with a 3500-second deadline",
+  "constraints": ["Do not signal main daemon PID 2631 or any other worker", "No daemon restart", "No lockfile removal or shared-data deletion", "No host configuration or GC override", "No source or dependency-pin change", "No acceptance weakening or premature lifecycle closeout"],
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "signal_sent_under_this_authorization": false,
+  "nix_retried": false
+}

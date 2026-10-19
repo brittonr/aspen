@@ -51,28 +51,60 @@ The live and virtual adapters supply observations to the same timer core. They d
 
 The scheduler tracks generation-bound runnable ids through ready, running, blocked, completed, and cancelled states. Wake, choose, yield, block, complete, cancellation, and generation cleanup are explicit transitions. Queue depth, total runnables, and concurrent selections are bounded.
 
-Every transition into ready - a new wake, a blocked wake, and yield - passes the same ready-capacity admission. A new occurrence charges the total-runnable envelope and the ready queue; an existing occurrence already holds its active slot, so only the ready queue applies. A denied transition returns `Reject` or `Backpressure` from the admitted overload policy, publishes no accepted wake or yield action, and leaves phases, counts, priorities, and sequence positions unchanged. Wake for an existing occurrence resumes only from `blocked`; ready, running, completed, and cancelled occurrences remain duplicates. Successful entry into ready takes a checked fresh enqueue position, the supplied priority, and a reset wait counter, and stale-generation commands are discarded before any effect. Terminal retention stays owned by the retained-occurrence policy and is unchanged by ready admission. A recorded trace that depended on a former over-capacity yield now reports the admitted overload result instead of silently rewriting the schedule.
+Every transition into ready - a new wake, a blocked wake, and yield - passes the same ready-capacity admission. A new occurrence charges the active-runnable envelope and the ready queue; an existing occurrence already holds its active slot, so only the ready queue applies. A denied transition returns `RejectedOverload` or `Backpressure` from the admitted overload policy, publishes no accepted wake or yield action, and leaves phases, counts, priorities, and sequence positions unchanged. Wake resumes only from `blocked`; ready, running, completed, and cancelled occurrences remain duplicates. Successful entry into ready takes a checked fresh enqueue position. Wake applies the supplied priority and resets the wait counter; Yield retains its occurrence's priority. Stale-generation commands are discarded without effects. Rejected Yield retains Running ownership: retry requires an explicit later command, not an adapter fallback. The canonical command and action schemas remain `v1`.
 
 Deterministic profiles order by admitted FIFO or priority/FIFO policy and record every choice. Recorded-choice profiles require an eligible recorded choice during replay. A fairness claim exists only when the selected profile includes a finite fairness bound. Otherwise, canonical evidence preserves `does-not-prove-fairness`. Bounded fairness promotes the longest-waiting overdue runnable before ordinary priority ordering.
 
-### Adapter regression evidence and limits
+### Owning shell and receiving effects
 
-The scheduler adapter regressions exercise both admitted profile kinds through
-`ExtensionTimeContext`, canonical accepted/denied action translation, blocked
-resume and Yield at the active limit, both overload policies, complete rejected
-state equality, fresh FIFO/priority/wait accounting, stale generations, and
-sequence exhaustion. Accepted live transitions also execute and observe the
-real thread-unpark adapter; a registered target rejects denied transitions.
+[`SchedulerRuntime<P>`](../src/fabric_time/shell/owned.rs) owns one admitted profile,
+`ExtensionTimeContext`, scheduler state, activated capacity, and an application-owned
+[`SchedulerWakePort`](../src/fabric_time/ports.rs). Extensions construct their context
+with `ExtensionTimeContext::from_host`; the executable application fixture and
+conformance consumer use `for_application` with their explicitly admitted profile.
+That constructor does not establish system-extension authority or a manifest envelope.
 
-These checks do not establish a combined scheduler/capacity/effect executor.
-`ExtensionTimeContext::apply_scheduler_command` returns a transition, while
-`capacity::Runtime` owns separate reservation/accounting operations. The
-deterministic profile and pure simulation event fixtures do not supply an
-independent simulated wake-effect dispatcher. End-to-end reservation/effect
-ordering remains an open F09/F10 acceptance obligation, owned by Molten
-fabric-time maintainers; neither the regression tests nor standalone capacity
-tests close it or establish liveness, performance, or whole-runtime allocation
-claims.
+The owner previews the authoritative core command/selection decision without cloning
+the scheduler snapshot, derives active/Ready deltas from the actual source and target
+phases, stages checked capacity use, and prepares fallible delivery before publication.
+With exclusive mutable ownership it publishes scheduler, capacity, and Ready indices
+together, then delivers only `Woken`/`Yielded`. Denial, stale discard, invalid phase,
+overflow, replay divergence, and preparation failure preserve the complete scheduler
+and capacity state. No pending delivery is added by those paths. A delivery error after
+publication is `SchedulerRuntimeError::CommittedEffectUncertain`: state stays committed,
+the result is not overload/denial, and the owner never retries automatically.
+
+Delivery receives `SchedulerWakeCommit`, borrowing the owner's actual published
+scheduler and capacity fields plus the stable occurrence index. It is not a copied
+expected/future state and adds no allocation to valid owning transitions. Concrete
+adapters retain their narrow thread-unpark and simulated-queue mechanisms.
+
+[`ThreadSchedulerWakeAdapter`](../src/fabric_time/parts/adapters/p003/body.rs) prepares
+the exact generation-qualified target and unparks it after commit.
+`SimulationSchedulerWakeAdapter` independently buffers bounded retained-occurrence
+indices. `drain_next` returns a `u64`; consumers check native index conversion,
+then read committed state/accounting. It never invokes the thread adapter or
+synthesizes an admitted scheduler action.
+A full undrained delivery queue is a fallible preparation error, not scheduler overload.
+The executable fixture and scheduler conformance consumer use the owner rather than
+manually charging capacity or routing pure transitions.
+
+The existing adapter regression paths now target this owning API, paired live and
+simulation receivers, phase-derived accounting, both overload policies, stale/service/
+profile fences, replay and arithmetic errors, preparation failure, terminal cleanup,
+and release. The receiving regressions capture the actual borrowed fields at the
+delivery boundary before the concrete effect, not later behind the command mutex.
+A deliberate wrong-order control delivers the real Running/Blocked owner fields
+through each concrete adapter; the same receiver predicate must reject those fields
+and accept normal committed publication. Per-command preparation/delivery sequences
+and FIFO receiver checkpoints account for denied work before shutdown, without an
+absence-by-timeout inference or hiding coalesced wake permits. Accepted live progress
+is observed before any checkpoint control wake. The [recorded two-profile CLI
+smoke](../evidence/cairn-source-remediation-2026-10-15/attempt-19-shared-scheduler-source-acceptance/actual-fabric-time-cli-readback.json)
+exercises the owning runtime and its concrete conformance consumers. Molten fabric-time
+maintainers own these regressions and fixture; neither establishes global liveness
+or measured performance.
+
 
 ## Scheduler capacity activation
 
@@ -80,14 +112,35 @@ The capacity core derives one plan from the admitted profile and active generati
 The plan binds runnable, queue, and concurrency slots with checked conversion and arithmetic.
 It adds no second capacity configuration.
 
-The live shell reserves storage for runnable states and queue keys before activation.
-An allocation error denies activation without a smaller scheduler or hidden fallback.
-The owned reservations use the concrete Rust slot types for this implementation cohort.
-They do not replace canonical Preserves state or make Rust layout authoritative.
+The shell fallibly preallocates the actual `SchedulerState::runnables` storage and
+Ready-index queue before activation; these are used by admitted transitions, not
+inert placeholder reservations. An allocation error denies activation without a
+smaller scheduler or hidden fallback. Shared core preview/apply decisions preserve
+the existing FIFO, priority/fairness, replay, cleanup, and overload laws without an
+independent adapter admission implementation. The owner transfers a new occurrence's
+owned command key into backing storage; snapshot/canonical evidence allocation is
+separate from transition publication.
 
-Steady-state accounting rejects a stale generation, wrong profile, wrong plan, released capacity, underflow, overflow, or physical exhaustion.
-The shell does not widen either reservation after activation.
-Existing scheduler ordering, fairness, replay, cleanup, and overload decisions remain authoritative.
+Neither backing widens after activation. The admitted logical slot counts remain
+binding even if an allocator reserves more bytes than requested. Active usage counts
+Ready, Running and Blocked phases; queue usage counts only Ready phases. Selection
+releases one Ready slot, Complete/Cancel release the actual active/Ready charges,
+and generation cleanup sums the affected phases. Release requires quiescence and
+fences further transitions while retaining terminal identity history.
+
+Completed and Cancelled rows are deliberately retained in runnable backing and are
+never silently purged or reused. Thus a scheduler can have zero active usage yet
+no physical space for a new identity after its retained history fills the plan.
+New identities then receive the existing Reject/Backpressure action without state
+mutation; an existing Blocked occurrence can still resume if Ready capacity exists.
+This finite-history/full-backing limit is not terminal reclamation or an implementation
+of the separate `bound-terminal-scheduler-retention` change. Rust layout and stable
+in-process indices do not replace canonical Preserves identity or occurrence fencing.
+
+Capacity use rejects stale generations, wrong profiles/plans, released capacity,
+underflow and overflow. Scheduler overload leaves usage, high-water and exhaustion
+observations unchanged; it is not a speculative capacity charge. Explicit standalone
+capacity exhaustion observations remain distinct from denied scheduler transitions.
 
 Capacity observations bind the plan, profile, generation, usage, high-water values, exhaustion count, and release state.
 These observations do not prove global latency, fairness, liveness, host memory stability, or whole-runtime zero allocation.

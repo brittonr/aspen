@@ -1,0 +1,21 @@
+{
+  "argv": [
+    "/run/wrappers/bin/sudo",
+    "-n",
+    "--",
+    "/run/current-system/sw/bin/ps",
+    "-p",
+    "3449589",
+    "-o",
+    "pid,ppid,uid,stat,wchan:48,args",
+    "--no-headers"
+  ],
+  "observed_at": "2026-10-17T21:11:03.715217+00:00",
+  "elapsed_seconds": 0.016,
+  "exit_code": 1,
+  "stdout": "",
+  "stderr": "sudo: a password is required\n",
+  "timed_out": false,
+  "read_only": true,
+  "target_pid": 3449589
+}

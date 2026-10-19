@@ -1,0 +1,33 @@
+{
+  "recorded_at": "2026-10-17T21:36:54.908246+00:00",
+  "source": "Operator-provided terminal output; accepted as delivered, not rerun",
+  "operator_stdout": {
+    "pid": 3449589,
+    "mode": "terminate",
+    "signal_sent": true,
+    "identity": [
+      "0",
+      "3449589",
+      "2631",
+      "nix-daemon 3449558"
+    ],
+    "lock_identity": [
+      0,
+      31,
+      4193189
+    ],
+    "lock_rows": [
+      {
+        "pid": 3449589,
+        "type": "FLOCK",
+        "mode": "WRITE",
+        "inode": 4193189,
+        "maj:min": "0:31",
+        "blocker": null
+      }
+    ],
+    "status": "SIGTERM delivered; exit and lock release are not yet proved"
+  },
+  "assistant_sent_signals": false,
+  "nix_retried": false
+}

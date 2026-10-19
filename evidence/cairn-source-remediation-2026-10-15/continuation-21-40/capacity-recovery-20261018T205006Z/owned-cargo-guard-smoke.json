@@ -1,0 +1,124 @@
+{
+  "recorded_at": "2026-10-18T21:11:44.396368+00:00",
+  "workspace": "/tmp/molten-capacity-reclaim-smoke-5_7d8fwb",
+  "scope": "Owned throwaway Cargo cache only; production cache not modified",
+  "steps": [
+    {
+      "step": "real-cargo-test-artifact-production",
+      "argv": [
+        "/run/current-system/sw/bin/timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "60s",
+        "bash",
+        "/tmp/molten-cairn-continuation-rrpmy62t/with-cached-shell.sh",
+        "cargo",
+        "test",
+        "--offline",
+        "--no-run",
+        "--target-dir",
+        "/tmp/molten-capacity-reclaim-smoke-5_7d8fwb/target"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "   Compiling capacity-reclaim-probe v0.0.0 (/tmp/molten-capacity-reclaim-smoke-5_7d8fwb)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.64s\n  Executable unittests src/lib.rs (target/debug/deps/capacity_reclaim_probe-820a6d416fbf607d)\n  Executable unittests src/main.rs (target/debug/deps/capacity_reclaim_probe-95704790f18d040d)\n"
+    },
+    {
+      "step": "real-cargo-lock-coordination",
+      "blocked_while_guard_held": true,
+      "exit_code_after_release": 0,
+      "stdout": "",
+      "stderr": "    Blocking waiting for file lock on build directory\n    Checking capacity-reclaim-probe v0.0.0 (/tmp/molten-capacity-reclaim-smoke-5_7d8fwb)\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.10s\n"
+    },
+    {
+      "step": "guard-and-file-boundaries",
+      "busy_guard": {
+        "status": "abstained",
+        "error": "[Errno 11] Resource temporarily unavailable",
+        "removed_names": []
+      },
+      "wrong_manifest_guard": {
+        "status": "abstained",
+        "error": "Approved manifest identity changed",
+        "removed_names": []
+      },
+      "wrong_root_guard": {
+        "status": "abstained",
+        "error": "Profile identity changed",
+        "removed_names": []
+      },
+      "changed_artifact_guard": {
+        "status": "abstained",
+        "error": "Approved artifact inventory changed: entries",
+        "removed_names": []
+      },
+      "applied": {
+        "status": "applied",
+        "profile": "/tmp/molten-capacity-reclaim-smoke-5_7d8fwb/target/debug",
+        "removed_names": [
+          "capacity_reclaim_probe-4055d7ea51f76597.d",
+          "capacity_reclaim_probe-5e48235d2b46a4e6.d",
+          "capacity_reclaim_probe-820a6d416fbf607d",
+          "capacity_reclaim_probe-820a6d416fbf607d.d",
+          "capacity_reclaim_probe-9246ba0286b09702.d",
+          "capacity_reclaim_probe-95704790f18d040d.d",
+          "libcapacity_reclaim_probe-4055d7ea51f76597.rmeta",
+          "libcapacity_reclaim_probe-5e48235d2b46a4e6.rmeta",
+          "libcapacity_reclaim_probe-9246ba0286b09702.rlib",
+          "libcapacity_reclaim_probe-9246ba0286b09702.rmeta"
+        ],
+        "allocated_bytes_unlinked": 41984,
+        "usage_observation": {
+          "argv": [
+            "/etc/profiles/per-user/brittonr/bin/lsof",
+            "-nP",
+            "-a",
+            "-u1555",
+            "-p",
+            "^3147161",
+            "+D",
+            "/tmp/molten-capacity-reclaim-smoke-5_7d8fwb/target/debug/deps",
+            "-Fpcfn"
+          ],
+          "exit_code": 1,
+          "stdout": "",
+          "stderr": "lsof: WARNING: can't stat() overlay file system /var/lib/docker/overlay2/f047a0d1084ef5053a9a655e0249dd015f60063c0c3c38439ddbb34a8d7725c8/merged\n      Output information may be incomplete.\nlsof: WARNING: can't stat() nsfs file system /run/docker/netns/49dac6319581\n      Output information may be incomplete.\n",
+          "limit": "UID 1555 observations only; warnings retain visibility limits. The three kernel Cargo locks separately exclude Cargo writers of any UID."
+        },
+        "limit": "Allocated bytes are not a substitute for measured post-operation dataset-available capacity; no protection against arbitrary non-Cargo manual mutators is claimed."
+      },
+      "protected_members_retained": {
+        "hard_linked_test_artifact": true,
+        "external_proof_alias": true,
+        "runtime_library": true,
+        "source_file": true,
+        "recent_artifact": true,
+        "symlink_not_followed_or_unlinked": true,
+        "cargo_lock_inodes_unchanged": true
+      }
+    },
+    {
+      "step": "real-cargo-rebuild-after-prune",
+      "argv": [
+        "/run/current-system/sw/bin/timeout",
+        "--signal=TERM",
+        "--kill-after=5s",
+        "60s",
+        "bash",
+        "/tmp/molten-cairn-continuation-rrpmy62t/with-cached-shell.sh",
+        "cargo",
+        "test",
+        "--offline",
+        "--no-run",
+        "--target-dir",
+        "/tmp/molten-capacity-reclaim-smoke-5_7d8fwb/target"
+      ],
+      "exit_code": 0,
+      "regenerated_test_executable": "capacity_reclaim_probe-820a6d416fbf607d",
+      "stdout": "",
+      "stderr": "   Compiling capacity-reclaim-probe v0.0.0 (/tmp/molten-capacity-reclaim-smoke-5_7d8fwb)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.42s\n  Executable unittests src/lib.rs (target/debug/deps/capacity_reclaim_probe-820a6d416fbf607d)\n  Executable unittests src/main.rs (target/debug/deps/capacity_reclaim_probe-95704790f18d040d)\n"
+    }
+  ],
+  "passed": true,
+  "owned_workspace_removed": true
+}

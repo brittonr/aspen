@@ -1,0 +1,15 @@
+{
+  "user_selection": "Retry with normal settings",
+  "scope": "One bounded retry of unchanged required nextest, clippy and nextest-config Nix checks after the host diagnostics and successful read-only store handshake",
+  "argv": ["nix", "build", "--no-update-lock-file", "--no-link", "-L", ".#checks.x86_64-linux.nextest", ".#checks.x86_64-linux.clippy", ".#checks.x86_64-linux.nextest-config"],
+  "command_deadline_seconds": 3500,
+  "gc_override": false,
+  "normal_automatic_gc_may_run": true,
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "readiness_evidence": "../host-readiness-after-done.json",
+  "prior_failed_acceptance": "../f09-f10-nix-command-local-retry/required-checks.json",
+  "constraints": ["Freeze Molten product source for the run", "Do not repeat already-passing source or functional checks on unchanged inputs", "No command-local GC override", "No persistent host configuration changes", "No daemon restart", "No manual shared-data deletion", "No unrelated-process termination", "No acceptance weakening", "No premature sync, archive, pin update or publication"],
+  "non_claims": ["The store handshake does not establish build or acceptance success", "The earlier timeout cause is not established", "No new implementation cycle has started"]
+}

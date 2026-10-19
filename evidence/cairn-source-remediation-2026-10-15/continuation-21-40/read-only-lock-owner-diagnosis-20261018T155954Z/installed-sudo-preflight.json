@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/run/wrappers/bin/sudo",
+    "-n",
+    "/run/current-system/sw/bin/id",
+    "-u"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-18T16:01:08.135969+00:00",
+  "elapsed_seconds": 0.022,
+  "exit_code": 1,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "sudo: a password is required\n",
+  "read_only": true
+}

@@ -1,0 +1,12 @@
+{
+  "user_selection": "Try command-local override",
+  "scope": "One bounded retry of the existing required nextest, clippy and nextest-config Nix checks with command-local min-free=0",
+  "argv": ["nix", "build", "--option", "min-free", "0", "--no-update-lock-file", "--no-link", "-L", ".#checks.x86_64-linux.nextest", ".#checks.x86_64-linux.clippy", ".#checks.x86_64-linux.nextest-config"],
+  "command_deadline_seconds": 3500,
+  "implementation_attempts_consumed": 20,
+  "authorized_implementation_attempt_cap": 40,
+  "new_source_attempt_started": false,
+  "unchanged_boundaries": ["No persistent host settings changes", "No shared-data deletion", "No unrelated-process termination", "No acceptance weakening", "No inferred permission for further GC overrides", "No Molten remote publication"],
+  "prior_failed_run": "../f09-f10-nix-recovery/ordered-relevant-nix-checks.json",
+  "risk": "The run can still exhaust available disk space or encounter an unresolved GC or other prerequisite; permission does not establish a root cause or passing result"
+}

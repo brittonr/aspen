@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "git",
+    "add",
+    "--",
+    "docs/fabric-time-scheduler-runtime.md"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-17T05:12:38.856915+00:00",
+  "elapsed_seconds": 0.008,
+  "exit_code": 0,
+  "timed_out": false,
+  "stdout": "",
+  "stderr": "",
+  "environment": {
+    "IN_NIX_SHELL": "impure",
+    "CARGO_TARGET_DIR": "/home/brittonr/.cargo-target"
+  }
+}

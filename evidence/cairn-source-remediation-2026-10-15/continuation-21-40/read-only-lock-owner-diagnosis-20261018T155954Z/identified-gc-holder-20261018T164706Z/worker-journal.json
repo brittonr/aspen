@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "/run/current-system/sw/bin/journalctl",
+    "--unit=nix-daemon.service",
+    "_PID=725672",
+    "--lines=40",
+    "--no-pager",
+    "--output=short-iso"
+  ],
+  "cwd": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "started_at": "2026-10-18T16:47:56.781483+00:00",
+  "elapsed_seconds": 0.006,
+  "exit_code": 0,
+  "stdout": "-- No entries --\n",
+  "stderr": "",
+  "read_only": true
+}

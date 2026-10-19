@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "/run/current-system/sw/bin/sudo",
+    "-n",
+    "/run/current-system/sw/bin/id",
+    "-u"
+  ],
+  "exit_code": 1,
+  "stderr": "sudo: /run/current-system/sw/bin/sudo must be owned by uid 0 and have the setuid bit set\n",
+  "source": "Observed bash tool result in this diagnosis",
+  "limit": "This is the unwrapped store binary, not yet a conclusion about the installed NixOS privilege wrapper",
+  "signals_or_host_changes": false
+}

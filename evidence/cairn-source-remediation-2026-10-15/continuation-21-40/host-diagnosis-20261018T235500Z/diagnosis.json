@@ -1,0 +1,111 @@
+{
+  "recorded_at": "2026-10-18T23:5x:00Z",
+  "status": "bounded-host-diagnosis-after-capacity-recovered-run-failure",
+  "context": {
+    "failed_run_record": "../capacity-recovered-normal-20261018T214935Z/ordered-relevant-nix-checks.json",
+    "failed_run": "argv nix build --no-update-lock-file --no-link -L .#checks.x86_64-linux.nextest .#checks.x86_64-linux.clippy .#checks.x86_64-linux.nextest-config; exit 1; timed_out true; elapsed 3500.125s; stdout empty; stderr 'shutting down error: interrupted by the user'",
+    "authorization_state": "The single authorized capacity-recovered sequence is consumed. The conditional repository flake gate was not launched.",
+    "implementation_attempts_consumed": 20,
+    "authorized_implementation_attempt_cap": 40
+  },
+  "observations": {
+    "capacity": {
+      "df_rows": "datapool/nix 495295135744 used 255763021824 available 236952354816; datapool/cargo-target 1556877148160 used 1319924793344 available 236952354816",
+      "available_gib": 220.68,
+      "thresholds_source": "/etc/nix/nix.conf:15-17",
+      "min_free_bytes": 107374182400,
+      "max_free_bytes": 137438953472,
+      "conclusion": "Capacity is above both thresholds; not a space blocker"
+    },
+    "store_and_daemon_health": {
+      "path_info_round_trip_seconds": 0.083,
+      "write_probe": "nix store add-path /etc/hostname --name molten-probe-20261018 -> /nix/store/1q2s3qwj59hw96kpb1d48b8j8dclgd8m-molten-probe-20261018 in 0.101s",
+      "read_throughput": "dd 200 MiB from rustc libLLVM.so -> 2.7 GB/s",
+      "conclusion": "Store reads, writes, and daemon round-trips are healthy in isolation"
+    },
+    "substituters": {
+      "endpoints": [
+        "http://100.100.103.95:39400/nix-cache-info -> 200 in 0.0117s",
+        "http://100.100.103.95:5000/nix-cache-info -> 200 in 0.0107s",
+        "https://cache.nixos.org/nix-cache-info -> 200 in 0.0473s",
+        "https://devenv.cachix.org/nix-cache-info -> 200 in 0.0372s"
+      ],
+      "conclusion": "No unreachable-substituter stall observed"
+    },
+    "daemon_worker_leak": {
+      "child_count": 3665,
+      "children_one_second_at_other_than_24h": "3572 children older than 24h; 92 between 1h and 24h",
+      "identical_age_seconds_of_oldest": 168283,
+      "single_mass_spawn_interpretation": "[INFERENCE] Identical etimes implies one mass fork event; accumulation over time is not observed",
+      "user": "all root",
+      "temproots_entries": 3666,
+      "worker_argv_client_pids_distinct": 3664,
+      "worker_argv_client_pids_still_alive": 31,
+      "orphaned_worker_estimate": 3633
+    },
+    "flock_census_proc_locks": {
+      "source": "/proc/locks",
+      "rows": {
+        "/nix/var/nix/db/big-lock inode=22406060": 3657,
+        "/nix/var/nix/db/db.sqlite inode=22406061": 3658,
+        "/nix/var/nix/db/db.sqlite-shm inode=302491": 3677,
+        "/nix/var/nix/gc.lock inode=22402385": 0,
+        "/nix/var/nix/current-load/main-lock inode=22402919": 0
+      },
+      "mode": "FLOCK ADVISORY READ rows",
+      "interpretation": "[INFERENCE] Shared READ holders consistent with one leaked worker each; shared readers do not block the successful write probe above, so lock starvation is not established",
+      "root_cause_claim": "none"
+    },
+    "evaluation_and_plan": {
+      "single_check_dry_run_warm": "688 'evaluating file' lines in 4s (172/s) for .#checks.x86_64-linux.nextest-config",
+      "single_check_dry_run_eval_cache_disabled": "688 lines in 2s (344/s)",
+      "three_check_dry_run_bounded_150s": "printed hundreds of nixpkgs evaluation lines, then reached its 150s deadline with no build or copy output",
+      "three_check_dry_run_plan_sizing": "pending at record time (bounded 400s probe)",
+      "conclusion": "Warm evaluation is fast; the failing runs produced no output, so the stall is not attributable to warm-cache evaluation"
+    },
+    "concurrent_workloads": {
+      "foreign_flake_check": "pid 1503394 'nix flake check --no-write-lock-file -L path:/var/tmp/kiln-public-cutover-20261018-b66y33zr/clean-source' running 4418s at observation; parent pid 1503332; not owned by this session",
+      "foreign_develop": "pid 1993445 'nix develop --no-write-lock-file ... path:/var/tmp/kiln-public-cutover-...'",
+      "nix_process_count": "29 nix processes plus 3665 nix-daemon children",
+      "zfs_pressure": "kernel threads z_wr_iss x32 and arc_evict x7 present",
+      "pool_state_prior_record": "../read-only-host-diagnosis/diagnosis.json: pool 'datapool' healthy, 96% used, 80% fragmentation (2026-10-17)",
+      "conclusion": "A foreign multi-hour Nix workload shares the daemon, max-jobs=4, cores=4, and the datapool that also hosts the Cargo target; contention is real but its causal weight for the timeout is not proved"
+    },
+    "daemon_journal": {
+      "window": "last 150 minutes",
+      "non_routine_lines": [
+        "18:48:25 nix-daemon[1040977]: unexpected Nix daemon error: error: interrupted by the user (this session's owned command deadline)",
+        "19:25:04 nix-daemon[1859225]: unexpected Nix daemon error: error: interrupted by the user",
+        "19:29:16 nix-daemon[1440239]: unexpected Nix daemon error: error: interrupted by the user",
+        "19:31:34 nix-daemon[1568800]: unexpected Nix daemon error: error: interrupted by the user"
+      ],
+      "conclusion": "No daemon-side error, lock, GC, or substitution failure message accompanies the timeout"
+    }
+  },
+  "limits": [
+    "No single root cause of the 3500s timeout is established: capacity, substituters, store IO, daemon latency, and warm evaluation are each excluded as the sole cause",
+    "Point-in-time observations are not a continuous record; the failing window was not instrumented end to end",
+    "Shared READ flock rows are not proof of blocking; they are one-worker-per-connection evidence",
+    "The orphaned-worker estimate depends on PID liveness semantics and does not prove worker defect",
+    "Foreign kiln cutover processes were observed only; they were not signalled, inspected, or modified"
+  ],
+  "mutations": {
+    "product_source_changed": false,
+    "dependency_or_toolchain_pins_changed": false,
+    "host_configuration_changed": false,
+    "services_restarted": false,
+    "shared_data_deleted": false,
+    "unrelated_processes_terminated": false,
+    "store_paths_added_by_probe": [
+      "/nix/store/1q2s3qwj59hw96kpb1d48b8j8dclgd8m-molten-probe-20261018"
+    ]
+  },
+  "next_boundary": "Another acceptance run, host-level worker cleanup, daemon restart, or waiting out the foreign workload each require the user's decision; do not infer them from this diagnosis.",
+  "maintenance_owner": "Host/Nix operator owns daemon worker population and pool pressure recovery; Molten maintainers retain unchanged F09/F10 acceptance criteria and evidence",
+  "non_claims": [
+    "No passing Nix acceptance result",
+    "No behavioral test failure",
+    "No claim that daemon workers, contention, or pool pressure caused the timeout",
+    "No lifecycle sync, archive, or publication"
+  ]
+}
