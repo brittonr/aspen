@@ -26,11 +26,16 @@ pub struct ProllyDeletionAdmission {
 pub type ProllyServiceResult<T> = std::result::Result<T, ProllyServiceError>;
 
 // r[impl molten.prolly_map.storage_boundary]
+// r[impl molten.prolly_map.snapshot_profile_preflight]
 pub fn load_prolly_snapshot(
     port: &impl ProllyBlockStorePort,
     profile: &ProllyProfile,
     root: ProllyRoot,
 ) -> ProllyServiceResult<MapSnapshot> {
+    let profile_issues = validate_profile(profile);
+    if !profile_issues.is_empty() {
+        return Err(ProllyServiceError::Domain(profile_issues));
+    }
     let mut pending = vec![root.top_node_ref.clone()];
     let mut seen = BTreeSet::new();
     let mut blocks = Vec::new();

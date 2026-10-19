@@ -101,6 +101,36 @@ fn assert_unexpected_generation_is_stale(store: &mut LocalProllyBlockStore, prof
     assert_eq!(stale.status, ProllyPublicationStatus::Stale);
 }
 
+// r[verify molten.prolly_map.snapshot_profile_preflight]
+#[test]
+fn prolly_snapshot_validates_profile_before_block_read() {
+    let temporary = cap_tempfile::tempdir(cap_std::ambient_authority()).expect("temporary state root");
+    let root = DirectoryRoot::from_dir(temporary.try_clone().expect("clone root"));
+    root.create_layout().expect("node state layout");
+    let storage = root.namespace(NamespaceKind::Storage).expect("storage namespace");
+    let mut store = LocalProllyBlockStore::open(&storage).expect("typed Prolly block store");
+    let profile = profile();
+    assert_eq!(profile.limits.max_graph_facts, MAX_GRAPH_FACTS);
+
+    let mut over_limit = profile.clone();
+    over_limit.limits.max_graph_facts = MAX_GRAPH_FACTS + 1;
+    over_limit.profile_ref = derive_profile_ref(&over_limit).expect("forged profile identity");
+    let plan = initial_plan();
+    let error = load_prolly_snapshot(&store, &over_limit, plan.next.snapshot.root.clone())
+        .expect_err("invalid profile must deny before reading missing blocks");
+    assert!(matches!(
+        &error,
+        ProllyServiceError::Domain(issues)
+            if issues.contains(&ProllyIssue::ProfileBoundInvalid("max-graph-facts"))
+    ));
+
+    store.stage_blocks(&plan.staged_blocks).expect("stage real encoded blocks");
+    let loaded = load_prolly_snapshot(&store, &profile, plan.next.snapshot.root.clone())
+        .expect("exact maximum graph profile remains accepted");
+    assert_eq!(loaded.root, plan.next.snapshot.root);
+    assert_eq!(loaded.blocks.len(), plan.next.snapshot.blocks.len());
+}
+
 #[test]
 fn gc_denies_incomplete_stale_unpinned_and_unauthorized_admission() {
     let profile = profile();
