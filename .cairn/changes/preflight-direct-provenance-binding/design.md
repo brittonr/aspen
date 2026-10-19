@@ -1,0 +1,3 @@
+# Design
+
+The public binding helper returns `BuildVerificationBinding` rather than `Result`, so reuse `ensure_ref_bound(..., MAX_PROVENANCE_REFS, ...)` for both receipt and `record.build_record_refs` counts and convert the first error into one fail-closed binding diagnostic. Check before the existing empty-input decisions, first-success return, or candidate diagnostic accumulation; valid inputs incur only two length checks. Keep the existing provenance parser, parent `evaluate` preflight, returned matching refs, and bounded behavior unchanged. A direct public consumer can pass a forged `Record` even when parse-time validation would reject it, hence both cardinalities must be checked at this entry point.

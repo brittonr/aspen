@@ -1,0 +1,9 @@
+# Verification
+
+- Failing-before targeted test: `cargo test -p molten --lib direct_build_binding_preflights_existing_receipt_maximum -- --nocapture` failed because 65 receipts returned `is_bound = true` from the first passing receipt despite provenance's existing 64-reference maximum.
+- Final `cargo test -p molten --lib direct_build_binding_preflights_existing_ref_envelope -- --nocapture` passed (1 passed) in the isolated owner, checking exact-64 canonical binding, a forged public record with 65 build-record refs, 65 receipts including an early pass, and 65 failing receipts returning the same single bound-count diagnostic.
+- Built final `molten` and independently compiled a throwaway Rust consumer against `molten::provenance` and `molten::preserves_rail` public APIs. Its actual output was `public provenance binding smoke: exact 64 bound; +1 receipts and record refs deny before growth`. The disposable source and binary live outside the repository, under `/home/brittonr/.cargo-target/aspen-provenance-owner-20260929/`.
+- Isolated owner `cargo fmt --package molten --check` and `cargo clippy -p molten --lib -- -D warnings` passed. Final scoped `cargo octet check --artifact-dir ... -- -p molten --lib` reported `warning-only`, 1,534 warnings and zero errors. The static `unbounded_collection_growth` row still points to `src/provenance/parts/mod/p002/body.rs:223`; it is not accepted as a substitute for the actual before/after boundary proof or a full strict-ci scan.
+- Isolated owner `cairn validate`: 56 packages and empty issues. Disjoint composition changed-path targeted test: 1 passed with 1,512 filtered; `cairn validate`: 63 packages and empty issues. The integrated focused fmt and Clippy checks passed. Integrated scoped Octet status is `warning-only`, 1,493 warnings and zero errors.
+
+The preexisting Cairn packages, accepted specs, policy and pins remain unchanged; this delta uses the existing `MAX_PROVENANCE_REFS`, not a new limit.

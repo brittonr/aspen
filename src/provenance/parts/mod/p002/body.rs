@@ -143,11 +143,15 @@ fn push_missing_boundary_diagnostic(diagnostics: &mut impl crate::bounded::VecSi
 /// Checks per receipt that can each add one diagnostic: decision, artifact match, and build record binding.
 const BUILD_RECEIPT_CHECK_COUNT: usize = 3;
 
+// r[impl molten.provenance_state_proof.direct_binding_ref_envelope]
 pub fn evaluate_build_verification_binding(
     record: &Record,
     artifact_ref: &str,
     receipts: &[BuildVerificationReceipt],
 ) -> BuildVerificationBinding {
+    if let Some(denial) = binding_ref_bound_denial(record, artifact_ref, receipts.len()) {
+        return denial;
+    }
     if receipts.is_empty() {
         return BuildVerificationBinding {
             provenance_record_ref: record.record_ref.clone(),

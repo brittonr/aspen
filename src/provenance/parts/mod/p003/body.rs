@@ -85,6 +85,24 @@ fn ensure_ref_bound(len: usize, max: usize, context: &str) -> Result<()> {
     }
 }
 
+fn binding_ref_bound_denial(
+    record: &Record,
+    artifact_ref: &str,
+    receipt_count: usize,
+) -> Option<BuildVerificationBinding> {
+    let error = ensure_ref_bound(receipt_count, MAX_PROVENANCE_REFS, "provenance build verification receipts")
+        .and_then(|()| ensure_ref_bound(record.build_record_refs.len(), MAX_PROVENANCE_REFS, "provenance build record ref"))
+        .err()?;
+    Some(BuildVerificationBinding {
+        provenance_record_ref: record.record_ref.clone(),
+        artifact_ref: artifact_ref.to_string(),
+        matched_receipt_ref: None,
+        matched_build_record_ref: None,
+        is_bound: false,
+        diagnostics: vec![error.to_string()],
+    })
+}
+
 // r[impl molten.runtime_spine.canonical_content_refs.migration]
 fn validate_ref(value: &str, context: &str) -> Result<()> {
     crate::preserves_rail::validate_content_ref(value).map_err(|error| {
