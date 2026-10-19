@@ -861,9 +861,11 @@ nix build .#checks.x86_64-linux.verified-node-replication-pilot --no-link -L
 
 ## License
 
-Repository-owned source is licensed under `AGPL-3.0-or-later`; see [LICENSE](LICENSE). Third-party dependencies, vendored manifest snapshots, generated material containing upstream code, and external references retain their original terms; see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+Repository-owned source—including cores, contracts, schemas, fixtures, templates, documentation, and policy—is licensed under `AGPL-3.0-or-later`; see [LICENSE](LICENSE). Third-party dependencies, vendored manifest snapshots, generated material containing upstream code, and external references retain their original terms; see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
-Earlier permissive grants remain valid. The current declaration applies prospectively to project-owned contributions and does not revoke rights already received. Licensing metadata is distribution evidence only: it does not establish contributor authority, legal compliance, runtime correctness, or release eligibility. AGPL is an accepted project distribution choice; the typed distribution profile records project-required notices and source-export evidence, is not legal advice, and does not prove compliance in every jurisdiction.
+Earlier permissive grants remain valid, including for byte-identical content previously received under those grants. The current declaration applies prospectively to project-owned contributions and does not revoke rights already received. Licensing metadata is distribution evidence only: it does not establish contributor authority, legal compliance, runtime correctness, or release eligibility. AGPL is an accepted project distribution choice; the typed distribution profile records project-required notices and source-export evidence, is not legal advice, and does not prove compliance in every jurisdiction.
+
+The focused [license policy](license-policy.tsv) covers every current workspace package exactly once, including `molten-node-host`; [the boundary checker](tools/check-license-boundary.rs) rejects missing package rules before checking license expressions and notice artifacts. This does not make private or authenticated dependency sources anonymously obtainable.
 
 ## References
 
