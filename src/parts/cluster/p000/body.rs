@@ -21,6 +21,7 @@ const CLUSTER_LIFECYCLE_PHASE_STOP: &str = "stop";
 const CLUSTER_LIFECYCLE_NONE: &str = "none";
 const CLUSTER_LIFECYCLE_STOP_SEPARATOR: &str = ">";
 const MAX_CLUSTER_LIFECYCLE_ITEMS: usize = 512;
+pub const MAX_CLUSTER_MANIFEST_BYTES: usize = 1_048_576;
 const _: () = assert!(MAX_CLUSTER_LIFECYCLE_ITEMS > 0);
 // Lifecycle receipts encode at most this many node summaries; larger manifests cannot run.
 const MAX_CLUSTER_MANIFEST_NODES: usize = MAX_CLUSTER_LIFECYCLE_ITEMS;
@@ -45,6 +46,12 @@ pub fn manifest_path(state_root: &std::path::Path) -> std::path::PathBuf {
 
 pub fn plan(state_root: &std::path::Path, node_names: &[String]) -> crate::error::Result<Plan> {
     validate_state_root(state_root)?;
+    if node_names.len() > MAX_CLUSTER_MANIFEST_NODES {
+        return Err(crate::error::Failure::invalid_harness(format!(
+            "cluster node count {} exceeds bound {MAX_CLUSTER_MANIFEST_NODES}",
+            node_names.len()
+        )));
+    }
     if node_names.is_empty() {
         return Err(crate::error::Failure::invalid_harness("cluster requires at least one --node"));
     }
@@ -74,6 +81,11 @@ pub fn render_manifest(plan: &Plan) -> String {
 }
 
 pub fn parse_manifest(source: &str) -> crate::error::Result<Vec<String>> {
+    if source.len() > MAX_CLUSTER_MANIFEST_BYTES {
+        return Err(crate::error::Failure::invalid_harness(format!(
+            "cluster manifest exceeds byte bound {MAX_CLUSTER_MANIFEST_BYTES}"
+        )));
+    }
     let mut lines = source.lines();
     let header = lines
         .next()

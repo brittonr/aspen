@@ -192,6 +192,20 @@ mod tests {
     }
 
     #[test]
+    fn manifest_rejects_bytes_above_the_reader_limit() {
+        let prefix = format!("{CLUSTER_MANIFEST_HEADER}\nnode:node-a\n");
+        let manifest = format!("{prefix}{}", "\n".repeat(MAX_CLUSTER_MANIFEST_BYTES - prefix.len()));
+        assert_eq!(manifest.len(), MAX_CLUSTER_MANIFEST_BYTES);
+        assert_eq!(parse_manifest(&manifest).expect("manifest at byte boundary"), vec![
+            "node:node-a".to_string()
+        ]);
+        assert!(
+            parse_manifest(&format!("{manifest}\n")).is_err(),
+            "manifest beyond byte boundary must be rejected"
+        );
+    }
+
+    #[test]
     fn denies_empty_duplicate_and_unsafe_nodes() {
         let root = std::path::PathBuf::from("target/cluster");
         let empty = plan(&root, &[]).expect_err("empty denied");
@@ -249,5 +263,15 @@ mod tests {
             MAX_CLUSTER_MANIFEST_NODES + 1
         );
         assert!(past_limit.to_string().contains(&expected));
+
+        let node_ids =
+            (0..MAX_CLUSTER_MANIFEST_NODES).map(|index| format!("node:node-{index}")).collect::<Vec<_>>();
+        let root = std::path::PathBuf::from("target/cluster");
+        let planned = plan(&root, &node_ids).expect("maximum-size cluster plan");
+        assert_eq!(planned.nodes.len(), MAX_CLUSTER_MANIFEST_NODES);
+
+        let mut oversized = node_ids;
+        oversized.push("node:one-too-many".to_string());
+        assert!(plan(&root, &oversized).is_err(), "oversized direct cluster plan must not admit nodes");
     }
 }

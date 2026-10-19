@@ -61,6 +61,58 @@ fn cli_cluster_harness_executes_checked_fixture_and_verifies_offline() -> CliRes
 }
 
 #[test]
+fn cli_cluster_harness_preflights_fixture_bytes_before_staging_or_children() -> CliResult<()> {
+    let root = temp_dir("cli-cluster-harness-fixture-byte-bound")?;
+    let prefix = "molten.cluster.nodes.v1\nnode:fixture-a\n";
+    let mut source = prefix.to_string();
+    source.push_str(&"\n".repeat(molten::cluster::MAX_CLUSTER_MANIFEST_BYTES - prefix.len()));
+    assert_eq!(source.len(), molten::cluster::MAX_CLUSTER_MANIFEST_BYTES);
+    let exact_fixture = root.join("exact.cluster");
+    std::fs::write(&exact_fixture, &source)?;
+    let exact_state = root.join("exact-state");
+    let exact_run = root.join("exact-run");
+    let exact = molten_cmd()
+        .args(["cluster", "harness-run", "--fixture"])
+        .arg(&exact_fixture)
+        .args(["--state-root"])
+        .arg(&exact_state)
+        .args(["--run-dir"])
+        .arg(&exact_run)
+        .args(["--child-timeout-ms", CLUSTER_HARNESS_TEST_TIMEOUT_MS])
+        .output()?;
+    assert_success(&exact, "exact one-megabyte harness fixture with actual child");
+    assert!(exact_run.join("children/receipts/fixture-a/startup-receipt.preserves").exists());
+
+    source.push('\n');
+    let excess_fixture = root.join("excess.cluster");
+    std::fs::write(&excess_fixture, source)?;
+    let excess_state = root.join("excess-state");
+    let excess_run = root.join("excess-run");
+    std::fs::create_dir_all(&excess_state)?;
+    std::fs::create_dir_all(&excess_run)?;
+    let state_sentinel = excess_state.join("state-before-run");
+    let run_sentinel = excess_run.join("output-before-run");
+    std::fs::write(&state_sentinel, "retained")?;
+    std::fs::write(&run_sentinel, "retained")?;
+    let excess = molten_cmd()
+        .args(["cluster", "harness-run", "--fixture"])
+        .arg(&excess_fixture)
+        .args(["--state-root"])
+        .arg(&excess_state)
+        .args(["--run-dir"])
+        .arg(&excess_run)
+        .args(["--force", "--child-timeout-ms", CLUSTER_HARNESS_TEST_TIMEOUT_MS])
+        .output()?;
+    assert_failure(&excess, "oversized fixture must deny before staging");
+    assert!(stderr(&excess).contains("cluster manifest exceeds byte bound 1048576"));
+    assert_eq!(std::fs::read(&state_sentinel)?, b"retained");
+    assert_eq!(std::fs::read(&run_sentinel)?, b"retained");
+    assert!(!excess_run.join("artifact-index.tsv").exists());
+    assert!(!excess_state.join("fixture-a").exists());
+    Ok(())
+}
+
+#[test]
 fn cli_cluster_harness_exports_sealed_bundle_when_children_cannot_spawn() -> CliResult<()> {
     // r[verify molten.testing.receipt_first_cluster_harness.fixture_executable_runner]
     // r[verify molten.testing.local_multiprocess_cluster_tier.cleanup_negatives]

@@ -3,8 +3,15 @@
 pub fn verify_run_directory(
     run_directory: &std::path::Path,
 ) -> crate::error::Result<RunDirectoryVerification> {
+    use std::io::Read as _;
+
     let index_path = run_directory.join(RUN_INDEX_FILE);
-    let index_text = std::fs::read_to_string(&index_path).map_err(crate::error::Failure::from)?;
+    let mut index_text = String::new();
+    std::fs::File::open(&index_path)
+        .map_err(crate::error::Failure::from)?
+        .take(MAX_RUN_INDEX_BYTES as u64 + 1)
+        .read_to_string(&mut index_text)
+        .map_err(crate::error::Failure::from)?;
     let entries = parse_run_index(&index_text)?;
     let index_ref = content_ref_for_text(TEXT_ARTIFACT_DOMAIN, &index_text);
     let mut assessment = assess_indexed_run_directory(run_directory, &entries);

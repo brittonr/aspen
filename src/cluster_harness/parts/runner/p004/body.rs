@@ -125,6 +125,11 @@ fn render_run_index(entries: &[molten_core::cluster_harness::RunArtifactIndexEnt
 pub(super) fn parse_run_index(
     source: &str,
 ) -> crate::error::Result<Vec<molten_core::cluster_harness::RunArtifactIndexEntry>> {
+    if source.len() > MAX_RUN_INDEX_BYTES {
+        return Err(crate::error::Failure::invalid_harness(format!(
+            "cluster run index exceeds {MAX_RUN_INDEX_BYTES} bytes"
+        )));
+    }
     let mut lines = source.lines();
     let header = lines
         .next()

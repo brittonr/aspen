@@ -36,8 +36,15 @@ fn current_running_status(state_root: &std::path::Path) -> molten::error::Result
 }
 
 fn read_plan(state_root: &std::path::Path) -> molten::error::Result<molten::cluster::Plan> {
+    use std::io::Read as _;
+
     let path = molten::cluster::manifest_path(state_root);
-    let source = std::fs::read_to_string(&path).map_err(molten::error::Failure::from)?;
+    let mut source = String::new();
+    std::fs::File::open(&path)
+        .map_err(molten::error::Failure::from)?
+        .take(molten::cluster::MAX_CLUSTER_MANIFEST_BYTES as u64 + 1)
+        .read_to_string(&mut source)
+        .map_err(molten::error::Failure::from)?;
     let nodes = molten::cluster::parse_manifest(&source)?;
     molten::cluster::plan(state_root, &nodes)
 }

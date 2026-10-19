@@ -12,6 +12,7 @@ const RUN_INDEX_ENTRY_LINE_OFFSET: usize = 2;
 // One past molten-core's run-artifact cap, so an oversized index still reaches the core
 // too-many-artifacts diagnostic.
 pub(super) const MAX_RUN_INDEX_ENTRIES: usize = molten_core::cluster_harness::MAX_RUN_ARTIFACTS + 1;
+pub(super) const MAX_RUN_INDEX_BYTES: usize = 4 * 1_024 * 1_024;
 const RUN_INDEX_FILE: &str = "artifact-index.tsv";
 const VERIFICATION_FILE: &str = "verification.preserves";
 const FAILURE_BUNDLE_FILE: &str = "failure-repro-bundle.preserves";
@@ -97,8 +98,8 @@ struct PreparedArtifact {
 // r[impl molten.testing.local_multiprocess_cluster_tier.middle_tier]
 pub fn execute(input: &ExecutionInput) -> crate::error::Result<Execution> {
     validate_execution_input(input)?;
-    prepare_output_roots(input)?;
     let planned = plan_run(input)?;
+    prepare_output_roots(input)?;
     let evidence = record_run_evidence(input, planned)?;
     finish_run(input, evidence)
 }
@@ -118,7 +119,14 @@ struct PlannedRun {
 /// Reads and plans the fixture, and prepares the fixture metadata, command plan, and local plan
 /// artifacts.
 fn plan_run(input: &ExecutionInput) -> crate::error::Result<PlannedRun> {
-    let fixture_source = std::fs::read_to_string(&input.fixture_path).map_err(crate::error::Failure::from)?;
+    use std::io::Read as _;
+
+    let mut fixture_source = String::new();
+    std::fs::File::open(&input.fixture_path)
+        .map_err(crate::error::Failure::from)?
+        .take(crate::cluster::MAX_CLUSTER_MANIFEST_BYTES as u64 + 1)
+        .read_to_string(&mut fixture_source)
+        .map_err(crate::error::Failure::from)?;
     let node_names = crate::cluster::parse_manifest(&fixture_source)?;
     let plan = crate::cluster::plan(&input.state_root, &node_names)?;
     let node_ids = plan.nodes.iter().map(|node| node.node_id.clone()).collect::<Vec<_>>();

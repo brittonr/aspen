@@ -136,3 +136,20 @@ fn run_index_entry_count_is_bounded() {
     );
     assert!(past_limit.to_string().contains(&expected));
 }
+
+#[test]
+fn run_index_byte_size_is_bounded() {
+    let header = format!("{}\n", super::runner::RUN_INDEX_HEADER);
+    let suffix = "\tkind\tref\tpreserves\n";
+    let payload = "y".repeat(super::runner::MAX_RUN_INDEX_BYTES - header.len() - 1 - suffix.len());
+    let mut index = format!("{header}x{payload}{suffix}");
+    assert_eq!(index.len(), super::runner::MAX_RUN_INDEX_BYTES);
+    assert_eq!(
+        super::runner::parse_run_index(&index).expect("maximum-byte index").len(),
+        1,
+        "maximum-size index keeps its single admitted entry"
+    );
+    index.push('x');
+    let error = super::runner::parse_run_index(&index).expect_err("oversized index denied");
+    assert!(error.to_string().contains("cluster run index exceeds 4194304 bytes"));
+}
