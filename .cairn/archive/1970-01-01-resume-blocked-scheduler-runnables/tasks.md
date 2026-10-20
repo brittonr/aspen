@@ -13,7 +13,7 @@ record implemented and exercised work; required acceptance blockers remain open.
 - [x] [serial] Review F11 occurrence compatibility and record Wake, replay-divergence, and canonical receipt decisions in fabric-time docs. Cite r[molten.audit_f09.ordering] and r[molten.audit_f09.validation].
 - [x] [serial] Run the focused baseline and new tests after edits, including scheduler capacity and replay fixtures. Cite r[molten.audit_f09.validation].
 - [x] [serial] Run focused Octet checks, the existing strict Octet gate, and Clippy with `-D warnings` across required targets and features. Cite r[molten.audit_f09.validation].
-- [ ] [serial] Run required workspace tests, relevant Nix checks, and the repository Nix gate without weakening existing scope. Cite r[molten.audit_f09.validation].
+- [x] [serial] Run required workspace tests, relevant Nix checks, and the repository Nix gate without weakening existing scope. Cite r[molten.audit_f09.validation].
 - [x] [serial] Run native `.cairn/` validation and required change gates with tracked evidence and explicit executed-versus-static limits. Cite r[molten.audit_f09.validation].
 
 ## 2026-10-15 acceptance attempt

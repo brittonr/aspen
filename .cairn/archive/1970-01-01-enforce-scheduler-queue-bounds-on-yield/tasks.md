@@ -13,7 +13,7 @@ record implemented and exercised work; required acceptance blockers remain open.
 - [x] [serial] Record compatibility, overload caller behavior, replay divergence, and bounded receipt decisions in fabric-time docs. Cite r[molten.audit_f10.validation].
 - [x] [serial] Repeat focused tests after edits and add replay controls for unchanged valid schedules and rejected over-capacity history. Cite r[molten.audit_f10.validation].
 - [x] [serial] Run focused Octet checks, the existing strict Octet gate, and Clippy with `-D warnings` across required targets and features. Cite r[molten.audit_f10.validation].
-- [ ] [serial] Run required workspace tests, relevant Nix checks, and the repository Nix gate without weakening existing checks. Cite r[molten.audit_f10.validation].
+- [x] [serial] Run required workspace tests, relevant Nix checks, and the repository Nix gate without weakening existing checks. Cite r[molten.audit_f10.validation].
 - [x] [serial] Run native `.cairn/` validation and required gates with tracked evidence and explicit limits on adapter claims. Cite r[molten.audit_f10.validation].
 
 ## 2026-10-15 acceptance attempt
