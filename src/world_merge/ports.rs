@@ -1,10 +1,11 @@
 use molten_core::world_commit::RootKind;
 use molten_core::world_commit::WorldCommitRef;
 use molten_core::world_commit::WorldRootRef;
+use molten_core::world_merge::AdmittedWorldMigration;
 use molten_core::world_merge::WorldApplicationHandlerProfile;
 use molten_core::world_merge::WorldMergePolicyRef;
 use molten_core::world_merge::WorldMergeSchemaRef;
-use molten_core::world_merge::WorldMigrationBinding;
+use molten_core::world_merge::WorldMigrationResult;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorldMergePortError {
@@ -43,9 +44,9 @@ pub trait WorldMergeObjectPort {
 pub trait WorldMergeMigrationPort {
     fn materialize_migration(
         &mut self,
-        binding: &WorldMigrationBinding,
+        conversion: &AdmittedWorldMigration,
         source_bytes: &[u8],
-    ) -> Result<Vec<u8>, WorldMergePortError>;
+    ) -> Result<WorldMigrationResult, WorldMergePortError>;
 }
 
 pub trait WorldMergeHandlerPort {

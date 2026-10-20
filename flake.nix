@@ -784,11 +784,15 @@
           cp -R ${./crates/molten-core/src/world_head} "$out/src/world_head"
         '';
         worldMergeOctetWorkspace = pkgs.runCommand "molten-world-merge-octet-workspace" { } ''
-          mkdir -p "$out/src"
+          mkdir -p "$out/src" "$out/vendor/kamacite"
           cp ${./checks/world-merge-octet/Cargo.toml} "$out/Cargo.toml"
           cp ${./checks/world-merge-octet/Cargo.lock} "$out/Cargo.lock"
           cp ${./checks/world-merge-octet/dylint.toml} "$out/dylint.toml"
           cp ${./checks/world-merge-octet/src/lib.rs} "$out/src/lib.rs"
+          cp -R ${kamaciteSource}/. "$out/vendor/kamacite/"
+          chmod -R u+w "$out/vendor/kamacite"
+          cp ${./checks/world-merge-octet/kamacite-core.Cargo.toml} \
+            "$out/vendor/kamacite/crates/kamacite-core/Cargo.toml"
           cp -R ${./crates/molten-core/src/worldcommit} "$out/src/world_commit"
           cp -R ${./crates/molten-core/src/world_head} "$out/src/world_head"
           cp -R ${./crates/molten-core/src/world_merge} "$out/src/world_merge"

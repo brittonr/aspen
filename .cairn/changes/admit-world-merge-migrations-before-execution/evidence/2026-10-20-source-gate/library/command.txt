@@ -1,0 +1,1 @@
+cargo octet check -p molten --artifact-dir target/octet-worldmerge-f06-accepted-library -- --lib

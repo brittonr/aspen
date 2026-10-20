@@ -5,7 +5,7 @@ use crate::world_commit::WorldCommitRef;
 use crate::world_commit::WorldRootRef;
 
 pub const WORLD_DIFF_SCHEMA: &str = "molten.world-diff.v1";
-pub const WORLD_MERGE_PLAN_SCHEMA: &str = "molten.world-merge-plan.v1";
+pub const WORLD_MERGE_PLAN_SCHEMA: &str = "molten.world-merge-plan.v2";
 pub const WORLD_MERGE_CONFLICT_SCHEMA: &str = "molten.world-merge-conflict.v1";
 pub const WORLD_MERGE_RESULT_SCHEMA: &str = "molten.world-merge-result.v1";
 pub const MAX_WORLD_MERGE_ROOTS: u32 = 32;
@@ -200,6 +200,8 @@ pub struct WorldMergePlan {
     pub source_heads: Vec<WorldCommitRef>,
     pub outputs: Vec<WorldMergedRoot>,
     pub conflicts: Vec<WorldMergeConflict>,
+    pub migrations: Vec<super::WorldMigrationEvidence>,
+    pub(crate) original_request_ref: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -219,6 +221,12 @@ pub enum WorldMergeIssue {
     MigrationRequired(RootKind),
     MigrationMismatch(RootKind),
     MigrationProfileInvalid(RootKind),
+    MigrationResultMismatch(RootKind),
+    MigrationResultMalformed(RootKind),
+    MigrationResultOversized { kind: RootKind, actual: u64, maximum: u64 },
+    MigrationResultMissing(RootKind),
+    MigrationResultUnexpected,
+    MigrationSourceMalformed(RootKind),
     RuntimeSensitiveRoot(RootKind),
     ModeNotDeclared(RootKind),
     HandlerMissing(RootKind),

@@ -1,4 +1,3 @@
-
 #[test]
 fn failed_output_publication_never_publishes_a_commit() {
     // r[verify molten.world_merge.result]
@@ -30,13 +29,9 @@ fn failed_output_publication_never_publishes_a_commit() {
 #[test]
 fn unresolved_conflicts_publish_only_detached_conflict_artifacts() {
     // r[verify molten.world_merge.conflicts]
-    let mut plan = plan_with_generated_output();
-    plan.outputs.clear();
-    plan.conflicts.push(WorldMergeConflict {
-        kind: RootKind::DurableState,
-        key: Some("key".to_string()),
-        code: "concurrent-key-change",
-    });
+    let mut request = publication_request();
+    request.roots[1].right.keyed_values.insert("a".to_string(), b"right-a".to_vec());
+    let plan = plan_world_merge(request, Vec::new(), None).expect("actual concurrent conflict plan");
     let policy = WorldMergePolicyRef::new(reference("policy")).expect("policy ref");
     let mut objects = TestObjects::default();
     let mut conflicts = TestConflicts::default();

@@ -1,0 +1,1 @@
+cargo octet check -p molten --artifact-dir .cairn/changes/admit-world-merge-migrations-before-execution/evidence/2026-10-20-final-acceptance/library -- --lib

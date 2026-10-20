@@ -130,7 +130,7 @@ struct PlanInput {
 fn plan(input: PlanInput) -> Result<()> {
     let profile = conservative_profile(&input.profile_ref, &input.policy_ref)?;
     let (_, request) = load_request(&input.state_root, &input.base, &input.left, &input.right, profile)?;
-    let plan = plan_world_merge(&request, None)
+    let plan = plan_world_merge(request, Vec::new(), None)
         .map_err(|issues| Failure::invalid_harness(format!("world merge planning denied: {issues:?}")))?;
     let canonical = canonical_world_merge_plan(&plan)?;
     std::fs::write(&input.out, &canonical.bytes)?;

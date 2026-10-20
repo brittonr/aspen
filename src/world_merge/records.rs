@@ -9,6 +9,7 @@ use molten_core::world_merge::WorldMergeConflict;
 use molten_core::world_merge::WorldMergePlan;
 use molten_core::world_merge::WorldMergeSchemaRef;
 use molten_core::world_merge::WorldMergedRoot;
+use molten_core::world_merge::WorldMigrationEvidence;
 use preserves::IOValue;
 
 use crate::error::Failure;
@@ -93,11 +94,13 @@ pub fn canonical_world_diff(report: &WorldDiffReport) -> Result<CanonicalWorldDi
 pub fn canonical_world_merge_plan(plan: &WorldMergePlan) -> Result<CanonicalWorldMergePlan> {
     let outputs = plan.outputs.iter().map(output_value).collect();
     let conflicts = plan.conflicts.iter().map(conflict_value).collect();
+    let migrations = plan.migrations.iter().map(migration_value).collect();
     let value = crate::preserves_rail::record(WORLD_MERGE_PLAN_RECORD, vec![
         crate::preserves_rail::string(WORLD_MERGE_PLAN_SCHEMA),
         field("plan-ref", crate::preserves_rail::string(plan.plan_ref.as_str())),
         field("base-head", crate::preserves_rail::string(plan.base_head.as_str())),
         field("source-heads", refs(plan.source_heads.iter().map(WorldCommitRef::as_str))),
+        field("migrations", crate::preserves_rail::sequence(migrations)),
         field("outputs", crate::preserves_rail::sequence(outputs)),
         field("conflicts", crate::preserves_rail::sequence(conflicts)),
         non_claims(),
@@ -200,6 +203,24 @@ fn canonical_diff(value: IOValue) -> Result<CanonicalWorldDiff> {
         value,
         bytes,
     })
+}
+
+fn migration_value(evidence: &WorldMigrationEvidence) -> IOValue {
+    let conversion = evidence.conversion();
+    let binding = conversion.binding();
+    crate::preserves_rail::record("merge-migration", vec![
+        field("conversion-ref", crate::preserves_rail::string(conversion.conversion_ref())),
+        field("kind", crate::preserves_rail::string(conversion.kind().as_str())),
+        field("side", crate::preserves_rail::string(conversion.side().as_str())),
+        field("original-root", crate::preserves_rail::string(conversion.original_root().as_str())),
+        field("source-schema", crate::preserves_rail::string(binding.source_schema.as_str())),
+        field("source-ref", crate::preserves_rail::string(conversion.source_ref())),
+        field("target-schema", crate::preserves_rail::string(binding.target_schema.as_str())),
+        field("migration-plan", crate::preserves_rail::string(binding.plan_ref.as_str())),
+        field("migration-profile", crate::preserves_rail::string(&binding.profile_id)),
+        field("max-output-bytes", crate::preserves_rail::u64_value(conversion.max_output_bytes())),
+        field("result-ref", crate::preserves_rail::string(evidence.result_ref())),
+    ])
 }
 
 fn output_value(output: &WorldMergedRoot) -> IOValue {

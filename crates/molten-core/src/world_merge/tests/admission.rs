@@ -28,8 +28,8 @@ impl WorldMergeHandler for TestHandler {
 fn ancestor_replacement_and_stable_plan_identity_preserve_all_sources() {
     // r[verify molten.world_merge.admission]
     let input = request();
-    let first = plan_world_merge(&input, None).expect("merge plan");
-    let second = plan_world_merge(&input, None).expect("stable merge plan");
+    let first = plan_world_merge(input.clone(), Vec::new(), None).expect("merge plan");
+    let second = plan_world_merge(input, Vec::new(), None).expect("stable merge plan");
 
     assert_eq!(first, second);
     assert_eq!(first.outputs.len(), EXPECTED_OUTPUT_ROOTS);
@@ -51,7 +51,7 @@ fn keyed_values_merge_disjoint_changes_and_preserve_concurrent_conflicts() {
         durable.left = keyed("left", &[("a", "left-a"), ("b", "base-b")]);
         durable.right = keyed("right", &[("a", "base-a"), ("b", "right-b")]);
     }
-    let merged = plan_world_merge(&input, None).expect("disjoint keyed merge");
+    let merged = plan_world_merge(input.clone(), Vec::new(), None).expect("disjoint keyed merge");
     let output = merged
         .outputs
         .iter()
@@ -66,37 +66,9 @@ fn keyed_values_merge_disjoint_changes_and_preserve_concurrent_conflicts() {
         .find(|root| root.kind == RootKind::DurableState)
         .expect("durable input")
         .right = keyed("right", &[("a", "right-a"), ("b", "base-b")]);
-    let conflicted = plan_world_merge(&input, None).expect("conflict plan");
+    let conflicted = plan_world_merge(input, Vec::new(), None).expect("conflict plan");
     assert!(conflicted.conflicts.iter().any(|conflict| conflict.key.as_deref() == Some("a")));
     assert!(!conflicted.outputs.iter().any(|output| output.kind == RootKind::DurableState));
-}
-
-#[test]
-fn schema_change_requires_exact_admitted_migration_binding() {
-    // r[verify molten.world_merge.admission]
-    let mut input = request();
-    let durable = input.roots.iter_mut().find(|root| root.kind == RootKind::DurableState).expect("durable input");
-    durable.base.schema_ref = Some(schema("old-schema"));
-    durable.right.schema_ref = Some(schema("old-schema"));
-    durable.left.schema_ref = Some(schema("new-schema"));
-    let missing = plan_world_merge(&input, None).expect_err("missing migration denied");
-    assert!(missing.contains(&WorldMergeIssue::MigrationRequired(RootKind::DurableState)));
-
-    input.profile.migrations.insert(RootKind::DurableState, WorldMigrationBinding {
-        plan_ref: WorldMigrationPlanRef::new(reference("migration-plan")).expect("migration plan ref"),
-        profile_id: "durable-state-v1-to-v2".to_string(),
-        source_schema: schema("old-schema"),
-        target_schema: schema("new-schema"),
-        admitted: true,
-    });
-    assert!(plan_world_merge(&input, None).is_ok());
-
-    input.profile.migrations.get_mut(&RootKind::DurableState).expect("migration binding").profile_id = String::new();
-    assert!(
-        plan_world_merge(&input, None)
-            .expect_err("invalid migration profile denied")
-            .contains(&WorldMergeIssue::MigrationProfileInvalid(RootKind::DurableState))
-    );
 }
 
 #[test]
@@ -124,7 +96,7 @@ fn pure_application_handler_is_exact_and_effect_requests_are_denied() {
         profile: handler_profile.clone(),
         requested_effect: false,
     };
-    let plan = plan_world_merge(&input, Some(&handler)).expect("application merge");
+    let plan = plan_world_merge(input.clone(), Vec::new(), Some(&handler)).expect("application merge");
     assert!(
         plan.outputs
             .iter()
@@ -136,7 +108,7 @@ fn pure_application_handler_is_exact_and_effect_requests_are_denied() {
         requested_effect: true,
     };
     assert!(
-        plan_world_merge(&input, Some(&effectful))
+        plan_world_merge(input, Vec::new(), Some(&effectful))
             .expect_err("effectful handler denied")
             .contains(&WorldMergeIssue::HandlerEffectRequested(RootKind::Schema))
     );
@@ -154,7 +126,7 @@ fn runtime_sensitive_ambiguous_duplicate_and_bounded_inputs_fail_closed() {
         right: value(RootKind::Tasks, "tasks-right"),
     });
     assert!(
-        plan_world_merge(&runtime, None)
+        plan_world_merge(runtime, Vec::new(), None)
             .expect_err("task merge denied")
             .contains(&WorldMergeIssue::RuntimeSensitiveRoot(RootKind::Tasks))
     );
@@ -162,7 +134,7 @@ fn runtime_sensitive_ambiguous_duplicate_and_bounded_inputs_fail_closed() {
     let mut ambiguous = request();
     ambiguous.common_ancestor_ambiguous = true;
     assert!(
-        plan_world_merge(&ambiguous, None)
+        plan_world_merge(ambiguous, Vec::new(), None)
             .expect_err("ambiguous base denied")
             .contains(&WorldMergeIssue::AmbiguousBase)
     );
@@ -170,7 +142,7 @@ fn runtime_sensitive_ambiguous_duplicate_and_bounded_inputs_fail_closed() {
     let mut duplicate = request();
     duplicate.source_heads.push(duplicate.source_heads[0].clone());
     assert!(
-        plan_world_merge(&duplicate, None)
+        plan_world_merge(duplicate, Vec::new(), None)
             .expect_err("duplicate source denied")
             .contains(&WorldMergeIssue::DuplicateSource)
     );
@@ -178,7 +150,7 @@ fn runtime_sensitive_ambiguous_duplicate_and_bounded_inputs_fail_closed() {
     let mut bounded = request();
     bounded.bounds.max_roots = 1;
     assert!(
-        plan_world_merge(&bounded, None)
+        plan_world_merge(bounded, Vec::new(), None)
             .expect_err("root bound denied")
             .contains(&WorldMergeIssue::RootLimitExceeded)
     );

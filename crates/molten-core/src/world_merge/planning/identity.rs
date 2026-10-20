@@ -1,47 +1,94 @@
+use serde::Serialize;
+
 use super::super::WorldMergeConflict;
 use super::super::WorldMergeIssue;
+use super::super::WorldMergePlan;
 use super::super::WorldMergePlanRef;
-use super::super::WorldMergeRequest;
 use super::super::WorldMergedRoot;
+use super::super::WorldMigrationEvidence;
+use super::super::migration::canonical_ref;
+use super::super::migration::payload_ref;
+use crate::world_commit::WorldCommitRef;
 
-const WORLD_MERGE_PLAN_IDENTITY_DOMAIN: &str = "molten.world-merge-plan.identity.v1";
+#[derive(Serialize)]
+#[serde(rename = "world-merge-plan-identity-v2")]
+struct PlanIdentity<'a> {
+    original_request: &'a str,
+    base_head: &'a str,
+    source_heads: Vec<&'a str>,
+    outputs: Vec<OutputIdentity<'a>>,
+    conflicts: Vec<(&'a str, Option<&'a str>, &'a str)>,
+    migrations: Vec<(&'a str, &'a str)>,
+}
+
+#[derive(Serialize)]
+struct OutputIdentity<'a> {
+    kind: &'a str,
+    selected_root: Option<&'a str>,
+    output_schema: Option<&'a str>,
+    generated_payload: Option<String>,
+}
+
+pub(in crate::world_merge) struct PlanIdentityInput<'a> {
+    pub original_request: &'a str,
+    pub base_head: &'a WorldCommitRef,
+    pub source_heads: &'a [WorldCommitRef],
+    pub outputs: &'a [WorldMergedRoot],
+    pub conflicts: &'a [WorldMergeConflict],
+    pub migrations: &'a [WorldMigrationEvidence],
+}
 
 pub(in crate::world_merge) fn identify_plan(
-    request: &WorldMergeRequest,
-    outputs: &[WorldMergedRoot],
-    conflicts: &[WorldMergeConflict],
+    input: PlanIdentityInput<'_>,
 ) -> Result<WorldMergePlanRef, WorldMergeIssue> {
-    let mut hasher = blake3::Hasher::new_derive_key(WORLD_MERGE_PLAN_IDENTITY_DOMAIN);
-    update_bytes(&mut hasher, request.base_head.as_str().as_bytes())?;
-    update_bytes(&mut hasher, request.profile.profile_ref.as_str().as_bytes())?;
-    for source in &request.source_heads {
-        update_bytes(&mut hasher, source.as_str().as_bytes())?;
-    }
-    for output in outputs {
-        update_bytes(&mut hasher, output.kind.as_str().as_bytes())?;
-        if let Some(root) = &output.selected_root {
-            update_bytes(&mut hasher, root.as_str().as_bytes())?;
-        }
-        for (key, value) in &output.generated_values {
-            update_bytes(&mut hasher, key.as_bytes())?;
-            update_bytes(&mut hasher, value)?;
-        }
-        if let Some(bytes) = &output.generated_bytes {
-            update_bytes(&mut hasher, bytes)?;
-        }
-    }
-    for conflict in conflicts {
-        update_bytes(&mut hasher, conflict.kind.as_str().as_bytes())?;
-        update_bytes(&mut hasher, conflict.key.as_deref().unwrap_or("").as_bytes())?;
-        update_bytes(&mut hasher, conflict.code.as_bytes())?;
-    }
-    WorldMergePlanRef::new(format!("blake3:{}", hasher.finalize().to_hex()))
+    let outputs = input
+        .outputs
+        .iter()
+        .map(|output| {
+            Ok(OutputIdentity {
+                kind: output.kind.as_str(),
+                selected_root: output.selected_root.as_ref().map(|root| root.as_str()),
+                output_schema: output.output_schema.as_ref().map(|schema| schema.as_str()),
+                generated_payload: if output.selected_root.is_none() {
+                    Some(payload_ref(output.generated_bytes.as_deref().unwrap_or_default(), &output.generated_values)?)
+                } else {
+                    None
+                },
+            })
+        })
+        .collect::<Result<Vec<_>, WorldMergeIssue>>()?;
+    let value = PlanIdentity {
+        original_request: input.original_request,
+        base_head: input.base_head.as_str(),
+        source_heads: input.source_heads.iter().map(WorldCommitRef::as_str).collect(),
+        outputs,
+        conflicts: input
+            .conflicts
+            .iter()
+            .map(|conflict| (conflict.kind.as_str(), conflict.key.as_deref(), conflict.code))
+            .collect(),
+        migrations: input
+            .migrations
+            .iter()
+            .map(|evidence| (evidence.conversion().conversion_ref(), evidence.result_ref()))
+            .collect(),
+    };
+    WorldMergePlanRef::new(canonical_ref(&value, "world-merge-plan-identity-v2")?)
         .map_err(|_| WorldMergeIssue::InvalidBounds("plan_identity"))
 }
 
-fn update_bytes(hasher: &mut blake3::Hasher, bytes: &[u8]) -> Result<(), WorldMergeIssue> {
-    let length = u64::try_from(bytes.len()).map_err(|_| WorldMergeIssue::InvalidBounds("identity_length"))?;
-    hasher.update(&length.to_le_bytes());
-    hasher.update(bytes);
+// r[impl molten.audit_f06.publication]
+pub fn validate_world_merge_plan(plan: &WorldMergePlan) -> Result<(), WorldMergeIssue> {
+    let expected = identify_plan(PlanIdentityInput {
+        original_request: &plan.original_request_ref,
+        base_head: &plan.base_head,
+        source_heads: &plan.source_heads,
+        outputs: &plan.outputs,
+        conflicts: &plan.conflicts,
+        migrations: &plan.migrations,
+    })?;
+    if expected != plan.plan_ref {
+        return Err(WorldMergeIssue::MigrationResultUnexpected);
+    }
     Ok(())
 }

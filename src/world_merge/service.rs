@@ -5,7 +5,10 @@ use molten_core::world_merge::WorldMergePlan;
 use molten_core::world_merge::WorldMergePolicyRef;
 use molten_core::world_merge::WorldMergeRequest;
 use molten_core::world_merge::WorldMergeValue;
+use molten_core::world_merge::admit_world_migrations;
 use molten_core::world_merge::plan_world_merge;
+use molten_core::world_merge::validate_world_merge_plan;
+use molten_core::world_merge::validate_world_migration_result;
 
 use super::CanonicalWorldMergeConflict;
 use super::CanonicalWorldMergeResult;
@@ -43,11 +46,24 @@ where
         load_value(objects, &mut root.base, loaded.bounds.max_value_bytes)?;
         load_value(objects, &mut root.left, loaded.bounds.max_value_bytes)?;
         load_value(objects, &mut root.right, loaded.bounds.max_value_bytes)?;
-        if let Some(binding) = loaded.profile.migrations.get(&root.kind) {
-            materialize_value(migrations, binding, &mut root.base)?;
-            materialize_value(migrations, binding, &mut root.left)?;
-            materialize_value(migrations, binding, &mut root.right)?;
-        }
+    }
+    let conversions = admit_world_migrations(&loaded)
+        .map_err(|issues| Failure::invalid_harness(format!("world merge migration admission denied: {issues:?}")))?;
+    let mut materializations = Vec::with_capacity(conversions.len());
+    for conversion in &conversions {
+        let root = loaded
+            .roots
+            .iter()
+            .find(|root| root.kind == conversion.kind())
+            .ok_or_else(|| Failure::invalid_harness("admitted migration root is unavailable"))?;
+        let source = conversion
+            .side()
+            .value(root)
+            .canonical_bytes
+            .as_deref()
+            .ok_or_else(|| Failure::invalid_harness("admitted migration source bytes are unavailable"))?;
+        let result = migrations.materialize_migration(conversion, source).map_err(port_error)?;
+        materializations.push(validate_world_migration_result(conversion, result).map_err(migration_result_error)?);
     }
     let application_profiles = loaded
         .profile
@@ -64,7 +80,7 @@ where
         .first()
         .map(|profile| handlers.load_handler(profile).map_err(port_error))
         .transpose()?;
-    plan_world_merge(&loaded, handler.as_deref())
+    plan_world_merge(loaded, materializations, handler.as_deref())
         .map_err(|issues| Failure::invalid_harness(format!("world merge planning denied: {issues:?}")))
 }
 
@@ -94,6 +110,8 @@ where
     A: WorldMergeAuthorityPort,
     P: WorldMergeCommitPort,
 {
+    validate_world_merge_plan(request.plan)
+        .map_err(|issue| Failure::invalid_harness(format!("world merge publication denied: {issue:?}")))?;
     if !request.plan.conflicts.is_empty() {
         return persist_conflicts(conflicts, request.plan);
     }
@@ -175,21 +193,8 @@ fn load_value<O: WorldMergeObjectPort>(objects: &mut O, value: &mut WorldMergeVa
     Ok(())
 }
 
-fn materialize_value<M: WorldMergeMigrationPort>(
-    migrations: &mut M,
-    binding: &molten_core::world_merge::WorldMigrationBinding,
-    value: &mut WorldMergeValue,
-) -> Result<()> {
-    if value.schema_ref.as_ref() != Some(&binding.source_schema) {
-        return Ok(());
-    }
-    let source = value
-        .canonical_bytes
-        .as_deref()
-        .ok_or_else(|| Failure::invalid_harness("migration source bytes are unavailable"))?;
-    value.canonical_bytes = Some(migrations.materialize_migration(binding, source).map_err(port_error)?);
-    value.schema_ref = Some(binding.target_schema.clone());
-    Ok(())
+fn migration_result_error(issue: molten_core::world_merge::WorldMergeIssue) -> Failure {
+    Failure::invalid_harness(format!("world merge migration result denied: {issue:?}"))
 }
 
 fn port_error(error: WorldMergePortError) -> Failure {

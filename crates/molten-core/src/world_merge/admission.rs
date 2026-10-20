@@ -9,29 +9,25 @@ use super::WorldMergeRequest;
 use super::WorldMergeRootInput;
 use super::WorldMergedRoot;
 use super::merge_keyed_values;
+use super::planning::PlanIdentityInput;
 use super::planning::add_application_handler;
 use super::planning::identify_plan;
 use crate::world_commit::RootKind;
 
 const MINIMUM_SOURCE_HEADS: usize = 2;
-const MIGRATION_PROFILE_MAX_BYTES: u16 = 256;
 
 pub fn plan_world_merge(
-    request: &WorldMergeRequest,
+    mut request: WorldMergeRequest,
+    materializations: Vec<super::MaterializedWorldMigration>,
     handler: Option<&dyn WorldMergeHandler>,
 ) -> Result<WorldMergePlan, Vec<WorldMergeIssue>> {
-    let mut issues = validate_request(request);
-    if !issues.is_empty() {
-        issues.sort();
-        issues.dedup();
-        return Err(issues);
-    }
+    let (original_ref, migrations) = super::migration::prepare_values(&mut request, materializations)?;
     let maximum_roots =
         usize::try_from(request.bounds.max_roots).map_err(|_| vec![WorldMergeIssue::InvalidBounds("max_roots")])?;
     let maximum_conflicts = usize::try_from(request.bounds.max_conflicts)
         .map_err(|_| vec![WorldMergeIssue::InvalidBounds("max_conflicts")])?;
-    let (outputs, mut conflicts, mut reduction_issues) =
-        reduce_roots(request, handler, maximum_roots, maximum_conflicts);
+    let (mut outputs, mut conflicts, mut reduction_issues) =
+        reduce_roots(&request, handler, maximum_roots, maximum_conflicts);
     if !reduction_issues.is_empty() {
         reduction_issues.sort();
         reduction_issues.dedup();
@@ -40,15 +36,26 @@ pub fn plan_world_merge(
     conflicts.sort_by(|left, right| {
         left.kind.cmp(&right.kind).then(left.key.cmp(&right.key)).then(left.code.cmp(right.code))
     });
-    let mut source_heads = request.source_heads.clone();
+    let mut source_heads = std::mem::take(&mut request.source_heads);
     source_heads.sort();
-    let plan_ref = identify_plan(request, &outputs, &conflicts).map_err(|issue| vec![issue])?;
+    super::migration::restore_generated_outputs(&mut request, &migrations, &mut outputs);
+    let plan_ref = identify_plan(PlanIdentityInput {
+        original_request: &original_ref,
+        base_head: &request.base_head,
+        source_heads: &source_heads,
+        outputs: &outputs,
+        conflicts: &conflicts,
+        migrations: &migrations,
+    })
+    .map_err(|issue| vec![issue])?;
     Ok(WorldMergePlan {
         plan_ref,
-        base_head: request.base_head.clone(),
+        base_head: request.base_head,
         source_heads,
         outputs,
         conflicts,
+        migrations,
+        original_request_ref: original_ref,
     })
 }
 
@@ -58,7 +65,7 @@ fn reduce_roots(
     maximum_roots: usize,
     maximum_conflicts: usize,
 ) -> (Vec<WorldMergedRoot>, Vec<WorldMergeConflict>, Vec<WorldMergeIssue>) {
-    let mut roots = request.roots.clone();
+    let mut roots = request.roots.iter().collect::<Vec<_>>();
     roots.sort_by_key(|root| root.kind);
     let mut outputs = Vec::with_capacity(maximum_roots.min(roots.len()));
     let mut conflicts = Vec::with_capacity(maximum_conflicts.min(roots.len()));
@@ -160,7 +167,7 @@ fn add_keyed(
     }
 }
 
-fn validate_request(request: &WorldMergeRequest) -> Vec<WorldMergeIssue> {
+pub(super) fn validate_request(request: &WorldMergeRequest) -> Vec<WorldMergeIssue> {
     let mut issues = Vec::with_capacity(8);
     if request.bounds.max_roots == 0 {
         issues.push(WorldMergeIssue::InvalidBounds("max_roots"));
@@ -201,33 +208,23 @@ fn validate_request(request: &WorldMergeRequest) -> Vec<WorldMergeIssue> {
     issues
 }
 
-fn validate_schema_admission(request: &WorldMergeRequest, root: &WorldMergeRootInput) -> Result<(), WorldMergeIssue> {
-    if !root.base.available || !root.left.available || !root.right.available {
-        return Err(WorldMergeIssue::UnavailableRoot(root.kind));
+fn validate_schema_admission(_request: &WorldMergeRequest, root: &WorldMergeRootInput) -> Result<(), WorldMergeIssue> {
+    let mut schema = None;
+    for value in [&root.base, &root.left, &root.right] {
+        if value.root.is_none() {
+            continue;
+        }
+        if !value.available {
+            return Err(WorldMergeIssue::UnavailableRoot(root.kind));
+        }
+        if let Some(expected) = schema {
+            if value.schema_ref.as_ref() != expected {
+                return Err(WorldMergeIssue::MigrationRequired(root.kind));
+            }
+        } else {
+            schema = Some(value.schema_ref.as_ref());
+        }
     }
-    if root.base.schema_ref == root.left.schema_ref && root.left.schema_ref == root.right.schema_ref {
-        return Ok(());
-    }
-    let binding = request.profile.migrations.get(&root.kind).ok_or(WorldMergeIssue::MigrationRequired(root.kind))?;
-    if !binding.admitted {
-        return Err(WorldMergeIssue::MigrationRequired(root.kind));
-    }
-    let schemas = [
-        root.base.schema_ref.as_ref(),
-        root.left.schema_ref.as_ref(),
-        root.right.schema_ref.as_ref(),
-    ];
-    if schemas
-        .iter()
-        .flatten()
-        .any(|schema| *schema != &binding.source_schema && *schema != &binding.target_schema)
-    {
-        return Err(WorldMergeIssue::MigrationMismatch(root.kind));
-    }
-    let limit = schema_migration_core::TextLimit::new(MIGRATION_PROFILE_MAX_BYTES)
-        .map_err(|_| WorldMergeIssue::MigrationProfileInvalid(root.kind))?;
-    schema_migration_core::MigrationProfileId::new(binding.profile_id.clone(), limit)
-        .map_err(|_| WorldMergeIssue::MigrationProfileInvalid(root.kind))?;
     Ok(())
 }
 
@@ -261,12 +258,13 @@ fn selected_output(
     root: &WorldMergeRootInput,
     selected_root: Option<crate::world_commit::WorldRootRef>,
 ) -> WorldMergedRoot {
+    let selected = [&root.left, &root.right, &root.base].into_iter().find(|value| value.root == selected_root);
     WorldMergedRoot {
         kind: root.kind,
         selected_root,
         generated_values: std::collections::BTreeMap::new(),
         generated_bytes: None,
-        output_schema: root.left.schema_ref.clone(),
+        output_schema: selected.and_then(|value| value.schema_ref.clone()),
     }
 }
 
@@ -274,7 +272,7 @@ fn root_conflict(kind: RootKind, code: &'static str) -> WorldMergeConflict {
     WorldMergeConflict { kind, key: None, code }
 }
 
-fn is_runtime_sensitive(kind: RootKind) -> bool {
+pub(super) fn is_runtime_sensitive(kind: RootKind) -> bool {
     matches!(
         kind,
         RootKind::Tasks

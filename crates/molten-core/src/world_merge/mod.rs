@@ -14,13 +14,16 @@
 mod admission;
 mod diff;
 mod handlers;
+mod migration;
 mod model;
 mod planning;
 
 pub use admission::*;
 pub use diff::*;
 pub use handlers::*;
+pub use migration::*;
 pub use model::*;
+pub use planning::validate_world_merge_plan;
 
 #[cfg(test)]
 mod tests;

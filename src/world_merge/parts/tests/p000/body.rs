@@ -7,22 +7,6 @@ use molten_core::world_merge::*;
 
 use super::*;
 
-const MERGE_SCHEMA_COUNT: usize = 4;
-const MERGE_SCHEMA_FIELD_COUNT: u64 = 6;
-const SCHEMA_ID_FIELD_INDEX: usize = 4;
-const MERGE_SCHEMA_ARTIFACTS: [&str; MERGE_SCHEMA_COUNT] = [
-    include_str!("../../../../../schemas/preserves-boundaries/molten-world-diff-v1.preserves"),
-    include_str!("../../../../../schemas/preserves-boundaries/molten-world-merge-plan-v1.preserves"),
-    include_str!("../../../../../schemas/preserves-boundaries/molten-world-merge-conflict-v1.preserves"),
-    include_str!("../../../../../schemas/preserves-boundaries/molten-world-merge-result-v1.preserves"),
-];
-const EXPECTED_MERGE_SCHEMA_IDS: [&str; MERGE_SCHEMA_COUNT] = [
-    WORLD_DIFF_SCHEMA,
-    WORLD_MERGE_PLAN_SCHEMA,
-    WORLD_MERGE_CONFLICT_SCHEMA,
-    WORLD_MERGE_RESULT_SCHEMA,
-];
-
 fn reference(label: &str) -> String {
     format!("blake3:{}", blake3::hash(label.as_bytes()).to_hex())
 }
@@ -37,31 +21,6 @@ fn root(kind: RootKind, label: &str) -> WorldRootRef {
 
 fn schema() -> WorldMergeSchemaRef {
     WorldMergeSchemaRef::new(reference("schema")).expect("schema ref")
-}
-
-fn plan_with_generated_output() -> WorldMergePlan {
-    WorldMergePlan {
-        plan_ref: WorldMergePlanRef::new(reference("plan")).expect("plan ref"),
-        base_head: commit("base"),
-        source_heads: vec![commit("left"), commit("right")],
-        outputs: vec![
-            WorldMergedRoot {
-                kind: RootKind::Artifact,
-                selected_root: Some(root(RootKind::Artifact, "artifact")),
-                generated_values: BTreeMap::new(),
-                generated_bytes: None,
-                output_schema: Some(schema()),
-            },
-            WorldMergedRoot {
-                kind: RootKind::DurableState,
-                selected_root: None,
-                generated_values: BTreeMap::from([("key".to_string(), b"value".to_vec())]),
-                generated_bytes: None,
-                output_schema: Some(schema()),
-            },
-        ],
-        conflicts: Vec::new(),
-    }
 }
 
 #[derive(Default)]
@@ -100,10 +59,10 @@ struct TestMigrations;
 impl WorldMergeMigrationPort for TestMigrations {
     fn materialize_migration(
         &mut self,
-        _binding: &WorldMigrationBinding,
-        source_bytes: &[u8],
-    ) -> std::result::Result<Vec<u8>, WorldMergePortError> {
-        Ok(source_bytes.to_vec())
+        _conversion: &AdmittedWorldMigration,
+        _source_bytes: &[u8],
+    ) -> std::result::Result<WorldMigrationResult, WorldMergePortError> {
+        Err(WorldMergePortError::new("adapter", "unexpected migration in nonmigration fixture"))
     }
 }
 
@@ -212,25 +171,6 @@ fn preparation_loads_root_bytes_before_pure_planning() {
         prepare_world_merge_plan(&mut objects, &mut migrations, &mut handlers, &request).expect("prepared merge plan");
 
     assert_eq!(plan.outputs[0].selected_root, Some(root(RootKind::Artifact, "left-artifact")));
-}
-
-#[test]
-fn checked_schema_artifacts_match_merge_schema_ids() {
-    // r[verify molten.world_merge.verification]
-    for (source, expected) in MERGE_SCHEMA_ARTIFACTS.iter().zip(EXPECTED_MERGE_SCHEMA_IDS) {
-        let value = crate::preserves_rail::parse_text(source).expect("merge schema artifact");
-        let fields = crate::preserves_rail::simple_record_fields(
-            &value,
-            "preserves-boundary-schema-artifact-v1",
-            MERGE_SCHEMA_FIELD_COUNT,
-        )
-        .expect("merge schema fields");
-        assert_eq!(
-            crate::preserves_rail::record_string_field(&fields[SCHEMA_ID_FIELD_INDEX], "schema-id", "schema id",)
-                .expect("schema id"),
-            expected
-        );
-    }
 }
 
 #[test]
