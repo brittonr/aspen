@@ -113,6 +113,7 @@ molten.choreography.sequence_replay
 molten.choreography.session_state
 molten.choreography.trellis_core
 molten.choreography.typed_facade_from_manifest
+molten.chunk_store.caller_built_manifest_count_preflight
 molten.chunk_store.cap_std_boundary.conversion
 molten.chunk_store.cap_std_boundary.dependency
 molten.chunk_store.cap_std_boundary.docs
@@ -139,6 +140,7 @@ molten.chunk_store.range_reads
 molten.chunk_store.receipts
 molten.chunk_store.redb_index
 molten.chunk_store.remote_byte_source_hints
+molten.chunk_store.remote_supplied_chunk_preflight
 molten.chunk_store.remote_sync
 molten.chunk_store.replay_snapshots
 molten.chunk_store.resumable_fetch
@@ -161,6 +163,7 @@ molten.consensus.linearizable_reads
 molten.consensus.log_admission
 molten.consensus.membership_changes
 molten.consensus.observability
+molten.consensus.placement_admitted_member_preflight
 molten.consensus.policy_boundary
 molten.consensus.property_tests
 molten.consensus.recovery
@@ -1255,8 +1258,11 @@ molten.resources.limit_profiles.receipt_binding
 molten.resources.limit_profiles.units_coherence
 molten.resources.mailbox_bounds
 molten.resources.no_data_authority
+molten.resources.placement_constraint_preflight
+molten.resources.placement_target_property_contract_missing
 molten.resources.property_tests
 molten.resources.receipts
+molten.resources.reconcile_required_effect_intent_preflight
 molten.resources.replay_tests
 molten.resources.revocation_tests
 molten.resources.scheduler_fairness
@@ -1622,6 +1628,7 @@ molten.testing.cluster_cli.fail_closed_negatives
 molten.testing.cluster_cli.lifecycle_roundtrip
 molten.testing.cluster_drift.ambient_state_negatives
 molten.testing.cluster_drift.lifecycle_rerun_gate
+molten.testing.cluster_harness_fixture_file_preflight
 molten.testing.contract_negative_fixtures.failure_classes
 molten.testing.contract_negative_fixtures.invariant_matrix
 molten.testing.counterexample_shrinking
@@ -1765,6 +1772,7 @@ molten.testing.receipt_driven_traceability.nix_gate
 molten.testing.receipt_driven_traceability.raw_claim_policy
 molten.testing.receipt_driven_traceability.source_model
 molten.testing.receipt_driven_traceability.stale_receipt_denial
+molten.testing.receipt_first_cluster_harness.run_index_intake_bound
 molten.testing.redacted_repro_export_profiles.encrypted_ref_validation
 molten.testing.redacted_repro_export_profiles.profile_schema
 molten.testing.redacted_repro_export_profiles.transform_receipt
@@ -1922,3 +1930,4 @@ molten.upgrades.task_model
 molten.upgrades.task_receipts
 molten.upgrades.todo_cli
 molten.upgrades.transcript_gate
+molten.wasm_performance.phase_group_count_preflight

@@ -7,7 +7,7 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 | Count | Specification |
 | ---: | --- |
 | 387 | `.cairn/specs/runtime-spine/spec.md` |
-| 310 | `.cairn/specs/testing-harness/spec.md` |
+| 311 | `.cairn/specs/testing-harness/spec.md` |
 | 196 | `.cairn/specs/evidence-gates/spec.md` |
 | 66 | `.cairn/specs/project/spec.md` |
 | 58 | `.cairn/specs/operator-workflow/spec.md` |
@@ -16,12 +16,12 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 | 50 | `.cairn/specs/peer-bootstrap-negotiation/spec.md` |
 | 47 | `.cairn/specs/plugin-host/spec.md` |
 | 41 | `.cairn/specs/catalog/spec.md` |
+| 37 | `.cairn/specs/content-addressed-chunk-store/spec.md` |
 | 36 | `.cairn/specs/confidentiality/spec.md` |
 | 36 | `.cairn/specs/coordination/spec.md` |
 | 36 | `.cairn/specs/local-artifact-registry/spec.md` |
 | 36 | `.cairn/specs/local-schema-identity/spec.md` |
-| 35 | `.cairn/specs/content-addressed-chunk-store/spec.md` |
-| 34 | `.cairn/specs/consensus/spec.md` |
+| 35 | `.cairn/specs/consensus/spec.md` |
 | 34 | `.cairn/specs/job-dag/spec.md` |
 | 33 | `.cairn/specs/runtime-patterns/spec.md` |
 | 32 | `.cairn/specs/authority-identity-revocation/spec.md` |
@@ -30,6 +30,7 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 | 27 | `.cairn/specs/local-evaluation-cache/spec.md` |
 | 26 | `.cairn/specs/remote-artifact-sync/spec.md` |
 | 25 | `.cairn/specs/unison-typed-storage/spec.md` |
+| 23 | `.cairn/specs/resource-governance-backpressure/spec.md` |
 | 22 | `.cairn/specs/delivery/spec.md` |
 | 22 | `.cairn/specs/upgrade-sessions/spec.md` |
 | 21 | `.cairn/specs/artifact-registry/spec.md` |
@@ -37,23 +38,24 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 | 20 | `.cairn/specs/evaluation-cache/spec.md` |
 | 20 | `.cairn/specs/explicit-effect-handle-scoping/spec.md` |
 | 20 | `.cairn/specs/federated-pull-sync/spec.md` |
-| 20 | `.cairn/specs/resource-governance-backpressure/spec.md` |
 | 17 | `.cairn/specs/persistent-node-identity/spec.md` |
 | 16 | `.cairn/specs/local-catalog-mcp-readonly/spec.md` |
 | 9 | `.cairn/specs/node-replication-pilot/spec.md` |
+| 1 | `.cairn/specs/cluster-harness/spec.md` |
+| 1 | `.cairn/specs/wasm-performance/spec.md` |
 
 ## Source area groups
 
 | Count | Source area |
 | ---: | --- |
-| 277 | `testing` |
+| 279 | `testing` |
 | 127 | `runtime_spine` |
 | 107 | `evidence` |
 | 80 | `determinism` |
 | 69 | `retention` |
 | 42 | `effects` |
+| 36 | `chunk_store` |
 | 36 | `project` |
-| 34 | `chunk_store` |
 | 34 | `modularity` |
 | 33 | `trellis_runtime` |
 | 30 | `local_transcripts` |
@@ -63,19 +65,19 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 | 24 | `octet_gates` |
 | 23 | `node_runtime` |
 | 23 | `prod_ops` |
+| 23 | `resources` |
 | 22 | `artifacts` |
 | 22 | `upgrades` |
+| 21 | `consensus` |
 | 21 | `local_catalog` |
 | 21 | `peer_bootstrap` |
 | 21 | `remote_sync` |
 | 21 | `transcripts` |
-| 20 | `consensus` |
 | 20 | `eval_cache` |
 | 20 | `job_dag` |
 | 20 | `local_artifacts` |
 | 20 | `local_schema_identity` |
 | 20 | `octet_tigerstyle_remediation` |
-| 20 | `resources` |
 | 20 | `storage` |
 | 19 | `coordination_services_control_plane` |
 | 19 | `secrets_redaction_encrypted_refs` |
@@ -153,3 +155,4 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 | 1 | `preserves_canonical_bytes` |
 | 1 | `preserves_rail_toolkit` |
 | 1 | `preserves_schema_boundaries` |
+| 1 | `wasm_performance` |

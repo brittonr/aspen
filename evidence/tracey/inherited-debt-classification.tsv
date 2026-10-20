@@ -125,6 +125,7 @@ specification	source_area	class	requirement_id
 .cairn/specs/choreography/spec.md	trellis_protocol_session	accepted-implementation-unestablished	molten.trellis_protocol_session.spec.install_gate
 .cairn/specs/choreography/spec.md	trellis_protocol_session	accepted-implementation-unestablished	molten.trellis_protocol_session.spec.lifecycle_gate
 .cairn/specs/choreography/spec.md	trellis_protocol_session	accepted-implementation-unestablished	molten.trellis_protocol_session.spec.transport_neutral
+.cairn/specs/cluster-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.cluster_harness_fixture_file_preflight
 .cairn/specs/confidentiality/spec.md	operator_gateway	accepted-implementation-unestablished	molten.operator_gateway.visibility_retention
 .cairn/specs/confidentiality/spec.md	secrets	accepted-implementation-unestablished	molten.secrets.catalog_redaction
 .cairn/specs/confidentiality/spec.md	secrets	accepted-implementation-unestablished	molten.secrets.decrypt_effect
@@ -175,6 +176,7 @@ specification	source_area	class	requirement_id
 .cairn/specs/consensus/spec.md	consensus	accepted-implementation-unestablished	molten.consensus.log_admission
 .cairn/specs/consensus/spec.md	consensus	accepted-implementation-unestablished	molten.consensus.membership_changes
 .cairn/specs/consensus/spec.md	consensus	accepted-implementation-unestablished	molten.consensus.observability
+.cairn/specs/consensus/spec.md	consensus	accepted-implementation-unestablished	molten.consensus.placement_admitted_member_preflight
 .cairn/specs/consensus/spec.md	consensus	accepted-implementation-unestablished	molten.consensus.policy_boundary
 .cairn/specs/consensus/spec.md	consensus	accepted-implementation-unestablished	molten.consensus.property_tests
 .cairn/specs/consensus/spec.md	consensus	accepted-implementation-unestablished	molten.consensus.recovery
@@ -195,6 +197,7 @@ specification	source_area	class	requirement_id
 .cairn/specs/consensus/spec.md	raft_membership_admission	accepted-implementation-unestablished	molten.raft_membership_admission.preflight_checks
 .cairn/specs/consensus/spec.md	raft_membership_admission	accepted-implementation-unestablished	molten.raft_membership_admission.quorum_safety
 .cairn/specs/consensus/spec.md	raft_membership_admission	accepted-implementation-unestablished	molten.raft_membership_admission.stronger_than_peer
+.cairn/specs/content-addressed-chunk-store/spec.md	chunk_store	accepted-implementation-unestablished	molten.chunk_store.caller_built_manifest_count_preflight
 .cairn/specs/content-addressed-chunk-store/spec.md	chunk_store	accepted-implementation-unestablished	molten.chunk_store.cap_std_boundary.conversion
 .cairn/specs/content-addressed-chunk-store/spec.md	chunk_store	accepted-implementation-unestablished	molten.chunk_store.cap_std_boundary.dependency
 .cairn/specs/content-addressed-chunk-store/spec.md	chunk_store	accepted-implementation-unestablished	molten.chunk_store.cap_std_boundary.docs
@@ -221,6 +224,7 @@ specification	source_area	class	requirement_id
 .cairn/specs/content-addressed-chunk-store/spec.md	chunk_store	accepted-implementation-unestablished	molten.chunk_store.receipts
 .cairn/specs/content-addressed-chunk-store/spec.md	chunk_store	accepted-implementation-unestablished	molten.chunk_store.redb_index
 .cairn/specs/content-addressed-chunk-store/spec.md	chunk_store	accepted-implementation-unestablished	molten.chunk_store.remote_byte_source_hints
+.cairn/specs/content-addressed-chunk-store/spec.md	chunk_store	accepted-implementation-unestablished	molten.chunk_store.remote_supplied_chunk_preflight
 .cairn/specs/content-addressed-chunk-store/spec.md	chunk_store	accepted-implementation-unestablished	molten.chunk_store.remote_sync
 .cairn/specs/content-addressed-chunk-store/spec.md	chunk_store	accepted-implementation-unestablished	molten.chunk_store.replay_snapshots
 .cairn/specs/content-addressed-chunk-store/spec.md	chunk_store	accepted-implementation-unestablished	molten.chunk_store.resumable_fetch
@@ -1138,8 +1142,11 @@ specification	source_area	class	requirement_id
 .cairn/specs/resource-governance-backpressure/spec.md	resources	accepted-implementation-unestablished	molten.resources.limit_profiles.units_coherence
 .cairn/specs/resource-governance-backpressure/spec.md	resources	accepted-implementation-unestablished	molten.resources.mailbox_bounds
 .cairn/specs/resource-governance-backpressure/spec.md	resources	accepted-implementation-unestablished	molten.resources.no_data_authority
+.cairn/specs/resource-governance-backpressure/spec.md	resources	accepted-implementation-unestablished	molten.resources.placement_constraint_preflight
+.cairn/specs/resource-governance-backpressure/spec.md	resources	accepted-implementation-unestablished	molten.resources.placement_target_property_contract_missing
 .cairn/specs/resource-governance-backpressure/spec.md	resources	accepted-implementation-unestablished	molten.resources.property_tests
 .cairn/specs/resource-governance-backpressure/spec.md	resources	accepted-implementation-unestablished	molten.resources.receipts
+.cairn/specs/resource-governance-backpressure/spec.md	resources	accepted-implementation-unestablished	molten.resources.reconcile_required_effect_intent_preflight
 .cairn/specs/resource-governance-backpressure/spec.md	resources	accepted-implementation-unestablished	molten.resources.replay_tests
 .cairn/specs/resource-governance-backpressure/spec.md	resources	accepted-implementation-unestablished	molten.resources.revocation_tests
 .cairn/specs/resource-governance-backpressure/spec.md	resources	accepted-implementation-unestablished	molten.resources.scheduler_fairness
@@ -1810,6 +1817,7 @@ specification	source_area	class	requirement_id
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.receipt_driven_traceability.raw_claim_policy
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.receipt_driven_traceability.source_model
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.receipt_driven_traceability.stale_receipt_denial
+.cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.receipt_first_cluster_harness.run_index_intake_bound
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.redacted_repro_export_profiles.encrypted_ref_validation
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.redacted_repro_export_profiles.profile_schema
 .cairn/specs/testing-harness/spec.md	testing	accepted-implementation-unestablished	molten.testing.redacted_repro_export_profiles.transform_receipt
@@ -1923,3 +1931,4 @@ specification	source_area	class	requirement_id
 .cairn/specs/upgrade-sessions/spec.md	upgrades	accepted-implementation-unestablished	molten.upgrades.task_receipts
 .cairn/specs/upgrade-sessions/spec.md	upgrades	accepted-implementation-unestablished	molten.upgrades.todo_cli
 .cairn/specs/upgrade-sessions/spec.md	upgrades	accepted-implementation-unestablished	molten.upgrades.transcript_gate
+.cairn/specs/wasm-performance/spec.md	wasm_performance	accepted-implementation-unestablished	molten.wasm_performance.phase_group_count_preflight
