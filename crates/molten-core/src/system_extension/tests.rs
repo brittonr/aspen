@@ -122,6 +122,7 @@ fn manifest_input() -> SystemExtensionManifestInput {
         policy_refs: vec![HASH_C.to_string()],
         provenance_refs: vec![HASH_D.to_string()],
         resources: resources(),
+        recovery_group: None,
         execution_profile: ExecutionProfile::SandboxedComponent,
         state_schema: "molten.fixture.echo.state.v1".to_string(),
         compatible_state_schemas: vec!["molten.fixture.echo.state.v1".to_string()],
@@ -598,4 +599,50 @@ fn fabric_non_claims_remain_distinct_from_extension_non_claims() {
         REQUIRED_SYSTEM_EXTENSION_NON_CLAIMS
             .contains(&SystemExtensionNonClaim::CallbackSuccessIsNotSemanticCorrectness)
     );
+}
+
+// r[verify molten.system_extension.recovery_groups]
+#[test]
+fn recovery_group_manifest_accepts_valid_and_rejects_invalid_declarations() {
+    let registry = build_fabric_port_registry(&[descriptor()]).expect("valid fixture registry");
+    let tier = tier_admission();
+    let context = SystemExtensionAdmissionContext {
+        registry: &registry,
+        tier_admission: &tier,
+        admitted_execution_profiles: &[ExecutionProfile::SandboxedComponent],
+    };
+    let member = |member_id: &str, restart_class, after: &[&str]| RecoveryGroupMember {
+        member_id: member_id.to_string(),
+        restart_class,
+        after: after.iter().map(|value| (*value).to_string()).collect(),
+    };
+    let valid_group = RecoveryGroupDeclaration {
+        group_id: "group-main".to_string(),
+        members: vec![
+            member("primary", RestartClass::Permanent, &[]),
+            member("worker", RestartClass::Transient, &["primary"]),
+        ],
+        window_ticks: 100,
+        backoff_ticks: 5,
+        max_restarts_per_member: 3,
+        max_restarts_per_group: 6,
+        elapsed_source_ref: "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+    };
+    let mut input = manifest_input();
+    input.recovery_group = Some(valid_group.clone());
+    let admitted = admit_system_extension_manifest(&input, context).expect("valid recovery group admitted");
+    assert_eq!(admitted.recovery_group, Some(valid_group.clone()));
+
+    input.recovery_group = Some(RecoveryGroupDeclaration {
+        members: vec![
+            member("primary", RestartClass::Permanent, &[]),
+            member("primary", RestartClass::Transient, &[]),
+        ],
+        ..valid_group
+    });
+    let issues = admit_system_extension_manifest(&input, context).expect_err("duplicate member denied");
+    assert!(issues.iter().any(|issue| matches!(
+        issue,
+        ManifestIssue::RecoveryGroup(RecoveryGroupIssue::DuplicateMember(value)) if value == "primary"
+    )));
 }

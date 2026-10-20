@@ -5,6 +5,8 @@ use super::ExecutionProfile;
 use super::INITIAL_SYSTEM_EXTENSION_GENERATION;
 use super::MAX_SYSTEM_EXTENSION_ITEMS;
 use super::REQUIRED_SYSTEM_EXTENSION_NON_CLAIMS;
+use super::RecoveryGroupDeclaration;
+use super::RecoveryGroupIssue;
 use super::ResourceEnvelope;
 use super::ResourceIssue;
 use super::SYSTEM_EXTENSION_MANIFEST_SCHEMA;
@@ -12,6 +14,7 @@ use super::SystemExtensionNonClaim;
 use super::duplicates;
 use super::valid_ref;
 use super::valid_token;
+use super::validate_recovery_group;
 use super::validate_resource_envelope;
 use crate::fabric::ExtensionTier;
 use crate::fabric::ExtensionTierAdmission;
@@ -46,6 +49,7 @@ pub struct SystemExtensionManifestInput {
     pub policy_refs: Vec<String>,
     pub provenance_refs: Vec<String>,
     pub resources: ResourceEnvelope,
+    pub recovery_group: Option<RecoveryGroupDeclaration>,
     pub execution_profile: ExecutionProfile,
     pub state_schema: String,
     pub compatible_state_schemas: Vec<String>,
@@ -68,6 +72,7 @@ pub struct AdmittedSystemExtensionManifest {
     pub policy_refs: Vec<String>,
     pub provenance_refs: Vec<String>,
     pub resources: ResourceEnvelope,
+    pub recovery_group: Option<RecoveryGroupDeclaration>,
     pub execution_profile: ExecutionProfile,
     pub state_schema: String,
     pub compatible_state_schemas: Vec<String>,
@@ -139,6 +144,7 @@ pub enum ManifestIssue {
         expected: u64,
     },
     Resource(ResourceIssue),
+    RecoveryGroup(RecoveryGroupIssue),
     MissingNonClaim(SystemExtensionNonClaim),
 }
 
@@ -158,6 +164,12 @@ pub fn admit_system_extension_manifest(
     validate_non_claims(input, &mut issues);
     for issue in validate_resource_envelope(&input.resources) {
         issues.push(ManifestIssue::Resource(issue));
+    }
+    if let Some(group) = &input.recovery_group {
+        // r[impl molten.system_extension.recovery_groups]
+        for issue in validate_recovery_group(group) {
+            issues.push(ManifestIssue::RecoveryGroup(issue));
+        }
     }
     let (required_bindings, optional_bindings) = validate_ports(input, context, &mut issues);
     if !issues.is_empty() {
@@ -193,6 +205,7 @@ pub fn admit_system_extension_manifest(
         policy_refs,
         provenance_refs,
         resources: input.resources.clone(),
+        recovery_group: input.recovery_group.clone(),
         execution_profile: input.execution_profile,
         state_schema: input.state_schema.clone(),
         compatible_state_schemas,

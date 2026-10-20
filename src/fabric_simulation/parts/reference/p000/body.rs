@@ -262,6 +262,7 @@ pub fn reference_manifest_input(
             max_restart_attempts: REFERENCE_MAX_RESTART_ATTEMPTS,
             overload_policy: crate::system_extension::OverloadPolicy::UpstreamBackpressure,
         },
+        recovery_group: None,
         execution_profile: crate::system_extension::ExecutionProfile::InProcessNative,
         state_schema: format!("molten.reference.{service}.state.v1"),
         compatible_state_schemas: vec![format!("molten.reference.{service}.state.v1")],

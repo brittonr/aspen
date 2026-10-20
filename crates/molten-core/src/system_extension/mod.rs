@@ -8,8 +8,12 @@ mod dispatch;
 mod lifecycle;
 mod manifest;
 mod native_host;
+mod recovery;
+mod recoveryplan;
 mod supervision;
 
+#[cfg(test)]
+mod recoverytests;
 #[cfg(test)]
 mod tests;
 
@@ -18,6 +22,8 @@ pub use lifecycle::*;
 pub use manifest::*;
 pub use native_host::admit_native_effect_output as admit_materialized_native_effect_output;
 pub use native_host::*;
+pub use recovery::*;
+pub use recoveryplan::*;
 pub use supervision::*;
 
 pub const SYSTEM_EXTENSION_MANIFEST_SCHEMA: &str = "molten.system-extension.manifest.v1";

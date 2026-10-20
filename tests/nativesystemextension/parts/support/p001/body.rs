@@ -243,6 +243,7 @@ fn admitted_manifest() -> TestResult<AdmittedManifest> {
                 max_restart_attempts: MAX_RESTART_ATTEMPTS,
                 overload_policy: OverloadPolicy::UpstreamBackpressure,
             },
+            recovery_group: None,
             execution_profile: ExecutionProfile::NativeProcess,
             state_schema: "molten.fixture.native.state.v1".to_string(),
             compatible_state_schemas: vec!["molten.fixture.native.state.v1".to_string()],

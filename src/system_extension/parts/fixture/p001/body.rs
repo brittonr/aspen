@@ -110,6 +110,7 @@ fn manifest_input(profile: super::ExecutionProfile) -> super::SystemExtensionMan
             max_restart_attempts: MAX_RESTART_ATTEMPTS,
             overload_policy: super::OverloadPolicy::UpstreamBackpressure,
         },
+        recovery_group: None,
         execution_profile: profile,
         state_schema: STATE_SCHEMA.to_string(),
         compatible_state_schemas: vec![STATE_SCHEMA.to_string()],

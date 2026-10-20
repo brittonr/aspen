@@ -213,6 +213,7 @@ fn host_without(omitted_port_id: Option<&str>) -> crate::system_extension::Dispa
                 max_restart_attempts: MAX_RESTART_ATTEMPTS,
                 overload_policy: crate::system_extension::OverloadPolicy::UpstreamBackpressure,
             },
+            recovery_group: None,
             execution_profile: crate::system_extension::ExecutionProfile::InProcessNative,
             state_schema: TEST_STATE_SCHEMA.to_string(),
             compatible_state_schemas: vec![TEST_STATE_SCHEMA.to_string()],
