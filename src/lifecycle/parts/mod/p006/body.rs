@@ -80,6 +80,9 @@ fn turn_action_value(action: &TurnAction) -> IoValue {
         TurnAction::Observe(observer) => record("runtime-turn-action-observe-v1", vec![observer.to_value()]),
         TurnAction::Assert(assertion) => record("runtime-turn-action-assert-v1", vec![assertion.to_value()]),
         TurnAction::Retract(assertion) => record("runtime-turn-action-retract-v1", vec![assertion.to_value()]),
+        TurnAction::RemoveObserver(observer) => record("runtime-turn-action-remove-observer-v1", vec![observer.to_value()]),
+        TurnAction::FacetCreate(facet) => record("runtime-turn-action-facet-create-v1", vec![facet.to_value()]),
+        TurnAction::FacetStop(facet_id) => record("runtime-turn-action-facet-stop-v1", vec![string(facet_id)]),
     }
 }
 

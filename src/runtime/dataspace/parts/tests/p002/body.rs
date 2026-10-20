@@ -129,3 +129,106 @@ fn retracting_an_unheld_assertion_rolls_back_before_commit() {
         if reason == "runtime retraction requires a committed assertion"));
     assert_eq!(state.snapshot(), before);
 }
+
+#[test]
+fn facet_stop_orders_children_before_parent_and_runs_handlers_last() {
+    // r[verify molten.runtime_spine.facet_owner_scopes]
+    let parent_value = Value::string("parent.ready").expect("parent value");
+    let child_value = Value::string("child.ready").expect("child value");
+    let mut state = RuntimeState::new(1);
+    state
+        .apply_facet_create("actor-1", "facet:parent", None, Some("handler:parent"))
+        .expect("create parent facet");
+    state
+        .apply_facet_create("actor-1", "facet:child", Some("facet:parent"), Some("handler:child"))
+        .expect("create child facet");
+    state.apply_facet_assert("actor-1", "facet:parent", &parent_value).expect("assert parent state");
+    state.apply_facet_assert("actor-1", "facet:child", &child_value).expect("assert child state");
+
+    let (events, receipt) = state.apply_facet_stop("actor-1", "facet:parent").expect("stop parent facet");
+
+    assert_eq!(receipt.decision, PredicateDecision::Pass);
+    assert_eq!(events, vec![
+        Event::AssertionRetracted {
+            actor: "actor-1".to_string(),
+            value: child_value,
+        },
+        Event::FacetStopped {
+            facet_id: "facet:child".to_string(),
+        },
+        Event::FacetStopHandlerRan {
+            facet_id: "facet:child".to_string(),
+            handler_ref: "handler:child".to_string(),
+        },
+        Event::AssertionRetracted {
+            actor: "actor-1".to_string(),
+            value: parent_value,
+        },
+        Event::FacetStopped {
+            facet_id: "facet:parent".to_string(),
+        },
+        Event::FacetStopHandlerRan {
+            facet_id: "facet:parent".to_string(),
+            handler_ref: "handler:parent".to_string(),
+        },
+    ]);
+    let snapshot = state.snapshot();
+    assert!(snapshot.assertions.is_empty());
+    assert_eq!(
+        snapshot.facets.get("facet:parent").map(|facet| facet.state),
+        Some(crate::runtime::RuntimeFacetState::Stopped)
+    );
+    assert_eq!(
+        snapshot.facets.get("facet:child").map(|facet| facet.state),
+        Some(crate::runtime::RuntimeFacetState::Stopped)
+    );
+}
+
+#[test]
+fn stopped_facet_denies_late_assertions_observers_and_children() {
+    // r[verify molten.runtime_spine.facet_owner_scopes]
+    let value = Value::string("service.ready").expect("runtime value");
+    let pattern = Value::new(RuntimePattern::exact(value.clone()).to_value()).expect("pattern value");
+    let mut state = RuntimeState::new(1);
+    state.apply_facet_create("actor-1", "facet:parent", None, None).expect("create parent facet");
+    state.apply_facet_stop("actor-1", "facet:parent").expect("stop parent facet");
+
+    assert!(state.apply_facet_assert("actor-1", "facet:parent", &value).is_err());
+    assert!(state.apply_facet_observe("actor-1", "facet:parent", &pattern).is_err());
+    assert!(state
+        .apply_facet_create("actor-1", "facet:child", Some("facet:parent"), None)
+        .is_err());
+    assert!(state.apply_facet_stop("actor-1", "facet:parent").is_err());
+    assert_eq!(
+        state.snapshot().facets.get("facet:parent").map(|facet| facet.state),
+        Some(crate::runtime::RuntimeFacetState::Stopped)
+    );
+}
+
+#[test]
+fn crash_cleanup_removes_facet_state_without_running_handlers() {
+    // r[verify molten.runtime_spine.facet_owner_scopes]
+    let parent_value = Value::string("parent.ready").expect("parent value");
+    let child_value = Value::string("child.ready").expect("child value");
+    let pattern = Value::new(RuntimePattern::wildcard("subject").to_value()).expect("pattern value");
+    let mut state = RuntimeState::new(1);
+    state
+        .apply_facet_create("actor-1", "facet:parent", None, Some("handler:parent"))
+        .expect("create parent facet");
+    state
+        .apply_facet_create("actor-1", "facet:child", Some("facet:parent"), Some("handler:child"))
+        .expect("create child facet");
+    state.apply_facet_assert("actor-1", "facet:parent", &parent_value).expect("assert parent state");
+    state.apply_facet_assert("actor-1", "facet:child", &child_value).expect("assert child state");
+    state.apply_facet_observe("actor-1", "facet:child", &pattern).expect("observe in child facet");
+
+    let cleanup = state.cleanup_actor_scope("actor-1").expect("crash cleanup");
+
+    assert_eq!(cleanup.actor, "actor-1");
+    assert_eq!(cleanup.assertion_refs.len(), 2);
+    assert_eq!(cleanup.observer_refs.len(), 1);
+    let snapshot = state.snapshot();
+    assert!(snapshot.assertions.is_empty());
+    assert!(snapshot.observers.is_empty());
+    assert!(snapshot.facets.is_empty());
+}

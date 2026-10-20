@@ -97,6 +97,7 @@
                 record("value", vec![string("visible")]),
             ]))
             .expect("assertion value"),
+            facet: None,
         };
         let (remaining, cleanup) = cleanup_for_revocation(&[assertion], &revocation_value, 5).expect("cleanup");
         assert!(remaining.is_empty());
@@ -283,6 +284,7 @@
                 record("value", vec![string("x")]),
             ]))
             .expect("assertion value"),
+            facet: None,
         };
         let (remaining, _) = cleanup_for_revocation(&[assertion], &revocation, salt).expect("cleanup");
         assert!(remaining.is_empty());

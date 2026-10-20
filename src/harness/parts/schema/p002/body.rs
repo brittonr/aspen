@@ -19,6 +19,17 @@ pub fn event_value(event: &super::core::CoreEvent) -> IoValue {
         super::core::CoreEvent::AssertionRetractionObserved { observer, owner, value } => {
             record("assertion-retraction-observed", vec![string(observer), string(owner), value.as_iovalue().clone()])
         }
+        super::core::CoreEvent::FacetCreated { facet_id, actor, parent } => {
+            record("facet-created", vec![
+                string(facet_id),
+                string(actor),
+                string(parent.as_deref().unwrap_or("")),
+            ])
+        }
+        super::core::CoreEvent::FacetStopped { facet_id } => record("facet-stopped", vec![string(facet_id)]),
+        super::core::CoreEvent::FacetStopHandlerRan { facet_id, handler_ref } => {
+            record("facet-stop-handler-ran", vec![string(facet_id), string(handler_ref)])
+        }
         super::core::CoreEvent::EffectRequest {
             effect,
             actor,

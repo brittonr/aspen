@@ -149,6 +149,17 @@ ownership, retention, delivery, or whole-system correctness claim, and the
 reference harness keeps per-owner bag counting while parity compares visible
 notifications.
 
+Facet owner scopes are nested lifetime owners for assertions, observers, and
+child facets under one actor. A facet records its parent, running or stopped
+state, and an optional stop-handler ref. Stopping a facet is one staged turn:
+running child facets stop depth-first, then the stopping facet's assertions and
+observers are removed, the facet is recorded as stopped, and its stop handler is
+reported last. Stopped facets remain as tombstones: they accept no new
+assertion, observer, retraction, or child, and cannot be restarted. A crash
+cleanup removes the same facet-owned state and the facet records without
+running any stop handler. Facets grant no additional authority; they are an
+ownership and lifetime mechanism over the same dataspace state.
+
 ## Vat/object layer: Goblins-inspired
 
 The public local runtime model remains Syndicate/SAM-style: actors, entities, facets, assertions, retractions, `Observe` patterns, and turns. A vat is an optional internal execution structure that a Rust, Wasm, or Steel actor/service may host when it needs fine-grained object-capability state.

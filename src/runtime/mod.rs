@@ -45,6 +45,8 @@ pub use cycle::PendingTurn;
 pub use cycle::RuntimeAssertion;
 pub use cycle::RuntimeEffect;
 pub use cycle::RuntimeEvent;
+pub use cycle::RuntimeFacet;
+pub use cycle::RuntimeFacetState;
 pub use cycle::RuntimeMessage;
 pub use cycle::RuntimeObserver;
 pub use cycle::RuntimeStep;

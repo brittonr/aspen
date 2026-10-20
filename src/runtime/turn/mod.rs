@@ -127,6 +127,7 @@ impl RuntimeMessage {
 pub struct RuntimeAssertion {
     pub actor: String,
     pub value: RuntimeValue,
+    pub facet: Option<String>,
 }
 
 impl RuntimeAssertion {
@@ -135,6 +136,7 @@ impl RuntimeAssertion {
             string(&self.actor),
             self.value.as_iovalue().clone(),
             record("value-ref", vec![string(self.value.value_ref())]),
+            string(self.facet.as_deref().unwrap_or("")),
         ])
     }
 
@@ -147,6 +149,7 @@ impl RuntimeAssertion {
 pub struct RuntimeObserver {
     pub actor: String,
     pub pattern: RuntimeValue,
+    pub facet: Option<String>,
 }
 
 impl RuntimeObserver {
@@ -155,6 +158,7 @@ impl RuntimeObserver {
             string(&self.actor),
             self.pattern.as_iovalue().clone(),
             record("pattern-ref", vec![string(self.pattern.value_ref())]),
+            string(self.facet.as_deref().unwrap_or("")),
         ])
     }
 
@@ -250,8 +254,11 @@ impl RuntimeStep {
 }
 
 mod chronicle;
+mod scope;
 pub use chronicle::RuntimeEffect;
 pub use chronicle::RuntimeEvent;
+pub use scope::RuntimeFacet;
+pub use scope::RuntimeFacetState;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingTurn {
@@ -274,4 +281,7 @@ pub(crate) enum TurnAction {
     Observe(RuntimeObserver),
     Assert(RuntimeAssertion),
     Retract(RuntimeAssertion),
+    RemoveObserver(RuntimeObserver),
+    FacetCreate(RuntimeFacet),
+    FacetStop(String),
 }

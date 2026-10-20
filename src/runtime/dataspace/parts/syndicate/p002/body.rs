@@ -15,6 +15,7 @@ impl ReferenceHarness {
         let assertion = Assertion {
             actor: actor.to_string(),
             value: value.clone(),
+            facet: None,
         };
         let is_newly_visible = !self.has_assertion_value(value);
         let mut events = vec![Event::AssertionCommitted {
@@ -46,6 +47,7 @@ impl ReferenceHarness {
         let assertion = Assertion {
             actor: actor.to_string(),
             value: value.clone(),
+            facet: None,
         };
         let is_last_owner = self.visible_owner_count(value) == 1;
         let mut events = vec![Event::AssertionRetracted {

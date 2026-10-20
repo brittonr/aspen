@@ -14,6 +14,8 @@ type RuntimePattern = super::RuntimePattern;
 type Assertion = super::RuntimeAssertion;
 type Effect = super::RuntimeEffect;
 type Event = super::RuntimeEvent;
+type Facet = super::RuntimeFacet;
+type FacetState = super::RuntimeFacetState;
 type Message = super::RuntimeMessage;
 type Observer = super::RuntimeObserver;
 type PredicateReceipt = super::RuntimePredicateReceipt;
@@ -62,6 +64,7 @@ pub struct RuntimeSnapshot {
     pub messages: OrderedSet<Message>,
     pub assertions: OrderedSet<Assertion>,
     pub observers: OrderedSet<Observer>,
+    pub facets: OrderedMap<String, super::RuntimeFacet>,
 }
 
 impl RuntimeSnapshot {
@@ -73,6 +76,7 @@ impl RuntimeSnapshot {
             sequence(self.messages.iter().map(Message::to_value).collect()),
             sequence(self.assertions.iter().map(Assertion::to_value).collect()),
             sequence(self.observers.iter().map(Observer::to_value).collect()),
+            sequence(self.facets.values().map(super::RuntimeFacet::to_value).collect()),
         ])
     }
 
@@ -89,6 +93,7 @@ pub struct RuntimeState {
     messages: OrderedSet<Message>,
     assertions: OrderedSet<Assertion>,
     observers: OrderedSet<Observer>,
+    facets: OrderedMap<String, super::RuntimeFacet>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

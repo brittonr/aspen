@@ -231,6 +231,7 @@ fn applied_assertion_value(input: AppliedAssertionInput<'_>) -> Result<IoValue> 
     let assertion = crate::runtime::RuntimeAssertion {
         actor: input.owner.to_owned(),
         value,
+        facet: None,
     };
     Ok(record("remote-dataspace-applied-assertion-v1", vec![
         string(crate::preserves_rail::REMOTE_DATASPACE_APPLIED_ASSERTION_SCHEMA),

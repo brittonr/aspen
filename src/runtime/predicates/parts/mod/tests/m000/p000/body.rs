@@ -255,6 +255,7 @@
         let observer = RuntimeObserver {
             actor: "watcher".to_string(),
             pattern: ready,
+            facet: None,
         };
         let result = evaluate_observe_initial_delivery(&state.snapshot(), &observer).expect("delivery");
         assert_eq!(result.delivered_assertion_refs.len(), 1);

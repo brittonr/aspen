@@ -8,6 +8,7 @@ impl RuntimeState {
             messages: OrderedSet::new(),
             assertions: OrderedSet::new(),
             observers: OrderedSet::new(),
+            facets: OrderedMap::new(),
         }
     }
 
@@ -19,6 +20,7 @@ impl RuntimeState {
             messages: self.messages.clone(),
             assertions: self.assertions.clone(),
             observers: self.observers.clone(),
+            facets: self.facets.clone(),
         }
     }
 
@@ -131,6 +133,7 @@ impl RuntimeState {
         self.assertions.retain(|assertion| assertion.actor != actor);
         self.observers.retain(|observer| observer.actor != actor);
         self.messages.retain(|message| message.from != actor && message.to != actor);
+        self.facets.retain(|_, facet| facet.actor != actor);
         Ok(RuntimeScopeCleanup {
             actor: actor.to_owned(),
             assertion_refs,
@@ -163,105 +166,6 @@ impl RuntimeState {
         Ok(transition.response)
     }
 
-    fn stage_step(&self, turn: &mut PendingTurn, step: &Step) {
-        match step {
-            Step::Send { from, to, body } => {
-                let message = Message {
-                    from: from.clone(),
-                    to: to.clone(),
-                    body: body.clone(),
-                };
-                turn.events.push(Event::MessageDelivered {
-                    from: from.clone(),
-                    to: to.clone(),
-                    body: body.clone(),
-                });
-                turn.actions.push(TurnAction::Send(message));
-            }
-            Step::Observe { actor, pattern } => {
-                let observer = Observer {
-                    actor: actor.clone(),
-                    pattern: pattern.clone(),
-                };
-                turn.events.push(Event::ObserveRegistered {
-                    actor: actor.clone(),
-                    pattern: pattern.clone(),
-                });
-                let mut notified = OrderedSet::new();
-                for assertion in
-                    self.assertions.iter().filter(|assertion| observe_value_matches(pattern, &assertion.value))
-                {
-                    if !notified.insert(assertion.value.clone()) {
-                        continue;
-                    }
-                    // r[impl molten.preserves_boundary_codegen.pattern_routing]
-                    turn.events.push(Event::AssertionObserved {
-                        observer: actor.clone(),
-                        owner: assertion.actor.clone(),
-                        value: assertion.value.clone(),
-                    });
-                }
-                turn.actions.push(TurnAction::Observe(observer));
-            }
-            Step::Assert { actor, value } => {
-                let assertion = Assertion {
-                    actor: actor.clone(),
-                    value: value.clone(),
-                };
-                let is_newly_visible = !self.has_visible_assertion(value);
-                turn.events.push(Event::AssertionCommitted {
-                    actor: actor.clone(),
-                    value: value.clone(),
-                });
-                if is_newly_visible {
-                    for observer in
-                        self.observers.iter().filter(|observer| observe_value_matches(&observer.pattern, value))
-                    {
-                        // r[impl molten.preserves_boundary_codegen.pattern_routing]
-                        turn.events.push(Event::AssertionObserved {
-                            observer: observer.actor.clone(),
-                            owner: actor.clone(),
-                            value: value.clone(),
-                        });
-                    }
-                }
-                turn.actions.push(TurnAction::Assert(assertion));
-            }
-            Step::Retract { actor, value } => {
-                if !self.holds_assertion(actor, value) {
-                    turn.events.push(Event::TurnRolledBack {
-                        actor: actor.clone(),
-                        reason: RETRACTION_WITHOUT_ASSERTION.to_string(),
-                    });
-                    return;
-                }
-                let assertion = Assertion {
-                    actor: actor.clone(),
-                    value: value.clone(),
-                };
-                let is_last_owner = self.visible_owner_count(value) == 1;
-                turn.events.push(Event::AssertionRetracted {
-                    actor: actor.clone(),
-                    value: value.clone(),
-                });
-                if is_last_owner {
-                    for observer in
-                        self.observers.iter().filter(|observer| observe_value_matches(&observer.pattern, value))
-                    {
-                        // r[impl molten.preserves_boundary_codegen.pattern_routing]
-                        turn.events.push(Event::AssertionRetractionObserved {
-                            observer: observer.actor.clone(),
-                            owner: actor.clone(),
-                            value: value.clone(),
-                        });
-                    }
-                }
-                turn.actions.push(TurnAction::Retract(assertion));
-            }
-            Step::Clock { .. } | Step::Random { .. } => {}
-        }
-    }
-
     fn local_clock_response_value(&mut self) -> u64 {
         let logical_time = self.logical_time;
         self.logical_time += 1;
@@ -275,6 +179,7 @@ impl RuntimeState {
         self.messages = snapshot.messages;
         self.assertions = snapshot.assertions;
         self.observers = snapshot.observers;
+        self.facets = snapshot.facets;
     }
 
     fn next_effect_sequence(&mut self) -> u64 {

@@ -139,6 +139,7 @@
         let staged_assertion = crate::runtime::RuntimeAssertion {
             actor: actor.clone(),
             value: staged_value.clone(),
+            facet: None,
         };
         let staged_assertion_ref = staged_assertion.assertion_ref().expect("staged assertion ref");
         let staged_observer_ref = deterministic_ref("rollback-staged-observer");

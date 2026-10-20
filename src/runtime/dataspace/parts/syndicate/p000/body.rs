@@ -214,6 +214,7 @@ impl ReferenceHarness {
         self.observers.insert(Observer {
             actor: actor.to_string(),
             pattern: pattern.clone(),
+            facet: None,
         });
         Ok(events)
     }

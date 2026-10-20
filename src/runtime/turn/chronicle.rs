@@ -49,6 +49,18 @@ pub enum RuntimeEvent {
         owner: String,
         value: RuntimeValue,
     },
+    FacetCreated {
+        facet_id: String,
+        actor: String,
+        parent: Option<String>,
+    },
+    FacetStopped {
+        facet_id: String,
+    },
+    FacetStopHandlerRan {
+        facet_id: String,
+        handler_ref: String,
+    },
     EffectRequest {
         effect: RuntimeEffect,
         actor: String,
@@ -127,6 +139,19 @@ impl RuntimeEvent {
                     value.as_iovalue().clone(),
                     record("value-ref", vec![string(value.value_ref())]),
                 ])
+            }
+            RuntimeEvent::FacetCreated {
+                facet_id,
+                actor,
+                parent,
+            } => record("runtime-event-facet-created-v1", vec![
+                string(facet_id),
+                string(actor),
+                string(parent.as_deref().unwrap_or("")),
+            ]),
+            RuntimeEvent::FacetStopped { facet_id } => record("runtime-event-facet-stopped-v1", vec![string(facet_id)]),
+            RuntimeEvent::FacetStopHandlerRan { facet_id, handler_ref } => {
+                record("runtime-event-facet-stop-handler-ran-v1", vec![string(facet_id), string(handler_ref)])
             }
             RuntimeEvent::EffectRequest {
                 effect,

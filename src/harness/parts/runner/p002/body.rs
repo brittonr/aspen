@@ -9,6 +9,7 @@ fn step_predicate_receipts(
             let observer = RuntimeObserver {
                 actor: actor.clone(),
                 pattern: pattern.clone(),
+                facet: None,
             };
             let receipt = crate::runtime::evaluate_observe_initial_delivery(before, &observer)?.receipt;
             Ok(vec![receipt.value])

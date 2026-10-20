@@ -52,6 +52,15 @@ fn action_summary_value(action: &TurnAction) -> IoValue {
         TurnAction::Retract(assertion) => {
             crate::preserves_rail::record("turn-action-retract-v1", vec![assertion.to_value()])
         }
+        TurnAction::RemoveObserver(observer) => {
+            crate::preserves_rail::record("turn-action-remove-observer-v1", vec![observer.to_value()])
+        }
+        TurnAction::FacetCreate(facet) => {
+            crate::preserves_rail::record("turn-action-facet-create-v1", vec![facet.to_value()])
+        }
+        TurnAction::FacetStop(facet_id) => {
+            crate::preserves_rail::record("turn-action-facet-stop-v1", vec![crate::preserves_rail::string(facet_id)])
+        }
     }
 }
 
@@ -103,6 +112,19 @@ pub fn committed_turn_snapshot(before: &RuntimeSnapshot, turn: &PendingTurn) -> 
             }
             TurnAction::Retract(assertion) => {
                 after.assertions.remove(assertion);
+            }
+            TurnAction::RemoveObserver(observer) => {
+                after.observers.remove(observer);
+            }
+            TurnAction::FacetCreate(facet) => {
+                after.facets.insert(facet.facet_id.clone(), facet.clone());
+            }
+            TurnAction::FacetStop(facet_id) => {
+                if let Some(facet) = after.facets.get_mut(facet_id) {
+                    facet.state = crate::runtime::RuntimeFacetState::Stopped;
+                }
+                after.assertions.retain(|assertion| assertion.facet.as_deref() != Some(facet_id.as_str()));
+                after.observers.retain(|observer| observer.facet.as_deref() != Some(facet_id.as_str()));
             }
         }
     }
