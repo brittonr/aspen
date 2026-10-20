@@ -37,8 +37,11 @@ notification tests.
 - `cargo check --workspace --all-targets`: pass.
 - `cargo clippy --workspace --all-targets -- -D warnings`: pass.
 - `cargo fmt --all --check`: pass.
-- `cargo octet check --artifact-dir target/octet-facet-scope-3`: clean, 0
+- `cargo octet check --artifact-dir target/octet-facet-scope-4`: clean, 0
   findings, 0 warnings, 0 errors.
+- Full repository flake gate: `nix flake check -L --no-update-lock-file`
+  passed with `all checks passed!`, 1,749 nextest tests, and CI receipt
+  `blake3:b1dcdb5a77f415014cb74f142439d054b0770101029c5857415a288495877156`.
 - Positive tests cover child-before-parent stop order, handler ordering,
   facet-owned assertion retraction, and flat actor cleanup.
 - Negative tests cover late assertion, observer, child, and repeated stop

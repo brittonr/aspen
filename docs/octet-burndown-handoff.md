@@ -68,6 +68,14 @@ Strict Cairn validation after archival reports 44 active changes, zero issues,
 `receipt_hash blake3:69448553e972b03eca47548cff919507cc1cd28a4884bbd2ac25240d0f4f33a6`.
 This remains local, unintegrated evidence and does not authorize a remote push.
 
+After that checkpoint, `admit-facet-owner-scopes` and
+`admit-recovery-group-supervision` were implemented, validated, synced, and
+archived. The full repository flake gate passed again with 1,749 nextest tests
+and CI receipt
+`blake3:b1dcdb5a77f415014cb74f142439d054b0770101029c5857415a288495877156`.
+Strict Cairn validation reports 42 active changes, zero issues,
+`receipt_hash blake3:4d21a3f49c19ea55447794e5cef6fb7f1db1a05c13f3b8c7a27abb3017c9e8cb`.
+
 ### Earlier source checkpoint (attempt 5/20)
 
 

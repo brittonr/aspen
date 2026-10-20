@@ -41,6 +41,9 @@ time-windowed history. The manifest had no recovery-group declaration.
 - `cargo fmt --all --check`: pass.
 - `cargo octet check --artifact-dir target/octet-recovery-group-3`: clean,
   0 findings, 0 warnings, 0 errors.
+- Full repository flake gate: `nix flake check -L --no-update-lock-file`
+  passed with `all checks passed!`, 1,749 nextest tests, and CI receipt
+  `blake3:b1dcdb5a77f415014cb74f142439d054b0770101029c5857415a288495877156`.
 - Admission tests cover valid, duplicate, unknown, self, cyclic, and invalid
   bound/source shapes. Planning tests cover ordered suffix restart, independent
   members, restart classes, member/group budgets, backoff, expired-window
