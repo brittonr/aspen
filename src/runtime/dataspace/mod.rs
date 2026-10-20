@@ -22,6 +22,8 @@ type Value = super::RuntimeValue;
 type TurnAction = super::TurnAction;
 type TurnOutcome = super::TurnOutcome;
 
+const RETRACTION_WITHOUT_ASSERTION: &str = "runtime retraction requires a committed assertion";
+
 fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }

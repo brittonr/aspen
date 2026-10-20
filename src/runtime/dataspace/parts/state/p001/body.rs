@@ -187,9 +187,13 @@ impl RuntimeState {
                     actor: actor.clone(),
                     pattern: pattern.clone(),
                 });
+                let mut notified = OrderedSet::new();
                 for assertion in
                     self.assertions.iter().filter(|assertion| observe_value_matches(pattern, &assertion.value))
                 {
+                    if !notified.insert(assertion.value.clone()) {
+                        continue;
+                    }
                     // r[impl molten.preserves_boundary_codegen.pattern_routing]
                     turn.events.push(Event::AssertionObserved {
                         observer: actor.clone(),
@@ -204,38 +208,53 @@ impl RuntimeState {
                     actor: actor.clone(),
                     value: value.clone(),
                 };
+                let is_newly_visible = !self.has_visible_assertion(value);
                 turn.events.push(Event::AssertionCommitted {
                     actor: actor.clone(),
                     value: value.clone(),
                 });
-                for observer in self.observers.iter().filter(|observer| observe_value_matches(&observer.pattern, value))
-                {
-                    // r[impl molten.preserves_boundary_codegen.pattern_routing]
-                    turn.events.push(Event::AssertionObserved {
-                        observer: observer.actor.clone(),
-                        owner: actor.clone(),
-                        value: value.clone(),
-                    });
+                if is_newly_visible {
+                    for observer in
+                        self.observers.iter().filter(|observer| observe_value_matches(&observer.pattern, value))
+                    {
+                        // r[impl molten.preserves_boundary_codegen.pattern_routing]
+                        turn.events.push(Event::AssertionObserved {
+                            observer: observer.actor.clone(),
+                            owner: actor.clone(),
+                            value: value.clone(),
+                        });
+                    }
                 }
                 turn.actions.push(TurnAction::Assert(assertion));
             }
             Step::Retract { actor, value } => {
+                if !self.holds_assertion(actor, value) {
+                    turn.events.push(Event::TurnRolledBack {
+                        actor: actor.clone(),
+                        reason: RETRACTION_WITHOUT_ASSERTION.to_string(),
+                    });
+                    return;
+                }
                 let assertion = Assertion {
                     actor: actor.clone(),
                     value: value.clone(),
                 };
+                let is_last_owner = self.visible_owner_count(value) == 1;
                 turn.events.push(Event::AssertionRetracted {
                     actor: actor.clone(),
                     value: value.clone(),
                 });
-                for observer in self.observers.iter().filter(|observer| observe_value_matches(&observer.pattern, value))
-                {
-                    // r[impl molten.preserves_boundary_codegen.pattern_routing]
-                    turn.events.push(Event::AssertionRetractionObserved {
-                        observer: observer.actor.clone(),
-                        owner: actor.clone(),
-                        value: value.clone(),
-                    });
+                if is_last_owner {
+                    for observer in
+                        self.observers.iter().filter(|observer| observe_value_matches(&observer.pattern, value))
+                    {
+                        // r[impl molten.preserves_boundary_codegen.pattern_routing]
+                        turn.events.push(Event::AssertionRetractionObserved {
+                            observer: observer.actor.clone(),
+                            owner: actor.clone(),
+                            value: value.clone(),
+                        });
+                    }
                 }
                 turn.actions.push(TurnAction::Retract(assertion));
             }

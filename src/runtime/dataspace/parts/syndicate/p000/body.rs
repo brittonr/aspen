@@ -144,7 +144,20 @@ impl ReferenceHarness {
     pub fn preview_fanout(&self, step: &Step) -> Result<u64> {
         let count = match step {
             Step::Observe { pattern, .. } => self.matching_assertion_count(pattern)?,
-            Step::Assert { value, .. } | Step::Retract { value, .. } => self.matching_observer_count(value)?,
+            Step::Assert { value, .. } => {
+                if self.has_assertion_value(value) {
+                    usize::default()
+                } else {
+                    self.matching_observer_count(value)?
+                }
+            }
+            Step::Retract { actor, value } => {
+                if !self.holds_assertion(actor, value) || self.visible_owner_count(value) > 1 {
+                    usize::default()
+                } else {
+                    self.matching_observer_count(value)?
+                }
+            }
             Step::Send { .. } | Step::Clock { .. } | Step::Random { .. } => usize::default(),
         };
         u64::try_from(count).map_err(|_| crate::error::Failure::invalid_harness("syndicate fanout count overflow"))
@@ -205,63 +218,12 @@ impl ReferenceHarness {
         Ok(events)
     }
 
-    fn apply_assert(&mut self, actor: &str, value: &Value) -> Result<Vec<Event>> {
-        let assertion = Assertion {
-            actor: actor.to_string(),
-            value: value.clone(),
-        };
-        let mut events = vec![Event::AssertionCommitted {
-            actor: actor.to_string(),
-            value: value.clone(),
-        }];
-        for observer in self.matching_observers(value)? {
-            events.push(Event::AssertionObserved {
-                observer: observer.actor,
-                owner: actor.to_string(),
-                value: value.clone(),
-            });
-        }
-        self.assertions.change(assertion, SYNDICATE_BAG_INSERT_DELTA);
-        Ok(events)
-    }
-
-    fn apply_retract(&mut self, actor: &str, value: &Value) -> Result<Vec<Event>> {
-        let assertion = Assertion {
-            actor: actor.to_string(),
-            value: value.clone(),
-        };
-        let mut events = vec![Event::AssertionRetracted {
-            actor: actor.to_string(),
-            value: value.clone(),
-        }];
-        for observer in self.matching_observers(value)? {
-            events.push(Event::AssertionRetractionObserved {
-                observer: observer.actor,
-                owner: actor.to_string(),
-                value: value.clone(),
-            });
-        }
-        self.assertions.change_clamped(assertion, SYNDICATE_BAG_RETRACT_DELTA);
-        Ok(events)
-    }
-
     fn matching_assertion_count(&self, pattern: &Value) -> Result<usize> {
         Ok(self.matching_assertions(pattern)?.len())
     }
 
     fn matching_observer_count(&self, value: &Value) -> Result<usize> {
         Ok(self.matching_observers(value)?.len())
-    }
-
-    fn matching_assertions(&self, pattern_value: &Value) -> Result<Vec<Assertion>> {
-        let pattern = RuntimePattern::from_observe_value(pattern_value)?;
-        let mut assertions = Vec::with_capacity(self.assertions.len());
-        for assertion in self.assertions.keys() {
-            if pattern.matches_value(&assertion.value)?.0 {
-                assertions.push(assertion.clone());
-            }
-        }
-        Ok(assertions)
     }
 
     fn matching_observers(&self, value: &Value) -> Result<Vec<Observer>> {

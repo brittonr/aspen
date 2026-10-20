@@ -94,13 +94,19 @@ fn local_state_routes_pattern_observe_for_current_future_and_retractions() {
         actor: "owner-b".into(),
         value: ready.clone(),
     });
-    assert!(matches!(future.as_slice(), [Event::AssertionCommitted { .. }, Event::AssertionObserved { .. }]));
+    assert!(matches!(future.as_slice(), [Event::AssertionCommitted { .. }]));
 
     let retraction = state.apply_step(&Step::Retract {
         actor: "owner-b".into(),
+        value: ready.clone(),
+    });
+    assert!(matches!(retraction.as_slice(), [Event::AssertionRetracted { .. }]));
+
+    let final_retraction = state.apply_step(&Step::Retract {
+        actor: "owner-a".into(),
         value: ready,
     });
-    assert!(matches!(retraction.as_slice(), [
+    assert!(matches!(final_retraction.as_slice(), [
         Event::AssertionRetracted { .. },
         Event::AssertionRetractionObserved { .. }
     ]));

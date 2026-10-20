@@ -138,6 +138,17 @@ actor receives event
 
 The dataspace is the default path for ordinary actor traffic. Raft is not used for ordinary actor messages.
 
+Assertion notifications are visibility-coalesced by canonical value. Per-owner
+assertion records remain, so ownership and retraction evidence stay exact, but
+an observer receives one notification per visible value regardless of how many
+owners hold it. A retraction notifies only when the last owner withdraws, and a
+retraction from an actor that does not hold the assertion rolls back before
+commit. `Observe` registration delivers one notification per distinct matching
+value. This rule changes visible notification count only: it grants no authority,
+ownership, retention, delivery, or whole-system correctness claim, and the
+reference harness keeps per-owner bag counting while parity compares visible
+notifications.
+
 ## Vat/object layer: Goblins-inspired
 
 The public local runtime model remains Syndicate/SAM-style: actors, entities, facets, assertions, retractions, `Observe` patterns, and turns. A vat is an optional internal execution structure that a Rust, Wasm, or Steel actor/service may host when it needs fine-grained object-capability state.
