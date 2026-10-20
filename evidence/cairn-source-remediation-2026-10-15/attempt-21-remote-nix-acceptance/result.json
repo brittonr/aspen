@@ -1,0 +1,80 @@
+{
+  "kind": "remote-nix-acceptance-attempt",
+  "recorded_at": "2026-10-19T16:30:00Z",
+  "local_source": {
+    "head": "e2db8c1eafbe5150926b2ff30461a936e4eea636",
+    "archive_sha256": "7049e9f19856d56355ba63f6058ba9edd853eae466e7ac68257432011c40abbb"
+  },
+  "remote_builder": {
+    "host": "aspen1",
+    "kernel": "Linux 7.2.4 #1-NixOS SMP PREEMPT_DYNAMIC x86_64",
+    "nix": "2.36.0",
+    "system_features": ["benchmark", "big-parallel", "kvm", "nixos-test", "recursive-nix", "uid-range"]
+  },
+  "required_nix_checks": {
+    "argv": [
+      "nix",
+      "build",
+      "--no-update-lock-file",
+      "--no-link",
+      "-L",
+      ".#checks.x86_64-linux.nextest",
+      ".#checks.x86_64-linux.clippy",
+      ".#checks.x86_64-linux.nextest-config"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 905.2,
+    "started_at": "2026-10-19T10:43:00-04:00",
+    "ended_at": "2026-10-19T10:58:30-04:00",
+    "outputs": {
+      "nextest": "/nix/store/pxr26xvx3a53bwi4mh1cycdi8w1kv1b2-molten-nextest",
+      "clippy": "/nix/store/djsbqa59mgdzxvw8y374vfsp7100qzrl-all-workspace-members-clippy",
+      "nextest_config": "/nix/store/66fa7qhhw555ch9k2plfy105myld3syb-molten-nextest-config-check"
+    },
+    "nextest_summary": "1741 tests run: 1741 passed (1 slow), 0 skipped",
+    "ci_test_run_receipt": "blake3:6371e2745a98f6f67577b6beff0019caf23b9759b77b0bfc2c38c9ee5b858540",
+    "decision": "pass"
+  },
+  "flake_evaluation": {
+    "argv": [
+      "nix",
+      "flake",
+      "check",
+      "--no-build",
+      "--offline",
+      "--no-update-lock-file",
+      "-L"
+    ],
+    "exit_code": 0,
+    "result": "all checks passed!",
+    "scope": "evaluation only, not full build acceptance"
+  },
+  "full_flake_gate": {
+    "attempted": true,
+    "completed": false,
+    "reason": "cold remote closure build (LLVM, GCC, QEMU, OpenBLAS, NixOS VM test inputs) exceeded the bounded session and was stopped",
+    "source_check_failure_observed": false,
+    "passing_evidence": false
+  },
+  "local_host_blocker": {
+    "blocked_process": "nix-store --add-root /var/tmp/kiln-live-ci-20261018-pns6mna0-runtime-root --indirect --realise /nix/store/pns6mna0zim4y9yp8cj5932dgssc29s4-kiln-0.1.0",
+    "pid": 2300007,
+    "owner": "root",
+    "observed_age_seconds": 72046,
+    "observed_user_cpu_seconds": 0.0,
+    "observed_system_cpu_seconds": 0.2,
+    "local_client_wait": "unix_stream_read_generic on the nix-daemon socket",
+    "noninteractive_sudo": "unavailable"
+  },
+  "input_transport": {
+    "method": "explicit GIT_CONFIG_GLOBAL insteadOf rewrite to local Nix git cache copies on the remote",
+    "flakes": "archived with nix flake archive --no-check-sigs",
+    "offline": true,
+    "release_evidence": false
+  },
+  "non_claims": [
+    "The full repository flake gate did not complete.",
+    "F09/F10 sync and archive remain open.",
+    "No release readiness, whole-core Octet cleanliness, or production correctness claim."
+  ]
+}
