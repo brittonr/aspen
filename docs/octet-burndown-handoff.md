@@ -46,7 +46,14 @@ the nine caller-built input preflights (`preflight-caller-built-chunk-manifest`,
 `preflight-resource-lifecycle-growth`, `preflight-simulation-world-before-hosts`).
 Strict Cairn validation then reported 47 active changes and zero issues
 (`receipt_hash blake3:e5f3a1b6a3c35e3d925da91c9e599be7bbaa9ded7f44ca64f4c3ec17b0f78057`).
-The two F09/F10 packages retain their final Nix acceptance task.
+The two F09/F10 packages retain their final Nix acceptance task. On
+2026-10-19 the required `nextest`, `clippy`, and `nextest-config` closures
+passed on the `aspen1` builder (1,741 nextest tests, all passing) after the
+local Nix daemon blocked on a root-owned `nix-store --add-root` process. The
+repository flake evaluation passed with `nix flake check --no-build`; the full
+flake build was attempted but stopped while building a cold NixOS VM closure.
+Exact records are under
+[`evidence/cairn-source-remediation-2026-10-15/attempt-21-remote-nix-acceptance/`](../evidence/cairn-source-remediation-2026-10-15/attempt-21-remote-nix-acceptance/verification.md).
 
 ### Earlier source checkpoint (attempt 5/20)
 
