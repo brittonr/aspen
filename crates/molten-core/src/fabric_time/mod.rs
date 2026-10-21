@@ -8,9 +8,12 @@ mod domain;
 mod entropy;
 mod lease;
 mod profile;
+mod reservation;
 mod scheduler;
 mod timer;
 
+#[cfg(test)]
+mod reservation_tests;
 #[cfg(test)]
 mod tests;
 
@@ -18,6 +21,7 @@ pub use domain::*;
 pub use entropy::*;
 pub use lease::*;
 pub use profile::*;
+pub use reservation::*;
 pub use scheduler::*;
 pub use timer::*;
 

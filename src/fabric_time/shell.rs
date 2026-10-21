@@ -14,10 +14,12 @@ use crate::system_extension::Dispatcher;
 use crate::system_extension::SystemExtensionExecutor;
 
 mod owned;
+mod reservation;
 
 pub use owned::SchedulerChoice;
 pub use owned::SchedulerRuntime;
 pub use owned::SchedulerRuntimeError;
+pub use reservation::*;
 
 // r[impl molten.modularity.fabric_boundary.shell]
 

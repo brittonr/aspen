@@ -1,0 +1,153 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/adopt-command-pattern-resource-reservation/specs/fabric-time-scheduling/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/specs/fabric-time-scheduling/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "adopt-command-pattern-resource-reservation",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/adopt-command-pattern-resource-reservation/specs/fabric-time-scheduling/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "e7f169af6650367f3beb1e8d7c0a1a7ce99a489b69483c56ce01f07164a4458f",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "7ba8d606520ab9cac80fb6dd9423bdfcaa6bb05014d809b58832a2d2184db95d",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "4fc0d0aaad9fb98b6b3879045cb1598d1cacc7a132b581239d422831601ececb",
+        "destination": ".cairn/specs/fabric-time-scheduling/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "b13b8551672e89bebba631337ae4ef537aa73ffd8ccb78ee4a19ddc300310188",
+        "operations": [
+          {
+            "block_hash": "c3e91431b33404f6e6f48ad4a9b8c8cdf5de81fa7b1d0e4ca3261b707c0fc9d9",
+            "heading": "### Requirement: Reservations evaluate atomically against authoritative state",
+            "kind": "added",
+            "requirement_id": "molten.reservation_command.atomic_eval"
+          },
+          {
+            "block_hash": "5d8e98a805065a22b0daf01db4f04a9606a9e557cdbcc9a7db1b7b2b84152df9",
+            "heading": "### Requirement: Reservation decisions stay in the pure core",
+            "kind": "added",
+            "requirement_id": "molten.reservation_command.pure_core"
+          },
+          {
+            "block_hash": "7ea958e82a7270269dab978d74deb4b22bab002a638ff29cb251362280fa038c",
+            "heading": "### Requirement: Batches are bounded and per-item",
+            "kind": "added",
+            "requirement_id": "molten.reservation_command.bounded_batches"
+          },
+          {
+            "block_hash": "2efa2b6f89a265b18516db948d367309dcc1173d2aa2ba3c5654a7ae147c535d",
+            "heading": "### Requirement: Expiry alone does not free capacity",
+            "kind": "added",
+            "requirement_id": "molten.reservation_command.expiry_not_release"
+          },
+          {
+            "block_hash": "65ba53d4a0f20fb6c3292068b2b327e6147ece3f93157694f86261c2f90183ae",
+            "heading": "### Requirement: Validation limits reservation evidence",
+            "kind": "added",
+            "requirement_id": "molten.reservation_command.validation"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.reservation_command.atomic_eval",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.reservation_command.pure_core",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.reservation_command.bounded_batches",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.reservation_command.expiry_not_release",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.reservation_command.validation",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/adopt-command-pattern-resource-reservation/specs/fabric-time-scheduling/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "b13b8551672e89bebba631337ae4ef537aa73ffd8ccb78ee4a19ddc300310188",
+          "exists": true,
+          "path": "./.cairn/specs/fabric-time-scheduling/spec.md"
+        }
+      ],
+      "manifest_hash": "915baa58597622bee132ce742e43da7b9122222f485c156777ab3cab39cd8b43"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "7ba8d606520ab9cac80fb6dd9423bdfcaa6bb05014d809b58832a2d2184db95d",
+          "exists": true,
+          "path": "./.cairn/specs/fabric-time-scheduling/spec.md"
+        }
+      ],
+      "manifest_hash": "6b59d1ad66abd700353414fde5ae9dbec4397f0da9c6081b9db9b30d7509d666"
+    },
+    "kind": "sync",
+    "manifest_hash": "73df4daece93dce8e65f75e2cd4b4bf277c1c5e8e9c9528fc48918c2a0b9bd74"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "4a50ffc8b8fe2c023e9d9e28828c8f8fc8ac2e02a258c8ed7d8df4475ce7904d",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "224a75ff04fb0df7b4712029736fde6117c56b8593cd37870b02daad3c429076",
+  "reasons": [],
+  "receipt_hash": "40780a28ba5e02674bf668981b0ae411b49ad5fb80b674d1c291c43f567c5090",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

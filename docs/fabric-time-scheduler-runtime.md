@@ -181,6 +181,18 @@ capacity exhaustion observations remain distinct from denied scheduler transitio
 Capacity observations bind the plan, profile, generation, usage, high-water values, exhaustion count, and release state.
 These observations do not prove global latency, fairness, liveness, host memory stability, or whole-runtime zero allocation.
 
+## Command-pattern resource reservation
+
+A resource reservation is one command. It carries the job, the logical operation identity, the resource requirements, and the expected generation. The pure core evaluates the whole command against current authoritative state and returns either a committed reservation with its worker selection and allocation, or a typed rejection that preserves state. There is no client-visible read-then-write window: a command that was in flight re-evaluates against the state it meets, not against the observation it started from.
+
+Capacity accounting keeps three quantities distinct: total admitted, reserved against a committed reservation, and allocated to a selected worker. Reserved never falls below allocated, and neither exceeds the total, on every path including rejections.
+
+Batches are bounded before evaluation. A batch declares an item count, a byte count, and a maximum waiting time; a batch that exceeds any limit is rejected whole with a typed reason and no item commits. Inside an admitted batch each item is its own atomic command with its own identity and result, so one invalid item neither fails nor admits its neighbours, and batching never enlarges the set of operations that commit together.
+
+Lease expiry changes bookkeeping only. Expiring a lease marks its reservation stale. The capacity behind it becomes reusable only through a transition whose precondition carries an enforcement or termination fact: an observed stop, a fencing takeover with termination authority, or a contract that declares the work non-external. Without such a fact the capacity stays counted against the stale reservation and the shortfall is visible in operator status. Expiry does not stop an external job.
+
+The shell executes only decided effects. A rejected command performs no allocation, dispatch, or capacity effect.
+
 ## Entropy
 
 Entropy streams bind profile, stream id, purpose, capability ref, generation, mode, replay class, and byte position. Requests are bounded byte draws or bounded choices.

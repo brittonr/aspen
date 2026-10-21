@@ -1,0 +1,1 @@
+cargo octet check -p molten --artifact-dir .cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/library -- --lib

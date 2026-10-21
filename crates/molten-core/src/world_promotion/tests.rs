@@ -262,6 +262,7 @@ fn promotion_retry_rejects_incompatible_request_parameters() {
 }
 
 // r[verify molten.promotion_identity.no_payload_merge]
+// r[verify molten.promotion_identity.validation]
 #[test]
 fn distinct_logical_operations_with_equal_payloads_never_merge() {
     let first = promotion_request();

@@ -1,0 +1,311 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: adopt-command-pattern-resource-reservation",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation"
+    }
+  ],
+  "blocked": false,
+  "change": "adopt-command-pattern-resource-reservation",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "31b3d8575a871014c8271481a35a5ab5d4005367a068b26b93aa59fbe9a37b74",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "7a7fb6acb2a0e92c0bb1594ced5853e252e18d5a656dc8c92d1979543f7b6aeb",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/design.md"
+        },
+        {
+          "content_hash": "d22187797bc67d12378c16c38ea00c0d86abe0401021d9b62b6688ac9af20206",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/evidence/2026-10-21-gate-design.json"
+        },
+        {
+          "content_hash": "85bb97fda1182ffa13296a3ddde9989d4d4eda15fa6dada5e05e0100eb32987d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/evidence/2026-10-21-gate-proposal.json"
+        },
+        {
+          "content_hash": "753af91493efdf50674ef110227a763775ce023e60fa17a52c633ee307e004a5",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/evidence/2026-10-21-gate-tasks.json"
+        },
+        {
+          "content_hash": "e8f663e0ac5b2ecb36b154d748772a9a05a86683188e88d26f6182669d2d27b7",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/evidence/2026-10-21-review-completeness.json"
+        },
+        {
+          "content_hash": "65e4143b987d4c11e159b427da3059cd5ef800d02eadf8c13c42feed5c56a85e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/library/command.txt"
+        },
+        {
+          "content_hash": "10aa25d0dd343f72ab6c53a2d4fdf7e34db3881e07eec031f1f4f2b2260ed42a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/library/provenance.jsonl"
+        },
+        {
+          "content_hash": "80482190e6338bcd353334335abb73ab590e953f09677628b7e86ced89924c3b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/library/status.json"
+        },
+        {
+          "content_hash": "223e5abf9805d32013ad3b9ac06053f4f316ccc3ef840fe89c88235ffb21caa3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/library/summary.txt"
+        },
+        {
+          "content_hash": "b0461c0f13f9b50c5e0f2bd8c3ea2a27ce88486a56d87c78c61ffdc1197aac71",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/workspace/artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "0f4e9c891ac1b17eeec5f7344a45b2616f8c7ab9e6c3dbd593529ea45afe680e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/workspace/command.txt"
+        },
+        {
+          "content_hash": "36c6f56ce0954a8e3088e13397837baa0fb4eada6a96b5bde6d060e807e9b894",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/workspace/gate-receipt.preserves"
+        },
+        {
+          "content_hash": "2d749cf4fc59e1376e3b8db5be430ac8bbee694e2aa8b580970ddd36de34d868",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/workspace/object-corpus-receipt.json"
+        },
+        {
+          "content_hash": "b3eea20e7608c2ef5d8ad88121108b5c878e79ecf2d96d0fab8c7c8c2b95a233",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/workspace/provenance.jsonl"
+        },
+        {
+          "content_hash": "bcdd20b2405ec2f9c792b68b8f4d2bd8e9df0b4afe62f4b1ba0d369702b12231",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/workspace/remediation-plan.preserves"
+        },
+        {
+          "content_hash": "4617bd412848ec267ee24fe0829831fedd8f4c5510bf8a11b6c97c4392416aab",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/workspace/status.json"
+        },
+        {
+          "content_hash": "0194f449b16c95e469042213390dd02eb9b1b5bb1b88128aab3127db89673f7c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/workspace/summary.txt"
+        },
+        {
+          "content_hash": "be7b4d3735938fda580846a476aa38e05a3f21884023db6d601dd9d052eccd55",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/evidence/2026-10-21-sync-receipt.json"
+        },
+        {
+          "content_hash": "4424a81dd16393b2cc6590363407f285470d8080bc292e7876f8c23ad53abdaa",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/evidence/2026-10-21-validate.json"
+        },
+        {
+          "content_hash": "ecbf9ab4f65c79d8ba1869015b07f95b956e7541b5ecccdf1d3c3dcb4bc724b7",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/evidence/2026-10-21-verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/metadata.json"
+        },
+        {
+          "content_hash": "e21822b352663c19d8de607780a877268f7b40b2145801c0eb4dcc548f0a87ba",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/proposal.md"
+        },
+        {
+          "content_hash": "4fc0d0aaad9fb98b6b3879045cb1598d1cacc7a132b581239d422831601ececb",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/specs/fabric-time-scheduling/spec.md"
+        },
+        {
+          "content_hash": "56d2ea90cff30db8209d870986f99cb02eaa19030fd8da7a114b04ff82b6f8c5",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-command-pattern-resource-reservation/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation"
+        }
+      ],
+      "manifest_hash": "e72b7c5c7deb8c5b673607c076c3895e3e092336087f8ab2272f0f52d20534f8"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "7a7fb6acb2a0e92c0bb1594ced5853e252e18d5a656dc8c92d1979543f7b6aeb",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/design.md"
+        },
+        {
+          "content_hash": "d22187797bc67d12378c16c38ea00c0d86abe0401021d9b62b6688ac9af20206",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-gate-design.json"
+        },
+        {
+          "content_hash": "85bb97fda1182ffa13296a3ddde9989d4d4eda15fa6dada5e05e0100eb32987d",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-gate-proposal.json"
+        },
+        {
+          "content_hash": "753af91493efdf50674ef110227a763775ce023e60fa17a52c633ee307e004a5",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-gate-tasks.json"
+        },
+        {
+          "content_hash": "e8f663e0ac5b2ecb36b154d748772a9a05a86683188e88d26f6182669d2d27b7",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-review-completeness.json"
+        },
+        {
+          "content_hash": "65e4143b987d4c11e159b427da3059cd5ef800d02eadf8c13c42feed5c56a85e",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/library/command.txt"
+        },
+        {
+          "content_hash": "10aa25d0dd343f72ab6c53a2d4fdf7e34db3881e07eec031f1f4f2b2260ed42a",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/library/provenance.jsonl"
+        },
+        {
+          "content_hash": "80482190e6338bcd353334335abb73ab590e953f09677628b7e86ced89924c3b",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/library/status.json"
+        },
+        {
+          "content_hash": "223e5abf9805d32013ad3b9ac06053f4f316ccc3ef840fe89c88235ffb21caa3",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/library/summary.txt"
+        },
+        {
+          "content_hash": "b0461c0f13f9b50c5e0f2bd8c3ea2a27ce88486a56d87c78c61ffdc1197aac71",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/workspace/artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "0f4e9c891ac1b17eeec5f7344a45b2616f8c7ab9e6c3dbd593529ea45afe680e",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/workspace/command.txt"
+        },
+        {
+          "content_hash": "36c6f56ce0954a8e3088e13397837baa0fb4eada6a96b5bde6d060e807e9b894",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/workspace/gate-receipt.preserves"
+        },
+        {
+          "content_hash": "2d749cf4fc59e1376e3b8db5be430ac8bbee694e2aa8b580970ddd36de34d868",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/workspace/object-corpus-receipt.json"
+        },
+        {
+          "content_hash": "b3eea20e7608c2ef5d8ad88121108b5c878e79ecf2d96d0fab8c7c8c2b95a233",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/workspace/provenance.jsonl"
+        },
+        {
+          "content_hash": "bcdd20b2405ec2f9c792b68b8f4d2bd8e9df0b4afe62f4b1ba0d369702b12231",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/workspace/remediation-plan.preserves"
+        },
+        {
+          "content_hash": "4617bd412848ec267ee24fe0829831fedd8f4c5510bf8a11b6c97c4392416aab",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/workspace/status.json"
+        },
+        {
+          "content_hash": "0194f449b16c95e469042213390dd02eb9b1b5bb1b88128aab3127db89673f7c",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-source/workspace/summary.txt"
+        },
+        {
+          "content_hash": "be7b4d3735938fda580846a476aa38e05a3f21884023db6d601dd9d052eccd55",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-sync-receipt.json"
+        },
+        {
+          "content_hash": "4424a81dd16393b2cc6590363407f285470d8080bc292e7876f8c23ad53abdaa",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-validate.json"
+        },
+        {
+          "content_hash": "ecbf9ab4f65c79d8ba1869015b07f95b956e7541b5ecccdf1d3c3dcb4bc724b7",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/evidence/2026-10-21-verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/metadata.json"
+        },
+        {
+          "content_hash": "e21822b352663c19d8de607780a877268f7b40b2145801c0eb4dcc548f0a87ba",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/proposal.md"
+        },
+        {
+          "content_hash": "4fc0d0aaad9fb98b6b3879045cb1598d1cacc7a132b581239d422831601ececb",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/specs/fabric-time-scheduling/spec.md"
+        },
+        {
+          "content_hash": "56d2ea90cff30db8209d870986f99cb02eaa19030fd8da7a114b04ff82b6f8c5",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-command-pattern-resource-reservation/tasks.md"
+        }
+      ],
+      "manifest_hash": "4213728eb46e0636bcb90c3142afd92839215e07b01e1687412bf9eb992e6d43"
+    },
+    "kind": "archive",
+    "manifest_hash": "08bb988e5aac212a01b70aa065c75c70a5273d204cd712902369b9a0184256d2"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "461bd47ce450a719fce9d8235c74c59abcaf4e1e3684f9fdba01b5b899785b92",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "224a75ff04fb0df7b4712029736fde6117c56b8593cd37870b02daad3c429076",
+  "reasons": [],
+  "receipt_hash": "c0327b1ac3a80693a3acbe1db50c35bf00c614444f27e9b7b1832a17263e6ed6",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
