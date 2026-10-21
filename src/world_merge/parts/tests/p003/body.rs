@@ -1,6 +1,7 @@
 fn exercise_positive() {
     // r[verify molten.audit_f06.binding]
     // r[verify molten.audit_f06.publication]
+    // r[verify molten.audit_f06.validation]
     let (request, memory) = fixture();
     let original_source = request.roots[0].left.clone();
     let mut adapter = MigrationAdapter {
@@ -140,6 +141,7 @@ fn exercise_absent_positive() {
 
 fn exercise_original_denial(case: &'static str) {
     // r[verify molten.audit_f06.admission]
+    // r[verify molten.audit_f06.validation]
     let (mut request, memory) = fixture();
     match case {
         "unadmitted" => request.profile.migrations.get_mut(&RootKind::DurableState).expect("binding").admitted = false,

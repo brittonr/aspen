@@ -82,3 +82,42 @@ fn changed_plan_output_denies_before_any_publication_effect() {
     assert_eq!(commits.calls, 0);
     assert!(commits.observed_roots.is_empty());
 }
+
+#[test]
+fn generated_payload_presence_tampering_denies_before_publication() {
+    // r[verify molten.audit_f06.publication]
+    // r[verify molten.audit_f06.validation]
+    let mut plan = plan_with_generated_output();
+    let output = plan
+        .outputs
+        .iter_mut()
+        .find(|output| output.kind == RootKind::DurableState)
+        .expect("generated durable output");
+    assert_eq!(output.generated_bytes, None);
+    let original_root = canonical_generated_world_root(output).expect("original root").0;
+    output.generated_bytes = Some(Vec::new());
+    let changed_root = canonical_generated_world_root(output).expect("changed root").0;
+    assert_ne!(original_root, changed_root, "payload presence changes the persisted root identity");
+
+    let policy = WorldMergePolicyRef::new(reference("policy")).expect("policy");
+    let mut objects = TestObjects::default();
+    let mut conflicts = TestConflicts::default();
+    let mut authority = TestAuthority { calls: 0 };
+    let mut commits = TestCommits::default();
+    let result = publish_world_merge(
+        &mut objects,
+        &mut conflicts,
+        &mut authority,
+        &mut commits,
+        &WorldMergePublicationRequest {
+            plan: &plan,
+            policy_ref: &policy,
+        },
+    );
+    assert!(result.is_err(), "unsealed payload presence must not reach publication");
+    assert!(objects.persisted.is_empty());
+    assert!(conflicts.records.is_empty());
+    assert_eq!(authority.calls, 0);
+    assert_eq!(commits.calls, 0);
+    assert!(commits.observed_roots.is_empty());
+}

@@ -1,0 +1,1 @@
+cargo octet check --artifact-dir target/octet

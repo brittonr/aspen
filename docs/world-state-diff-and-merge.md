@@ -93,6 +93,11 @@ If one root publication fails, no successful merge commit is published. Already 
 
 The shell rechecks current merge authority before publication. The standalone `world-merge merge-publish` command stays fail-closed without that adapter.
 
+The plan seal binds generated handler-byte presence as well as byte and keyed-value
+content. An absent handler payload and a present empty payload produce distinct
+canonical roots and cannot be substituted after planning. Plans prepared before
+this presence binding must be prepared again; publication does not upgrade them.
+
 ## Operator commands
 
 `molten world-merge` provides these commands:
@@ -112,6 +117,12 @@ cargo test -p molten --lib world_merge
 ```
 
 The public preparation/publication path is the integration proof boundary: record adapter calls and publications, deny an unadmitted binding before any call, accept an admitted conversion with retained canonical evidence, reject stale or substituted results, and publish converted bytes under a new target-schema root. Repeat with mixed source/target inputs and keyed outputs so schema normalization cannot hide a retained source map or old root identity. A `merge-plan` CLI run without a migration adapter is not proof that conversion execution worked, and a serialized v2 plan is evidence rather than a transferable execution capability. These commands describe the repeatability path, not a claim that all validation rails have passed.
+
+The [F06 execution record](../.cairn/archive/2026-10-20-admit-world-merge-migrations-before-execution/evidence/2026-10-20-verification.md)
+retains the admitted-conversion, denied-input, substituted-result, and post-plan
+mutation observations, canonical target-payload readback, and the exact executed
+validation checkpoints. Earlier receipts remain bound to their recorded sources.
+The separate absent-output carrier correction remains outside F06 completion.
 
 ## Non-claims
 

@@ -26,6 +26,7 @@ struct OutputIdentity<'a> {
     kind: &'a str,
     selected_root: Option<&'a str>,
     output_schema: Option<&'a str>,
+    generated_bytes_present: bool,
     generated_payload: Option<String>,
 }
 
@@ -49,6 +50,7 @@ pub(in crate::world_merge) fn identify_plan(
                 kind: output.kind.as_str(),
                 selected_root: output.selected_root.as_ref().map(|root| root.as_str()),
                 output_schema: output.output_schema.as_ref().map(|schema| schema.as_str()),
+                generated_bytes_present: output.generated_bytes.is_some(),
                 generated_payload: if output.selected_root.is_none() {
                     Some(payload_ref(output.generated_bytes.as_deref().unwrap_or_default(), &output.generated_values)?)
                 } else {

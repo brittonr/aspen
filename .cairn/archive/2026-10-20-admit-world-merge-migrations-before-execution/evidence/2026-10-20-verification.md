@@ -234,3 +234,183 @@ All commands exited 0. Actual native outputs:
 - [Tasks gate](2026-10-20-final-acceptance/cairn-final-tasks.stdout): `PASS`, receipt `6e849c65228fa9ada57e90d6b913c15ae9cbca0bccde17e7cd1858682f41fcfe`.
 
 The final `b3sum --check .cairn/changes/admit-world-merge-migrations-before-execution/evidence/2026-10-20-final-acceptance/source.b3` readback exited 0 for all 40 selected source inputs after the runtime checks. These checks complete the recorded implementation/validation tasks; they do not rebuild the unavailable sibling provider, complete the separate absent-output change, sync accepted specifications, archive, commit, push, or authorize a release.
+
+## Resumed completion from published `95234e235`
+
+The preceding sections retain their original checkpoints; their source manifests
+and receipts are not relabeled as observations of this resumed checkout. The F06
+implementation was already present in the published base. This completion adds
+the missing `molten.audit_f06.validation` links to the existing positive and
+original-input-denial fixtures; it does not change migration or publication laws.
+The inherited traceability baseline is unchanged.
+
+Fresh `nix develop -c cargo test -p molten-core -p molten --lib world_merge`
+execution passed 11 shell and 11 core tests, zero failed or ignored.
+
+A temporary executable consumer reused the repository's in-memory object/commit
+ports and migration adapter, called the public preparation/publication APIs, and
+decoded the persisted canonical root. Its final command was
+`nix develop -c cargo run --example world_merge_completion_smoke`; exit 0:
+
+```text
+unadmitted: denied migration_calls=0 handler_calls=0 publication_calls=0 state=preserved
+substituted-result: denied migration_calls=1 publication_calls=0 state=preserved
+mutated-plan: denied authority_calls=0 publication_calls=0 state=preserved
+admitted: migration_calls=1 evidence=retained payload=modern-left parents=base+left+right order=authority,persist,commit
+plan=blake3:0229441bd39c1359947676ab0ac34434a81d2923f44baca78a8f79c80b6d6e6d
+```
+
+The consumer checked original object/head preservation on denial, the exact base
+and both causal source parents, target-schema payload readback, content-addressed
+storage, and root persistence before commit. This is bounded in-memory execution,
+not live storage, migration semantic-correctness, or external authority evidence.
+The temporary example was removed after execution.
+
+Two earlier consumer attempts exited 101 after the three negative checks: one
+incorrectly required the caller's source-parent ordering rather than preserving
+the causal parents; the other searched packed Preserves bytes for raw ASCII instead
+of decoding the integer-sequence payload. Only the throwaway consumer was corrected.
+Neither failed attempt is a product regression or passing positive smoke evidence.
+
+Fresh focused Nix source-policy and dependency-identity checks passed, realizing
+`/nix/store/10n80cwb777xbfmrz9gdchx1h62g0zfr-octet-consumer-check` and
+`/nix/store/5z5l7jhxw3fw549hlqfiayg20bg38gvh-molten-world-merge-dependency-identity`.
+Proposal, design, and completed-tasks gates passed under the immutable owner policy
+with receipts `e05d4192cb7b928cf6f7f439c54be3ca1c7e88b1b347684fbced67eb9d78b49d`,
+`4d50a3ecff50731c1f6c0b4882a6139f3371382a044c6caf6559734274ee2892`, and
+`178d5c0738409696367ac41f4806210adcf794c669f101c4998b1277be6ae724`.
+
+## Post-review payload-presence seal correction
+
+Core and shell review found that the plan identity conflated absent generated
+handler bytes with present empty bytes. These yield different canonical roots.
+The public-publication regression
+`generated_payload_presence_tampering_denies_before_publication` failed before
+the repair: the tampered plan reached publication. A separate temporary public-API
+consumer also reproduced the bypass before the repair, exiting 101 after:
+
+```text
+presence-tamper: accepted=true events=["authority", "persist", "commit"]
+```
+
+`OutputIdentity` now seals `generated_bytes.is_some()` alongside its existing
+payload identity. The shared migration `payload_ref` and migration result
+identity are unchanged. This closes F06's post-planning mutation boundary; it
+does not implement the separate absent-output carrier redesign.
+
+Post-repair commands all exited 0:
+
+```sh
+nix develop -c cargo test -p molten-core world_merge
+nix develop -c cargo test -p molten --lib world_merge
+nix develop -c cargo run --example world_merge_payload_presence_smoke
+```
+
+All 11 core and 12 shell tests passed. The same temporary consumer observed:
+
+```text
+presence-tamper: accepted=false events=[]
+unchanged-plan: accepted=true migration_calls=1 evidence=retained payload=none order=authority,persist,commit
+plan=blake3:7b54e22d6820a22ba73986d9266a2b637c2de5e1d80df834698193061ba3159e
+```
+
+The negative case preserved the object store, heads and commit state with zero
+publication effects. The positive case retained admitted conversion evidence,
+decoded the generated root's absent handler payload, checked its stored identity,
+and observed authority, persistence, then commit. The example emitted a dead-code
+warning for an unused included fixture helper; no product warning was suppressed.
+The temporary example was removed after proof. This is in-memory port-boundary
+execution, not live-storage or migration-correctness evidence.
+
+Read-only re-review found no remaining blocking F06 issue. It performed no checks
+and is not execution evidence. The interrupted source and full-Nix jobs were
+stopped when this defect was found; they are not claimed as passing checkpoints.
+
+## Post-repair full Nix acceptance
+
+`nix flake check --keep-going -L` exited 0 with all 87 exported x86_64-linux
+checks passing. The command omitted the other declared systems; no cross-platform
+or optional-backend acceptance is inferred. This includes the real-core strict
+world-merge Octet check and dependency-identity check, plus the inherited Tracey
+debt guard without a baseline change.
+
+Hermetic nextest executed 1,795 tests: all passed, zero skipped. Its native
+canonical receipt reports `decision=pass`, ref
+`blake3:00bb203c75156ad45152197f31dd7a49bc07e8731a48eb7f2be651998a434f6a`.
+The actual [CI receipt](2026-10-20-presence-seal/ci-test-run-receipt.preserves)
+is retained from `/nix/store/kqvd423ha944vq8i4mg756c8d0gaz5mw-molten-nextest`.
+The focused core Octet check realized
+`/nix/store/5bbnd9dx9xhm72q35z5308y59f20jbvb-octet-consumer-check`.
+
+The final [selected-source manifest](2026-10-20-presence-seal/source.b3)
+records the same 40 F06 implementation, test, schema, and build inputs as the
+earlier checkpoint, freshly hashed after the presence-seal repair. Earlier
+manifests and receipts remain evidence only for their own recorded sources.
+
+## Post-repair ordered source and workspace acceptance
+
+The documented source sequence completed both configured Octet producers with
+`CARGO_BUILD_JOBS=1`: each reported `clean`, zero findings, zero warnings and zero
+errors under the unchanged `nightly-2026-03-21` producer cohort. Actual
+[workspace status](2026-10-20-presence-seal/workspace/status.json),
+[library status](2026-10-20-presence-seal/library/status.json), commands,
+summaries and native provenance are retained without policy allowances.
+
+The native [object corpus](2026-10-20-presence-seal/workspace/object-corpus-receipt.json)
+was generated with all 1,928 explicit Rust source arguments under `src/`; it
+reports 14,361 objects over 1,603 object-bearing source paths. This root scanner
+scope is distinct from the real-core strict Nix check recorded above.
+
+The current product binary consumed those producer outputs in the documented
+artifact-import, unchanged `strict-ci` gate and remediation-plan order:
+
+- Artifact import passed, six imported artifacts; actual
+  [receipt](2026-10-20-presence-seal/workspace/artifact-ledger-receipt.preserves),
+  `blake3:03397c30c72950796ecb921deaaf070c1539d5a3a707f2995d6d1440c52e4b4d`.
+- Strict gate passed; actual
+  [receipt](2026-10-20-presence-seal/workspace/gate-receipt.preserves),
+  `blake3:6477d18da48e12f1ec2026659034e24fafb7f0a8118eaaf2631d59865cf7c151`.
+- Remediation plan completed; actual
+  [receipt](2026-10-20-presence-seal/workspace/remediation-plan.preserves),
+  `blake3:7842270f0f768c54b50bbf47bd1bcf7dcf76b36f8844554820e873fa7fcdf8a0`.
+
+The following commands then all passed in order:
+
+```sh
+nix develop -c cargo test --workspace --all-targets
+nix develop -c cargo test --workspace --doc
+nix develop -c cargo clippy --workspace --all-targets -- -D warnings
+nix develop -c cargo fmt --all -- --check
+```
+
+Workspace/all-target execution passed 2,251 tests with zero failures or ignored;
+all seven doctests passed. This is default-feature coverage, not unqualified
+all-features acceptance.
+
+The sequence stopped only at strict Cairn validation because its historical
+store-policy locator did not exist. No completed source, test, lint or formatting
+check was rerun for that selector failure. Resolving the whole sibling flake also
+encountered an unsupported socket; pure evaluation rejected direct ambient file
+access. Importing only the actual owner policy export with explicit impure Nix
+evaluation produced immutable
+`/nix/store/36crz91fjwvf3djd0mkr3sraq6z0i4j2-cairn-owner-policy.json`.
+Its BLAKE3 policy identity is the unchanged owner identity
+`7a67802377005c18ebded42899e7f564f5d87087b6c14ca70464b35886f340a9`;
+the local vendored policy was not substituted or weakened.
+
+Final strict validation under that explicit owner policy passed with 38 active
+changes and zero issues, receipt
+`cc3d900d7b0f088525104be7eeef4ec1e8963d25d01629474d916baaedf4442c`.
+Proposal, design and tasks gates each passed, respectively:
+`1bfee85d5d534640f4db3b6eb2a4683c338833567ddc5b5904ed1055f51c40f8`,
+`0e5a2ef8f1f3220a79fca6a052445e0a04ad399589b0df52862d2bc3276ad7c7`,
+and `fa53425266b437fe45d70b3e8fcea051dcf6e8c4aeec4ea3ede4e34d4f22cf39`.
+Native completeness review returned `PASS`, no findings, receipt
+`dd33ae43e8272ac1c1a5050c6440f8f62184ff7aa409974702f9d4182218087f`.
+The actual [native outputs](2026-10-20-presence-seal/cairn-final.stdout)
+are retained; these structural results do not replace executed behavior evidence.
+
+All 13 retained producer/receipt artifacts byte-compared equal to their native
+sources, including both complete large receipts; the selected-source BLAKE3
+readback passed for all 40 inputs after runtime verification. No migration,
+publication, test or source-policy source changed during policy-locator repair.
