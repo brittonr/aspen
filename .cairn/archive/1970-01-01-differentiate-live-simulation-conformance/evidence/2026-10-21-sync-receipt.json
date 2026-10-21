@@ -1,0 +1,131 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/differentiate-live-simulation-conformance/specs/fabric-simulation/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/differentiate-live-simulation-conformance/specs/fabric-simulation/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "differentiate-live-simulation-conformance",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/differentiate-live-simulation-conformance/specs/fabric-simulation/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "6ff0f77fa03a20a72791116d85d660beb2ebf69f865377e92fdfeeddba01a8dc",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "97cd7d0444c094b4b6d60cdc71c9f905d652e88961c7a9d1708c30f4b8b26c92",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "fa2aab1f2dea5fbdcc6044133da2fd7a8e3a74937093647a4d8eda52a6829715",
+        "destination": ".cairn/specs/fabric-simulation/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "844b187bf4d0ff453c36eda2cf8cbaafb8bdc0cb8d8fc2ece3ee4b44f5dacddc",
+        "operations": [
+          {
+            "block_hash": "d45f1f255007d82efc0b15bf019cd5bb42ddb665e3eef58feb663c5ee21d5cf6",
+            "heading": "### Requirement: Differential conformance compares executed workloads",
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.live_differential"
+          },
+          {
+            "block_hash": "d1c49ec181dc830d22454ac792336f78676a9f98b74a741a83f8acc7577e777e",
+            "heading": "### Requirement: Differential results distinguish divergence from incompleteness",
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.differential_results"
+          },
+          {
+            "block_hash": "4783d1f54b20bc9fa5fb7c6a5b1bc2a7afd6e8fa507f41fc8c6536de320afcd1",
+            "heading": "### Requirement: Execution and structural differentials bind separately",
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.differential_evidence"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.live_differential",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.differential_results",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.differential_evidence",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/differentiate-live-simulation-conformance/specs/fabric-simulation/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "844b187bf4d0ff453c36eda2cf8cbaafb8bdc0cb8d8fc2ece3ee4b44f5dacddc",
+          "exists": true,
+          "path": "./.cairn/specs/fabric-simulation/spec.md"
+        }
+      ],
+      "manifest_hash": "5396cf301041d26e2bdee5a42a899a7fd92b0c34abcddc0e8c530b1fa2ab0b03"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "97cd7d0444c094b4b6d60cdc71c9f905d652e88961c7a9d1708c30f4b8b26c92",
+          "exists": true,
+          "path": "./.cairn/specs/fabric-simulation/spec.md"
+        }
+      ],
+      "manifest_hash": "56a9d22256b22c25804f9ff72648288ae166e22f035e6a31023d8d6ee82a40f5"
+    },
+    "kind": "sync",
+    "manifest_hash": "f9f85cebc11c017fd168179f323141dd122104610975b4728267eb0882e10a91"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "383bbde8fd71bd5fd0d5e0fc6c3088eba4187b12d5e52a9e07c0c68310e12d38",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "89761c809d3c890906a08da7b04e3954fa2f7a0dcbc0a87e9039d01ef3d96efd",
+  "reasons": [],
+  "receipt_hash": "2d79b8abb5cd1160a244a05510c27cefbcb90abfac1024cf7c74dc9f0f9844ba",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

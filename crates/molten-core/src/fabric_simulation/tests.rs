@@ -1187,3 +1187,181 @@ fn observation(sequence: u64, ambient_effect: bool, semantic_invariants: &[&str]
         semantic_invariants_passed: semantic_invariants.iter().map(|value| (*value).to_string()).collect(),
     }
 }
+
+fn live_step(sequence: u64, request: char, permitted: Vec<OutcomeClass>, key: Option<&str>) -> LiveWorkloadStep {
+    LiveWorkloadStep {
+        sequence,
+        class: FabricPortClass::DurableState,
+        request_ref: content_ref(request),
+        permitted,
+        ordering_key: key.map(ToString::to_string),
+    }
+}
+
+fn live_workload(steps: Vec<LiveWorkloadStep>) -> LiveWorkload {
+    LiveWorkload::new(steps).expect("admitted live workload")
+}
+
+#[test]
+fn live_workload_rejects_malformed_and_unbounded_declarations() {
+    // r[verify molten.fabric_simulation.live_differential]
+    assert!(matches!(
+        LiveWorkload::new(Vec::new()),
+        Err(issues) if issues.contains(&LiveDifferentialIssue::EmptyWorkload)
+    ));
+    let duplicate = vec![
+        live_step(1, 'a', vec![OutcomeClass::Delivered], None),
+        live_step(1, 'b', vec![OutcomeClass::Delivered], None),
+    ];
+    assert!(matches!(
+        LiveWorkload::new(duplicate),
+        Err(issues) if issues.contains(&LiveDifferentialIssue::DuplicateSequence(1))
+    ));
+    let empty = vec![live_step(1, 'a', Vec::new(), None)];
+    assert!(matches!(
+        LiveWorkload::new(empty),
+        Err(issues) if issues.contains(&LiveDifferentialIssue::EmptyPermittedClasses(0))
+    ));
+    let repeated = vec![live_step(
+        1,
+        'a',
+        vec![OutcomeClass::Delivered, OutcomeClass::Delivered],
+        None,
+    )];
+    assert!(matches!(
+        LiveWorkload::new(repeated),
+        Err(issues) if issues.contains(&LiveDifferentialIssue::DuplicatePermittedClass {
+            step: 0,
+            class: OutcomeClass::Delivered,
+        })
+    ));
+    let malformed = vec![LiveWorkloadStep {
+        sequence: 1,
+        class: FabricPortClass::DurableState,
+        request_ref: "not-a-ref".to_string(),
+        permitted: vec![OutcomeClass::Delivered],
+        ordering_key: Some(String::new()),
+    }];
+    assert!(matches!(
+        LiveWorkload::new(malformed),
+        Err(issues) if issues.contains(&LiveDifferentialIssue::MalformedRequestRef(0))
+    ));
+    let oversized = (1..=u64::try_from(MAX_LIVE_WORKLOAD_STEPS).expect("bound"))
+        .map(|sequence| live_step(sequence, 'a', vec![OutcomeClass::Delivered], None))
+        .chain(std::iter::once(live_step(0, 'b', vec![OutcomeClass::Delivered], None)))
+        .collect();
+    assert!(matches!(
+        LiveWorkload::new(oversized),
+        Err(issues) if issues.iter().any(|issue| matches!(issue, LiveDifferentialIssue::WorkloadTooLarge { .. }))
+    ));
+}
+
+#[test]
+fn live_workload_identity_binds_requests_and_permitted_classes() {
+    // r[verify molten.fabric_simulation.live_differential]
+    let base = live_workload(vec![
+        live_step(1, 'a', vec![OutcomeClass::Delivered], Some("node-a")),
+        live_step(2, 'b', vec![OutcomeClass::Delivered, OutcomeClass::Delayed], Some("node-a")),
+    ]);
+    let changed_permitted = live_workload(vec![
+        live_step(1, 'a', vec![OutcomeClass::Delivered], Some("node-a")),
+        live_step(2, 'b', vec![OutcomeClass::Delivered], Some("node-a")),
+    ]);
+    let changed_request = live_workload(vec![
+        live_step(1, 'c', vec![OutcomeClass::Delivered], Some("node-a")),
+        live_step(2, 'b', vec![OutcomeClass::Delivered, OutcomeClass::Delayed], Some("node-a")),
+    ]);
+    assert!(base.workload_ref.starts_with("blake3:"));
+    assert_ne!(base.workload_ref, changed_permitted.workload_ref);
+    assert_ne!(base.workload_ref, changed_request.workload_ref);
+}
+
+#[test]
+fn live_differential_agrees_only_when_observed_classes_match() {
+    // r[verify molten.fabric_simulation.live_differential]
+    let workload = live_workload(vec![
+        live_step(1, 'a', vec![OutcomeClass::Delivered], Some("node-a")),
+        live_step(2, 'b', vec![OutcomeClass::Delivered], Some("node-a")),
+    ]);
+    let observed = [Some(OutcomeClass::Delivered), Some(OutcomeClass::Delivered)];
+    assert_eq!(evaluate_live_differential(&workload, &observed, &observed), LiveDifferentialDecision::Agreement {
+        steps: 2
+    });
+}
+
+#[test]
+fn live_differential_records_permitted_divergence_and_ordering() {
+    // r[verify molten.fabric_simulation.differential_results]
+    let workload = live_workload(vec![
+        live_step(1, 'a', vec![OutcomeClass::Delivered, OutcomeClass::Delayed], Some("node-a")),
+        live_step(2, 'b', vec![OutcomeClass::Delivered, OutcomeClass::Delayed], Some("node-a")),
+    ]);
+    let simulated = [Some(OutcomeClass::Delivered), Some(OutcomeClass::Delivered)];
+    let live = [Some(OutcomeClass::Delayed), Some(OutcomeClass::Delivered)];
+    let decision = evaluate_live_differential(&workload, &simulated, &live);
+    assert_eq!(decision.result_kind(), "permitted-divergence");
+    assert_eq!(decision, LiveDifferentialDecision::PermittedDivergence {
+        divergences: vec![PermittedDivergence {
+            step: 0,
+            simulated: OutcomeClass::Delivered,
+            live: OutcomeClass::Delayed,
+        }],
+        ordering: vec![OrderingDivergence {
+            key: "node-a".to_string(),
+            simulated: vec![OutcomeClass::Delivered, OutcomeClass::Delivered],
+            live: vec![OutcomeClass::Delayed, OutcomeClass::Delivered],
+        }],
+    });
+}
+
+#[test]
+fn live_differential_reports_unpermitted_live_class_and_incomplete_sides() {
+    // r[verify molten.fabric_simulation.differential_results]
+    let workload = live_workload(vec![
+        live_step(1, 'a', vec![OutcomeClass::Delivered], None),
+        live_step(2, 'b', vec![OutcomeClass::Delivered], None),
+    ]);
+    let simulated = [Some(OutcomeClass::Delivered), Some(OutcomeClass::Delivered)];
+    let unpermitted = [Some(OutcomeClass::Backpressured), Some(OutcomeClass::Delivered)];
+    assert!(matches!(
+        evaluate_live_differential(&workload, &simulated, &unpermitted),
+        LiveDifferentialDecision::Failure { outcome } if outcome.step == 0
+            && outcome.simulated == OutcomeClass::Delivered
+            && outcome.live == OutcomeClass::Backpressured
+    ));
+
+    let unsupported = [Some(OutcomeClass::Unsupported), None];
+    let decision = evaluate_live_differential(&workload, &simulated, &unsupported);
+    assert_eq!(decision.result_kind(), "incomplete");
+    assert!(matches!(
+        decision,
+        LiveDifferentialDecision::Incomplete { incomplete, .. }
+            if incomplete.len() == 2
+                && incomplete[0].reason == IncompleteReason::Unsupported
+                && incomplete[1].reason == IncompleteReason::NotExecuted
+    ));
+
+    let unavailable = adapter_unavailable(&workload);
+    assert_eq!(unavailable.result_kind(), "incomplete");
+    assert!(matches!(
+        unavailable,
+        LiveDifferentialDecision::Incomplete { incomplete, .. }
+            if incomplete.iter().all(|step| step.reason == IncompleteReason::AdapterUnavailable)
+    ));
+}
+
+#[test]
+fn execute_workload_uses_the_selected_executor_for_every_step() {
+    // r[verify molten.fabric_simulation.live_differential]
+    struct Stub;
+    impl WorkloadExecutor for Stub {
+        fn execute_step(&mut self, step: &LiveWorkloadStep) -> Option<OutcomeClass> {
+            (step.sequence != 2).then_some(OutcomeClass::Delivered)
+        }
+    }
+    let workload = live_workload(vec![
+        live_step(1, 'a', vec![OutcomeClass::Delivered], None),
+        live_step(2, 'b', vec![OutcomeClass::Delivered], None),
+    ]);
+    assert_eq!(execute_workload(&mut Stub, &workload), vec![Some(OutcomeClass::Delivered), None]);
+}

@@ -1,6 +1,6 @@
 const ARTIFACT_INDEX_WIDTH: usize = 4;
-const RUN_FIXED_ARTIFACT_COUNT: usize = 4;
-const EXPORT_ARTIFACT_COUNT: usize = 4;
+const RUN_FIXED_ARTIFACT_COUNT: usize = 6;
+const EXPORT_ARTIFACT_COUNT: usize = 6;
 const SHRINK_ARTIFACT_COUNT: usize = 3;
 const MAX_ARTIFACTS: usize = 4_096;
 const MAX_REPORT_ARTIFACT_BYTES: u64 = 1_048_576;
@@ -113,11 +113,13 @@ pub(super) fn export(out: std::path::PathBuf) -> molten::error::Result<()> {
     let plan = plan_export_artifacts(&fixture)?;
     write_artifacts(&out, &plan)?;
     println!(
-        "fabric-simulation export ok world={} run={} bundle={} differential={} artifacts={} out={}",
+        "fabric-simulation export ok world={} run={} bundle={} differential={} execution-differential={} differential-evidence={} artifacts={} out={}",
         fixture.world.world_ref,
         fixture.run.run_ref,
         fixture.bundle.bundle_ref,
         fixture.differential.report_ref,
+        fixture.execution_differential.report_ref,
+        fixture.differential_evidence.evidence_ref,
         plan.len(),
         out.display(),
     );
@@ -143,6 +145,11 @@ fn plan_run_artifacts(
         run_artifact("report.preserves", &fixture.run)?,
         bundle_artifact("bundle.preserves", &fixture.bundle)?,
         differential_artifact("differential.preserves", &fixture.differential)?,
+        execution_differential_artifact(
+            "execution-differential.preserves",
+            &fixture.execution_differential,
+        )?,
+        differential_evidence_artifact("differential-evidence.preserves", &fixture.differential_evidence)?,
     ];
     for (index, observation) in fixture.observations.iter().enumerate() {
         let path = format!("observations/{index:0width$}.preserves", width = ARTIFACT_INDEX_WIDTH);
@@ -165,6 +172,11 @@ fn plan_export_artifacts(
         run_artifact("report.preserves", &fixture.run)?,
         bundle_artifact("bundle.preserves", &fixture.bundle)?,
         differential_artifact("differential.preserves", &fixture.differential)?,
+        execution_differential_artifact(
+            "execution-differential.preserves",
+            &fixture.execution_differential,
+        )?,
+        differential_evidence_artifact("differential-evidence.preserves", &fixture.differential_evidence)?,
     ];
     if artifacts.len() != EXPORT_ARTIFACT_COUNT {
         return Err(molten::error::Failure::invalid_harness("fabric-simulation export artifact count drifted"));
@@ -214,6 +226,20 @@ fn differential_artifact(
     differential: &molten::fabric_simulation::Differential,
 ) -> molten::error::Result<PlannedArtifact> {
     planned(path, &differential.value)
+}
+
+fn execution_differential_artifact(
+    path: impl Into<std::path::PathBuf>,
+    differential: &molten::fabric_simulation::ExecutionDifferential,
+) -> molten::error::Result<PlannedArtifact> {
+    planned(path, &differential.value)
+}
+
+fn differential_evidence_artifact(
+    path: impl Into<std::path::PathBuf>,
+    evidence: &molten::fabric_simulation::DifferentialEvidence,
+) -> molten::error::Result<PlannedArtifact> {
+    planned(path, &evidence.value)
 }
 
 fn observation_artifact(

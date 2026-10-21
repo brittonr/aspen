@@ -113,6 +113,14 @@ fn differential_is_contract_scoped_and_cannot_promote_itself_to_live() {
     assert!(fixture.differential.equivalent);
     assert_ne!(fixture.differential.simulation_profile_ref, fixture.differential.live_profile_ref);
     assert!(text.contains("no-live-production-equivalence-claim"));
+    assert_eq!(fixture.execution_differential.result_kind, "incomplete");
+    assert_ne!(fixture.execution_differential.report_ref, fixture.differential.report_ref);
+    assert_eq!(fixture.differential_evidence.structural_ref, fixture.differential.report_ref);
+    assert_eq!(fixture.differential_evidence.execution_ref, fixture.execution_differential.report_ref);
+    assert_eq!(fixture.differential_evidence.workload_ref, fixture.execution_differential.workload_ref);
+    let execution_text = crate::preserves_rail::to_text(&fixture.execution_differential.value).expect("execution text");
+    assert!(execution_text.contains("incomplete-is-not-agreement"));
+    assert!(execution_text.contains("adapter-unavailable"));
     assert!(!promotion.decision.admitted);
     assert!(promotion.decision_ref.starts_with("blake3:"));
     assert!(promotion.decision.missing_evidence.contains(&"profile-specific-evidence"));
@@ -236,3 +244,4 @@ fn reference_world_records_exactly_max_choices_and_denies_one_past() {
         .expect_err("one choice past the max-choices bound denies the run");
     assert!(error.to_string().contains("ChoiceBoundExceeded"), "unexpected max-choices denial: {error}");
 }
+include!("tests/differential.rs");

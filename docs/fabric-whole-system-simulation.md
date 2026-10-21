@@ -142,11 +142,15 @@ These services do not claim FoundationDB, Kafka, or external scheduler compatibi
 
 ## Differential scope
 
-The fixture compares simulation and reviewed live descriptors at the shared command and event contract.
-It does not run live networking or live storage.
+The fixture produces two separately identified differential artifacts.
 
-The differential receipt records distinct simulation and live profile refs.
-It also records the explicit no-live-equivalence check.
+The descriptor-level structural differential compares the declared simulation and reviewed live port-contract descriptors at the shared command and event contract. It does not run networking or storage, and it cannot diverge by construction.
+
+The executed-workload differential runs one bounded shared workload through the simulated adapter and, when a live adapter is selected for the profile, through that live adapter. Each step declares its permitted outcome classes and an optional ordering key. The comparison normalizes observed outcomes to those classes, evaluates per-key ordering, and reports exactly one of agreement, permitted divergence, incomplete, or failure. Physical timing, latency, and non-canonical physical bytes do not participate. A live outcome outside its declared permitted set is the only failure; an unsupported behavior or unavailable adapter is incomplete and never agreement.
+
+Evidence binds both artifact identities, the shared workload, the execution result, the incomplete count, and the non-claims. This fixture selects no live adapter, so its execution result is incomplete rather than agreement; agreement is exercised through the focused canonical tests with explicit executor stubs.
+
+The differential does not establish live equivalence beyond the exercised workload and declared properties, performance, durability, or release eligibility.
 
 ## Replay and shrinking
 

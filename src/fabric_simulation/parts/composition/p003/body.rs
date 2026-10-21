@@ -142,6 +142,11 @@ fn run_prepared_reference_world(
     )?;
     let bundle = repro_bundle(&prepared.world, &run, None)?;
     let differential = reference_contract_differential(&prepared.world)?;
+    let execution_differential = reference_execution_differential(&prepared, &router.events)?;
+    let differential_evidence = differential_evidence(DifferentialEvidenceInput {
+        structural: &differential,
+        execution: &execution_differential,
+    })?;
     Ok(ReferenceFixtureRun {
         world: prepared.world,
         run,
@@ -149,6 +154,8 @@ fn run_prepared_reference_world(
         observations,
         port_events: router.events,
         differential,
+        execution_differential,
+        differential_evidence,
         host_evidence_refs,
         crash_recoveries,
         service_states,

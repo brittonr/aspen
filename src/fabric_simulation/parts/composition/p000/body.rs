@@ -41,6 +41,8 @@ pub struct ReferenceFixtureRun {
     pub observations: Vec<Observation>,
     pub port_events: Vec<PortEvent>,
     pub differential: Differential,
+    pub execution_differential: ExecutionDifferential,
+    pub differential_evidence: DifferentialEvidence,
     pub host_evidence_refs: Vec<String>,
     pub crash_recoveries: Vec<ReferenceCrashRecovery>,
     pub service_states: std::collections::BTreeMap<String, ReferenceServiceState>,

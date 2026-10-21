@@ -1,0 +1,311 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: differentiate-live-simulation-conformance",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance"
+    }
+  ],
+  "blocked": false,
+  "change": "differentiate-live-simulation-conformance",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "886589d94eec2b1d9b58538657226ad531814c62188f75e2ffcd237e473eb525",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "0778a9f0a21a9ea5074be385975a67edd7be4ae56d08454e46b3a9aee98a346f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/design.md"
+        },
+        {
+          "content_hash": "6bd2657c00886fa69126c08048d7c73f17f954f49d1cc3a07ad04aa8a0765e82",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/evidence/2026-10-21-gate-design.json"
+        },
+        {
+          "content_hash": "a7b1e4ce7a08b6174e75e45ede0451d9b3c0e896fd4a6bbde99b36844d6c48cc",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/evidence/2026-10-21-gate-proposal.json"
+        },
+        {
+          "content_hash": "de4ccf74d40cc1e00bf9f839d5e23046c54236908f6afbea38281c0867ca2a35",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/evidence/2026-10-21-gate-tasks.json"
+        },
+        {
+          "content_hash": "a9be1ff89ce42f4f0600dd3ac11d5de67fec9d98c30b09440e6bae8cf42c8027",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/evidence/2026-10-21-review-completeness.json"
+        },
+        {
+          "content_hash": "5f9eac420324d5a7eb894307410431be1f4b63f1ece2dacea7f134d2aa15b3cb",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/evidence/2026-10-21-source/library/command.txt"
+        },
+        {
+          "content_hash": "ca6f2a180e3ea42e08961d6f8eb1557259aa24ef95cc086bb8af5a0066ece57d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/evidence/2026-10-21-source/library/provenance.jsonl"
+        },
+        {
+          "content_hash": "80482190e6338bcd353334335abb73ab590e953f09677628b7e86ced89924c3b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/evidence/2026-10-21-source/library/status.json"
+        },
+        {
+          "content_hash": "223e5abf9805d32013ad3b9ac06053f4f316ccc3ef840fe89c88235ffb21caa3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/evidence/2026-10-21-source/library/summary.txt"
+        },
+        {
+          "content_hash": "aae75fcf0ebc0996a02c3eecf286b4954f08f5086d22dd7c55b414cac1c49254",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/evidence/2026-10-21-source/workspace/artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "6c4fecbe54e415f0efad4de7a020ddc18a2e42d6d58b403988aa5f392f9eeb46",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/evidence/2026-10-21-source/workspace/command.txt"
+        },
+        {
+          "content_hash": "cec71369f02c7d2be7b8db8117c2043f1acfbf200863acf04157dca9238977bc",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/evidence/2026-10-21-source/workspace/gate-receipt.preserves"
+        },
+        {
+          "content_hash": "eae2eb24b0918cd2370862ed50465840e27a336c48807ef61fcfd9b312059265",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/evidence/2026-10-21-source/workspace/object-corpus-receipt.json"
+        },
+        {
+          "content_hash": "6945db631bb0323ec19ee6fcd0d701e7cb65a17280a76cb1bfb965db92ef99e5",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/evidence/2026-10-21-source/workspace/provenance.jsonl"
+        },
+        {
+          "content_hash": "08b0ec6cba02eeed6f202c727d4c4584b010ccf971a4f934f1104d06943f26ed",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/evidence/2026-10-21-source/workspace/remediation-plan.preserves"
+        },
+        {
+          "content_hash": "4617bd412848ec267ee24fe0829831fedd8f4c5510bf8a11b6c97c4392416aab",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/evidence/2026-10-21-source/workspace/status.json"
+        },
+        {
+          "content_hash": "0194f449b16c95e469042213390dd02eb9b1b5bb1b88128aab3127db89673f7c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/evidence/2026-10-21-source/workspace/summary.txt"
+        },
+        {
+          "content_hash": "ed5ce26337d97b4acd848af6d59a7219624161fdd60d9d0eb00a018791ec8977",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/evidence/2026-10-21-sync-receipt.json"
+        },
+        {
+          "content_hash": "febc8180351c907a242fd70f5a62952db6a9153ad5042f0606593e20da9e133d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/evidence/2026-10-21-validate.json"
+        },
+        {
+          "content_hash": "f40d4692910ddd114c6138636a0731d1feac6548fecd392a707819651ac1b559",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/evidence/2026-10-21-verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/metadata.json"
+        },
+        {
+          "content_hash": "87eab410b8673f4c23fabc9a589b1827ac3de7d7832449d4b744fc5da49bb9dc",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/proposal.md"
+        },
+        {
+          "content_hash": "fa2aab1f2dea5fbdcc6044133da2fd7a8e3a74937093647a4d8eda52a6829715",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/specs/fabric-simulation/spec.md"
+        },
+        {
+          "content_hash": "3e313e3d52f00c0802ed0d38fd58df4a978be9f0be5245f908ebda4d54e2f20e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-differentiate-live-simulation-conformance/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance"
+        }
+      ],
+      "manifest_hash": "cc85cd7b7ea7f1d7107f097f89c357ada0a705c9afa845b3d5de86841e1e0ce5"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "0778a9f0a21a9ea5074be385975a67edd7be4ae56d08454e46b3a9aee98a346f",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/design.md"
+        },
+        {
+          "content_hash": "6bd2657c00886fa69126c08048d7c73f17f954f49d1cc3a07ad04aa8a0765e82",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/evidence/2026-10-21-gate-design.json"
+        },
+        {
+          "content_hash": "a7b1e4ce7a08b6174e75e45ede0451d9b3c0e896fd4a6bbde99b36844d6c48cc",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/evidence/2026-10-21-gate-proposal.json"
+        },
+        {
+          "content_hash": "de4ccf74d40cc1e00bf9f839d5e23046c54236908f6afbea38281c0867ca2a35",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/evidence/2026-10-21-gate-tasks.json"
+        },
+        {
+          "content_hash": "a9be1ff89ce42f4f0600dd3ac11d5de67fec9d98c30b09440e6bae8cf42c8027",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/evidence/2026-10-21-review-completeness.json"
+        },
+        {
+          "content_hash": "5f9eac420324d5a7eb894307410431be1f4b63f1ece2dacea7f134d2aa15b3cb",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/evidence/2026-10-21-source/library/command.txt"
+        },
+        {
+          "content_hash": "ca6f2a180e3ea42e08961d6f8eb1557259aa24ef95cc086bb8af5a0066ece57d",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/evidence/2026-10-21-source/library/provenance.jsonl"
+        },
+        {
+          "content_hash": "80482190e6338bcd353334335abb73ab590e953f09677628b7e86ced89924c3b",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/evidence/2026-10-21-source/library/status.json"
+        },
+        {
+          "content_hash": "223e5abf9805d32013ad3b9ac06053f4f316ccc3ef840fe89c88235ffb21caa3",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/evidence/2026-10-21-source/library/summary.txt"
+        },
+        {
+          "content_hash": "aae75fcf0ebc0996a02c3eecf286b4954f08f5086d22dd7c55b414cac1c49254",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/evidence/2026-10-21-source/workspace/artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "6c4fecbe54e415f0efad4de7a020ddc18a2e42d6d58b403988aa5f392f9eeb46",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/evidence/2026-10-21-source/workspace/command.txt"
+        },
+        {
+          "content_hash": "cec71369f02c7d2be7b8db8117c2043f1acfbf200863acf04157dca9238977bc",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/evidence/2026-10-21-source/workspace/gate-receipt.preserves"
+        },
+        {
+          "content_hash": "eae2eb24b0918cd2370862ed50465840e27a336c48807ef61fcfd9b312059265",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/evidence/2026-10-21-source/workspace/object-corpus-receipt.json"
+        },
+        {
+          "content_hash": "6945db631bb0323ec19ee6fcd0d701e7cb65a17280a76cb1bfb965db92ef99e5",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/evidence/2026-10-21-source/workspace/provenance.jsonl"
+        },
+        {
+          "content_hash": "08b0ec6cba02eeed6f202c727d4c4584b010ccf971a4f934f1104d06943f26ed",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/evidence/2026-10-21-source/workspace/remediation-plan.preserves"
+        },
+        {
+          "content_hash": "4617bd412848ec267ee24fe0829831fedd8f4c5510bf8a11b6c97c4392416aab",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/evidence/2026-10-21-source/workspace/status.json"
+        },
+        {
+          "content_hash": "0194f449b16c95e469042213390dd02eb9b1b5bb1b88128aab3127db89673f7c",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/evidence/2026-10-21-source/workspace/summary.txt"
+        },
+        {
+          "content_hash": "ed5ce26337d97b4acd848af6d59a7219624161fdd60d9d0eb00a018791ec8977",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/evidence/2026-10-21-sync-receipt.json"
+        },
+        {
+          "content_hash": "febc8180351c907a242fd70f5a62952db6a9153ad5042f0606593e20da9e133d",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/evidence/2026-10-21-validate.json"
+        },
+        {
+          "content_hash": "f40d4692910ddd114c6138636a0731d1feac6548fecd392a707819651ac1b559",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/evidence/2026-10-21-verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/metadata.json"
+        },
+        {
+          "content_hash": "87eab410b8673f4c23fabc9a589b1827ac3de7d7832449d4b744fc5da49bb9dc",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/proposal.md"
+        },
+        {
+          "content_hash": "fa2aab1f2dea5fbdcc6044133da2fd7a8e3a74937093647a4d8eda52a6829715",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/specs/fabric-simulation/spec.md"
+        },
+        {
+          "content_hash": "3e313e3d52f00c0802ed0d38fd58df4a978be9f0be5245f908ebda4d54e2f20e",
+          "exists": true,
+          "path": "./.cairn/changes/differentiate-live-simulation-conformance/tasks.md"
+        }
+      ],
+      "manifest_hash": "dcb7ca6f9992c694c134f64099d01e0409c76bb00ec14e8f20a578bb6b792d22"
+    },
+    "kind": "archive",
+    "manifest_hash": "0f3cac664b216f6bd41a6f9d8c859c3c1ba956ef53edd23d30d1673a6952696e"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "1a172aadb58ee984ed7177eec4da04d440d9bca2debfcf718ff46506be260e70",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "89761c809d3c890906a08da7b04e3954fa2f7a0dcbc0a87e9039d01ef3d96efd",
+  "reasons": [],
+  "receipt_hash": "e2eff3888713000ec7e789ded92a8cd6ccf40c3ab35aba59674b0c020a2d9bad",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

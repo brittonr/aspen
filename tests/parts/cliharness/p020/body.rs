@@ -53,8 +53,11 @@ fn fabric_simulation_cli_runs_replays_shrinks_inspects_and_exports() -> CliResul
         .arg(&export_dir)
         .output()?;
     assert_success(&export, "fabric simulation export");
-    assert!(stdout(&export).contains("artifacts=4"));
+    assert!(stdout(&export).contains("artifacts=6"));
+    assert!(stdout(&export).contains("execution-differential=blake3:"));
     assert!(export_dir.join("bundle.preserves").is_file());
+    assert!(export_dir.join("execution-differential.preserves").is_file());
+    assert!(export_dir.join("differential-evidence.preserves").is_file());
     Ok(())
 }
 
