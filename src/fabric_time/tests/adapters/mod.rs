@@ -16,11 +16,12 @@ fn profile(kind: TimeProfileKind, overload: SchedulerOverloadPolicy, active_slot
     admit_profile(&requested).expect("bounded scheduler profile")
 }
 
-fn key(id: &str) -> RunnableKey {
+fn key(id: &str, occurrence_sequence: u64) -> RunnableKey {
     RunnableKey {
         service_id: "test-service".to_string(),
         generation: GENERATION,
         runnable_id: id.to_string(),
+        occurrence_sequence,
     }
 }
 
@@ -29,7 +30,7 @@ fn context(profile: &AdmittedTimeProfile, generation: u64) -> ExtensionTimeConte
 }
 
 fn event_action(event: &Event) -> String {
-    let fields = event.value.collect_simple_record("fabric-time-event-v1", None).expect("canonical event");
+    let fields = event.value.collect_simple_record("fabric-time-event-v2", None).expect("canonical scheduler event");
     fields
         .iter()
         .find_map(|value| {
@@ -44,7 +45,7 @@ type Snapshot = (SchedulerState, molten_core::fabric_time::capacity::UseState);
 #[derive(Debug)]
 struct DeliveryBoundary {
     snapshot: Snapshot,
-    occurrence: usize,
+    token: SchedulerWakeToken,
     sequence: u64,
 }
 
@@ -60,8 +61,8 @@ struct Effects {
     deliveries: u64,
 }
 enum Prepared {
-    Live(std::thread::Thread),
-    Simulation(u64),
+    Live((std::thread::Thread, SchedulerWakeToken)),
+    Simulation(SchedulerWakeToken),
 }
 impl SchedulerWakePort for Effects {
     type Prepared = Prepared;
@@ -77,13 +78,21 @@ impl SchedulerWakePort for Effects {
         prepared: Prepared,
         committed: SchedulerWakeCommit<'_>,
     ) -> crate::fabric::FabricPortResult<()> {
+        let token = match &prepared {
+            Prepared::Live((_, token)) | Prepared::Simulation(token) => *token,
+        };
+        if !committed.accepts(token) {
+            return Err(crate::fabric::FabricPortError::capability(
+                "test delivery token does not match committed occurrence",
+            ));
+        }
         self.deliveries += 1;
         // Capture the actual borrowed owner fields AT delivery, before entering the
         // concrete adapter. Never read state later behind the command mutex. This
         // observation travels with that real delivery, not a predicted test result.
         let boundary = DeliveryBoundary {
             snapshot: (committed.scheduler.clone(), committed.capacity.clone()),
-            occurrence: committed.occurrence,
+            token,
             sequence: self.deliveries,
         };
         match (&mut self.concrete, prepared) {
@@ -91,7 +100,7 @@ impl SchedulerWakePort for Effects {
                 self.live_receiver
                     .as_ref()
                     .expect("live receiving mailbox")
-                    .send(ReceiverInput::Delivery(boundary))
+                    .send(ReceiverInput::Delivery(Box::new(boundary)))
                     .expect("record real delivery boundary");
                 port.deliver(target, committed)
             }
@@ -106,15 +115,16 @@ impl SchedulerWakePort for Effects {
 
 fn boundary_is_committed(boundary: &DeliveryBoundary, key: &RunnableKey) -> bool {
     let (state, capacity) = &boundary.snapshot;
-    let Some(row) = state.runnables.get(boundary.occurrence) else {
+    let Some(row) = boundary.token.resolve(state) else {
         return false;
     };
     let active = state
         .runnables
         .iter()
+        .flatten()
         .filter(|row| matches!(row.phase, RunnablePhase::Ready | RunnablePhase::Running | RunnablePhase::Blocked))
         .count();
-    let ready = state.runnables.iter().filter(|row| row.phase == RunnablePhase::Ready).count();
+    let ready = state.runnables.iter().flatten().filter(|row| row.phase == RunnablePhase::Ready).count();
     &row.key == key
         && row.phase == RunnablePhase::Ready
         && !capacity.is_released
@@ -129,3 +139,4 @@ include!("harness.rs");
 
 include!("capacity.rs");
 include!("fencing.rs");
+include!("retention.rs");

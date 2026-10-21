@@ -10,6 +10,7 @@ pub struct RunnableKey {
     pub service_id: String,
     pub generation: u64,
     pub runnable_id: String,
+    pub occurrence_sequence: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,6 +29,7 @@ pub struct RunnableState {
     pub enqueue_sequence: u64,
     pub wait_turns: u64,
     pub phase: RunnablePhase,
+    pub terminal_sequence: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,7 +38,17 @@ pub struct SchedulerState {
     pub generation: u64,
     pub next_enqueue_sequence: u64,
     pub choice_sequence: u64,
-    pub runnables: Vec<RunnableState>,
+    pub terminal_retention_limit: u64,
+    pub highest_occurrence_sequence: u64,
+    pub next_terminal_sequence: u64,
+    pub runnables: Vec<Option<RunnableState>>,
+}
+
+impl SchedulerState {
+    /// Propose fresh issuance; only an admitted Wake advances the fence.
+    pub fn next_occurrence_sequence(&self) -> Result<u64, SchedulerError> {
+        self.highest_occurrence_sequence.checked_add(1).ok_or(SchedulerError::Overflow)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,10 +140,21 @@ pub struct SchedulerSelection {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplayChoiceMismatch {
+    pub expected: RunnableKey,
+    pub actual: RunnableKey,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SchedulerError {
     MalformedServiceId(String),
     MalformedRunnableId(String),
     ZeroGeneration,
+    ZeroOccurrenceSequence,
+    StaleOccurrence {
+        highest: u64,
+        actual: u64,
+    },
     ProfileMismatch,
     PolicyMismatch {
         expected: SchedulerPolicy,
@@ -154,10 +177,7 @@ pub enum SchedulerError {
         maximum: u64,
     },
     ReplayChoiceRequired,
-    UnexpectedReplayChoice {
-        expected: RunnableKey,
-        actual: RunnableKey,
-    },
+    UnexpectedReplayChoice(Box<ReplayChoiceMismatch>),
     FairnessBoundExceeded {
         key: RunnableKey,
         wait_turns: u64,
@@ -172,6 +192,9 @@ pub fn new_scheduler_state(profile: &AdmittedTimeProfile, generation: u64) -> Sc
         generation,
         next_enqueue_sequence: 0,
         choice_sequence: 0,
+        terminal_retention_limit: profile.max_runnables,
+        highest_occurrence_sequence: 0,
+        next_terminal_sequence: 0,
         runnables: Vec::new(),
     }
 }
@@ -184,7 +207,7 @@ pub fn apply_scheduler_command(
     active_generation: u64,
     command: &SchedulerCommand,
 ) -> Result<SchedulerTransition, SchedulerError> {
-    let decision = preview_scheduler_command(profile, policy, state, active_generation, command, true)?;
+    let decision = preview_scheduler_command(profile, policy, state, active_generation, command)?;
     let mut next = state.clone();
     let action = decision.apply(&mut next, command.clone());
     Ok(SchedulerTransition {
@@ -202,7 +225,7 @@ pub fn choose_runnable(
     recorded_choice: Option<&RunnableKey>,
 ) -> Result<SchedulerSelection, SchedulerError> {
     let decision = preview_runnable_choice(profile, policy, state, active_generation, recorded_choice, None)?;
-    let selected = state.runnables[decision.index].key.clone();
+    let selected = state.runnables[decision.index].as_ref().ok_or(SchedulerError::NoReadyRunnable)?.key.clone();
     let choice_sequence = decision.choice_sequence;
     let eligible_count = decision.eligible_count;
     let mut next = state.clone();
@@ -215,18 +238,50 @@ pub fn choose_runnable(
     })
 }
 
-pub fn cleanup_scheduler_generation(state: &SchedulerState, generation: u64) -> SchedulerState {
+pub fn cleanup_scheduler_generation(state: &SchedulerState, generation: u64) -> Result<SchedulerState, SchedulerError> {
     let mut next = state.clone();
-    cleanup_scheduler_generation_in_place(&mut next, generation);
-    next
+    cleanup_scheduler_generation_in_place(&mut next, generation)?;
+    Ok(next)
 }
 
-pub fn cleanup_scheduler_generation_in_place(state: &mut SchedulerState, generation: u64) {
-    for runnable in &mut state.runnables {
-        if runnable.key.generation == generation
-            && !matches!(runnable.phase, RunnablePhase::Completed | RunnablePhase::Cancelled)
-        {
+// r[impl molten.audit_f11.retention]
+// r[impl molten.audit_f11.atomicity]
+pub fn cleanup_scheduler_generation_in_place(
+    state: &mut SchedulerState,
+    generation: u64,
+) -> Result<(), SchedulerError> {
+    let affected = u64::try_from(
+        state
+            .runnables
+            .iter()
+            .flatten()
+            .filter(|runnable| runnable.key.generation == generation && runnable.terminal_sequence.is_none())
+            .count(),
+    )
+    .map_err(|_| SchedulerError::Overflow)?;
+    state.next_terminal_sequence.checked_add(affected).ok_or(SchedulerError::Overflow)?;
+    for runnable in state.runnables.iter_mut().flatten() {
+        if runnable.key.generation == generation && runnable.terminal_sequence.is_none() {
             runnable.phase = RunnablePhase::Cancelled;
+            runnable.terminal_sequence = Some(state.next_terminal_sequence);
+            state.next_terminal_sequence += 1;
+        }
+    }
+    reclaim_terminal_history(state);
+    Ok(())
+}
+
+// Terminal positions are unique and contiguous. Keeping the last admitted window
+// reclaims oldest terminals in one pass without moving any occupied slot.
+fn reclaim_terminal_history(state: &mut SchedulerState) {
+    let oldest_retained = state.next_terminal_sequence.saturating_sub(state.terminal_retention_limit);
+    for slot in &mut state.runnables {
+        if slot
+            .as_ref()
+            .and_then(|runnable| runnable.terminal_sequence)
+            .is_some_and(|sequence| sequence < oldest_retained)
+        {
+            *slot = None;
         }
     }
 }
@@ -250,6 +305,7 @@ fn ready_overload_action(
         state
             .runnables
             .iter()
+            .flatten()
             .filter(|runnable| !matches!(runnable.phase, RunnablePhase::Completed | RunnablePhase::Cancelled))
             .count(),
     )
@@ -291,10 +347,17 @@ fn validate_scheduler_state(
             actual: state.generation,
         });
     }
+    if state.terminal_retention_limit != profile.max_runnables {
+        return Err(SchedulerError::ProfileMismatch);
+    }
+    let physical_limit = profile.max_runnables.checked_mul(2).ok_or(SchedulerError::Overflow)?;
+    if u64::try_from(state.runnables.len()).map_err(|_| SchedulerError::Overflow)? > physical_limit {
+        return Err(SchedulerError::Overflow);
+    }
     Ok(())
 }
 
-fn validate_key(key: &RunnableKey) -> Result<(), SchedulerError> {
+pub fn validate_runnable_key(key: &RunnableKey) -> Result<(), SchedulerError> {
     if !valid_time_id(&key.service_id) {
         return Err(SchedulerError::MalformedServiceId(key.service_id.clone()));
     }
@@ -303,6 +366,9 @@ fn validate_key(key: &RunnableKey) -> Result<(), SchedulerError> {
     }
     if key.generation == 0 {
         return Err(SchedulerError::ZeroGeneration);
+    }
+    if key.occurrence_sequence == 0 {
+        return Err(SchedulerError::ZeroOccurrenceSequence);
     }
     Ok(())
 }
@@ -318,6 +384,6 @@ fn command_key(command: &SchedulerCommand) -> &RunnableKey {
 }
 
 fn count_phase(state: &SchedulerState, phase: RunnablePhase) -> Result<u64, SchedulerError> {
-    u64::try_from(state.runnables.iter().filter(|runnable| runnable.phase == phase).count())
+    u64::try_from(state.runnables.iter().flatten().filter(|runnable| runnable.phase == phase).count())
         .map_err(|_| SchedulerError::Overflow)
 }

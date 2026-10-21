@@ -50,6 +50,19 @@ impl Harness {
             checkpoint: std::cell::Cell::new(0),
         }
     }
+    fn register(&self, key: &RunnableKey) {
+        if let Some(worker) = &self.worker {
+            let mut owner = self.owner.lock().expect("registration lock");
+            let ConcreteEffects::Live(port) = &mut owner.effects_mut().concrete else { unreachable!() };
+            port.register(key.clone(), worker.thread().clone()).expect("register fresh occurrence");
+        }
+    }
+    fn unregister(&self, key: &RunnableKey) {
+        let mut owner = self.owner.lock().expect("registration lock");
+        if let ConcreteEffects::Live(port) = &mut owner.effects_mut().concrete {
+            assert!(port.unregister(key));
+        }
+    }
     fn snapshot(&self) -> Snapshot {
         let owner = self.owner.lock().expect("owner lock");
         (owner.state().clone(), owner.capacity_state().clone())
@@ -71,7 +84,7 @@ impl Harness {
             // No control unpark/checkpoint precedes this observation: actual
             // progress must come from the real ThreadSchedulerWakeAdapter path.
             match self.received.recv_timeout(WAKE_TIMEOUT).expect("real receiving worker progress") {
-                ReceiverOutput::Delivery(boundary) => boundary,
+                ReceiverOutput::Delivery(boundary) => *boundary,
                 checkpoint => panic!("delivery replaced by control traffic: {checkpoint:?}"),
             }
         } else {
@@ -80,9 +93,10 @@ impl Harness {
             let ConcreteEffects::Simulation(port) = &mut effects.concrete else {
                 unreachable!()
             };
-            let index = port.drain_next().expect("independently drained simulation delivery");
+            let token = port.drain_next().expect("independently drained simulation delivery");
             let boundary = effects.simulation_boundaries.pop_front().expect("actual simulation delivery boundary");
-            assert_eq!(u64::try_from(boundary.occurrence).expect("occurrence fits simulation index"), index);
+            assert_eq!(boundary.token, token);
+            assert!(owner.resolve_wake(token).is_some(), "consumer rejects stale simulation token");
             boundary
         };
         assert_eq!(boundary.sequence, self.consumed.get() + 1);
@@ -129,6 +143,19 @@ impl Harness {
                 }
                 delivery => panic!("unaccounted delivery before checkpoint: {delivery:?}"),
             }
+        }
+    }
+    fn arm_fence_probe(&self) {
+        if self.worker.is_some() {
+            self.control.send(ReceiverInput::FenceProbe(1)).expect("arm actual-unpark probe");
+        }
+    }
+    fn assert_no_fence_wake(&self) {
+        if let Some(worker) = &self.worker {
+            assert!(matches!(self.received.recv_timeout(std::time::Duration::from_millis(25)), Err(std::sync::mpsc::RecvTimeoutError::Timeout)), "rejected delivery unparked the actual worker");
+            // Only this explicit control wake may release the armed mailbox.
+            worker.thread().unpark();
+            assert!(matches!(self.received.recv_timeout(WAKE_TIMEOUT).expect("control releases probe"), ReceiverOutput::FenceProbe(1)));
         }
     }
     fn wake(&self, key: &RunnableKey, priority: i32) {

@@ -96,11 +96,52 @@ fn timer_request(generation: u64, kind: TimerKind) -> TimerScheduleRequest {
     }
 }
 
-fn runnable(id: &str, generation: u64) -> RunnableKey {
+#[test]
+fn terminal_scheduler_records_stay_within_derived_retention_bound() {
+    // r[verify molten.audit_f11.retention]
+    const RETENTION_BOUND: u64 = 1;
+    const FRESH_OCCURRENCES: u64 = 16;
+    let mut descriptor = descriptor(TimeProfileKind::DeterministicSimulation);
+    descriptor.max_runnables = RETENTION_BOUND;
+    descriptor.max_scheduler_queue_depth = RETENTION_BOUND;
+    descriptor.max_scheduler_concurrency = RETENTION_BOUND;
+    let profile = admit_time_profile(&descriptor).expect("bounded profile");
+    let policy = profile.scheduler_policy;
+    let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
+    for sequence in 1..=FRESH_OCCURRENCES {
+        let key = runnable("reusable-logical-name", ACTIVE_GENERATION, sequence);
+        state = apply_scheduler_command(&profile, policy, &state, ACTIVE_GENERATION, &SchedulerCommand::Wake {
+            key: key.clone(),
+            priority: 0,
+        })
+        .expect("fresh occurrence remains admissible")
+        .next;
+        state = choose_runnable(&profile, policy, &state, ACTIVE_GENERATION, None)
+            .expect("select fresh occurrence")
+            .next;
+        state =
+            apply_scheduler_command(&profile, policy, &state, ACTIVE_GENERATION, &SchedulerCommand::Complete { key })
+                .expect("complete fresh occurrence")
+                .next;
+        let retained = state
+            .runnables
+            .iter()
+            .flatten()
+            .filter(|runnable| matches!(runnable.phase, RunnablePhase::Completed | RunnablePhase::Cancelled))
+            .count();
+        assert!(
+            u64::try_from(retained).expect("terminal count") <= RETENTION_BOUND,
+            "retained {retained} terminal occurrences"
+        );
+    }
+}
+
+fn runnable(id: &str, generation: u64, occurrence_sequence: u64) -> RunnableKey {
     RunnableKey {
         service_id: "service.scheduler".to_string(),
         generation,
         runnable_id: id.to_string(),
+        occurrence_sequence,
     }
 }
 
@@ -332,7 +373,7 @@ fn timer_admission_is_resource_bounded() {
 fn scheduler_orders_records_and_replays_choices() {
     let profile = profile();
     let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
-    let low = runnable("low", ACTIVE_GENERATION);
+    let low = runnable("low", ACTIVE_GENERATION, 1);
     let wrong_policy = SchedulerPolicy {
         ordering: SchedulerOrdering::Fifo,
         replay: SchedulerReplayPolicy::Deterministic,
@@ -345,7 +386,7 @@ fn scheduler_orders_records_and_replays_choices() {
         },),
         Err(SchedulerError::PolicyMismatch { .. })
     ));
-    let high = runnable("high", ACTIVE_GENERATION);
+    let high = runnable("high", ACTIVE_GENERATION, 2);
     for (key, priority) in [(low.clone(), 0), (high.clone(), 1)] {
         state = apply_scheduler_command(
             &profile,
@@ -388,7 +429,7 @@ fn scheduler_orders_records_and_replays_choices() {
 fn scheduler_rejects_duplicate_stale_and_illegal_transitions() {
     let profile = profile();
     let state = new_scheduler_state(&profile, ACTIVE_GENERATION);
-    let key = runnable("work", ACTIVE_GENERATION);
+    let key = runnable("work", ACTIVE_GENERATION, 1);
     let woken = apply_scheduler_command(
         &profile,
         scheduler_policy(SchedulerReplayPolicy::Deterministic),
@@ -429,7 +470,7 @@ fn scheduler_rejects_duplicate_stale_and_illegal_transitions() {
         &woken.next,
         ACTIVE_GENERATION,
         &SchedulerCommand::Wake {
-            key: runnable("stale", STALE_GENERATION),
+            key: runnable("stale", STALE_GENERATION, 1),
             priority: 0,
         },
     )
@@ -441,8 +482,8 @@ fn scheduler_rejects_duplicate_stale_and_illegal_transitions() {
 fn fairness_bound_prevents_indefinite_starvation_and_replay_mismatch_fails() {
     let profile = profile();
     let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
-    let low = runnable("low-fairness", ACTIVE_GENERATION);
-    let high = runnable("high-fairness", ACTIVE_GENERATION);
+    let low = runnable("low-fairness", ACTIVE_GENERATION, 1);
+    let high = runnable("high-fairness", ACTIVE_GENERATION, 2);
     let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
     for (key, priority) in [(low.clone(), 0), (high.clone(), 1)] {
         state = apply_scheduler_command(&profile, policy, &state, ACTIVE_GENERATION, &SchedulerCommand::Wake {
@@ -467,7 +508,7 @@ fn fairness_bound_prevents_indefinite_starvation_and_replay_mismatch_fails() {
     assert_eq!(fairness_selection.selected, low);
     assert!(matches!(
         choose_runnable(&profile, policy, &state, ACTIVE_GENERATION, Some(&high),),
-        Err(SchedulerError::UnexpectedReplayChoice { .. })
+        Err(SchedulerError::UnexpectedReplayChoice(_))
     ));
 }
 
@@ -963,13 +1004,20 @@ fn scheduler_command(
 }
 
 fn scheduler_phase(state: &SchedulerState, key: &RunnableKey) -> RunnablePhase {
-    state.runnables.iter().find(|runnable| &runnable.key == key).expect("known runnable").phase
+    state
+        .runnables
+        .iter()
+        .flatten()
+        .find(|runnable| &runnable.key == key)
+        .expect("known runnable")
+        .phase
 }
 
 fn active_runnable_count(state: &SchedulerState) -> usize {
     state
         .runnables
         .iter()
+        .flatten()
         .filter(|runnable| !matches!(runnable.phase, RunnablePhase::Completed | RunnablePhase::Cancelled))
         .count()
 }
@@ -980,7 +1028,7 @@ fn active_runnable_count(state: &SchedulerState) -> usize {
 fn wake_resumes_a_blocked_occurrence_at_the_active_limit() {
     let profile = limited_scheduler_profile(1, 1);
     let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
-    let key = runnable("resumed", ACTIVE_GENERATION);
+    let key = runnable("resumed", ACTIVE_GENERATION, 1);
     let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
     state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
         key: key.clone(),
@@ -999,7 +1047,13 @@ fn wake_resumes_a_blocked_occurrence_at_the_active_limit() {
     assert_eq!(resumed.action, SchedulerAction::Woken);
     assert_eq!(resumed.next.runnables.len(), blocked.runnables.len());
     assert_eq!(active_runnable_count(&resumed.next), active_runnable_count(&blocked));
-    let record = resumed.next.runnables.iter().find(|runnable| runnable.key == key).expect("resumed record");
+    let record = resumed
+        .next
+        .runnables
+        .iter()
+        .flatten()
+        .find(|runnable| runnable.key == key)
+        .expect("resumed record");
     assert_eq!(record.phase, RunnablePhase::Ready);
     assert_eq!(record.priority, 7);
     assert_eq!(record.wait_turns, 0);
@@ -1012,8 +1066,8 @@ fn wake_resumes_a_blocked_occurrence_at_the_active_limit() {
 fn wake_resume_enters_fifo_order_behind_older_ready_work() {
     let profile = limited_scheduler_profile(2, 2);
     let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
-    let resuming = runnable("resuming", ACTIVE_GENERATION);
-    let older = runnable("older", ACTIVE_GENERATION);
+    let resuming = runnable("resuming", ACTIVE_GENERATION, 1);
+    let older = runnable("older", ACTIVE_GENERATION, 2);
     let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
     state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
         key: resuming.clone(),
@@ -1037,12 +1091,14 @@ fn wake_resume_enters_fifo_order_behind_older_ready_work() {
     let resuming_sequence = state
         .runnables
         .iter()
+        .flatten()
         .find(|runnable| runnable.key == resuming)
         .expect("resumed record")
         .enqueue_sequence;
     let older_sequence = state
         .runnables
         .iter()
+        .flatten()
         .find(|runnable| runnable.key == older)
         .expect("older record")
         .enqueue_sequence;
@@ -1054,8 +1110,8 @@ fn wake_resume_enters_fifo_order_behind_older_ready_work() {
 fn wake_resume_denies_when_the_ready_queue_is_full() {
     let profile = limited_scheduler_profile(4, 1);
     let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
-    let blocked_key = runnable("blocked", ACTIVE_GENERATION);
-    let ready_key = runnable("ready", ACTIVE_GENERATION);
+    let blocked_key = runnable("blocked", ACTIVE_GENERATION, 1);
+    let ready_key = runnable("ready", ACTIVE_GENERATION, 2);
     let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
     state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
         key: blocked_key.clone(),
@@ -1090,7 +1146,7 @@ fn wake_resume_denies_when_the_ready_queue_is_full() {
 fn wake_denies_non_blocked_duplicates_without_mutation() {
     let profile = limited_scheduler_profile(4, 4);
     let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
-    let ready_key = runnable("ready-duplicate", ACTIVE_GENERATION);
+    let ready_key = runnable("ready-duplicate", ACTIVE_GENERATION, 1);
     let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
     state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
         key: ready_key.clone(),
@@ -1129,7 +1185,7 @@ fn wake_denies_non_blocked_duplicates_without_mutation() {
     ));
     assert_eq!(scheduler_phase(&state, &ready_key), RunnablePhase::Completed);
 
-    let cancelled_key = runnable("cancelled-duplicate", ACTIVE_GENERATION);
+    let cancelled_key = runnable("cancelled-duplicate", ACTIVE_GENERATION, 2);
     state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
         key: cancelled_key.clone(),
         priority: 0,
@@ -1154,7 +1210,7 @@ fn wake_denies_non_blocked_duplicates_without_mutation() {
 fn wake_resume_overflow_preserves_state() {
     let profile = limited_scheduler_profile(2, 2);
     let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
-    let key = runnable("exhausted", ACTIVE_GENERATION);
+    let key = runnable("exhausted", ACTIVE_GENERATION, 1);
     let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
     state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
         key: key.clone(),
@@ -1184,8 +1240,8 @@ fn wake_resume_overflow_preserves_state() {
 fn yield_denies_at_the_ready_bound_and_preserves_state() {
     let profile = limited_scheduler_profile(4, 1);
     let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
-    let running_key = runnable("yielding", ACTIVE_GENERATION);
-    let ready_key = runnable("queued", ACTIVE_GENERATION);
+    let running_key = runnable("yielding", ACTIVE_GENERATION, 1);
+    let ready_key = runnable("queued", ACTIVE_GENERATION, 2);
     let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
     state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
         key: running_key.clone(),
@@ -1216,7 +1272,7 @@ fn yield_denies_at_the_ready_bound_and_preserves_state() {
 fn yield_admits_with_ready_capacity_and_takes_a_fresh_position() {
     let profile = limited_scheduler_profile(4, 2);
     let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
-    let key = runnable("yielding", ACTIVE_GENERATION);
+    let key = runnable("yielding", ACTIVE_GENERATION, 1);
     let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
     state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
         key: key.clone(),
@@ -1229,7 +1285,13 @@ fn yield_admits_with_ready_capacity_and_takes_a_fresh_position() {
     let yielded = scheduler_command(&profile, policy, &state, &SchedulerCommand::Yield { key: key.clone() });
 
     assert_eq!(yielded.action, SchedulerAction::Yielded);
-    let record = yielded.next.runnables.iter().find(|runnable| runnable.key == key).expect("yielded record");
+    let record = yielded
+        .next
+        .runnables
+        .iter()
+        .flatten()
+        .find(|runnable| runnable.key == key)
+        .expect("yielded record");
     assert_eq!(record.phase, RunnablePhase::Ready);
     assert_eq!(record.enqueue_sequence, sequence_before);
     assert_eq!(yielded.next.next_enqueue_sequence, sequence_before + 1);
@@ -1240,8 +1302,8 @@ fn yield_admits_with_ready_capacity_and_takes_a_fresh_position() {
 fn new_wake_denies_at_the_active_bound_while_ready_capacity_exists() {
     let profile = limited_scheduler_profile(1, 1);
     let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
-    let running_key = runnable("running", ACTIVE_GENERATION);
-    let new_key = runnable("new", ACTIVE_GENERATION);
+    let running_key = runnable("running", ACTIVE_GENERATION, 1);
+    let new_key = runnable("new", ACTIVE_GENERATION, 2);
     let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
     state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
         key: running_key.clone(),
@@ -1258,7 +1320,7 @@ fn new_wake_denies_at_the_active_bound_while_ready_capacity_exists() {
 
     assert_eq!(denied.action, SchedulerAction::RejectedOverload);
     assert_eq!(denied.next, before);
-    assert!(denied.next.runnables.iter().all(|runnable| runnable.key != new_key));
+    assert!(denied.next.runnables.iter().flatten().all(|runnable| runnable.key != new_key));
     assert_eq!(scheduler_phase(&denied.next, &running_key), RunnablePhase::Running);
 }
 
@@ -1274,8 +1336,8 @@ fn backpressure_profile_maps_denied_yield_to_backpressure() {
     };
     let profile = admit_time_profile(&limited).expect("admitted backpressure profile");
     let policy = profile.scheduler_policy;
-    let running_key = runnable("yielding", ACTIVE_GENERATION);
-    let queued_key = runnable("queued", ACTIVE_GENERATION);
+    let running_key = runnable("yielding", ACTIVE_GENERATION, 1);
+    let queued_key = runnable("queued", ACTIVE_GENERATION, 2);
     let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
     state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
         key: running_key.clone(),
@@ -1305,7 +1367,7 @@ fn backpressure_profile_maps_denied_yield_to_backpressure() {
 fn stale_generation_wake_and_yield_discard_without_effects() {
     let profile = limited_scheduler_profile(2, 2);
     let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
-    let stale = runnable("stale", STALE_GENERATION);
+    let stale = runnable("stale", STALE_GENERATION, 1);
     let state = new_scheduler_state(&profile, ACTIVE_GENERATION);
     let before = state.clone();
 
@@ -1326,7 +1388,7 @@ fn stale_generation_wake_and_yield_discard_without_effects() {
 fn yield_denies_invalid_phase_and_exhausted_sequence_without_mutation() {
     let profile = limited_scheduler_profile(4, 4);
     let policy = scheduler_policy(SchedulerReplayPolicy::Deterministic);
-    let key = runnable("invalid-yield", ACTIVE_GENERATION);
+    let key = runnable("invalid-yield", ACTIVE_GENERATION, 1);
     let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
     state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
         key: key.clone(),
@@ -1358,4 +1420,148 @@ fn yield_denies_invalid_phase_and_exhausted_sequence_without_mutation() {
     ));
     assert_eq!(exhausted, before);
     assert_eq!(scheduler_phase(&exhausted, &key), RunnablePhase::Running);
+}
+
+// r[verify molten.audit_f11.atomicity]
+#[test]
+fn terminal_sequence_exhaustion_rejects_commands_and_bulk_cleanup_atomically() {
+    let profile = limited_scheduler_profile(2, 2);
+    let policy = profile.scheduler_policy;
+    let running = runnable("running-at-terminal-bound", ACTIVE_GENERATION, 1);
+    let ready = runnable("ready-at-terminal-bound", ACTIVE_GENERATION, 2);
+    let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: running.clone(),
+        priority: 0,
+    })
+    .next;
+    state = choose_runnable(&profile, policy, &state, ACTIVE_GENERATION, None).expect("running occurrence").next;
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: ready.clone(),
+        priority: 0,
+    })
+    .next;
+    state.next_terminal_sequence = u64::MAX;
+    let before = state.clone();
+    for command in [
+        SchedulerCommand::Complete { key: running.clone() },
+        SchedulerCommand::Cancel { key: ready.clone() },
+    ] {
+        assert!(matches!(
+            apply_scheduler_command(&profile, policy, &state, ACTIVE_GENERATION, &command),
+            Err(SchedulerError::Overflow)
+        ));
+        assert_eq!(state, before);
+    }
+    state.next_terminal_sequence = u64::MAX - 1;
+    let before = state.clone();
+    assert_eq!(cleanup_scheduler_generation_in_place(&mut state, ACTIVE_GENERATION), Err(SchedulerError::Overflow));
+    assert_eq!(state, before);
+    cleanup_scheduler_generation_in_place(&mut state, STALE_GENERATION).expect("unrelated generation cleanup");
+    assert_eq!(state, before);
+    state.next_terminal_sequence = 0;
+    cleanup_scheduler_generation_in_place(&mut state, ACTIVE_GENERATION).expect("checked bulk cleanup");
+    assert_eq!(active_runnable_count(&state), 0);
+    assert_eq!(scheduler_phase(&state, &running), RunnablePhase::Cancelled);
+    assert_eq!(scheduler_phase(&state, &ready), RunnablePhase::Cancelled);
+    assert_eq!(state.next_terminal_sequence, 2);
+}
+
+// r[verify molten.audit_f11.freshness]
+#[test]
+fn occurrence_high_water_denies_renamed_duplicate_issuance_without_eviction() {
+    let profile = limited_scheduler_profile(2, 2);
+    let policy = profile.scheduler_policy;
+    let first = runnable("original-logical-name", ACTIVE_GENERATION, 1);
+    let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: first.clone(),
+        priority: 0,
+    })
+    .next;
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Cancel { key: first }).next;
+    let before = state.clone();
+    let duplicate = runnable("different-logical-name", ACTIVE_GENERATION, 1);
+    assert_eq!(
+        apply_scheduler_command(&profile, policy, &state, ACTIVE_GENERATION, &SchedulerCommand::Wake {
+            key: duplicate,
+            priority: 0,
+        }),
+        Err(SchedulerError::StaleOccurrence { highest: 1, actual: 1 })
+    );
+    assert_eq!(state, before);
+    let fresh = runnable(
+        "original-logical-name",
+        ACTIVE_GENERATION,
+        state.next_occurrence_sequence().expect("fresh issuance"),
+    );
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: fresh.clone(),
+        priority: 0,
+    })
+    .next;
+    assert_eq!(scheduler_phase(&state, &fresh), RunnablePhase::Ready);
+    assert_eq!(state.highest_occurrence_sequence, fresh.occurrence_sequence);
+}
+
+// r[verify molten.audit_f11.retention]
+// r[verify molten.audit_f11.freshness]
+#[test]
+fn eviction_preserves_a_blocked_occurrences_slot_and_exact_identity_resume() {
+    const LAST_OCCURRENCE: u64 = 12;
+    const TERMINAL_RETENTION: u64 = 2;
+    let profile = limited_scheduler_profile(2, 2);
+    let policy = profile.scheduler_policy;
+    let anchor = runnable("long-lived-blocked", ACTIVE_GENERATION, 1);
+    let mut state = new_scheduler_state(&profile, ACTIVE_GENERATION);
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: anchor.clone(),
+        priority: 0,
+    })
+    .next;
+    state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Block { key: anchor.clone() }).next;
+    let original_slot = state.runnables[0].clone();
+    for sequence in 2..=LAST_OCCURRENCE {
+        let fresh = runnable("repeated-other-work", ACTIVE_GENERATION, sequence);
+        state = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+            key: fresh.clone(),
+            priority: 0,
+        })
+        .next;
+        assert_eq!(state.runnables[0], original_slot);
+        assert!(state.runnables.len() <= 4);
+        state = choose_runnable(&profile, policy, &state, ACTIVE_GENERATION, Some(&fresh))
+            .expect("select only Ready work")
+            .next;
+        let terminal = if sequence % 2 == 0 {
+            SchedulerCommand::Complete { key: fresh }
+        } else {
+            SchedulerCommand::Cancel { key: fresh }
+        };
+        state = scheduler_command(&profile, policy, &state, &terminal).next;
+        let mut retained = state
+            .runnables
+            .iter()
+            .flatten()
+            .filter_map(|row| row.terminal_sequence.map(|_| row.key.occurrence_sequence))
+            .collect::<Vec<_>>();
+        retained.sort();
+        let oldest = sequence.saturating_sub(TERMINAL_RETENTION - 1).max(2);
+        assert_eq!(retained, (oldest..=sequence).collect::<Vec<_>>());
+        assert_eq!(state.runnables[0], original_slot);
+        assert_eq!(active_runnable_count(&state), 1);
+    }
+    let resumed = scheduler_command(&profile, policy, &state, &SchedulerCommand::Wake {
+        key: anchor.clone(),
+        priority: 0,
+    });
+    assert_eq!(resumed.action, SchedulerAction::Woken);
+    assert_eq!(resumed.next.runnables[0].as_ref().expect("same occupied slot").key, anchor);
+    assert_eq!(resumed.next.highest_occurrence_sequence, LAST_OCCURRENCE);
+    assert_eq!(
+        choose_runnable(&profile, policy, &resumed.next, ACTIVE_GENERATION, Some(&anchor))
+            .expect("resume selection")
+            .selected,
+        anchor
+    );
 }

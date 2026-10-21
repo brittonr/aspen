@@ -1,10 +1,10 @@
 ## Implementation tasks
 
-All tasks remain proposed. This package grants no implementation permission.
+Checked tasks record the executed baseline and producer review only. Implementation and completion remain blocked on an authoritative exact-candidate producer contract.
 
-- [ ] [serial] Run existing node lifecycle and runtime source-gate tests before core edits. Record baseline outcomes. r[molten.audit_f02.validation]
+- [x] [serial] Run existing node lifecycle and runtime source-gate tests before core edits. Record baseline outcomes. r[molten.audit_f02.validation]
 - [ ] [serial] Add the F02 normal-startup reproduction to repository tests, alongside a valid real-artifact control. r[molten.audit_f02.real_evidence] r[molten.audit_f02.validation]
-- [ ] [serial] Review the real artifact producer, exact source-to-binary binding, and startup evidence input compatibility. r[molten.audit_f02.candidate_binding]
+- [x] [serial] Review the real artifact producer, exact source-to-binary binding, and startup evidence input compatibility. r[molten.audit_f02.candidate_binding]
 - [ ] [serial] Define pure admission over supplied candidate, policy, profile, toolchain, and artifact bindings. r[molten.audit_f02.candidate_binding]
 - [ ] [serial] Make the startup shell load and validate real artifacts before activation or destructive restart preparation. r[molten.audit_f02.real_evidence] r[molten.audit_f02.candidate_binding]
 - [ ] [serial] Isolate synthetic composition to explicit tests without normal-path or compatibility-wrapper fallback. r[molten.audit_f02.fixture_isolation]
@@ -16,3 +16,7 @@ All tasks remain proposed. This package grants no implementation permission.
 - [ ] [serial] Run focused Octet error checks and Clippy with `-D warnings`, without policy allowances. r[molten.audit_f02.validation]
 - [ ] [serial] Run workspace tests across all targets and compatible features, relevant Nix source-gate checks, and required flake gates. r[molten.audit_f02.validation]
 - [ ] [serial] Run required Cairn validation, traceability, and package gates before completion review. Preserve blocked-check evidence. r[molten.audit_f02.validation]
+
+## 2026-10-21 prerequisite review
+
+The [executed baseline and producer review](evidence/2026-10-21-prerequisite-review.md) identifies the missing source-to-binary binding. Normal startup remains unchanged; no fixture, configuration hash, or caller-supplied matching reference is promoted into real candidate evidence.

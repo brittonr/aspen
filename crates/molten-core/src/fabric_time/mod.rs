@@ -24,7 +24,7 @@ pub use timer::*;
 pub const FABRIC_TIME_PROFILE_SCHEMA: &str = "molten.fabric-time.profile.v1";
 pub const FABRIC_TIME_OBSERVATION_SCHEMA: &str = "molten.fabric-time.observation.v1";
 pub const FABRIC_TIMER_EVENT_SCHEMA: &str = "molten.fabric-time.timer-event.v1";
-pub const FABRIC_SCHEDULER_EVENT_SCHEMA: &str = "molten.fabric-time.scheduler-event.v1";
+pub const FABRIC_SCHEDULER_EVENT_SCHEMA: &str = "molten.fabric-time.scheduler-event.v2";
 pub const FABRIC_ENTROPY_EVENT_SCHEMA: &str = "molten.fabric-time.entropy-event.v1";
 pub const FABRIC_DEADLINE_LEASE_SCHEMA: &str = "molten.fabric-time.deadline-lease.v1";
 pub const FABRIC_TIME_RUN_REPORT_SCHEMA: &str = "molten.fabric-time.run-report.v1";

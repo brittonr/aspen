@@ -1,0 +1,511 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: bound-terminal-scheduler-retention",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention"
+    }
+  ],
+  "blocked": false,
+  "change": "bound-terminal-scheduler-retention",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "ff9307b334a0be00aea93f7ce4adb73bdc54784bc4d4b6e01e1243cef4a8aa8f",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "1d8a9408df87edcfd96d08533c8102b75a9a4f927e7b22893c4f5e57e40da3c3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/design.md"
+        },
+        {
+          "content_hash": "249261240d9a7faf8680045cd7d2cfea1898db3048078f53df2cfd6f6bc31a14",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-both-report.preserves"
+        },
+        {
+          "content_hash": "63aa28434c18925f781c4e4f031500b5aa842fb3e0ce34caedec6ff2978fd4c3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/library/command.txt"
+        },
+        {
+          "content_hash": "a6d09bccdd3c2dd3d037e848bfbddd94d103445e93e024588e6112afa5b919ef",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/library/provenance.jsonl"
+        },
+        {
+          "content_hash": "80482190e6338bcd353334335abb73ab590e953f09677628b7e86ced89924c3b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/library/status.json"
+        },
+        {
+          "content_hash": "223e5abf9805d32013ad3b9ac06053f4f316ccc3ef840fe89c88235ffb21caa3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/library/summary.txt"
+        },
+        {
+          "content_hash": "3470710df0f85a0d4251b601464bb647cc51ff9d81e3eda6f68a0b3690e7e3cf",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/workspace/artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "31fc05052d2d04486db064bf4dc0327c8ea395ecf4f9cc58c61cdf69a574dc77",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/workspace/command.txt"
+        },
+        {
+          "content_hash": "ffc147e638198f738794935b97f6834ac6479777fea6ae5d33465c51ddfbecd3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/workspace/gate-receipt.preserves"
+        },
+        {
+          "content_hash": "1ae0fbc8b78a96d7c7313f4b78560d408ce50c52ebcce7670d051d91a459b1d9",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/workspace/object-corpus-receipt.json"
+        },
+        {
+          "content_hash": "9632be9da502cacf17f3532b93862a4e146f6ee1d1e7a7679b8e9ba4f524720e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/workspace/provenance.jsonl"
+        },
+        {
+          "content_hash": "4e13fa97c8c9b7570bdc29348281e8cff65054ff95b0c73d96a7f93aaff72b2f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/workspace/remediation-plan.preserves"
+        },
+        {
+          "content_hash": "4617bd412848ec267ee24fe0829831fedd8f4c5510bf8a11b6c97c4392416aab",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/workspace/status.json"
+        },
+        {
+          "content_hash": "0194f449b16c95e469042213390dd02eb9b1b5bb1b88128aab3127db89673f7c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/workspace/summary.txt"
+        },
+        {
+          "content_hash": "87a2991af31ab77fff899f387fe3dd08c794ea60a240d60c6ce31a07a0f92a83",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "a6259c2f948065b89056fae855c596f31f940b602c0bb408d9b72de11c4d3af7",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-both-report.preserves"
+        },
+        {
+          "content_hash": "046ebc1646be57945721d2d760b9a38d6c43148325894044ea1b159eaa08da9c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-final-both-report.preserves"
+        },
+        {
+          "content_hash": "8522da4ee78c0bfa3f18b74c3ee78e13f6326eebecea551464129aa6af261b03",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-final-gate-design.json"
+        },
+        {
+          "content_hash": "82afcb9c012769951f26dc226f00c260756be24b261f3d00c866f64b9edea9f6",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-final-gate-proposal.json"
+        },
+        {
+          "content_hash": "99d2c10a99ce5ed622fe99de7f42740670b923242afd2179fab65ccc1bfc0ff6",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-final-gate-tasks.json"
+        },
+        {
+          "content_hash": "42a27313c0883016fdf5dd0d4acfc20d3cb934f3d1b65f2d5a77ad4c22ad42ca",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-final-review-completeness.json"
+        },
+        {
+          "content_hash": "047cdb683167b74cd611c35f6c2f883fb86a6643bde0e863cb4453be1ee8d5b1",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/library/command.txt"
+        },
+        {
+          "content_hash": "e80278389f85460be9186ba2ff570b0e8976c9840a910412c3572f62975d8777",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/library/provenance.jsonl"
+        },
+        {
+          "content_hash": "80482190e6338bcd353334335abb73ab590e953f09677628b7e86ced89924c3b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/library/status.json"
+        },
+        {
+          "content_hash": "223e5abf9805d32013ad3b9ac06053f4f316ccc3ef840fe89c88235ffb21caa3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/library/summary.txt"
+        },
+        {
+          "content_hash": "f1a178b16bcbcefa6244ab7fe65d1e8afcc2350d2ecc554923d19685a5596f5f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/workspace/artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "8bf6b29c7e1c6fd9fc5b88441451f28ba4281354c634def8439877f954a78739",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/workspace/command.txt"
+        },
+        {
+          "content_hash": "3f9e1add0b085401ee52744d3bbfe1c4fb7ffeda4763bc3e622e187d7a92cab4",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/workspace/gate-receipt.preserves"
+        },
+        {
+          "content_hash": "6a37b304ad281e83f7727cbd16dd79648e155f91bd5ccf1204945cd528ae9515",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/workspace/object-corpus-receipt.json"
+        },
+        {
+          "content_hash": "c9dcf467f2307dacd46c3b8be1322c565e227d62b4cecfbb58555f195de341b0",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/workspace/provenance.jsonl"
+        },
+        {
+          "content_hash": "a248476c2f10c5111cef7919af3289a1373bac6a169455b2973935959b1bed40",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/workspace/remediation-plan.preserves"
+        },
+        {
+          "content_hash": "4617bd412848ec267ee24fe0829831fedd8f4c5510bf8a11b6c97c4392416aab",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/workspace/status.json"
+        },
+        {
+          "content_hash": "0194f449b16c95e469042213390dd02eb9b1b5bb1b88128aab3127db89673f7c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/workspace/summary.txt"
+        },
+        {
+          "content_hash": "60ab6bf5882c0684be16efb118870080d9660712da14db5a27ce8684fed0abb9",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-final-validate.json"
+        },
+        {
+          "content_hash": "5ffa3040f83ebc850d0ebb215580a764c1a1386d7d95cfea0ddc4c635c023ce5",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-gate-receipt.preserves"
+        },
+        {
+          "content_hash": "85b57944b8828b01fa6ddd6faa0976273d236f280b895015e7e01c30fc2a8cd1",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-remediation-plan.preserves"
+        },
+        {
+          "content_hash": "83c8ffdcb56d2f71abd31b8f11343f9f5a3a5213b605f505ba983f541740a654",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-simulation-report.preserves"
+        },
+        {
+          "content_hash": "8e69b00cd2be6be57238755c145f85f4789e2c44c915a6f2b3cba1e6e714bbde",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-sync-preview.json"
+        },
+        {
+          "content_hash": "e37d80fb298a05ce18535159ecaec6617803f1ac45993b2155422c01091422ef",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-sync-receipt.json"
+        },
+        {
+          "content_hash": "85439249fb86eff8b701bf3d185179692982e7ba4f96dd7fd97527dc0ddc4cee",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/evidence/2026-10-21-verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/metadata.json"
+        },
+        {
+          "content_hash": "4ed775dce54b46d45851eb9a8870bc2cec77cfc0e346b05d1dc4626c553158db",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/proposal.md"
+        },
+        {
+          "content_hash": "f2937a6968faf2349d1fddac757ff39ce42702362bd851924d51725fa34bf1d5",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/specs/fabric-time-scheduling/spec.md"
+        },
+        {
+          "content_hash": "17023cd9528f073de317853153c2a0551b7347b79ce25165e552cc83a4588376",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bound-terminal-scheduler-retention/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention"
+        }
+      ],
+      "manifest_hash": "25d152ff1c1b5506b76c306d445deb248ee1dfb3bb2b79e076a8a054ecb8c44a"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "1d8a9408df87edcfd96d08533c8102b75a9a4f927e7b22893c4f5e57e40da3c3",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/design.md"
+        },
+        {
+          "content_hash": "249261240d9a7faf8680045cd7d2cfea1898db3048078f53df2cfd6f6bc31a14",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-both-report.preserves"
+        },
+        {
+          "content_hash": "63aa28434c18925f781c4e4f031500b5aa842fb3e0ce34caedec6ff2978fd4c3",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/library/command.txt"
+        },
+        {
+          "content_hash": "a6d09bccdd3c2dd3d037e848bfbddd94d103445e93e024588e6112afa5b919ef",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/library/provenance.jsonl"
+        },
+        {
+          "content_hash": "80482190e6338bcd353334335abb73ab590e953f09677628b7e86ced89924c3b",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/library/status.json"
+        },
+        {
+          "content_hash": "223e5abf9805d32013ad3b9ac06053f4f316ccc3ef840fe89c88235ffb21caa3",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/library/summary.txt"
+        },
+        {
+          "content_hash": "3470710df0f85a0d4251b601464bb647cc51ff9d81e3eda6f68a0b3690e7e3cf",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/workspace/artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "31fc05052d2d04486db064bf4dc0327c8ea395ecf4f9cc58c61cdf69a574dc77",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/workspace/command.txt"
+        },
+        {
+          "content_hash": "ffc147e638198f738794935b97f6834ac6479777fea6ae5d33465c51ddfbecd3",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/workspace/gate-receipt.preserves"
+        },
+        {
+          "content_hash": "1ae0fbc8b78a96d7c7313f4b78560d408ce50c52ebcce7670d051d91a459b1d9",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/workspace/object-corpus-receipt.json"
+        },
+        {
+          "content_hash": "9632be9da502cacf17f3532b93862a4e146f6ee1d1e7a7679b8e9ba4f524720e",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/workspace/provenance.jsonl"
+        },
+        {
+          "content_hash": "4e13fa97c8c9b7570bdc29348281e8cff65054ff95b0c73d96a7f93aaff72b2f",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/workspace/remediation-plan.preserves"
+        },
+        {
+          "content_hash": "4617bd412848ec267ee24fe0829831fedd8f4c5510bf8a11b6c97c4392416aab",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/workspace/status.json"
+        },
+        {
+          "content_hash": "0194f449b16c95e469042213390dd02eb9b1b5bb1b88128aab3127db89673f7c",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-accepted-source/workspace/summary.txt"
+        },
+        {
+          "content_hash": "87a2991af31ab77fff899f387fe3dd08c794ea60a240d60c6ce31a07a0f92a83",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "a6259c2f948065b89056fae855c596f31f940b602c0bb408d9b72de11c4d3af7",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-both-report.preserves"
+        },
+        {
+          "content_hash": "046ebc1646be57945721d2d760b9a38d6c43148325894044ea1b159eaa08da9c",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-final-both-report.preserves"
+        },
+        {
+          "content_hash": "8522da4ee78c0bfa3f18b74c3ee78e13f6326eebecea551464129aa6af261b03",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-final-gate-design.json"
+        },
+        {
+          "content_hash": "82afcb9c012769951f26dc226f00c260756be24b261f3d00c866f64b9edea9f6",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-final-gate-proposal.json"
+        },
+        {
+          "content_hash": "99d2c10a99ce5ed622fe99de7f42740670b923242afd2179fab65ccc1bfc0ff6",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-final-gate-tasks.json"
+        },
+        {
+          "content_hash": "42a27313c0883016fdf5dd0d4acfc20d3cb934f3d1b65f2d5a77ad4c22ad42ca",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-final-review-completeness.json"
+        },
+        {
+          "content_hash": "047cdb683167b74cd611c35f6c2f883fb86a6643bde0e863cb4453be1ee8d5b1",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/library/command.txt"
+        },
+        {
+          "content_hash": "e80278389f85460be9186ba2ff570b0e8976c9840a910412c3572f62975d8777",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/library/provenance.jsonl"
+        },
+        {
+          "content_hash": "80482190e6338bcd353334335abb73ab590e953f09677628b7e86ced89924c3b",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/library/status.json"
+        },
+        {
+          "content_hash": "223e5abf9805d32013ad3b9ac06053f4f316ccc3ef840fe89c88235ffb21caa3",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/library/summary.txt"
+        },
+        {
+          "content_hash": "f1a178b16bcbcefa6244ab7fe65d1e8afcc2350d2ecc554923d19685a5596f5f",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/workspace/artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "8bf6b29c7e1c6fd9fc5b88441451f28ba4281354c634def8439877f954a78739",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/workspace/command.txt"
+        },
+        {
+          "content_hash": "3f9e1add0b085401ee52744d3bbfe1c4fb7ffeda4763bc3e622e187d7a92cab4",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/workspace/gate-receipt.preserves"
+        },
+        {
+          "content_hash": "6a37b304ad281e83f7727cbd16dd79648e155f91bd5ccf1204945cd528ae9515",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/workspace/object-corpus-receipt.json"
+        },
+        {
+          "content_hash": "c9dcf467f2307dacd46c3b8be1322c565e227d62b4cecfbb58555f195de341b0",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/workspace/provenance.jsonl"
+        },
+        {
+          "content_hash": "a248476c2f10c5111cef7919af3289a1373bac6a169455b2973935959b1bed40",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/workspace/remediation-plan.preserves"
+        },
+        {
+          "content_hash": "4617bd412848ec267ee24fe0829831fedd8f4c5510bf8a11b6c97c4392416aab",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/workspace/status.json"
+        },
+        {
+          "content_hash": "0194f449b16c95e469042213390dd02eb9b1b5bb1b88128aab3127db89673f7c",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-final-source/workspace/summary.txt"
+        },
+        {
+          "content_hash": "60ab6bf5882c0684be16efb118870080d9660712da14db5a27ce8684fed0abb9",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-final-validate.json"
+        },
+        {
+          "content_hash": "5ffa3040f83ebc850d0ebb215580a764c1a1386d7d95cfea0ddc4c635c023ce5",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-gate-receipt.preserves"
+        },
+        {
+          "content_hash": "85b57944b8828b01fa6ddd6faa0976273d236f280b895015e7e01c30fc2a8cd1",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-remediation-plan.preserves"
+        },
+        {
+          "content_hash": "83c8ffdcb56d2f71abd31b8f11343f9f5a3a5213b605f505ba983f541740a654",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-simulation-report.preserves"
+        },
+        {
+          "content_hash": "8e69b00cd2be6be57238755c145f85f4789e2c44c915a6f2b3cba1e6e714bbde",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-sync-preview.json"
+        },
+        {
+          "content_hash": "e37d80fb298a05ce18535159ecaec6617803f1ac45993b2155422c01091422ef",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-sync-receipt.json"
+        },
+        {
+          "content_hash": "85439249fb86eff8b701bf3d185179692982e7ba4f96dd7fd97527dc0ddc4cee",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/evidence/2026-10-21-verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/metadata.json"
+        },
+        {
+          "content_hash": "4ed775dce54b46d45851eb9a8870bc2cec77cfc0e346b05d1dc4626c553158db",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/proposal.md"
+        },
+        {
+          "content_hash": "f2937a6968faf2349d1fddac757ff39ce42702362bd851924d51725fa34bf1d5",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/specs/fabric-time-scheduling/spec.md"
+        },
+        {
+          "content_hash": "17023cd9528f073de317853153c2a0551b7347b79ce25165e552cc83a4588376",
+          "exists": true,
+          "path": "./.cairn/changes/bound-terminal-scheduler-retention/tasks.md"
+        }
+      ],
+      "manifest_hash": "0467930c33cbf00480b35b60e3cf012c8a4d45c56ea2ea594cf5583df2930b90"
+    },
+    "kind": "archive",
+    "manifest_hash": "a01047ad5284f97728c15a51076d6bc4737a667aeac474b3b45fe75080df0838"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "126f65ca74ba6afe64463379ef83d25d51ddf024838d3e1e4382ff4bb2b822ce",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "92c4f2c80ad33cc484f7fbc023a217796e5eda1b1631ee531f5a2183fe21ebb9",
+  "reasons": [],
+  "receipt_hash": "9e0ed5e0be35c043854100c3cbe789622bd3cf28741137239ef60c68a60c6de4",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

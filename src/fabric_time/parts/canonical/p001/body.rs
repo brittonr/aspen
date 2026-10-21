@@ -1,4 +1,3 @@
-
 // r[impl molten.fabric_time.scheduler]
 pub fn scheduler_transition(
     profile_ref: &str,
@@ -13,10 +12,10 @@ pub fn scheduler_transition(
             action: scheduler_action(transition.action),
             ticks: 0,
         },
-        vec![field(
-            "service-id",
-            crate::preserves_rail::string(&transition.runnable.service_id),
-        )],
+        vec![
+            field("occurrence", runnable_key_value(&transition.runnable)?),
+            field("scheduler-state", scheduler_state_value(&transition.next)?),
+        ],
         &["generation-fenced", "queue-bounded", "wake-transition-checked"],
     )
 }
@@ -35,10 +34,34 @@ pub fn scheduler_selection(
             ticks: selection.choice_sequence,
         },
         vec![
-            field("service-id", crate::preserves_rail::string(&selection.selected.service_id)),
+            field("occurrence", runnable_key_value(&selection.selected)?),
+            field("scheduler-state", scheduler_state_value(&selection.next)?),
             field("eligible-count", crate::preserves_rail::u64_value(selection.eligible_count)),
         ],
         &["choice-recorded", "replay-choice-checked", "concurrency-bounded"],
+    )
+}
+
+// r[impl molten.audit_f11.retention]
+pub fn scheduler_cleanup(
+    profile_ref: &str,
+    state: &super::SchedulerState,
+    generation: u64,
+) -> crate::error::Result<Event> {
+    event(
+        EventHeader {
+            profile_ref,
+            kind: EventKind::Scheduler,
+            generation: state.generation,
+            subject: "scheduler-generation",
+            action: "generation-cleanup",
+            ticks: state.next_terminal_sequence,
+        },
+        vec![
+            field("cleaned-generation", crate::preserves_rail::u64_value(generation)),
+            field("scheduler-state", scheduler_state_value(state)?),
+        ],
+        &["generation-fenced", "terminal-retention-bounded", "actual-post-cleanup-state"],
     )
 }
 

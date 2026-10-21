@@ -56,6 +56,16 @@ F10 owns shared Ready admission. Establish those semantics before adapting occur
 F11 owns identity migration and terminal reclamation. Neither F09 nor F10 requires F11 completion to define its local invariant.
 F12 is independent. There are no circular blocking dependencies.
 
+## Implementation decisions — 2026-10-21
+
+- Derive `terminal_retention_slots = max_runnables` and checked `physical_runnable_slots = max_runnables + terminal_retention_slots`. Keep active, terminal and physical counts distinct; reserve all physical slots before activation.
+- Use stable optional slots rather than compacting active rows. Reclaim the oldest terminal transition deterministically, leave a vacant slot, and reuse the lowest vacant slot for fresh work. No active occurrence moves and no initialized backing grows.
+- Extend `RunnableKey` with a nonzero `occurrence_sequence`. Each scheduler owner admits only fresh issuance above its generation's high-water fence. Exact retained blocked identities still resume without a new active charge. Rejected requests never advance the fence or evict history.
+- Check terminal-transition sequence advancement before mutation, including bulk cleanup. A sequence failure is an error, never a new generation or wrap.
+- Bind deferred wake tokens to slot, generation and occurrence sequence. A token cannot name fresh work after slot reuse; receivers validate the token against current owned state before consumption.
+- Cut over the runnable port, occurrence/event encoding and capacity-plan identity to `v2`. Other time ports and the base time-profile schema remain `v1`; their independent contracts do not acquire new behavior. There is no legacy callback inference or compatibility fallback.
+- Preserve bounded terminal detail only. A vacant slot reports unavailable historical detail, not a fabricated terminal result. Molten fabric-time maintainers remain the owner of this core, its adapters and reproduction corpus.
+
 ## Validation and owner
 
 Molten fabric-time maintainers own the durable state-machine and adapter tests.

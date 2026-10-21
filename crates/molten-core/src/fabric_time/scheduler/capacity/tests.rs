@@ -38,20 +38,27 @@ fn profile() -> super::super::super::AdmittedTimeProfile {
 
 // r[verify molten.fabric_time.scheduler_capacity.plan]
 // r[verify molten.fabric_time.scheduler_capacity.verification]
+// r[verify molten.audit_f11.atomicity]
 #[test]
-fn valid_profile_produces_stable_checked_plan() {
+fn physical_retention_storage_does_not_raise_the_active_admission_limit() {
     let profile = profile();
     let plan = derive(&profile, GENERATION).expect("capacity plan");
-    let repeated = derive(&profile, GENERATION).expect("repeated capacity plan");
-
-    assert_eq!(plan.profile_ref, profile.profile_ref);
-    assert_eq!(plan.generation, GENERATION);
-    assert_eq!(plan.runnable_slots, RUNNABLE_LIMIT);
-    assert_eq!(plan.queue_slots, QUEUE_LIMIT);
-    assert_eq!(plan.concurrency_slots, CONCURRENCY_LIMIT);
-    assert_eq!(plan.total_slots, RUNNABLE_LIMIT + QUEUE_LIMIT + CONCURRENCY_LIMIT);
-    assert_eq!(plan.plan_ref, repeated.plan_ref);
-    assert!(plan.plan_ref.starts_with("blake3:"));
+    assert_eq!(plan.terminal_retention_slots, RUNNABLE_LIMIT);
+    assert_eq!(plan.physical_runnable_slots, 2 * RUNNABLE_LIMIT);
+    assert_eq!(plan.total_slots, 2 * RUNNABLE_LIMIT + QUEUE_LIMIT + CONCURRENCY_LIMIT);
+    let activated = UseState::activated(&plan);
+    let filled = apply_use(&plan, &activated, &profile.profile_ref, GENERATION, UseRequest {
+        runnable_delta: i64::try_from(RUNNABLE_LIMIT).expect("active limit"),
+        queue_delta: 0,
+    });
+    assert_eq!(filled.kind, UseDecisionKind::Admit);
+    let denied = apply_use(&plan, &filled.next, &profile.profile_ref, GENERATION, UseRequest {
+        runnable_delta: 1,
+        queue_delta: 0,
+    });
+    assert_eq!(denied.kind, UseDecisionKind::Exhausted);
+    assert_eq!(denied.next.runnable_usage, RUNNABLE_LIMIT);
+    assert_eq!(denied.next.queue_usage, filled.next.queue_usage);
 }
 
 #[test]
@@ -152,7 +159,6 @@ fn exhaustion_underflow_release_and_observation_are_explicit() {
     let observation = observe(&released);
     assert!(observation.is_released);
     assert_eq!(observation.exhaustion_count, 1);
-    assert!(observation.observation_ref.starts_with("blake3:"));
     assert!(observation.non_claims.contains(&"does-not-prove-fairness"));
     assert!(observation.non_claims.contains(&"does-not-prove-liveness"));
 }

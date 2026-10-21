@@ -82,7 +82,7 @@ where
     Reserve: FnMut(ReservationKind, usize) -> Result<(), ()>,
 {
     let plan = molten_core::fabric_time::capacity::derive(profile, generation).map_err(ActivationError::Plan)?;
-    let runnable_slots = usize::try_from(plan.runnable_slots)
+    let runnable_slots = usize::try_from(plan.physical_runnable_slots)
         .map_err(|_| ActivationError::CountUnrepresentable(ReservationKind::Runnables))?;
     let queue_slots =
         usize::try_from(plan.queue_slots).map_err(|_| ActivationError::CountUnrepresentable(ReservationKind::Queue))?;

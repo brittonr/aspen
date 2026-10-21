@@ -1,10 +1,12 @@
-const PLAN_CONTEXT: &str = "molten.fabric-time.scheduler-capacity-plan.v1";
+const PLAN_CONTEXT: &str = "molten.fabric-time.scheduler-capacity-plan.v2";
 const OBSERVATION_CONTEXT: &str = "molten.fabric-time.scheduler-capacity-observation.v1";
 
 pub(super) struct PlanInput<'a> {
     pub profile_ref: &'a str,
     pub generation: u64,
     pub runnable_slots: u64,
+    pub terminal_retention_slots: u64,
+    pub physical_runnable_slots: u64,
     pub queue_slots: u64,
     pub concurrency_slots: u64,
     pub total_slots: u64,
@@ -15,6 +17,8 @@ pub(super) fn plan(input: &PlanInput<'_>) -> String {
     hash_text(&mut hasher, "profile", input.profile_ref);
     hash_number(&mut hasher, "generation", input.generation);
     hash_number(&mut hasher, "runnable-slots", input.runnable_slots);
+    hash_number(&mut hasher, "terminal-retention-slots", input.terminal_retention_slots);
+    hash_number(&mut hasher, "physical-runnable-slots", input.physical_runnable_slots);
     hash_number(&mut hasher, "queue-slots", input.queue_slots);
     hash_number(&mut hasher, "concurrency-slots", input.concurrency_slots);
     hash_number(&mut hasher, "total-slots", input.total_slots);

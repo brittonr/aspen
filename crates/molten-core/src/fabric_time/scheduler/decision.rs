@@ -1,4 +1,5 @@
 use super::AdmittedTimeProfile;
+use super::ReplayChoiceMismatch;
 use super::RunnableKey;
 use super::RunnablePhase;
 use super::RunnableState;
@@ -13,7 +14,8 @@ use super::command_key;
 use super::count_phase;
 use super::overload_action;
 use super::ready_overload_action;
-use super::validate_key;
+use super::reclaim_terminal_history;
+use super::validate_runnable_key;
 use super::validate_scheduler_policy;
 use super::validate_scheduler_state;
 
@@ -23,18 +25,20 @@ use super::validate_scheduler_state;
 pub struct SchedulerCommandDecision {
     pub action: SchedulerAction,
     index: Option<usize>,
+    new_index: Option<usize>,
     phase: Option<RunnablePhase>,
     priority: Option<i32>,
     enqueue: Option<u64>,
+    terminal: Option<u64>,
 }
 
 impl SchedulerCommandDecision {
     pub fn occurrence_index(&self, state: &SchedulerState) -> usize {
-        self.index.unwrap_or(state.runnables.len())
+        self.index.or(self.new_index).unwrap_or(state.runnables.len())
     }
 
     pub fn usage_change(&self, state: &SchedulerState) -> (i64, i64) {
-        let before = self.index.map(|index| state.runnables[index].phase);
+        let before = self.index.and_then(|index| state.runnables[index].as_ref().map(|runnable| runnable.phase));
         let active = |phase| match phase {
             Some(RunnablePhase::Ready | RunnablePhase::Running | RunnablePhase::Blocked) => 1,
             _ => 0,
@@ -47,9 +51,9 @@ impl SchedulerCommandDecision {
     }
 
     pub fn apply(self, state: &mut SchedulerState, command: SchedulerCommand) -> SchedulerAction {
+        let index = self.occurrence_index(state);
         if let Some(phase) = self.phase {
-            if let Some(index) = self.index {
-                let runnable = &mut state.runnables[index];
+            if let Some(runnable) = self.index.and_then(|index| state.runnables[index].as_mut()) {
                 runnable.phase = phase;
                 if let Some(priority) = self.priority {
                     runnable.priority = priority;
@@ -58,18 +62,29 @@ impl SchedulerCommandDecision {
                 if let Some(sequence) = self.enqueue {
                     runnable.enqueue_sequence = sequence;
                 }
+                runnable.terminal_sequence = self.terminal;
             } else if let SchedulerCommand::Wake { key, priority } = command {
-                state.runnables.push(RunnableState {
+                state.highest_occurrence_sequence = key.occurrence_sequence;
+                let runnable = Some(RunnableState {
                     key,
                     priority,
                     enqueue_sequence: state.next_enqueue_sequence,
                     wait_turns: 0,
                     phase,
+                    terminal_sequence: None,
                 });
+                if index == state.runnables.len() {
+                    state.runnables.push(runnable);
+                } else {
+                    state.runnables[index] = runnable;
+                }
             }
             if self.enqueue.is_some() {
-                // Preview checked this increment before any publication.
                 state.next_enqueue_sequence += 1;
+            }
+            if self.terminal.is_some() {
+                state.next_terminal_sequence += 1;
+                reclaim_terminal_history(state);
             }
         }
         self.action
@@ -80,40 +95,46 @@ impl SchedulerCommandDecision {
 // r[impl molten.audit_f09.ordering]
 // r[impl molten.audit_f10.queue]
 // r[impl molten.audit_f10.atomicity]
+// r[impl molten.audit_f11.freshness]
+// r[impl molten.audit_f11.atomicity]
 pub fn preview_scheduler_command(
     profile: &AdmittedTimeProfile,
     policy: SchedulerPolicy,
     state: &SchedulerState,
     active_generation: u64,
     command: &SchedulerCommand,
-    has_new_occurrence_slot: bool,
 ) -> Result<SchedulerCommandDecision, SchedulerError> {
     validate_scheduler_state(profile, state, active_generation)?;
     validate_scheduler_policy(profile, policy)?;
     let key = command_key(command);
-    validate_key(key)?;
-    let index = state.runnables.iter().position(|runnable| &runnable.key == key);
+    validate_runnable_key(key)?;
+    let index = state.runnables.iter().position(|slot| slot.as_ref().is_some_and(|runnable| &runnable.key == key));
     let unchanged = |action| SchedulerCommandDecision {
         action,
         index,
+        new_index: None,
         phase: None,
         priority: None,
         enqueue: None,
+        terminal: None,
     };
     if key.generation != active_generation {
         return Ok(unchanged(SchedulerAction::DiscardedStaleGeneration));
     }
-    let before = index.map(|index| state.runnables[index].phase);
+    let before = index.and_then(|index| state.runnables[index].as_ref().map(|runnable| runnable.phase));
     let (phase, action, priority, should_enqueue) = match command {
         SchedulerCommand::Wake { priority, .. } => {
             if before.is_some() && before != Some(RunnablePhase::Blocked) {
                 return Err(SchedulerError::DuplicateRunnable(key.clone()));
             }
+            if before.is_none() && key.occurrence_sequence <= state.highest_occurrence_sequence {
+                return Err(SchedulerError::StaleOccurrence {
+                    highest: state.highest_occurrence_sequence,
+                    actual: key.occurrence_sequence,
+                });
+            }
             if let Some(action) = ready_overload_action(profile, policy, state, before.is_none())? {
                 return Ok(unchanged(action));
-            }
-            if before.is_none() && !has_new_occurrence_slot {
-                return Ok(unchanged(overload_action(policy)));
             }
             (RunnablePhase::Ready, SchedulerAction::Woken, Some(*priority), true)
         }
@@ -144,12 +165,28 @@ pub fn preview_scheduler_command(
     if should_enqueue {
         state.next_enqueue_sequence.checked_add(1).ok_or(SchedulerError::Overflow)?;
     }
+    let is_terminal = matches!(phase, RunnablePhase::Completed | RunnablePhase::Cancelled);
+    if is_terminal {
+        state.next_terminal_sequence.checked_add(1).ok_or(SchedulerError::Overflow)?;
+    }
+    let new_index = if index.is_none() {
+        let slot = state.runnables.iter().position(Option::is_none).unwrap_or(state.runnables.len());
+        let physical_limit = profile.max_runnables.checked_mul(2).ok_or(SchedulerError::Overflow)?;
+        if u64::try_from(slot).map_err(|_| SchedulerError::Overflow)? >= physical_limit {
+            return Ok(unchanged(overload_action(policy)));
+        }
+        Some(slot)
+    } else {
+        None
+    };
     Ok(SchedulerCommandDecision {
         action,
         index,
+        new_index,
         phase: Some(phase),
         priority,
         enqueue: should_enqueue.then_some(state.next_enqueue_sequence),
+        terminal: is_terminal.then_some(state.next_terminal_sequence),
     })
 }
 
@@ -179,6 +216,7 @@ pub struct SchedulerChoiceDecision {
 impl SchedulerChoiceDecision {
     pub fn apply(self, state: &mut SchedulerState) {
         for (index, runnable) in state.runnables.iter_mut().enumerate() {
+            let Some(runnable) = runnable.as_mut() else { continue };
             if runnable.phase != RunnablePhase::Ready {
                 continue;
             }
@@ -215,7 +253,7 @@ pub fn preview_runnable_choice(
     let ready = || {
         (0..ready_indices.map_or(state.runnables.len(), <[usize]>::len)).filter_map(|position| {
             let index = ready_indices.map_or(position, |indices| indices[position]);
-            let runnable = state.runnables.get(index)?;
+            let runnable = state.runnables.get(index)?.as_ref()?;
             (runnable.phase == RunnablePhase::Ready && runnable.key.generation == active_generation)
                 .then_some((index, runnable))
         })
@@ -225,18 +263,19 @@ pub fn preview_runnable_choice(
         .ok_or(SchedulerError::NoReadyRunnable)?;
     let index = match (policy.replay, recorded_choice) {
         (SchedulerReplayPolicy::RecordedChoiceRequired, None) => return Err(SchedulerError::ReplayChoiceRequired),
-        (SchedulerReplayPolicy::RecordedChoiceRequired, Some(recorded)) => ready()
-            .find(|(_, runnable)| &runnable.key == recorded)
-            .map(|(index, _)| index)
-            .ok_or_else(|| SchedulerError::UnexpectedReplayChoice {
-                expected: deterministic.key.clone(),
-                actual: recorded.clone(),
-            })?,
+        (SchedulerReplayPolicy::RecordedChoiceRequired, Some(recorded)) => {
+            ready().find(|(_, runnable)| &runnable.key == recorded).map(|(index, _)| index).ok_or_else(|| {
+                SchedulerError::UnexpectedReplayChoice(Box::new(ReplayChoiceMismatch {
+                    expected: deterministic.key.clone(),
+                    actual: recorded.clone(),
+                }))
+            })?
+        }
         (SchedulerReplayPolicy::Deterministic, Some(recorded)) if recorded != &deterministic.key => {
-            return Err(SchedulerError::UnexpectedReplayChoice {
+            return Err(SchedulerError::UnexpectedReplayChoice(Box::new(ReplayChoiceMismatch {
                 expected: deterministic.key.clone(),
                 actual: recorded.clone(),
-            });
+            })));
         }
         _ => deterministic_index,
     };
@@ -248,7 +287,7 @@ pub fn preview_runnable_choice(
                 .then_with(|| compare_ready(left, right, policy.ordering, profile.fairness_bound_turns))
         });
         if let Some((_, overdue)) = overdue
-            && state.runnables[index].wait_turns < overdue.wait_turns
+            && state.runnables[index].as_ref().is_some_and(|runnable| runnable.wait_turns < overdue.wait_turns)
         {
             return Err(SchedulerError::FairnessBoundExceeded {
                 key: overdue.key.clone(),
@@ -257,9 +296,11 @@ pub fn preview_runnable_choice(
             });
         }
     }
-    for (other, runnable) in
-        state.runnables.iter().enumerate().filter(|(_, runnable)| runnable.phase == RunnablePhase::Ready)
-    {
+    for (other, runnable) in state.runnables.iter().enumerate().filter_map(|(index, slot)| {
+        slot.as_ref()
+            .filter(|runnable| runnable.phase == RunnablePhase::Ready)
+            .map(|runnable| (index, runnable))
+    }) {
         if other != index {
             runnable.wait_turns.checked_add(1).ok_or(SchedulerError::Overflow)?;
         }

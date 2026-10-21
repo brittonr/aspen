@@ -56,6 +56,24 @@ impl<P: SchedulerWakePort> SchedulerRuntime<P> {
     pub fn capacity_state(&self) -> &molten_core::fabric_time::capacity::UseState {
         self.capacity.state()
     }
+    pub fn next_occurrence_sequence(&self) -> std::result::Result<u64, SchedulerRuntimeError> {
+        self.stage_capacity(0, 0)?;
+        self.state().next_occurrence_sequence().map_err(SchedulerRuntimeError::Core)
+    }
+
+    pub fn resolve_wake(&self, token: SchedulerWakeToken) -> Option<&RunnableState> {
+        let capacity = self.capacity_state();
+        if capacity.is_released
+            || capacity.generation != self.state().generation
+            || capacity.profile_ref != self.state().profile_ref
+            || capacity.runnable_usage == 0
+            || capacity.queue_usage == 0
+        {
+            return None;
+        }
+        token.resolve(self.state())
+    }
+
     pub fn effects_mut(&mut self) -> &mut P {
         &mut self.effects
     }
@@ -71,16 +89,8 @@ impl<P: SchedulerWakePort> SchedulerRuntime<P> {
         self.check_usage()?;
         let key = scheduler_command_key(&command);
         // The same context/core decision serves snapshot and owning consumers.
-        let has_slot = u64::try_from(self.state().runnables.len())
-            .map_err(|_| SchedulerRuntimeError::Core(SchedulerError::Overflow))?
-            < self.capacity.plan().runnable_slots;
-        let decision = self.context.preview_command(
-            &self.profile,
-            self.profile.scheduler_policy,
-            self.state(),
-            &command,
-            has_slot,
-        )?;
+        let decision =
+            self.context.preview_command(&self.profile, self.profile.scheduler_policy, self.state(), &command)?;
         let action = decision.action;
         let (runnable_delta, queue_delta) = decision.usage_change(self.state());
         let staged = self.stage_capacity(runnable_delta, queue_delta)?;
@@ -134,7 +144,7 @@ impl<P: SchedulerWakePort> SchedulerRuntime<P> {
         self.check_usage()?;
         let mut active = 0_i64;
         let mut ready = 0_i64;
-        for runnable in &self.state().runnables {
+        for runnable in self.state().runnables.iter().flatten() {
             if runnable.key.generation == generation
                 && matches!(runnable.phase, RunnablePhase::Ready | RunnablePhase::Running | RunnablePhase::Blocked)
             {
@@ -143,15 +153,18 @@ impl<P: SchedulerWakePort> SchedulerRuntime<P> {
             }
         }
         let staged = self.stage_capacity(-active, -ready)?;
-        cleanup_scheduler_generation_in_place(&mut self.capacity.scheduler, generation);
-        self.capacity
-            .ready
-            .retain(|index| self.capacity.scheduler.runnables[*index].phase == RunnablePhase::Ready);
+        cleanup_scheduler_generation_in_place(&mut self.capacity.scheduler, generation)
+            .map_err(SchedulerRuntimeError::Core)?;
+        self.capacity.ready.retain(|index| {
+            self.capacity.scheduler.runnables[*index]
+                .as_ref()
+                .is_some_and(|runnable| runnable.phase == RunnablePhase::Ready)
+        });
         molten_core::fabric_time::capacity::publish_use(&mut self.capacity.state, staged);
         Ok(())
     }
 
-    /// Release only after quiescence; retain terminal identities for duplicate fencing.
+    /// Release only after quiescence; retained history stays bounded until drop.
     pub fn release(&mut self) -> std::result::Result<(), SchedulerRuntimeError> {
         self.check_usage()?;
         if self.capacity_state().runnable_usage != 0 {
@@ -193,18 +206,27 @@ impl<P: SchedulerWakePort> SchedulerRuntime<P> {
 
     fn check_usage(&self) -> std::result::Result<(), SchedulerRuntimeError> {
         self.stage_capacity(0, 0)?;
-        let active = self
-            .state()
-            .runnables
-            .iter()
-            .filter(|runnable| {
-                matches!(runnable.phase, RunnablePhase::Ready | RunnablePhase::Running | RunnablePhase::Blocked)
-            })
-            .count();
-        let ready = self.state().runnables.iter().filter(|runnable| runnable.phase == RunnablePhase::Ready).count();
+        let (mut active, mut ready, mut retained) = (0_usize, 0_usize, 0_usize);
+        for runnable in self.state().runnables.iter().flatten() {
+            match runnable.phase {
+                RunnablePhase::Ready => {
+                    active += 1;
+                    ready += 1;
+                }
+                RunnablePhase::Running | RunnablePhase::Blocked => active += 1,
+                RunnablePhase::Completed | RunnablePhase::Cancelled => retained += 1,
+            }
+        }
         if u64::try_from(active).ok() != Some(self.capacity_state().runnable_usage)
             || u64::try_from(ready).ok() != Some(self.capacity_state().queue_usage)
             || ready != self.capacity.ready.len()
+            || u64::try_from(retained)
+                .ok()
+                .is_none_or(|count| count > self.capacity.plan().terminal_retention_slots)
+            || u64::try_from(self.state().runnables.len())
+                .ok()
+                .is_none_or(|count| count > self.capacity.plan().physical_runnable_slots)
+            || self.state().terminal_retention_limit != self.capacity.plan().terminal_retention_slots
         {
             return Err(SchedulerRuntimeError::Admission(Failure::invalid_harness(
                 "scheduler capacity disagrees with phases",

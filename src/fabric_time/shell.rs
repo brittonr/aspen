@@ -118,7 +118,7 @@ impl ExtensionTimeContext {
         state: &SchedulerState,
         command: &SchedulerCommand,
     ) -> Result<SchedulerTransition> {
-        let decision = self.preview_command(profile, policy, state, command, true).map_err(Failure::from)?;
+        let decision = self.preview_command(profile, policy, state, command).map_err(Failure::from)?;
         let mut next = state.clone();
         let action = decision.apply(&mut next, command.clone());
         Ok(SchedulerTransition {
@@ -136,7 +136,12 @@ impl ExtensionTimeContext {
         recorded_choice: Option<&RunnableKey>,
     ) -> Result<SchedulerSelection> {
         let decision = self.preview_choice(profile, policy, state, recorded_choice, None).map_err(Failure::from)?;
-        let selected = state.runnables[decision.index].key.clone();
+        let selected = state.runnables[decision.index]
+            .as_ref()
+            .ok_or(SchedulerRuntimeError::Core(SchedulerError::NoReadyRunnable))
+            .map_err(Failure::from)?
+            .key
+            .clone();
         let choice_sequence = decision.choice_sequence;
         let eligible_count = decision.eligible_count;
         let mut next = state.clone();
@@ -155,7 +160,6 @@ impl ExtensionTimeContext {
         policy: SchedulerPolicy,
         state: &SchedulerState,
         command: &SchedulerCommand,
-        has_slot: bool,
     ) -> std::result::Result<SchedulerCommandDecision, SchedulerRuntimeError> {
         ensure_bound_profile(&self.scheduler_profile, profile, "scheduler")
             .map_err(SchedulerRuntimeError::Admission)?;
@@ -164,12 +168,13 @@ impl ExtensionTimeContext {
                 "runnable service identity mismatch",
             )));
         }
-        let decision = preview_scheduler_command(profile, policy, state, self.generation, command, has_slot)
+        let decision = preview_scheduler_command(profile, policy, state, self.generation, command)
             .map_err(SchedulerRuntimeError::Core)?;
         if decision.usage_change(state).0 > 0 {
             let active = state
                 .runnables
                 .iter()
+                .flatten()
                 .filter(|runnable| {
                     matches!(runnable.phase, RunnablePhase::Ready | RunnablePhase::Running | RunnablePhase::Blocked)
                 })
@@ -197,7 +202,8 @@ impl ExtensionTimeContext {
             .map_err(SchedulerRuntimeError::Admission)?;
         let decision = preview_runnable_choice(profile, policy, state, self.generation, recorded, ready)
             .map_err(SchedulerRuntimeError::Core)?;
-        let running = state.runnables.iter().filter(|runnable| runnable.phase == RunnablePhase::Running).count();
+        let running =
+            state.runnables.iter().flatten().filter(|runnable| runnable.phase == RunnablePhase::Running).count();
         if u64::try_from(running).map_err(|_| SchedulerRuntimeError::Core(SchedulerError::Overflow))?
             >= self.max_concurrency
         {
@@ -241,7 +247,12 @@ fn bound_port_profile<E: SystemExtensionExecutor>(host: &Dispatcher<E>, port_id:
     host.manifest()
         .binding_for(&FabricPortKey {
             port_id: port_id.to_string(),
-            version: FABRIC_TIME_PORT_VERSION.to_string(),
+            version: if port_id == FABRIC_SCHEDULER_PORT_ID {
+                FABRIC_SCHEDULER_PORT_VERSION
+            } else {
+                FABRIC_TIME_PORT_VERSION
+            }
+            .to_string(),
         })
         .map(|binding| binding.binding.implementation_profile.clone())
 }

@@ -3,9 +3,13 @@ pub const FABRIC_TIMER_PORT_ID: &str = "molten.fabric.time.timer";
 pub const FABRIC_SCHEDULER_PORT_ID: &str = "molten.fabric.scheduler.runnable";
 pub const FABRIC_ENTROPY_PORT_ID: &str = "molten.fabric.entropy.stream";
 pub const FABRIC_TIME_PORT_VERSION: &str = "v1";
+pub const FABRIC_SCHEDULER_PORT_VERSION: &str = "v2";
+pub const FABRIC_RUNNABLE_SCHEMA: &str = "molten.fabric-time.runnable.v2";
 
 const FABRIC_TIME_PROFILE_RECORD: &str = "fabric-time-profile-v1";
 const FABRIC_TIME_EVENT_RECORD: &str = "fabric-time-event-v1";
+const FABRIC_SCHEDULER_EVENT_RECORD: &str = "fabric-time-event-v2";
+const FABRIC_RUNNABLE_RECORD: &str = "fabric-time-runnable-v2";
 const FABRIC_TIME_RUN_RECORD: &str = "fabric-time-run-v1";
 const MAX_RUN_EVIDENCE_REFS: usize = 4_096;
 
@@ -200,7 +204,7 @@ pub fn port_descriptors(profile: &Profile) -> Vec<crate::fabric::FabricPortDescr
             port_id: FABRIC_SCHEDULER_PORT_ID,
             class: crate::fabric::FabricPortClass::Scheduling,
             operations: &["wake", "choose", "yield", "block", "cancel", "cleanup-generation"],
-            input_schemas: &[super::FABRIC_TIME_PROFILE_SCHEMA],
+            input_schemas: &[super::FABRIC_TIME_PROFILE_SCHEMA, FABRIC_RUNNABLE_SCHEMA],
             output_schemas: &[super::FABRIC_SCHEDULER_EVENT_SCHEMA],
             authorities: &[crate::fabric::FabricAuthority::Scheduling],
             resources: &[

@@ -138,3 +138,54 @@ fn rejects_invalid_planner_inputs_before_comparison() {
     let error = replay_fixture_retry(&profile, jitter).expect_err("unexpected jitter");
     assert!(error.to_string().contains("JitterOutOfBounds"));
 }
+
+const RETENTION_TEST_LIMIT: u64 = 3;
+const FIRST_RETAINED_WAKE: usize = 0;
+const FIRST_GENERATION_CLEANUP: usize = 8;
+
+fn retention_profile() -> Profile {
+    let mut declaration = descriptor(TimeProfileKind::DeterministicSimulation, "retention-replay", HASH_A);
+    declaration.max_runnables = RETENTION_TEST_LIMIT;
+    declaration.max_scheduler_concurrency = 1;
+    declaration.max_scheduler_queue_depth = 1;
+    admit_profile(&declaration).expect("bounded retention replay profile")
+}
+
+// r[verify molten.audit_f11.freshness]
+// r[verify molten.audit_f11.validation]
+#[test]
+fn scheduler_retention_distinguishes_reused_logical_names() {
+    let profile = retention_profile();
+    let recorded =
+        crate::fabric_time::fixture::scheduler_retention_events(&profile).expect("actual retention execution");
+    crate::fabric_time::fixture::replay_scheduler_retention(&profile, &recorded).expect("matching retention replay");
+    let mut substituted = recorded.clone();
+    let fresh_wake = substituted.len() - 2;
+    substituted[fresh_wake] = recorded[FIRST_RETAINED_WAKE].clone();
+    crate::fabric_time::fixture::replay_scheduler_retention(&profile, &substituted)
+        .expect_err("old canonical occurrence cannot stand in for fresh same-name work");
+}
+
+// r[verify molten.audit_f11.retention]
+// r[verify molten.audit_f11.validation]
+#[test]
+fn scheduler_retention_rejects_missing_reordered_and_tampered_reclamation() {
+    let profile = retention_profile();
+    let recorded =
+        crate::fabric_time::fixture::scheduler_retention_events(&profile).expect("actual retention execution");
+    let mut missing = recorded.clone();
+    missing.pop();
+    let mut extra = recorded.clone();
+    extra.push(recorded[FIRST_GENERATION_CLEANUP].clone());
+    let mut reordered = recorded.clone();
+    reordered.swap(FIRST_RETAINED_WAKE, FIRST_GENERATION_CLEANUP);
+    let mut tampered = recorded.clone();
+    tampered[FIRST_GENERATION_CLEANUP].evidence_ref = HASH_B.to_owned();
+    let mut old_cleanup = recorded.clone();
+    let terminal_cleanup = old_cleanup.len() - 1;
+    old_cleanup[terminal_cleanup] = recorded[FIRST_GENERATION_CLEANUP].clone();
+    for invalid in [missing, extra, reordered, tampered, old_cleanup] {
+        crate::fabric_time::fixture::replay_scheduler_retention(&profile, &invalid)
+            .expect_err("changed retention history must diverge");
+    }
+}

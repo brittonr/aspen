@@ -18,23 +18,27 @@ impl ThreadSchedulerWakeAdapter {
 }
 
 impl super::SchedulerWakePort for ThreadSchedulerWakeAdapter {
-    type Prepared = std::thread::Thread;
+    type Prepared = (std::thread::Thread, super::SchedulerWakeToken);
 
-    fn prepare(&mut self, key: &super::RunnableKey, _index: usize) -> crate::fabric::FabricPortResult<Self::Prepared> {
-        self.targets.get(key).cloned().ok_or_else(|| crate::fabric::FabricPortError::capability("no live scheduler wake target"))
+    fn prepare(&mut self, key: &super::RunnableKey, index: usize) -> crate::fabric::FabricPortResult<Self::Prepared> {
+        let thread = self.targets.get(key).cloned().ok_or_else(|| crate::fabric::FabricPortError::capability("no live scheduler wake target"))?;
+        Ok((thread, super::SchedulerWakeToken { occurrence: index, generation: key.generation, occurrence_sequence: key.occurrence_sequence }))
     }
 
-    fn deliver(&mut self, thread: Self::Prepared, _committed: super::SchedulerWakeCommit<'_>) -> crate::fabric::FabricPortResult<()> {
+    fn deliver(&mut self, (thread, token): Self::Prepared, committed: super::SchedulerWakeCommit<'_>) -> crate::fabric::FabricPortResult<()> {
+        if !committed.accepts(token) {
+            return Err(crate::fabric::FabricPortError::capability("live scheduler wake token does not match committed occurrence"));
+        }
         thread.unpark();
         Ok(())
     }
 }
 
-/// Independent, explicitly drained deterministic effect transport. Occurrence
-/// indices remain stable because the owner never purges or reuses terminal rows.
+/// Independent, explicitly drained deterministic effect transport. Consumers
+/// resolve occurrence-fenced tokens against their owning scheduler before use.
 #[derive(Debug)]
 pub struct SimulationSchedulerWakeAdapter {
-    pending: std::collections::VecDeque<u64>,
+    pending: std::collections::VecDeque<super::SchedulerWakeToken>,
     limit: usize,
 }
 
@@ -46,24 +50,29 @@ impl SimulationSchedulerWakeAdapter {
         Ok(Self { pending, limit })
     }
 
-    pub fn drain_next(&mut self) -> Option<u64> {
+    pub fn drain_next(&mut self) -> Option<super::SchedulerWakeToken> {
         self.pending.pop_front()
     }
 }
 
 impl super::SchedulerWakePort for SimulationSchedulerWakeAdapter {
-    type Prepared = u64;
+    type Prepared = super::SchedulerWakeToken;
 
-    fn prepare(&mut self, _key: &super::RunnableKey, index: usize) -> crate::fabric::FabricPortResult<Self::Prepared> {
+    fn prepare(&mut self, key: &super::RunnableKey, index: usize) -> crate::fabric::FabricPortResult<Self::Prepared> {
         if self.pending.len() >= self.limit {
             return Err(crate::fabric::FabricPortError::capability("simulation wake delivery queue is full"));
         }
-        u64::try_from(index)
-            .map_err(|_| crate::fabric::FabricPortError::capability("simulation wake occurrence is unrepresentable"))
+        Ok(super::SchedulerWakeToken { occurrence: index, generation: key.generation, occurrence_sequence: key.occurrence_sequence })
     }
 
-    fn deliver(&mut self, index: Self::Prepared, _committed: super::SchedulerWakeCommit<'_>) -> crate::fabric::FabricPortResult<()> {
-        self.pending.push_back(index);
+    fn deliver(&mut self, token: Self::Prepared, committed: super::SchedulerWakeCommit<'_>) -> crate::fabric::FabricPortResult<()> {
+        if !committed.accepts(token) {
+            return Err(crate::fabric::FabricPortError::capability("simulation scheduler wake token does not match committed occurrence"));
+        }
+        if self.pending.len() >= self.limit {
+            return Err(crate::fabric::FabricPortError::capability("simulation wake delivery queue is full"));
+        }
+        self.pending.push_back(token);
         Ok(())
     }
 }
@@ -73,11 +82,12 @@ fn run_scheduler_conformance(
     service_id: &str,
     generation: u64,
 ) -> crate::error::Result<(bool, bool)> {
-    let runnable = super::RunnableKey { service_id: service_id.to_string(), generation, runnable_id: "adapter-conformance-runnable".to_string() };
+    let runnable = |occurrence_sequence| super::RunnableKey { service_id: service_id.to_string(), generation, runnable_id: "adapter-conformance-runnable".to_string(), occurrence_sequence };
     let context = super::ExtensionTimeContext::for_application(service_id.to_string(), generation, profile);
     match profile.kind {
         super::TimeProfileKind::Live => {
             let mut owner = super::SchedulerRuntime::activate(context, profile.clone(), ThreadSchedulerWakeAdapter::default())?;
+            let runnable = runnable(owner.next_occurrence_sequence().map_err(|_| crate::error::Failure::invalid_harness("scheduler conformance occurrence issuance exhausted"))?);
             let worker = std::thread::spawn(std::thread::park);
             let registration = owner.effects_mut().register(runnable.clone(), worker.thread().clone());
             let result = registration.and_then(|()| scheduler_owner_conformance(owner, &runnable, |_owner| Ok(())));
@@ -88,11 +98,10 @@ fn run_scheduler_conformance(
         super::TimeProfileKind::DeterministicSimulation => {
             let effects = SimulationSchedulerWakeAdapter::activate(profile)?;
             let owner = super::SchedulerRuntime::activate(context, profile.clone(), effects)?;
+            let runnable = runnable(owner.next_occurrence_sequence().map_err(|_| crate::error::Failure::invalid_harness("scheduler conformance occurrence issuance exhausted"))?);
             scheduler_owner_conformance(owner, &runnable, |owner| {
-                let index = owner.effects_mut().drain_next().ok_or_else(|| crate::error::Failure::invalid_harness("simulation conformance delivery missing"))?;
-                let index = usize::try_from(index)
-                    .map_err(|_| crate::error::Failure::invalid_harness("simulation conformance index overflow"))?;
-                if owner.state().runnables[index].phase != super::RunnablePhase::Ready || owner.capacity_state().queue_usage != 1 {
+                let token = owner.effects_mut().drain_next().ok_or_else(|| crate::error::Failure::invalid_harness("simulation conformance delivery missing"))?;
+                if owner.resolve_wake(token).is_none() || owner.capacity_state().queue_usage != 1 {
                     return Err(crate::error::Failure::invalid_harness("simulation conformance delivery preceded commit"));
                 }
                 Ok(())
@@ -109,7 +118,7 @@ fn scheduler_owner_conformance<P: super::SchedulerWakePort>(
     owner.command(super::SchedulerCommand::Wake { key: runnable.clone(), priority: 0 })?;
     consume(&mut owner)?;
     let selected = owner.choose(Some(runnable))?;
-    let is_selected = &owner.state().runnables[selected.index].key == runnable;
+    let is_selected = owner.state().runnables[selected.index].as_ref().is_some_and(|row| &row.key == runnable);
     let cancelled = owner.command(super::SchedulerCommand::Cancel { key: runnable.clone() })?;
     Ok((is_selected, cancelled == super::SchedulerAction::Cancelled))
 }

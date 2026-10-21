@@ -4,7 +4,7 @@
 fn resume_and_yield_at_the_active_limit_before_host_wakes() {
     for kind in [TimeProfileKind::Live, TimeProfileKind::DeterministicSimulation] {
         let admitted = profile(kind, SchedulerOverloadPolicy::Reject, SINGLE_SLOT, SINGLE_SLOT);
-        let key = key("resumed");
+        let key = key("resumed", 1);
         let harness = Harness::new(&admitted.profile, GENERATION, std::slice::from_ref(&key));
         let backing = harness.owner.lock().expect("owner").backing_capacity();
         harness.wake(&key, 0);
@@ -18,15 +18,16 @@ fn resume_and_yield_at_the_active_limit_before_host_wakes() {
         assert_eq!(harness.snapshot(), running);
         harness.no_delivery();
         let blocked = harness.snapshot();
-        assert_eq!(harness.command(SchedulerCommand::Wake { key: self::key("extra"), priority: 0 }).expect("active overload"), SchedulerAction::RejectedOverload);
+        assert_eq!(harness.command(SchedulerCommand::Wake { key: self::key("extra", 2), priority: 0 }).expect("active overload"), SchedulerAction::RejectedOverload);
         assert_eq!(harness.snapshot(), blocked);
         harness.no_delivery();
         harness.wake(&key, RESUME_PRIORITY);
         let resumed = harness.snapshot();
         assert_eq!(resumed.0.runnables.len(), 1);
-        assert_eq!(resumed.0.runnables[0].enqueue_sequence, blocked.0.next_enqueue_sequence);
-        assert_eq!(resumed.0.runnables[0].priority, RESUME_PRIORITY);
-        assert_eq!(resumed.0.runnables[0].wait_turns, 0);
+        let resumed_row = resumed.0.runnables.iter().flatten().find(|row| row.key == key).expect("resumed occurrence");
+        assert_eq!(resumed_row.enqueue_sequence, blocked.0.next_enqueue_sequence);
+        assert_eq!(resumed_row.priority, RESUME_PRIORITY);
+        assert_eq!(resumed_row.wait_turns, 0);
         harness.usage(1, 1);
         harness.choose(&key).expect("select resumed occurrence");
         harness.usage(1, 0);
@@ -50,8 +51,8 @@ fn preserve_saturated_resume_and_yield_for_both_overload_policies() {
         ] {
             for is_resume in [false, true] {
                 let admitted = profile(kind, overload, TWO_SLOTS, SINGLE_SLOT);
-                let key = key("owner");
-                let queued = self::key("queued");
+                let key = key("owner", 1);
+                let queued = self::key("queued", 2);
                 let harness = Harness::new(&admitted.profile, GENERATION, &[key.clone(), queued.clone()]);
                 harness.wake(&key, 0);
                 harness.choose(&key).expect("choose owner");
@@ -67,49 +68,68 @@ fn preserve_saturated_resume_and_yield_for_both_overload_policies() {
                 harness.no_delivery();
                 let transition = SchedulerTransition { next: before.0.clone(), action, runnable: key.clone() };
                 assert_eq!(event_action(&scheduler_transition(&admitted.profile.profile_ref, &transition).expect("canonical denial")), canonical);
-                assert_eq!(before.0.runnables[0].phase, if is_resume { RunnablePhase::Blocked } else { RunnablePhase::Running });
+                assert_eq!(before.0.runnables.iter().flatten().find(|row| row.key == key).expect("owner").phase, if is_resume { RunnablePhase::Blocked } else { RunnablePhase::Running });
                 harness.command(SchedulerCommand::Cancel { key: queued }).expect("explicitly free Ready space");
                 harness.usage(1, 0);
                 assert_eq!(harness.command(command).expect("explicit later admission"), if is_resume { SchedulerAction::Woken } else { SchedulerAction::Yielded });
                 harness.consume(&key);
                 harness.usage(1, 1);
-                assert_eq!(harness.snapshot().0.runnables[0].enqueue_sequence, before.0.next_enqueue_sequence);
+                assert_eq!(harness.snapshot().0.runnables.iter().flatten().find(|row| row.key == key).expect("owner").enqueue_sequence, before.0.next_enqueue_sequence);
             }
         }
     }
 }
 
+// r[verify molten.audit_f11.validation]
 #[test]
-fn terminal_history_cleanup_release_and_physical_exhaustion_stay_distinct() {
+fn terminal_retention_reuses_backing_across_completion_cancel_and_cleanup() {
     for kind in [TimeProfileKind::Live, TimeProfileKind::DeterministicSimulation] {
         for overload in [SchedulerOverloadPolicy::Reject, SchedulerOverloadPolicy::Backpressure] {
-            let admitted = profile(kind, overload, TWO_SLOTS, TWO_SLOTS);
-            let first = key("first");
-            let second = key("second");
-            let harness = Harness::new(&admitted.profile, GENERATION, &[first.clone(), second.clone()]);
-            harness.wake(&first, 0);
-            harness.choose(&first).expect("select");
-            harness.command(SchedulerCommand::Complete { key: first.clone() }).expect("complete");
-            harness.usage(0, 0);
-            harness.wake(&second, 0);
-            harness.owner.lock().expect("owner").cleanup_generation(GENERATION).expect("cleanup active generation");
-            harness.usage(0, 0);
-            let before = harness.snapshot();
-            assert_eq!(before.0.runnables[0].phase, RunnablePhase::Completed);
-            assert_eq!(before.0.runnables[1].phase, RunnablePhase::Cancelled);
-            for retired in [first, second] {
-                assert!(matches!(harness.command(SchedulerCommand::Wake { key: retired, priority: 0 }), Err(SchedulerRuntimeError::Core(SchedulerError::DuplicateRunnable(_)))));
-                assert_eq!(harness.snapshot(), before);
+            let admitted = profile(kind, overload, SINGLE_SLOT, SINGLE_SLOT);
+            let harness = Harness::new(&admitted.profile, GENERATION, &[]);
+            let backing = harness.owner.lock().expect("owner").backing_capacity();
+            for sequence in 1..=18 {
+                let fresh = key("reused-logical-name", sequence);
+                assert_eq!(harness.owner.lock().expect("owner").next_occurrence_sequence().expect("next issuance"), sequence);
+                harness.register(&fresh);
+                harness.wake(&fresh, 0);
+                harness.usage(1, 1);
+                if sequence >= 3 {
+                    let old = key("reused-logical-name", 1);
+                    let before = harness.snapshot();
+                    assert!(!before.0.runnables.iter().flatten().any(|row| row.key == old), "old identity was evicted before exercising callbacks");
+                    for command in [
+                        SchedulerCommand::Wake { key: old.clone(), priority: RESUME_PRIORITY },
+                        SchedulerCommand::Yield { key: old.clone() },
+                        SchedulerCommand::Block { key: old.clone() },
+                        SchedulerCommand::Complete { key: old.clone() },
+                        SchedulerCommand::Cancel { key: old },
+                    ] {
+                        assert!(harness.command(command).is_err(), "evicted occurrence must not target fresh work");
+                        assert_eq!(harness.snapshot(), before);
+                    }
+                }
+                match sequence % 3 {
+                    0 => { harness.owner.lock().expect("owner").cleanup_generation(GENERATION).expect("cleanup current generation"); }
+                    1 => {
+                        harness.choose(&fresh).expect("choose before completion");
+                        harness.command(SchedulerCommand::Complete { key: fresh.clone() }).expect("complete fresh");
+                    }
+                    _ => { harness.command(SchedulerCommand::Cancel { key: fresh.clone() }).expect("cancel fresh"); }
+                }
+                harness.no_delivery();
+                harness.usage(0, 0);
+                let snapshot = harness.snapshot();
+                assert!(snapshot.0.runnables.iter().flatten().filter(|row| matches!(row.phase, RunnablePhase::Completed | RunnablePhase::Cancelled)).count() <= 1);
+                assert!(snapshot.0.runnables.len() <= 2);
+                assert_eq!(harness.owner.lock().expect("owner").backing_capacity(), backing);
+                harness.unregister(&fresh);
             }
-            let expected = match overload { SchedulerOverloadPolicy::Reject => SchedulerAction::RejectedOverload, SchedulerOverloadPolicy::Backpressure => SchedulerAction::Backpressure };
-            assert_eq!(harness.command(SchedulerCommand::Wake { key: key("third"), priority: 0 }).expect("physical backing overload"), expected);
+            harness.owner.lock().expect("owner").release().expect("release quiescent owner");
+            let before = harness.snapshot();
+            assert!(before.1.is_released);
+            assert!(matches!(harness.command(SchedulerCommand::Wake { key: key("after-release", 19), priority: 0 }), Err(SchedulerRuntimeError::Capacity(molten_core::fabric_time::capacity::UseDecisionKind::Released))));
             assert_eq!(harness.snapshot(), before);
-            harness.no_delivery();
-            harness.owner.lock().expect("owner").release().expect("quiescent release");
-            assert_eq!(harness.snapshot().0, before.0);
-            assert!(harness.snapshot().1.is_released);
-            assert!(matches!(harness.command(SchedulerCommand::Wake { key: key("after-release"), priority: 0 }), Err(SchedulerRuntimeError::Capacity(molten_core::fabric_time::capacity::UseDecisionKind::Released))));
-            harness.no_delivery();
         }
     }
 }

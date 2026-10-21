@@ -18,6 +18,7 @@ fn extension_context_resumes_a_blocked_occurrence_at_the_active_limit() {
         service_id: "test-service".to_string(),
         generation: GENERATION,
         runnable_id: "resumed".to_string(),
+        occurrence_sequence: 1,
     };
     let mut state = new_scheduler_state(profile, GENERATION);
     state = context
@@ -48,6 +49,7 @@ fn extension_context_resumes_a_blocked_occurrence_at_the_active_limit() {
             .next
             .runnables
             .iter()
+            .flatten()
             .any(|runnable| runnable.key == key && runnable.phase == RunnablePhase::Ready)
     );
 }
@@ -69,11 +71,13 @@ fn extension_context_reports_overload_for_yield_at_the_ready_bound() {
         service_id: "test-service".to_string(),
         generation: GENERATION,
         runnable_id: "yielding".to_string(),
+        occurrence_sequence: 1,
     };
     let queued_key = RunnableKey {
         service_id: "test-service".to_string(),
         generation: GENERATION,
         runnable_id: "queued".to_string(),
+        occurrence_sequence: 2,
     };
     let mut state = new_scheduler_state(profile, GENERATION);
     state = context
@@ -106,6 +110,7 @@ fn extension_context_reports_overload_for_yield_at_the_ready_bound() {
             .next
             .runnables
             .iter()
+            .flatten()
             .any(|runnable| runnable.key == running_key && runnable.phase == RunnablePhase::Running)
     );
 }
@@ -123,11 +128,13 @@ fn corrected_yield_admission_diverges_from_an_over_capacity_history() {
         service_id: "test-service".to_string(),
         generation: GENERATION,
         runnable_id: "yielding".to_string(),
+        occurrence_sequence: 1,
     };
     let queued_key = RunnableKey {
         service_id: "test-service".to_string(),
         generation: GENERATION,
         runnable_id: "queued".to_string(),
+        occurrence_sequence: 2,
     };
     let mut state = new_scheduler_state(profile, GENERATION);
     state = context

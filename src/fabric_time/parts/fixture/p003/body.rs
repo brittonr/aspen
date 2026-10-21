@@ -1,8 +1,4 @@
-
-fn validate_ports(
-    live: &Profile,
-    simulation: &Profile,
-) -> crate::error::Result<Vec<String>> {
+fn validate_ports(live: &Profile, simulation: &Profile) -> crate::error::Result<Vec<String>> {
     let mut refs = Vec::new();
     for profile in [live, simulation] {
         let descriptors = port_descriptors(profile);
@@ -60,11 +56,12 @@ fn timer_request(
     }
 }
 
-fn runnable_key(runnable_id: &str) -> RunnableKey {
+fn runnable_key(runnable_id: &str, occurrence_sequence: u64) -> RunnableKey {
     RunnableKey {
         service_id: FIXTURE_SERVICE_ID.to_string(),
         generation: FIXTURE_GENERATION,
         runnable_id: runnable_id.to_string(),
+        occurrence_sequence,
     }
 }
 
@@ -103,17 +100,11 @@ fn select_boundary_ref(
     match selection {
         Selection::Live => Ok(live_ref.to_string()),
         Selection::DeterministicSimulation => Ok(simulation_ref.to_string()),
-        Selection::Both => {
-            trace_ref(trace_kind, &[live_ref.to_string(), simulation_ref.to_string()])
-        }
+        Selection::Both => trace_ref(trace_kind, &[live_ref.to_string(), simulation_ref.to_string()]),
     }
 }
 
-fn trace_for_kinds(
-    events: &[&Event],
-    kinds: &[EventKind],
-    trace_kind: &str,
-) -> crate::error::Result<String> {
+fn trace_for_kinds(events: &[&Event], kinds: &[EventKind], trace_kind: &str) -> crate::error::Result<String> {
     let refs = events
         .iter()
         .filter(|event| kinds.contains(&event.kind))
@@ -138,11 +129,8 @@ fn core_error(label: &str, error: impl std::fmt::Debug) -> crate::error::Failure
 }
 
 fn scheduler_owner(profile: &Profile) -> crate::error::Result<SchedulerRuntime<SimulationSchedulerWakeAdapter>> {
-    let context = ExtensionTimeContext::for_application(
-        FIXTURE_SERVICE_ID.to_string(),
-        FIXTURE_GENERATION,
-        &profile.profile,
-    );
+    let context =
+        ExtensionTimeContext::for_application(FIXTURE_SERVICE_ID.to_string(), FIXTURE_GENERATION, &profile.profile);
     Ok(SchedulerRuntime::activate(
         context,
         profile.profile.clone(),
@@ -164,12 +152,9 @@ fn scheduler_command(
     let action = owner.command(command)?;
     let delivered = owner.effects_mut().drain_next();
     if matches!(action, SchedulerAction::Woken | SchedulerAction::Yielded) {
-        let index = delivered
+        let token = delivered
             .ok_or_else(|| crate::error::Failure::invalid_harness("simulation consumer received no admitted wake"))?;
-        let index = usize::try_from(index)
-            .map_err(|_| crate::error::Failure::invalid_harness("simulation consumer index overflow"))?;
-        if owner.state().runnables[index].key != key
-            || owner.state().runnables[index].phase != RunnablePhase::Ready
+        if owner.resolve_wake(token).is_none_or(|runnable| runnable.key != key)
             || owner.capacity_state().queue_usage == 0
         {
             return Err(crate::error::Failure::invalid_harness(
@@ -196,15 +181,29 @@ fn run_scheduler_saturation(
     let saturation_fault = Fault::SaturateSchedulerQueue;
     let mut owner = scheduler_owner(profile)?;
     for index in 0..profile.profile.max_scheduler_queue_depth {
-        let action = owner.command(SchedulerCommand::Wake { key: runnable_key(&format!("saturated-{index}")), priority: 0 })?;
-        let delivered = owner.effects_mut().drain_next().ok_or_else(|| crate::error::Failure::invalid_harness("saturation consumer received no admitted wake"))?;
-        let delivered = usize::try_from(delivered)
-            .map_err(|_| crate::error::Failure::invalid_harness("saturation consumer index overflow"))?;
-        if action != SchedulerAction::Woken || owner.state().runnables[delivered].phase != RunnablePhase::Ready || owner.capacity_state().queue_usage != index + 1 {
-            return Err(crate::error::Failure::invalid_harness("saturation consumer observed inconsistent committed usage"));
+        let key = runnable_key(&format!("saturated-{index}"), owner.next_occurrence_sequence()?);
+        let action = owner.command(SchedulerCommand::Wake {
+            key: key.clone(),
+            priority: 0,
+        })?;
+        let delivered = owner
+            .effects_mut()
+            .drain_next()
+            .ok_or_else(|| crate::error::Failure::invalid_harness("saturation consumer received no admitted wake"))?;
+        if action != SchedulerAction::Woken
+            || owner.resolve_wake(delivered).is_none_or(|runnable| runnable.key != key)
+            || owner.capacity_state().queue_usage != index + 1
+        {
+            return Err(crate::error::Failure::invalid_harness(
+                "saturation consumer observed inconsistent committed usage",
+            ));
         }
     }
-    let overload = scheduler_command(&mut owner, SchedulerCommand::Wake { key: runnable_key("saturated-overflow"), priority: 0 })?;
+    let overflow = runnable_key("saturated-overflow", owner.next_occurrence_sequence()?);
+    let overload = scheduler_command(&mut owner, SchedulerCommand::Wake {
+        key: overflow,
+        priority: 0,
+    })?;
     validate_scheduler_fault_outcome(&saturation_fault, &overload)?;
     events.push_item(scheduler_transition(&profile.profile_ref, &overload)?);
     events.push_item(named_event(EventHeader {
@@ -218,4 +217,59 @@ fn run_scheduler_saturation(
     counters.scheduler_events = checked_increment(counters.scheduler_events, "scheduler event count")?;
     counters.fault_events = checked_increment(counters.fault_events, "fault event count")?;
     Ok(())
+}
+
+const RETENTION_TERMINAL_MODES: u64 = 3;
+const RETENTION_EVICTION_MARGIN: u64 = 1;
+const STALE_CALLBACK_OBSERVATION_MILLIS: u64 = 100;
+
+fn scheduler_snapshot<P: SchedulerWakePort>(
+    owner: &SchedulerRuntime<P>,
+    key: RunnableKey,
+    action: SchedulerAction,
+) -> SchedulerTransition {
+    SchedulerTransition {
+        next: owner.state().clone(),
+        action,
+        runnable: key,
+    }
+}
+
+fn live_scheduler_wake(
+    owner: &mut SchedulerRuntime<ThreadSchedulerWakeAdapter>,
+    key: RunnableKey,
+) -> crate::error::Result<SchedulerTransition> {
+    const CHANNEL_CAPACITY: usize = 1;
+    const OBSERVATION_TIMEOUT_SECONDS: u64 = 5;
+    let (sender, receiver) = std::sync::mpsc::sync_channel(CHANNEL_CAPACITY);
+    let parked = std::thread::spawn(move || {
+        std::thread::park();
+        sender.send(())
+    });
+    let registration = owner.effects_mut().register(key.clone(), parked.thread().clone());
+    let is_registered = registration.is_ok();
+    let result = registration.map_err(SchedulerRuntimeError::Admission).and_then(|()| {
+        owner.command(SchedulerCommand::Wake {
+            key: key.clone(),
+            priority: 0,
+        })
+    });
+    if !matches!(result, Ok(SchedulerAction::Woken)) {
+        parked.thread().unpark();
+    }
+    let observed = receiver.recv_timeout(std::time::Duration::from_secs(OBSERVATION_TIMEOUT_SECONDS));
+    if observed.is_err() {
+        parked.thread().unpark();
+    }
+    let joined = parked.join();
+    let is_unregistered = !is_registered || owner.effects_mut().unregister(&key);
+    joined
+        .map_err(|_| crate::error::Failure::invalid_harness("retention wake target panicked"))?
+        .map_err(|_| crate::error::Failure::invalid_harness("retention wake receiver disconnected"))?;
+    let action = result?;
+    observed.map_err(|_| crate::error::Failure::invalid_harness("retention wake receiver did not finish"))?;
+    if !is_unregistered {
+        return Err(crate::error::Failure::invalid_harness("retention wake target was not registered"));
+    }
+    Ok(scheduler_snapshot(owner, key, action))
 }

@@ -1,14 +1,16 @@
 // Receiving-worker protocol: traffic alone is not a concrete adapter wake.
 enum ReceiverInput {
-    Delivery(DeliveryBoundary),
+    Delivery(Box<DeliveryBoundary>),
     Checkpoint(u64),
+    FenceProbe(u64),
     CheckpointReleased(u64),
     Stop,
 }
 #[derive(Debug)]
 enum ReceiverOutput {
-    Delivery(DeliveryBoundary),
+    Delivery(Box<DeliveryBoundary>),
     Checkpoint { sequence: u64, deliveries: u64 },
+    FenceProbe(u64),
 }
 
 fn receive_worker(
@@ -27,6 +29,9 @@ fn receive_worker(
                     deliveries += 1;
                     assert_eq!(boundary.sequence, deliveries);
                     sender.send(ReceiverOutput::Delivery(boundary)).expect("report real delivery");
+                }
+                ReceiverInput::FenceProbe(sequence) => {
+                    sender.send(ReceiverOutput::FenceProbe(sequence)).expect("observe actual unpark probe");
                 }
                 ReceiverInput::Checkpoint(sequence) => {
                     // Confirmation is sent after the control unpark

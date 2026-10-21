@@ -159,15 +159,16 @@ fn run_scheduler_scenario(
     counters: &mut ScenarioCounters,
 ) -> crate::error::Result<()> {
     let mut owner = scheduler_owner(profile)?;
-    let low = runnable_key("low");
-    let high = runnable_key("high");
-    for (key, priority) in [(low.clone(), 0), (high.clone(), 1)] {
-        let transition = scheduler_command(&mut owner, SchedulerCommand::Wake { key, priority })?;
-        events.push_item(scheduler_transition(&profile.profile_ref, &transition)?);
-        counters.scheduler_events = checked_increment(counters.scheduler_events, "scheduler event count")?;
-    }
+    let low = runnable_key("low", owner.next_occurrence_sequence()?);
+    let first = scheduler_command(&mut owner, SchedulerCommand::Wake { key: low.clone(), priority: 0 })?;
+    events.push_item(scheduler_transition(&profile.profile_ref, &first)?);
+    counters.scheduler_events = checked_increment(counters.scheduler_events, "scheduler event count")?;
+    let high = runnable_key("high", owner.next_occurrence_sequence()?);
+    let second = scheduler_command(&mut owner, SchedulerCommand::Wake { key: high.clone(), priority: 1 })?;
+    events.push_item(scheduler_transition(&profile.profile_ref, &second)?);
+    counters.scheduler_events = checked_increment(counters.scheduler_events, "scheduler event count")?;
     let before_choice_sequence = owner.state().choice_sequence;
-    if !matches!(owner.choose(Some(&low)), Err(SchedulerRuntimeError::Core(SchedulerError::UnexpectedReplayChoice { .. }))) {
+    if !matches!(owner.choose(Some(&low)), Err(SchedulerRuntimeError::Core(SchedulerError::UnexpectedReplayChoice(_)))) {
         return Err(crate::error::Failure::invalid_harness("fixture scheduler accepted a divergent replay choice"));
     }
     let choice = owner.choose(Some(&high))?;

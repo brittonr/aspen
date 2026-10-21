@@ -87,3 +87,35 @@ fn supervision_deadline_admits_the_supervision_bound_and_denies_one_past() {
     let mut elapsed = SupervisionDeadline::after(std::time::Duration::ZERO).expect("zero timeout");
     assert!(elapsed.is_expired().expect("zero timeout is already expired"));
 }
+
+// r[verify molten.audit_f11.freshness]
+// r[verify molten.audit_f11.validation]
+#[test]
+fn runnable_wire_rejects_legacy_missing_zero_and_malformed_occurrence_fences() {
+    let field = |name: &str, value| crate::preserves_rail::record("field", vec![crate::preserves_rail::string(name), value]);
+    let key = RunnableKey {
+        service_id: "wire-service".to_string(), generation: GENERATION,
+        runnable_id: "reused-name".to_string(), occurrence_sequence: 1,
+    };
+    let encoded = runnable_key_value(&key).expect("canonical occurrence");
+    assert_eq!(parse_runnable_key(&encoded).expect("decode exact occurrence"), key);
+    let fresh = RunnableKey { occurrence_sequence: 2, ..key.clone() };
+    let fresh_encoded = runnable_key_value(&fresh).expect("fresh canonical occurrence");
+    assert_eq!(parse_runnable_key(&fresh_encoded).expect("decode fresh occurrence"), fresh);
+    assert_ne!(crate::preserves_rail::canonical_hash(&encoded).expect("old ref"),
+        crate::preserves_rail::canonical_hash(&fresh_encoded).expect("fresh ref"));
+    for (tag, occurrence) in [
+        ("fabric-time-runnable-v1", Some(crate::preserves_rail::u64_value(1))),
+        ("fabric-time-runnable-v2", None),
+        ("fabric-time-runnable-v2", Some(crate::preserves_rail::u64_value(0))),
+        ("fabric-time-runnable-v2", Some(crate::preserves_rail::string("1"))),
+    ] {
+        let mut fields = vec![
+            field("service-id", crate::preserves_rail::string(&key.service_id)),
+            field("generation", crate::preserves_rail::u64_value(key.generation)),
+            field("runnable-id", crate::preserves_rail::string(&key.runnable_id)),
+        ];
+        if let Some(occurrence) = occurrence { fields.push(field("occurrence-sequence", occurrence)); }
+        assert!(parse_runnable_key(&crate::preserves_rail::record(tag, fields)).is_err());
+    }
+}

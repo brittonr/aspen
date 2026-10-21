@@ -104,6 +104,8 @@ pub fn run_executable(
     events.push(conformance_event(simulation_ref, "simulation-adapter", "passed", simulation_initial_ticks)?);
     events.push(clock_anomaly_event(live_ref, FIXTURE_GENERATION, &live_wall_decision)?);
     events.push(run_live_scheduler_scenario(&live_profile)?);
+    events.extend(live_scheduler_retention_events(&live_profile)?);
+    events.extend(scheduler_retention_events(&simulation_profile)?);
 
     let _counters = run_simulation_scenarios(&simulation_profile, &mut virtual_clock, &mut events)?;
     let production_entropy_source = run_production_entropy_scenario(&live_profile, &mut events)?;
@@ -247,13 +249,9 @@ fn run_report(
 }
 
 fn run_live_scheduler_scenario(profile: &Profile) -> crate::error::Result<Event> {
-    let key = RunnableKey {
-        service_id: FIXTURE_SERVICE_ID.to_string(),
-        generation: FIXTURE_GENERATION,
-        runnable_id: "live-wakeup".to_string(),
-    };
     let context = ExtensionTimeContext::for_application(FIXTURE_SERVICE_ID.to_string(), FIXTURE_GENERATION, &profile.profile);
     let mut owner = SchedulerRuntime::activate(context, profile.profile.clone(), ThreadSchedulerWakeAdapter::default())?;
+    let key = runnable_key("live-wakeup", owner.next_occurrence_sequence()?);
     let parked = std::thread::spawn(std::thread::park);
     let registration = owner.effects_mut().register(key.clone(), parked.thread().clone());
     let result = registration.map_err(SchedulerRuntimeError::Admission).and_then(|()| owner.command(SchedulerCommand::Wake { key: key.clone(), priority: 0 }));

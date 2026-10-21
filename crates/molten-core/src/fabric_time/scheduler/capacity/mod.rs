@@ -7,6 +7,8 @@ pub struct Plan {
     pub profile_ref: String,
     pub generation: u64,
     pub runnable_slots: u64,
+    pub terminal_retention_slots: u64,
+    pub physical_runnable_slots: u64,
     pub queue_slots: u64,
     pub concurrency_slots: u64,
     pub total_slots: u64,
@@ -52,12 +54,20 @@ pub fn derive(profile: &super::super::AdmittedTimeProfile, generation: u64) -> R
     validate_count("runnable-slots", profile.max_runnables)?;
     validate_count("queue-slots", profile.max_scheduler_queue_depth)?;
     validate_count("concurrency-slots", profile.max_scheduler_concurrency)?;
+    let terminal_retention_slots = profile.max_runnables;
+    let physical_runnable_slots = profile
+        .max_runnables
+        .checked_add(terminal_retention_slots)
+        .ok_or(PlanIssue::AllocationArithmeticOverflow)?;
+    validate_count("physical-runnable-slots", physical_runnable_slots)?;
     let total_slots =
-        checked_total(profile.max_runnables, profile.max_scheduler_queue_depth, profile.max_scheduler_concurrency)?;
+        checked_total(physical_runnable_slots, profile.max_scheduler_queue_depth, profile.max_scheduler_concurrency)?;
     let plan_ref = identity::plan(&identity::PlanInput {
         profile_ref: &profile.profile_ref,
         generation,
         runnable_slots: profile.max_runnables,
+        terminal_retention_slots,
+        physical_runnable_slots,
         queue_slots: profile.max_scheduler_queue_depth,
         concurrency_slots: profile.max_scheduler_concurrency,
         total_slots,
@@ -66,6 +76,8 @@ pub fn derive(profile: &super::super::AdmittedTimeProfile, generation: u64) -> R
         profile_ref: profile.profile_ref.clone(),
         generation,
         runnable_slots: profile.max_runnables,
+        terminal_retention_slots,
+        physical_runnable_slots,
         queue_slots: profile.max_scheduler_queue_depth,
         concurrency_slots: profile.max_scheduler_concurrency,
         total_slots,

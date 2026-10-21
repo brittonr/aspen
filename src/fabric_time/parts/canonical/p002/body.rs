@@ -137,7 +137,7 @@ fn port_descriptor(input: PortDescriptorInput<'_>) -> crate::fabric::FabricPortD
     crate::fabric::FabricPortDescriptor {
         schema: crate::fabric::FABRIC_PORT_DESCRIPTOR_SCHEMA.to_string(),
         port_id: port_id.to_string(),
-        version: FABRIC_TIME_PORT_VERSION.to_string(),
+        version: if port_id == FABRIC_SCHEDULER_PORT_ID { FABRIC_SCHEDULER_PORT_VERSION } else { FABRIC_TIME_PORT_VERSION }.to_string(),
         class,
         operation_classes: operations.iter().map(|value| (*value).to_string()).collect(),
         input_schema_refs: input_schemas.iter().map(|value| (*value).to_string()).collect(),
@@ -169,8 +169,13 @@ fn event(
     if generation == 0 {
         return Err(crate::error::Failure::invalid_harness("fabric time event generation must be non-zero"));
     }
-    let value = crate::preserves_rail::record(FABRIC_TIME_EVENT_RECORD, vec![
-        crate::preserves_rail::string(super::FABRIC_TIME_OBSERVATION_SCHEMA),
+    let (record, schema) = if kind == EventKind::Scheduler {
+        (FABRIC_SCHEDULER_EVENT_RECORD, super::FABRIC_SCHEDULER_EVENT_SCHEMA)
+    } else {
+        (FABRIC_TIME_EVENT_RECORD, super::FABRIC_TIME_OBSERVATION_SCHEMA)
+    };
+    let value = crate::preserves_rail::record(record, vec![
+        crate::preserves_rail::string(schema),
         field("profile-ref", crate::preserves_rail::string(profile_ref)),
         field("kind", crate::preserves_rail::string(kind.as_str())),
         field("generation", crate::preserves_rail::u64_value(generation)),
