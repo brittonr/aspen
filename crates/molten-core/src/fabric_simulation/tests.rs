@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use super::*;
 use crate::fabric::FabricPortClass;
 use crate::fabric::ReferenceSystemKind;
@@ -542,6 +544,7 @@ fn distributed_scheduler_reference_core_denies_wrong_owner_and_double_completion
             job_id: "job-a".to_string(),
             owner: "worker-b".to_string(),
             completion_ref: content_ref('a'),
+            assignment_token: scheduler_assignment_token("job-a", "worker-a", 1),
         }),
     )
     .expect_err("wrong owner must deny");
@@ -551,6 +554,7 @@ fn distributed_scheduler_reference_core_denies_wrong_owner_and_double_completion
             job_id: "job-a".to_string(),
             owner: "worker-a".to_string(),
             completion_ref: content_ref('a'),
+            assignment_token: scheduler_assignment_token("job-a", "worker-a", 1),
         }),
     )
     .expect("authoritative completion");
@@ -560,12 +564,227 @@ fn distributed_scheduler_reference_core_denies_wrong_owner_and_double_completion
             job_id: "job-a".to_string(),
             owner: "worker-a".to_string(),
             completion_ref: content_ref('b'),
+            assignment_token: scheduler_assignment_token("job-a", "worker-a", 1),
         }),
     )
     .expect_err("double authoritative completion must deny");
 
     assert!(matches!(wrong_owner, ReferenceServiceIssue::LeaseOwnerMismatch { .. }));
     assert!(matches!(duplicate, ReferenceServiceIssue::DuplicateAuthoritativeCompletion(job) if job == "job-a"));
+}
+
+#[test]
+fn scheduler_completion_rejects_a_stale_assignment_after_ownership_returns() {
+    // r[verify molten.fabric_simulation.assignment_token]
+    let returned = scheduler_owner_returns_state();
+    let mut stale = scheduler_operations_to_owner_returns();
+    stale.push(DistributedSchedulerOperation::Complete {
+        job_id: "job-a".to_string(),
+        owner: "worker-a".to_string(),
+        completion_ref: content_ref('f'),
+        assignment_token: scheduler_assignment_token("job-a", "worker-a", 1),
+    });
+    let denied = apply_reference_operation(
+        &returned,
+        &ReferenceServiceOperation::DistributedScheduler(stale.last().expect("stale completion").clone()),
+    )
+    .expect_err("epoch-1 completion must not complete the epoch-3 assignment");
+    assert!(
+        matches!(
+            &denied,
+            ReferenceServiceIssue::StaleAssignmentToken { job_id, expected_epoch }
+                if job_id == "job-a" && *expected_epoch == 3
+        ),
+        "unexpected issue: {denied:?}"
+    );
+    let ReferenceServiceState::DistributedScheduler(state) = &returned else {
+        panic!("scheduler state");
+    };
+    let job = &state.jobs["job-a"];
+    assert_eq!(job.phase, ReferenceJobPhase::Leased);
+    assert_eq!(job.lease_owner.as_deref(), Some("worker-a"));
+    assert_eq!(job.lease_epoch, 3);
+    assert!(job.authoritative_completion_ref.is_none());
+}
+
+#[test]
+fn scheduler_completion_accepts_only_the_current_assignment_token() {
+    // r[verify molten.fabric_simulation.assignment_token]
+    let returned = scheduler_owner_returns_state();
+    let current = scheduler_assignment_token("job-a", "worker-a", 3);
+    let completed = apply_reference_operation(
+        &returned,
+        &ReferenceServiceOperation::DistributedScheduler(DistributedSchedulerOperation::Complete {
+            job_id: "job-a".to_string(),
+            owner: "worker-a".to_string(),
+            completion_ref: content_ref('c'),
+            assignment_token: current.clone(),
+        }),
+    )
+    .expect("current assignment completes");
+    let duplicate = apply_reference_operation(
+        &completed.next,
+        &ReferenceServiceOperation::DistributedScheduler(DistributedSchedulerOperation::Complete {
+            job_id: "job-a".to_string(),
+            owner: "worker-a".to_string(),
+            completion_ref: content_ref('d'),
+            assignment_token: current,
+        }),
+    )
+    .expect_err("token reuse after completion is a duplicate");
+    assert!(matches!(
+        duplicate,
+        ReferenceServiceIssue::DuplicateAuthoritativeCompletion(job) if job == "job-a"
+    ));
+    let ReferenceServiceState::DistributedScheduler(state) = &completed.next else {
+        panic!("scheduler state");
+    };
+    assert_eq!(state.jobs["job-a"].authoritative_completion_ref.as_deref(), Some(content_ref('c').as_str()));
+}
+
+#[test]
+fn scheduler_assignment_tokens_bind_job_owner_and_epoch() {
+    // r[verify molten.fabric_simulation.assignment_token]
+    let base = scheduler_assignment_token("job-a", "worker-a", 1);
+    assert!(base.starts_with("blake3:"));
+    assert_ne!(base, scheduler_assignment_token("job-b", "worker-a", 1));
+    assert_ne!(base, scheduler_assignment_token("job-a", "worker-b", 1));
+    assert_ne!(base, scheduler_assignment_token("job-a", "worker-a", 2));
+}
+
+#[test]
+fn scheduler_epoch_overflow_denies_failover_without_mutation() {
+    // r[verify molten.fabric_simulation.assignment_token]
+    let state = ReferenceServiceState::DistributedScheduler(DistributedSchedulerState {
+        jobs: BTreeMap::from([("job-a".to_string(), ReferenceJobState {
+            phase: ReferenceJobPhase::Leased,
+            lease_owner: Some("worker-a".to_string()),
+            lease_epoch: u64::MAX,
+            authoritative_completion_ref: None,
+        })]),
+    });
+    let denied = apply_reference_operation(
+        &state,
+        &ReferenceServiceOperation::DistributedScheduler(DistributedSchedulerOperation::Failover {
+            job_id: "job-a".to_string(),
+            next_owner: "worker-b".to_string(),
+        }),
+    )
+    .expect_err("epoch overflow denies failover");
+    assert!(matches!(denied, ReferenceServiceIssue::LeaseEpochOverflow));
+}
+
+#[test]
+fn independent_checker_detects_an_accepted_stale_completion() {
+    // r[verify molten.fabric_simulation.stale_completion_check]
+    let returned = scheduler_owner_returns_state();
+    let accepted = accept_completion_ignoring_token(&returned, content_ref('f'));
+    assert_eq!(accepted.decision, ReferenceTransitionDecision::Applied);
+    assert!(accepted.semantic_invariants.contains(&"completion-requires-current-lease"));
+    let history = scheduler_operations_to_owner_returns_with_completion(
+        content_ref('f'),
+        scheduler_assignment_token("job-a", "worker-a", 1),
+    );
+    let issue = check_scheduler_completion_history(&history).expect_err("independent checker must deny");
+    assert_eq!(issue, SchedulerCompletionCheckIssue::StaleAssignment {
+        position: 4,
+        job_id: "job-a".to_string(),
+        assignment_epoch: 3,
+    });
+}
+
+#[test]
+fn independent_checker_passes_current_assignments_without_reported_invariants() {
+    // r[verify molten.fabric_simulation.stale_completion_check]
+    let history = scheduler_operations_to_owner_returns_with_completion(
+        content_ref('c'),
+        scheduler_assignment_token("job-a", "worker-a", 3),
+    );
+    let checked = check_scheduler_completion_history(&history).expect("current assignment passes");
+    assert_eq!(checked.completions, 1);
+    let direct = vec![
+        DistributedSchedulerOperation::Submit {
+            job_id: "job-a".to_string(),
+        },
+        DistributedSchedulerOperation::Lease {
+            job_id: "job-a".to_string(),
+            owner: "worker-a".to_string(),
+        },
+        DistributedSchedulerOperation::Complete {
+            job_id: "job-a".to_string(),
+            owner: "worker-a".to_string(),
+            completion_ref: content_ref('e'),
+            assignment_token: scheduler_assignment_token("job-a", "worker-a", 1),
+        },
+    ];
+    assert_eq!(check_scheduler_completion_history(&direct).expect("direct history").completions, 1);
+}
+
+fn scheduler_operations_to_owner_returns() -> Vec<DistributedSchedulerOperation> {
+    vec![
+        DistributedSchedulerOperation::Submit {
+            job_id: "job-a".to_string(),
+        },
+        DistributedSchedulerOperation::Lease {
+            job_id: "job-a".to_string(),
+            owner: "worker-a".to_string(),
+        },
+        DistributedSchedulerOperation::Failover {
+            job_id: "job-a".to_string(),
+            next_owner: "worker-b".to_string(),
+        },
+        DistributedSchedulerOperation::Failover {
+            job_id: "job-a".to_string(),
+            next_owner: "worker-a".to_string(),
+        },
+    ]
+}
+
+fn scheduler_operations_to_owner_returns_with_completion(
+    completion_ref: String,
+    assignment_token: String,
+) -> Vec<DistributedSchedulerOperation> {
+    let mut history = scheduler_operations_to_owner_returns();
+    history.push(DistributedSchedulerOperation::Complete {
+        job_id: "job-a".to_string(),
+        owner: "worker-a".to_string(),
+        completion_ref,
+        assignment_token,
+    });
+    history
+}
+
+fn scheduler_owner_returns_state() -> ReferenceServiceState {
+    scheduler_operations_to_owner_returns().into_iter().fold(
+        initial_reference_state(ReferenceSystemKind::DistributedScheduler),
+        |state, operation| {
+            apply_reference_operation(&state, &ReferenceServiceOperation::DistributedScheduler(operation))
+                .expect("admitted scheduler operation")
+                .next
+        },
+    )
+}
+
+// Deliberately defective variant for the independent checker: it skips the
+// assignment-token comparison and still reports the passing invariant names.
+fn accept_completion_ignoring_token(
+    state: &ReferenceServiceState,
+    completion_ref: String,
+) -> ReferenceServiceTransition {
+    let ReferenceServiceState::DistributedScheduler(current) = state else {
+        panic!("scheduler state");
+    };
+    let mut next = current.clone();
+    let job = next.jobs.get_mut("job-a").expect("job");
+    job.phase = ReferenceJobPhase::Completed;
+    job.authoritative_completion_ref = Some(completion_ref);
+    ReferenceServiceTransition {
+        next: ReferenceServiceState::DistributedScheduler(next),
+        decision: ReferenceTransitionDecision::Applied,
+        required_ports: REQUIRED_SIMULATION_PORT_CLASSES.to_vec(),
+        semantic_invariants: vec!["single-authoritative-completion", "completion-requires-current-lease"],
+        state_material: String::new(),
+    }
 }
 
 #[test]
@@ -760,7 +979,7 @@ fn storage_operation(id: &str, eligible_at_tick: u64) -> SimulatedStorageOperati
         operation_id: id.to_string(),
         port_id: "molten.fabric.simulation.durable-state".to_string(),
         owner_node_id: "node-a".to_string(),
-        request_ref: content_ref('s'),
+        request_ref: content_ref('f'),
         phase: simulation_fault_phase(SimulationFaultKind::Delay),
         submission_ordinal: FIRST_WORKLOAD_SEQUENCE,
         submitted_at_tick: FIRST_VIRTUAL_TICK,
@@ -785,7 +1004,7 @@ fn storage_completion_holds_head_of_line_and_applies_in_order() {
     assert_eq!(eligible.len(), 1);
     assert_eq!(eligible[0].choice_id, storage_completion_choice_id("op-a"));
     let entry = storage.complete("op-a", SECOND_READY_TICK).expect("held head completes");
-    assert_eq!(entry.request_ref, content_ref('s'));
+    assert_eq!(entry.request_ref, content_ref('f'));
     let next = storage.complete("op-b", SECOND_READY_TICK).expect("next in line completes");
     assert_eq!(storage.durable_image().entries().len(), 2);
     assert!(storage.durable_image().entries()[0].submission_ordinal <= next.submission_ordinal);

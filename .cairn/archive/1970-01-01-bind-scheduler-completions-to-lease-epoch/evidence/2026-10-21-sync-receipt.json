@@ -1,0 +1,120 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/bind-scheduler-completions-to-lease-epoch/specs/fabric-simulation/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/specs/fabric-simulation/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "bind-scheduler-completions-to-lease-epoch",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/specs/fabric-simulation/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "6f79a7bc49de47e591e45caae07e5b4e4b5cf67cea992b8879d965d322c562a6",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "3067a17ad0c27f7265efdfb02ee6ca2654acdf33f92e4c82dbd54e7c4533a47c",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "9a16b77adf7e6221b29af3b676335e85402d237df594edce701e15a7e8f15227",
+        "destination": ".cairn/specs/fabric-simulation/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "97cd7d0444c094b4b6d60cdc71c9f905d652e88961c7a9d1708c30f4b8b26c92",
+        "operations": [
+          {
+            "block_hash": "0c83d70341086f9ed5c7e5647fa070954ca7c9b71549ca8e982db78e3609bb21",
+            "heading": "### Requirement: Completions bind to the exact assignment",
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.assignment_token"
+          },
+          {
+            "block_hash": "f1a73b0c56a83d1fd7ced119530f4f6da57710a6e1356c2278e1c56d4f3758c5",
+            "heading": "### Requirement: Independent checking detects an accepted stale completion",
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.stale_completion_check"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.assignment_token",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.stale_completion_check",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/bind-scheduler-completions-to-lease-epoch/specs/fabric-simulation/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "97cd7d0444c094b4b6d60cdc71c9f905d652e88961c7a9d1708c30f4b8b26c92",
+          "exists": true,
+          "path": "./.cairn/specs/fabric-simulation/spec.md"
+        }
+      ],
+      "manifest_hash": "56a9d22256b22c25804f9ff72648288ae166e22f035e6a31023d8d6ee82a40f5"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "3067a17ad0c27f7265efdfb02ee6ca2654acdf33f92e4c82dbd54e7c4533a47c",
+          "exists": true,
+          "path": "./.cairn/specs/fabric-simulation/spec.md"
+        }
+      ],
+      "manifest_hash": "d07942334e34d683931593feba9e76216a023167246a71367fd97da4d785d404"
+    },
+    "kind": "sync",
+    "manifest_hash": "7e6bb93d19370b4538660c1157dea5a596eeda7f74ab626f2be6721517f0b1e9"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "200c3aee29d1065cce28266fae95dcf8d3e77cbd1676677b5cc282c1b7339dca",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "a093b980ae26ea5ec521782f80ebecf85dfc18230c1a77379d09969a6f7f5809",
+  "reasons": [],
+  "receipt_hash": "42245d50e7e5036ac2daa2ce71950e37e7036d67c1be929f4c46483f63aca6b9",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

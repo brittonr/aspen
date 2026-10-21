@@ -49,6 +49,7 @@ pub fn default_operations() -> Vec<(crate::fabric::ReferenceSystemKind, String, 
                 job_id: "job-a".to_string(),
                 owner: "worker-a".to_string(),
                 completion_ref: blake3_ref(b"job-a-completion"),
+                assignment_token: crate::fabric_simulation::scheduler_assignment_token("job-a", "worker-a", 1),
             }),
         ),
     ]

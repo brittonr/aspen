@@ -132,6 +132,7 @@ pub enum DistributedSchedulerOperation {
         job_id: String,
         owner: String,
         completion_ref: String,
+        assignment_token: String,
     },
     Failover {
         job_id: String,
@@ -222,6 +223,10 @@ pub enum ReferenceServiceIssue {
     },
     MissingLeaseOwner(String),
     LeaseEpochOverflow,
+    StaleAssignmentToken {
+        job_id: String,
+        expected_epoch: u64,
+    },
     DuplicateAuthoritativeCompletion(String),
 }
 
@@ -403,10 +408,12 @@ fn apply_scheduler(
             job_id,
             owner,
             completion_ref,
+            assignment_token,
         } => {
             validate_identifier("job-id", job_id)?;
             validate_identifier("completion-owner", owner)?;
             validate_reference("completion-ref", completion_ref)?;
+            validate_reference("assignment-token", assignment_token)?;
             let job = next.jobs.get_mut(job_id).ok_or_else(|| ReferenceServiceIssue::UnknownJob(job_id.clone()))?;
             if job.authoritative_completion_ref.is_some() {
                 return Err(ReferenceServiceIssue::DuplicateAuthoritativeCompletion(job_id.clone()));
@@ -419,6 +426,14 @@ fn apply_scheduler(
                     job_id: job_id.clone(),
                     expected: expected.to_string(),
                     actual: owner.clone(),
+                });
+            }
+            // A matching owner is not enough: an earlier assignment of the same
+            // job to this owner must not authorize a later completion.
+            if scheduler_assignment_token(job_id, owner, job.lease_epoch) != *assignment_token {
+                return Err(ReferenceServiceIssue::StaleAssignmentToken {
+                    job_id: job_id.clone(),
+                    expected_epoch: job.lease_epoch,
                 });
             }
             job.phase = ReferenceJobPhase::Completed;
@@ -533,4 +548,137 @@ fn validate_identifier(field: &'static str, value: &str) -> Result<(), Reference
 
 pub const fn initial_transaction_version() -> u64 {
     INITIAL_STATE_VERSION
+}
+
+const SCHEDULER_ASSIGNMENT_DOMAIN: &[u8] = b"molten.fabric-simulation.scheduler-assignment.v1";
+
+// r[impl molten.fabric_simulation.assignment_token]
+pub fn scheduler_assignment_token(job_id: &str, owner: &str, lease_epoch: u64) -> String {
+    let capacity = SCHEDULER_ASSIGNMENT_DOMAIN
+        .len()
+        .saturating_add(super::MAX_WORLD_IDENTIFIER_BYTES.saturating_mul(2))
+        .saturating_add(size_of::<u64>())
+        .saturating_add(3);
+    let mut material = Vec::with_capacity(capacity);
+    material.extend_from_slice(SCHEDULER_ASSIGNMENT_DOMAIN);
+    material.push(0);
+    material.extend_from_slice(job_id.as_bytes());
+    material.push(0);
+    material.extend_from_slice(owner.as_bytes());
+    material.push(0);
+    material.extend_from_slice(&lease_epoch.to_le_bytes());
+    format!("blake3:{}", blake3::hash(&material).to_hex())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SchedulerCompletionCheck {
+    pub completions: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SchedulerCompletionCheckIssue {
+    MalformedHistory {
+        position: usize,
+    },
+    CompletionWithoutAssignment {
+        position: usize,
+        job_id: String,
+    },
+    StaleAssignment {
+        position: usize,
+        job_id: String,
+        assignment_epoch: u64,
+    },
+    DuplicateCompletion {
+        position: usize,
+        job_id: String,
+    },
+}
+
+struct RecordedAssignment {
+    owner: String,
+    lease_epoch: u64,
+    completed: bool,
+}
+
+/// Independent history check: it derives assignment facts from recorded scheduler
+/// operations and never consults a transition's reported invariant names.
+// r[impl molten.fabric_simulation.stale_completion_check]
+pub fn check_scheduler_completion_history(
+    operations: &[DistributedSchedulerOperation],
+) -> Result<SchedulerCompletionCheck, SchedulerCompletionCheckIssue> {
+    let mut jobs: BTreeMap<&str, Option<RecordedAssignment>> = BTreeMap::new();
+    let mut completions = 0_usize;
+    for (position, operation) in operations.iter().enumerate() {
+        match operation {
+            DistributedSchedulerOperation::Submit { job_id } => {
+                if jobs.insert(job_id.as_str(), None).is_some() {
+                    return Err(SchedulerCompletionCheckIssue::MalformedHistory { position });
+                }
+            }
+            DistributedSchedulerOperation::Lease { job_id, owner } => {
+                let slot = jobs
+                    .get_mut(job_id.as_str())
+                    .ok_or(SchedulerCompletionCheckIssue::MalformedHistory { position })?;
+                if slot.is_some() {
+                    return Err(SchedulerCompletionCheckIssue::MalformedHistory { position });
+                }
+                let lease_epoch = INITIAL_LEASE_EPOCH
+                    .checked_add(LEASE_EPOCH_INCREMENT)
+                    .ok_or(SchedulerCompletionCheckIssue::MalformedHistory { position })?;
+                *slot = Some(RecordedAssignment {
+                    owner: owner.clone(),
+                    lease_epoch,
+                    completed: false,
+                });
+            }
+            DistributedSchedulerOperation::Failover { job_id, next_owner } => {
+                let slot = jobs
+                    .get_mut(job_id.as_str())
+                    .ok_or(SchedulerCompletionCheckIssue::MalformedHistory { position })?;
+                let assignment = slot.as_mut().ok_or(SchedulerCompletionCheckIssue::MalformedHistory { position })?;
+                assignment.lease_epoch = assignment
+                    .lease_epoch
+                    .checked_add(LEASE_EPOCH_INCREMENT)
+                    .ok_or(SchedulerCompletionCheckIssue::MalformedHistory { position })?;
+                assignment.owner = next_owner.clone();
+                assignment.completed = false;
+            }
+            DistributedSchedulerOperation::Complete {
+                job_id,
+                owner,
+                assignment_token,
+                ..
+            } => {
+                let slot = jobs
+                    .get_mut(job_id.as_str())
+                    .ok_or(SchedulerCompletionCheckIssue::MalformedHistory { position })?;
+                let assignment =
+                    slot.as_ref().ok_or_else(|| SchedulerCompletionCheckIssue::CompletionWithoutAssignment {
+                        position,
+                        job_id: job_id.clone(),
+                    })?;
+                if assignment.completed {
+                    return Err(SchedulerCompletionCheckIssue::DuplicateCompletion {
+                        position,
+                        job_id: job_id.clone(),
+                    });
+                }
+                let matches = assignment.owner == *owner
+                    && scheduler_assignment_token(job_id, owner, assignment.lease_epoch) == *assignment_token;
+                if !matches {
+                    return Err(SchedulerCompletionCheckIssue::StaleAssignment {
+                        position,
+                        job_id: job_id.clone(),
+                        assignment_epoch: assignment.lease_epoch,
+                    });
+                }
+                if let Some(assignment) = slot.as_mut() {
+                    assignment.completed = true;
+                }
+                completions = completions.saturating_add(1);
+            }
+        }
+    }
+    Ok(SchedulerCompletionCheck { completions })
 }

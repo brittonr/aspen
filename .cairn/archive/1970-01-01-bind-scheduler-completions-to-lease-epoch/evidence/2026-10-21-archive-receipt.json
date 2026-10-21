@@ -1,0 +1,311 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: bind-scheduler-completions-to-lease-epoch",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch"
+    }
+  ],
+  "blocked": false,
+  "change": "bind-scheduler-completions-to-lease-epoch",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "232953d54991845e2494768fd2f5450b5f0ba014bf94495ca4d9bd2a9aa9b6a8",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "d034bb417f2bc0e24af93f09863d9aa81fb3f82ee7b4e3b4740c4e6d4e47fd90",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/design.md"
+        },
+        {
+          "content_hash": "8051e52d52a6461126ebd9c6449498fc6cefdf37bc4ba784b2c3da78d36700ae",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-gate-design.json"
+        },
+        {
+          "content_hash": "2a68fc6e1e7a3a8cb8b051801933eaf61276cd6333f92057a1d19be1ebdda6de",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-gate-proposal.json"
+        },
+        {
+          "content_hash": "4b71fafe546bd6fb37e17e9e0b26e99b36d61fff1e001358640845bcce5f96af",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-gate-tasks.json"
+        },
+        {
+          "content_hash": "ddce701e7ecc56be8a128b62eb3a8dc4b607a08048566233b1bb9528fe39f3a0",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-review-completeness.json"
+        },
+        {
+          "content_hash": "6ce1df2c1f524d98ab3aa8da5f6e0ece0684c9835d71e22a4faff28741b4cb1d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/library/command.txt"
+        },
+        {
+          "content_hash": "86d2b126da10ac4ff008ac9d474050334982e53616316aa21645c32f8c5b2992",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/library/provenance.jsonl"
+        },
+        {
+          "content_hash": "80482190e6338bcd353334335abb73ab590e953f09677628b7e86ced89924c3b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/library/status.json"
+        },
+        {
+          "content_hash": "223e5abf9805d32013ad3b9ac06053f4f316ccc3ef840fe89c88235ffb21caa3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/library/summary.txt"
+        },
+        {
+          "content_hash": "7e64ba0c70b4403c8ceb6f639d41697ef3147d721ae7a49d3467fbf170a0f038",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/workspace/artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "f4559ab6c6dbc30118a02bbc90fa0615529cce5b4c7aa7de492708a1794fa883",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/workspace/command.txt"
+        },
+        {
+          "content_hash": "f6098e03581315ef4dfe04db04ae7cafe9f7937e3eb90bdc6709ea55297214a7",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/workspace/gate-receipt.preserves"
+        },
+        {
+          "content_hash": "aadc9fae43e9a084c7760d96c5a3d40dbc08d9b999f95abd532ad14b523bef81",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/workspace/object-corpus-receipt.json"
+        },
+        {
+          "content_hash": "7b7128c636f9118a69c5fa7c4634134870e0a4d23e6a7d4f912337733ef5dd9c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/workspace/provenance.jsonl"
+        },
+        {
+          "content_hash": "2be050a39ade993dcf27c933419d4af6b6e9c53f34d023d9ac86c9e0b6c0be8b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/workspace/remediation-plan.preserves"
+        },
+        {
+          "content_hash": "4617bd412848ec267ee24fe0829831fedd8f4c5510bf8a11b6c97c4392416aab",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/workspace/status.json"
+        },
+        {
+          "content_hash": "0194f449b16c95e469042213390dd02eb9b1b5bb1b88128aab3127db89673f7c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/workspace/summary.txt"
+        },
+        {
+          "content_hash": "5320acac5b104f4ebd8942954c26cb7a8440e94183e8b5597c18b73c35e6883f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-sync-receipt.json"
+        },
+        {
+          "content_hash": "27884c8a4da7d8897e7860da93ef9219e5cd328afdd0953144c9afcfb8d90370",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-validate.json"
+        },
+        {
+          "content_hash": "ab54dcf7480a79b61bc1c0f42771cc481de04671a11e5eab341364c0fcb435ab",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/metadata.json"
+        },
+        {
+          "content_hash": "78b0e3beef53b924d5eae8d91a526332ad9f39fbf4b9389c1e112ecd32926f41",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/proposal.md"
+        },
+        {
+          "content_hash": "9a16b77adf7e6221b29af3b676335e85402d237df594edce701e15a7e8f15227",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/specs/fabric-simulation/spec.md"
+        },
+        {
+          "content_hash": "44225989e8a79cb1c46f676296f1240001e4fdc2dbf0c7f54b8516b2ce085b37",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-scheduler-completions-to-lease-epoch/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch"
+        }
+      ],
+      "manifest_hash": "09928a633a7b82e7c60a1b642f786d05c5820f2cdfa26d5048927f4e4711d34a"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "d034bb417f2bc0e24af93f09863d9aa81fb3f82ee7b4e3b4740c4e6d4e47fd90",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/design.md"
+        },
+        {
+          "content_hash": "8051e52d52a6461126ebd9c6449498fc6cefdf37bc4ba784b2c3da78d36700ae",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-gate-design.json"
+        },
+        {
+          "content_hash": "2a68fc6e1e7a3a8cb8b051801933eaf61276cd6333f92057a1d19be1ebdda6de",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-gate-proposal.json"
+        },
+        {
+          "content_hash": "4b71fafe546bd6fb37e17e9e0b26e99b36d61fff1e001358640845bcce5f96af",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-gate-tasks.json"
+        },
+        {
+          "content_hash": "ddce701e7ecc56be8a128b62eb3a8dc4b607a08048566233b1bb9528fe39f3a0",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-review-completeness.json"
+        },
+        {
+          "content_hash": "6ce1df2c1f524d98ab3aa8da5f6e0ece0684c9835d71e22a4faff28741b4cb1d",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/library/command.txt"
+        },
+        {
+          "content_hash": "86d2b126da10ac4ff008ac9d474050334982e53616316aa21645c32f8c5b2992",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/library/provenance.jsonl"
+        },
+        {
+          "content_hash": "80482190e6338bcd353334335abb73ab590e953f09677628b7e86ced89924c3b",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/library/status.json"
+        },
+        {
+          "content_hash": "223e5abf9805d32013ad3b9ac06053f4f316ccc3ef840fe89c88235ffb21caa3",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/library/summary.txt"
+        },
+        {
+          "content_hash": "7e64ba0c70b4403c8ceb6f639d41697ef3147d721ae7a49d3467fbf170a0f038",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/workspace/artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "f4559ab6c6dbc30118a02bbc90fa0615529cce5b4c7aa7de492708a1794fa883",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/workspace/command.txt"
+        },
+        {
+          "content_hash": "f6098e03581315ef4dfe04db04ae7cafe9f7937e3eb90bdc6709ea55297214a7",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/workspace/gate-receipt.preserves"
+        },
+        {
+          "content_hash": "aadc9fae43e9a084c7760d96c5a3d40dbc08d9b999f95abd532ad14b523bef81",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/workspace/object-corpus-receipt.json"
+        },
+        {
+          "content_hash": "7b7128c636f9118a69c5fa7c4634134870e0a4d23e6a7d4f912337733ef5dd9c",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/workspace/provenance.jsonl"
+        },
+        {
+          "content_hash": "2be050a39ade993dcf27c933419d4af6b6e9c53f34d023d9ac86c9e0b6c0be8b",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/workspace/remediation-plan.preserves"
+        },
+        {
+          "content_hash": "4617bd412848ec267ee24fe0829831fedd8f4c5510bf8a11b6c97c4392416aab",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/workspace/status.json"
+        },
+        {
+          "content_hash": "0194f449b16c95e469042213390dd02eb9b1b5bb1b88128aab3127db89673f7c",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-source/workspace/summary.txt"
+        },
+        {
+          "content_hash": "5320acac5b104f4ebd8942954c26cb7a8440e94183e8b5597c18b73c35e6883f",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-sync-receipt.json"
+        },
+        {
+          "content_hash": "27884c8a4da7d8897e7860da93ef9219e5cd328afdd0953144c9afcfb8d90370",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-validate.json"
+        },
+        {
+          "content_hash": "ab54dcf7480a79b61bc1c0f42771cc481de04671a11e5eab341364c0fcb435ab",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/evidence/2026-10-21-verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/metadata.json"
+        },
+        {
+          "content_hash": "78b0e3beef53b924d5eae8d91a526332ad9f39fbf4b9389c1e112ecd32926f41",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/proposal.md"
+        },
+        {
+          "content_hash": "9a16b77adf7e6221b29af3b676335e85402d237df594edce701e15a7e8f15227",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/specs/fabric-simulation/spec.md"
+        },
+        {
+          "content_hash": "44225989e8a79cb1c46f676296f1240001e4fdc2dbf0c7f54b8516b2ce085b37",
+          "exists": true,
+          "path": "./.cairn/changes/bind-scheduler-completions-to-lease-epoch/tasks.md"
+        }
+      ],
+      "manifest_hash": "e40bd0f73d2487e993848876355694a08c22c1dd27f554e1a83bb0161077468e"
+    },
+    "kind": "archive",
+    "manifest_hash": "b168884f9d614f7a39973a892f48a9e444f649d127f7a8bfadfd8d182aff120a"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "450bf435ac2cdd2b7b9440f909ecc5594223bbae250409f1ee1fc4700cfa8265",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "a093b980ae26ea5ec521782f80ebecf85dfc18230c1a77379d09969a6f7f5809",
+  "reasons": [],
+  "receipt_hash": "38f418ca66fb6d3f6c0a94ec3a1896cd0230f6ca3e018622b9f1d021e5c57199",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

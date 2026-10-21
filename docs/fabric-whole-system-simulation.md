@@ -128,8 +128,11 @@ Retention cannot move past the replicated boundary.
 
 ### Distributed scheduler
 
-The extension owns jobs, leases, failover, and authoritative completion.
-A wrong lease owner or second authoritative completion fails closed.
+The extension owns jobs, leases, failover, authoritative completion, and assignment-token binding.
+A lease or failover establishes a new assignment epoch.
+A completion must carry the token derived from the job, the owner, and the epoch of the assignment that produced the work.
+A stale token, a wrong lease owner, or a second authoritative completion fails closed.
+A separate pure checker derives assignments from recorded history and detects an accepted stale completion without consulting reported invariant names.
 
 Every request enters `system_extension::Dispatcher` through the ordinary request callback.
 Every approved effect routes through all admitted deterministic fabric port bindings.
