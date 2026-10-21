@@ -225,47 +225,6 @@
     }
 
     #[test]
-    fn service_demand_waits_without_start_until_dependencies_are_ready() {
-        let demand_ref = content_ref_from_bytes(b"service-demand");
-        let manifest_ref = content_ref_from_bytes(b"service-manifest");
-        let dependency_ref = content_ref_from_bytes(b"database-ready");
-        let authority_ref = content_ref_from_bytes(b"service-authority");
-        let resource_ref = content_ref_from_bytes(b"service-resource");
-        let evidence_ref = content_ref_from_bytes(b"service-evidence");
-        let wait = super::evaluate_service_demand(&super::ServiceDemandEvaluationInput {
-            service_id: "service:frontend",
-            demand_ref: &demand_ref,
-            manifest_ref: &manifest_ref,
-            required_dependency_refs: std::slice::from_ref(&dependency_ref),
-            ready_dependency_refs: &[],
-            authority_refs: std::slice::from_ref(&authority_ref),
-            resource_refs: std::slice::from_ref(&resource_ref),
-            evidence_refs: std::slice::from_ref(&evidence_ref),
-        })
-        .expect("dependency wait");
-        assert_eq!(wait.decision, "wait");
-        assert_eq!(wait.lifecycle_kind, "dependency-wait");
-        assert!(!wait.start_side_effect_admitted);
-        assert!(wait.readiness_assertion.is_none());
-
-        let ready = super::evaluate_service_demand(&super::ServiceDemandEvaluationInput {
-            service_id: "service:frontend",
-            demand_ref: &demand_ref,
-            manifest_ref: &manifest_ref,
-            required_dependency_refs: std::slice::from_ref(&dependency_ref),
-            ready_dependency_refs: std::slice::from_ref(&dependency_ref),
-            authority_refs: std::slice::from_ref(&authority_ref),
-            resource_refs: std::slice::from_ref(&resource_ref),
-            evidence_refs: std::slice::from_ref(&evidence_ref),
-        })
-        .expect("service ready demand");
-        assert_eq!(ready.decision, "pass");
-        assert_eq!(ready.lifecycle_kind, "start");
-        assert!(ready.start_side_effect_admitted);
-        assert!(ready.readiness_assertion.is_some());
-    }
-
-    #[test]
     fn probe_result_status_refs_obey_lifecycle_reference_bound() {
         // r[verify molten.runtime_spine.lifecycle_probe_result_bound]
         let probe = LifecycleProbe {

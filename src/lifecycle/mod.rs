@@ -5,3 +5,5 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/lifecycle/parts/mod/p005/body
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/lifecycle/parts/mod/p002/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/lifecycle/parts/mod/p006/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/lifecycle/parts/mod/p003/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/lifecycle/parts/mod/p007/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/lifecycle/parts/mod/p008/body.rs"));

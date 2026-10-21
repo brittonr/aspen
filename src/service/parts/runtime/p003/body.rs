@@ -38,7 +38,8 @@ fn runtime_event_label(event: &crate::runtime::RuntimeEvent) -> &'static str {
 fn ready_status_map(statuses: &[crate::service_records::ServiceStatus]) -> Result<OrderedMap<String, String>> {
     let mut ready = OrderedMap::new();
     for status in statuses {
-        if status.state == "ready" && ready.insert(status.service_id.clone(), status.status_ref.clone()).is_some() {
+        let assertions = crate::phases::project_readiness_state(&status.state)?;
+        if assertions.contains_ready() && ready.insert(status.service_id.clone(), status.status_ref.clone()).is_some() {
             return Err(MoltenError::invalid_harness(format!(
                 "duplicate ready service status for {}",
                 status.service_id

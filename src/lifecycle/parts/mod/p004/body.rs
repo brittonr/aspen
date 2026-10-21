@@ -197,13 +197,21 @@ pub struct SupervisorDecisionReceipt {
     pub value: IoValue,
 }
 
+/// One required dependency, its required assertion, and the assertions
+/// projected from that dependency's committed state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ServiceDependencyInput<'a> {
+    pub dependency_ref: &'a str,
+    pub requirement: ServiceRequirement,
+    pub assertions: &'a ServiceAssertionSet,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ServiceDemandEvaluationInput<'a> {
     pub service_id: &'a str,
     pub demand_ref: &'a str,
     pub manifest_ref: &'a str,
-    pub required_dependency_refs: &'a [String],
-    pub ready_dependency_refs: &'a [String],
+    pub dependencies: &'a [ServiceDependencyInput<'a>],
     pub authority_refs: &'a [String],
     pub resource_refs: &'a [String],
     pub evidence_refs: &'a [String],

@@ -2,9 +2,13 @@
 pub fn evaluate_service_demand(input: &ServiceDemandEvaluationInput<'_>) -> Result<ServiceDemandEvaluation> {
     validate_service_demand_input(input)?;
     let mut diagnostics = Vec::with_capacity(MAX_DIAGNOSTICS.min(4));
-    for dependency_ref in input.required_dependency_refs {
-        if !input.ready_dependency_refs.contains(dependency_ref) {
-            diagnostics.push(format!("service dependency readiness missing {dependency_ref}"));
+    for dependency in input.dependencies {
+        if !dependency.requirement.satisfied_by(dependency.assertions) {
+            diagnostics.push(format!(
+                "service dependency readiness missing {} for {}",
+                dependency.dependency_ref,
+                dependency.requirement.as_str()
+            ));
         }
     }
     if input.authority_refs.is_empty() {
@@ -75,8 +79,12 @@ fn validate_service_demand_input(input: &ServiceDemandEvaluationInput<'_>) -> Re
     }
     validate_content_ref(input.demand_ref)?;
     validate_content_ref(input.manifest_ref)?;
-    validate_refs("required dependency", input.required_dependency_refs)?;
-    validate_refs("ready dependency", input.ready_dependency_refs)?;
+    if input.dependencies.len() > MAX_REFS {
+        return Err(MoltenError::invalid_harness("service dependency count exceeds the bound"));
+    }
+    for dependency in input.dependencies {
+        validate_content_ref(dependency.dependency_ref)?;
+    }
     validate_refs("authority", input.authority_refs)?;
     validate_refs("resource", input.resource_refs)?;
     validate_refs("evidence", input.evidence_refs)?;
@@ -88,13 +96,15 @@ fn service_readiness_evidence_refs(input: &ServiceDemandEvaluationInput<'_>) -> 
         input
             .evidence_refs
             .len()
-            .saturating_add(input.ready_dependency_refs.len())
+            .saturating_add(input.dependencies.len())
             .saturating_add(SERVICE_READINESS_BASE_REF_COUNT),
     );
     evidence_refs.extend(input.evidence_refs.iter().cloned());
     evidence_refs.push(input.demand_ref.to_owned());
     evidence_refs.push(input.manifest_ref.to_owned());
-    evidence_refs.extend(input.ready_dependency_refs.iter().cloned());
+    for dependency in input.dependencies {
+        evidence_refs.push(dependency.dependency_ref.to_owned());
+    }
     evidence_refs.sort();
     evidence_refs.dedup();
     validate_refs("service readiness evidence", &evidence_refs)?;
