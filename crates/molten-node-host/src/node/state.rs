@@ -8,6 +8,8 @@ mod filesystem;
 mod locator;
 #[path = "state/namespace.rs"]
 mod namespace;
+#[path = "state/publication.rs"]
+mod publication;
 
 pub use authority::DirectoryRoot;
 pub use authority::EntryKind;

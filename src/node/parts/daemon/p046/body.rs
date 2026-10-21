@@ -46,6 +46,9 @@ fn dispatch_pending_control_request(
     root: &crate::node_state::DirectoryRoot,
     pending: PendingControlRequest,
 ) -> Result<ObservedControlDispatch> {
+    let delivery_root = root.delivery_store()?;
+    let mut publication_store = crate::delivery_idempotency::PublicationStore::open(&delivery_root)?;
+    publication_store.require_healthy()?;
     let inbox = root.control_inbox()?;
     let bytes = inbox.read_entry(&pending.entry, crate::node_state::MAX_NODE_STATE_FILE_BYTES)?;
     let observed_ref = crate::preserves_rail::content_ref_from_bytes(&bytes);
@@ -61,6 +64,7 @@ fn dispatch_pending_control_request(
     let request = crate::node_runtime::parse_control_request(&request_value)?;
     import_artifact(root, &request_value)?;
     if let Some(prior) = prior_dispatch_for_request(root, &request)? {
+        ingress::dispatch::complete(root, &request, &mut publication_store)?;
         archive_dispatched_request(root, &pending.entry, &request.value)?;
         write_dispatch_queue_receipt(root, &request, "duplicate-dispatch")?;
         return Ok(ObservedControlDispatch {
@@ -68,6 +72,7 @@ fn dispatch_pending_control_request(
             is_duplicate: true,
         });
     }
+    ingress::dispatch::run(root, &request, &mut publication_store, || {
     let dispatch = match request.operation.as_str() {
         "status" => dispatch_status_request(root, &request)?,
         "shutdown" => dispatch_shutdown_request(root, &request)?,
@@ -83,6 +88,7 @@ fn dispatch_pending_control_request(
     Ok(ObservedControlDispatch {
         dispatch,
         is_duplicate: false,
+    })
     })
 }
 

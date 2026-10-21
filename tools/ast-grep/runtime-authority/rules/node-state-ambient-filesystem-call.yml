@@ -8,6 +8,7 @@ metadata:
   non_claim: structural-node-state-containment-only
 files:
   - src/node/parts/daemon/p*/body.rs
+  - src/node/ingress/*.rs
   - src/node/parts/identity/p001/body.rs
   - src/node/parts/identity/p004/body.rs
   - src/job/parts/dag/p009/body.rs
@@ -18,6 +19,7 @@ files:
   - tools/ast-grep/runtime-authority/fixtures/negative/node_state_capability_shell.rs
 ignores:
   - "**/tests/**"
+  - src/node/ingress/tests.rs
   - src/node/parts/daemon/p000/body.rs
   - src/node/parts/daemon/p039/body.rs
   - src/node/parts/daemon/p036/body.rs

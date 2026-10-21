@@ -1,3 +1,6 @@
+#[path = "ingress/mod.rs"]
+mod ingress;
+
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/daemon/p000/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/daemon/p039/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/daemon/p001/body.rs"));

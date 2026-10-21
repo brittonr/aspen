@@ -243,6 +243,13 @@ impl DirectoryRoot {
         super::filesystem::write_regular_file(&self.inner.dir, path.as_path(), bytes, None)
     }
 
+    /// Publish one new regular file in an existing parent, without replacement.
+    /// Success observes payload and parent synchronization, not hardware durability.
+    pub fn write_new(&self, path: &super::locator::RelativePath, bytes: &[u8]) -> crate::error::Result<()> {
+        super::filesystem::validate_write_size(bytes, super::MAX_NODE_STATE_FILE_BYTES)?;
+        super::publication::write_new_regular_file(&self.inner.dir, path.as_path(), bytes)
+    }
+
     pub fn try_exists(&self, path: &super::locator::RelativePath) -> crate::error::Result<bool> {
         super::filesystem::entry_kind_optional(&self.inner.dir, path.as_path()).map(|kind| kind.is_some())
     }

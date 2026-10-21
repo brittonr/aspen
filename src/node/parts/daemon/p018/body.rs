@@ -245,28 +245,7 @@ pub fn submit_control_request_with_root(
     request_value: &IoValue,
 ) -> Result<ControlSubmit> {
     ensure_state_layout(root)?;
-    let request = crate::node_runtime::parse_control_request(request_value)?;
-    import_artifact(root, request_value)?;
-    let inbox_path = control_inbox_path(&request.request_ref)?;
-    write_preserves(root, &inbox_path, request_value)?;
-    let location_ref = local_ref("node-control-inbox-path", &inbox_path.display())?;
-    let receipt_value = queue_receipt_value(&QueueReceiptValueInput {
-        decision: "pass",
-        phase: "enqueue",
-        operation: &request.operation,
-        request_ref: &request.request_ref,
-        location_ref: &location_ref,
-        diagnostics: &[],
-    })?;
-    let queue_receipt_ref = crate::preserves_rail::canonical_hash(&receipt_value)?;
-    write_preserves(root, &queue_receipt_path(&request.request_ref)?, &receipt_value)?;
-    import_artifact(root, &receipt_value)?;
-    Ok(ControlSubmit {
-        request_ref: request.request_ref.clone(),
-        inbox_entry: control_inbox_entry_name(&request.request_ref),
-        queue_receipt_ref,
-        queue_receipt_value: receipt_value,
-    })
+    ingress::submit(root, request_value)
 }
 
 pub fn dispatch_control_request(input: &ControlDispatchInput<'_>) -> Result<ControlDispatch> {

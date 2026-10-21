@@ -938,6 +938,14 @@
               cp ${./checks/coordination-delivery-octet/empty-tests.rs} \
                 "$out/src/coordination_delivery/tests.rs"
             '';
+        nodeIngressOctetWorkspace = pkgs.runCommand "molten-node-ingress-octet-workspace" { } ''
+          mkdir -p "$out/src"
+          cp ${./checks/node-ingress-octet/Cargo.toml} "$out/Cargo.toml"
+          cp ${./checks/node-ingress-octet/Cargo.lock} "$out/Cargo.lock"
+          cp ${./checks/node-ingress-octet/dylint.toml} "$out/dylint.toml"
+          cp ${./checks/node-ingress-octet/src/lib.rs} "$out/src/lib.rs"
+          cp -R ${./crates/molten-core/src/node_ingress} "$out/src/node_ingress"
+        '';
         addressableActorOctetWorkspace = pkgs.runCommand "molten-addressable-actor-octet-workspace" { } ''
           mkdir -p "$out/src"
           cp ${./checks/addressable-actor-octet/Cargo.toml} "$out/Cargo.toml"
@@ -1183,6 +1191,7 @@
                     > "$TMPDIR/reacquisition-negative.json"
                   ast-grep scan --rule "$ambient_rule" --json=compact \
                     src/node/parts/daemon \
+                    src/node/ingress \
                     src/node/parts/identity/p001/body.rs \
                     src/node/parts/identity/p004/body.rs \
                     src/job/parts/dag/p009/body.rs \
@@ -1192,6 +1201,7 @@
                     > "$TMPDIR/ambient-converted.json"
                   ast-grep scan --rule "$reacquisition_rule" --json=compact \
                     src/node/parts/daemon \
+                    src/node/ingress \
                     src/node/parts/identity/p001/body.rs \
                     src/node/parts/identity/p004/body.rs \
                     src/job/parts/dag/p009/body.rs \
@@ -2713,6 +2723,18 @@
                 packages = [ "molten-coordination-delivery-octet" ];
                 cargoExtraArgs = "--all-targets --all-features";
                 cargoLock = ./checks/coordination-delivery-octet/Cargo.lock;
+              }).overrideAttrs
+                (_previous: {
+                  DYLINT_RUSTFLAGS = "--deny warnings";
+                });
+            node-ingress-octet-deny-all =
+              assert executableExtentOctetAdmitted;
+              (executable-extent-octet.lib.mkConsumerCheck {
+                inherit system;
+                src = nodeIngressOctetWorkspace;
+                packages = [ "molten-node-ingress-octet" ];
+                cargoExtraArgs = "--all-targets --all-features";
+                cargoLock = ./checks/node-ingress-octet/Cargo.lock;
               }).overrideAttrs
                 (_previous: {
                   DYLINT_RUSTFLAGS = "--deny warnings";

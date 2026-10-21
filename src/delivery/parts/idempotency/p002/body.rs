@@ -84,7 +84,13 @@ fn read_entry_from_store(db: &redb::Database, dedup_key: &str) -> Result<Option<
     parse_dedup_entry(&value).map(Some)
 }
 
-fn store_first_decision(db: &redb::Database, window: &Window, entry: &DedupEntry, receipt: &Receipt) -> Result<()> {
+fn store_first_decision(
+    db: &redb::Database,
+    window: &Window,
+    entry: &DedupEntry,
+    receipt: &Receipt,
+    publication_metadata: Option<&IoValue>,
+) -> Result<()> {
     let write_txn = db.begin_write().map_err(store_error)?;
     {
         let mut windows = write_txn.open_table(STORE_WINDOWS).map_err(store_error)?;
@@ -105,6 +111,9 @@ fn store_first_decision(db: &redb::Database, window: &Window, entry: &DedupEntry
         let mut pins = write_txn.open_table(STORE_PINS).map_err(store_error)?;
         pins.insert(entry.operation_ref.as_str(), entry.entry_ref.as_bytes()).map_err(store_error)?;
         pins.insert(window.scope_ref.as_str(), window.window_ref.as_bytes()).map_err(store_error)?;
+    }
+    if let Some(metadata) = publication_metadata {
+        insert_publication_intent(&write_txn, entry, metadata)?;
     }
     write_txn.commit().map_err(store_error)
 }

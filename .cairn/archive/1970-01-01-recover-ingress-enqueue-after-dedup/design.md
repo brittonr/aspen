@@ -49,3 +49,47 @@ F01 owns shutdown admission after dispatch. F14 owns historical shutdown result 
 Baseline `control_ingress_enqueues_once_and_preserves_provenance_gate` and `control_ingress_denies_missing_authority_before_enqueue` before core edits. Repeat them after edits with normal repository recovery regressions.
 
 Run focused Octet and Clippy error gates, workspace tests, relevant Nix delivery and node-state checks, and required Cairn gates. Keep failed and blocked runs explicit. Local fault tests do not prove power-loss durability, exactly-once external effects, consensus safety, or release readiness.
+
+## Implementation decision — 2026-10-20
+
+The selected mechanism extends the existing delivery Redb database with canonical
+`delivery-publication-intent-v1` records and a separate adapter-health table. A first
+dedup decision and its `reserved` intent commit in the same transaction. Node-runtime
+metadata uses `node-ingress-publication-v1` with `reserved`, `publishing`, `published`,
+`dispatching`, or `dispatched` phases. Compare-before-update preserves exact intent
+identity. No dependency revision, generated build plan, or existing delivery identity
+framing changes.
+
+The capability-rooted publication lease spans observation, reservation, publication,
+and dispatch ordering. Node-host owns no-replace file creation and payload/parent
+synchronization; the pure reconciliation core owns decisions only. Fresh database
+initialization requires an atomically created file. Existing empty databases reject,
+and Redb repair callbacks abort existing-store repair rather than silently admitting
+repaired state. Quarantine uses the already pinned Transactional Reconciliation Core
+`QuarantineStatus`/`CommitOutcomeUnknown` vocabulary. Normal reopen never clears the
+durable quarantine. This is a local consumer contract, not implementation of the
+separate storage-fault package's repair, consensus, or voting policy.
+
+Lease acquisition blocks until the current holder releases it; contention alone is
+not an uncertain persistence outcome or a terminal delivery decision. Input rejection
+and unavailable per-request observations before reservation deny only that request.
+Direct submission validates existing inbox and queue facts before publication.
+Persistence errors and failures after reservation preserve durable quarantine;
+invalid stored intent metadata also fails closed. Dedup rejection retains the
+original decision and sequence diagnostics in the ingress receipt.
+
+Queue and ingress receipt v1 shapes remain unchanged. New ingress phases distinguish
+recovered publication, observed publication, duplicate publication, completed dispatch,
+conflict, and unknown outcome. An inbox-only repair creates a new observation receipt;
+a completed-dispatch observation references the immutable control receipt. Neither
+claims to recover the original missing enqueue receipt. The control receipt's exact
+canonical request reference binds its operation; no duplicated operation field or
+historical receipt rewrite is added. Legacy dedup records without an intent remain
+unresolved unless exact local publication/result evidence suffices. An uncertain
+`publishing`/`dispatching` intent never grants replay from absence alone.
+
+Controlled persisted-boundary tests and a temporary public-API smoke exercise reopen
+and receipt loss. They do not inject hardware power loss or an actual Redb commit/sync
+failure. Actual status-dispatch cases use the existing synthetic startup fixture only
+under `cfg(test)`; they are not F02 startup-policy evidence. Executed results and failed
+attempts belong in this change's verification evidence, not in historical audit claims.

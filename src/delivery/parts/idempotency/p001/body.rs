@@ -80,6 +80,12 @@ pub fn check_with_root(input: CapabilityCheckInput<'_>) -> Result<Decision> {
 }
 
 fn check_request(root: &crate::local_store::DeliveryStoreRoot, input: CheckRequest<'_>) -> Result<Decision> {
+    let operation = validated_check_operation(input)?;
+    let db = ensure_store_tables_with_root(root)?;
+    check_operation_in_store(&db, input, operation, None)
+}
+
+fn validated_check_operation(input: CheckRequest<'_>) -> Result<OperationId> {
     validate_scope_profile(input.scope_profile)?;
     require_ref(input.scope_ref, "delivery scope ref")?;
     validate_refs(input.policy_refs, "delivery policy ref")?;
@@ -87,7 +93,7 @@ fn check_request(root: &crate::local_store::DeliveryStoreRoot, input: CheckReque
     if let Some(result_ref) = input.semantic_result_ref {
         require_ref(result_ref, "delivery semantic result ref")?;
     }
-    let operation = derive_operation_id(OperationIdInput {
+    derive_operation_id(OperationIdInput {
         scope_ref: input.scope_ref.to_owned(),
         producer: input.producer.to_owned(),
         consumer: input.consumer.to_owned(),
@@ -95,11 +101,18 @@ fn check_request(root: &crate::local_store::DeliveryStoreRoot, input: CheckReque
         intent: input.intent.to_owned(),
         payload_ref: input.payload_ref.to_owned(),
         policy_refs: input.policy_refs.to_vec(),
-    })?;
+    })
+}
+
+fn check_operation_in_store(
+    db: &redb::Database,
+    input: CheckRequest<'_>,
+    operation: OperationId,
+    publication_metadata: Option<&IoValue>,
+) -> Result<Decision> {
     let dedup_key = dedup_key_ref(&operation)?;
-    let db = ensure_store_tables_with_root(root)?;
-    let existing_entry = read_entry_from_store(&db, &dedup_key)?;
-    let current_window = read_or_create_window(&db, input.scope_profile, input.scope_ref, input.policy_refs)?;
+    let existing_entry = read_entry_from_store(db, &dedup_key)?;
+    let current_window = read_or_create_window(db, input.scope_profile, input.scope_ref, input.policy_refs)?;
     let law = classify_idempotency_decision(DecisionLawInput {
         operation: &operation,
         window: &current_window,
@@ -107,19 +120,20 @@ fn check_request(root: &crate::local_store::DeliveryStoreRoot, input: CheckReque
         evidence_refs: input.evidence_refs,
         gap_policy: input.gap_policy,
     })?;
-    let decision = match law.kind {
-        IdempotencyDecisionKind::First => first_decision(input, &db, operation, current_window, dedup_key)?,
+    match law.kind {
+        IdempotencyDecisionKind::First => {
+            first_decision(FirstDecisionInput { request: input, publication_metadata }, db, operation, current_window, dedup_key)
+        }
         IdempotencyDecisionKind::Duplicate | IdempotencyDecisionKind::Conflict => {
             let entry = existing_entry.ok_or_else(|| {
                 MoltenError::invalid_harness("delivery idempotency invariant violated: duplicate/conflict without entry")
             })?;
-            duplicate_or_conflict_decision(&db, operation, current_window, entry, &law)?
+            duplicate_or_conflict_decision(db, operation, current_window, entry, &law)
         }
         IdempotencyDecisionKind::Stale | IdempotencyDecisionKind::Gap | IdempotencyDecisionKind::Retry => {
-            suppressed_decision_from_law(&db, operation, current_window, &law)?
+            suppressed_decision_from_law(db, operation, current_window, &law)
         }
-    };
-    Ok(decision)
+    }
 }
 
 pub fn read_idempotency_receipt(root: &std::path::Path, receipt_ref: &str) -> Result<IoValue> {

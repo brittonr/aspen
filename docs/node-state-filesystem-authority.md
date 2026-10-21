@@ -33,6 +33,15 @@ r[impl molten.node.cap_std_identity_secret] Endpoint secrets are created and loa
 
 r[impl molten.node.cap_std_request_lifecycle] Pending requests are represented by `Entry` values returned by the inbox capability. Entries bind their originating root and exact namespace view. Dispatch reopens the logical entry through that namespace, archives through the outbox namespace, and removes through the inbox namespace. The legacy `Path` compatibility API accepts either one normal UTF-8 entry component or the exact diagnostic path under the selected state root's inbox, converts it to an entry identity, and never treats the supplied host path as a deletion target. Wrong-root entries, links, non-regular leaves, malformed names, and stale canonical bindings deny without lexical host-path authorization.
 
+Ingress publication uses `DirectoryRoot::write_new`: it creates a regular leaf without
+replacement in an existing capability-owned parent, synchronizes the payload, and
+opens that same parent for synchronization. An error retains partial bytes for
+reconciliation rather than removing or overwriting uncertain evidence. Local-store
+`create_database_file` similarly requires no-replace creation, distinguishing a new
+Redb file from an existing empty or repair-requiring database. Existing stores cannot
+be reinitialized as fresh delivery history. These mechanics do not prove hardware
+durability or authorize a control operation.
+
 ## Async and nested-store authority
 
 r[impl molten.node.cap_std_async_authority] Live listeners, senders, ingress delivery, service loops, supervisor work, and target-side job execution carry the `molten-node-host` open root across async boundaries. Inner functions do not accept a host root path. Artifact, ledger, chunk, and delivery-idempotency adapters receive capability-derived store roots; Redb files are opened through those roots.

@@ -1,11 +1,17 @@
 
+struct FirstDecisionInput<'a> {
+    request: CheckRequest<'a>,
+    publication_metadata: Option<&'a IoValue>,
+}
+
 fn first_decision(
-    input: CheckRequest<'_>,
+    input: FirstDecisionInput<'_>,
     db: &redb::Database,
     operation: OperationId,
     window: Window,
     dedup_key: String,
 ) -> Result<Decision> {
+    let FirstDecisionInput { request: input, publication_metadata } = input;
     let next_sequence = operation
         .sequence
         .checked_add(1)
@@ -41,7 +47,7 @@ fn first_decision(
         evidence_refs: input.evidence_refs,
     })?;
     let entry = parse_dedup_entry(&entry_value)?;
-    store_first_decision(db, &updated_window, &entry, &receipt)?;
+    store_first_decision(db, &updated_window, &entry, &receipt, publication_metadata)?;
     Ok(Decision {
         operation,
         window: updated_window,

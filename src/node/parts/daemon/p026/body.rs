@@ -127,6 +127,7 @@ struct EnqueueOutcome {
     idempotency_receipt_ref: Option<String>,
     queue_receipt_ref: Option<String>,
     has_enqueued: bool,
+    phase: &'static str,
     diagnostics: Vec<String>,
 }
 
@@ -134,52 +135,7 @@ fn apply_ingress_enqueue(
     state_root: &crate::node_state::DirectoryRoot,
     envelope: &ControlIngressEnvelope,
 ) -> Result<EnqueueOutcome> {
-    let idempotency_evidence_refs = ingress_idempotency_evidence_refs(envelope);
-    let scope_ref = crate::delivery_idempotency::remote_topic_scope_ref(&envelope.topic, &envelope.to_node)?;
-    let delivery_root = state_root.delivery_store()?;
-    let delivery = crate::delivery_idempotency::check_with_root(crate::delivery_idempotency::CapabilityCheckInput {
-        root: &delivery_root,
-        request: crate::delivery_idempotency::CheckRequest {
-            scope_profile: crate::delivery_idempotency::SCOPE_REMOTE_TOPIC,
-            scope_ref: &scope_ref,
-            producer: &envelope.from_peer,
-            consumer: &envelope.to_node,
-            sequence: envelope.sequence,
-            intent: "node-control-ingress",
-            payload_ref: &envelope.request.request_ref,
-            policy_refs: &envelope.policy_refs,
-            evidence_refs: &idempotency_evidence_refs,
-            semantic_result_ref: Some(&envelope.request.request_ref),
-            gap_policy: crate::delivery_idempotency::GapPolicy::Deny,
-        },
-    })?;
-    let idempotency_receipt_ref = Some(delivery.receipt.receipt_ref.clone());
-    import_artifact(state_root, &delivery.receipt.value)?;
-    if delivery.should_commit_side_effect {
-        let submitted = submit_control_request_with_root(state_root, &envelope.request.value)?;
-        return Ok(EnqueueOutcome {
-            idempotency_receipt_ref,
-            queue_receipt_ref: Some(submitted.queue_receipt_ref),
-            has_enqueued: true,
-            diagnostics: Vec::new(),
-        });
-    }
-    if delivery.receipt.decision == "duplicate" {
-        return Ok(EnqueueOutcome {
-            idempotency_receipt_ref,
-            queue_receipt_ref: prior_queue_receipt_ref(state_root, &envelope.request.request_ref).ok(),
-            has_enqueued: false,
-            diagnostics: Vec::new(),
-        });
-    }
-    let mut diagnostics = delivery.receipt.diagnostics.clone();
-    diagnostics.push(format!("node control ingress idempotency decision {}", delivery.receipt.decision));
-    Ok(EnqueueOutcome {
-        idempotency_receipt_ref,
-        queue_receipt_ref: None,
-        has_enqueued: false,
-        diagnostics,
-    })
+    ingress::enqueue(state_root, envelope)
 }
 
 pub fn deliver_control_ingress(input: &ControlIngressDeliverInput<'_>) -> Result<ControlIngressDeliver> {
@@ -213,11 +169,7 @@ fn deliver_control_ingress_with_root(
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let receipt_value = ingress_receipt_value(&IngressReceiptValueInput {
         decision,
-        phase: if enqueue.has_enqueued {
-            "deliver"
-        } else {
-            "duplicate-or-deny"
-        },
+        phase: if enqueue.phase.is_empty() { "duplicate-or-deny" } else { enqueue.phase },
         transport: &envelope.transport,
         envelope: &envelope,
         idempotency_receipt_ref: enqueue.idempotency_receipt_ref.as_deref(),

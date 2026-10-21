@@ -20,7 +20,7 @@ The packages are plans only. No implementation task is complete, and no fix, arc
 |---|---|---|---|
 | F01: denied shutdown changes node lifecycle state | High | Source | [fix-node-shutdown-admission](../../.cairn/archive/1970-01-01-fix-node-shutdown-admission/proposal.md) |
 | F02: normal startup supplies synthetic gate evidence | High | Source | [require-node-startup-source-gate-evidence](../../.cairn/changes/require-node-startup-source-gate-evidence/proposal.md) |
-| F03: dedup commit precedes unrecoverable ingress enqueue | High | Source | [recover-ingress-enqueue-after-dedup](../../.cairn/changes/recover-ingress-enqueue-after-dedup/proposal.md) |
+| F03: dedup commit precedes unrecoverable ingress enqueue | High | Source | [recover-ingress-enqueue-after-dedup](../../.cairn/archive/1970-01-01-recover-ingress-enqueue-after-dedup/proposal.md) |
 | F04: historical success suppresses repair after replica loss | High | Core reproduction | [repair-lost-replicas-after-prior-success](../../.cairn/archive/1970-01-01-repair-lost-replicas-after-prior-success/proposal.md) |
 | F05: cleanup removes the only replica in a required domain | High | Core plan reproduction | [preserve-replica-fault-domains-during-cleanup](../../.cairn/archive/1970-01-01-preserve-replica-fault-domains-during-cleanup/proposal.md) |
 | F06: merge preparation bypasses migration admission | High | Source | [admit-world-merge-migrations-before-execution](../../.cairn/changes/admit-world-merge-migrations-before-execution/proposal.md) |

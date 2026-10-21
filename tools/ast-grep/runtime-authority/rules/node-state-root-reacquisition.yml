@@ -7,6 +7,7 @@ metadata:
   surface: node-state-carried-authority
   non_claim: structural-authority-threading-only
 files:
+  - src/node/ingress/*.rs
   - src/node/parts/daemon/p020/body.rs
   - src/node/parts/daemon/p025/body.rs
   - src/node/parts/daemon/p051/body.rs
@@ -33,6 +34,7 @@ files:
   - tools/ast-grep/runtime-authority/fixtures/negative/node_state_carried_authority.rs
 ignores:
   - "**/tests/**"
+  - src/node/ingress/tests.rs
 rule:
   any:
     - pattern: crate::node_state::DirectoryRoot::open($PATH)

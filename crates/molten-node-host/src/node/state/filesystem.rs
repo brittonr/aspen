@@ -63,7 +63,7 @@ pub(super) fn open_dir_components(
     Ok(current)
 }
 
-fn open_parent<'a>(
+pub(super) fn open_parent<'a>(
     dir: &cap_std::fs::Dir,
     path: &'a std::path::Path,
     create: bool,

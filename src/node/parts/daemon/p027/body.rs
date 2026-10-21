@@ -229,11 +229,6 @@ fn ingress_idempotency_evidence_refs(envelope: &ControlIngressEnvelope) -> Vec<S
     refs
 }
 
-fn prior_queue_receipt_ref(root: &crate::node_state::DirectoryRoot, request_ref: &str) -> Result<String> {
-    let receipt = read_preserves(root, &queue_receipt_path(request_ref)?)?;
-    crate::preserves_rail::canonical_hash(&receipt)
-}
-
 fn prior_dispatch_for_request(
     root: &crate::node_state::DirectoryRoot,
     request: &crate::node_runtime::ControlRequest,

@@ -1,4 +1,5 @@
 use redb::ReadableDatabase;
+use redb::ReadableTable;
 
 type IoValue = preserves::IOValue;
 type Value<T> = preserves::Value<T>;

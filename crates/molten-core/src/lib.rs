@@ -28,6 +28,7 @@ pub mod fabric_simulation;
 pub mod fabric_time;
 pub mod fabric_transport;
 pub mod live_binding;
+pub mod node_ingress;
 pub mod nominal;
 pub mod planning;
 pub mod policy;

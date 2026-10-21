@@ -155,6 +155,14 @@ impl StorageRoot {
         Ok(names)
     }
 
+    /// Create one new database member in an existing parent, without replacing prior bytes.
+    pub fn create_database_file(&self, path: &Locator) -> Result<std::fs::File> {
+        let mut options = cap_std::fs::OpenOptions::new();
+        options.read(true).write(true).create_new(true).follow(cap_fs_ext::FollowSymlinks::No);
+        let file = self.dir.open_with(path.as_path(), &options).map_err(MoltenError::from)?;
+        Ok(file.into_std())
+    }
+
     pub fn open_database_file(&self, path: &Locator) -> Result<std::fs::File> {
         match self.dir.symlink_metadata(path.as_path()) {
             Ok(metadata) => {
