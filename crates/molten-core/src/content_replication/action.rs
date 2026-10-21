@@ -2,28 +2,66 @@ use super::*;
 
 impl super::planner::PlanningState<'_> {
     // r[impl molten.content_replication.retention_confidentiality]
+    // r[impl molten.audit_f05.residual_policy]
+    // r[impl molten.audit_f05.selection]
     pub(super) fn plan_cleanup(
         &mut self,
         content: &ReplicaRule,
         current: &[&Replica],
         excess: usize,
     ) -> Result<(), Issue> {
-        for replica in current.iter().rev().take(excess) {
-            self.cleanup_candidates.insert(content.content_ref.clone());
-            if replica.pinned || !self.input.manifest.repair.cleanup_after_handoff {
-                self.defer(content, Issue::ActiveRetentionPin)?;
+        self.cleanup_candidates.insert(content.content_ref.clone());
+        if !self.input.manifest.repair.cleanup_after_handoff {
+            return self.defer(content, Issue::ActiveRetentionPin);
+        }
+        let Some(authority_ref) = content.cleanup_authority_ref.as_ref() else {
+            return self.defer(content, Issue::MissingCleanupAuthority);
+        };
+        let policy = &self.input.manifest.policy;
+        let mut domain_counts = std::collections::BTreeMap::new();
+        for replica in current {
+            let count = domain_counts.entry(replica.fault_domain.as_str()).or_insert(0_usize);
+            *count = count.saturating_add(1);
+        }
+        let mut remaining_domains = domain_counts.len();
+        let mut remaining_replicas = current.len();
+        let mut selected = 0_usize;
+        let mut unresolved = None;
+        for replica in current.iter().rev() {
+            if selected == excess {
+                break;
+            }
+            let residual_count = remaining_replicas.saturating_sub(1);
+            if residual_count < policy.desired_replicas || residual_count < policy.minimum_verified_replicas {
+                unresolved.get_or_insert(Issue::InsufficientPeers);
                 continue;
             }
-            let Some(authority_ref) = content.cleanup_authority_ref.as_ref() else {
-                self.defer(content, Issue::MissingCleanupAuthority)?;
+            let domain_count = domain_counts.get_mut(replica.fault_domain.as_str()).ok_or(Issue::InvalidPolicy)?;
+            let residual_domains = remaining_domains.saturating_sub(usize::from(*domain_count == 1));
+            if residual_domains < policy.minimum_fault_domains {
+                unresolved.get_or_insert(Issue::InsufficientFaultDomains);
                 continue;
-            };
+            }
+            if replica.pinned {
+                unresolved.get_or_insert(Issue::ActiveRetentionPin);
+                continue;
+            }
             let Some(clearance_ref) = replica.cleanup_clearance_ref.as_ref() else {
-                self.defer(content, Issue::MissingRetentionPin)?;
+                unresolved.get_or_insert(Issue::MissingRetentionPin);
                 continue;
             };
-            let action = build_cleanup(&self.input.manifest, content, replica, authority_ref, clearance_ref)?;
-            self.actions.push(action);
+            if self.actions.len() >= self.input.manifest.resources.max_queue_depth {
+                return Err(Issue::QueueExhausted);
+            }
+            self.actions
+                .push(build_cleanup(&self.input.manifest, content, replica, authority_ref, clearance_ref)?);
+            *domain_count = domain_count.saturating_sub(1);
+            remaining_domains = residual_domains;
+            remaining_replicas = residual_count;
+            selected = selected.saturating_add(1);
+        }
+        if selected < excess {
+            return self.defer(content, unresolved.unwrap_or(Issue::InsufficientPeers));
         }
         Ok(())
     }
@@ -49,7 +87,8 @@ impl super::planner::PlanningState<'_> {
         } else {
             Decision::Partial
         };
-        let plan_ref = identify_plan(&self.input.manifest, self.input.observed_tick, &self.actions)?;
+        let plan_ref =
+            identify_plan(&self.input.manifest, self.input.observed_tick, &self.actions, &self.replica_deficits)?;
         Ok(Plan {
             plan_ref,
             decision,
@@ -64,7 +103,8 @@ impl super::planner::PlanningState<'_> {
                 .desired_replicas
                 .saturating_mul(self.input.manifest.contents.len()),
             verified_replicas: self.verified_replicas,
-            under_replicated: self.under_replicated.into_iter().collect(),
+            under_replicated: self.replica_deficits.iter().map(|deficit| deficit.content_ref.clone()).collect(),
+            replica_deficits: self.replica_deficits,
             deferred: self.deferred.into_iter().collect(),
             required_pins: self.required_pins.into_iter().collect(),
             cleanup_candidates: self.cleanup_candidates.into_iter().collect(),
@@ -99,30 +139,6 @@ pub(super) fn build_transfer(input: TransferBuild<'_>) -> Result<Action, Issue> 
         preserve_protected_form: input.content.protected,
         cleanup_authority_ref: None,
         prior_result_ref: None,
-        diagnostic: None,
-    })
-}
-
-pub(super) fn build_reuse(
-    content: &ReplicaRule,
-    source: &Replica,
-    target: &Peer,
-    prior: &PriorOperation,
-) -> Result<Action, Issue> {
-    Ok(Action {
-        action_id: identify_action(&prior.operation_id, ActionKind::Reuse)?,
-        operation_id: prior.operation_id.clone(),
-        kind: ActionKind::Reuse,
-        attempt: prior.attempt,
-        content_ref: content.content_ref.clone(),
-        source_peer: Some(source.peer_id.clone()),
-        target_peer: target.peer_id.clone(),
-        fault_domain: target.fault_domain.clone(),
-        encoded_bytes: content.encoded_bytes,
-        pin_required: true,
-        preserve_protected_form: content.protected,
-        cleanup_authority_ref: None,
-        prior_result_ref: prior.result_ref.clone(),
         diagnostic: None,
     })
 }
@@ -190,7 +206,17 @@ fn build_defer(manifest: &Manifest, content: &ReplicaRule, issue: Issue) -> Resu
 
 pub(super) fn denied_plan(input: &ReconcileInput, issues: Vec<Issue>) -> Result<Plan, Issue> {
     let actions = Vec::new();
-    let plan_ref = identify_plan(&input.manifest, input.observed_tick, &actions)?;
+    let mut replica_deficits = input
+        .manifest
+        .contents
+        .iter()
+        .map(|content| ReplicaDeficit {
+            content_ref: content.content_ref.clone(),
+            missing_replicas: input.manifest.policy.desired_replicas,
+        })
+        .collect::<Vec<_>>();
+    replica_deficits.sort();
+    let plan_ref = identify_plan(&input.manifest, input.observed_tick, &actions, &replica_deficits)?;
     Ok(Plan {
         plan_ref,
         decision: Decision::Denied,
@@ -200,79 +226,12 @@ pub(super) fn denied_plan(input: &ReconcileInput, issues: Vec<Issue>) -> Result<
         actions,
         desired_replicas: input.manifest.policy.desired_replicas.saturating_mul(input.manifest.contents.len()),
         verified_replicas: 0,
-        under_replicated: input.manifest.contents.iter().map(|content| content.content_ref.clone()).collect(),
+        under_replicated: replica_deficits.iter().map(|deficit| deficit.content_ref.clone()).collect(),
+        replica_deficits,
         deferred: Vec::new(),
         required_pins: Vec::new(),
         cleanup_candidates: Vec::new(),
         issues,
         non_claims: NON_CLAIMS.iter().map(ToString::to_string).collect(),
     })
-}
-
-pub fn status(plan: &Plan, history: &[PriorOperation]) -> Status {
-    let terminal = history
-        .iter()
-        .map(|operation| (operation.operation_id.as_str(), operation))
-        .collect::<std::collections::BTreeMap<_, _>>();
-    let data_actions = plan.actions.iter().filter(|action| {
-        matches!(action.kind, ActionKind::Transfer | ActionKind::Repair | ActionKind::Handoff | ActionKind::Reuse)
-    });
-    let successful = data_actions
-        .clone()
-        .filter(|action| {
-            terminal
-                .get(action.operation_id.as_str())
-                .is_some_and(|operation| operation.outcome == OperationOutcome::Verified)
-        })
-        .collect::<Vec<_>>();
-    let successful_ids = successful
-        .iter()
-        .map(|action| action.operation_id.as_str())
-        .collect::<std::collections::BTreeSet<_>>();
-    let mut active_operations = data_actions
-        .filter(|action| !terminal.contains_key(action.operation_id.as_str()))
-        .map(|action| action.operation_id.clone())
-        .collect::<Vec<_>>();
-    active_operations.sort();
-    let plan_operation_ids = plan
-        .actions
-        .iter()
-        .map(|action| action.operation_id.as_str())
-        .collect::<std::collections::BTreeSet<_>>();
-    let mut failures = terminal
-        .values()
-        .filter(|operation| {
-            plan_operation_ids.contains(operation.operation_id.as_str())
-                && operation.outcome != OperationOutcome::Verified
-        })
-        .map(|operation| operation.operation_id.clone())
-        .collect::<Vec<_>>();
-    failures.sort();
-    let under_replicated = plan
-        .under_replicated
-        .iter()
-        .filter(|content_ref| {
-            plan.actions.iter().any(|action| {
-                action.content_ref == **content_ref
-                    && (action.kind == ActionKind::Defer
-                        || (matches!(
-                            action.kind,
-                            ActionKind::Transfer | ActionKind::Repair | ActionKind::Handoff | ActionKind::Reuse
-                        ) && !successful_ids.contains(action.operation_id.as_str())))
-            })
-        })
-        .cloned()
-        .collect();
-    Status {
-        plan_ref: plan.plan_ref.clone(),
-        generation: plan.generation,
-        placement_epoch: plan.placement_epoch,
-        desired_replicas: plan.desired_replicas,
-        verified_replicas: plan.verified_replicas.saturating_add(successful.len()).min(plan.desired_replicas),
-        under_replicated,
-        active_operations,
-        failures,
-        pins: plan.required_pins.clone(),
-        non_claims: plan.non_claims.clone(),
-    }
 }

@@ -158,7 +158,6 @@ pub enum ActionKind {
     Transfer,
     Repair,
     Handoff,
-    Reuse,
     Defer,
     Cleanup,
 }
@@ -169,7 +168,6 @@ impl ActionKind {
             Self::Transfer => "transfer",
             Self::Repair => "repair",
             Self::Handoff => "handoff",
-            Self::Reuse => "reuse",
             Self::Defer => "defer",
             Self::Cleanup => "cleanup",
         }
@@ -211,6 +209,13 @@ impl Decision {
     }
 }
 
+// r[impl molten.audit_f07.per_content_accounting]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ReplicaDeficit {
+    pub content_ref: String,
+    pub missing_replicas: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Plan {
     pub plan_ref: String,
@@ -222,6 +227,7 @@ pub struct Plan {
     pub desired_replicas: usize,
     pub verified_replicas: usize,
     pub under_replicated: Vec<String>,
+    pub replica_deficits: Vec<ReplicaDeficit>,
     pub deferred: Vec<String>,
     pub required_pins: Vec<String>,
     pub cleanup_candidates: Vec<String>,

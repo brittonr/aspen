@@ -2,7 +2,7 @@ use super::*;
 
 const OPERATION_CONTEXT: &str = "onixresearch.molten.content-replication.operation.v1";
 const ACTION_CONTEXT: &str = "onixresearch.molten.content-replication.action.v1";
-const PLAN_CONTEXT: &str = "onixresearch.molten.content-replication.plan.v1";
+const PLAN_CONTEXT: &str = "onixresearch.molten.content-replication.plan.v2";
 
 pub struct OperationFrame<'a> {
     pub manifest: &'a Manifest,
@@ -47,13 +47,19 @@ pub fn identify_action(operation_id: &str, kind: ActionKind) -> Result<String, I
 }
 
 // r[impl molten.content_replication.planner]
-pub fn identify_plan(manifest: &Manifest, observed_tick: u64, actions: &[Action]) -> Result<String, Issue> {
+pub fn identify_plan(
+    manifest: &Manifest,
+    observed_tick: u64,
+    actions: &[Action],
+    replica_deficits: &[ReplicaDeficit],
+) -> Result<String, Issue> {
     let mut hasher = blake3::Hasher::new_derive_key(PLAN_CONTEXT);
     update(&mut hasher, &manifest.service_id)?;
     update(&mut hasher, &manifest.generation.to_string())?;
     update(&mut hasher, &manifest.membership_epoch.to_string())?;
     update(&mut hasher, &manifest.placement_epoch.to_string())?;
     update(&mut hasher, &observed_tick.to_string())?;
+    update(&mut hasher, &actions.len().to_string())?;
     for action in actions {
         update(&mut hasher, &action.action_id)?;
         update(&mut hasher, &action.operation_id)?;
@@ -62,6 +68,11 @@ pub fn identify_plan(manifest: &Manifest, observed_tick: u64, actions: &[Action]
         update(&mut hasher, &action.content_ref)?;
         update(&mut hasher, action.source_peer.as_deref().unwrap_or("none"))?;
         update(&mut hasher, &action.target_peer)?;
+    }
+    update(&mut hasher, &replica_deficits.len().to_string())?;
+    for deficit in replica_deficits {
+        update(&mut hasher, &deficit.content_ref)?;
+        update(&mut hasher, &deficit.missing_replicas.to_string())?;
     }
     Ok(format!("blake3:{}", hasher.finalize().to_hex()))
 }

@@ -7,7 +7,6 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use super::action::TransferBuild;
-use super::action::build_reuse;
 use super::action::build_transfer;
 use super::action::denied_plan;
 use super::*;
@@ -31,7 +30,7 @@ pub(super) struct PlanningState<'a> {
     pub(super) input: &'a ReconcileInput,
     pub(super) history: BTreeMap<&'a str, &'a PriorOperation>,
     pub(super) actions: Vec<Action>,
-    pub(super) under_replicated: BTreeSet<String>,
+    pub(super) replica_deficits: Vec<ReplicaDeficit>,
     pub(super) deferred: BTreeSet<String>,
     pub(super) required_pins: BTreeSet<String>,
     pub(super) cleanup_candidates: BTreeSet<String>,
@@ -47,7 +46,7 @@ impl<'a> PlanningState<'a> {
             input,
             history: input.history.iter().map(|operation| (operation.operation_id.as_str(), operation)).collect(),
             actions: Vec::with_capacity(input.manifest.resources.max_queue_depth),
-            under_replicated: BTreeSet::new(),
+            replica_deficits: Vec::with_capacity(input.manifest.contents.len()),
             deferred: BTreeSet::new(),
             required_pins: BTreeSet::new(),
             cleanup_candidates: BTreeSet::new(),
@@ -58,13 +57,19 @@ impl<'a> PlanningState<'a> {
         }
     }
 
+    // r[impl molten.audit_f07.deficit_status]
+    // r[impl molten.audit_f07.per_content_accounting]
     fn reconcile(&mut self, content: &ReplicaRule) -> Result<(), Issue> {
         let current = self.current_replicas(content);
-        self.verified_replicas = self.verified_replicas.saturating_add(current.len());
         let desired = self.input.manifest.policy.desired_replicas;
+        self.verified_replicas = self.verified_replicas.saturating_add(current.len().min(desired));
         if current.len() < desired {
-            self.under_replicated.insert(content.content_ref.clone());
-            self.plan_missing(content, &current, desired.saturating_sub(current.len()))?;
+            let missing_replicas = desired.saturating_sub(current.len());
+            self.replica_deficits.push(ReplicaDeficit {
+                content_ref: content.content_ref.clone(),
+                missing_replicas,
+            });
+            self.plan_missing(content, &current, missing_replicas)?;
         } else if current.len() > desired {
             self.plan_cleanup(content, &current, current.len().saturating_sub(desired))?;
         }
@@ -115,6 +120,7 @@ impl<'a> PlanningState<'a> {
         });
         if candidates.len() < needed {
             self.issues.insert(Issue::InsufficientPeers);
+            self.deferred.insert(content.content_ref.clone());
         }
         let selected = candidates.into_iter().take(needed).collect::<Vec<_>>();
         let selected_domains = selected.iter().map(|peer| peer.fault_domain.as_str()).collect::<BTreeSet<_>>();
@@ -174,7 +180,7 @@ impl<'a> PlanningState<'a> {
 
     fn plan_transfer(&mut self, content: &ReplicaRule, source: &Replica, target: &Peer) -> Result<(), Issue> {
         let kind = self.transfer_kind(content, target);
-        let attempt = self.next_attempt(content, target, kind);
+        let attempt = self.next_attempt(content, target);
         if attempt > self.input.manifest.repair.max_attempts {
             return self.defer(content, Issue::RepairExhausted);
         }
@@ -189,8 +195,8 @@ impl<'a> PlanningState<'a> {
             kind,
             attempt,
         })?;
-        if let Some(prior) = self.history.get(operation_id.as_str()) {
-            return self.reuse_or_conflict(content, source, target, prior);
+        if self.history.contains_key(operation_id.as_str()) {
+            return Err(Issue::ConflictingOperation);
         }
         let action = build_transfer(TransferBuild {
             content,
@@ -214,18 +220,21 @@ impl<'a> PlanningState<'a> {
         }
     }
 
-    fn next_attempt(&self, content: &ReplicaRule, target: &Peer, _kind: ActionKind) -> u32 {
-        let matching = self.input.history.iter().filter(|operation| {
-            operation.content_ref == content.content_ref
-                && operation.target_peer == target.peer_id
-                && operation.generation == self.input.manifest.generation
-                && operation.membership_epoch == self.input.manifest.membership_epoch
-                && operation.placement_epoch == self.input.manifest.placement_epoch
-        });
-        if let Some(verified) = matching.clone().find(|operation| operation.outcome == OperationOutcome::Verified) {
-            return verified.attempt;
-        }
-        matching.map(|operation| operation.attempt).max().map_or(1, |attempt| attempt.saturating_add(1))
+    // r[impl molten.audit_f04.fresh_repair]
+    fn next_attempt(&self, content: &ReplicaRule, target: &Peer) -> u32 {
+        self.input
+            .history
+            .iter()
+            .filter(|operation| {
+                operation.content_ref == content.content_ref
+                    && operation.target_peer == target.peer_id
+                    && operation.generation == self.input.manifest.generation
+                    && operation.membership_epoch == self.input.manifest.membership_epoch
+                    && operation.placement_epoch == self.input.manifest.placement_epoch
+            })
+            .map(|operation| operation.attempt)
+            .max()
+            .map_or(1, |attempt| attempt.saturating_add(1))
     }
 
     // r[impl molten.content_replication.resources_failures]
@@ -235,32 +244,6 @@ impl<'a> PlanningState<'a> {
             && self.planned_bytes.checked_add(encoded_bytes).is_some_and(|bytes| {
                 bytes <= self.input.manifest.resources.max_transfer_bytes && bytes <= MAX_REPLICATION_BYTES
             })
-    }
-
-    // r[impl molten.content_replication.receiver_driven]
-    fn reuse_or_conflict(
-        &mut self,
-        content: &ReplicaRule,
-        source: &Replica,
-        target: &Peer,
-        prior: &PriorOperation,
-    ) -> Result<(), Issue> {
-        if prior.content_ref != content.content_ref
-            || prior.source_peer.as_deref() != Some(source.peer_id.as_str())
-            || prior.target_peer != target.peer_id
-            || prior.generation != self.input.manifest.generation
-            || prior.membership_epoch != self.input.manifest.membership_epoch
-            || prior.placement_epoch != self.input.manifest.placement_epoch
-        {
-            self.issues.insert(Issue::ConflictingOperation);
-            return Err(Issue::ConflictingOperation);
-        }
-        if prior.outcome == OperationOutcome::Verified {
-            let action = build_reuse(content, source, target, prior)?;
-            self.actions.push(action);
-            return Ok(());
-        }
-        self.defer(content, Issue::ConflictingOperation)
     }
 
     fn record_transfer(&mut self, action: Action, content: &ReplicaRule) -> Result<(), Issue> {

@@ -8,6 +8,8 @@ The extension owns replica policy, placement, repair, handoff, and convergence s
 
 Fabric adapters retain transport, time, membership, placement, durable-state, resource, identity, and observation mechanisms. These adapters do not define replica policy.
 
+The content-replication maintainers own the pure core in `crates/molten-core/src/content_replication/`, the shell and adapters in `src/content_replication/`, and their conformance evidence.
+
 ## Pure planner
 
 The functional core receives a complete `ReconcileInput`. This input contains the manifest, inventory, peers, operation history, and observed tick.
@@ -21,11 +23,17 @@ The manifest binds these facts:
 - all required fabric ports;
 - the fixed non-claims.
 
-The planner returns ordered transfer, repair, handoff, reuse, defer, and cleanup actions. It performs no file, network, clock, or process operation.
+The planner returns ordered transfer, repair, handoff, defer, and cleanup actions. It performs no file, network, clock, or process operation.
 
 Operation identity includes the content and manifest references. It also includes source, receiver, generation, epochs, action, transform, protection mode, and attempt.
 
 Current replicas must match the active generation and epochs. Stale replicas can supply verified bytes, but they cannot satisfy current placement.
+
+Current verified counts come from the supplied inventory, not prior transfer outcomes. A new reconciliation after same-epoch loss selects a fresh operation at the next attempt for that content and receiver in the current generation and epochs, across prior outcomes and action kinds. Exhausted attempts retain unresolved demand. Exact saved-operation replay preserves the original outcome without another transfer; it is not a new reconciliation or evidence of present availability.
+
+Each plan retains the missing replica count per content independently of its actions. Status clears a deficit only when enough distinct selected receivers have verified results matching the exact operation, content, source, receiver, generation, epochs, and attempt. Missing or malformed result references and duplicate operation identities cannot supply success. A successful subset cannot fill unselected demand or another content's deficit.
+
+Cleanup checks the cumulative remainder after every selection against desired replicas, minimum verified replicas, and minimum fault domains. It skips unsafe, pinned, or uncleared candidates and considers deterministic safe alternatives. If no safe alternative exists, the excess remains and the plan is partial.
 
 ## Imperative shell
 
@@ -42,7 +50,17 @@ For each transfer, the shell uses this order:
 
 The shell stores and publishes status after all actions. It publishes the aggregate receipt last.
 
+Invalid planning inputs reject before resource reservation, durable writes, or publication. Verification and envelope rejection do not append a terminal success or publish completion. A receipt is complete only for a ready plan with no remaining deficits, active operations, or failures; unresolved cleanup also remains partial.
+
 Cleanup requires the content rule authority and a matching cleanup clearance. An active retention pin prevents cleanup.
+
+The public reconciliation API always observes current facts and replans; `last_plan_ref` and historical plans do not authorize execution. Every cleanup execution rechecks retention admission even when an earlier cleanup operation succeeded. A malformed result returned after deletion is post-effect uncertainty, not proof that deletion rolled back.
+
+## Canonical compatibility
+
+New plans use `content-replication-plan-v2` and the `onixresearch.molten.content-replication.plan.v2` identity context. They bind ordered per-content `replica-deficit` entries as well as actions, so action-free plans with different unmet demand have different identities. Active `reuse` actions are removed; fresh repair uses the existing bounded attempt field.
+
+Operation/action identity framing and operation, status, and receipt v1 record shapes remain unchanged. Canonical status admission rejects invalid bindings, inconsistent counts, invalid or duplicate references, missing non-claims, and exceeded reference bounds. Historical canonical bytes and identities are not rewritten. An old receipt or unsafe plan remains historical evidence only; it cannot bypass corrected current planning or deletion admission.
 
 ## Conformance
 

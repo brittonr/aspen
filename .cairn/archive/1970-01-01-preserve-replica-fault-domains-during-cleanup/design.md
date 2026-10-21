@@ -22,6 +22,12 @@ Prefer existing action and policy schemas. Corrected plans can have different ac
 
 A planning receipt describes candidate selection only. A deletion observation requires successful shell execution and separate authority. No retrospective claim can promote the F05 counterexample into executed deletion.
 
+### Implementation compatibility decision (2026-10-20)
+
+Keep the existing cleanup action and policy fields. Selection checks the cumulative remainder, skips unsafe alternatives, and records an unresolved cause only if the requested excess cannot be removed. F07's per-content carrier makes all newly published plans explicitly v2; operation/action identity framing and operation/status/receipt v1 shapes remain unchanged.
+
+Old unsafe plans remain historical evidence, not executable input: public reconciliation reobserves current inventory, authority, and epochs and invokes the corrected planner. A recorded cleanup success never bypasses retention admission for another deletion. Malformed results after an adapter effect cannot prove rollback or become durable success. See [the shared runtime contract](../../../docs/content-replication.md#canonical-compatibility).
+
 ## Coordination and order
 
 F04 repairs current availability accounting. F07 preserves unresolved demand in status. F05 uses current verified replicas and preserves domains in the proposed remainder. Keep each package independent and separately testable.

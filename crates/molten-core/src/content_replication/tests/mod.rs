@@ -1,4 +1,7 @@
+mod cleanup;
+mod deficits;
 mod edge;
+mod repair;
 
 use super::*;
 
@@ -184,30 +187,4 @@ fn stale_target_handoffs_without_authorizing_stale_cleanup() {
     handoff.manifest.policy.minimum_fault_domains = 1;
     let stable = plan(&handoff).expect("stale cleanup plan");
     assert!(!stable.actions.iter().any(|action| action.kind == ActionKind::Cleanup));
-}
-
-// r[verify molten.content_replication.receiver_driven]
-#[test]
-fn corrupt_replica_repairs_and_exact_terminal_operation_reuses() {
-    let mut corrupt = input();
-    let content_ref = corrupt.manifest.contents[0].content_ref.clone();
-    let mut target = replica(&content_ref, "peer-b", "zone-b");
-    target.identity_verified = false;
-    corrupt.inventory.replicas.push(target);
-    let first = plan(&corrupt).expect("repair plan");
-    let repair = first.actions.iter().find(|action| action.kind == ActionKind::Repair).expect("repair action");
-    corrupt.history.push(PriorOperation {
-        operation_id: repair.operation_id.clone(),
-        content_ref: repair.content_ref.clone(),
-        source_peer: repair.source_peer.clone(),
-        target_peer: repair.target_peer.clone(),
-        generation: GENERATION,
-        membership_epoch: MEMBERSHIP_EPOCH,
-        placement_epoch: PLACEMENT_EPOCH,
-        attempt: 1,
-        outcome: OperationOutcome::Verified,
-        result_ref: Some(digest('b')),
-    });
-    let repeated = plan(&corrupt).expect("reused plan");
-    assert!(repeated.actions.iter().any(|action| action.kind == ActionKind::Reuse));
 }

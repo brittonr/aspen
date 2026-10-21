@@ -120,17 +120,18 @@ pub fn reconcile(mut instance: ServiceInstance, ports: ReconcilePorts<'_>) -> cr
     };
     let plan = molten_core::content_replication::plan(&input)
         .map_err(|issue| crate::error::Failure::invalid_harness(format!("replication planning denied: {issue:?}")))?;
+    if plan.decision == Decision::Denied {
+        return Err(crate::error::Failure::invalid_harness(format!("replication planning denied: {:?}", plan.issues)));
+    }
     let canonical_plan = canonical_plan(&plan)?;
     ports.observations.publish_plan(&canonical_plan)?;
     let mut evidence_refs = facts.evidence_refs();
     let mut resource_refs = Vec::new();
     evidence_refs.push(canonical_plan.record_ref.clone());
-    if plan.decision != Decision::Denied {
-        let resources = ports.resources.reserve(&plan)?;
-        validate_resources(&instance.manifest, &plan, &resources)?;
-        resource_refs.push(resources.reservation_ref.clone());
-        evidence_refs.push(resources.reservation_ref);
-    }
+    let resources = ports.resources.reserve(&plan)?;
+    validate_resources(&instance.manifest, &plan, &resources)?;
+    resource_refs.push(resources.reservation_ref.clone());
+    evidence_refs.push(resources.reservation_ref);
     let execution = execute_actions(&instance.manifest, &plan, &history, &mut evidence_refs, ports)?;
     let status = molten_core::content_replication::status(&plan, &execution.operations);
     let canonical_status = canonical_status(&status)?;
@@ -220,7 +221,13 @@ fn observe_current_facts(manifest: &Manifest, input: FactPorts<'_>) -> crate::er
 }
 
 mod execution;
+mod replay;
 mod validation;
 
 use execution::*;
+use replay::*;
 use validation::*;
+
+#[cfg(test)]
+#[path = "../tests/replay.rs"]
+mod replay_tests;

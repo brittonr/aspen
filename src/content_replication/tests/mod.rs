@@ -1,9 +1,11 @@
-mod adapters;
+pub(super) mod adapters;
+mod cleanup;
 #[cfg(unix)]
 #[path = "conformance/tests.rs"]
 mod conformance_tests;
 mod content;
-mod support;
+mod deficits;
+pub(super) mod support;
 
 use adapters::*;
 #[cfg(unix)]
@@ -13,7 +15,7 @@ use support::*;
 
 use super::*;
 
-fn ports<'a>(facts: &'a mut FactPorts, effects: &'a mut EffectPorts) -> ReconcilePorts<'a> {
+pub(super) fn ports<'a>(facts: &'a mut FactPorts, effects: &'a mut EffectPorts) -> ReconcilePorts<'a> {
     ReconcilePorts {
         authority: &mut facts.authority,
         identity: &mut facts.identity,

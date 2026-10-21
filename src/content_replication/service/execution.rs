@@ -29,6 +29,7 @@ pub(super) fn execute_actions<'a>(
     evidence_refs: &mut impl crate::bounded::VecSink<String>,
     ports: ReconcilePorts<'a>,
 ) -> crate::error::Result<ExecutionResult<'a>> {
+    let replays = index_replays(plan, history)?;
     let execution_ports = ExecutionPorts {
         content: ports.content,
         transport: ports.transport,
@@ -39,13 +40,11 @@ pub(super) fn execute_actions<'a>(
     };
     let mut operations = history.to_vec();
     for action in &plan.actions {
-        if action.kind == ActionKind::Reuse {
-            if let Some(result_ref) = history
-                .iter()
-                .find(|prior| prior.operation_id == action.operation_id)
-                .and_then(|prior| prior.result_ref.clone())
-            {
-                evidence_refs.push_item(result_ref);
+        if is_data_action(action)
+            && let Some(operation) = replays.get(action.operation_id.as_str())
+        {
+            if let Some(result_ref) = &operation.result_ref {
+                evidence_refs.push_item(result_ref.clone());
             }
             continue;
         }
@@ -54,7 +53,7 @@ pub(super) fn execute_actions<'a>(
             transport: &mut *execution_ports.transport,
             retention: &mut *execution_ports.retention,
         };
-        if let Some(operation) = execute_action(manifest, action, history, evidence_refs, &mut action_ports)? {
+        if let Some(operation) = execute_action(manifest, action, evidence_refs, &mut action_ports)? {
             let canonical = canonical_operation(&operation)?;
             let durable_ref = execution_ports.durable.store_operation(&operation)?;
             validate_ref(&durable_ref, "replication durable operation")?;
@@ -75,13 +74,11 @@ pub(super) fn execute_actions<'a>(
 fn execute_action(
     manifest: &Manifest,
     action: &Action,
-    history: &[PriorOperation],
     evidence_refs: &mut impl crate::bounded::VecSink<String>,
     ports: &mut ActionPorts<'_>,
 ) -> crate::error::Result<Option<PriorOperation>> {
     match action.kind {
         ActionKind::Defer => Ok(None),
-        ActionKind::Reuse => Ok(history.iter().find(|prior| prior.operation_id == action.operation_id).cloned()),
         ActionKind::Cleanup => {
             execute_cleanup(manifest, action, &mut *ports.content, &mut *ports.retention, evidence_refs).map(Some)
         }
@@ -174,6 +171,8 @@ pub(super) struct ReceiptInput<'a> {
     pub(super) evidence_refs: Vec<String>,
 }
 
+// r[impl molten.audit_f07.receipt_decision]
+// r[impl molten.audit_f05.authority_preservation]
 pub(super) fn execution_receipt(input: ReceiptInput<'_>) -> ExecutionReceipt {
     let ReceiptInput {
         instance,
@@ -185,7 +184,11 @@ pub(super) fn execution_receipt(input: ReceiptInput<'_>) -> ExecutionReceipt {
     } = input;
     let decision = if plan.decision == Decision::Denied {
         ReceiptDecision::Denied
-    } else if status.under_replicated.is_empty() && status.active_operations.is_empty() && status.failures.is_empty() {
+    } else if plan.decision == Decision::Ready
+        && status.under_replicated.is_empty()
+        && status.active_operations.is_empty()
+        && status.failures.is_empty()
+    {
         ReceiptDecision::Complete
     } else {
         ReceiptDecision::Partial

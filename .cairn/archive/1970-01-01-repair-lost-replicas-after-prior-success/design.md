@@ -24,6 +24,12 @@ Update the old `corrupt_replica_repairs_and_exact_terminal_operation_reuses` exp
 
 Receipts bind observed verification and report unresolved repair. They cannot turn historical success into current availability or permanent durability.
 
+### Implementation compatibility decision (2026-10-20)
+
+Fresh reconciliation advances the maximum attempt for the same content, receiver, generation, and epochs, independent of old outcome or action kind. Existing operation/action v1 framing and operation/status/receipt v1 shapes remain unchanged. Remove active `Reuse` actions rather than retain a fallback. The internal saved-plan executor admits exact bound terminal data-operation results without effects; conflicting, duplicate, unfinished, or malformed saved results reject. Public reconciliation has no persisted-plan execution input and always replans from current observations.
+
+F07 requires a per-content missing-count carrier: new canonical plans and their identity context are explicitly v2. Historical records retain their original bytes; no old receipt or plan is upgraded into a current availability or cleanup-authority claim. See [the shared runtime contract](../../../docs/content-replication.md#canonical-compatibility).
+
 ## Coordination and order
 
 Keep F04, F05, and F07 separate. Recommended order is F04 accounting, F07 deficit projection, then F05 cleanup integration. Each package can validate its own invariant without another package as a blocking dependency.

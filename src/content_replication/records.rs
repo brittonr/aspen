@@ -39,7 +39,7 @@ pub fn canonical_manifest(manifest: &Manifest) -> crate::error::Result<Canonical
 pub fn canonical_plan(plan: &Plan) -> crate::error::Result<CanonicalReplicationRecord> {
     canonical(
         "plan",
-        record("content-replication-plan-v1", vec![
+        record("content-replication-plan-v2", vec![
             field("plan-ref", string(&plan.plan_ref)),
             field("decision", string(plan.decision.as_str())),
             field("generation", number(plan.generation)),
@@ -49,6 +49,20 @@ pub fn canonical_plan(plan: &Plan) -> crate::error::Result<CanonicalReplicationR
             field("desired-replicas", count(plan.desired_replicas)?),
             field("verified-replicas", count(plan.verified_replicas)?),
             field("under-replicated", strings(&plan.under_replicated)),
+            field(
+                "replica-deficits",
+                sequence(
+                    plan.replica_deficits
+                        .iter()
+                        .map(|deficit| {
+                            Ok(record("replica-deficit", vec![
+                                string(&deficit.content_ref),
+                                count(deficit.missing_replicas)?,
+                            ]))
+                        })
+                        .collect::<crate::error::Result<Vec<_>>>()?,
+                ),
+            ),
             field("deferred", strings(&plan.deferred)),
             field("required-pins", strings(&plan.required_pins)),
             field("cleanup-candidates", strings(&plan.cleanup_candidates)),
@@ -78,6 +92,7 @@ pub fn canonical_operation(operation: &PriorOperation) -> crate::error::Result<C
 }
 
 pub fn canonical_status(status: &Status) -> crate::error::Result<CanonicalReplicationRecord> {
+    validate_status(status)?;
     canonical(
         "status",
         record("content-replication-status-v1", vec![
@@ -243,4 +258,35 @@ fn sequence(values: Vec<preserves::IOValue>) -> preserves::IOValue {
 
 fn record(label: &'static str, fields: Vec<preserves::IOValue>) -> preserves::IOValue {
     crate::preserves_rail::record(label, fields)
+}
+
+// r[impl molten.audit_f07.validation_claims]
+fn validate_status(status: &Status) -> crate::error::Result<()> {
+    if !valid_ref(&status.plan_ref)
+        || status.generation == 0
+        || status.placement_epoch == 0
+        || status.desired_replicas == 0
+        || status.desired_replicas > MAX_CONTENTS.saturating_mul(MAX_PEERS)
+        || status.verified_replicas > status.desired_replicas
+        || !status.non_claims.iter().map(String::as_str).eq(NON_CLAIMS.iter().copied())
+    {
+        return Err(crate::error::Failure::invalid_harness(
+            "content-replication status has invalid bindings or counts",
+        ));
+    }
+    for (references, limit) in [
+        (&status.under_replicated, MAX_CONTENTS),
+        (&status.active_operations, MAX_ACTIONS),
+        (&status.failures, MAX_ACTIONS),
+        (&status.pins, MAX_CONTENTS),
+    ] {
+        if references.len() > limit {
+            return Err(crate::error::Failure::invalid_harness("content-replication status exceeds reference bounds"));
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        if references.iter().any(|reference| !valid_ref(reference) || !seen.insert(reference)) {
+            return Err(crate::error::Failure::invalid_harness("content-replication status has invalid references"));
+        }
+    }
+    Ok(())
 }

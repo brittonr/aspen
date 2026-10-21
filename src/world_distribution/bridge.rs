@@ -145,9 +145,9 @@ where C: ContentPort
 }
 
 fn transferable_actions(plan: &Plan) -> impl Iterator<Item = &Action> {
-    plan.actions.iter().filter(|action| {
-        matches!(action.kind, ActionKind::Transfer | ActionKind::Repair | ActionKind::Handoff | ActionKind::Reuse)
-    })
+    plan.actions
+        .iter()
+        .filter(|action| matches!(action.kind, ActionKind::Transfer | ActionKind::Repair | ActionKind::Handoff))
 }
 
 fn select_action<'a>(state: &'a BridgeState, request: &DagFetchRequest) -> Result<&'a Action> {
