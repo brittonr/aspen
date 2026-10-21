@@ -41,6 +41,16 @@ pub(super) fn keyed(label: &str, entries: &[(&str, &str)]) -> WorldMergeValue {
     }
 }
 
+pub(super) fn absent(schema_ref: Option<WorldMergeSchemaRef>) -> WorldMergeValue {
+    WorldMergeValue {
+        root: None,
+        schema_ref,
+        available: true,
+        canonical_bytes: None,
+        keyed_values: BTreeMap::new(),
+    }
+}
+
 pub(super) fn profile() -> WorldMergeProfile {
     WorldMergeProfile {
         profile_ref: WorldMergeProfileRef::new(reference("merge-profile")).expect("profile ref"),

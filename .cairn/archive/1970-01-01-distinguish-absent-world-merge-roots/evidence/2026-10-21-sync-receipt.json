@@ -1,0 +1,142 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/distinguish-absent-world-merge-roots/specs/world-commit/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/distinguish-absent-world-merge-roots/specs/world-commit/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "distinguish-absent-world-merge-roots",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/distinguish-absent-world-merge-roots/specs/world-commit/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "12c43c037dc5d7f80a688c7bfe68e109bebc67ca01f9d0a7b73358bc58fe4b90",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "d998db0c0c8666813e043136cfecbdafe8fdfe8fa1859650daaf76d344202925",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "b5ddeb1b4b764fca16a449707562be10d83dd21b8ac9e47e112d67a1a99c87d4",
+        "destination": ".cairn/specs/world-commit/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "113f8eb148fc64d5555359d1d2052e0a8539480a05381788bf12ad9860b07f1b",
+        "operations": [
+          {
+            "block_hash": "a9b206b2c5f9d47ec72eb8bc5112e984068308aa149c90d58ecfde9a9914d17a",
+            "heading": "### Requirement: Merge output kinds are explicit",
+            "kind": "added",
+            "requirement_id": "molten.audit_f13.output_kind"
+          },
+          {
+            "block_hash": "eac85317b2e3bdb0bbfcf6c4fdaf65703bec2d6aa03fb8602765a225f130980b",
+            "heading": "### Requirement: Publication preserves admitted root absence",
+            "kind": "added",
+            "requirement_id": "molten.audit_f13.absence"
+          },
+          {
+            "block_hash": "4f489601b4248fb78e8201febf693a7c3379b89e6acc5fbe8ce148726cc2f5ca",
+            "heading": "### Requirement: Canonical output identity binds output kind",
+            "kind": "added",
+            "requirement_id": "molten.audit_f13.compatibility"
+          },
+          {
+            "block_hash": "a9407a4359cd0fedb2ff00623fa49b4391df04eb2061e30147111b3a45850bd7",
+            "heading": "### Requirement: Root absence has core and publication regression evidence",
+            "kind": "added",
+            "requirement_id": "molten.audit_f13.validation"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.audit_f13.output_kind",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.audit_f13.absence",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.audit_f13.compatibility",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.audit_f13.validation",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/distinguish-absent-world-merge-roots/specs/world-commit/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "113f8eb148fc64d5555359d1d2052e0a8539480a05381788bf12ad9860b07f1b",
+          "exists": true,
+          "path": "./.cairn/specs/world-commit/spec.md"
+        }
+      ],
+      "manifest_hash": "b45f9b5af1a7b90dfded4969048e2b81cda87bffdceff77487a13f004b66442f"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "d998db0c0c8666813e043136cfecbdafe8fdfe8fa1859650daaf76d344202925",
+          "exists": true,
+          "path": "./.cairn/specs/world-commit/spec.md"
+        }
+      ],
+      "manifest_hash": "b8e2ceeaef6b9670ec2ed836e830def0072e72cd6d822aea8fe1aeee88bab8a0"
+    },
+    "kind": "sync",
+    "manifest_hash": "06a61c358a8117ddb54e49cbcf7112888c175c471f1d36ff77e12868697b51de"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "a43936239f63c6d7657876a2c18f664117ce65b2fb2897fa7ab7129cf5c2bf46",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "940b6e130302c472cdd4b6fbbc0d995ba7215f9511307fe0c45763980fb68140",
+  "reasons": [],
+  "receipt_hash": "9b7360baaf7ad6c64b5abb50c893ec48ca7c1cab152761b9214eeeb47b65cf7f",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

@@ -51,6 +51,122 @@ fn plan_with_generated_output() -> WorldMergePlan {
 }
 
 #[test]
+fn absent_outputs_publish_without_generated_roots() {
+    // r[verify molten.audit_f13.absence]
+    // r[verify molten.audit_f13.validation]
+    for with_schema in [false, true] {
+        let mut request = publication_request();
+        request.roots.truncate(1);
+        let artifact_schema = with_schema.then(schema);
+        let artifact = &mut request.roots[0];
+        for value in [&mut artifact.base, &mut artifact.left, &mut artifact.right] {
+            *value = WorldMergeValue {
+                root: None,
+                schema_ref: artifact_schema.clone(),
+                available: true,
+                canonical_bytes: None,
+                keyed_values: BTreeMap::new(),
+            };
+        }
+        let plan = plan_world_merge(request.clone(), Vec::new(), None).expect("absent artifact plan");
+        let artifact = plan.outputs.iter().find(|output| output.kind == RootKind::Artifact).expect("artifact output");
+        assert_eq!(artifact.output, WorldMergeOutput::Absent);
+        let mut objects = TestObjects::default();
+        let mut conflicts = TestConflicts::default();
+        let mut authority = TestAuthority { calls: 0 };
+        let mut commits = TestCommits::default();
+        let result = publish_world_merge(
+            &mut objects,
+            &mut conflicts,
+            &mut authority,
+            &mut commits,
+            &WorldMergePublicationRequest {
+                plan: &plan,
+                policy_ref: &request.profile.policy_ref,
+            },
+        )
+        .expect("publish absent artifact inventory");
+        assert!(objects.persisted.is_empty(), "absence must not request generated content");
+        assert_eq!(commits.calls, 1);
+        assert!(commits.observed_roots.is_empty(), "absent roots are omitted from the inventory");
+        assert!(result.output_roots.is_empty());
+        assert_eq!(authority.calls, 1);
+        assert!(result.conflicts.is_empty());
+    }
+}
+
+#[test]
+fn generated_persistence_failure_prevents_commit() {
+    // r[verify molten.audit_f13.validation]
+    let plan = plan_with_generated_output();
+    let policy = WorldMergePolicyRef::new(reference("policy")).expect("policy");
+    let mut objects = TestObjects {
+        persisted: Vec::new(),
+        fail: true,
+    };
+    let mut conflicts = TestConflicts::default();
+    let mut authority = TestAuthority { calls: 0 };
+    let mut commits = TestCommits::default();
+    let result = publish_world_merge(
+        &mut objects,
+        &mut conflicts,
+        &mut authority,
+        &mut commits,
+        &WorldMergePublicationRequest {
+            plan: &plan,
+            policy_ref: &policy,
+        },
+    );
+    assert!(result.is_err(), "failed generated persistence must deny publication");
+    assert!(objects.persisted.is_empty());
+    assert_eq!(commits.calls, 0);
+    assert!(commits.observed_roots.is_empty());
+    assert!(conflicts.records.is_empty());
+}
+
+#[test]
+fn mixed_absent_and_generated_outputs_publish_the_exact_inventory() {
+    // r[verify molten.audit_f13.absence]
+    // r[verify molten.audit_f13.validation]
+    let mut request = publication_request();
+    let artifact = &mut request.roots[0];
+    for value in [&mut artifact.base, &mut artifact.left, &mut artifact.right] {
+        *value = WorldMergeValue {
+            root: None,
+            schema_ref: Some(schema()),
+            available: true,
+            canonical_bytes: None,
+            keyed_values: BTreeMap::new(),
+        };
+    }
+    let plan = plan_world_merge(request.clone(), Vec::new(), None).expect("mixed output plan");
+    assert!(matches!(
+        &plan.outputs.iter().find(|output| output.kind == RootKind::Artifact).expect("artifact").output,
+        WorldMergeOutput::Absent
+    ));
+    let mut objects = TestObjects::default();
+    let mut conflicts = TestConflicts::default();
+    let mut authority = TestAuthority { calls: 0 };
+    let mut commits = TestCommits::default();
+    let result = publish_world_merge(
+        &mut objects,
+        &mut conflicts,
+        &mut authority,
+        &mut commits,
+        &WorldMergePublicationRequest {
+            plan: &plan,
+            policy_ref: &request.profile.policy_ref,
+        },
+    )
+    .expect("publish mixed inventory");
+    assert_eq!(objects.persisted.len(), 1, "only the generated durable root is written");
+    assert_eq!(commits.observed_roots, result.output_roots);
+    assert_eq!(result.output_roots.len(), 1);
+    assert_eq!(result.output_roots[0].kind(), RootKind::DurableState);
+    assert_eq!(commits.calls, 1);
+}
+
+#[test]
 fn changed_plan_output_denies_before_any_publication_effect() {
     let mut plan = plan_with_generated_output();
     let durable = plan
@@ -58,7 +174,10 @@ fn changed_plan_output_denies_before_any_publication_effect() {
         .iter_mut()
         .find(|output| output.kind == RootKind::DurableState)
         .expect("durable output");
-    durable.generated_values.insert("injected".to_string(), b"not planned".to_vec());
+    let WorldMergeOutput::Generated(generated) = &mut durable.output else {
+        panic!("durable output is generated data");
+    };
+    generated.values.insert("injected".to_string(), b"not planned".to_vec());
     assert!(validate_world_merge_plan(&plan).is_err());
     let policy = WorldMergePolicyRef::new(reference("policy")).expect("policy");
     let mut objects = TestObjects::default();
@@ -93,9 +212,14 @@ fn generated_payload_presence_tampering_denies_before_publication() {
         .iter_mut()
         .find(|output| output.kind == RootKind::DurableState)
         .expect("generated durable output");
-    assert_eq!(output.generated_bytes, None);
     let original_root = canonical_generated_world_root(output).expect("original root").0;
-    output.generated_bytes = Some(Vec::new());
+    {
+        let WorldMergeOutput::Generated(generated) = &mut output.output else {
+            panic!("generated durable output");
+        };
+        assert_eq!(generated.bytes, None);
+        generated.bytes = Some(Vec::new());
+    }
     let changed_root = canonical_generated_world_root(output).expect("changed root").0;
     assert_ne!(original_root, changed_root, "payload presence changes the persisted root identity");
 

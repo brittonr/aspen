@@ -2,6 +2,7 @@ use serde::Serialize;
 
 use super::super::WorldMergeConflict;
 use super::super::WorldMergeIssue;
+use super::super::WorldMergeOutput;
 use super::super::WorldMergePlan;
 use super::super::WorldMergePlanRef;
 use super::super::WorldMergedRoot;
@@ -11,7 +12,7 @@ use super::super::migration::payload_ref;
 use crate::world_commit::WorldCommitRef;
 
 #[derive(Serialize)]
-#[serde(rename = "world-merge-plan-identity-v2")]
+#[serde(rename = "world-merge-plan-identity-v3")]
 struct PlanIdentity<'a> {
     original_request: &'a str,
     base_head: &'a str,
@@ -24,10 +25,21 @@ struct PlanIdentity<'a> {
 #[derive(Serialize)]
 struct OutputIdentity<'a> {
     kind: &'a str,
-    selected_root: Option<&'a str>,
-    output_schema: Option<&'a str>,
-    generated_bytes_present: bool,
-    generated_payload: Option<String>,
+    case: OutputCase<'a>,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "case", rename_all = "kebab-case")]
+enum OutputCase<'a> {
+    Absent,
+    Selected {
+        root: &'a str,
+    },
+    Generated {
+        schema: &'a str,
+        bytes_present: bool,
+        payload: String,
+    },
 }
 
 pub(in crate::world_merge) struct PlanIdentityInput<'a> {
@@ -46,16 +58,18 @@ pub(in crate::world_merge) fn identify_plan(
         .outputs
         .iter()
         .map(|output| {
+            let case = match &output.output {
+                WorldMergeOutput::Absent => OutputCase::Absent,
+                WorldMergeOutput::Selected(root) => OutputCase::Selected { root: root.as_str() },
+                WorldMergeOutput::Generated(generated) => OutputCase::Generated {
+                    schema: generated.schema.as_str(),
+                    bytes_present: generated.bytes.is_some(),
+                    payload: payload_ref(generated.bytes.as_deref().unwrap_or_default(), &generated.values)?,
+                },
+            };
             Ok(OutputIdentity {
                 kind: output.kind.as_str(),
-                selected_root: output.selected_root.as_ref().map(|root| root.as_str()),
-                output_schema: output.output_schema.as_ref().map(|schema| schema.as_str()),
-                generated_bytes_present: output.generated_bytes.is_some(),
-                generated_payload: if output.selected_root.is_none() {
-                    Some(payload_ref(output.generated_bytes.as_deref().unwrap_or_default(), &output.generated_values)?)
-                } else {
-                    None
-                },
+                case,
             })
         })
         .collect::<Result<Vec<_>, WorldMergeIssue>>()?;
@@ -75,11 +89,12 @@ pub(in crate::world_merge) fn identify_plan(
             .map(|evidence| (evidence.conversion().conversion_ref(), evidence.result_ref()))
             .collect(),
     };
-    WorldMergePlanRef::new(canonical_ref(&value, "world-merge-plan-identity-v2")?)
+    WorldMergePlanRef::new(canonical_ref(&value, "world-merge-plan-identity-v3")?)
         .map_err(|_| WorldMergeIssue::InvalidBounds("plan_identity"))
 }
 
 // r[impl molten.audit_f06.publication]
+// r[impl molten.audit_f13.compatibility]
 pub fn validate_world_merge_plan(plan: &WorldMergePlan) -> Result<(), WorldMergeIssue> {
     let expected = identify_plan(PlanIdentityInput {
         original_request: &plan.original_request_ref,
@@ -90,7 +105,7 @@ pub fn validate_world_merge_plan(plan: &WorldMergePlan) -> Result<(), WorldMerge
         migrations: &plan.migrations,
     })?;
     if expected != plan.plan_ref {
-        return Err(WorldMergeIssue::MigrationResultUnexpected);
+        return Err(WorldMergeIssue::PlanIdentityMismatch);
     }
     Ok(())
 }

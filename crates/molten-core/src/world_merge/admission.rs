@@ -4,11 +4,11 @@ use super::WorldMergeConflict;
 use super::WorldMergeHandler;
 use super::WorldMergeIssue;
 use super::WorldMergeMode;
+use super::WorldMergeOutput;
 use super::WorldMergePlan;
 use super::WorldMergeRequest;
 use super::WorldMergeRootInput;
 use super::WorldMergedRoot;
-use super::merge_keyed_values;
 use super::planning::PlanIdentityInput;
 use super::planning::add_application_handler;
 use super::planning::identify_plan;
@@ -38,7 +38,8 @@ pub fn plan_world_merge(
     });
     let mut source_heads = std::mem::take(&mut request.source_heads);
     source_heads.sort();
-    super::migration::restore_generated_outputs(&mut request, &migrations, &mut outputs);
+    super::migration::restore_generated_outputs(&mut request, &migrations, &mut outputs)
+        .map_err(|issue| vec![issue])?;
     let plan_ref = identify_plan(PlanIdentityInput {
         original_request: &original_ref,
         base_head: &request.base_head,
@@ -101,8 +102,14 @@ fn reduce_root(
     handler: Option<&dyn WorldMergeHandler>,
     reduction: &mut MergeReduction<'_>,
 ) {
+    if root.left.root.is_none() && root.right.root.is_none() {
+        super::planning::reduce_absent(request, root, reduction.outputs, reduction.issues);
+        return;
+    }
     if root.left.root == root.right.root && root.left.schema_ref == root.right.schema_ref {
-        reduction.outputs.push(selected_output(root, root.left.root.clone()));
+        if let Some(selected) = root.left.root.clone() {
+            reduction.outputs.push(selected_output(root.kind, selected));
+        }
         return;
     }
     if is_runtime_sensitive(root.kind) {
@@ -125,45 +132,11 @@ fn reduce_root(
             add_ancestor_replacement(root, reduction.outputs, reduction.conflicts);
         }
         WorldMergeMode::KeyedDurableValues => {
-            add_keyed(request, root, reduction.outputs, reduction.conflicts, reduction.issues);
+            super::planning::add_keyed(request, root, reduction.outputs, reduction.conflicts, reduction.issues);
         }
         WorldMergeMode::ApplicationHandler => {
             add_application_handler(request, root, handler, reduction.outputs, reduction.issues);
         }
-    }
-}
-
-fn add_keyed(
-    request: &WorldMergeRequest,
-    root: &WorldMergeRootInput,
-    outputs: &mut Vec<WorldMergedRoot>,
-    conflicts: &mut Vec<WorldMergeConflict>,
-    issues: &mut Vec<WorldMergeIssue>,
-) {
-    if root.kind != RootKind::DurableState {
-        issues.push(WorldMergeIssue::RuntimeSensitiveRoot(root.kind));
-        return;
-    }
-    match merge_keyed_values(
-        root.kind,
-        &root.base.keyed_values,
-        &root.left.keyed_values,
-        &root.right.keyed_values,
-        &request.bounds,
-    ) {
-        Ok(mut result) => {
-            if result.conflicts.is_empty() {
-                outputs.push(WorldMergedRoot {
-                    kind: root.kind,
-                    selected_root: None,
-                    generated_values: result.values,
-                    generated_bytes: None,
-                    output_schema: root.left.schema_ref.clone(),
-                });
-            }
-            conflicts.append(&mut result.conflicts);
-        }
-        Err(issue) => issues.push(issue),
     }
 }
 
@@ -234,7 +207,9 @@ fn add_identical(
     conflicts: &mut Vec<WorldMergeConflict>,
 ) {
     if root.left.root == root.right.root {
-        outputs.push(selected_output(root, root.left.root.clone()));
+        if let Some(selected) = root.left.root.clone() {
+            outputs.push(selected_output(root.kind, selected));
+        }
     } else {
         conflicts.push(root_conflict(root.kind, "identical-only-mismatch"));
     }
@@ -245,26 +220,27 @@ fn add_ancestor_replacement(
     outputs: &mut Vec<WorldMergedRoot>,
     conflicts: &mut Vec<WorldMergeConflict>,
 ) {
-    if root.left.root == root.base.root {
-        outputs.push(selected_output(root, root.right.root.clone()));
+    let selected = if root.left.root == root.base.root {
+        Some(root.right.root.clone())
     } else if root.right.root == root.base.root {
-        outputs.push(selected_output(root, root.left.root.clone()));
+        Some(root.left.root.clone())
     } else {
-        conflicts.push(root_conflict(root.kind, "concurrent-root-change"));
+        None
+    };
+    match selected {
+        Some(Some(selected)) => outputs.push(selected_output(root.kind, selected)),
+        Some(None) => outputs.push(WorldMergedRoot {
+            kind: root.kind,
+            output: WorldMergeOutput::Absent,
+        }),
+        None => conflicts.push(root_conflict(root.kind, "concurrent-root-change")),
     }
 }
 
-fn selected_output(
-    root: &WorldMergeRootInput,
-    selected_root: Option<crate::world_commit::WorldRootRef>,
-) -> WorldMergedRoot {
-    let selected = [&root.left, &root.right, &root.base].into_iter().find(|value| value.root == selected_root);
+fn selected_output(kind: RootKind, selected: crate::world_commit::WorldRootRef) -> WorldMergedRoot {
     WorldMergedRoot {
-        kind: root.kind,
-        selected_root,
-        generated_values: std::collections::BTreeMap::new(),
-        generated_bytes: None,
-        output_schema: selected.and_then(|value| value.schema_ref.clone()),
+        kind,
+        output: WorldMergeOutput::Selected(selected),
     }
 }
 

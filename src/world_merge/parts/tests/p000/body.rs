@@ -170,7 +170,10 @@ fn preparation_loads_root_bytes_before_pure_planning() {
     let plan =
         prepare_world_merge_plan(&mut objects, &mut migrations, &mut handlers, &request).expect("prepared merge plan");
 
-    assert_eq!(plan.outputs[0].selected_root, Some(root(RootKind::Artifact, "left-artifact")));
+    assert!(matches!(
+        &plan.outputs[0].output,
+        WorldMergeOutput::Selected(selected) if selected == &root(RootKind::Artifact, "left-artifact")
+    ));
 }
 
 #[test]

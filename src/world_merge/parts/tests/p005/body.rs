@@ -14,7 +14,12 @@ fn exercise_mutated_plan_denial(case: &'static str) {
     )
     .expect("valid conversion plan");
     match case {
-        "output" => plan.outputs[0].generated_bytes = Some(b"substituted after planning".to_vec()),
+        "output" => {
+            let WorldMergeOutput::Generated(generated) = &mut plan.outputs[0].output else {
+                panic!("converted output is generated data");
+            };
+            generated.bytes = Some(b"substituted after planning".to_vec());
+        }
         "evidence" => plan.migrations.clear(),
         "head" => plan.source_heads[0] = head("substituted-head"),
         _ => panic!("unknown plan mutation"),

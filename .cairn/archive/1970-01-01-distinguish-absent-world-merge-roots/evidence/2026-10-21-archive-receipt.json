@@ -1,0 +1,431 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: distinguish-absent-world-merge-roots",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots"
+    }
+  ],
+  "blocked": false,
+  "change": "distinguish-absent-world-merge-roots",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "3906b392f9ac9a4fa577a3b668102e69bd2774c11e8463317e50d6cea40b5d1d",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "4e508dde04042f6693aec0dbbf5d2c80d388cd52d5ea3460ba0c938275e37d40",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/design.md"
+        },
+        {
+          "content_hash": "551817ca5808e2868a18646962ac3e37a02e63118091bd641a5481597607c759",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/library/command.txt"
+        },
+        {
+          "content_hash": "3a134e12f7600f5ae2ba5406c0b3d3dfc746c25215dedef9e56bb79b940aa382",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/library/provenance.jsonl"
+        },
+        {
+          "content_hash": "80482190e6338bcd353334335abb73ab590e953f09677628b7e86ced89924c3b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/library/status.json"
+        },
+        {
+          "content_hash": "223e5abf9805d32013ad3b9ac06053f4f316ccc3ef840fe89c88235ffb21caa3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/library/summary.txt"
+        },
+        {
+          "content_hash": "738796d22093c41e46aa0879bddbc5135d80f730e3122be15a5e50ea9d291ce0",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/workspace/artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "9cd0109772404af36d94ae1420586a03291f7b5b66cfe3364e778132f4180280",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/workspace/command.txt"
+        },
+        {
+          "content_hash": "2690854065758417288d7e9d9f91dfdcccf6e9d69ab62478324104002a11e829",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/workspace/gate-receipt.preserves"
+        },
+        {
+          "content_hash": "9a2db5f1dc36a9f98ebf218bb297fb6fee9d8718a3e29325d7997d9f97b8a986",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/workspace/object-corpus-receipt.json"
+        },
+        {
+          "content_hash": "69af1c98739531cbaa622084edb7316b39e27d56db02da6e47421d46269c47dc",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/workspace/provenance.jsonl"
+        },
+        {
+          "content_hash": "31c8b0a7ec6ed3fddff5b5cbeb051ea67864aef8c4a8c5785f661e2d3e6481ba",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/workspace/remediation-plan.preserves"
+        },
+        {
+          "content_hash": "4617bd412848ec267ee24fe0829831fedd8f4c5510bf8a11b6c97c4392416aab",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/workspace/status.json"
+        },
+        {
+          "content_hash": "0194f449b16c95e469042213390dd02eb9b1b5bb1b88128aab3127db89673f7c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/workspace/summary.txt"
+        },
+        {
+          "content_hash": "c5e018f7bf7c4df3d0452c7002e028c7d1750629c8ea0a3ba3f16304682f5316",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-gate-design.json"
+        },
+        {
+          "content_hash": "52437d9c3265822b8fb8acca452f034e757e8f2af8c079bd7c7919920473c47c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-gate-proposal.json"
+        },
+        {
+          "content_hash": "bcfd3ac049d9dc2ce6c629c1475c8b6b63333bcfa6d5c61d4dccd92510f49723",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-gate-tasks.json"
+        },
+        {
+          "content_hash": "a80fa032fca58c82213a6758da6501aa51ed3eb4ffb8b3f37b4798119531cb6e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-review-completeness.json"
+        },
+        {
+          "content_hash": "e1de1c7fb305a2447023f37c1fb557aebcd84c79703a9692dacf7f76a9c0f013",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-source/library/command.txt"
+        },
+        {
+          "content_hash": "2bbd6758d586b5b7e335c1fb77d22bcb92533074bdec33662c67ea8803c53053",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-source/library/provenance.jsonl"
+        },
+        {
+          "content_hash": "80482190e6338bcd353334335abb73ab590e953f09677628b7e86ced89924c3b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-source/library/status.json"
+        },
+        {
+          "content_hash": "223e5abf9805d32013ad3b9ac06053f4f316ccc3ef840fe89c88235ffb21caa3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-source/library/summary.txt"
+        },
+        {
+          "content_hash": "0bf71defb0ebe33e9cedec199f5cf8839ad2ac26a77e2f9868e747e93621955c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-source/workspace/artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "b88846bdd3016d5195ee8c3d39a8ed1c50d77651a44b543f0f696dd9f1f9920d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-source/workspace/command.txt"
+        },
+        {
+          "content_hash": "7e708662abbfe6257d157eef3d5630fb57c3a43674de6e037a594f1e5650dab4",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-source/workspace/gate-receipt.preserves"
+        },
+        {
+          "content_hash": "9a2db5f1dc36a9f98ebf218bb297fb6fee9d8718a3e29325d7997d9f97b8a986",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-source/workspace/object-corpus-receipt.json"
+        },
+        {
+          "content_hash": "8f8c7c89fd4332b3bdbabc295fe52f4d3719b3b84d8e218cb5f36a696dd53794",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-source/workspace/provenance.jsonl"
+        },
+        {
+          "content_hash": "31c8b0a7ec6ed3fddff5b5cbeb051ea67864aef8c4a8c5785f661e2d3e6481ba",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-source/workspace/remediation-plan.preserves"
+        },
+        {
+          "content_hash": "4617bd412848ec267ee24fe0829831fedd8f4c5510bf8a11b6c97c4392416aab",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-source/workspace/status.json"
+        },
+        {
+          "content_hash": "0194f449b16c95e469042213390dd02eb9b1b5bb1b88128aab3127db89673f7c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-source/workspace/summary.txt"
+        },
+        {
+          "content_hash": "2e14986b1a4286aacc52210c7b96f362c20fbd7986b50843173673d6b6c7b211",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-sync-receipt.json"
+        },
+        {
+          "content_hash": "1b7f89ac4c629c7050a93802fdb88545670affbf1dec1c64d1e7a6eb67dda445",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-validate.json"
+        },
+        {
+          "content_hash": "221caee66854c751d58ad7e64870bad755e130b8d85ae3e36b094f18be45fedd",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/evidence/2026-10-21-verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/metadata.json"
+        },
+        {
+          "content_hash": "82adf298fb23cfa7080e1f160a7839313496595d315ecd0178768539e6a877d4",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/proposal.md"
+        },
+        {
+          "content_hash": "b5ddeb1b4b764fca16a449707562be10d83dd21b8ac9e47e112d67a1a99c87d4",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/specs/world-commit/spec.md"
+        },
+        {
+          "content_hash": "dd7e5fe294eb13b8118c8264686eef0b8be8a3fb2ecb141ba2731d8bba198ba8",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-distinguish-absent-world-merge-roots/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots"
+        }
+      ],
+      "manifest_hash": "33a8b675d56116767825bf22387ce62a9711eae72812eb77a91261087b5ae98b"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "4e508dde04042f6693aec0dbbf5d2c80d388cd52d5ea3460ba0c938275e37d40",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/design.md"
+        },
+        {
+          "content_hash": "551817ca5808e2868a18646962ac3e37a02e63118091bd641a5481597607c759",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/library/command.txt"
+        },
+        {
+          "content_hash": "3a134e12f7600f5ae2ba5406c0b3d3dfc746c25215dedef9e56bb79b940aa382",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/library/provenance.jsonl"
+        },
+        {
+          "content_hash": "80482190e6338bcd353334335abb73ab590e953f09677628b7e86ced89924c3b",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/library/status.json"
+        },
+        {
+          "content_hash": "223e5abf9805d32013ad3b9ac06053f4f316ccc3ef840fe89c88235ffb21caa3",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/library/summary.txt"
+        },
+        {
+          "content_hash": "738796d22093c41e46aa0879bddbc5135d80f730e3122be15a5e50ea9d291ce0",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/workspace/artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "9cd0109772404af36d94ae1420586a03291f7b5b66cfe3364e778132f4180280",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/workspace/command.txt"
+        },
+        {
+          "content_hash": "2690854065758417288d7e9d9f91dfdcccf6e9d69ab62478324104002a11e829",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/workspace/gate-receipt.preserves"
+        },
+        {
+          "content_hash": "9a2db5f1dc36a9f98ebf218bb297fb6fee9d8718a3e29325d7997d9f97b8a986",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/workspace/object-corpus-receipt.json"
+        },
+        {
+          "content_hash": "69af1c98739531cbaa622084edb7316b39e27d56db02da6e47421d46269c47dc",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/workspace/provenance.jsonl"
+        },
+        {
+          "content_hash": "31c8b0a7ec6ed3fddff5b5cbeb051ea67864aef8c4a8c5785f661e2d3e6481ba",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/workspace/remediation-plan.preserves"
+        },
+        {
+          "content_hash": "4617bd412848ec267ee24fe0829831fedd8f4c5510bf8a11b6c97c4392416aab",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/workspace/status.json"
+        },
+        {
+          "content_hash": "0194f449b16c95e469042213390dd02eb9b1b5bb1b88128aab3127db89673f7c",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-accepted-source/workspace/summary.txt"
+        },
+        {
+          "content_hash": "c5e018f7bf7c4df3d0452c7002e028c7d1750629c8ea0a3ba3f16304682f5316",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-gate-design.json"
+        },
+        {
+          "content_hash": "52437d9c3265822b8fb8acca452f034e757e8f2af8c079bd7c7919920473c47c",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-gate-proposal.json"
+        },
+        {
+          "content_hash": "bcfd3ac049d9dc2ce6c629c1475c8b6b63333bcfa6d5c61d4dccd92510f49723",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-gate-tasks.json"
+        },
+        {
+          "content_hash": "a80fa032fca58c82213a6758da6501aa51ed3eb4ffb8b3f37b4798119531cb6e",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-review-completeness.json"
+        },
+        {
+          "content_hash": "e1de1c7fb305a2447023f37c1fb557aebcd84c79703a9692dacf7f76a9c0f013",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-source/library/command.txt"
+        },
+        {
+          "content_hash": "2bbd6758d586b5b7e335c1fb77d22bcb92533074bdec33662c67ea8803c53053",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-source/library/provenance.jsonl"
+        },
+        {
+          "content_hash": "80482190e6338bcd353334335abb73ab590e953f09677628b7e86ced89924c3b",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-source/library/status.json"
+        },
+        {
+          "content_hash": "223e5abf9805d32013ad3b9ac06053f4f316ccc3ef840fe89c88235ffb21caa3",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-source/library/summary.txt"
+        },
+        {
+          "content_hash": "0bf71defb0ebe33e9cedec199f5cf8839ad2ac26a77e2f9868e747e93621955c",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-source/workspace/artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "b88846bdd3016d5195ee8c3d39a8ed1c50d77651a44b543f0f696dd9f1f9920d",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-source/workspace/command.txt"
+        },
+        {
+          "content_hash": "7e708662abbfe6257d157eef3d5630fb57c3a43674de6e037a594f1e5650dab4",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-source/workspace/gate-receipt.preserves"
+        },
+        {
+          "content_hash": "9a2db5f1dc36a9f98ebf218bb297fb6fee9d8718a3e29325d7997d9f97b8a986",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-source/workspace/object-corpus-receipt.json"
+        },
+        {
+          "content_hash": "8f8c7c89fd4332b3bdbabc295fe52f4d3719b3b84d8e218cb5f36a696dd53794",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-source/workspace/provenance.jsonl"
+        },
+        {
+          "content_hash": "31c8b0a7ec6ed3fddff5b5cbeb051ea67864aef8c4a8c5785f661e2d3e6481ba",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-source/workspace/remediation-plan.preserves"
+        },
+        {
+          "content_hash": "4617bd412848ec267ee24fe0829831fedd8f4c5510bf8a11b6c97c4392416aab",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-source/workspace/status.json"
+        },
+        {
+          "content_hash": "0194f449b16c95e469042213390dd02eb9b1b5bb1b88128aab3127db89673f7c",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-source/workspace/summary.txt"
+        },
+        {
+          "content_hash": "2e14986b1a4286aacc52210c7b96f362c20fbd7986b50843173673d6b6c7b211",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-sync-receipt.json"
+        },
+        {
+          "content_hash": "1b7f89ac4c629c7050a93802fdb88545670affbf1dec1c64d1e7a6eb67dda445",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-validate.json"
+        },
+        {
+          "content_hash": "221caee66854c751d58ad7e64870bad755e130b8d85ae3e36b094f18be45fedd",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/evidence/2026-10-21-verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/metadata.json"
+        },
+        {
+          "content_hash": "82adf298fb23cfa7080e1f160a7839313496595d315ecd0178768539e6a877d4",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/proposal.md"
+        },
+        {
+          "content_hash": "b5ddeb1b4b764fca16a449707562be10d83dd21b8ac9e47e112d67a1a99c87d4",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/specs/world-commit/spec.md"
+        },
+        {
+          "content_hash": "dd7e5fe294eb13b8118c8264686eef0b8be8a3fb2ecb141ba2731d8bba198ba8",
+          "exists": true,
+          "path": "./.cairn/changes/distinguish-absent-world-merge-roots/tasks.md"
+        }
+      ],
+      "manifest_hash": "38c7edbf6388f470b93906590f72ead13869705191b46769b58d04d9ede66258"
+    },
+    "kind": "archive",
+    "manifest_hash": "3756d7f20e069fdfae700585e4b727532137291f615b56861f0682f8f6fe8d81"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "33cbd4772ba3c0a0578a0bb90ead4f70f49e99710cbd71803f051cc7f2ae22c4",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "940b6e130302c472cdd4b6fbbc0d995ba7215f9511307fe0c45763980fb68140",
+  "reasons": [],
+  "receipt_hash": "3fb5d6ab3cf88e6d0017af5814b4c35aaba6d1f80adb262cf74b3220b6f813d0",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

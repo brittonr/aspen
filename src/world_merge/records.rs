@@ -6,8 +6,8 @@ use molten_core::world_merge::WORLD_MERGE_PLAN_SCHEMA;
 use molten_core::world_merge::WORLD_MERGE_RESULT_SCHEMA;
 use molten_core::world_merge::WorldDiffReport;
 use molten_core::world_merge::WorldMergeConflict;
+use molten_core::world_merge::WorldMergeOutput;
 use molten_core::world_merge::WorldMergePlan;
-use molten_core::world_merge::WorldMergeSchemaRef;
 use molten_core::world_merge::WorldMergedRoot;
 use molten_core::world_merge::WorldMigrationEvidence;
 use preserves::IOValue;
@@ -140,11 +140,10 @@ pub fn canonical_world_merge_conflict(
 }
 
 pub fn canonical_generated_world_root(output: &WorldMergedRoot) -> Result<(WorldRootRef, Vec<u8>)> {
-    let schema = output
-        .output_schema
-        .as_ref()
-        .ok_or_else(|| Failure::invalid_harness("generated merge root requires an output schema"))?;
-    let mut entries = output.generated_values.iter().collect::<Vec<_>>();
+    let WorldMergeOutput::Generated(generated) = &output.output else {
+        return Err(Failure::invalid_harness("merge output is not generated data"));
+    };
+    let mut entries = generated.values.iter().collect::<Vec<_>>();
     entries.sort_by(|left, right| left.0.cmp(right.0));
     let entries = entries
         .into_iter()
@@ -155,11 +154,11 @@ pub fn canonical_generated_world_root(output: &WorldMergedRoot) -> Result<(World
     let value = crate::preserves_rail::record(WORLD_MERGE_GENERATED_ROOT_RECORD, vec![
         crate::preserves_rail::string(WORLD_MERGE_RESULT_SCHEMA),
         field("root-kind", crate::preserves_rail::string(output.kind.as_str())),
-        field("schema-ref", crate::preserves_rail::string(schema.as_str())),
+        field("schema-ref", crate::preserves_rail::string(generated.schema.as_str())),
         field("entries", crate::preserves_rail::sequence(entries)),
         field(
             "handler-bytes",
-            output.generated_bytes.as_ref().map_or_else(
+            generated.bytes.as_ref().map_or_else(
                 || crate::preserves_rail::record("none", Vec::new()),
                 |bytes| crate::preserves_rail::record("some", vec![bytes_value(bytes)]),
             ),
@@ -224,16 +223,16 @@ fn migration_value(evidence: &WorldMigrationEvidence) -> IOValue {
 }
 
 fn output_value(output: &WorldMergedRoot) -> IOValue {
-    crate::preserves_rail::record("merge-output", vec![
-        crate::preserves_rail::string(output.kind.as_str()),
-        crate::preserves_rail::optional_ref_value(output.selected_root.as_ref().map(WorldRootRef::as_str)),
-        crate::preserves_rail::optional_ref_value(output.output_schema.as_ref().map(WorldMergeSchemaRef::as_str)),
-        crate::preserves_rail::string(if output.generated_values.is_empty() && output.generated_bytes.is_none() {
-            "selected"
-        } else {
-            "generated"
-        }),
-    ])
+    let case = match &output.output {
+        WorldMergeOutput::Absent => crate::preserves_rail::record("absent", Vec::new()),
+        WorldMergeOutput::Selected(root) => {
+            crate::preserves_rail::record("selected", vec![crate::preserves_rail::string(root.as_str())])
+        }
+        WorldMergeOutput::Generated(generated) => {
+            crate::preserves_rail::record("generated", vec![crate::preserves_rail::string(generated.schema.as_str())])
+        }
+    };
+    crate::preserves_rail::record("merge-output", vec![crate::preserves_rail::string(output.kind.as_str()), case])
 }
 
 fn conflict_value(conflict: &WorldMergeConflict) -> IOValue {

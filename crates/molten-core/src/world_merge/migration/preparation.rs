@@ -1,4 +1,6 @@
+use super::super::WorldMergeGenerated;
 use super::super::WorldMergeIssue;
+use super::super::WorldMergeOutput;
 use super::super::WorldMergeRequest;
 use super::super::WorldMergedRoot;
 use super::MaterializedWorldMigration;
@@ -56,9 +58,9 @@ pub(in crate::world_merge) fn restore_generated_outputs(
     request: &mut WorldMergeRequest,
     migrations: &[WorldMigrationEvidence],
     outputs: &mut [WorldMergedRoot],
-) {
+) -> Result<(), WorldMergeIssue> {
     for output in outputs {
-        let Some(selected) = output.selected_root.as_ref() else {
+        let WorldMergeOutput::Selected(selected) = output.output.clone() else {
             continue;
         };
         let Some(evidence) = migrations
@@ -71,8 +73,14 @@ pub(in crate::world_merge) fn restore_generated_outputs(
             continue;
         };
         let value = evidence.conversion.side.value_mut(root);
-        output.selected_root = None;
-        output.generated_bytes = value.canonical_bytes.take();
-        output.generated_values = std::mem::take(&mut value.keyed_values);
+        let Some(schema) = value.schema_ref.clone() else {
+            return Err(WorldMergeIssue::MissingOutputSchema(output.kind));
+        };
+        output.output = WorldMergeOutput::Generated(WorldMergeGenerated {
+            schema,
+            values: std::mem::take(&mut value.keyed_values),
+            bytes: value.canonical_bytes.take(),
+        });
     }
+    Ok(())
 }

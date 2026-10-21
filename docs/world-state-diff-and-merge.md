@@ -58,7 +58,15 @@ These checks establish exact binding and bounded materialization, not arbitrary 
 
 ### Canonical plan cutover
 
-The current canonical carrier is `molten.world-merge-plan.v2`. Its eight fields are the schema identifier, plan ref, base head, source heads, migrations, outputs, conflicts, and non-claims. Each `merge-migration` entry records:
+The current canonical carrier is `molten.world-merge-plan.v3`. Its eight fields are the schema identifier, plan ref, base head, source heads, migrations, outputs, conflicts, and non-claims. Each `merge-output` entry is a root kind plus exactly one explicit case:
+
+- `absent` records no root value for the new inventory;
+- `selected` binds one existing cross-root reference;
+- `generated` binds the target schema ref. Generated values and handler bytes enter the plan identity through a payload reference.
+
+The three cases are a closed typed enum in the core, so a carrier cannot declare absence and also supply a selected root or generated payload. Plan identity is derived from the case tag rather than from field emptiness, and a generated empty value has a different identity from an absent root. A plan whose stored identity does not match its current outputs denies with `PlanIdentityMismatch` before any publication port runs.
+
+Each `merge-migration` entry records:
 
 - `conversion-ref`, `kind`, and `side` (`base`, `left`, or `right`);
 - `original-root`, `source-schema`, and `source-ref` for the admitted original content;
@@ -67,7 +75,7 @@ The current canonical carrier is `molten.world-merge-plan.v2`. Its eight fields 
 
 The durable capability is an inspectable, content-addressed link from each converted original input to its admitted bounded result, retained even after internal schema normalization. The immediate outcome is admission-before-execution and denial-before-publication, rather than a target-schema equality shortcut.
 
-`schemas/preserves-boundaries/molten-world-merge-plan-v2.preserves` is the current carrier marker. The v1 marker remains historical evidence only: v1 plans lack these conversion bindings, and there is no executable v1 plan reader or automatic upgrade that grants admission. Replan from the original commits, roots, loaded content, and reviewed profile through the current preparation API; do not relabel v1 bytes or treat an old successful plan as current migration permission.
+`schemas/preserves-boundaries/molten-world-merge-plan-v3.preserves` is the current carrier marker. The v1 and v2 markers remain historical evidence only. Neither has an executable reader or automatic upgrade: v1 plans lack conversion bindings, and v2 outputs carry the overloaded optional selection this contract replaces. Replan from the original commits, roots, loaded content, and reviewed profile through the current preparation API; do not relabel old bytes or infer a case from which fields happen to be empty.
 
 ## Pure handlers
 
@@ -86,6 +94,8 @@ Molten does not choose by timestamp, arrival order, or content identity. An unre
 ## Publish-last shell
 
 The shell persists every generated root before it publishes a merge commit.
+
+An admitted absent root is omitted from the new root inventory. Absence never calls the generated-root port, never requires a schema, and never authorizes deletion of retained content; old snapshots and retention holds remain separate protections.
 
 When reduction selects converted content, it emits a generated target-schema root with the new bytes instead of reusing the old source root identity. The shell canonically constructs and persists that generated root before publishing the commit. An unchanged selected root may still be reused. Migration result refs bind materialization evidence; they are not a substitute for the generated world-root identity.
 

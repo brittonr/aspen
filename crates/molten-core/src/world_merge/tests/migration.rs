@@ -52,9 +52,11 @@ fn mixed_schema_conversion_keeps_original_evidence_and_generates_target_bytes() 
     );
     let plan = plan_world_merge(input.clone(), converted(&input, BTreeMap::new()), None).expect("converted plan");
     assert!(plan.conflicts.is_empty());
-    assert_eq!(plan.outputs[0].selected_root, None, "old root cannot carry converted bytes");
-    assert_eq!(plan.outputs[0].generated_bytes.as_deref(), Some(b"modern-left".as_slice()));
-    assert_eq!(plan.outputs[0].output_schema, Some(schema("new-schema")));
+    let WorldMergeOutput::Generated(generated) = &plan.outputs[0].output else {
+        panic!("old root cannot carry converted bytes");
+    };
+    assert_eq!(generated.bytes.as_deref(), Some(b"modern-left".as_slice()));
+    assert_eq!(generated.schema, schema("new-schema"));
     assert_eq!(plan.migrations.len(), 1);
     let conversion = plan.migrations[0].conversion();
     assert_eq!(conversion.side(), WorldMergeInputSide::Left);
@@ -105,7 +107,10 @@ fn conversion_replaces_legacy_keyed_values_before_keyed_reduction() {
     let result = BTreeMap::from([("a".to_string(), b"converted".to_vec())]);
     let plan = plan_world_merge(input.clone(), converted(&input, result), None).expect("keyed converted plan");
     assert!(plan.conflicts.is_empty());
-    assert_eq!(plan.outputs[0].generated_values, BTreeMap::from([("a".to_string(), b"converted".to_vec())]));
+    let WorldMergeOutput::Generated(generated) = &plan.outputs[0].output else {
+        panic!("keyed converted output is generated data");
+    };
+    assert_eq!(generated.values, BTreeMap::from([("a".to_string(), b"converted".to_vec())]));
 }
 
 #[test]

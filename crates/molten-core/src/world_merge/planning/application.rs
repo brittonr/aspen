@@ -1,5 +1,7 @@
+use super::super::WorldMergeGenerated;
 use super::super::WorldMergeHandler;
 use super::super::WorldMergeIssue;
+use super::super::WorldMergeOutput;
 use super::super::WorldMergeRequest;
 use super::super::WorldMergeRootInput;
 use super::super::WorldMergedRoot;
@@ -59,9 +61,10 @@ pub(in crate::world_merge) fn add_application_handler(
     }
     outputs.push(WorldMergedRoot {
         kind: root.kind,
-        selected_root: None,
-        generated_values: std::collections::BTreeMap::new(),
-        generated_bytes: Some(output.canonical_bytes),
-        output_schema: Some(profile.output_schema.clone()),
+        output: WorldMergeOutput::Generated(WorldMergeGenerated {
+            schema: profile.output_schema.clone(),
+            values: std::collections::BTreeMap::new(),
+            bytes: Some(output.canonical_bytes),
+        }),
     });
 }

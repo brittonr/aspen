@@ -1,6 +1,7 @@
 use molten_core::world_commit::WorldCommitRef;
 use molten_core::world_commit::WorldRootRef;
 use molten_core::world_merge::WorldMergeMode;
+use molten_core::world_merge::WorldMergeOutput;
 use molten_core::world_merge::WorldMergePlan;
 use molten_core::world_merge::WorldMergePolicyRef;
 use molten_core::world_merge::WorldMergeRequest;
@@ -120,20 +121,19 @@ where
         .map_err(port_error)?;
     let mut output_roots = Vec::with_capacity(request.plan.outputs.len());
     for output in &request.plan.outputs {
-        if let Some(root) = &output.selected_root {
-            output_roots.push(root.clone());
-            continue;
+        match &output.output {
+            WorldMergeOutput::Absent => {}
+            WorldMergeOutput::Selected(root) => output_roots.push(root.clone()),
+            WorldMergeOutput::Generated(generated) => {
+                let (expected_root, bytes) = canonical_generated_world_root(output)?;
+                let observed =
+                    objects.persist_generated_root(output.kind, &generated.schema, &bytes).map_err(port_error)?;
+                if observed != expected_root {
+                    return Err(Failure::invalid_harness("generated merge root identity changed during publication"));
+                }
+                output_roots.push(observed);
+            }
         }
-        let (expected_root, bytes) = canonical_generated_world_root(output)?;
-        let schema_ref = output
-            .output_schema
-            .as_ref()
-            .ok_or_else(|| Failure::invalid_harness("generated merge output has no schema"))?;
-        let observed_root = objects.persist_generated_root(output.kind, schema_ref, &bytes).map_err(port_error)?;
-        if observed_root != expected_root {
-            return Err(Failure::invalid_harness("generated merge root identity changed during publication"));
-        }
-        output_roots.push(observed_root);
     }
     let result_commit = commits
         .publish_merge_commit(&request.plan.base_head, &request.plan.source_heads, &output_roots)

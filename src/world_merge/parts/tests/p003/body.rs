@@ -17,8 +17,10 @@ fn exercise_positive() {
     .expect("mixed schema preparation");
     assert_eq!(adapter.calls, 1, "target-schema values must not be migrated");
     assert_eq!(plan.migrations.len(), 1);
-    assert_eq!(plan.outputs[0].selected_root, None, "converted bytes cannot retain old root identity");
-    assert_eq!(plan.outputs[0].generated_bytes.as_deref(), Some(b"modern-left".as_slice()));
+    let WorldMergeOutput::Generated(generated) = &plan.outputs[0].output else {
+        panic!("converted bytes cannot retain old root identity");
+    };
+    assert_eq!(generated.bytes.as_deref(), Some(b"modern-left".as_slice()));
     assert_eq!(request.roots[0].left, original_source, "original request mutated");
     assert_conversion_evidence(&plan, &request);
     let result = publish_world_merge(
@@ -115,8 +117,10 @@ fn exercise_absent_positive() {
     assert_eq!(adapter.calls, 1, "absent sides must not invoke the adapter");
     assert_eq!(plan.migrations.len(), 1);
     assert_eq!(plan.migrations[0].conversion().side(), WorldMergeInputSide::Left);
-    assert_eq!(plan.outputs[0].selected_root, None);
-    assert_eq!(plan.outputs[0].generated_bytes.as_deref(), Some(b"modern-left".as_slice()));
+    let WorldMergeOutput::Generated(generated) = &plan.outputs[0].output else {
+        panic!("converted present side is generated data");
+    };
+    assert_eq!(generated.bytes.as_deref(), Some(b"modern-left".as_slice()));
     let result = publish_world_merge(
         &mut MemoryPort(memory.clone()),
         &mut MemoryPort(memory.clone()),
