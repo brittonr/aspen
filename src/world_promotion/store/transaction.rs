@@ -7,6 +7,7 @@ use crate::error::Result;
 use crate::world_head::canonical_world_head_state;
 use crate::world_head::parse_canonical_world_head_state;
 use crate::world_promotion::CanonicalWorldPromotionRecord;
+use crate::world_promotion::StoredPromotionIdentity;
 use crate::world_promotion::WorldPromotionBookkeepingPort;
 use crate::world_promotion::WorldPromotionCommitPort;
 use crate::world_promotion::parse_reservation;
@@ -22,7 +23,21 @@ impl WorldPromotionCommitPort for LocalWorldPromotionStore {
         validate_promotion_transaction(plan, facts)
             .map_err(|issues| Failure::invalid_harness(format!("world promotion transaction denied: {issues:?}")))?;
         let parsed = parse_committed_reservations(plan, reservations)?;
+        let canonical_identity = crate::world_promotion::canonical_promotion_identity(&plan.identity)?;
         let write = self.database().begin_write().map_err(store_error)?;
+        {
+            let identities = write.open_table(PROMOTION_IDENTITIES_TABLE).map_err(store_error)?;
+            if let Some(existing) = identities
+                .get(plan.operation_ref.as_str())
+                .map_err(store_error)?
+                .map(|guard| guard.value().to_vec())
+            {
+                let stored = crate::world_promotion::parse_promotion_identity(&existing)?;
+                if stored != plan.identity {
+                    return Ok(WorldPromotionCommitObservation::Inconsistent);
+                }
+            }
+        }
         let observed = {
             let heads = write.open_table(WORLD_HEADS_TABLE).map_err(store_error)?;
             heads
@@ -48,6 +63,12 @@ impl WorldPromotionCommitPort for LocalWorldPromotionStore {
             }));
         }
         let (_, state_bytes) = canonical_world_head_state(&plan.after)?;
+        {
+            let mut identities = write.open_table(PROMOTION_IDENTITIES_TABLE).map_err(store_error)?;
+            identities
+                .insert(plan.operation_ref.as_str(), canonical_identity.bytes.as_slice())
+                .map_err(store_error)?;
+        }
         {
             let mut heads = write.open_table(WORLD_HEADS_TABLE).map_err(store_error)?;
             heads.insert(plan.after.branch_id.as_str(), state_bytes.as_slice()).map_err(store_error)?;
@@ -148,6 +169,35 @@ impl WorldPromotionBookkeepingPort for LocalWorldPromotionStore {
 
     fn read_attempt(&self, attempt_ref: &WorldReleaseAttemptRef) -> Result<Option<WorldAttemptRecord>> {
         super::outbox::read_attempt(self.database(), attempt_ref)
+    }
+
+    fn read_promotion_identity(
+        &self,
+        operation_ref: &WorldPromotionOperationRef,
+    ) -> Result<Option<StoredPromotionIdentity>> {
+        let read = self.database().begin_read().map_err(store_error)?;
+        {
+            let identities = read.open_table(PROMOTION_IDENTITIES_TABLE).map_err(store_error)?;
+            if let Some(bytes) =
+                identities.get(operation_ref.as_str()).map_err(store_error)?.map(|guard| guard.value().to_vec())
+            {
+                return Ok(Some(StoredPromotionIdentity::Current(crate::world_promotion::parse_promotion_identity(
+                    &bytes,
+                )?)));
+            }
+        }
+        let promotions = read.open_table(PROMOTIONS_TABLE).map_err(store_error)?;
+        for entry in promotions.iter().map_err(store_error)? {
+            let (_, value) = entry.map_err(store_error)?;
+            let (stored_operation, plan_ref) = crate::world_promotion::parse_promotion_operation(value.value())?;
+            if &stored_operation == operation_ref {
+                return Ok(Some(StoredPromotionIdentity::Legacy {
+                    operation_ref: stored_operation,
+                    plan_ref,
+                }));
+            }
+        }
+        Ok(None)
     }
 }
 

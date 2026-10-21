@@ -192,6 +192,13 @@ impl WorldPromotionBookkeepingPort for UnknownTransaction {
     fn read_attempt(&self, _attempt_ref: &WorldReleaseAttemptRef) -> Result<Option<WorldAttemptRecord>> {
         Ok(None)
     }
+
+    fn read_promotion_identity(
+        &self,
+        _operation_ref: &WorldPromotionOperationRef,
+    ) -> Result<Option<StoredPromotionIdentity>> {
+        Ok(None)
+    }
 }
 
 pub(super) fn reference(label: &str) -> String {

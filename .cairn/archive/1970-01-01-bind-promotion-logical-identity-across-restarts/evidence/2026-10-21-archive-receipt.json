@@ -1,0 +1,311 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: bind-promotion-logical-identity-across-restarts",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts"
+    }
+  ],
+  "blocked": false,
+  "change": "bind-promotion-logical-identity-across-restarts",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "dcb2a00535a8d5168eb0de8f8c60c0af478d4073faa6b57767cf06d17815f480",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "b81c08246a4eb150b4620ab2bae3062da5136b26e95a40584fd48897f645e1f3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/design.md"
+        },
+        {
+          "content_hash": "fdb0d9ec3711ff1ea075435e098b6a8d7d485e08b798c113e56a21a8c24417bf",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-gate-design.json"
+        },
+        {
+          "content_hash": "2be35d98aa1351384aa8f0fd4116a7b61539431c7edd0ae85c7814123569311e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-gate-proposal.json"
+        },
+        {
+          "content_hash": "ea1c182122c27d941ed36127c0737ec5532e4c2e9e4e40f14e2c55b46538d438",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-gate-tasks.json"
+        },
+        {
+          "content_hash": "7cc351db6b06b7fb2423ff09bdac9279b77c8f7be62f001fc3ada08e9c244357",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-review-completeness.json"
+        },
+        {
+          "content_hash": "0e33462c65c09d59edda03230bb6a0aeef91872c487047a8b218c5d335231469",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/library/command.txt"
+        },
+        {
+          "content_hash": "5463bd569198b20bae3f06a210b4eb1fcddd7fc8cc7a915a74579b063b94788c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/library/provenance.jsonl"
+        },
+        {
+          "content_hash": "80482190e6338bcd353334335abb73ab590e953f09677628b7e86ced89924c3b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/library/status.json"
+        },
+        {
+          "content_hash": "223e5abf9805d32013ad3b9ac06053f4f316ccc3ef840fe89c88235ffb21caa3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/library/summary.txt"
+        },
+        {
+          "content_hash": "5e091b34d45ef29e0b26cc9f1191812c8bd54e1c29b2728ebf9e62932e208450",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/workspace/artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "416129caef81ce325636c5d32dd8f66224fe2631ed7a8b85b5a09d1e24988e99",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/workspace/command.txt"
+        },
+        {
+          "content_hash": "b8d89fedf2cc740cf92f6a03c2d955fbc6c0fe08076df35fa5b3f9f534c0c9d4",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/workspace/gate-receipt.preserves"
+        },
+        {
+          "content_hash": "c1ea1177a6888ee416bc20d1ef5ffdb5c2f57ad6ff268a625ea2639ca6637da3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/workspace/object-corpus-receipt.json"
+        },
+        {
+          "content_hash": "ed3600d1aed6aca2f24a8294ec571d6289aa33d2ee39f5bdb9c89758e63edccf",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/workspace/provenance.jsonl"
+        },
+        {
+          "content_hash": "d4f9841fffc3e45c0c78a5a9a9b0704be96cc17bc722054b53c432595f980d74",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/workspace/remediation-plan.preserves"
+        },
+        {
+          "content_hash": "4617bd412848ec267ee24fe0829831fedd8f4c5510bf8a11b6c97c4392416aab",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/workspace/status.json"
+        },
+        {
+          "content_hash": "0194f449b16c95e469042213390dd02eb9b1b5bb1b88128aab3127db89673f7c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/workspace/summary.txt"
+        },
+        {
+          "content_hash": "7fe4d47232e61e09470b2cdadb799fb542afdbc8d181b7a6c5c8c2b648533fcc",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-sync-receipt.json"
+        },
+        {
+          "content_hash": "b01ec3c0c0a5a2379849cf14f6aaa1d0103f564acdde9753f54781019ff6cf94",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-validate.json"
+        },
+        {
+          "content_hash": "db3d23a573dee7333461d0daedc4444ee338c5711499793d60151e7ef99f5cb8",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/metadata.json"
+        },
+        {
+          "content_hash": "b8ddc30e0653482b163f0f7cdb336a77c46193c25fd7ebbeb3f3112a587adc06",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/proposal.md"
+        },
+        {
+          "content_hash": "939c26ba4800b5903eb8aeb303eaf36612617d05f8f81b4006ffa419a123dfa4",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/specs/world-commit/spec.md"
+        },
+        {
+          "content_hash": "5b06b21b0cb9dbf27abaedb1b50f49ce5a64b93d9e6911eaa54fede9b17db29a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-bind-promotion-logical-identity-across-restarts/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts"
+        }
+      ],
+      "manifest_hash": "2d20782297ca63b76df783af2433c08bbf8602d9c5b14c05f794ee51f0381756"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "b81c08246a4eb150b4620ab2bae3062da5136b26e95a40584fd48897f645e1f3",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/design.md"
+        },
+        {
+          "content_hash": "fdb0d9ec3711ff1ea075435e098b6a8d7d485e08b798c113e56a21a8c24417bf",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-gate-design.json"
+        },
+        {
+          "content_hash": "2be35d98aa1351384aa8f0fd4116a7b61539431c7edd0ae85c7814123569311e",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-gate-proposal.json"
+        },
+        {
+          "content_hash": "ea1c182122c27d941ed36127c0737ec5532e4c2e9e4e40f14e2c55b46538d438",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-gate-tasks.json"
+        },
+        {
+          "content_hash": "7cc351db6b06b7fb2423ff09bdac9279b77c8f7be62f001fc3ada08e9c244357",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-review-completeness.json"
+        },
+        {
+          "content_hash": "0e33462c65c09d59edda03230bb6a0aeef91872c487047a8b218c5d335231469",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/library/command.txt"
+        },
+        {
+          "content_hash": "5463bd569198b20bae3f06a210b4eb1fcddd7fc8cc7a915a74579b063b94788c",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/library/provenance.jsonl"
+        },
+        {
+          "content_hash": "80482190e6338bcd353334335abb73ab590e953f09677628b7e86ced89924c3b",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/library/status.json"
+        },
+        {
+          "content_hash": "223e5abf9805d32013ad3b9ac06053f4f316ccc3ef840fe89c88235ffb21caa3",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/library/summary.txt"
+        },
+        {
+          "content_hash": "5e091b34d45ef29e0b26cc9f1191812c8bd54e1c29b2728ebf9e62932e208450",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/workspace/artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "416129caef81ce325636c5d32dd8f66224fe2631ed7a8b85b5a09d1e24988e99",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/workspace/command.txt"
+        },
+        {
+          "content_hash": "b8d89fedf2cc740cf92f6a03c2d955fbc6c0fe08076df35fa5b3f9f534c0c9d4",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/workspace/gate-receipt.preserves"
+        },
+        {
+          "content_hash": "c1ea1177a6888ee416bc20d1ef5ffdb5c2f57ad6ff268a625ea2639ca6637da3",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/workspace/object-corpus-receipt.json"
+        },
+        {
+          "content_hash": "ed3600d1aed6aca2f24a8294ec571d6289aa33d2ee39f5bdb9c89758e63edccf",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/workspace/provenance.jsonl"
+        },
+        {
+          "content_hash": "d4f9841fffc3e45c0c78a5a9a9b0704be96cc17bc722054b53c432595f980d74",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/workspace/remediation-plan.preserves"
+        },
+        {
+          "content_hash": "4617bd412848ec267ee24fe0829831fedd8f4c5510bf8a11b6c97c4392416aab",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/workspace/status.json"
+        },
+        {
+          "content_hash": "0194f449b16c95e469042213390dd02eb9b1b5bb1b88128aab3127db89673f7c",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/workspace/summary.txt"
+        },
+        {
+          "content_hash": "7fe4d47232e61e09470b2cdadb799fb542afdbc8d181b7a6c5c8c2b648533fcc",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-sync-receipt.json"
+        },
+        {
+          "content_hash": "b01ec3c0c0a5a2379849cf14f6aaa1d0103f564acdde9753f54781019ff6cf94",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-validate.json"
+        },
+        {
+          "content_hash": "db3d23a573dee7333461d0daedc4444ee338c5711499793d60151e7ef99f5cb8",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/metadata.json"
+        },
+        {
+          "content_hash": "b8ddc30e0653482b163f0f7cdb336a77c46193c25fd7ebbeb3f3112a587adc06",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/proposal.md"
+        },
+        {
+          "content_hash": "939c26ba4800b5903eb8aeb303eaf36612617d05f8f81b4006ffa419a123dfa4",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/specs/world-commit/spec.md"
+        },
+        {
+          "content_hash": "5b06b21b0cb9dbf27abaedb1b50f49ce5a64b93d9e6911eaa54fede9b17db29a",
+          "exists": true,
+          "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/tasks.md"
+        }
+      ],
+      "manifest_hash": "d9e5fa1b99aee2e7c3469f59415218136df855a0ec0dee57466d1551b8dbc171"
+    },
+    "kind": "archive",
+    "manifest_hash": "bd0552cd6d0716bfd6a19f49bedc07b4f64025321f8d5570d6b664ccec2dbdc3"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "7d9abec5bfa2f628b005ce7f4fcf6bc49b50781e74a67bbcd6d156a1301a5826",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "15ee00a9784300ce7bd85084364bdfe738247e43a89f5d631ef6b6fd80d769a8",
+  "reasons": [],
+  "receipt_hash": "02613b364861738ee180a03936fc5607ca776f2fd86e4f2daaa6c077d3477b59",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

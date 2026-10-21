@@ -3,6 +3,17 @@ use molten_core::world_promotion::*;
 use super::CanonicalWorldPromotionRecord;
 use crate::error::Result;
 
+/// A stored promotion operation identity. Records written before the identity
+/// table existed expose only their logical operation and plan identity.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StoredPromotionIdentity {
+    Current(WorldPromotionIdentity),
+    Legacy {
+        operation_ref: WorldPromotionOperationRef,
+        plan_ref: WorldPromotionPlanRef,
+    },
+}
+
 pub trait WorldPromotionCurrentPort {
     fn observe_transaction(&mut self, plan: &WorldPromotionPlan) -> Result<WorldPromotionTransactionFacts>;
 }
@@ -38,6 +49,11 @@ pub trait WorldPromotionBookkeepingPort {
     fn store_attempt(&mut self, attempt: &WorldAttemptRecord) -> Result<()>;
 
     fn read_attempt(&self, attempt_ref: &WorldReleaseAttemptRef) -> Result<Option<WorldAttemptRecord>>;
+
+    fn read_promotion_identity(
+        &self,
+        operation_ref: &WorldPromotionOperationRef,
+    ) -> Result<Option<StoredPromotionIdentity>>;
 }
 
 /// Every transaction capability a promotion adapter must provide.

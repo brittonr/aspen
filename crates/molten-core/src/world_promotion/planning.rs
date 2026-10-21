@@ -29,6 +29,7 @@ pub fn plan_world_promotion(request: &WorldPromotionRequest) -> Result<WorldProm
         .ok_or_else(|| vec![WorldPromotionIssue::GenerationOverflow])?;
     let mut intents = request.intents.clone();
     intents.sort_by(|left, right| left.intent_ref.cmp(&right.intent_ref));
+    let identity = promotion_identity(request, &intents, successor_generation)?;
     let plan_ref = identify_promotion(request, &intents)?;
     let mut reservations = intents
         .iter()
@@ -57,6 +58,7 @@ pub fn plan_world_promotion(request: &WorldPromotionRequest) -> Result<WorldProm
     Ok(WorldPromotionPlan {
         plan_ref,
         operation_ref: request.operation_ref.clone(),
+        identity,
         authority_ref: request.authority.authority_ref.clone(),
         before,
         after,

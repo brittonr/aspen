@@ -1,0 +1,153 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/bind-promotion-logical-identity-across-restarts/specs/world-commit/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/bind-promotion-logical-identity-across-restarts/specs/world-commit/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "bind-promotion-logical-identity-across-restarts",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/bind-promotion-logical-identity-across-restarts/specs/world-commit/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "d236d2d129b7ade1e2fd6d3a9ad45fb8d49cb1c69d616e352c110476fd07ef48",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "113f8eb148fc64d5555359d1d2052e0a8539480a05381788bf12ad9860b07f1b",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "939c26ba4800b5903eb8aeb303eaf36612617d05f8f81b4006ffa419a123dfa4",
+        "destination": ".cairn/specs/world-commit/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "c373403bebfa4556f4961df4cb15d3619c19cd01600a8a4c375f9001faa888c4",
+        "operations": [
+          {
+            "block_hash": "9ee206150c7888f5353347ea3cf07f33d57eccdc2d8e0190c3dbf64a2badb0e1",
+            "heading": "### Requirement: Promotion records carry four identity roles",
+            "kind": "added",
+            "requirement_id": "molten.promotion_identity.roles"
+          },
+          {
+            "block_hash": "c97d266e4e11f63e1b48e67daf5b1ba4ddb7c775a32acd399d948f94428cfec2",
+            "heading": "### Requirement: Logical identity binds its canonical request",
+            "kind": "added",
+            "requirement_id": "molten.promotion_identity.request_binding"
+          },
+          {
+            "block_hash": "4491b92be59d8d2e1b723bfb92107135cb8eb6d0a4454c70202d6d826ba71708",
+            "heading": "### Requirement: Payload equality never merges operations",
+            "kind": "added",
+            "requirement_id": "molten.promotion_identity.no_payload_merge"
+          },
+          {
+            "block_hash": "fdf2994dd6efcbbdfb1b82ccb8d5f62032bd2b54134d75e88d1bcfeb5725c71f",
+            "heading": "### Requirement: Logical identity survives restart and uncertainty",
+            "kind": "added",
+            "requirement_id": "molten.promotion_identity.restart_binding"
+          },
+          {
+            "block_hash": "15de26de710657f383dea3bc072f6a80481ba11b4f655e5b0ee2ae51cfa29ec4",
+            "heading": "### Requirement: Validation limits identity evidence",
+            "kind": "added",
+            "requirement_id": "molten.promotion_identity.validation"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.promotion_identity.roles",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.promotion_identity.request_binding",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.promotion_identity.no_payload_merge",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.promotion_identity.restart_binding",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.promotion_identity.validation",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/bind-promotion-logical-identity-across-restarts/specs/world-commit/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "c373403bebfa4556f4961df4cb15d3619c19cd01600a8a4c375f9001faa888c4",
+          "exists": true,
+          "path": "./.cairn/specs/world-commit/spec.md"
+        }
+      ],
+      "manifest_hash": "a2ede19c834e23f1bade5d3f97e61cb176c76b6499b031f690244a196904bca4"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "113f8eb148fc64d5555359d1d2052e0a8539480a05381788bf12ad9860b07f1b",
+          "exists": true,
+          "path": "./.cairn/specs/world-commit/spec.md"
+        }
+      ],
+      "manifest_hash": "b45f9b5af1a7b90dfded4969048e2b81cda87bffdceff77487a13f004b66442f"
+    },
+    "kind": "sync",
+    "manifest_hash": "ab23473cbbc108003c7a4ef41ceeee6876ac33faf0d98c1fdb1345242e239777"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "e70fdb56627acc907a908641a1c92cb8c3bda552c269963fadbe8912c8909954",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "15ee00a9784300ce7bd85084364bdfe738247e43a89f5d631ef6b6fd80d769a8",
+  "reasons": [],
+  "receipt_hash": "d7990832233ece61e8de4752a9c4f1f11991f47e69bde35bb7141682682bfe63",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

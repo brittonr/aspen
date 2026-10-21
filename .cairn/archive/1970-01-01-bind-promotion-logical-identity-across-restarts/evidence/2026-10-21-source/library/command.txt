@@ -1,0 +1,1 @@
+cargo octet check -p molten --artifact-dir .cairn/changes/bind-promotion-logical-identity-across-restarts/evidence/2026-10-21-source/library -- --lib

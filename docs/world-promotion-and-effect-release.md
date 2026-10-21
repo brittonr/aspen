@@ -26,6 +26,24 @@ A promotion plan binds:
 
 Each release reservation binds the promotion, candidate, intent, semantic operation, handler, adapter, and successor generation. Retry attempts keep this logical reservation identity.
 
+## Promotion identity roles
+
+A promotion operation carries four separate identity roles:
+
+- the logical operation identity, minted once at the origin and persisted before the first submission;
+- the canonical request identity, a domain-separated binding of the exact request parameters;
+- the attempt identity, which changes per transmission; and
+- the generation identity that authorizes the acting owner.
+
+The store persists those roles with the promotion, in the same write transaction as the successor head, the promotion record, and the reservation set. A retry is evaluated against the stored roles:
+
+- the same logical identity with the same canonical request identity replays the original operation and returns its retained outcome or retained uncertainty;
+- the same logical identity with a different canonical request identity is rejected before any state mutation;
+- a different logical identity is a distinct operation, even when the canonical request identity or the payload hash is equal; and
+- a record written before the identity roles existed replays by logical operation identity alone and keeps its historical outcome, with the unavailable detail reported as uncertain rather than invented.
+
+The shell never substitutes a new logical identity for an unresolved operation. A lost response keeps the original logical and attempt identities, so a post-restart retry reports the recorded uncertainty instead of a fresh success or failure. Identity equality never proves exactly-once execution of an external effect.
+
 ## Atomic local eligibility
 
 `LocalWorldPromotionStore` uses the same Redb database and active-head table as the branch-head store. One write transaction does all of this work:
@@ -34,7 +52,7 @@ Each release reservation binds the promotion, candidate, intent, semantic operat
 2. Recheck current transaction facts.
 3. Verify the exact reservation set.
 4. Write the successor active head.
-5. Write the promotion record.
+5. Write the promotion record with its identity roles.
 6. Write every committed reservation.
 7. Commit the transaction.
 

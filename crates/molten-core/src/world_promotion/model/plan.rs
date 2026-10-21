@@ -5,6 +5,7 @@ use transactional_reconciliation_core::PublicationIntent;
 
 use super::super::MAX_WORLD_PROMOTION_INTENTS;
 use super::dispatch::WorldReleaseState;
+use super::identity::WorldPromotionIdentity;
 use super::reference::*;
 use crate::world_commit::WorldCommitRef;
 use crate::world_head::WorldBranchClass;
@@ -113,6 +114,7 @@ pub struct TransactionalPromotionPlan {
 pub struct WorldPromotionPlan {
     pub plan_ref: WorldPromotionPlanRef,
     pub operation_ref: WorldPromotionOperationRef,
+    pub identity: WorldPromotionIdentity,
     pub authority_ref: WorldPromotionAuthorityRef,
     pub before: WorldHeadState,
     pub after: WorldHeadState,
@@ -155,4 +157,5 @@ pub enum WorldPromotionIssue {
     ObservationSuccessorUnchanged,
     ObservationTraceInvalid,
     TransactionalMapping(String),
+    PromotionIdentityConflict,
 }

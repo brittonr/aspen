@@ -226,3 +226,55 @@ fn commit(label: &str) -> WorldCommitRef {
 fn reference(label: &str) -> String {
     format!("blake3:{}", blake3::hash(label.as_bytes()).to_hex())
 }
+
+// r[verify molten.promotion_identity.roles]
+#[test]
+fn promotion_plan_carries_all_four_identity_roles() {
+    let request = promotion_request();
+    let plan = plan_world_promotion(&request).expect("promotion plan");
+    let identity = &plan.identity;
+    assert_eq!(identity.operation_ref, request.operation_ref);
+    assert!(identity.canonical_request_ref.as_str().starts_with("blake3:"));
+    assert!(identity.attempt_ref.as_str().starts_with("blake3:"));
+    assert_eq!(identity.generation, CURRENT_GENERATION + 1);
+    assert_ne!(identity.attempt_ref.as_str(), request.operation_ref.as_str());
+    let repeated = plan_world_promotion(&request).expect("repeated plan");
+    assert_eq!(repeated.identity, *identity);
+}
+
+// r[verify molten.promotion_identity.request_binding]
+#[test]
+fn promotion_retry_rejects_incompatible_request_parameters() {
+    let request = promotion_request();
+    let original = plan_world_promotion(&request).expect("plan").identity;
+    assert_eq!(evaluate_promotion_retry(&original, None), WorldPromotionRetryDecision::New);
+    assert_eq!(evaluate_promotion_retry(&original, Some(&original)), WorldPromotionRetryDecision::Replay);
+
+    let mut changed = request.clone();
+    changed.candidate_head = commit("other-candidate");
+    let incompatible = plan_world_promotion(&changed).expect("changed plan").identity;
+    assert_eq!(incompatible.operation_ref, original.operation_ref);
+    assert_ne!(incompatible.canonical_request_ref, original.canonical_request_ref);
+    assert_eq!(
+        evaluate_promotion_retry(&incompatible, Some(&original)),
+        WorldPromotionRetryDecision::IncompatibleRequest
+    );
+}
+
+// r[verify molten.promotion_identity.no_payload_merge]
+#[test]
+fn distinct_logical_operations_with_equal_payloads_never_merge() {
+    let first = promotion_request();
+    let mut second = first.clone();
+    second.operation_ref =
+        WorldPromotionOperationRef::new(reference("other-promotion-operation")).expect("operation ref");
+    let first_plan = plan_world_promotion(&first).expect("first plan");
+    let second_plan = plan_world_promotion(&second).expect("second plan");
+    assert_eq!(first_plan.identity.canonical_request_ref, second_plan.identity.canonical_request_ref);
+    assert_ne!(first_plan.identity.operation_ref, second_plan.identity.operation_ref);
+    assert_eq!(
+        evaluate_promotion_retry(&second_plan.identity, Some(&first_plan.identity)),
+        WorldPromotionRetryDecision::New
+    );
+    assert_ne!(first_plan.plan_ref, second_plan.plan_ref);
+}

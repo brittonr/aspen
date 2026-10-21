@@ -1,3 +1,6 @@
+mod identity;
+
+pub use identity::*;
 use molten_core::world_commit::WorldCommitRef;
 use molten_core::world_promotion::*;
 use preserves::IOValue;
@@ -8,7 +11,8 @@ use transactional_reconciliation_core::QuarantineStatus;
 use crate::error::Failure;
 use crate::error::Result;
 
-pub const WORLD_PROMOTION_PLAN_SCHEMA: &str = "molten.world-promotion-plan.v1";
+pub const WORLD_PROMOTION_PLAN_SCHEMA: &str = "molten.world-promotion-plan.v2";
+pub const WORLD_PROMOTION_PLAN_SCHEMA_V1: &str = "molten.world-promotion-plan.v1";
 pub const WORLD_RELEASE_RESERVATION_SCHEMA: &str = "molten.world-release-reservation.v1";
 pub const WORLD_RELEASE_ATTEMPT_SCHEMA: &str = "molten.world-release-attempt.v1";
 pub const WORLD_RELEASE_OBSERVATION_SCHEMA: &str = "molten.world-release-observation.v1";
@@ -35,6 +39,9 @@ pub fn canonical_promotion_plan(plan: &WorldPromotionPlan) -> Result<CanonicalWo
         crate::preserves_rail::string(WORLD_PROMOTION_PLAN_SCHEMA),
         named("plan-ref", string(plan.plan_ref.as_str())),
         named("operation-ref", string(plan.operation_ref.as_str())),
+        named("request-ref", string(plan.identity.canonical_request_ref.as_str())),
+        named("attempt-ref", string(plan.identity.attempt_ref.as_str())),
+        named("generation", number(plan.identity.generation)),
         named("branch-id", string(plan.after.branch_id.as_str())),
         named("before-head", string(plan.before.head.as_str())),
         named("before-generation", number(plan.before.generation)),

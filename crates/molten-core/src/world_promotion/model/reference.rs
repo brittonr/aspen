@@ -37,6 +37,7 @@ macro_rules! promotion_reference {
 
 promotion_reference!(WorldPromotionPlanRef);
 promotion_reference!(WorldPromotionOperationRef);
+promotion_reference!(WorldPromotionRequestRef);
 promotion_reference!(WorldEffectIntentRef);
 promotion_reference!(WorldSemanticIntentRef);
 promotion_reference!(WorldReleaseReservationRef);

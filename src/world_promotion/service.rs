@@ -19,6 +19,7 @@ pub struct WorldPromotionOutcome {
     pub canonical_plan: CanonicalWorldPromotionRecord,
     pub canonical_reservations: Vec<CanonicalWorldPromotionRecord>,
     pub canonical_receipt: CanonicalWorldPromotionRecord,
+    pub replayed: bool,
 }
 
 // r[impl molten.world_promotion.transaction]
@@ -46,15 +47,29 @@ where
         .collect::<Vec<_>>();
     let canonical_reservations =
         committed_reservations.iter().map(canonical_reservation).collect::<Result<Vec<_>>>()?;
-    let facts = ports.current.observe_transaction(&plan)?;
-    let observation = ports.transaction.commit_promotion(&plan, &canonical_plan, &canonical_reservations, &facts)?;
-    let mut persistence = classify_promotion_commit(&plan, &observation)
-        .map_err(|issues| Failure::invalid_harness(format!("promotion commit classification failed: {issues:?}")))?;
-    if persistence.shared.quarantine() != QuarantineStatus::Clear {
-        let read_back = ports.transaction.read_back_promotion(&plan)?;
-        persistence = reconcile_promotion_read_back(&plan, &persistence, &read_back)
-            .map_err(|issues| Failure::invalid_harness(format!("promotion readback failed: {issues:?}")))?;
+    let stored_identity = ports.transaction.read_promotion_identity(&plan.operation_ref)?;
+    let decision = match &stored_identity {
+        None => WorldPromotionRetryDecision::New,
+        Some(StoredPromotionIdentity::Current(existing)) => evaluate_promotion_retry(&plan.identity, Some(existing)),
+        Some(StoredPromotionIdentity::Legacy { .. }) => WorldPromotionRetryDecision::Replay,
+    };
+    if decision == WorldPromotionRetryDecision::IncompatibleRequest {
+        return Err(Failure::invalid_harness(format!(
+            "promotion identity conflict for operation {}",
+            plan.operation_ref
+        )));
     }
+    let (persistence, replayed) = if decision == WorldPromotionRetryDecision::Replay {
+        let observation = replay_observation(&plan, &stored_identity, ports.transaction)?;
+        let persistence = classify_promotion_commit(&plan, &observation).map_err(|issues| {
+            Failure::invalid_harness(format!("promotion replay classification failed: {issues:?}"))
+        })?;
+        (persistence, true)
+    } else {
+        let persistence =
+            commit_persistence(&plan, &canonical_plan, &canonical_reservations, ports.current, ports.transaction)?;
+        (persistence, false)
+    };
     let canonical_receipt = canonical_persistence(&plan, &persistence)?;
     ports.receipts.publish_promotion_receipt(&canonical_receipt)?;
     Ok(WorldPromotionOutcome {
@@ -64,7 +79,51 @@ where
         canonical_plan,
         canonical_reservations,
         canonical_receipt,
+        replayed,
     })
+}
+
+fn replay_observation<T: WorldPromotionTransactionPort>(
+    plan: &WorldPromotionPlan,
+    stored_identity: &Option<StoredPromotionIdentity>,
+    transaction: &T,
+) -> Result<WorldPromotionCommitObservation> {
+    if matches!(stored_identity, Some(StoredPromotionIdentity::Legacy { .. })) {
+        return Ok(WorldPromotionCommitObservation::OutcomeUnknown);
+    }
+    Ok(match transaction.read_back_promotion(plan)? {
+        WorldPromotionReadBackObservation::Reservation => WorldPromotionCommitObservation::Applied,
+        WorldPromotionReadBackObservation::Prior { head, generation } => WorldPromotionCommitObservation::NotApplied {
+            current_head: head,
+            current_generation: generation,
+        },
+        WorldPromotionReadBackObservation::Missing | WorldPromotionReadBackObservation::Corrupt => {
+            WorldPromotionCommitObservation::OutcomeUnknown
+        }
+    })
+}
+
+fn commit_persistence<C, T>(
+    plan: &WorldPromotionPlan,
+    canonical_plan: &CanonicalWorldPromotionRecord,
+    canonical_reservations: &[CanonicalWorldPromotionRecord],
+    current: &mut C,
+    transaction: &mut T,
+) -> Result<WorldPromotionPersistence>
+where
+    C: WorldPromotionCurrentPort,
+    T: WorldPromotionTransactionPort,
+{
+    let facts = current.observe_transaction(plan)?;
+    let observation = transaction.commit_promotion(plan, canonical_plan, canonical_reservations, &facts)?;
+    let mut persistence = classify_promotion_commit(plan, &observation)
+        .map_err(|issues| Failure::invalid_harness(format!("promotion commit classification failed: {issues:?}")))?;
+    if persistence.shared.quarantine() != QuarantineStatus::Clear {
+        let read_back = transaction.read_back_promotion(plan)?;
+        persistence = reconcile_promotion_read_back(plan, &persistence, &read_back)
+            .map_err(|issues| Failure::invalid_harness(format!("promotion readback failed: {issues:?}")))?;
+    }
+    Ok(persistence)
 }
 
 pub struct WorldDispatchPorts<'a, T, A, D, R> {
