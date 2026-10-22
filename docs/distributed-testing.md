@@ -30,6 +30,29 @@ The topology-profile matrix names pairwise transport, control quorum, restart/re
 
 `multinode-reconciliation-gate-v1` compares per-node summaries against the declared topology, scenario fixture, required receipts, equality classes, and allowed variance refs. Queue, ledger, dispatch, ack, protocol, chunk, or receipt-index refs must match unless a visible variance ref permits the difference. Missing node evidence, stale refs, wrong topology, duplicate semantic commits, divergent queues, and log-only reconciliation deny.
 
+## Service recovery composition
+
+The deterministic track composes three services through the typed facades and one recovery-group declaration: a durable
+stateful service, a dependent worker ordered after it in the group, and an independent sibling outside the group. One
+scenario per failure class records what the composition observed, and the property evaluation turns those observations
+into five named properties: unaffected services continue, stale instances lose influence, durable work is readmitted
+under a current claim, uncertain external effects are not blindly repeated, and restart storms reach a terminal outcome
+inside the admitted window.
+
+The scenarios are the member failure with the dependent restart, the delayed pre-restart event delivery, the durable
+work readmission, the uncertain effect surfacing, the queue overload, the restart storm to escalation, and the generation
+upgrade with stale-work rejection. Each scenario asserts every property that applies to it, so a regression in one
+mechanism fails several scenarios.
+
+Two deliberately broken variants keep the property assertions honest. The fencing-removed variant restarts without
+advancing the incarnation, and the group-budget-reset variant clears the restart history on every replacement. The
+harness must fail the matching property for each; a passing broken variant would mean the property assertion is
+vacuous. A failing property is evidence against the mechanism that owns it, not a patch inside the composition.
+
+The CPU-saturation case under the time-sliced execution profile and the real-process twin are not part of this
+composition yet: the first needs the admitted time-sliced profile, and the second needs the outside-in process-fault
+track and its observation conventions.
+
 ## Local multiprocess harness
 
 The local multiprocess harness model has a pure planner that validates node identities, state-root handles, transport handles, command-plan refs, expected receipt refs, and cleanup policy. The shell may spawn processes and collect artifacts, but the plan denies state-root collisions, transport collisions, stale tickets, missing receipts, child timeouts, orphaned children, or missing cleanup before accepting local pass evidence. `local-multiprocess-executable-run-v1` binds the shell observations to the pure plan and local run receipt. Local multiprocess receipts are local integration evidence only; they do not replace NixOS VM, WAN/live, authority, policy, provenance, resource, source-gate, retention, deployment, or production-readiness evidence.
