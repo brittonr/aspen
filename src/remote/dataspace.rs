@@ -8,3 +8,4 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/remote/parts/dataspace/p005/b
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/remote/parts/dataspace/p009/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/remote/parts/dataspace/p006/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/remote/parts/dataspace/p007/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/remote/parts/dataspace/p010/body.rs"));

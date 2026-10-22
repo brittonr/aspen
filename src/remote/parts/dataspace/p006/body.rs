@@ -32,6 +32,8 @@ pub struct RemoteSession {
     pub topic: String,
     pub generation: u64,
     pub state: RemoteSessionState,
+    /// The references the peer was introduced to when the session opened.
+    pub bootstrap_references: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -45,6 +47,17 @@ impl RemoteSessionRegistry {
     }
 
     pub fn open_session(&mut self, receiver_peer: &str, topic: &str, generation: u64) -> Result<RemoteSession> {
+        self.open_session_with_bootstrap(receiver_peer, topic, generation, &[])
+    }
+
+    /// Open a session that starts with the given bootstrap references.
+    pub fn open_session_with_bootstrap(
+        &mut self,
+        receiver_peer: &str,
+        topic: &str,
+        generation: u64,
+        bootstrap_references: &[String],
+    ) -> Result<RemoteSession> {
         validate_name(receiver_peer, "receiver peer")?;
         validate_name(topic, "topic")?;
         let session_ref = remote_session_ref(receiver_peer, topic, generation)?;
@@ -62,6 +75,7 @@ impl RemoteSessionRegistry {
             topic: topic.to_owned(),
             generation,
             state: RemoteSessionState::Open,
+            bootstrap_references: bootstrap_references.to_vec(),
         };
         self.sessions.insert(session.session_ref.clone(), session.clone());
         Ok(session)
@@ -176,6 +190,23 @@ pub fn admit_and_apply_delivered_envelope_for_session(
         MoltenError::invalid_harness(format!("declared owner session is unknown: {session_ref}"))
     })?;
     let owner = session.owner.clone();
+    let introduced = IntroducedReferences::derive(state, &owner, &session.bootstrap_references);
+    let unintroduced = introduced.unknown(&delivery.envelope.content_refs);
+    if !unintroduced.is_empty() {
+        let diagnostics: Vec<String> = unintroduced
+            .iter()
+            .map(|reference| format!("message carries unintroduced reference {reference}"))
+            .collect();
+        return Ok(SessionAdmission::Denied(SessionDenial {
+            session_ref: session_ref.to_owned(),
+            admission_receipt_value: deny_admission_receipt_value(
+                &delivery.envelope,
+                &transport_receipt_ref,
+                diagnostics.clone(),
+            ),
+            diagnostics,
+        }));
+    }
     validate_delivery_evidence(&delivery.envelope, evidence)?;
     let turn_journal_context_ref_value = turn_journal_context_ref(delivery)?;
     let mut turn_context_refs = vec![turn_journal_context_ref_value.clone()];
