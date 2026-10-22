@@ -1,5 +1,7 @@
 // The bounded record pattern form.
 //
+// r[impl molten.runtime_spine.record_pattern_subset]
+//
 // A record pattern declares a record label and a set of declared field
 // positions. The candidate is matched with the at-least rule: undeclared
 // positions are ignored, a missing or mistyped declared position fails the
