@@ -164,6 +164,7 @@ pub struct ExecutionReceipt {
 pub struct ReconcileOutcome {
     pub instance: ServiceInstance,
     pub plan: Plan,
+    pub repair_plan: ClosureRepairPlan,
     pub status: Status,
     pub receipt: ExecutionReceipt,
     pub resource_refs: Vec<String>,
@@ -186,5 +187,8 @@ pub struct OperatorStatusView {
     pub failures: Vec<String>,
     pub pins: Vec<String>,
     pub evidence_refs: Vec<String>,
+    pub repair_completeness: String,
+    pub repair_unrecoverable: Vec<String>,
+    pub repair_non_claims: Vec<String>,
     pub non_claims: Vec<String>,
 }

@@ -79,6 +79,10 @@ The public reconciliation API always observes current facts and replans; `last_p
 
 New plans use `content-replication-plan-v2` and the `onixresearch.molten.content-replication.plan.v2` identity context. They bind ordered per-content `replica-deficit` entries as well as actions, so action-free plans with different unmet demand have different identities. Active `reuse` actions are removed; fresh repair uses the existing bounded attempt field.
 
+The operator status record moves to `content-replication-operator-status-v2`: it carries the repair completeness, the
+unrecoverable identities, and the repair non-claims. Operator status is a bounded view, not a durable authority
+record, and no reader of the v1 shape exists.
+
 Operation/action identity framing and operation, status, and receipt v1 record shapes remain unchanged. Canonical status admission rejects invalid bindings, inconsistent counts, invalid or duplicate references, missing non-claims, and exceeded reference bounds. Historical canonical bytes and identities are not rewritten. An old receipt or unsafe plan remains historical evidence only; it cannot bypass corrected current planning or deletion admission.
 
 ## Conformance
@@ -100,7 +104,15 @@ The bounded operator view reports these facts:
 - under-replicated content;
 - active operations and transfer resources;
 - failures and retention pins;
+- the closure repair completeness, the unrecoverable identities, and the repair non-claims;
 - evidence references and non-claims.
+
+The repair completeness is explicit. A complete repair means every required object has an intact verifiable copy
+somewhere in the cohort. An incomplete repair names the unrecoverable identities and keeps the progress on the
+objects that did verify. The view carries the bytes-not-authority claim: recovered bytes are bytes matching
+already-established identities, so they never make a replica the current placement and never decide which head is
+authoritative. A view without that claim, with a completeness outside the closed vocabulary, or with an incomplete
+repair that names nothing is refused.
 
 The view contains no content bytes, credentials, private keys, transport handles, or backend objects.
 

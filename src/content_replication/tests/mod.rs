@@ -5,6 +5,7 @@ mod cleanup;
 mod conformance_tests;
 mod content;
 mod deficits;
+mod repair;
 pub(super) mod support;
 
 use adapters::*;

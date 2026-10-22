@@ -110,27 +110,6 @@ pub fn canonical_status(status: &Status) -> crate::error::Result<CanonicalReplic
     )
 }
 
-pub fn canonical_operator_status(view: &OperatorStatusView) -> crate::error::Result<CanonicalReplicationRecord> {
-    canonical(
-        "operator-status",
-        record("content-replication-operator-status-v1", vec![
-            field("service-id", string(&view.service_id)),
-            field("generation", number(view.generation)),
-            field("placement-epoch", number(view.placement_epoch)),
-            field("desired-replicas", count(view.desired_replicas)?),
-            field("verified-replicas", count(view.verified_replicas)?),
-            field("under-replicated", strings(&view.under_replicated)),
-            field("active-plan-ref", string(&view.active_plan_ref)),
-            field("active-operations", strings(&view.active_operations)),
-            field("resource-refs", strings(&view.resource_refs)),
-            field("failures", strings(&view.failures)),
-            field("pins", strings(&view.pins)),
-            field("evidence-refs", strings(&view.evidence_refs)),
-            non_claims(),
-        ]),
-    )
-}
-
 // r[impl molten.content_replication.final_validation]
 pub fn canonical_receipt(receipt: &ExecutionReceipt) -> crate::error::Result<CanonicalReplicationRecord> {
     let expected = NON_CLAIMS.iter().map(ToString::to_string).collect::<Vec<_>>();
@@ -191,7 +170,7 @@ fn action_value(action: &Action) -> preserves::IOValue {
     ])
 }
 
-fn canonical(kind: &str, value: preserves::IOValue) -> crate::error::Result<CanonicalReplicationRecord> {
+pub(super) fn canonical(kind: &str, value: preserves::IOValue) -> crate::error::Result<CanonicalReplicationRecord> {
     let bytes = crate::preserves_rail::canonical_bytes(&value)?;
     let mut hasher = blake3::Hasher::new_derive_key(RECORD_IDENTITY_CONTEXT);
     update(&mut hasher, kind)?;
@@ -214,7 +193,7 @@ fn update(hasher: &mut blake3::Hasher, value: &str) -> crate::error::Result<()> 
     Ok(())
 }
 
-fn non_claims() -> preserves::IOValue {
+pub(super) fn non_claims() -> preserves::IOValue {
     field("non-claims", sequence(NON_CLAIMS.iter().map(string).collect()))
 }
 
@@ -222,7 +201,7 @@ fn issues(values: &[Issue]) -> preserves::IOValue {
     sequence(values.iter().map(|issue| string(issue.as_str())).collect())
 }
 
-fn strings(values: &[String]) -> preserves::IOValue {
+pub(super) fn strings(values: &[String]) -> preserves::IOValue {
     sequence(values.iter().map(string).collect())
 }
 
@@ -234,29 +213,29 @@ fn boolean(value: bool) -> preserves::IOValue {
     record(if value { "true" } else { "false" }, Vec::new())
 }
 
-fn count(value: usize) -> crate::error::Result<preserves::IOValue> {
+pub(super) fn count(value: usize) -> crate::error::Result<preserves::IOValue> {
     u64::try_from(value)
         .map(number)
         .map_err(|_| crate::error::Failure::invalid_harness("replication count exceeds u64"))
 }
 
-fn field(label: &'static str, value: preserves::IOValue) -> preserves::IOValue {
+pub(super) fn field(label: &'static str, value: preserves::IOValue) -> preserves::IOValue {
     record(label, vec![value])
 }
 
-fn number(value: u64) -> preserves::IOValue {
+pub(super) fn number(value: u64) -> preserves::IOValue {
     crate::preserves_rail::u64_value(value)
 }
 
-fn string(value: impl AsRef<str>) -> preserves::IOValue {
+pub(super) fn string(value: impl AsRef<str>) -> preserves::IOValue {
     crate::preserves_rail::string(value.as_ref())
 }
 
-fn sequence(values: Vec<preserves::IOValue>) -> preserves::IOValue {
+pub(super) fn sequence(values: Vec<preserves::IOValue>) -> preserves::IOValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn record(label: &'static str, fields: Vec<preserves::IOValue>) -> preserves::IOValue {
+pub(super) fn record(label: &'static str, fields: Vec<preserves::IOValue>) -> preserves::IOValue {
     crate::preserves_rail::record(label, fields)
 }
 

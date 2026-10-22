@@ -6,6 +6,7 @@
 mod conformance;
 mod model;
 mod multiprocess;
+mod operator;
 mod ports;
 mod records;
 mod service;
@@ -13,6 +14,7 @@ mod service;
 pub use conformance::*;
 pub use model::*;
 pub use multiprocess::*;
+pub use operator::*;
 pub use ports::*;
 pub use records::*;
 pub use service::*;

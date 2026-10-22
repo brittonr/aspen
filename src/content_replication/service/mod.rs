@@ -96,6 +96,9 @@ pub fn operator_status(outcome: &ReconcileOutcome) -> OperatorStatusView {
         failures: outcome.status.failures.clone(),
         pins: outcome.status.pins.clone(),
         evidence_refs: outcome.receipt.evidence_refs.clone(),
+        repair_completeness: outcome.repair_plan.completeness.as_str().to_string(),
+        repair_unrecoverable: outcome.repair_plan.unrecoverable_objects.clone(),
+        repair_non_claims: outcome.repair_plan.non_claims.clone(),
         non_claims: outcome.status.non_claims.clone(),
     }
 }
@@ -110,6 +113,9 @@ pub fn reconcile(mut instance: ServiceInstance, ports: ReconcilePorts<'_>) -> cr
         time_port: &mut *ports.time,
     })?;
     let inventory = ports.content.inventory(&instance.manifest)?;
+    let repair_plan = plan_closure_repair(&closure_repair_input(&instance.manifest, &inventory)).map_err(|issue| {
+        crate::error::Failure::invalid_harness(format!("closure repair planning denied: {issue:?}"))
+    })?;
     let history = ports.durable.load_history(&instance.manifest)?;
     let input = ReconcileInput {
         manifest: instance.manifest.clone(),
@@ -156,6 +162,7 @@ pub fn reconcile(mut instance: ServiceInstance, ports: ReconcilePorts<'_>) -> cr
     Ok(ReconcileOutcome {
         instance,
         plan,
+        repair_plan,
         status,
         receipt,
         resource_refs,
@@ -163,6 +170,32 @@ pub fn reconcile(mut instance: ServiceInstance, ports: ReconcilePorts<'_>) -> cr
         canonical_status,
         canonical_receipt,
     })
+}
+
+/// The closure repair input over the observed inventory.
+///
+/// The required closure is the manifest's content set, and the inventory facts
+/// are the per-replica, per-object verification facts. Donor eligibility is per
+/// object, so a cohort whose members each hold a different intact subset still
+/// repairs the whole closure.
+fn closure_repair_input(manifest: &Manifest, inventory: &Inventory) -> ClosureRepairInput {
+    let required_objects = manifest.contents.iter().map(|rule| rule.content_ref.clone()).collect();
+    let facts = inventory
+        .replicas
+        .iter()
+        .map(|replica| ReplicaObjectFact {
+            peer_id: replica.peer_id.clone(),
+            fault_domain: replica.fault_domain.clone(),
+            object_ref: replica.content_ref.clone(),
+            present: replica.present,
+            identity_verified: replica.identity_verified,
+        })
+        .collect();
+    ClosureRepairInput {
+        required_objects,
+        inventory: facts,
+        max_transfers: manifest.contents.len(),
+    }
 }
 
 struct CurrentFacts {
