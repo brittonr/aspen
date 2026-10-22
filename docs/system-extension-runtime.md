@@ -95,6 +95,32 @@ Supported callback groups are:
 
 A callback receives canonical event/payload refs, generation, sequence, logical tick, and an explicit logical deadline. Cancellation and expired or overlong deadlines deny before invocation. Callback outputs are bounded content refs, state/checkpoint refs, health, and typed fabric-port effect requests. Callback code cannot mint authority by returning a receipt.
 
+## Typed facades
+
+The facade layer is an opt-in library over the same interface. A facade is admitted as a manifest profile that binds
+the event, state, and reply schemas, the extension manifest it composes with, and the profile's own knobs: a
+state-machine phase table with per-phase legal and postponable events, a postponement bound, and a state timeout with
+its fencing declaration; a task completion schema; and a concurrency limit. Admission rejects a phase table whose
+events are not declared, unbounded postponement, a state timeout without incarnation-and-phase fencing, a task profile
+without a completion schema, and a concurrency limit below one.
+
+A facade turn is `current state plus admitted event` lowered into `next state, replies, effect intents, and timer
+intents`. The facade owns the structure, not the business logic:
+
+- an event outside the phase's legal set is rejected with a typed phase issue and the state does not change;
+- a postponable event is deferred while the phase's bound holds, and dead-letters through the existing delivery path
+  once the bound is exhausted;
+- a state timeout is scheduled fenced by its phase and the current incarnation, and a timer that fires from an earlier
+  phase or an earlier incarnation is rejected as stale;
+- effects bind the executing generation and incarnation and must name a bound port;
+- a parallel event for the same logical service that presents a stale turn sequence is rejected, so two events cannot
+  interleave inside one state transition;
+- a completed task maps to the existing stopped transition and consumes no restart budget.
+
+The facade lowers into the canonical envelopes the interface already defines, so a facade-lowered turn and a
+hand-written turn produce identical envelopes, admission results, and evidence. Facades add no runtime, no I/O route,
+and no state store, and they change no failure-isolation, authority, or durability guarantee.
+
 ## Fabric effects
 
 A system extension can request an external effect only through an exact admitted `(port-id, version)` binding. Each request binds:

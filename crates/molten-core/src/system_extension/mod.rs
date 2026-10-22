@@ -5,6 +5,7 @@
 //! invocation and canonical Preserves evidence.
 
 mod dispatch;
+mod facade;
 mod lifecycle;
 mod manifest;
 mod native_host;
@@ -21,6 +22,7 @@ mod recoverytests;
 mod tests;
 
 pub use dispatch::*;
+pub use facade::*;
 pub use lifecycle::*;
 pub use manifest::*;
 pub use native_host::admit_native_effect_output as admit_materialized_native_effect_output;
