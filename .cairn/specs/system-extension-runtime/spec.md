@@ -538,3 +538,62 @@ r[molten.system_extension.restart_rate_budget] Restart budgets MUST combine a bo
 - GIVEN a group consumed most of its windowed budget before its supervisor was replaced
 - WHEN the replacement supervisor faces further failures inside the same window
 - THEN the accumulated group budget still applies and the storm still terminates.
+
+### Requirement: Typed service facades lower to the existing interface
+r[molten.system_extension.service_facades] Aspen MUST admit library-level Service, StateMachine, and Task facade profiles over the existing system-extension interface. A facade turn MUST lower `current state plus admitted event` into `next state, replies, effect intents, and timer intents` through the existing canonical envelopes, admission checks, lifecycle transitions, and evidence. Facades MUST NOT add a runtime implementation, I/O route, or state store. State-machine timers and postponement MUST be incarnation- and phase-fenced and explicitly bounded, and a concurrency limit above one MUST NOT permit concurrent mutation of one logical service's state.
+
+#### Scenario: Facade turn equals hand-written turn
+- GIVEN the same admitted event against the same state
+- WHEN the facade lowers the turn and a hand-written extension produces the same turn
+- THEN the canonical envelopes, admission results, and evidence records are identical.
+
+#### Scenario: Illegal event for the phase
+- GIVEN a state machine in a phase whose table does not admit the arriving event
+- WHEN the event is presented
+- THEN the facade rejects it with a typed phase issue and the state does not change.
+
+#### Scenario: Stale-state timer cannot transition a replacement
+- GIVEN a state timeout scheduled by an earlier phase or an earlier incarnation
+- WHEN the timer fires after a phase change or a restart
+- THEN the timer is rejected as stale and cannot cause a transition in the current state or replacement instance.
+
+#### Scenario: Postponement stays bounded
+- GIVEN events postponed in a phase up to the admitted bound
+- WHEN one more event arrives beyond the bound
+- THEN the event dead-letters through the existing delivery path instead of extending the queue.
+
+#### Scenario: Parallel events serialize per service
+- GIVEN a service facade configured with a concurrency limit above one
+- WHEN two events arrive in parallel for the same logical service state
+- THEN they serialize through the controlled commit and no transition observes a partial or interleaved state.
+
+### Requirement: Runtime-local work binds to the executing incarnation
+r[molten.system_extension.incarnation_fencing] Aspen MUST distinguish the service key, the implementation generation, and the runtime incarnation of an executing instance. Every runtime-local timer, callback completion, and failure notification MUST bind the incarnation that produced it, and dispatch MUST reject work whose incarnation does not match the executing instance, including after a restart that preserves the generation. Restart paths MUST advance the fencing identity before old runtime-local work can act on the replacement instance.
+
+#### Scenario: Delayed timer after same-generation restart
+- GIVEN instance A scheduled a timer and then restarted as instance B without changing the implementation generation
+- WHEN the timer fires for instance A after B is running
+- THEN dispatch rejects the timer delivery with a typed stale-instance issue and instance B state does not change.
+
+#### Scenario: Callback completion from the previous instance
+- GIVEN instance A issued a callback whose completion is still pending and then restarted as instance B
+- WHEN the completion arrives after B is running
+- THEN the completion is rejected as stale and no effect, state delta, or externally visible output from it is planned.
+
+#### Scenario: Conformance trace guards every restart path
+- GIVEN the permanent restart-fencing conformance trace in the deterministic test suite
+- WHEN any restart path is added or changed such that old runtime-local work can act on the replacement
+- THEN the trace fails and names the accepted delivery.
+
+### Requirement: Durable work survives restart only through explicit readmission
+r[molten.system_extension.durable_readmission] Durable logical work addressed to a service MAY survive restart, but it MUST be re-admitted under the replacement instance with a current delivery claim before it can act. Runtime-local work MUST NOT be presented as durable work, and durable work MUST NOT be treated as a still-valid callback of a previous instance.
+
+#### Scenario: Durable message readmitted after restart
+- GIVEN a durable message addressed to the service exists when the instance restarts
+- WHEN the replacement instance starts and the shell presents the message with a fresh delivery claim bound to the current incarnation
+- THEN the message is processed under the replacement instance and the claim records the current incarnation.
+
+#### Scenario: Old callback presented as durable work
+- GIVEN instance A's callback completion exists when instance B is running
+- WHEN that completion is presented through the durable readmission path
+- THEN readmission rejects it because its incarnation predates the current claim.
