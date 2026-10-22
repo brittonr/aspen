@@ -8,6 +8,49 @@
         assert_eq!(crate::ledger::artifact_kind(&harness.receipt_value), "remote-dataspace-gate-receipt");
     }
 
+    // r[verify molten.runtime_spine.record_pattern_subset]
+    #[test]
+    fn the_service_ready_consumer_keeps_matching_a_record_with_an_extra_field() {
+        let root = temp_dir("remote-dataspace-service-ready-subscription");
+        let mut peer_b = RuntimeState::new(1);
+        peer_b.apply_step(&RuntimeStep::Observe {
+            actor: "consumer".to_owned(),
+            pattern: RuntimeValue::new(
+                crate::runtime::RuntimePattern::record(
+                    "service-ready",
+                    vec![crate::runtime::RecordPatternEntry {
+                        position: 0,
+                        pattern: Box::new(crate::runtime::RuntimePattern::wildcard("service")),
+                    }],
+                )
+                .to_value(),
+            )
+            .expect("service ready pattern"),
+        });
+        let payload = record("service-ready", vec![string("db"), string("zone-a")]);
+        let envelope = assert_envelope(AssertEnvelopeInput {
+            from_peer: "peer:a",
+            from_actor: "producer",
+            to_peer: "peer:b",
+            topic: "services",
+            payload,
+            capability_refs: Vec::new(),
+            evidence_refs: Vec::new(),
+        })
+        .expect("envelope");
+        publish_local_gossip(&root, &envelope, "peer:a").expect("publish");
+        let delivered = deliver_local_gossip(&root, "services", &envelope.envelope_ref, "peer:b").expect("deliver");
+        let applied = admit_and_apply_delivered_envelope(&mut peer_b, &delivered, &evidence_fixture())
+            .expect("apply delivered envelope");
+        assert!(
+            applied
+                .events
+                .iter()
+                .any(|event| matches!(event, RuntimeEvent::AssertionObserved { .. })),
+            "the subscription keeps matching a record that carries an extra field"
+        );
+    }
+
     #[test]
     fn wrong_topic_wrong_peer_and_tampered_envelope_are_rejected() {
         let root = temp_dir("remote-dataspace-negative-routing");

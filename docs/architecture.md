@@ -129,6 +129,15 @@ Key concepts:
 - **Automatic cleanup**: assertions are retracted when their owner dies, disconnects, or loses authority.
 - **Turn semantics**: one event enters an actor, pending actions accumulate, policy gates run, then actions commit or roll back as a unit.
 - **Service dependency assertions**: demand, readiness, failure, restart, and exposed service objects are represented as dataspace facts.
+- **Record patterns**: a subscription may declare a record pattern instead of one exact value. The pattern declares a
+  record label and its declared field positions, and each declared position carries a sub-pattern. The match is
+  at-least: a candidate that carries additional undeclared structure still matches, while a missing or mistyped
+  declared position fails the match and leaves no binding behind. The declared positions increase in Preserves order,
+  the bindings arrive in that order, and a failed sub-pattern discards the bindings the visit produced. The admitted
+  bounds are a maximum number of declared positions, a maximum record nesting depth, and the existing binding byte
+  limit; a pattern outside the bounds is refused when the subscription is registered, before it routes a delivery.
+  Pattern matching decides routing only: it never computes an identity, a receipt hash, or a canonical value ref, and a
+  matched record keeps one unchanged canonical value.
 - **Reference introductions**: a message must not embed a reference the peer has not been introduced to. The introduced set for a remote session is the session's bootstrap references plus the references its live assertions name, so withdrawing the last assertion that introduced a reference withdraws the introduction. A delivery that carries an unintroduced reference is denied before it is applied, and the denial names the unknown reference. The peer-visible surface is unchanged: the denial is recorded as evidence rather than answered with a protocol-level error reply.
 - **Service demand**: demand is a retractable assertion owned by the demanding scope, carrying the service, the demand form, the demander, and the operation identity. Demand is deduplicated per owner and service, so one demander cannot double-count its demand, and two demanders of one service are two live demands. Dependency-gated demand waits for the declared dependencies; force-run demand bypasses that order only because the record declares it. Withdrawal of the last live demand makes shutdown eligible, and the normal shutdown admission, resource, and receipt gates still apply. A restart request stays a message: it never creates, extends, or satisfies demand. Demand is coordination state, not authority: it cannot start work by itself and it proves no provider exists. No capacity is inferred from concurrency.
 

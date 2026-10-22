@@ -107,6 +107,7 @@ pub use logic::PredicateDecision;
 pub use logic::PromisePipelineResult;
 pub use logic::PromiseStateResult;
 pub use logic::PromiseUseResult;
+pub use logic::RecordPatternEntry;
 pub use logic::RevocationCleanupResult;
 pub use logic::RightsAmplificationResult;
 pub use logic::RuntimeActormapTransactionOutcome;

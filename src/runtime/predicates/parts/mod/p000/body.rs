@@ -71,6 +71,8 @@ impl TurnOutcome {
 pub enum RuntimePattern {
     Exact(RuntimeValue),
     Wildcard { binding: String },
+    /// A bounded record pattern: a record label and its declared positions.
+    Record { label: String, entries: Vec<RecordPatternEntry> },
 }
 
 impl RuntimePattern {
@@ -81,6 +83,14 @@ impl RuntimePattern {
     pub fn wildcard(binding: impl Into<String>) -> Self {
         Self::Wildcard {
             binding: binding.into(),
+        }
+    }
+
+    /// A record pattern over the declared field positions of a record.
+    pub fn record(label: impl Into<String>, entries: Vec<RecordPatternEntry>) -> Self {
+        Self::Record {
+            label: label.into(),
+            entries,
         }
     }
 
@@ -107,6 +117,12 @@ impl RuntimePattern {
             validate_pattern_binding(&binding)?;
             return Ok(Self::Wildcard { binding });
         }
+        if let Some(record_pattern) = record_pattern_from_ast(value)? {
+            return Ok(Self::Record {
+                label: record_pattern.label,
+                entries: record_pattern.entries,
+            });
+        }
         Err(crate::error::Failure::invalid_harness(
             "unsupported Preserves routing pattern AST form",
         ))
@@ -119,6 +135,9 @@ impl RuntimePattern {
             .is_some()
             || source
                 .collect_simple_record(RUNTIME_PATTERN_WILDCARD_LABEL, Some(PATTERN_WILDCARD_ARITY))
+                .is_some()
+            || source
+                .collect_simple_record(RUNTIME_PATTERN_RECORD_LABEL, Some(PATTERN_RECORD_ARITY))
                 .is_some()
         {
             Self::from_ast_value(source)
@@ -138,6 +157,7 @@ impl RuntimePattern {
                     binding,
                 )])
             }
+            Self::Record { label, entries } => record_pattern_to_value(label, entries),
         }
     }
 
@@ -149,6 +169,16 @@ impl RuntimePattern {
         match self {
             Self::Exact(_) => Ok(()),
             Self::Wildcard { binding } => validate_pattern_binding(binding),
+            Self::Record { label, entries } => {
+                record_pattern_validate(label, entries)?;
+                let depth = record_pattern_depth(self);
+                if depth > MAX_PATTERN_RECORD_DEPTH {
+                    return Err(crate::error::Failure::invalid_harness(format!(
+                        "runtime record pattern nests deeper than {MAX_PATTERN_RECORD_DEPTH} records"
+                    )));
+                }
+                Ok(())
+            }
         }
     }
 
@@ -159,6 +189,7 @@ impl RuntimePattern {
                 validate_pattern_binding(binding)?;
                 Ok((true, vec![(binding.clone(), value.value_ref().to_string())]))
             }
+            Self::Record { label, entries } => record_pattern_matches(label, entries, value),
         }
     }
 }

@@ -9,3 +9,4 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/predicates/parts/mod/
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/predicates/parts/mod/p005/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/predicates/parts/mod/p010/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/predicates/parts/mod/p006/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/runtime/predicates/parts/mod/p011/body.rs"));

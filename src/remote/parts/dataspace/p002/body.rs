@@ -236,7 +236,7 @@ pub fn gate_receipt_value(
 
 pub fn two_peer_service_ready_harness(root: &Path, evidence: DeliveryEvidence) -> Result<TwoPeerHarness> {
     let payload = record("service-ready", vec![string("db")]);
-    let pattern = RuntimeValue::new(payload.clone())?;
+    let pattern = service_ready_subscription_pattern()?;
     let mut peer_b = RuntimeState::new(1);
     peer_b.apply_step(&RuntimeStep::Observe {
         actor: "consumer".to_owned(),
