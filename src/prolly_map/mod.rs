@@ -10,6 +10,7 @@ mod ports;
 mod records;
 mod service;
 mod store;
+mod storeretention;
 
 pub use ports::*;
 pub use records::*;

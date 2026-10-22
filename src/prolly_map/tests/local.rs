@@ -68,6 +68,7 @@ fn local_store_stages_publishes_restarts_and_executes_revalidated_gc() {
     assert!(plan.complete);
     assert!(!plan.candidate_unreachable.is_empty());
     let candidate = plan.candidate_unreachable[0].clone();
+    let inventory = reopened.retention_inventory().expect("retention inventory");
     execute_prolly_gc(&mut reopened, &plan, &ProllyDeletionAdmission {
         roots: plan.roots.clone(),
         pins: plan.pins.clone(),
@@ -75,6 +76,7 @@ fn local_store_stages_publishes_restarts_and_executes_revalidated_gc() {
         generation_current: true,
         retention_policy_allows: true,
         deletion_authority_present: true,
+        retention_generation: inventory.retention_generation,
     })
     .expect("admitted gc");
     assert!(reopened.read_block(&candidate).expect("candidate read").is_none());
@@ -147,6 +149,7 @@ fn gc_denies_incomplete_stale_unpinned_and_unauthorized_admission() {
         generation_current: false,
         retention_policy_allows: true,
         deletion_authority_present: true,
+        retention_generation: 0,
     });
     assert_eq!(denied, Err(ProllyServiceError::GcAdmissionDenied));
 
@@ -159,11 +162,12 @@ fn gc_denies_incomplete_stale_unpinned_and_unauthorized_admission() {
         generation_current: true,
         retention_policy_allows: true,
         deletion_authority_present: true,
+        retention_generation: 0,
     });
     assert_eq!(crossed, Err(ProllyServiceError::GcAdmissionDenied));
 }
 
-fn merged_facts(profile: &ProllyProfile, snapshots: &[&MapSnapshot]) -> Vec<GraphFact> {
+pub(super) fn merged_facts(profile: &ProllyProfile, snapshots: &[&MapSnapshot]) -> Vec<GraphFact> {
     snapshots
         .iter()
         .flat_map(|snapshot| facts_from_snapshot(profile, snapshot).expect("facts"))

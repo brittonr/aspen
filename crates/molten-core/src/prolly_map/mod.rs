@@ -11,6 +11,7 @@
 )]
 
 mod differential;
+mod failures;
 mod model;
 mod operations;
 mod profile;
@@ -19,6 +20,7 @@ mod retention;
 mod tree;
 
 pub use differential::*;
+pub use failures::*;
 pub use model::*;
 pub use operations::*;
 pub use profile::*;

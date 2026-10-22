@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use molten_core::prolly_map::*;
 
@@ -46,6 +47,10 @@ pub(super) enum UnknownMode {
     None,
     BeforeApply,
     AfterApply,
+    /// The first staging commit fails after possible durability.
+    StagingCommitUnknown,
+    /// The readback fails as if the stored head were corrupt.
+    CorruptReadback,
 }
 
 pub(super) struct MemoryPort {
@@ -53,6 +58,9 @@ pub(super) struct MemoryPort {
     pub(super) head: Option<PublishedProllyRoot>,
     pub(super) unknown_mode: UnknownMode,
     pub(super) compare_calls: u32,
+    pub(super) pins: BTreeSet<String>,
+    pub(super) retention_generation: u64,
+    pub(super) staging_attempted: bool,
 }
 
 impl MemoryPort {
@@ -62,6 +70,24 @@ impl MemoryPort {
             head: None,
             unknown_mode,
             compare_calls: 0,
+            pins: BTreeSet::new(),
+            retention_generation: 0,
+            staging_attempted: false,
+        }
+    }
+
+    fn current_inventory(&self) -> ProllyRetentionInventory {
+        let mut roots = Vec::new();
+        if let Some(head) = &self.head {
+            roots.push(head.root.top_node_ref.clone());
+        }
+        roots.sort();
+        roots.dedup();
+        let pins = self.pins.iter().map(|pin| NodeRef::new(pin.clone())).collect();
+        ProllyRetentionInventory {
+            roots,
+            pins,
+            retention_generation: self.retention_generation,
         }
     }
 }
@@ -72,6 +98,14 @@ impl ProllyBlockStorePort for MemoryPort {
     }
 
     fn stage_blocks(&mut self, blocks: &[EncodedBlock]) -> ProllyPortResult<()> {
+        if self.unknown_mode == UnknownMode::StagingCommitUnknown && !self.staging_attempted {
+            self.staging_attempted = true;
+            return Err(ProllyPortError::new(
+                "scripted-unknown",
+                "staging commit failed after possible durability",
+                true,
+            ));
+        }
         for block in blocks {
             self.blocks.insert(block.node_ref.as_str().to_string(), block.bytes.clone());
         }
@@ -79,6 +113,9 @@ impl ProllyBlockStorePort for MemoryPort {
     }
 
     fn read_root(&self, _map_id: &str) -> ProllyPortResult<Option<PublishedProllyRoot>> {
+        if self.unknown_mode == UnknownMode::CorruptReadback {
+            return Err(ProllyPortError::new("prolly-head-shape", "stored head has the wrong field count", false));
+        }
         Ok(self.head.clone())
     }
 
@@ -99,13 +136,65 @@ impl ProllyBlockStorePort for MemoryPort {
                 self.head = Some(next.clone());
                 Ok(ProllyPublicationObservation::Applied)
             }
+            UnknownMode::StagingCommitUnknown => {
+                self.head = Some(next.clone());
+                Ok(ProllyPublicationObservation::Applied)
+            }
+            UnknownMode::CorruptReadback => Err(ProllyPortError::new("scripted-unknown", "corrupt readback", true)),
         }
     }
+}
 
-    fn delete_blocks(&mut self, node_refs: &[NodeRef]) -> ProllyPortResult<()> {
+impl ProllyRetentionPort for MemoryPort {
+    fn pin_blocks(&mut self, node_refs: &[NodeRef]) -> ProllyPortResult<()> {
         for node_ref in node_refs {
-            self.blocks.remove(node_ref.as_str());
+            self.pins.insert(node_ref.as_str().to_string());
         }
         Ok(())
+    }
+
+    fn release_pins(&mut self, node_refs: &[NodeRef]) -> ProllyPortResult<()> {
+        for node_ref in node_refs {
+            self.pins.remove(node_ref.as_str());
+        }
+        Ok(())
+    }
+
+    fn retention_inventory(&self) -> ProllyPortResult<ProllyRetentionInventory> {
+        Ok(self.current_inventory())
+    }
+
+    fn compare_retention_inventory_and_delete(
+        &mut self,
+        expected: &ProllyRetentionInventory,
+        candidates: &[NodeRef],
+    ) -> ProllyPortResult<GcDeletionOutcome> {
+        let current = self.current_inventory();
+        if current.roots != expected.roots {
+            return Ok(GcDeletionOutcome::InventoryMismatch {
+                reason: "published-roots-changed",
+            });
+        }
+        if current.retention_generation != expected.retention_generation {
+            return Ok(GcDeletionOutcome::InventoryMismatch {
+                reason: "retention-generation-changed",
+            });
+        }
+        if !expected.pins.iter().all(|pin| current.pins.contains(pin)) {
+            return Ok(GcDeletionOutcome::InventoryMismatch {
+                reason: "expected-pin-missing",
+            });
+        }
+        if candidates.iter().any(|candidate| current.pins.contains(candidate)) {
+            return Ok(GcDeletionOutcome::InventoryMismatch {
+                reason: "candidate-is-pinned",
+            });
+        }
+        for node_ref in candidates {
+            self.blocks.remove(node_ref.as_str());
+        }
+        Ok(GcDeletionOutcome::Deleted {
+            deleted: candidates.to_vec(),
+        })
     }
 }

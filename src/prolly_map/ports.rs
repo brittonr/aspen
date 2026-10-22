@@ -39,7 +39,35 @@ impl ProllyPortError {
 
 pub type ProllyPortResult<T> = std::result::Result<T, ProllyPortError>;
 
+/// The retention inventory a deletion admission was built against.
+///
+/// The inventory is the durable state the admission observed: the published
+/// roots, the pinned blocks, and the retention generation. A deletion that
+/// finds a different inventory is refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProllyRetentionInventory {
+    pub roots: Vec<NodeRef>,
+    pub pins: Vec<NodeRef>,
+    pub retention_generation: u64,
+}
+
+/// The outcome of a compare-and-delete operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GcDeletionOutcome {
+    /// The inventory matched and the candidates were deleted.
+    Deleted { deleted: Vec<NodeRef> },
+    /// The inventory did not match, so nothing was deleted.
+    InventoryMismatch { reason: &'static str },
+}
+
+impl GcDeletionOutcome {
+    pub fn is_deleted(&self) -> bool {
+        matches!(self, Self::Deleted { .. })
+    }
+}
+
 // r[impl molten.prolly_map.storage_boundary]
+// r[impl molten.prolly.gc.currentness]
 pub trait ProllyBlockStorePort {
     fn read_block(&self, node_ref: &NodeRef) -> ProllyPortResult<Option<Vec<u8>>>;
 
@@ -53,6 +81,24 @@ pub trait ProllyBlockStorePort {
         expected: &ExpectedProllyRoot,
         next: &PublishedProllyRoot,
     ) -> ProllyPortResult<ProllyPublicationObservation>;
+}
 
-    fn delete_blocks(&mut self, node_refs: &[NodeRef]) -> ProllyPortResult<()>;
+// r[impl molten.prolly.gc.currentness]
+pub trait ProllyRetentionPort {
+    /// Pin blocks so a garbage collection cannot delete them.
+    fn pin_blocks(&mut self, node_refs: &[NodeRef]) -> ProllyPortResult<()>;
+
+    /// Release pins the caller no longer needs.
+    fn release_pins(&mut self, node_refs: &[NodeRef]) -> ProllyPortResult<()>;
+
+    /// The current retention inventory of the store.
+    fn retention_inventory(&self) -> ProllyPortResult<ProllyRetentionInventory>;
+
+    /// Compare the current retention inventory with the admission inventory
+    /// and delete the candidates in one indivisible step.
+    fn compare_retention_inventory_and_delete(
+        &mut self,
+        expected: &ProllyRetentionInventory,
+        candidates: &[NodeRef],
+    ) -> ProllyPortResult<GcDeletionOutcome>;
 }

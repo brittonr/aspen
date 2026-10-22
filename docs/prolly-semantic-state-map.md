@@ -109,6 +109,8 @@ Blocks are immutable. Root publication uses a Redb compare-and-advance transacti
 
 If publication may have completed without an acknowledgement, the service reads the durable root once. It reports applied, not applied, or unknown. It does not retry the mutation blindly.
 
+Port failures are classified over the phase and kind of the operation. A failure that precedes any mutation has a known outcome. A commit failure on block staging, root publication, or block deletion may already have become durable, so the port error reports an unknown outcome and the publication is reconciled instead of being reported as applied or not applied. Staging ambiguity stays separate from head ambiguity: staged blocks are content addressed, so a staging failure is resolved by re-staging them, and a staging failure never by itself marks the head publication unknown. A readback that fails, is corrupt, or shows a conflicting head keeps the outcome unknown.
+
 Canonical publication receipts do not grant future mutation or deletion authority.
 
 ## Reachability and GC
@@ -118,6 +120,8 @@ The core receives all roots, pins, node identities, and graph facts. It returns 
 A missing or incomplete graph fact makes the plan incomplete. The plan never grants deletion authority.
 
 The shell deletes candidates only after exact root and pin comparison, current-generation evidence, retention policy approval, and deletion authority.
+
+The comparison and the deletion are indivisible. The adapter compares the current durable roots, the current pins, and the retention generation against the admission inventory inside the same write transaction that deletes the candidates. A mismatch returns a typed outcome and deletes nothing: a stale admission cannot remove content that a later publication made reachable, and a block that is pinned now is never deleted. The publication path pins the blocks it stages before it stages them, so a garbage collection cannot remove content an in-progress publication still needs, and it releases the pin once the publication reaches a terminal outcome.
 
 ## DoltLite differential boundary
 
