@@ -20,6 +20,7 @@
             restart_refs: Vec::new(),
             reverse_dependency_refs: vec![reverse.clone()],
             shutdown_refs: sorted_refs(vec![service.clone(), reverse.clone()]),
+            live_demand_demanders: Vec::new(),
         };
         let pass = evaluate_service_dependencies(&pass_state).expect("service dependencies predicate");
         assert!(pass.is_allowed);
@@ -38,6 +39,7 @@
             restart_refs: vec![stale_restart],
             reverse_dependency_refs: vec![reverse],
             shutdown_refs: vec![service],
+            live_demand_demanders: Vec::new(),
         };
         let denied = evaluate_service_dependencies(&denied_state).expect("denied service dependencies predicate");
         assert!(!denied.is_allowed);

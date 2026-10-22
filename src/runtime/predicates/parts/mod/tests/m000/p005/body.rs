@@ -20,6 +20,7 @@
             restart_refs: Vec::new(),
             reverse_dependency_refs: Vec::new(),
             shutdown_refs: Vec::new(),
+            live_demand_demanders: Vec::new(),
         };
         let service_result = evaluate_service_dependencies(&service_state).expect("service dependencies");
         let is_dependencies_ready = ready_count >= dependency_count;
@@ -45,6 +46,7 @@
             restart_refs: vec![failed_dependency],
             reverse_dependency_refs: Vec::new(),
             shutdown_refs: Vec::new(),
+            live_demand_demanders: Vec::new(),
         };
         let force_run = evaluate_service_dependencies(&admitted_failure).expect("force-run dependency");
         assert!(force_run.is_allowed);

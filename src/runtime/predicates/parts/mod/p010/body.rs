@@ -147,6 +147,12 @@ fn ref_list_value(label: &'static str, refs: &[String]) -> IoValue {
     )])
 }
 
+fn string_list_value(label: &'static str, values: &[String]) -> IoValue {
+    crate::preserves_rail::record(label, vec![crate::preserves_rail::sequence(
+        values.iter().map(crate::preserves_rail::string).collect(),
+    )])
+}
+
 fn optional_ref_record(label: &'static str, reference: Option<&str>) -> IoValue {
     match reference {
         Some(reference) => crate::preserves_rail::record(label, vec![crate::preserves_rail::string(reference)]),

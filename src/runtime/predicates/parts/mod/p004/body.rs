@@ -18,6 +18,7 @@ pub fn evaluate_service_dependencies(state: &RuntimeServiceDependenciesState) ->
         "failed-dependency-admission".to_string(),
         "restart-refs-match-failures".to_string(),
         "shutdown-reverse-dependencies-first".to_string(),
+        "shutdown-after-last-demand-withdrawal".to_string(),
     ];
     let mut state_refs = Vec::with_capacity(2);
     state_refs.push(dependency_ref);
@@ -208,6 +209,9 @@ fn validate_service_dependencies(state: &RuntimeServiceDependenciesState) -> Vec
     diagnostics.extend(validate_sorted_content_refs(&state.restart_refs, "service", "restart"));
     diagnostics.extend(validate_sorted_content_refs(&state.reverse_dependency_refs, "service", "reverse-dependency"));
     diagnostics.extend(validate_sorted_content_refs(&state.shutdown_refs, "service", "shutdown"));
+    if state.live_demand_demanders.iter().any(|demander| demander.trim().is_empty()) {
+        diagnostics.push("service-live-demand-demander-empty".to_string());
+    }
 
     let service_ref = state.service_ref.as_str();
     let demanded_refs = string_set(&state.demanded_service_refs);
@@ -240,6 +244,9 @@ fn validate_service_dependencies(state: &RuntimeServiceDependenciesState) -> Vec
 
     if shutdown_refs.contains(service_ref) && !is_subset(&reverse_dependency_refs, &shutdown_refs) {
         diagnostics.push("service-shutdown-before-reverse-dependencies".to_string());
+    }
+    if shutdown_refs.contains(service_ref) && !state.live_demand_demanders.is_empty() {
+        diagnostics.push("service-shutdown-with-live-demand".to_string());
     }
     diagnostics.sort();
     diagnostics.dedup();

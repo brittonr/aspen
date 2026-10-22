@@ -76,15 +76,34 @@ pub struct RuntimeServiceDependenciesState {
     pub restart_refs: Vec<String>,
     pub reverse_dependency_refs: Vec<String>,
     pub shutdown_refs: Vec<String>,
+    /// The demanding scopes that still demand this service. The demand
+    /// assertions own the demand lifetime, and a shutdown is eligible only
+    /// when the last live demand is withdrawn.
+    pub live_demand_demanders: Vec<String>,
 }
 
 impl RuntimeServiceDependenciesState {
+    /// The demand-derived predicate input.
+    ///
+    /// The demanded services and the force-run declarations come from the live
+    /// demand assertions, so the predicate stays pure over derived facts and
+    /// never reads ambient state.
+    pub fn with_demand_assertions(
+        mut self,
+        demands: &crate::runtime::dataspace::ServiceDemandSet,
+    ) -> Self {
+        self.demanded_service_refs = demands.demanded_service_refs();
+        self.force_run_refs = demands.force_run_service_refs();
+        self.live_demand_demanders = demands.demanders_for(&self.service_ref);
+        self
+    }
+
     pub fn dependency_ref(&self) -> Result<String> {
         crate::preserves_rail::canonical_hash(&self.to_value())
     }
 
     fn to_value(&self) -> IoValue {
-        crate::preserves_rail::record("runtime-service-dependencies-state-v1", vec![
+        crate::preserves_rail::record("runtime-service-dependencies-state-v2", vec![
             crate::preserves_rail::record("service-ref", vec![crate::preserves_rail::string(&self.service_ref)]),
             ref_list_value("demanded-service-refs", &self.demanded_service_refs),
             ref_list_value("dependency-refs", &self.dependency_refs),
@@ -94,6 +113,7 @@ impl RuntimeServiceDependenciesState {
             ref_list_value("restart-refs", &self.restart_refs),
             ref_list_value("reverse-dependency-refs", &self.reverse_dependency_refs),
             ref_list_value("shutdown-refs", &self.shutdown_refs),
+            string_list_value("live-demand-demanders", &self.live_demand_demanders),
         ])
     }
 }
