@@ -106,6 +106,7 @@
             assertion_refs: vec![content_ref_from_bytes(b"stale-assertion")],
             observer_refs: Vec::new(),
             message_refs: Vec::new(),
+            cause: crate::runtime::RuntimeTurnCause::Cleanup,
         };
         let stale_receipt = super::scope_cleanup_receipt(&super::ScopeCleanupInput { cause: "stale-cleanup", before: &before_second, after_cleanup: &after_second, cleanup: &stale_cleanup, logical_step: 14, ..first_input })
         .expect("stale service cleanup receipt");

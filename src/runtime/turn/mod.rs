@@ -253,6 +253,7 @@ impl RuntimeStep {
     }
 }
 
+pub(crate) mod causality;
 mod chronicle;
 mod scope;
 pub use chronicle::RuntimeEffect;
@@ -264,13 +265,22 @@ pub use scope::RuntimeFacetState;
 pub struct PendingTurn {
     pub(crate) actions: Vec<TurnAction>,
     pub(crate) events: Vec<RuntimeEvent>,
+    pub(crate) actor: String,
+    pub(crate) cause: causality::RuntimeTurnCause,
 }
 
 impl PendingTurn {
     pub(crate) fn new() -> Self {
+        Self::with_cause(String::new(), causality::RuntimeTurnCause::external("runtime-turn"))
+    }
+
+    /// A pending turn with the cause that produced it.
+    pub(crate) fn with_cause(actor: String, cause: causality::RuntimeTurnCause) -> Self {
         Self {
             actions: Vec::new(),
             events: Vec::new(),
+            actor,
+            cause,
         }
     }
 }

@@ -120,7 +120,14 @@ fn flow_control_receipt(step: &Step, fanout: usize, budget: ResourceBudget) -> R
 }
 
 fn parity_receipt(molten_events: &[Event], syndicate_events: &[Event]) -> Result<ParityReceipt> {
-    let molten_event_refs = event_refs(molten_events)?;
+    // The parity compares the semantic actions. The committed turn record is
+    // Molten's causal annotation, and the reference surface has no counterpart.
+    let semantic_events: Vec<Event> = molten_events
+        .iter()
+        .filter(|event| !matches!(event, Event::TurnCommitted { .. }))
+        .cloned()
+        .collect();
+    let molten_event_refs = event_refs(&semantic_events)?;
     let syndicate_event_refs = event_refs(syndicate_events)?;
     let diagnostics = parity_diagnostics(&molten_event_refs, &syndicate_event_refs)?;
     let decision = if diagnostics.is_empty() {

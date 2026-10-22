@@ -32,6 +32,7 @@ fn runtime_event_label(event: &crate::runtime::RuntimeEvent) -> &'static str {
         crate::runtime::RuntimeEvent::EffectResponse { .. } => "effect-response",
         crate::runtime::RuntimeEvent::AdmissionDecision { .. } => "admission-decision",
         crate::runtime::RuntimeEvent::TurnRolledBack { .. } => "turn-rolled-back",
+        crate::runtime::RuntimeEvent::TurnCommitted { .. } => "turn-committed",
     }
 }
 

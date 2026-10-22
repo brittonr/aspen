@@ -167,7 +167,10 @@ fn rollback_leaves_staged_actions_uncommitted() {
     assert!(matches!(events.as_slice(), [Event::TurnRolledBack { .. }]));
 
     let committed = state.apply_step(&step);
-    assert!(matches!(committed.as_slice(), [Event::AssertionCommitted { .. }]));
+    assert!(matches!(
+        committed.as_slice(),
+        [Event::AssertionCommitted { .. }, Event::TurnCommitted { .. }]
+    ));
     assert_ne!(state.snapshot(), before);
 }
 
@@ -182,7 +185,10 @@ fn apply_step_with_predicate_receipt_gates_commit() {
 
     let (events, receipt) = state.apply_step_with_predicate_receipt(&step).expect("predicate-gated apply succeeds");
 
-    assert!(matches!(events.as_slice(), [Event::AssertionCommitted { .. }]));
+    assert!(matches!(
+        events.as_slice(),
+        [Event::AssertionCommitted { .. }, Event::TurnCommitted { .. }]
+    ));
     let receipt = receipt.expect("dataspace turn returns predicate receipt");
     assert_eq!(receipt.decision, PredicateDecision::Pass);
     assert!(state.assertions.iter().any(|assertion| assertion.actor == "producer"));

@@ -8,25 +8,41 @@ fn observer_notifications_coalesce_equal_assertions() {
         actor: "observer-a".into(),
         pattern,
     });
-    assert!(matches!(observed.as_slice(), [Event::ObserveRegistered { .. }]));
+    assert!(matches!(
+        observed.as_slice(),
+        [Event::ObserveRegistered { .. }, Event::TurnCommitted { .. }]
+    ));
 
     let first = state.apply_step(&Step::Assert {
         actor: "owner-a".into(),
         value: ready.clone(),
     });
-    assert!(matches!(first.as_slice(), [Event::AssertionCommitted { .. }, Event::AssertionObserved { .. }]));
+    assert!(matches!(
+        first.as_slice(),
+        [
+            Event::AssertionCommitted { .. },
+            Event::AssertionObserved { .. },
+            Event::TurnCommitted { .. }
+        ]
+    ));
 
     let duplicate_owner = state.apply_step(&Step::Assert {
         actor: "owner-b".into(),
         value: ready.clone(),
     });
-    assert!(matches!(duplicate_owner.as_slice(), [Event::AssertionCommitted { .. }]));
+    assert!(matches!(
+        duplicate_owner.as_slice(),
+        [Event::AssertionCommitted { .. }, Event::TurnCommitted { .. }]
+    ));
 
     let duplicate_owner_again = state.apply_step(&Step::Assert {
         actor: "owner-b".into(),
         value: ready,
     });
-    assert!(matches!(duplicate_owner_again.as_slice(), [Event::AssertionCommitted { .. }]));
+    assert!(matches!(
+        duplicate_owner_again.as_slice(),
+        [Event::AssertionCommitted { .. }, Event::TurnCommitted { .. }]
+    ));
 }
 
 #[test]
@@ -52,7 +68,10 @@ fn retraction_notifies_only_after_the_last_owner_withdraws() {
         actor: "owner-a".into(),
         value: ready.clone(),
     });
-    assert!(matches!(first.as_slice(), [Event::AssertionRetracted { .. }]));
+    assert!(matches!(
+        first.as_slice(),
+        [Event::AssertionRetracted { .. }, Event::TurnCommitted { .. }]
+    ));
     assert_eq!(state.snapshot().assertions.len(), 1);
     assert!(state.snapshot().assertions.iter().any(|assertion| assertion.actor == "owner-b"));
 
@@ -62,7 +81,8 @@ fn retraction_notifies_only_after_the_last_owner_withdraws() {
     });
     assert!(matches!(last.as_slice(), [
         Event::AssertionRetracted { .. },
-        Event::AssertionRetractionObserved { .. }
+        Event::AssertionRetractionObserved { .. },
+        Event::TurnCommitted { .. }
     ]));
     assert!(state.snapshot().assertions.is_empty());
 }
@@ -82,7 +102,14 @@ fn distinct_assertion_values_notify_separately() {
             actor: "owner-a".into(),
             value: Value::string(value).expect("runtime value"),
         });
-        assert!(matches!(events.as_slice(), [Event::AssertionCommitted { .. }, Event::AssertionObserved { .. }]));
+        assert!(matches!(
+            events.as_slice(),
+            [
+                Event::AssertionCommitted { .. },
+                Event::AssertionObserved { .. },
+                Event::TurnCommitted { .. }
+            ]
+        ));
     }
 }
 
@@ -125,7 +152,7 @@ fn retracting_an_unheld_assertion_rolls_back_before_commit() {
         value: ready,
     });
 
-    assert!(matches!(events.as_slice(), [Event::TurnRolledBack { reason, .. }]
+    assert!(matches!(events.as_slice(), [Event::TurnRolledBack { reason, .. }, Event::TurnCommitted { .. }]
         if reason == "runtime retraction requires a committed assertion"));
     assert_eq!(state.snapshot(), before);
 }
@@ -148,7 +175,8 @@ fn facet_stop_orders_children_before_parent_and_runs_handlers_last() {
     let (events, receipt) = state.apply_facet_stop("actor-1", "facet:parent").expect("stop parent facet");
 
     assert_eq!(receipt.decision, PredicateDecision::Pass);
-    assert_eq!(events, vec![
+    let (facet_events, turn_record) = events.split_at(6);
+    assert_eq!(facet_events, vec![
         Event::AssertionRetracted {
             actor: "actor-1".to_string(),
             value: child_value,
@@ -172,6 +200,7 @@ fn facet_stop_orders_children_before_parent_and_runs_handlers_last() {
             handler_ref: "handler:parent".to_string(),
         },
     ]);
+    assert!(matches!(turn_record, [Event::TurnCommitted { .. }]));
     let snapshot = state.snapshot();
     assert!(snapshot.assertions.is_empty());
     assert_eq!(

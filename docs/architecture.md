@@ -388,6 +388,17 @@ Molten should be able to emit canonical Preserves trace records for:
 - object/vat state deltas where authorized,
 - deterministic scheduler keys, before/after state hashes, effect requests/responses, and replay divergence boundaries.
 
+Every committed turn carries a cause from one closed vocabulary, and the cause is part of the canonical
+turn record that the trace binds. The cause names why the turn ran: the prior turn that released the work,
+a scope `cleanup`, a linked-task release with its reason, a declared periodic activation, a delay with the
+causing turn and the amount that expired, or a bounded `external` description for inputs outside the runtime
+model. The cause comes from the transition input and is never derived from a wall clock, so replay reproduces
+it exactly. A record with an absent or unknown cause fails validation instead of recording an opaque string,
+and a replay whose cause differs compares as divergent.
+
+A trace proves the recorded causal order only. It is not a complete account of what happened, and it carries no
+authority.
+
 The replay law is:
 
 ```text

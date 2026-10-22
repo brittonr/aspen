@@ -82,6 +82,11 @@ pub enum RuntimeEvent {
         actor: String,
         reason: String,
     },
+    TurnCommitted {
+        actor: String,
+        cause: super::causality::RuntimeTurnCause,
+        event_refs: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -189,6 +194,17 @@ impl RuntimeEvent {
             RuntimeEvent::TurnRolledBack { actor, reason } => {
                 record("runtime-event-turn-rolled-back-v1", vec![string(actor), string(reason)])
             }
+            RuntimeEvent::TurnCommitted {
+                actor,
+                cause,
+                event_refs,
+            } => record("runtime-event-turn-committed-v1", vec![
+                string(actor),
+                cause.to_value(),
+                record("event-refs", vec![crate::preserves_rail::sequence(
+                    event_refs.iter().map(crate::preserves_rail::string).collect(),
+                )]),
+            ]),
         }
     }
 

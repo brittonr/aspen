@@ -102,6 +102,8 @@ pub struct RuntimeScopeCleanup {
     pub assertion_refs: Vec<String>,
     pub observer_refs: Vec<String>,
     pub message_refs: Vec<String>,
+    /// The cause of the cleanup. A scope cleanup is caused by cleanup.
+    pub cause: super::RuntimeTurnCause,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

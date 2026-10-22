@@ -128,7 +128,10 @@
             actor: "svc".into(),
             value: ready.clone(),
         });
-        assert!(matches!(assert.events.as_slice(), [RuntimeEvent::AssertionCommitted { .. }]));
+        assert!(matches!(
+            assert.events.as_slice(),
+            [RuntimeEvent::AssertionCommitted { .. }, RuntimeEvent::TurnCommitted { .. }]
+        ));
         let direct_assert = evaluate_turn_transition(&assert.before, &assert.turn, &assert.after, TurnOutcome::Committed)
             .expect("direct assert commit receipt");
         assert_eq!(assert.receipt.receipt_ref, direct_assert.receipt_ref);
@@ -145,7 +148,10 @@
             to: "watcher".into(),
             body: message_body,
         });
-        assert!(matches!(send.events.as_slice(), [RuntimeEvent::MessageDelivered { .. }]));
+        assert!(matches!(
+            send.events.as_slice(),
+            [RuntimeEvent::MessageDelivered { .. }, RuntimeEvent::TurnCommitted { .. }]
+        ));
 
         let retract = commit_bound_turn(&mut state, &RuntimeStep::Retract {
             actor: "svc".into(),

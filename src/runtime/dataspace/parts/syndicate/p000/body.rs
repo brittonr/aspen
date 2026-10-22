@@ -196,6 +196,7 @@ impl ReferenceHarness {
             assertion_refs,
             observer_refs,
             message_refs,
+            cause: super::super::RuntimeTurnCause::Cleanup,
         })
     }
 

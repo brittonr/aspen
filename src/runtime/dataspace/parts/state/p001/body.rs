@@ -35,6 +35,48 @@ impl RuntimeState {
         }
     }
 
+    /// Apply a step whose turn carries the given cause.
+    ///
+    /// The cause comes from the transition input. It is never derived from a
+    /// wall clock, and it becomes part of the committed turn record.
+    pub fn apply_step_with_cause(
+        &mut self,
+        step: &Step,
+        cause: &super::super::RuntimeTurnCause,
+    ) -> Result<(Vec<Event>, Option<PredicateReceipt>)> {
+        match step {
+            Step::Clock { actor } => {
+                let sequence = self.next_effect_sequence();
+                let request = Event::EffectRequest {
+                    effect: Effect::Clock,
+                    actor: actor.clone(),
+                    sequence,
+                    upper: None,
+                };
+                let value = self.local_clock_response_value();
+                let response = effect_response(Effect::Clock, actor.clone(), sequence, None, value);
+                Ok((vec![request, response], None))
+            }
+            Step::Random { actor, upper } => {
+                let sequence = self.next_effect_sequence();
+                let request = Event::EffectRequest {
+                    effect: Effect::Random,
+                    actor: actor.clone(),
+                    sequence,
+                    upper: Some(*upper),
+                };
+                let value = self.next_random(*upper);
+                let response = effect_response(Effect::Random, actor.clone(), sequence, Some(*upper), value);
+                Ok((vec![request, response], None))
+            }
+            Step::Send { .. } | Step::Observe { .. } | Step::Assert { .. } | Step::Retract { .. } => {
+                let turn = self.begin_turn_with_cause(step, cause);
+                let (events, receipt) = self.commit_turn_with_predicate_receipt(turn)?;
+                Ok((events, Some(receipt)))
+            }
+        }
+    }
+
     pub fn apply_step_with_predicate_receipt(&mut self, step: &Step) -> Result<(Vec<Event>, Option<PredicateReceipt>)> {
         match step {
             Step::Clock { actor } => {
@@ -70,21 +112,40 @@ impl RuntimeState {
     }
 
     pub fn begin_turn(&self, step: &Step) -> PendingTurn {
-        let mut turn = PendingTurn::new();
+        self.begin_turn_with_cause(step, &super::super::RuntimeTurnCause::external("runtime-step"))
+    }
+
+    /// Begin a turn whose cause names why the turn runs.
+    pub fn begin_turn_with_cause(
+        &self,
+        step: &Step,
+        cause: &super::super::RuntimeTurnCause,
+    ) -> PendingTurn {
+        let mut turn = PendingTurn::with_cause(step.primary_actor().to_string(), cause.clone());
         self.stage_step(&mut turn, step);
         turn
     }
 
-    pub(crate) fn commit_turn(&mut self, turn: PendingTurn) -> Vec<Event> {
+    pub(crate) fn commit_turn(&mut self, turn: PendingTurn) -> Result<Vec<Event>> {
         let after = committed_turn_snapshot(&self.snapshot(), &turn);
         self.overwrite_from_snapshot(after);
-        turn.events
+        let mut events = turn.events;
+        let mut event_refs = Vec::with_capacity(events.len());
+        for event in &events {
+            event_refs.push(event.event_ref()?);
+        }
+        events.push(Event::TurnCommitted {
+            actor: turn.actor,
+            cause: turn.cause,
+            event_refs,
+        });
+        Ok(events)
     }
 
     pub fn commit_turn_with_predicate_receipt(&mut self, turn: PendingTurn) -> Result<(Vec<Event>, PredicateReceipt)> {
         let before = self.snapshot();
         let mut preview = self.clone();
-        let events = preview.commit_turn(turn.clone());
+        let events = preview.commit_turn(turn.clone())?;
         let after = preview.snapshot();
         let receipt = evaluate_turn_transition(&before, &turn, &after, TurnOutcome::Committed)?;
         if receipt.decision == PredicateDecision::Pass {
@@ -139,6 +200,7 @@ impl RuntimeState {
             assertion_refs,
             observer_refs,
             message_refs,
+            cause: super::super::RuntimeTurnCause::Cleanup,
         })
     }
 

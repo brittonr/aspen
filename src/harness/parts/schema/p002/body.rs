@@ -62,6 +62,9 @@ pub fn event_value(event: &super::core::CoreEvent) -> IoValue {
         super::core::CoreEvent::TurnRolledBack { actor, reason } => {
             record("turn-rolled-back", vec![string(actor), string(reason)])
         }
+        super::core::CoreEvent::TurnCommitted { actor, cause, .. } => {
+            record("turn-committed", vec![string(actor), cause.to_value()])
+        }
     }
 }
 
