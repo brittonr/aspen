@@ -42,6 +42,7 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 | 16 | `.cairn/specs/local-catalog-mcp-readonly/spec.md` |
 | 9 | `.cairn/specs/node-replication-pilot/spec.md` |
 | 1 | `.cairn/specs/cluster-harness/spec.md` |
+| 1 | `.cairn/specs/durable-state-ports/spec.md` |
 | 1 | `.cairn/specs/wasm-performance/spec.md` |
 
 ## Source area groups
@@ -152,6 +153,7 @@ All remaining rows use `accepted-implementation-unestablished`. The report does 
 | 2 | `iroh_experiments` |
 | 2 | `preserves_boundary_field_contracts` |
 | 1 | `claim_authority` |
+| 1 | `durable_state_ports` |
 | 1 | `preserves_canonical_bytes` |
 | 1 | `preserves_rail_toolkit` |
 | 1 | `preserves_schema_boundaries` |

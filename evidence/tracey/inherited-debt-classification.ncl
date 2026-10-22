@@ -44,24 +44,24 @@ let ClassificationMetadata = {
 in
 let metadata | ClassificationMetadata = {
   schema = "molten.inherited-tracey-debt-classification.v1",
-  observed_date = "2026-10-19",
+  observed_date = "2026-10-22",
   classification_base_revision = "9842cc6453a00ed943a866549bb4307c8502d575",
   baseline = {
     path = "evidence/tracey/inherited-debt-baseline.txt",
-    blake3 = "e32ca33a172ba31f3f81c5ca26ffbfab225bc24ec3c37f8760dd95e9bab92bc1",
-    entries = 1933,
+    blake3 = "f8d79bcc696e7a3607e4de3b9a8e23e9274f55129f3ef292758fcc61d0ed2ecc",
+    entries = 1934,
   },
   inventory = {
     path = "evidence/tracey/inherited-debt-classification.tsv",
-    blake3 = "17606537784a3111e86c945a9dade3f1d0b159074403f3a215d4ab1b2a6d1daf",
+    blake3 = "87d126813f3d757157ff02bc64cffaba6b7a7671bd0b30bd09aba837a361c49e",
     summary_path = "evidence/tracey/inherited-debt-classification.md",
-    summary_blake3 = "27566bc883ef104d9ba4cef222c961f2e4c04a6046b0c4cea34e25349c217528",
-    entries = 1933,
-    specification_groups = 37,
-    source_area_groups = 108,
+    summary_blake3 = "56df39b875f493b22cf88552ec0c6063863f896a30066b3ff94a92583bd8e0c1",
+    entries = 1934,
+    specification_groups = 38,
+    source_area_groups = 109,
   },
   classes = {
-    accepted_implementation_unestablished = 1933,
+    accepted_implementation_unestablished = 1934,
     implemented_missing_marker = 0,
     renamed_or_replaced = 0,
     obsolete_or_invalid = 0,

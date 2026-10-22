@@ -292,6 +292,7 @@ specification	source_area	class	requirement_id
 .cairn/specs/delivery/spec.md	delivery_idempotency_ux	accepted-implementation-unestablished	molten.delivery_idempotency_ux.spec.cli_check_receipts
 .cairn/specs/delivery/spec.md	delivery_idempotency_ux	accepted-implementation-unestablished	molten.delivery_idempotency_ux.spec.cli_scope_operation
 .cairn/specs/delivery/spec.md	delivery_idempotency_ux	accepted-implementation-unestablished	molten.delivery_idempotency_ux.spec.evidence_only
+.cairn/specs/durable-state-ports/spec.md	durable_state_ports	accepted-implementation-unestablished	molten.durable_state_ports.digest_named_records
 .cairn/specs/evaluation-cache/spec.md	eval_cache	accepted-implementation-unestablished	molten.eval_cache.admission_freshness
 .cairn/specs/evaluation-cache/spec.md	eval_cache	accepted-implementation-unestablished	molten.eval_cache.choreography_projection
 .cairn/specs/evaluation-cache/spec.md	eval_cache	accepted-implementation-unestablished	molten.eval_cache.determinism_tiers

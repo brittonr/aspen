@@ -332,6 +332,7 @@ molten.dogfood.receipts_cli
 molten.dogfood.redaction
 molten.dogfood.replay_validation
 molten.dogfood.vertical_slice
+molten.durable_state_ports.digest_named_records
 molten.effects.ability_manifest_boundary
 molten.effects.adapter_integration
 molten.effects.artifact_link
