@@ -1,14 +1,14 @@
 
-const CALLBACK_ENVELOPE_RECORD: &str = "native-callback-envelope-v2";
-const CALLBACK_OUTCOME_RECORD: &str = "native-callback-outcome-v2";
-const EFFECT_RECORD: &str = "native-callback-effect-v2";
+const CALLBACK_ENVELOPE_RECORD: &str = "native-callback-envelope-v3";
+const CALLBACK_OUTCOME_RECORD: &str = "native-callback-outcome-v3";
+const EFFECT_RECORD: &str = "native-callback-effect-v3";
 const PORT_TARGET_RECORD: &str = "native-callback-port-target-v2";
 const VALUE_RECORD: &str = "native-callback-value-v2";
 const NONE_RECORD: &str = "none";
 const SOME_RECORD: &str = "some";
-const ENVELOPE_FIELD_COUNT: u64 = 18;
+const ENVELOPE_FIELD_COUNT: u64 = 19;
 const OUTCOME_FIELD_COUNT: u64 = 6;
-const EFFECT_FIELD_COUNT: u64 = 8;
+const EFFECT_FIELD_COUNT: u64 = 9;
 const PORT_TARGET_FIELD_COUNT: u64 = 2;
 const VALUE_FIELD_COUNT: u64 = 2;
 
@@ -99,6 +99,7 @@ pub fn canonical_callback_envelope(
         crate::preserves_rail::string(&context.extension_id),
         crate::preserves_rail::string(&context.service_id),
         crate::preserves_rail::u64_value(invocation.generation),
+        crate::preserves_rail::u64_value(invocation.incarnation),
         crate::preserves_rail::string(invocation.callback.as_str()),
         crate::preserves_rail::u64_value(invocation.sequence),
         crate::preserves_rail::string(&invocation.event_ref),
@@ -139,24 +140,25 @@ pub fn decode_callback_envelope(
     if schema != NATIVE_CALLBACK_ENVELOPE_SCHEMA {
         return Err(crate::error::Failure::invalid_harness("native callback envelope schema mismatch"));
     }
-    let callback_name = crate::preserves_rail::required_string_field(&fields[7], "callback kind")?;
+    let callback_name = crate::preserves_rail::required_string_field(&fields[8], "callback kind")?;
     let callback = CallbackKind::parse(&callback_name)
         .ok_or_else(|| crate::error::Failure::invalid_harness("native callback kind is unsupported"))?;
-    let framing = crate::preserves_rail::required_string_field(&fields[17], "callback framing")?;
+    let framing = crate::preserves_rail::required_string_field(&fields[18], "callback framing")?;
     if framing != NATIVE_FRAMING {
         return Err(crate::error::Failure::invalid_harness("native callback framing mismatch"));
     }
-    let payload = parse_optional_value(&fields[10], "callback payload", maximum_value_bytes)?;
-    let state = parse_optional_value(&fields[13], "callback state", maximum_value_bytes)?;
+    let payload = parse_optional_value(&fields[11], "callback payload", maximum_value_bytes)?;
+    let state = parse_optional_value(&fields[14], "callback state", maximum_value_bytes)?;
     require_item_bound(payload.iter().count() + state.iter().count(), maximum_items, "callback input values")?;
     let invocation = CallbackInvocation {
         callback,
         generation: required_u64(&fields[6], "callback generation")?,
-        sequence: required_u64(&fields[8], "callback sequence")?,
-        event_ref: crate::preserves_rail::required_content_ref_string(&fields[9], "callback event ref")?,
+        incarnation: required_u64(&fields[7], "callback incarnation")?,
+        sequence: required_u64(&fields[9], "callback sequence")?,
+        event_ref: crate::preserves_rail::required_content_ref_string(&fields[10], "callback event ref")?,
         payload_ref: payload.as_ref().map(|value| value.value_ref.clone()),
-        logical_tick: required_u64(&fields[11], "callback logical tick")?,
-        deadline_tick: required_u64(&fields[12], "callback deadline tick")?,
+        logical_tick: required_u64(&fields[12], "callback logical tick")?,
+        deadline_tick: required_u64(&fields[13], "callback deadline tick")?,
     };
     let context = CallbackContext {
         manifest_ref: crate::preserves_rail::required_content_ref_string(&fields[1], "callback manifest ref")?,
@@ -165,9 +167,9 @@ pub fn decode_callback_envelope(
         extension_id: crate::preserves_rail::required_string_field(&fields[4], "callback extension id")?,
         service_id: crate::preserves_rail::required_string_field(&fields[5], "callback service id")?,
         state_ref: state.as_ref().map(|value| value.value_ref.clone()),
-        policy_refs: parse_ref_sequence(&fields[14], "callback policy refs", maximum_items)?,
-        resource_ref: crate::preserves_rail::required_content_ref_string(&fields[15], "callback resource ref")?,
-        port_binding_refs: parse_ref_sequence(&fields[16], "callback port refs", maximum_items)?,
+        policy_refs: parse_ref_sequence(&fields[15], "callback policy refs", maximum_items)?,
+        resource_ref: crate::preserves_rail::required_content_ref_string(&fields[16], "callback resource ref")?,
+        port_binding_refs: parse_ref_sequence(&fields[17], "callback port refs", maximum_items)?,
     };
     let inputs = CallbackInputs { payload, state };
     require_input_links(&context, &invocation, &inputs)?;
@@ -258,6 +260,7 @@ fn effect_value(effect: &MaterializedEffectRequest) -> preserves::IOValue {
         crate::preserves_rail::string(&effect.effect.output_schema_ref),
         value_value(&effect.request),
         crate::preserves_rail::u64_value(effect.effect.generation),
+        crate::preserves_rail::u64_value(effect.effect.incarnation),
         crate::preserves_rail::u64_value(effect.effect.accounted_bytes),
         crate::preserves_rail::string(NATIVE_CALLBACK_OUTCOME_SCHEMA),
     ])

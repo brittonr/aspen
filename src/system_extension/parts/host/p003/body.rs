@@ -55,6 +55,7 @@ impl<E: SystemExtensionExecutor> Dispatcher<E> {
         let begin = self.apply_transition(super::LifecycleEvent {
             kind: begin_kind,
             generation: self.state.generation,
+            incarnation: self.state.incarnation,
             next_generation: Some(next_generation),
             checkpoint_ref: None,
             failure_class: None,
@@ -123,6 +124,7 @@ impl<E: SystemExtensionExecutor> Dispatcher<E> {
         Ok(super::CallbackEvent {
             callback,
             generation: self.state.generation,
+            incarnation: self.state.incarnation,
             event_ref,
             payload_ref: payload_ref.map(str::to_string),
             accounted_bytes,
@@ -157,6 +159,7 @@ impl<E: SystemExtensionExecutor> Dispatcher<E> {
         let lifecycle = self.apply_transition(super::LifecycleEvent {
             kind: super::LifecycleEventKind::Failure,
             generation: self.state.generation,
+            incarnation: self.state.incarnation,
             next_generation: None,
             checkpoint_ref: None,
             failure_class: Some(failure_class),
@@ -173,7 +176,7 @@ impl<E: SystemExtensionExecutor> Dispatcher<E> {
         } else {
             self.state.generation
         };
-        self.apply_transition(super::LifecycleEvent::simple(kind, generation))
+        self.apply_transition(super::LifecycleEvent::simple(kind, generation, self.state.incarnation))
     }
 
     fn apply_transition(

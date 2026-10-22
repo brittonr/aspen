@@ -8,10 +8,13 @@ mod dispatch;
 mod lifecycle;
 mod manifest;
 mod native_host;
+mod readmission;
 mod recovery;
 mod recoveryplan;
 mod supervision;
 
+#[cfg(test)]
+mod incarnationtests;
 #[cfg(test)]
 mod recoverytests;
 #[cfg(test)]
@@ -22,12 +25,13 @@ pub use lifecycle::*;
 pub use manifest::*;
 pub use native_host::admit_native_effect_output as admit_materialized_native_effect_output;
 pub use native_host::*;
+pub use readmission::*;
 pub use recovery::*;
 pub use recoveryplan::*;
 pub use supervision::*;
 
 pub const SYSTEM_EXTENSION_MANIFEST_SCHEMA: &str = "molten.system-extension.manifest.v1";
-pub const SYSTEM_EXTENSION_LIFECYCLE_SCHEMA: &str = "molten.system-extension.lifecycle.v1";
+pub const SYSTEM_EXTENSION_LIFECYCLE_SCHEMA: &str = "molten.system-extension.lifecycle.v2";
 pub const SYSTEM_EXTENSION_CALLBACK_SCHEMA: &str = "molten.system-extension.callback.v1";
 pub const SYSTEM_EXTENSION_EXECUTION_BINDING_SCHEMA: &str = "molten.system-extension.execution-binding.v1";
 pub const SYSTEM_EXTENSION_TYPED_EFFECT_SCHEMA: &str = "molten.system-extension.typed-effect.v1";

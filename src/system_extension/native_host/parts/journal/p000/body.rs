@@ -1,12 +1,12 @@
 
-const INSTANCE_RECORD: &str = "native-instance-state-v2";
-const LIFECYCLE_RECORD: &str = "native-instance-lifecycle-v2";
+const INSTANCE_RECORD: &str = "native-instance-state-v3";
+const LIFECYCLE_RECORD: &str = "native-instance-lifecycle-v3";
 const USAGE_RECORD: &str = "native-instance-usage-v2";
 const OPERATION_RECORD: &str = "native-instance-operation-v2";
 const NONE_RECORD: &str = "none";
 const SOME_RECORD: &str = "some";
 const INSTANCE_FIELD_COUNT: u64 = 19;
-const LIFECYCLE_FIELD_COUNT: u64 = 5;
+const LIFECYCLE_FIELD_COUNT: u64 = 6;
 const USAGE_FIELD_COUNT: u64 = 6;
 const OPERATION_FIELD_COUNT: u64 = 8;
 const MAX_INSTANCE_COLLECTION_ITEMS: usize = 1_024;
@@ -221,6 +221,7 @@ fn instance_value(instance: &NativeInstanceRecord) -> preserves::IOValue {
 fn lifecycle_value(state: &LifecycleState) -> preserves::IOValue {
     crate::preserves_rail::record(LIFECYCLE_RECORD, vec![
         crate::preserves_rail::u64_value(state.generation),
+        crate::preserves_rail::u64_value(state.incarnation),
         crate::preserves_rail::string(state.phase.as_str()),
         crate::preserves_rail::u64_value(state.restart_attempts),
         crate::preserves_rail::string(state.health.as_str()),
@@ -257,10 +258,11 @@ fn parse_lifecycle(value: &preserves::Value<preserves::IOValue>) -> crate::error
     let fields = crate::preserves_rail::simple_record_fields(&value, LIFECYCLE_RECORD, LIFECYCLE_FIELD_COUNT)?;
     Ok(LifecycleState {
         generation: required_u64(&fields[0], "lifecycle generation")?,
-        phase: parse_phase(&crate::preserves_rail::required_string_field(&fields[1], "lifecycle phase")?)?,
-        restart_attempts: required_u64(&fields[2], "lifecycle restart attempts")?,
-        health: parse_health(&crate::preserves_rail::required_string_field(&fields[3], "lifecycle health")?)?,
-        checkpoint_ref: parse_optional_ref(&fields[4], "lifecycle checkpoint ref")?,
+        incarnation: required_u64(&fields[1], "lifecycle incarnation")?,
+        phase: parse_phase(&crate::preserves_rail::required_string_field(&fields[2], "lifecycle phase")?)?,
+        restart_attempts: required_u64(&fields[3], "lifecycle restart attempts")?,
+        health: parse_health(&crate::preserves_rail::required_string_field(&fields[4], "lifecycle health")?)?,
+        checkpoint_ref: parse_optional_ref(&fields[5], "lifecycle checkpoint ref")?,
     })
 }
 

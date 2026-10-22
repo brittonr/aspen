@@ -79,6 +79,7 @@ fn instance() -> NativeInstanceRecord {
         state_schema_ref: HASH_A.to_string(),
         lifecycle: super::super::LifecycleState {
             generation: GENERATION,
+            incarnation: 0,
             phase: LifecyclePhase::Running,
             restart_attempts: 0,
             health: HealthState::Healthy,
@@ -144,9 +145,9 @@ fn ingress() -> NativeIngressEnvelope {
 // r[verify molten.system_extension.native_host.validation]
 #[test]
 fn contract_surface_binds_protocol_execution_state_effects_and_neutral_identity() {
-    assert_eq!(NATIVE_CALLBACK_ENVELOPE_SCHEMA, "molten.system-extension.native-callback-envelope.v2");
+    assert_eq!(NATIVE_CALLBACK_ENVELOPE_SCHEMA, "molten.system-extension.native-callback-envelope.v3");
     assert_eq!(NATIVE_FRAMING, "preserves-packed-materialized-values-v2");
-    assert_eq!(NATIVE_INSTANCE_STATE_SCHEMA, "molten.system-extension.native-instance-state.v2");
+    assert_eq!(NATIVE_INSTANCE_STATE_SCHEMA, "molten.system-extension.native-instance-state.v3");
     assert_eq!(NativeOperationKind::Effect.as_str(), "effect");
     assert!(!NATIVE_HOST_PROFILE_SCHEMA.contains("kiln"));
 }

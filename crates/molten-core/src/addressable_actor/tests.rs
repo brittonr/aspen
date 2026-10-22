@@ -343,6 +343,7 @@ fn generic_system_extension_binding_is_explicit() {
     actor.checkpoint_ref = Some(reference("checkpoint"));
     let extension = LifecycleState {
         generation: actor.extension_generation,
+        incarnation: 0,
         phase: LifecyclePhase::Drained,
         restart_attempts: 0,
         health: HealthState::Stopped,

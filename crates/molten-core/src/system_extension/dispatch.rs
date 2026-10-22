@@ -18,6 +18,7 @@ use crate::fabric::FabricPortRequirement;
 pub struct CallbackEvent {
     pub callback: CallbackKind,
     pub generation: u64,
+    pub incarnation: u64,
     pub event_ref: String,
     pub payload_ref: Option<String>,
     pub accounted_bytes: u64,
@@ -30,6 +31,7 @@ pub struct CallbackEvent {
 pub struct CallbackInvocation {
     pub callback: CallbackKind,
     pub generation: u64,
+    pub incarnation: u64,
     pub sequence: u64,
     pub event_ref: String,
     pub payload_ref: Option<String>,
@@ -55,6 +57,10 @@ pub enum DispatchIssue {
         actual: u64,
         active: u64,
     },
+    StaleIncarnation {
+        actual: u64,
+        active: u64,
+    },
     MalformedEventRef(String),
     MalformedPayloadRef(String),
     MissingDeadline,
@@ -74,6 +80,7 @@ pub enum DispatchIssue {
 
 // r[impl molten.system_extension.callbacks]
 // r[impl molten.system_extension.lifecycle]
+// r[impl molten.system_extension.incarnation_fencing]
 pub fn plan_callback_dispatch(
     manifest: &AdmittedSystemExtensionManifest,
     state: &LifecycleState,
@@ -101,6 +108,7 @@ pub fn plan_callback_dispatch(
         invocation: Some(CallbackInvocation {
             callback: event.callback,
             generation: event.generation,
+            incarnation: event.incarnation,
             sequence,
             event_ref: event.event_ref.clone(),
             payload_ref: event.payload_ref.clone(),
@@ -130,6 +138,12 @@ fn validate_callback_event(
         issues.push(DispatchIssue::StaleGeneration {
             actual: event.generation,
             active: state.generation,
+        });
+    }
+    if event.incarnation != state.incarnation {
+        issues.push(DispatchIssue::StaleIncarnation {
+            actual: event.incarnation,
+            active: state.incarnation,
         });
     }
     if !valid_ref(&event.event_ref) {
@@ -216,6 +230,7 @@ pub struct TypedEffectRequest {
     pub output_schema_ref: String,
     pub request_ref: String,
     pub generation: u64,
+    pub incarnation: u64,
     pub accounted_bytes: u64,
 }
 
@@ -224,6 +239,7 @@ pub enum EffectIssue {
     TooManyEffects { actual: usize, maximum: usize },
     DuplicateRequestRef(String),
     StaleGeneration { actual: u64, active: u64 },
+    StaleIncarnation { actual: u64, active: u64 },
     AmbientEffectDenied(AmbientEffect),
     PortNotBound(FabricPortKey),
     OperationNotAdmitted { key: FabricPortKey, operation: String },
@@ -239,6 +255,7 @@ pub enum EffectIssue {
 pub fn validate_typed_effects(
     manifest: &AdmittedSystemExtensionManifest,
     active_generation: u64,
+    active_incarnation: u64,
     effects: &[TypedEffectRequest],
 ) -> Vec<EffectIssue> {
     let mut issues = Vec::new();
@@ -258,7 +275,7 @@ pub fn validate_typed_effects(
         }
     }
     for effect in effects {
-        validate_effect(manifest, active_generation, effect, &mut issues);
+        validate_effect(manifest, active_generation, active_incarnation, effect, &mut issues);
     }
     issues
 }
@@ -266,6 +283,7 @@ pub fn validate_typed_effects(
 fn validate_effect(
     manifest: &AdmittedSystemExtensionManifest,
     active_generation: u64,
+    active_incarnation: u64,
     effect: &TypedEffectRequest,
     issues: &mut Vec<EffectIssue>,
 ) {
@@ -273,6 +291,12 @@ fn validate_effect(
         issues.push(EffectIssue::StaleGeneration {
             actual: effect.generation,
             active: active_generation,
+        });
+    }
+    if effect.incarnation != active_incarnation {
+        issues.push(EffectIssue::StaleIncarnation {
+            actual: effect.incarnation,
+            active: active_incarnation,
         });
     }
     if !valid_token(&effect.operation) {
@@ -367,15 +391,33 @@ pub enum CallbackOutcomeIssue {
     MalformedRef { field: &'static str, value: String },
     MissingCheckpointRef,
     MissingStateRef,
+    StaleGeneration { actual: u64, active: u64 },
+    StaleIncarnation { actual: u64, active: u64 },
     Effect(EffectIssue),
 }
 
+// r[impl molten.system_extension.incarnation_fencing]
+// r[impl molten.system_extension.typed_effects]
 pub fn validate_callback_outcome(
     manifest: &AdmittedSystemExtensionManifest,
+    active_generation: u64,
+    active_incarnation: u64,
     invocation: &CallbackInvocation,
     outcome: &CallbackOutcome,
 ) -> Vec<CallbackOutcomeIssue> {
     let mut issues = Vec::new();
+    if invocation.generation != active_generation {
+        issues.push(CallbackOutcomeIssue::StaleGeneration {
+            actual: invocation.generation,
+            active: active_generation,
+        });
+    }
+    if invocation.incarnation != active_incarnation {
+        issues.push(CallbackOutcomeIssue::StaleIncarnation {
+            actual: invocation.incarnation,
+            active: active_incarnation,
+        });
+    }
     validate_outcome_refs("output-refs", &outcome.output_refs, &mut issues);
     for (field, reference) in [
         ("state-ref", outcome.state_ref.as_ref()),
@@ -396,7 +438,7 @@ pub fn validate_callback_outcome(
     if invocation.callback == CallbackKind::Recover && outcome.state_ref.is_none() {
         issues.push(CallbackOutcomeIssue::MissingStateRef);
     }
-    for issue in validate_typed_effects(manifest, invocation.generation, &outcome.effects) {
+    for issue in validate_typed_effects(manifest, active_generation, active_incarnation, &outcome.effects) {
         issues.push(CallbackOutcomeIssue::Effect(issue));
     }
     issues

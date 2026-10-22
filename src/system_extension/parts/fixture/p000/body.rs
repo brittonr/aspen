@@ -174,6 +174,7 @@ impl SystemExtensionExecutor for EchoExecutor {
         }
         let effects = if invocation.callback == super::CallbackKind::Request {
             vec![super::TypedEffectRequest {
+                incarnation: invocation.incarnation,
                 target: super::EffectTarget::FabricPort(crate::fabric::FabricPortKey {
                     port_id: PORT_ID.to_string(),
                     version: PORT_VERSION.to_string(),

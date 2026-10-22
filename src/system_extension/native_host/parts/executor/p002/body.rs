@@ -49,7 +49,17 @@ where
             }
         };
         let outcome = materialized.project();
-        let issues = validate_callback_outcome(self.template.admitted.manifest(), &envelope.invocation, &outcome);
+        // The native process answered this invocation, so the materialized
+        // outcome must carry the invocation's own generation and incarnation.
+        // The executing host checks the invocation against the current
+        // instance when it validates the completion it receives.
+        let issues = validate_callback_outcome(
+            self.template.admitted.manifest(),
+            envelope.invocation.generation,
+            envelope.invocation.incarnation,
+            &envelope.invocation,
+            &outcome,
+        );
         if !issues.is_empty() {
             self.complete_callback(CallbackCompletionInput {
                 operation_ref,

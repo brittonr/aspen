@@ -62,7 +62,25 @@ absent -> installed -> admitted -> initializing -> initialized
        -> quarantined
 ```
 
-Every event and callback names the active generation. Upgrade and rollback create exactly the next generation. Old-generation callbacks, effects, completions, timers, and messages are denied before executor invocation. Drain and shutdown completion require zero tracked callbacks, queued events, in-flight bytes, streams, timers, and effect requests. Retryable failures may restart only within the admitted budget; fatal, policy, resource, or generation failures quarantine rather than loop indefinitely.
+Every event and callback names the active generation. Upgrade and rollback create exactly the next generation. Old-generation callbacks, effects, completions, timers, and messages are denied before executor invocation.
+
+### Incarnation fencing
+
+Generation names the implementation; it does not name the running instance. A restart or recovery replaces the
+instance while the generation stays the same, so the lifecycle also carries a monotonic `incarnation` that advances on
+every restart-entry transition. Every runtime-local timer, callback completion, and failure notification binds the
+incarnation that produced it, and dispatch denies work whose incarnation is not the executing one, before executor
+invocation and before any effect is planned. A delayed timer, a pending callback completion, and a failure notification
+from the previous instance are therefore all rejected against the replacement instance, and the lifecycle receipt binds
+the previous and next incarnation so the advance is visible in evidence.
+
+Durable logical work is not fenced out by the incarnation. It is re-admitted deliberately: the shell presents durable
+work with a fresh delivery claim bound to the current generation and incarnation, and the claim records the current
+incarnation. Runtime-local work presented as durable work is denied, and durable work presented without a current claim
+is denied. The native callback protocol carries the invocation incarnation in the envelope and the effect record, and
+the native host binds the materialized effect to the invocation it answers; the native callback envelope, outcome, effect,
+instance-state records, and the native ALPN move to version 3, so a native extension built against version 2 is not
+admitted by a version 3 host. Drain and shutdown completion require zero tracked callbacks, queued events, in-flight bytes, streams, timers, and effect requests. Retryable failures may restart only within the admitted budget; fatal, policy, resource, or generation failures quarantine rather than loop indefinitely.
 
 ## Callback contract
 
@@ -85,9 +103,10 @@ A system extension can request an external effect only through an exact admitted
 - input and output schema refs;
 - request content ref;
 - active generation;
+- active incarnation;
 - accounted bytes.
 
-The host rejects ambient filesystem, network, clock, randomness, process, and environment targets. It also rejects unbound ports, unsupported operations, schema mismatch, stale generations, malformed refs, duplicate requests, and resource excess. Successful validation returns effect requests to an adapter shell; it does not execute them inside the pure core and does not grant new authority.
+The host rejects ambient filesystem, network, clock, randomness, process, and environment targets. It also rejects unbound ports, unsupported operations, schema mismatch, stale generations, stale incarnations, malformed refs, duplicate requests, and resource excess. Successful validation returns effect requests to an adapter shell; it does not execute them inside the pure core and does not grant new authority.
 
 ## Execution profiles
 

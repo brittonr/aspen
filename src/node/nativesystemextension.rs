@@ -6,6 +6,7 @@ pub enum NativeNodeRegistryIssue {
     SchemaMismatch,
     ProfileMismatch,
     StaleGeneration { actual: u64, active: u64 },
+    StaleIncarnation { actual: u64, active: u64 },
     Removal(Vec<crate::system_extension::NativeHostIssue>),
 }
 
@@ -68,6 +69,12 @@ impl NativeNodeServiceRegistry {
             return Err(NativeNodeRegistryIssue::StaleGeneration {
                 actual: instance.lifecycle.generation,
                 active: current.lifecycle.generation,
+            });
+        }
+        if instance.lifecycle.incarnation < current.lifecycle.incarnation {
+            return Err(NativeNodeRegistryIssue::StaleIncarnation {
+                actual: instance.lifecycle.incarnation,
+                active: current.lifecycle.incarnation,
             });
         }
         self.instances.insert(instance.instance_id.clone(), instance);
@@ -143,6 +150,7 @@ mod tests {
             state_schema_ref: HASH.to_string(),
             lifecycle: LifecycleState {
                 generation: GENERATION,
+                incarnation: 0,
                 phase: LifecyclePhase::Stopped,
                 restart_attempts: 0,
                 health: HealthState::Stopped,

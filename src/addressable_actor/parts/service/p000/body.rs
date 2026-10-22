@@ -256,6 +256,7 @@ fn validate_host_binding(service: &Request<'_>, state: &ActorState) -> Result<()
         return Err(Error::Host(ActorIssue::AdmissionDenied));
     }
     let extension = molten_core::system_extension::LifecycleState {
+        incarnation: 0,
         generation: host.system_extension_generation,
         phase: host.system_extension_phase,
         restart_attempts: 0,

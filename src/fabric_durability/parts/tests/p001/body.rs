@@ -38,6 +38,7 @@ fn registered_effect_port_routes_only_known_commands_to_the_exact_bound_profile(
         output_schema_ref: DURABLE_STATE_OUTCOME_SCHEMA.to_string(),
         request_ref: OPERATION_REF.to_string(),
         generation: GENERATION,
+        incarnation: 0,
         accounted_bytes: 1,
     };
     let output = port.route(&binding, &effect).expect("route durable effect");

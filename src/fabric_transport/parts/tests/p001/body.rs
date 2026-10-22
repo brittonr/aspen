@@ -89,6 +89,7 @@ fn registered_effect_port_routes_only_exact_profile_generation_and_known_request
         output_schema_ref: TRANSPORT_EVENT_SCHEMA.to_string(),
         request_ref: REQUEST_REF.to_string(),
         generation: GENERATION,
+        incarnation: 0,
         accounted_bytes: 0,
     };
     let output = port.route(&binding, &effect).expect("route transport effect");

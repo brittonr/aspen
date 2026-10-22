@@ -226,6 +226,7 @@ fn initial_instance(
         state_schema_ref: executable.executable.state_schema_ref.clone(),
         lifecycle: LifecycleState {
             generation: admitted.manifest().initial_generation,
+            incarnation: 0,
             phase: LifecyclePhase::Installed,
             restart_attempts: 0,
             health: HealthState::Unknown,

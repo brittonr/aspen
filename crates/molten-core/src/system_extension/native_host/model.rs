@@ -6,13 +6,13 @@ use super::super::ResourceUsage;
 // r[impl molten.system_extension.native_host.value_protocol]
 pub const NATIVE_HOST_PROFILE_SCHEMA: &str = "molten.system-extension.native-host-profile.v2";
 pub const NATIVE_EXECUTABLE_EVIDENCE_SCHEMA: &str = "molten.system-extension.native-executable-evidence.v2";
-pub const NATIVE_CALLBACK_ENVELOPE_SCHEMA: &str = "molten.system-extension.native-callback-envelope.v2";
-pub const NATIVE_CALLBACK_OUTCOME_SCHEMA: &str = "molten.system-extension.native-callback-outcome.v2";
-pub const NATIVE_INSTANCE_STATE_SCHEMA: &str = "molten.system-extension.native-instance-state.v2";
+pub const NATIVE_CALLBACK_ENVELOPE_SCHEMA: &str = "molten.system-extension.native-callback-envelope.v3";
+pub const NATIVE_CALLBACK_OUTCOME_SCHEMA: &str = "molten.system-extension.native-callback-outcome.v3";
+pub const NATIVE_INSTANCE_STATE_SCHEMA: &str = "molten.system-extension.native-instance-state.v3";
 pub const NATIVE_OPERATION_SCHEMA: &str = "molten.system-extension.native-operation.v2";
 pub const NATIVE_INGRESS_SCHEMA: &str = "molten.system-extension.native-ingress.v2";
 pub const NATIVE_STATUS_SCHEMA: &str = "molten.system-extension.native-status.v2";
-pub const NATIVE_ALPN: &str = "molten/system-extension/native/v2";
+pub const NATIVE_ALPN: &str = "molten/system-extension/native/v3";
 pub const NATIVE_FRAMING: &str = "preserves-packed-materialized-values-v2";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

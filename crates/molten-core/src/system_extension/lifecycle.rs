@@ -60,6 +60,7 @@ impl LifecyclePhase {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LifecycleState {
     pub generation: u64,
+    pub incarnation: u64,
     pub phase: LifecyclePhase,
     pub restart_attempts: u64,
     pub health: HealthState,
@@ -70,6 +71,7 @@ impl LifecycleState {
     pub const fn absent() -> Self {
         Self {
             generation: 0,
+            incarnation: 0,
             phase: LifecyclePhase::Absent,
             restart_attempts: 0,
             health: HealthState::Unknown,
@@ -143,16 +145,18 @@ impl LifecycleEventKind {
 pub struct LifecycleEvent {
     pub kind: LifecycleEventKind,
     pub generation: u64,
+    pub incarnation: u64,
     pub next_generation: Option<u64>,
     pub checkpoint_ref: Option<String>,
     pub failure_class: Option<FailureClass>,
 }
 
 impl LifecycleEvent {
-    pub const fn simple(kind: LifecycleEventKind, generation: u64) -> Self {
+    pub const fn simple(kind: LifecycleEventKind, generation: u64, incarnation: u64) -> Self {
         Self {
             kind,
             generation,
+            incarnation,
             next_generation: None,
             checkpoint_ref: None,
             failure_class: None,
@@ -166,6 +170,11 @@ pub enum LifecycleIssue {
         actual: u64,
         active: u64,
     },
+    StaleIncarnation {
+        actual: u64,
+        active: u64,
+    },
+    IncarnationOverflow,
     InitialGenerationMismatch {
         actual: u64,
         expected: u64,
@@ -191,6 +200,7 @@ pub enum LifecycleIssue {
 }
 
 // r[impl molten.system_extension.lifecycle]
+// r[impl molten.system_extension.incarnation_fencing]
 pub fn plan_lifecycle_transition(
     state: &LifecycleState,
     event: &LifecycleEvent,
@@ -205,6 +215,7 @@ pub fn plan_lifecycle_transition(
     let next = match (state.phase, event.kind) {
         (LifecyclePhase::Absent, LifecycleEventKind::Install) => LifecycleState {
             generation: event.generation,
+            incarnation: 0,
             phase: LifecyclePhase::Installed,
             restart_attempts: 0,
             health: HealthState::Stopped,
@@ -248,7 +259,15 @@ pub fn plan_lifecycle_transition(
         (
             LifecyclePhase::Admitted | LifecyclePhase::Failed | LifecyclePhase::Restarting,
             LifecycleEventKind::BeginRecovery,
-        ) => with_phase(state, LifecyclePhase::Recovering),
+        ) => {
+            let incarnation =
+                state.incarnation.checked_add(1).ok_or_else(|| vec![LifecycleIssue::IncarnationOverflow])?;
+            LifecycleState {
+                phase: LifecyclePhase::Recovering,
+                incarnation,
+                ..state.clone()
+            }
+        }
         (LifecyclePhase::Recovering, LifecycleEventKind::RecoverySucceeded) => LifecycleState {
             phase: LifecyclePhase::Running,
             health: HealthState::Healthy,
@@ -290,10 +309,13 @@ pub fn plan_lifecycle_transition(
             }
             let restart_attempts =
                 state.restart_attempts.checked_add(1).ok_or_else(|| vec![LifecycleIssue::RestartBudgetExhausted])?;
+            let incarnation =
+                state.incarnation.checked_add(1).ok_or_else(|| vec![LifecycleIssue::IncarnationOverflow])?;
             LifecycleState {
                 phase: LifecyclePhase::Restarting,
                 health: HealthState::Starting,
                 restart_attempts,
+                incarnation,
                 ..state.clone()
             }
         }
@@ -354,6 +376,12 @@ fn validate_event_shape(state: &LifecycleState, event: &LifecycleEvent) -> Vec<L
         issues.push(LifecycleIssue::StaleGeneration {
             actual: event.generation,
             active: state.generation,
+        });
+    }
+    if event.incarnation != state.incarnation {
+        issues.push(LifecycleIssue::StaleIncarnation {
+            actual: event.incarnation,
+            active: state.incarnation,
         });
     }
 

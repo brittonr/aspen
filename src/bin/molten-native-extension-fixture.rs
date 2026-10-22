@@ -98,6 +98,7 @@ fn effect_request(
             output_schema_ref: EFFECT_OUTPUT_SCHEMA.to_string(),
             request_ref: request.value_ref.clone(),
             generation: envelope.invocation.generation,
+            incarnation: envelope.invocation.incarnation,
             accounted_bytes,
         },
         request,

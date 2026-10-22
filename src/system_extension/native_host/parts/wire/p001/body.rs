@@ -11,7 +11,7 @@ fn parse_effect(
             .map_err(|_| {
                 crate::error::Failure::invalid_harness("native callback effect target must be an exact fabric port")
             })?;
-    let schema = crate::preserves_rail::required_string_field(&fields[7], "effect schema")?;
+    let schema = crate::preserves_rail::required_string_field(&fields[8], "effect schema")?;
     if schema != NATIVE_CALLBACK_OUTCOME_SCHEMA {
         return Err(crate::error::Failure::invalid_harness("native callback effect schema mismatch"));
     }
@@ -27,7 +27,8 @@ fn parse_effect(
             output_schema_ref: crate::preserves_rail::required_string_field(&fields[3], "effect output schema")?,
             request_ref: request.value_ref.clone(),
             generation: required_u64(&fields[5], "effect generation")?,
-            accounted_bytes: required_u64(&fields[6], "effect accounted bytes")?,
+            incarnation: required_u64(&fields[6], "effect incarnation")?,
+            accounted_bytes: required_u64(&fields[7], "effect accounted bytes")?,
         },
         request,
     })

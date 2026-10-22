@@ -96,3 +96,12 @@ fn unsupported_fixture_profile_has_no_silent_fallback() {
 
     assert!(error.to_string().contains("admits in-process-native or sandboxed-component"));
 }
+
+// r[verify molten.system_extension.incarnation_fencing]
+#[test]
+fn restart_fences_runtime_local_work_from_the_previous_incarnation() {
+    let probe = probe_stale_delivery_after_restart(ExecutionProfile::SandboxedComponent).expect("stale delivery probe");
+    assert!(probe.active_incarnation > probe.stale_incarnation);
+    let denial = probe.denial.expect("the replacement instance must deny the stale delivery");
+    assert!(denial.contains("StaleIncarnation"), "unexpected denial: {denial}");
+}

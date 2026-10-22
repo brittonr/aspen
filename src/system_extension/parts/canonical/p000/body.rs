@@ -187,7 +187,7 @@ pub(crate) fn lifecycle_receipt(
         event,
         usage,
     } = input;
-    let value = crate::preserves_rail::record("system-extension-lifecycle-v1", vec![
+    let value = crate::preserves_rail::record("system-extension-lifecycle-v2", vec![
         crate::preserves_rail::string(super::SYSTEM_EXTENSION_LIFECYCLE_SCHEMA),
         field("manifest-ref", crate::preserves_rail::string(manifest_ref)),
         field("extension-id", crate::preserves_rail::string(extension_id)),
@@ -196,6 +196,9 @@ pub(crate) fn lifecycle_receipt(
         field("event-generation", crate::preserves_rail::u64_value(event.generation)),
         field("previous-generation", crate::preserves_rail::u64_value(previous.generation)),
         field("next-generation", crate::preserves_rail::u64_value(next.generation)),
+        field("event-incarnation", crate::preserves_rail::u64_value(event.incarnation)),
+        field("previous-incarnation", crate::preserves_rail::u64_value(previous.incarnation)),
+        field("next-incarnation", crate::preserves_rail::u64_value(next.incarnation)),
         field("previous-phase", crate::preserves_rail::string(previous.phase.as_str())),
         field("next-phase", crate::preserves_rail::string(next.phase.as_str())),
         field("restart-attempts", crate::preserves_rail::u64_value(next.restart_attempts)),
@@ -205,6 +208,7 @@ pub(crate) fn lifecycle_receipt(
         field("resource-usage", resource_usage_value(usage)),
         checks_value(&[
             "generation-fenced",
+            "incarnation-fenced",
             "transition-law-validated",
             "logical-inputs-only",
             "receipt-is-not-consensus-or-durability-proof",

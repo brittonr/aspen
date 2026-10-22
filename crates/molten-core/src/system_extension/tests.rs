@@ -146,7 +146,7 @@ fn admitted_manifest() -> AdmittedSystemExtensionManifest {
 fn transition(state: &LifecycleState, kind: LifecycleEventKind) -> LifecycleState {
     plan_lifecycle_transition(
         state,
-        &LifecycleEvent::simple(kind, INITIAL_SYSTEM_EXTENSION_GENERATION),
+        &LifecycleEvent::simple(kind, state.generation, state.incarnation),
         ResourceUsage::default(),
         resources().max_restart_attempts,
     )
@@ -156,7 +156,7 @@ fn transition(state: &LifecycleState, kind: LifecycleEventKind) -> LifecycleStat
 fn running_state() -> LifecycleState {
     let installed = plan_lifecycle_transition(
         &LifecycleState::absent(),
-        &LifecycleEvent::simple(LifecycleEventKind::Install, INITIAL_SYSTEM_EXTENSION_GENERATION),
+        &LifecycleEvent::simple(LifecycleEventKind::Install, INITIAL_SYSTEM_EXTENSION_GENERATION, 0),
         ResourceUsage::default(),
         resources().max_restart_attempts,
     )
@@ -172,6 +172,7 @@ fn request_event() -> CallbackEvent {
     CallbackEvent {
         callback: CallbackKind::Request,
         generation: INITIAL_SYSTEM_EXTENSION_GENERATION,
+        incarnation: 0,
         event_ref: HASH_B.to_string(),
         payload_ref: Some(HASH_C.to_string()),
         accounted_bytes: REQUEST_BYTES,
@@ -254,6 +255,7 @@ fn lifecycle_is_explicit_and_rejects_delayed_old_generation_work() {
     let upgrade = LifecycleEvent {
         kind: LifecycleEventKind::BeginUpgrade,
         generation: running.generation,
+        incarnation: running.incarnation,
         next_generation: Some(running.generation + 1),
         checkpoint_ref: None,
         failure_class: None,
@@ -279,6 +281,7 @@ fn lifecycle_is_explicit_and_rejects_delayed_old_generation_work() {
         &LifecycleEvent {
             kind: LifecycleEventKind::BeginUpgrade,
             generation: u64::MAX,
+            incarnation: exhausted.incarnation,
             next_generation: Some(0),
             checkpoint_ref: None,
             failure_class: None,
@@ -346,6 +349,7 @@ fn admitted_callback_produces_only_validated_typed_port_effects() {
         output_schema_ref: OUTPUT_SCHEMA.to_string(),
         request_ref: HASH_D.to_string(),
         generation: state.generation,
+        incarnation: state.incarnation,
         accounted_bytes: REQUEST_BYTES,
     };
     let outcome = CallbackOutcome {
@@ -356,7 +360,9 @@ fn admitted_callback_produces_only_validated_typed_port_effects() {
         health: HealthState::Healthy,
     };
 
-    assert!(validate_callback_outcome(&manifest, &invocation, &outcome).is_empty());
+    assert!(
+        validate_callback_outcome(&manifest, state.generation, state.incarnation, &invocation, &outcome).is_empty()
+    );
 }
 
 // r[verify molten.system_extension.typed_effects]
@@ -370,6 +376,7 @@ fn ambient_and_unbound_effects_are_denied() {
         output_schema_ref: OUTPUT_SCHEMA.to_string(),
         request_ref: HASH_A.to_string(),
         generation: INITIAL_SYSTEM_EXTENSION_GENERATION,
+        incarnation: 0,
         accounted_bytes: REQUEST_BYTES,
     };
     let mut unbound = ambient.clone();
@@ -379,7 +386,7 @@ fn ambient_and_unbound_effects_are_denied() {
     });
     unbound.request_ref = HASH_B.to_string();
 
-    let issues = validate_typed_effects(&manifest, INITIAL_SYSTEM_EXTENSION_GENERATION, &[ambient, unbound]);
+    let issues = validate_typed_effects(&manifest, INITIAL_SYSTEM_EXTENSION_GENERATION, 0, &[ambient, unbound]);
 
     assert!(issues.contains(&EffectIssue::AmbientEffectDenied(AmbientEffect::Filesystem)));
     assert!(
@@ -446,6 +453,7 @@ fn failed_checkpoint_and_recovery_take_explicit_failure_paths() {
         &LifecycleEvent {
             kind: LifecycleEventKind::CheckpointFailed,
             generation: checkpointing.generation,
+            incarnation: checkpointing.incarnation,
             next_generation: None,
             checkpoint_ref: None,
             failure_class: Some(FailureClass::Retryable),
@@ -462,6 +470,7 @@ fn failed_checkpoint_and_recovery_take_explicit_failure_paths() {
         &LifecycleEvent {
             kind: LifecycleEventKind::RecoveryFailed,
             generation: recovering.generation,
+            incarnation: recovering.incarnation,
             next_generation: None,
             checkpoint_ref: None,
             failure_class: Some(FailureClass::Fatal),
@@ -474,7 +483,7 @@ fn failed_checkpoint_and_recovery_take_explicit_failure_paths() {
 
     let illegal = plan_lifecycle_transition(
         &LifecycleState::absent(),
-        &LifecycleEvent::simple(LifecycleEventKind::BeginStart, 0),
+        &LifecycleEvent::simple(LifecycleEventKind::BeginStart, 0, 0),
         ResourceUsage::default(),
         resources().max_restart_attempts,
     )
@@ -496,7 +505,7 @@ fn drain_completion_rejects_live_resources() {
     };
     let issues = plan_lifecycle_transition(
         &draining,
-        &LifecycleEvent::simple(LifecycleEventKind::DrainSucceeded, draining.generation),
+        &LifecycleEvent::simple(LifecycleEventKind::DrainSucceeded, draining.generation, draining.incarnation),
         usage,
         resources().max_restart_attempts,
     )
@@ -515,6 +524,7 @@ fn retry_budget_is_bounded_and_fatal_failures_quarantine() {
     let event = LifecycleEvent {
         kind: LifecycleEventKind::Failure,
         generation: running.generation,
+        incarnation: running.incarnation,
         next_generation: None,
         checkpoint_ref: None,
         failure_class: Some(FailureClass::Fatal),

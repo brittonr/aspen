@@ -20,6 +20,7 @@ impl<E: SystemExtensionExecutor> Dispatcher<E> {
         let effect_issues = super::validate_typed_effects(
             self.admitted.manifest(),
             self.state.generation,
+            self.state.incarnation,
             &callback_receipt.approved_effects,
         );
         if !effect_issues.is_empty() {
@@ -83,6 +84,7 @@ impl<E: SystemExtensionExecutor> Dispatcher<E> {
         self.apply_transition(super::LifecycleEvent {
             kind: super::LifecycleEventKind::CheckpointSucceeded,
             generation: self.state.generation,
+            incarnation: self.state.incarnation,
             next_generation: None,
             checkpoint_ref: Some(checkpoint_ref),
             failure_class: None,
@@ -102,6 +104,7 @@ impl<E: SystemExtensionExecutor> Dispatcher<E> {
         self.apply_transition(super::LifecycleEvent {
             kind: super::LifecycleEventKind::RecoverySucceeded,
             generation: self.state.generation,
+            incarnation: self.state.incarnation,
             next_generation: None,
             checkpoint_ref: Some(checkpoint_ref.to_string()),
             failure_class: None,
@@ -131,6 +134,7 @@ impl<E: SystemExtensionExecutor> Dispatcher<E> {
         self.apply_transition(super::LifecycleEvent {
             kind: super::LifecycleEventKind::Failure,
             generation: self.state.generation,
+            incarnation: self.state.incarnation,
             next_generation: None,
             checkpoint_ref: None,
             failure_class: Some(super::FailureClass::Retryable),

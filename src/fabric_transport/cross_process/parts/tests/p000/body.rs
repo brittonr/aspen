@@ -225,6 +225,7 @@ fn effect_request(
         output_schema_ref: TRANSPORT_EVENT_SCHEMA.to_string(),
         request_ref: request_ref.to_string(),
         generation: GENERATION,
+        incarnation: 0,
         accounted_bytes,
     }
 }

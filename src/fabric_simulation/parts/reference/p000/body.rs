@@ -117,7 +117,7 @@ impl SystemExtensionExecutor for ServiceExecutor {
         let effects = transition
             .required_ports
             .iter()
-            .map(|class| self.effect_for(*class, payload_ref, invocation.generation))
+            .map(|class| self.effect_for(*class, payload_ref, invocation.generation, invocation.incarnation))
             .collect::<std::result::Result<Vec<_>, _>>()?;
         self.state = transition.next.clone();
         let state_ref = blake3_ref(transition.state_material.as_bytes());
@@ -139,6 +139,7 @@ impl ServiceExecutor {
         class: crate::fabric::FabricPortClass,
         payload_ref: &str,
         generation: u64,
+        incarnation: u64,
     ) -> std::result::Result<crate::system_extension::TypedEffectRequest, String> {
         let profile = self
             .port_profiles
@@ -146,6 +147,7 @@ impl ServiceExecutor {
             .ok_or_else(|| format!("reference service has no deterministic {} port profile", class.as_str()))?;
         let request_material = format!("{payload_ref}:{}:{generation}", class.as_str());
         Ok(crate::system_extension::TypedEffectRequest {
+            incarnation,
             target: crate::system_extension::EffectTarget::FabricPort(crate::fabric::FabricPortKey {
                 port_id: profile.port_id.clone(),
                 version: profile.version.clone(),

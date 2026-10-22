@@ -185,7 +185,13 @@ impl<E: SystemExtensionExecutor> Dispatcher<E> {
                 failure_class: super::FailureClass::Retryable,
             }),
             Ok(outcome) => {
-                let outcome_issues = super::validate_callback_outcome(self.admitted.manifest(), &invocation, &outcome);
+                let outcome_issues = super::validate_callback_outcome(
+                    self.admitted.manifest(),
+                    self.state.generation,
+                    self.state.incarnation,
+                    &invocation,
+                    &outcome,
+                );
                 if !outcome_issues.is_empty() {
                     return self.fail_invocation(InvocationFailureInput {
                         invocation: &invocation,

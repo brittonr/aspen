@@ -30,6 +30,7 @@ fn invocation() -> CallbackInvocation {
     CallbackInvocation {
         callback: CallbackKind::Request,
         generation: GENERATION,
+        incarnation: 0,
         sequence: GENERATION,
         event_ref: HASH_A.to_string(),
         payload_ref: Some(value(PAYLOAD_BYTES).value_ref),
@@ -63,6 +64,7 @@ fn effect() -> TypedEffectRequest {
         output_schema_ref: "fixture-output-v1".to_string(),
         request_ref: value(EFFECT_REQUEST_BYTES).value_ref,
         generation: GENERATION,
+        incarnation: 0,
         accounted_bytes: u64::try_from(EFFECT_REQUEST_BYTES.len()).expect("effect request length"),
     }
 }
@@ -79,6 +81,7 @@ fn instance() -> NativeInstanceRecord {
         state_schema_ref: HASH_D.to_string(),
         lifecycle: LifecycleState {
             generation: GENERATION,
+            incarnation: 0,
             phase: LifecyclePhase::Running,
             restart_attempts: 0,
             health: HealthState::Healthy,
