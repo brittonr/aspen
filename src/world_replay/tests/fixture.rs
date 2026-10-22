@@ -50,7 +50,11 @@ pub(super) fn fixture(kind: WorldReplayProfileKind) -> Fixture {
         })
         .collect::<Vec<_>>();
     let additional_requirements = additional_requirements();
-    let requirements = required_world_replay_closure(&trace, &closures, &additional_requirements);
+    let boundary = super::sealed::fixture_boundary(&trace);
+    let mut requirements = required_world_replay_closure(&trace, &closures, &additional_requirements);
+    requirements.extend(required_world_replay_boundary_closure(&boundary));
+    requirements.sort();
+    requirements.dedup();
     let members = capsule_members(requirements);
     let mut capsule = WorldReplayCapsule {
         schema: WORLD_REPLAY_CAPSULE_SCHEMA.to_string(),
@@ -69,6 +73,7 @@ pub(super) fn fixture(kind: WorldReplayProfileKind) -> Fixture {
             commits: closures,
             additional_requirements,
             bounds: WorldReplayBounds::default(),
+            boundary,
         },
         commits,
     }

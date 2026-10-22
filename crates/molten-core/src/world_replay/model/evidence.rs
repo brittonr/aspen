@@ -95,6 +95,8 @@ pub struct WorldReplayReceipt {
     pub current_admission_ref: Option<String>,
     pub dependency_refs: Vec<String>,
     pub diagnostics: Vec<String>,
+    /// The observation boundary the replay ran under.
+    pub boundary: crate::world_replay::ReplayBoundarySummary,
     pub non_claims: Vec<String>,
 }
 
@@ -144,9 +146,16 @@ pub enum WorldReplayIssue {
     TotalByteLimitExceeded,
     DiagnosticLimitExceeded,
     DependencyLimitExceeded,
-    NonContiguousStep { expected: u64, actual: u64 },
-    StepParentMismatch { position: u64 },
-    StepProfileMismatch { position: u64 },
+    NonContiguousStep {
+        expected: u64,
+        actual: u64,
+    },
+    StepParentMismatch {
+        position: u64,
+    },
+    StepProfileMismatch {
+        position: u64,
+    },
     UnsupportedProfile,
     LogicalCohortUnexpected,
     LogicalSnapshotDescriptorUnexpected,
@@ -156,17 +165,31 @@ pub enum WorldReplayIssue {
     MissingCommit(String),
     CommitIdentityUnverified(String),
     CommitParentMismatch(String),
-    DuplicateCommitRoot { commit_ref: String, root_kind: RootKind },
+    DuplicateCommitRoot {
+        commit_ref: String,
+        root_kind: RootKind,
+    },
     DuplicateMember(String),
     NonCanonicalMemberOrder,
     EmptyMemberRoles(String),
     TooManyMemberRoles(String),
     NonCanonicalMemberRoleOrder(String),
     InvalidMemberProtection(String),
-    MissingClosureRole { object_ref: String, role: String },
-    UndeclaredClosureRole { object_ref: String, role: String },
+    MissingClosureRole {
+        object_ref: String,
+        role: String,
+    },
+    UndeclaredClosureRole {
+        object_ref: String,
+        role: String,
+    },
     FieldPathLimitExceeded,
     InvalidFieldPath,
     ObservationLimitExceeded,
-    ObservationPositionMismatch { expected: u64, actual: u64 },
+    ObservationPositionMismatch {
+        expected: u64,
+        actual: u64,
+    },
+    /// The observation boundary blocks replay.
+    ObservationBoundary(crate::world_replay::ReplayBoundaryBlocker),
 }

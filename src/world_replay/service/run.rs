@@ -14,6 +14,7 @@ struct ReplayInputRecords {
 }
 
 struct ReplayExecution {
+    effect_attempts: u32,
     executions: Vec<WorldReplayExecutionObservation>,
     captures: Vec<WorldReplayCaptureObservation>,
     divergence_record: Option<CanonicalWorldReplayRecord>,
@@ -44,6 +45,7 @@ struct DeniedRunInput<'a> {
 
 struct ReplayReceiptFields<'a> {
     request: &'a WorldReplayPlanRequest,
+    boundary: ReplayBoundarySummary,
     decision: WorldReplayReceiptDecision,
     horizon: usize,
     actual_transition_refs: Vec<String>,
@@ -84,7 +86,8 @@ pub fn run_world_replay(
             receipts: ports.receipts,
         });
     }
-    let execution = execute_replay_steps(request, ports.transitions, ports.capture, ports.receipts)?;
+    let mut observations = SealedReplayObservations::new(&request.boundary, &request.trace)?;
+    let execution = execute_replay_steps(request, &mut observations, ports.transitions, ports.capture, ports.receipts)?;
     finish_run_outcome(FinishRunInput {
         request,
         plan,
@@ -134,13 +137,16 @@ fn restore_profile(
     Ok(restore)
 }
 
+// r[impl molten.world_replay_boundary.effect_sealing]
 fn execute_replay_steps(
     request: &WorldReplayPlanRequest,
+    observations: &mut SealedReplayObservations,
     transitions: &mut dyn WorldReplayTransitionPort,
     capture: &mut dyn WorldReplayCapturePort,
     receipts: &mut dyn WorldReplayReceiptPort,
 ) -> Result<ReplayExecution> {
     let mut execution = ReplayExecution {
+        effect_attempts: 0,
         executions: Vec::with_capacity(request.trace.steps.len()),
         captures: Vec::with_capacity(request.trace.steps.len()),
         divergence_record: None,
@@ -148,7 +154,8 @@ fn execute_replay_steps(
         matched_steps: 0,
     };
     for step in &request.trace.steps {
-        let observed_execution = transitions.execute_transition(step)?;
+        let observed_execution = transitions.execute_transition(step, observations)?;
+        observations.finish_step(step.position)?;
         validate_execution(step, &observed_execution)?;
         let observed_capture = capture.capture_successor(step, &observed_execution)?;
         validate_ref(&observed_capture.observation_ref, "world replay successor capture")?;
@@ -167,6 +174,7 @@ fn execute_replay_steps(
             .checked_add(comparison.matched_steps)
             .ok_or_else(|| Failure::invalid_harness("world replay matched-step count overflowed"))?;
     }
+    execution.effect_attempts = observations.effect_attempts();
     Ok(execution)
 }
 
@@ -202,6 +210,7 @@ fn finish_run_outcome(input: FinishRunInput<'_>) -> Result<WorldReplayRunOutcome
     };
     let receipt_input = replay_receipt_input(ReplayReceiptFields {
         request: input.request,
+        boundary: boundary_summary(input.request, input.execution.effect_attempts)?,
         decision,
         horizon: input.execution.matched_steps,
         actual_transition_refs: input
@@ -235,6 +244,7 @@ fn finish_run_outcome(input: FinishRunInput<'_>) -> Result<WorldReplayRunOutcome
 fn denied_run_outcome(input: DeniedRunInput<'_>) -> Result<WorldReplayRunOutcome> {
     let receipt_input = replay_receipt_input(ReplayReceiptFields {
         request: input.request,
+        boundary: boundary_summary(input.request, 0)?,
         decision: WorldReplayReceiptDecision::Denied,
         horizon: 0,
         actual_transition_refs: Vec::new(),
@@ -274,6 +284,17 @@ fn replay_receipt_input(fields: ReplayReceiptFields<'_>) -> WorldReplayReceipt {
         current_admission_ref: Some(fields.admission.observation_ref.clone()),
         dependency_refs: fields.dependency_refs.to_vec(),
         diagnostics: fields.diagnostics,
+        boundary: fields.boundary,
         non_claims: world_replay_non_claims(),
     }
+}
+
+/// The boundary facts the receipt states for the admitted observation boundary.
+// r[impl molten.world_replay_boundary.claims]
+fn boundary_summary(request: &WorldReplayPlanRequest, effect_attempts: u32) -> Result<ReplayBoundarySummary> {
+    let admission = admit_replay_observations(&request.boundary, &request.trace).map_err(|blockers| {
+        Failure::invalid_harness(format!("world replay observation boundary is blocked: {blockers:?}"))
+    })?;
+    summarize_replay_boundary(&admission, &request.boundary, &request.trace.profile, effect_attempts)
+        .map_err(|blocker| Failure::invalid_harness(format!("world replay boundary summary failed: {blocker:?}")))
 }

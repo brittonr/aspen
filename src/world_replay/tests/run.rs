@@ -14,7 +14,7 @@ fn logical_replay_uses_ports_and_emits_bounded_receipts() {
     let mut materialization = Materialization::default();
     let mut restore = Restore::default();
     let mut admission = Admission { allowed: true };
-    let mut transitions = Transitions::default();
+    let mut transitions = Transitions::for_fixture(&fixture);
     let mut capture = Capture::from_fixture(&fixture);
     let mut receipts = Receipts::default();
     let outcome = run(
@@ -56,7 +56,7 @@ fn current_authority_denial_emits_receipt_before_transition_execution() {
     let mut materialization = Materialization::default();
     let mut restore = Restore::default();
     let mut admission = Admission { allowed: false };
-    let mut transitions = Transitions::default();
+    let mut transitions = Transitions::for_fixture(&fixture);
     let mut capture = Capture::from_fixture(&fixture);
     let mut receipts = Receipts::default();
     let outcome = run(
@@ -83,7 +83,7 @@ fn replay_stops_before_later_steps_after_first_divergence() {
     let mut materialization = Materialization::default();
     let mut restore = Restore::default();
     let mut admission = Admission { allowed: true };
-    let mut transitions = Transitions::default();
+    let mut transitions = Transitions::for_fixture(&fixture);
     let mut capture = Capture::from_fixture(&fixture);
     capture.diverge_at = Some(0);
     let mut receipts = Receipts::default();
@@ -111,7 +111,7 @@ fn exact_opaque_replay_runs_without_logical_fallback() {
     let mut materialization = Materialization::default();
     let mut restore = Restore::default();
     let mut admission = Admission { allowed: true };
-    let mut transitions = Transitions::default();
+    let mut transitions = Transitions::for_fixture(&fixture);
     let mut capture = Capture::from_fixture(&fixture);
     let mut receipts = Receipts::default();
     let outcome = run(
@@ -140,7 +140,7 @@ fn opaque_replay_uses_only_the_exact_adapter_and_rejects_fallback() {
         ..Restore::default()
     };
     let mut admission = Admission { allowed: true };
-    let mut transitions = Transitions::default();
+    let mut transitions = Transitions::for_fixture(&fixture);
     let mut capture = Capture::from_fixture(&fixture);
     let mut receipts = Receipts::default();
     let error = run(
@@ -158,6 +158,26 @@ fn opaque_replay_uses_only_the_exact_adapter_and_rejects_fallback() {
     assert_eq!(restore.logical_calls, 0);
     assert_eq!(restore.opaque_calls, 1);
     assert!(transitions.positions.is_empty());
+}
+
+pub(super) fn run_with_transitions(
+    fixture: &Fixture,
+    transitions: &mut Transitions,
+) -> crate::error::Result<WorldReplayRunOutcome> {
+    let mut materialization = Materialization::default();
+    let mut restore = Restore::default();
+    let mut admission = Admission { allowed: true };
+    let mut capture = Capture::from_fixture(fixture);
+    let mut receipts = Receipts::default();
+    run(
+        fixture,
+        &mut materialization,
+        &mut restore,
+        &mut admission,
+        transitions,
+        &mut capture,
+        &mut receipts,
+    )
 }
 
 fn run(

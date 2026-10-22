@@ -56,6 +56,8 @@ pub fn canonical_world_replay_plan(plan: &WorldReplayPlan) -> Result<CanonicalWo
             field("trace-ref", string(&plan.trace_ref)),
             field("capsule-ref", string(&plan.capsule_ref)),
             profile_value(&plan.profile),
+            field("inventory-ref", string(&plan.inventory_ref)),
+            field("ledger-ref", string(&plan.ledger_ref)),
             field("operations", sequence(plan.operations.iter().map(operation_value).collect())),
             field("current-admission-required", boolean(plan.current_admission_required)),
             non_claims_value(&plan.non_claims),

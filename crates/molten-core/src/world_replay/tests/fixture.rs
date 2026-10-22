@@ -8,7 +8,7 @@ use crate::world_commit::WorldRootRef;
 pub(super) const MEMBER_BYTES: u64 = 64;
 pub(super) const EXPECTED_STEP_COUNT: usize = 2;
 
-pub(super) fn valid_request() -> WorldReplayPlanRequest {
+pub(crate) fn valid_request() -> WorldReplayPlanRequest {
     let trace = valid_trace();
     let commits = valid_commits(&trace);
     let additional_requirements = vec![
@@ -21,7 +21,9 @@ pub(super) fn valid_request() -> WorldReplayPlanRequest {
             role: WorldReplayCapsuleMemberRole::SealedReproductionBundle,
         },
     ];
-    let capsule = valid_capsule(&trace, &commits, &additional_requirements);
+    let boundary = super::sealed::sealed_boundary(&trace);
+    let capsule =
+        valid_capsule(&trace, &commits, &super::sealed::with_boundary_closure(&additional_requirements, &boundary));
     WorldReplayPlanRequest {
         supported_profile_refs: vec![trace.profile.profile_ref.as_str().to_string()],
         trace,
@@ -29,6 +31,7 @@ pub(super) fn valid_request() -> WorldReplayPlanRequest {
         commits,
         additional_requirements,
         bounds: WorldReplayBounds::default(),
+        boundary,
     }
 }
 
@@ -74,7 +77,7 @@ pub(super) fn commit_ref(label: &str) -> WorldCommitRef {
     WorldCommitRef::new(digest(label)).expect("commit ref")
 }
 
-pub(super) fn digest(label: &str) -> String {
+pub(crate) fn digest(label: &str) -> String {
     format!("blake3:{}", blake3::hash(label.as_bytes()).to_hex())
 }
 

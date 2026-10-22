@@ -17,6 +17,9 @@ pub enum WorldReplayCapsuleMemberRole {
     TransitionInput,
     ContentManifest,
     SealedReproductionBundle,
+    SourceInventory,
+    ObservationLedger,
+    OpaqueDiagnostic,
 }
 
 impl WorldReplayCapsuleMemberRole {
@@ -34,6 +37,9 @@ impl WorldReplayCapsuleMemberRole {
             Self::TransitionInput => "transition-input".to_string(),
             Self::ContentManifest => "content-manifest".to_string(),
             Self::SealedReproductionBundle => "sealed-reproduction-bundle".to_string(),
+            Self::SourceInventory => "source-inventory".to_string(),
+            Self::ObservationLedger => "observation-ledger".to_string(),
+            Self::OpaqueDiagnostic => "opaque-diagnostic".to_string(),
         }
     }
 }

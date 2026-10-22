@@ -58,6 +58,29 @@ pub fn required_world_replay_closure(
     requirements.into_iter().collect()
 }
 
+/// The capsule members the observation boundary requires: the inventory, the
+/// ledger, and each detached opaque diagnostic.
+// r[impl molten.world_replay_boundary.observations]
+pub fn required_world_replay_boundary_closure(
+    boundary: &WorldReplayObservationBoundary,
+) -> Vec<WorldReplayClosureRequirement> {
+    let mut requirements = vec![
+        WorldReplayClosureRequirement {
+            object_ref: boundary.inventory.inventory_ref.clone(),
+            role: WorldReplayCapsuleMemberRole::SourceInventory,
+        },
+        WorldReplayClosureRequirement {
+            object_ref: boundary.ledger.ledger_ref.clone(),
+            role: WorldReplayCapsuleMemberRole::ObservationLedger,
+        },
+    ];
+    requirements.extend(boundary.opaque_diagnostics.iter().map(|diagnostic| WorldReplayClosureRequirement {
+        object_ref: diagnostic.descriptor_ref.clone(),
+        role: WorldReplayCapsuleMemberRole::OpaqueDiagnostic,
+    }));
+    requirements
+}
+
 pub(crate) fn validate_commit_closure(
     trace: &WorldTransitionTrace,
     commits: &[WorldReplayCommitClosure],

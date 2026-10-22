@@ -32,9 +32,15 @@ pub fn validate_world_replay_plan_request(request: &WorldReplayPlanRequest) -> V
         }
     }
     issues.extend(validate_commit_closure(&request.trace, &request.commits));
+    if let Err(blockers) = admit_replay_observations(&request.boundary, &request.trace) {
+        issues.extend(blockers.into_iter().map(WorldReplayIssue::ObservationBoundary));
+    }
     if issues.is_empty() {
-        let requirements =
+        let mut requirements =
             required_world_replay_closure(&request.trace, &request.commits, &request.additional_requirements);
+        requirements.extend(required_world_replay_boundary_closure(&request.boundary));
+        requirements.sort();
+        requirements.dedup();
         issues.extend(validate_capsule_closure(&request.capsule, &requirements, request.bounds.max_diagnostics));
     }
     bounded_sorted_issues(issues, request.bounds.max_diagnostics)

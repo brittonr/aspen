@@ -35,6 +35,10 @@ pub fn canonicalize_world_replay_receipt(
     if let Some(reference) = &receipt.current_admission_ref {
         validate_ref(reference, "replay current admission")?;
     }
+    let claim_blockers = validate_replay_boundary_claims(&receipt.boundary);
+    if !claim_blockers.is_empty() {
+        return Err(Failure::invalid_harness(format!("world replay receipt overclaims: {claim_blockers:?}")));
+    }
     let identity_value = replay_receipt_value(&receipt, false);
     receipt.receipt_ref = domain_identity(WORLD_REPLAY_RECEIPT_IDENTITY_CONTEXT, &identity_value)?;
     let value = replay_receipt_value(&receipt, true);
@@ -82,6 +86,7 @@ fn replay_receipt_value(receipt: &WorldReplayReceipt, include_ref: bool) -> IOVa
         field("current-admission-ref", optional_ref(receipt.current_admission_ref.as_deref())),
         field("dependencies", sequence(receipt.dependency_refs.iter().map(string).collect())),
         field("diagnostics", sequence(receipt.diagnostics.iter().map(string).collect())),
+        boundary_value(&receipt.boundary),
         field("universal-determinism-proved", boolean(false)),
         field("semantic-equivalence-proved", boolean(false)),
         field("capability-transferred", boolean(false)),
@@ -90,6 +95,44 @@ fn replay_receipt_value(receipt: &WorldReplayReceipt, include_ref: bool) -> IOVa
         non_claims_value(&receipt.non_claims),
     ]);
     record(WORLD_REPLAY_RECEIPT_RECORD, values)
+}
+
+/// The boundary facts of a replay receipt: inventory, handling classes,
+/// horizon, cohorts, effect sealing, opaque diagnostics, redaction, claims,
+/// and non-claims.
+// r[impl molten.world_replay_boundary.claims]
+fn boundary_value(boundary: &ReplayBoundarySummary) -> IOValue {
+    let horizon = match boundary.horizon {
+        Some((step, position)) => sequence(vec![number(step), number(position)]),
+        None => sequence(Vec::new()),
+    };
+    field(
+        "observation-boundary",
+        record("replay-observation-boundary", vec![
+            field("inventory-ref", string(&boundary.inventory_ref)),
+            field("ledger-ref", string(&boundary.ledger_ref)),
+            field("deterministic-sources", number(u64::from(boundary.deterministic_sources))),
+            field("simulated-sources", number(u64::from(boundary.simulated_sources))),
+            field("recorded-sources", number(u64::from(boundary.recorded_sources))),
+            field("recorded-observations", number(u64::from(boundary.recorded_observations))),
+            field("horizon", horizon),
+            field("adapter-cohort-ref", string(&boundary.adapter_cohort_ref)),
+            field("runtime-cohort-ref", optional_ref(boundary.runtime_cohort_ref.as_deref())),
+            field("sealed-effects", number(u64::from(boundary.sealed_effects))),
+            field("repeated-effect-attempts", number(u64::from(boundary.repeated_effect_attempts))),
+            field("opaque-diagnostics", sequence(boundary.opaque_diagnostic_refs.iter().map(string).collect())),
+            field("redaction", string(redaction_label(boundary.redaction))),
+            field("claims", sequence(boundary.claims.iter().map(|claim| string(claim.as_str())).collect())),
+            field("non-claims", sequence(boundary.non_claims.iter().map(string).collect())),
+        ]),
+    )
+}
+
+const fn redaction_label(redaction: ReplayRedaction) -> &'static str {
+    match redaction {
+        ReplayRedaction::NoSensitiveSources => "no-sensitive-sources",
+        ReplayRedaction::SensitiveProtected => "sensitive-protected",
+    }
 }
 
 fn import_receipt_value(receipt: &WorldReplayImportReceipt, include_ref: bool) -> IOValue {
@@ -112,5 +155,5 @@ fn import_receipt_value(receipt: &WorldReplayImportReceipt, include_ref: bool) -
     record(WORLD_REPLAY_IMPORT_RECEIPT_RECORD, values)
 }
 
-const WORLD_REPLAY_RECEIPT_FIELD_CAPACITY: usize = 18;
+const WORLD_REPLAY_RECEIPT_FIELD_CAPACITY: usize = 19;
 const WORLD_REPLAY_IMPORT_RECEIPT_FIELD_CAPACITY: usize = 11;

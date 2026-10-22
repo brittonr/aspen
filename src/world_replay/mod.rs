@@ -10,11 +10,13 @@
 )]
 
 mod adapters;
+mod boundary;
 mod ports;
 mod records;
 mod service;
 
 pub use adapters::*;
+pub use boundary::*;
 pub use ports::*;
 pub use records::*;
 pub use service::*;

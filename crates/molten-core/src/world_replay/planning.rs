@@ -13,6 +13,8 @@ pub fn plan_world_replay(request: &WorldReplayPlanRequest) -> Result<WorldReplay
         trace_ref: request.trace.trace_ref.clone(),
         capsule_ref: request.capsule.capsule_ref.clone(),
         profile: request.trace.profile.clone(),
+        inventory_ref: request.boundary.inventory.inventory_ref.clone(),
+        ledger_ref: request.boundary.ledger.ledger_ref.clone(),
         operations: build_operations(request)?,
         current_admission_required: true,
         non_claims: world_replay_non_claims(),
@@ -33,6 +35,11 @@ fn build_operations(request: &WorldReplayPlanRequest) -> Result<Vec<WorldReplayO
         position: None,
         subject_ref: member.object_ref.clone(),
     }));
+    operations.push(WorldReplayOperation {
+        kind: WorldReplayOperationKind::AdmitObservationBoundary,
+        position: None,
+        subject_ref: request.boundary.ledger.ledger_ref.clone(),
+    });
     operations.push(WorldReplayOperation {
         kind: match request.trace.profile.kind {
             WorldReplayProfileKind::Logical => WorldReplayOperationKind::RestoreLogicalProfile,

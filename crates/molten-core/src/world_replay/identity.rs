@@ -56,6 +56,8 @@ pub fn identify_world_replay_plan(plan: &WorldReplayPlan) -> Result<String, Worl
     update_text(&mut hasher, &plan.trace_ref)?;
     update_text(&mut hasher, &plan.capsule_ref)?;
     update_profile(&mut hasher, &plan.profile)?;
+    update_text(&mut hasher, &plan.inventory_ref)?;
+    update_text(&mut hasher, &plan.ledger_ref)?;
     update_usize(&mut hasher, plan.operations.len())?;
     for operation in &plan.operations {
         update_text(&mut hasher, operation.kind.as_str())?;
@@ -99,7 +101,7 @@ fn update_profile(hasher: &mut blake3::Hasher, profile: &WorldReplayProfile) -> 
     update_optional_text(hasher, profile.snapshot_descriptor_ref.as_deref())
 }
 
-fn update_optional_text(hasher: &mut blake3::Hasher, value: Option<&str>) -> Result<(), WorldReplayIssue> {
+pub(crate) fn update_optional_text(hasher: &mut blake3::Hasher, value: Option<&str>) -> Result<(), WorldReplayIssue> {
     match value {
         Some(value) => {
             update_bool(hasher, true);
@@ -112,7 +114,7 @@ fn update_optional_text(hasher: &mut blake3::Hasher, value: Option<&str>) -> Res
     }
 }
 
-fn update_optional_number(hasher: &mut blake3::Hasher, value: Option<u64>) {
+pub(crate) fn update_optional_number(hasher: &mut blake3::Hasher, value: Option<u64>) {
     match value {
         Some(value) => {
             update_bool(hasher, true);
@@ -122,23 +124,23 @@ fn update_optional_number(hasher: &mut blake3::Hasher, value: Option<u64>) {
     }
 }
 
-fn update_text(hasher: &mut blake3::Hasher, value: &str) -> Result<(), WorldReplayIssue> {
+pub(crate) fn update_text(hasher: &mut blake3::Hasher, value: &str) -> Result<(), WorldReplayIssue> {
     let length = u64::try_from(value.len()).map_err(|_| WorldReplayIssue::InvalidText("identity-length"))?;
     update_number(hasher, length);
     hasher.update(value.as_bytes());
     Ok(())
 }
 
-fn update_usize(hasher: &mut blake3::Hasher, value: usize) -> Result<(), WorldReplayIssue> {
+pub(crate) fn update_usize(hasher: &mut blake3::Hasher, value: usize) -> Result<(), WorldReplayIssue> {
     let value = u64::try_from(value).map_err(|_| WorldReplayIssue::InvalidText("identity-count"))?;
     update_number(hasher, value);
     Ok(())
 }
 
-fn update_number(hasher: &mut blake3::Hasher, value: u64) {
+pub(crate) fn update_number(hasher: &mut blake3::Hasher, value: u64) {
     hasher.update(&value.to_be_bytes());
 }
 
-fn update_bool(hasher: &mut blake3::Hasher, value: bool) {
+pub(crate) fn update_bool(hasher: &mut blake3::Hasher, value: bool) {
     hasher.update(&[u8::from(value)]);
 }

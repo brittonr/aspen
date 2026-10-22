@@ -77,14 +77,43 @@ impl WorldReplayAdmissionPort for Admission {
     }
 }
 
-#[derive(Default)]
+/// A transition executor that consumes its declared observation demands and,
+/// when asked, attempts one original effect.
 pub(super) struct Transitions {
     pub positions: Vec<u64>,
+    pub demands: BTreeMap<u64, Vec<ReplayObservationDemand>>,
+    pub attempt_effect: Option<String>,
+    pub served: Vec<String>,
+}
+
+impl Transitions {
+    pub fn demanding(demands: BTreeMap<u64, Vec<ReplayObservationDemand>>) -> Self {
+        Self {
+            positions: Vec::new(),
+            demands,
+            attempt_effect: None,
+            served: Vec::new(),
+        }
+    }
+
+    pub fn for_fixture(fixture: &Fixture) -> Self {
+        Self::demanding(super::sealed::faithful_demands(&fixture.request.boundary))
+    }
 }
 
 impl WorldReplayTransitionPort for Transitions {
-    fn execute_transition(&mut self, step: &WorldTransitionStep) -> Result<WorldReplayExecutionObservation> {
+    fn execute_transition(
+        &mut self,
+        step: &WorldTransitionStep,
+        observations: &mut SealedReplayObservations,
+    ) -> Result<WorldReplayExecutionObservation> {
         self.positions.push(step.position);
+        for demand in self.demands.get(&step.position).into_iter().flatten() {
+            self.served.push(observations.observe(demand)?.observation_ref);
+        }
+        if let Some(source_id) = &self.attempt_effect {
+            observations.attempt_effect(source_id)?;
+        }
         Ok(WorldReplayExecutionObservation {
             observation_ref: digest(&format!("execute-{}", step.position)),
             position: step.position,

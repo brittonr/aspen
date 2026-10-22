@@ -110,7 +110,13 @@ pub trait WorldReplayAdmissionPort {
 }
 
 pub trait WorldReplayTransitionPort {
-    fn execute_transition(&mut self, step: &WorldTransitionStep) -> Result<WorldReplayExecutionObservation>;
+    /// Execute one transition. Every recorded observation the transition
+    /// consumes comes from `observations`; an original effect is denied there.
+    fn execute_transition(
+        &mut self,
+        step: &WorldTransitionStep,
+        observations: &mut super::SealedReplayObservations,
+    ) -> Result<WorldReplayExecutionObservation>;
 }
 
 pub trait WorldReplayCapturePort {

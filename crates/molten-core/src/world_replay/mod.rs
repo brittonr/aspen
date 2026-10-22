@@ -13,12 +13,14 @@
     reason = "world replay names remain explicit at the product boundary"
 )]
 
+mod boundary;
 mod comparison;
 mod identity;
 mod model;
 mod planning;
 mod validation;
 
+pub use boundary::*;
 pub use comparison::*;
 pub use identity::*;
 pub use model::*;

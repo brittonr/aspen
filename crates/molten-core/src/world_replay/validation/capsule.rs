@@ -48,6 +48,9 @@ pub fn validate_world_replay_plan(plan: &WorldReplayPlan) -> Vec<WorldReplayIssu
     if !valid_reference(&plan.trace_ref) || !valid_reference(&plan.capsule_ref) {
         issues.push(WorldReplayIssue::InvalidReference("plan-input-ref"));
     }
+    if !valid_reference(&plan.inventory_ref) || !valid_reference(&plan.ledger_ref) {
+        issues.push(WorldReplayIssue::InvalidReference("plan-boundary-ref"));
+    }
     if !plan.current_admission_required {
         issues.push(WorldReplayIssue::InvalidText("current-admission-required"));
     }

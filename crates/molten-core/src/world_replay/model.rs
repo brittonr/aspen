@@ -32,7 +32,7 @@ pub const MAX_WORLD_REPLAY_DEPENDENCY_REFS: usize = 64;
 pub const MAX_WORLD_REPLAY_CANONICAL_BYTES: usize = 4_194_304;
 pub const MAX_WORLD_REPLAY_TEXT_BYTES: usize = 256;
 pub const WORLD_REPLAY_OPERATIONS_PER_STEP: usize = 3;
-pub const WORLD_REPLAY_FIXED_OPERATIONS: usize = 3;
+pub const WORLD_REPLAY_FIXED_OPERATIONS: usize = 4;
 
 pub const WORLD_REPLAY_NON_CLAIMS: &[&str] = &[
     "replay does not prove universal determinism",
