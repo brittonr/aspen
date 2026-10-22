@@ -57,6 +57,10 @@ path = "tests/executable_extent/main.rs"
 name = "fabric_simulation_boundary"
 path = "tests/fabric_simulation_boundary/main.rs"
 
+[[test]]
+name = "outside_in"
+path = "tests/outside_in/main.rs"
+
 [[bin]]
 name = "molten-native-extension-fixture"
 path = "src/bin/molten-native-extension-fixture.rs"

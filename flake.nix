@@ -4861,11 +4861,12 @@
                   cargo nextest show-config version --user-config-file none --profile harness > harness.txt
                   cargo nextest show-config version --user-config-file none --profile cli > cli.txt
                   cargo nextest show-config version --user-config-file none --profile distributed-simulation > distributed-simulation.txt
+                  cargo nextest show-config version --user-config-file none --profile outside-in > outside-in.txt
                   cargo nextest show-config version --user-config-file none --profile vm-platform > vm-platform.txt
                   cargo nextest show-config version --user-config-file none --profile dogfood-soak > dogfood-soak.txt
                   mkdir -p $out
-                  cp default.txt ci.txt deterministic.txt exploratory.txt fast-core.txt harness.txt cli.txt distributed-simulation.txt vm-platform.txt dogfood-soak.txt .config/nextest.toml $out/
-                  profiles='ci deterministic exploratory fast-core harness cli distributed-simulation vm-platform dogfood-soak'
+                  cp default.txt ci.txt deterministic.txt exploratory.txt fast-core.txt harness.txt cli.txt distributed-simulation.txt outside-in.txt vm-platform.txt dogfood-soak.txt .config/nextest.toml $out/
+                  profiles='ci deterministic exploratory fast-core harness cli distributed-simulation outside-in vm-platform dogfood-soak'
                   profile_block_context=16
                   for profile in $profiles; do
                     grep -q "^\[profile.$profile\]" .config/nextest.toml
@@ -4882,6 +4883,7 @@
                   printf 'cargo nextest run --profile harness\n' > $out/harness-command.txt
                   printf 'cargo nextest run --profile cli\n' > $out/cli-command.txt
                   printf 'cargo nextest run --profile distributed-simulation\n' > $out/distributed-simulation-command.txt
+                  printf 'cargo nextest run --profile outside-in\n' > $out/outside-in-command.txt
                   printf 'cargo nextest run --profile vm-platform\n' > $out/vm-platform-command.txt
                   printf 'cargo nextest run --profile dogfood-soak\n' > $out/dogfood-soak-command.txt
                   printf 'target/nextest/ci/junit.xml\n' > $out/ci-junit-path.txt
@@ -4891,6 +4893,7 @@
                   printf 'target/nextest/harness/junit.xml\n' > $out/harness-junit-path.txt
                   printf 'target/nextest/cli/junit.xml\n' > $out/cli-junit-path.txt
                   printf 'target/nextest/distributed-simulation/junit.xml\n' > $out/distributed-simulation-junit-path.txt
+                  printf 'target/nextest/outside-in/junit.xml\n' > $out/outside-in-junit-path.txt
                   printf 'target/nextest/vm-platform/junit.xml\n' > $out/vm-platform-junit-path.txt
                   printf 'target/nextest/dogfood-soak/junit.xml\n' > $out/dogfood-soak-junit-path.txt
                 '';

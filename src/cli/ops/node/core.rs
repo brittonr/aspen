@@ -26,3 +26,20 @@ pub(crate) fn write_file(path: &std::path::Path, contents: &str) -> molten::erro
     }
     std::fs::write(path, contents).map_err(molten::error::Failure::from)
 }
+
+/// Write a file through a sibling staging file and a rename, so a reader that
+/// waits for the path never observes partial contents.
+pub(crate) fn write_file_replace(path: &std::path::Path, contents: &str) -> molten::error::Result<()> {
+    let Some(name) = path.file_name() else {
+        return Err(molten::error::Failure::invalid_harness(format!(
+            "output path {} has no file name",
+            path.display()
+        )));
+    };
+    let mut staging_name = std::ffi::OsString::from(".");
+    staging_name.push(name);
+    staging_name.push(".staging");
+    let staging = path.with_file_name(staging_name);
+    write_file(&staging, contents)?;
+    std::fs::rename(&staging, path).map_err(molten::error::Failure::from)
+}

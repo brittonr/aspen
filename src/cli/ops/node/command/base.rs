@@ -100,6 +100,14 @@ pub(crate) struct Status {
     pub(crate) receipt_out: Option<std::path::PathBuf>,
 }
 
+/// Read the node's control deliveries, pending requests, and processed
+/// requests without writing to the state root.
+#[derive(Debug, clap::Args)]
+pub(crate) struct History {
+    #[arg(long)]
+    pub(crate) state_root: std::path::PathBuf,
+}
+
 #[derive(Debug, clap::Args)]
 pub(crate) struct Stop {
     #[arg(long)]

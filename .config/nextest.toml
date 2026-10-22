@@ -62,6 +62,18 @@ inherits = "deterministic"
 default-filter = 'package(molten) & test(/distributed|simulation|fault|two_peer|remote/) & not test(/live|vm|dogfood|soak|exploratory/)'
 junit = { path = "junit.xml", report-name = "molten-distributed-simulation", store-failure-output = true, store-success-output = false }
 
+# Outside-in scenarios run real node processes over the real Iroh transport and
+# real local Redb stores. Each scenario declares its own process, wall-clock, and
+# output budgets; results are integration evidence only, not production,
+# simulation-replacement, or performance evidence. Zero retries: a flaky result fails.
+[profile.outside-in]
+inherits = "ci"
+default-filter = 'package(molten) & test(/outside_in/)'
+test-threads = 2
+global-timeout = "20m"
+slow-timeout = { period = "60s", terminate-after = 2, grace-period = "10s" }
+junit = { path = "junit.xml", report-name = "molten-outside-in", store-failure-output = true, store-success-output = false }
+
 [profile.vm-platform]
 inherits = "ci"
 default-filter = 'package(molten) & test(/vm|nixos|platform/)'

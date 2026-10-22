@@ -56,38 +56,9 @@ fn live_listener_receipt_refs(value: &IoValue) -> Result<(String, Vec<String>, S
     ))
 }
 
+/// Bind the live listener, then serve it until its event bound or timeout.
 pub async fn serve_control_live_listener(input: &ControlLiveServeInput<'_>) -> Result<ControlLiveServe> {
-    let state_root = crate::node_state::DirectoryRoot::open(input.state_root)?;
-    validate_state_root(input.state_root)?;
-    validate_node_id(input.topic)?;
-    validate_listener_event_limit(input.max_events)?;
-    validate_loop_request_limit(input.max_requests_per_tick)?;
-    ensure_state_layout(&state_root)?;
-    let identity = crate::node_identity::parse_identity(&read_preserves(
-        &state_root,
-        &crate::node_state::RelativePath::parse(IDENTITY_FILE)?,
-    )?)?;
-    let lookup = iroh::address_lookup::memory::MemoryLookup::new();
-    let endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(&state_root, &identity)?)).await?;
-    let bound_endpoint_id = format!("iroh:{}", endpoint.id());
-    let live_ticket = live_ticket_for_bound_endpoint(&state_root, &identity, input.topic, &endpoint.addr())?;
-    lookup.add_endpoint_info(endpoint.addr());
-    let gossip = iroh_gossip::Gossip::builder().spawn(endpoint.clone());
-    let router = iroh::protocol::Router::builder(endpoint).accept(iroh_gossip::ALPN, gossip.clone()).spawn();
-    let mut topic = gossip
-        .subscribe(control_live_topic_id(input.topic), Vec::new())
-        .await
-        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh serve subscribe failed: {error}")))?;
-    let served = serve_node_control_live_listener_with_topic(&state_root, input, &mut topic, EndpointIdentityInput { node_id: &identity.node_id, logical_endpoint_id: &identity.endpoint_id, bound_endpoint_id: &bound_endpoint_id })
-    .await;
-    router
-        .shutdown()
-        .await
-        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh serve router shutdown failed: {error}")))?;
-    let mut served = served?;
-    served.live_ticket_ref = Some(live_ticket.ticket_ref);
-    served.live_ticket_value = Some(live_ticket.value);
-    Ok(served)
+    bind_control_live_listener(input).await?.serve().await
 }
 
 pub async fn control_live_serve_listener_loopback(

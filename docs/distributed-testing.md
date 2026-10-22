@@ -57,6 +57,22 @@ track and its observation conventions.
 
 The local multiprocess harness model has a pure planner that validates node identities, state-root handles, transport handles, command-plan refs, expected receipt refs, and cleanup policy. The shell may spawn processes and collect artifacts, but the plan denies state-root collisions, transport collisions, stale tickets, missing receipts, child timeouts, orphaned children, or missing cleanup before accepting local pass evidence. `local-multiprocess-executable-run-v1` binds the shell observations to the pure plan and local run receipt. Local multiprocess receipts are local integration evidence only; they do not replace NixOS VM, WAN/live, authority, policy, provenance, resource, source-gate, retention, deployment, or production-readiness evidence.
 
+## Outside-in fault track
+
+r[impl molten.outside_in.observation] The outside-in tier (`tests/outside_in/`, nextest profile `outside-in`) runs ordinary node processes through public entry points over the real Iroh transport and a real local Redb store. The receiver is a node state root driven by `molten node init`, `run`, `live-peer-admit`, and `serve --live-iroh`. The client is a separate `molten node control-ingress-live-send` process. The scenario reads histories through `molten node control-history`. The live control path's Redb store is the receiver's delivery idempotency store, `control/idempotency/delivery-idempotency.redb`.
+
+Each scenario declares its process, wall-clock, retained-output, and client-operation budgets before it starts (`molten_core::outside_in`). The harness owns every process and scratch path it creates and tears them down. The scenarios cover five profiles:
+
+- **No fault:** one request is delivered and processed once.
+- **Kill and restart:** at the `listener-awaiting-request` boundary, a listener waiting after a committed request is killed and restarted on the same storage. The committed request must still appear in the post-restart history, and every run must report the same bound endpoint.
+- **Pause and resume:** at the same boundary, the listener is stopped with `SIGSTOP` while a client sends, then resumed.
+- **Partition and heal:** at the `transport-between-peers` boundary, the client dials a loopback UDP forwarder that carries the real Iroh QUIC datagrams. It drops every datagram during a bounded hold, so the partitioned attempt is denied. After the heal, the retry is delivered once.
+- **Lost response:** at the `client-response` boundary, the harness drops the client's response and records the outcome as unresolved. A retry with the same sequence is suppressed by the receiver's idempotency store.
+
+Judgment uses only observed outcomes: client attempts, the per-envelope delivery outcomes, pending requests, and processed requests. No observation carries a time. A result is agreement; a permitted divergence with its reasons (lost response applied, retried after fault, duplicate suppressed); a failure naming the first mismatch; or a typed unsupported, incomplete, startup-failed, budget-exhausted, or rejected-declaration outcome. A scenario passes only if its teardown released everything it owned. Negative fixtures cover a startup failure, each budget exhausted, a fault the host cannot apply, an unreadable history, and a retained scratch path.
+
+The consensus path is excluded: a consensus-path declaration is rejected before any process starts, and the ChaosControl and live consensus campaigns own it. The track complements deterministic simulation and does not replace it: simulation explores fault interleavings deterministically, while this tier exercises real processes, sockets, signals, and stores at a few declared boundaries. Results carry the no-production-admission, no-simulation-replacement, and no-performance non-claims. They are local integration evidence, not VM, WAN, production, or performance evidence.
+
 ## Cluster lifecycle receipts and drift summaries
 
 Cluster lifecycle tests can produce `cluster-lifecycle-run-v1` review receipts over explicit observations from `cluster init`, `start`, `status`, and `stop` workflows. The receipt binds workflow id, manifest ref, ordered node ids, phase decisions, per-node config/identity/startup/health/control/heartbeat/shutdown refs, already-running observations, reverse stop order, diagnostics, and evidence-only caveats. Missing phase receipts, duplicate node summaries, stale manifest refs, wrong stop order, invalid refs, missing required per-phase refs, or stdout-only success deny before pass evidence.

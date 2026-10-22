@@ -31,6 +31,7 @@ pub mod fabric_transport;
 pub mod live_binding;
 pub mod node_ingress;
 pub mod nominal;
+pub mod outside_in;
 pub mod planning;
 pub mod policy;
 pub mod preserves_profile;
