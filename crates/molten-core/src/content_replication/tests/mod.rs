@@ -2,6 +2,7 @@ mod cleanup;
 mod closure;
 mod deficits;
 mod edge;
+mod eligibility;
 mod repair;
 
 use super::*;

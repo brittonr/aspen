@@ -175,6 +175,21 @@ cleanup removes the same facet-owned state and the facet records without
 running any stop handler. Facets grant no additional authority; they are an
 ownership and lifetime mechanism over the same dataspace state.
 
+The committed-change stream is a fourth, narrow observation surface, distinct
+from dataspace `Observe`, from durable delivery, and from the world-promotion
+outbox: it records committed service transitions only, never a speculative
+callback. A cursor identifies a position by service identity, stream epoch,
+revision, and event ordinal. Where one storage owner controls the state and the
+event, the owner advances the state, the event, and the stream position
+together; the stream never implies an atomicity across independent stores. A
+subscription is bounded, a cursor behind the retained window reports an
+explicit retention gap, and a cursor from a prior epoch is rejected rather than
+remapped. A snapshot plus its watermark cannot miss a committed change. A
+replayed event keeps one stable identity, so a resumed subscriber deduplicates
+it exactly. Possessing an event, a cursor, or a stream position authorizes
+nothing: reading the content an event references still requires the existing
+current capability checks.
+
 ## Vat/object layer: Goblins-inspired
 
 The public local runtime model remains Syndicate/SAM-style: actors, entities, facets, assertions, retractions, `Observe` patterns, and turns. A vat is an optional internal execution structure that a Rust, Wasm, or Steel actor/service may host when it needs fine-grained object-capability state.

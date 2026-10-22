@@ -219,3 +219,71 @@ fn malformed_status_bindings_counts_references_and_nonclaims_fail_closed() {
         assert!(canonical_status(&status).is_err());
     }
 }
+
+struct EligibilityFixture {
+    instance: ServiceInstance,
+    facts: FactPorts,
+    effects: EffectPorts,
+}
+
+impl EligibilityFixture {
+    fn new(manifest: Manifest) -> Self {
+        let events = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let mut facts = FactPorts::admitted(&events);
+        let instance = active(manifest.clone(), &mut facts);
+        let effects = EffectPorts::admitted(&manifest, &events);
+        Self {
+            instance,
+            facts,
+            effects,
+        }
+    }
+
+    fn run(&mut self) -> crate::error::Result<ReconcileOutcome> {
+        reconcile(self.instance.clone(), ports(&mut self.facts, &mut self.effects))
+    }
+}
+
+// r[verify molten.observations.eligibility]
+// r[verify molten.observations.tests]
+#[test]
+fn an_admitted_publication_carries_the_bound_eligibility_receipt() {
+    let mut fixture = EligibilityFixture::new(manifest());
+    let outcome = fixture.run().expect("admitted publication");
+    assert_eq!(outcome.eligibility_receipts.len(), 1, "the published content carries one receipt");
+    let receipt = &outcome.eligibility_receipts[0];
+    assert_eq!(receipt.content_ref, digest('7'), "the receipt binds the exact content identity");
+    assert!(!receipt.operation_id.is_empty(), "the receipt binds the operation");
+    assert_eq!(receipt.receiver_set.len(), 2, "the receipt binds the receiver set");
+    assert_eq!(receipt.retention_generation, manifest().generation);
+    assert_eq!(receipt.placement_epoch, manifest().placement_epoch);
+    assert_eq!(
+        receipt.storage_guarantee,
+        StorageGuaranteeKind::ReplicatedAcrossFaultDomains {
+            replicas: 2,
+            fault_domains: 2,
+        },
+        "the receipt names the storage guarantee instead of a bare replica count"
+    );
+    assert!(
+        outcome.receipt.evidence_refs.contains(&receipt.receipt_ref),
+        "the receipt is part of the published evidence"
+    );
+}
+
+// r[verify molten.observations.eligibility]
+#[test]
+fn a_publication_that_cannot_satisfy_the_profile_never_claims_the_content() {
+    let mut manifest = manifest();
+    manifest.policy.minimum_fault_domains = DEFAULT_REPLICAS;
+    let mut fixture = EligibilityFixture::new(manifest);
+    // Every admitted peer now lives in one fault domain, so the deployment
+    // cannot satisfy the profile's spread requirement.
+    fixture.facts.membership.peers = vec![peer("peer-a", "zone-a"), peer("peer-b", "zone-a")];
+    let outcome = fixture.run().expect("the publication reports the deficit instead of claiming the content");
+    assert!(outcome.eligibility_receipts.is_empty(), "no receipt is issued for content the profile cannot admit");
+    assert!(
+        outcome.status.under_replicated.contains(&digest('7')),
+        "the status reports the content as under replicated"
+    );
+}

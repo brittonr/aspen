@@ -54,6 +54,21 @@ between the plan and the transfer is refused at transfer time.
 Repair recovers bytes matching known identities only. It creates no new content identity, it grants no capacity or
 authority, and repaired bytes never make a replica the current placement.
 
+## Publication eligibility
+
+A profile states its own durability requirement before the metadata publication
+becomes authoritative. The requirement is the profile's replica policy, and the
+gate compares it against the admitted storage observations: the exact content
+identity, the publishing operation, the receiver set, the retention generation,
+the placement epoch, and the storage guarantee kind. A replica count alone never
+satisfies the gate. The receipt names the storage guarantee, so a local
+guarantee never satisfies a profile that asks for replicated availability across
+fault domains, and a receipt that omits a binding is refused.
+
+The gate sits between the transfers and the metadata publication. A local
+development profile and a replicated deployment therefore declare different
+durability explicitly, and the receipt is part of the published evidence.
+
 ## Imperative shell
 
 The shell observes authority, identity, membership, placement, time, inventory, and durable history before it runs the planner.

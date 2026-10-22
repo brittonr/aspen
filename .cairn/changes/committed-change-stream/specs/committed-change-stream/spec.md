@@ -26,7 +26,7 @@ NOT imply cross-store atomicity.
 
 ### Requirement: Cursors are resumable, bounded, and gap-explicit
 
-r[molten.observations.stream] Stream cursors MUST be identified by
+r[molten.observations.cursors] Stream cursors MUST be identified by
 (service identity, stream epoch, revision, event ordinal) and MUST support resumable
 subscription with bounded buffering. Retention gaps MUST be explicit, a subscriber
 past a gap MUST resnapshot, and a snapshot-plus-watermark operation MUST exist such
@@ -101,3 +101,20 @@ stable event identity.
 - WHEN the consumer processes the stream
 - THEN the stable event identity MUST allow exact deduplication of the replayed
   event.
+
+### Requirement: The stream and the gate keep their negative coverage
+
+r[molten.observations.tests] The repository MUST retain positive and negative
+tests for the committed-change stream, the cursor resumption and gap rules, the
+deduplication of replayed events, and the publication eligibility gate. The
+coverage MUST include a stale-epoch cursor, a retention gap, a premature
+publication, and a receipt that names only a replica count.
+
+#### Scenario: The negative cases fail closed
+
+- GIVEN a cursor behind the retained window, a cursor from a prior epoch, a
+  publication without a conforming eligibility receipt, and an eligibility
+  receipt that names only a replica count
+- WHEN the stream and the gate evaluate them
+- THEN each one fails closed and none of them reports a committed change or an
+  admitted publication.

@@ -103,7 +103,10 @@ pub fn operator_status(outcome: &ReconcileOutcome) -> OperatorStatusView {
     }
 }
 
-pub fn reconcile(mut instance: ServiceInstance, ports: ReconcilePorts<'_>) -> crate::error::Result<ReconcileOutcome> {
+pub fn reconcile(
+    mut instance: ServiceInstance,
+    mut ports: ReconcilePorts<'_>,
+) -> crate::error::Result<ReconcileOutcome> {
     require_active(&instance)?;
     let facts = observe_current_facts(&instance.manifest, FactPorts {
         authority_port: &mut *ports.authority,
@@ -112,23 +115,13 @@ pub fn reconcile(mut instance: ServiceInstance, ports: ReconcilePorts<'_>) -> cr
         placement_port: &mut *ports.placement,
         time_port: &mut *ports.time,
     })?;
-    let inventory = ports.content.inventory(&instance.manifest)?;
-    let repair_plan = plan_closure_repair(&closure_repair_input(&instance.manifest, &inventory)).map_err(|issue| {
-        crate::error::Failure::invalid_harness(format!("closure repair planning denied: {issue:?}"))
-    })?;
-    let history = ports.durable.load_history(&instance.manifest)?;
-    let input = ReconcileInput {
-        manifest: instance.manifest.clone(),
-        inventory,
-        peers: facts.membership.peers.clone(),
-        history: history.clone(),
-        observed_tick: facts.time.observed_tick,
-    };
-    let plan = molten_core::content_replication::plan(&input)
-        .map_err(|issue| crate::error::Failure::invalid_harness(format!("replication planning denied: {issue:?}")))?;
-    if plan.decision == Decision::Denied {
-        return Err(crate::error::Failure::invalid_harness(format!("replication planning denied: {:?}", plan.issues)));
-    }
+    let planning = plan_reconciliation(&instance.manifest, &facts, &mut ports)?;
+    let Planning {
+        plan,
+        repair_plan,
+        history,
+        observed_inventory,
+    } = planning;
     let canonical_plan = canonical_plan(&plan)?;
     ports.observations.publish_plan(&canonical_plan)?;
     let mut evidence_refs = facts.evidence_refs();
@@ -139,30 +132,36 @@ pub fn reconcile(mut instance: ServiceInstance, ports: ReconcilePorts<'_>) -> cr
     resource_refs.push(resources.reservation_ref.clone());
     evidence_refs.push(resources.reservation_ref);
     let execution = execute_actions(&instance.manifest, &plan, &history, &mut evidence_refs, ports)?;
-    let status = molten_core::content_replication::status(&plan, &execution.operations);
-    let canonical_status = canonical_status(&status)?;
-    let durable_status_ref = execution.durable.store_status(&canonical_status)?;
-    validate_ref(&durable_status_ref, "replication durable status")?;
-    execution.observations.publish_status(&canonical_status)?;
-    evidence_refs.push(durable_status_ref);
-    evidence_refs.push(canonical_status.record_ref.clone());
-    evidence_refs.sort();
-    evidence_refs.dedup();
-    let receipt = execution_receipt(ReceiptInput {
-        instance: &instance,
-        plan: &plan,
-        status: &status,
-        canonical_status: &canonical_status,
-        operations: execution.operations,
+    // The eligibility gate sits between the transfers and the metadata
+    // publication. The requirement is the profile's replica policy, and the
+    // receipt binds the content, the operation, the receivers, the retention
+    // generation, the placement epoch, and the storage guarantee.
+    let eligibility = publication_eligibility(&instance.manifest, &plan, &observed_inventory, &execution.operations)?;
+    evidence_refs.extend(eligibility.iter().map(|receipt| receipt.receipt_ref.clone()));
+    let ExecutionResult {
+        operations,
+        durable,
+        observations,
+        receipts,
+    } = execution;
+    let published = publish_status_and_receipt(
+        &instance,
+        &plan,
+        operations,
+        PublicationPorts {
+            durable,
+            observations,
+            receipts,
+        },
         evidence_refs,
-    });
-    let canonical_receipt = canonical_receipt(&receipt)?;
-    execution.receipts.publish_receipt(&canonical_receipt)?;
+    )?;
+    let (status, canonical_status, receipt, canonical_receipt) = published;
     instance.last_plan_ref = Some(plan.plan_ref.clone());
     Ok(ReconcileOutcome {
         instance,
         plan,
         repair_plan,
+        eligibility_receipts: eligibility,
         status,
         receipt,
         resource_refs,
@@ -172,92 +171,95 @@ pub fn reconcile(mut instance: ServiceInstance, ports: ReconcilePorts<'_>) -> cr
     })
 }
 
-/// The closure repair input over the observed inventory.
-///
-/// The required closure is the manifest's content set, and the inventory facts
-/// are the per-replica, per-object verification facts. Donor eligibility is per
-/// object, so a cohort whose members each hold a different intact subset still
-/// repairs the whole closure.
-fn closure_repair_input(manifest: &Manifest, inventory: &Inventory) -> ClosureRepairInput {
-    let required_objects = manifest.contents.iter().map(|rule| rule.content_ref.clone()).collect();
-    let facts = inventory
-        .replicas
-        .iter()
-        .map(|replica| ReplicaObjectFact {
-            peer_id: replica.peer_id.clone(),
-            fault_domain: replica.fault_domain.clone(),
-            object_ref: replica.content_ref.clone(),
-            present: replica.present,
-            identity_verified: replica.identity_verified,
-        })
-        .collect();
-    ClosureRepairInput {
-        required_objects,
-        inventory: facts,
-        max_transfers: manifest.contents.len(),
+/// The planning phase of a reconciliation.
+struct Planning {
+    plan: Plan,
+    repair_plan: ClosureRepairPlan,
+    history: Vec<PriorOperation>,
+    observed_inventory: Inventory,
+}
+
+/// Plan the reconciliation over the current facts and the observed inventory.
+fn plan_reconciliation(
+    manifest: &Manifest,
+    facts: &CurrentFacts,
+    ports: &mut ReconcilePorts<'_>,
+) -> crate::error::Result<Planning> {
+    let inventory = ports.content.inventory(manifest)?;
+    let observed_inventory = inventory.clone();
+    let repair_plan = plan_closure_repair(&closure_repair_input(manifest, &inventory)).map_err(|issue| {
+        crate::error::Failure::invalid_harness(format!("closure repair planning denied: {issue:?}"))
+    })?;
+    let history = ports.durable.load_history(manifest)?;
+    let input = ReconcileInput {
+        manifest: manifest.clone(),
+        inventory,
+        peers: facts.membership.peers.clone(),
+        history: history.clone(),
+        observed_tick: facts.time.observed_tick,
+    };
+    let plan = molten_core::content_replication::plan(&input)
+        .map_err(|issue| crate::error::Failure::invalid_harness(format!("replication planning denied: {issue:?}")))?;
+    if plan.decision == Decision::Denied {
+        return Err(crate::error::Failure::invalid_harness(format!("replication planning denied: {:?}", plan.issues)));
     }
-}
-
-struct CurrentFacts {
-    authority: AuthorityObservation,
-    identity: IdentityObservation,
-    membership: MembershipObservation,
-    placement: PlacementObservation,
-    time: TimeObservation,
-}
-
-impl CurrentFacts {
-    fn evidence_refs(&self) -> Vec<String> {
-        vec![
-            self.authority.observation_ref.clone(),
-            self.identity.observation_ref.clone(),
-            self.membership.observation_ref.clone(),
-            self.placement.observation_ref.clone(),
-            self.time.observation_ref.clone(),
-        ]
-    }
-}
-
-struct FactPorts<'a> {
-    authority_port: &'a mut dyn AuthorityPort,
-    identity_port: &'a mut dyn IdentityPort,
-    membership_port: &'a mut dyn MembershipPort,
-    placement_port: &'a mut dyn PlacementPort,
-    time_port: &'a mut dyn TimePort,
-}
-
-fn observe_current_facts(manifest: &Manifest, input: FactPorts<'_>) -> crate::error::Result<CurrentFacts> {
-    let FactPorts {
-        authority_port,
-        identity_port,
-        membership_port,
-        placement_port,
-        time_port,
-    } = input;
-    let authority = authority_port.observe(manifest)?;
-    validate_authority(manifest, &authority)?;
-    let identity = identity_port.observe(manifest)?;
-    validate_identity(manifest, &identity)?;
-    let membership = membership_port.observe(manifest)?;
-    validate_membership(manifest, &membership)?;
-    let placement = placement_port.observe(manifest)?;
-    validate_placement(manifest, &placement)?;
-    let time = time_port.observe(manifest)?;
-    validate_ref(&time.observation_ref, "replication time observation")?;
-    Ok(CurrentFacts {
-        authority,
-        identity,
-        membership,
-        placement,
-        time,
+    Ok(Planning {
+        plan,
+        repair_plan,
+        history,
+        observed_inventory,
     })
 }
 
+/// The ports the publication step writes through.
+struct PublicationPorts<'a> {
+    durable: &'a mut dyn DurablePort,
+    observations: &'a mut dyn ObservationPort,
+    receipts: &'a mut dyn ReceiptPort,
+}
+
+/// Publish the durable status, then the receipt that binds it.
+fn publish_status_and_receipt(
+    instance: &ServiceInstance,
+    plan: &Plan,
+    operations: Vec<PriorOperation>,
+    ports: PublicationPorts<'_>,
+    evidence_refs: Vec<String>,
+) -> crate::error::Result<(Status, CanonicalReplicationRecord, ExecutionReceipt, CanonicalReplicationRecord)> {
+    let status = molten_core::content_replication::status(plan, &operations);
+    let canonical_status = canonical_status(&status)?;
+    let durable_status_ref = ports.durable.store_status(&canonical_status)?;
+    validate_ref(&durable_status_ref, "replication durable status")?;
+    ports.observations.publish_status(&canonical_status)?;
+    let mut evidence_refs = evidence_refs;
+    evidence_refs.push(durable_status_ref);
+    evidence_refs.push(canonical_status.record_ref.clone());
+    evidence_refs.sort();
+    evidence_refs.dedup();
+    let receipt = execution_receipt(ReceiptInput {
+        instance,
+        plan,
+        status: &status,
+        canonical_status: &canonical_status,
+        operations,
+        evidence_refs,
+    });
+    let canonical_receipt = canonical_receipt(&receipt)?;
+    ports.receipts.publish_receipt(&canonical_receipt)?;
+    Ok((status, canonical_status, receipt, canonical_receipt))
+}
+
+mod eligibility;
 mod execution;
+mod facts;
+mod repair;
 mod replay;
 mod validation;
 
+use eligibility::*;
 use execution::*;
+use facts::*;
+use repair::*;
 use replay::*;
 use validation::*;
 

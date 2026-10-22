@@ -7,6 +7,7 @@
 
 mod action;
 mod diagnostic;
+mod eligibility;
 mod identity;
 mod model;
 mod planner;
@@ -15,6 +16,7 @@ pub mod repair;
 mod validation;
 
 pub use diagnostic::*;
+pub use eligibility::*;
 pub use identity::*;
 pub use model::*;
 pub use planner::*;
