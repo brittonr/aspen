@@ -35,6 +35,25 @@ Each plan retains the missing replica count per content independently of its act
 
 Cleanup checks the cumulative remainder after every selection against desired replicas, minimum verified replicas, and minimum fault domains. It skips unsafe, pinned, or uncleared candidates and considers deterministic safe alternatives. If no safe alternative exists, the excess remains and the plan is partial.
 
+## Closure repair
+
+Closure repair works at the canonical-content boundary: verified blobs and manifests whose identities are already
+established. The pure repair planner takes a required-closure set and a bounded inventory of per-replica, per-object
+verification facts.
+
+Donor eligibility is per object. A replica donates exactly the required objects it holds with a passing verification
+result, so a cohort whose members each hold a different intact subset repairs the whole closure even though no single
+member holds all of it. The plan is bounded, and each transfer names the object and its chosen donor.
+
+Completeness is explicit. When every required object has an intact verifiable copy the plan is complete. When one does
+not, the plan is a typed incomplete repair: it still carries the transfers for the objects that do have donors, and it
+names the unrecoverable identities. Verification stays on the receiving side: an assembled object is verified against its
+established identity before it enters the repaired set, and a mismatch rejects that object alone. A donor that flapped
+between the plan and the transfer is refused at transfer time.
+
+Repair recovers bytes matching known identities only. It creates no new content identity, it grants no capacity or
+authority, and repaired bytes never make a replica the current placement.
+
 ## Imperative shell
 
 The shell observes authority, identity, membership, placement, time, inventory, and durable history before it runs the planner.

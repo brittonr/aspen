@@ -1,4 +1,5 @@
 mod cleanup;
+mod closure;
 mod deficits;
 mod edge;
 mod repair;

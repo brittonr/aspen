@@ -11,6 +11,7 @@ mod identity;
 mod model;
 mod planner;
 mod projection;
+pub mod repair;
 mod validation;
 
 pub use diagnostic::*;
@@ -18,6 +19,7 @@ pub use identity::*;
 pub use model::*;
 pub use planner::*;
 pub use projection::*;
+pub use repair::*;
 pub use validation::*;
 
 #[cfg(test)]

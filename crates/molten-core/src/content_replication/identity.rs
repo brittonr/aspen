@@ -3,6 +3,7 @@ use super::*;
 const OPERATION_CONTEXT: &str = "onixresearch.molten.content-replication.operation.v1";
 const ACTION_CONTEXT: &str = "onixresearch.molten.content-replication.action.v1";
 const PLAN_CONTEXT: &str = "onixresearch.molten.content-replication.plan.v2";
+const REPAIR_PLAN_CONTEXT: &str = "onixresearch.molten.content-replication.closure-repair-plan.v1";
 
 pub struct OperationFrame<'a> {
     pub manifest: &'a Manifest,
@@ -36,6 +37,31 @@ pub fn identify_operation(input: OperationFrame<'_>) -> Result<String, Issue> {
     update(&mut hasher, input.target_peer)?;
     update(&mut hasher, input.kind.as_str())?;
     update(&mut hasher, &input.attempt.to_string())?;
+    Ok(format!("blake3:{}", hasher.finalize().to_hex()))
+}
+
+/// The identity of a closure repair plan.
+///
+/// The identity binds the required closure, the chosen donors, and the
+/// completeness decision, so a plan whose completeness differs compares as a
+/// different plan.
+pub fn identify_repair_plan(
+    required_objects: &[String],
+    transfers: &[super::repair::ClosureTransfer],
+    completeness: &super::repair::RepairCompleteness,
+) -> Result<String, Issue> {
+    let mut hasher = blake3::Hasher::new_derive_key(REPAIR_PLAN_CONTEXT);
+    update(&mut hasher, &required_objects.join(","))?;
+    update(&mut hasher, &transfers.len().to_string())?;
+    for transfer in transfers {
+        update(&mut hasher, &transfer.object_ref)?;
+        update(&mut hasher, &transfer.donor_fault_domain)?;
+        update(&mut hasher, &transfer.donor_peer_id)?;
+    }
+    update(&mut hasher, completeness.as_str())?;
+    if let super::repair::RepairCompleteness::Incomplete { unrecoverable } = completeness {
+        update(&mut hasher, &unrecoverable.join(","))?;
+    }
     Ok(format!("blake3:{}", hasher.finalize().to_hex()))
 }
 
