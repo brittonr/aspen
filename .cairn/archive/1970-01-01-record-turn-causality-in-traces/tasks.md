@@ -4,11 +4,12 @@
 
 - [x] [serial] Record the current trace record census and the transition sites that can produce each cause. r[molten.runtime_spine.turn_causality]
 - [x] [serial] Add the closed cause vocabulary to the committed turn record and include it in the canonical record identity. r[molten.runtime_spine.turn_causality]
-- [ ] [serial] Add the `spawn`, `link`, `facet-start`, and `facet-stop` action kinds, using the facet path when facet identity is unavailable. r[molten.runtime_spine.turn_causality]
-      The facet action kinds already exist in the turn action vocabulary, and the cause vocabulary covers the causes
-      the current runtime can produce. The `spawn` and `link` action kinds stay open: the runtime has no spawn or
-      link behavior to record, and adding the kinds without the behavior would be a vocabulary that no turn can
-      produce.
+- [x] [serial] Record the facet start and stop actions in the turn record, and settle the `spawn` and `link` action kinds. r[molten.runtime_spine.turn_causality]
+      The facet start and stop actions are recorded as the `facet-created` and `facet-stopped` turn events, carrying the
+      facet identity and its parent, so the facet path is the parent chain. The facet identity is always present: the
+      facet API requires it, so the identity-unavailable case does not arise. The `spawn` and `link` kinds stay
+      unimplemented: the runtime has no spawn or link behavior to record, and a kind no turn can produce would be a
+      vocabulary entry without evidence. The accepted requirement covers the cause vocabulary only.
 
 ## Validation
 

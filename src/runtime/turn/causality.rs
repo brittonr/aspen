@@ -45,6 +45,7 @@ impl TaskReleaseReason {
 ///
 /// The cause comes from the transition input. It is never derived from a wall
 /// clock, and an unknown or absent cause fails validation.
+// r[impl molten.runtime_spine.turn_causality]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RuntimeTurnCause {
     /// The turn that released this work, by turn ref.
