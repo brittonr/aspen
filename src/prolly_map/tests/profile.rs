@@ -71,7 +71,15 @@ fn named_benchmark_thresholds_bind_measured_structural_facts() {
     assert_eq!(measured.block_bytes, json_u64(&declared, "observed_block_bytes"));
     assert_eq!(u64::from(measured.reused_blocks), json_u64(&declared, "observed_reused_blocks"));
     assert_eq!(u64::from(measured.diff_records), json_u64(&declared, "observed_diff_records"));
-    assert_eq!(u64::from(measured.skipped_equal_nodes), json_u64(&declared, "observed_skipped_equal_nodes"));
+    assert_eq!(u64::from(measured.shared_node_count), json_u64(&declared, "observed_shared_node_count"));
+    assert_eq!(
+        u64::from(measured.diff_subtrees_not_traversed),
+        json_u64(&declared, "observed_diff_subtrees_not_traversed")
+    );
+    assert_eq!(
+        u64::from(measured.diff_comparison_nodes_decoded),
+        json_u64(&declared, "observed_diff_comparison_nodes_decoded")
+    );
     assert_eq!(u64::from(measured.gc_candidates), json_u64(&declared, "observed_gc_candidates"));
     assert_eq!(
         declared.get("observed_restart_verified").and_then(serde_json::Value::as_bool),

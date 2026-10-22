@@ -66,10 +66,27 @@ impl GcDeletionOutcome {
     }
 }
 
+/// One bounded block read session.
+///
+/// The adapter may hold one read transaction for the whole session. The
+/// session refuses every request after it is closed or after a request
+/// exceeds its bounds, and never hands the underlying transaction out.
+// r[impl molten.prolly.readsession]
+pub trait ProllyReadSession {
+    /// Read one block inside the session bounds.
+    fn read_block(&mut self, node_ref: &NodeRef) -> ProllyPortResult<Option<Vec<u8>>>;
+
+    /// Close the session and release its transaction.
+    fn close(&mut self) -> ReadSessionObservation;
+}
+
 // r[impl molten.prolly_map.storage_boundary]
 // r[impl molten.prolly.gc.currentness]
 pub trait ProllyBlockStorePort {
     fn read_block(&self, node_ref: &NodeRef) -> ProllyPortResult<Option<Vec<u8>>>;
+
+    /// Open a bounded read session.
+    fn open_read_session(&self, bounds: ReadSessionBounds) -> ProllyPortResult<Box<dyn ProllyReadSession + '_>>;
 
     fn stage_blocks(&mut self, blocks: &[EncodedBlock]) -> ProllyPortResult<()>;
 

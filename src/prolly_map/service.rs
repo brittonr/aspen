@@ -28,22 +28,64 @@ pub struct ProllyDeletionAdmission {
 
 pub type ProllyServiceResult<T> = std::result::Result<T, ProllyServiceError>;
 
+/// A snapshot loaded from the block store, with the work the load performed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoadedProllySnapshot {
+    pub snapshot: MapSnapshot,
+    pub work: ProllyWorkCounters,
+}
+
+/// Load and validate a snapshot through one bounded read session.
+///
+/// The session holds at most one read transaction for the whole load. Child
+/// discovery and validation share one operation-scoped decoded-node cache, so
+/// every block is decoded once.
 // r[impl molten.prolly_map.storage_boundary]
 // r[impl molten.prolly_map.snapshot_profile_preflight]
+// r[impl molten.prolly.readsession]
 pub fn load_prolly_snapshot(
     port: &impl ProllyBlockStorePort,
     profile: &ProllyProfile,
     root: ProllyRoot,
-) -> ProllyServiceResult<MapSnapshot> {
+) -> ProllyServiceResult<LoadedProllySnapshot> {
     let profile_issues = validate_profile(profile);
     if !profile_issues.is_empty() {
         return Err(ProllyServiceError::Domain(profile_issues));
     }
+    let max_blocks = usize::try_from(profile.limits.max_graph_facts)
+        .map_err(|_| ProllyServiceError::Domain(vec![ProllyIssue::GraphLimitExceeded]))?;
+    let bounds = ReadSessionBounds {
+        max_blocks: profile.limits.max_graph_facts,
+        max_bytes: u64::from(profile.limits.max_graph_facts).saturating_mul(u64::from(profile.max_node_bytes)),
+    };
+    let mut session = port.open_read_session(bounds).map_err(ProllyServiceError::Port)?;
+    let mut cache = DecodedNodeCache::operation_scoped(max_blocks);
+    let discovered = discover_blocks(session.as_mut(), profile, &root, max_blocks, &mut cache);
+    let observation = session.close();
+    let (blocks, discovery_decodes) = discovered?;
+    let snapshot = MapSnapshot { root, blocks };
+    let read = validate_snapshot_cached(profile, &snapshot, &mut cache).map_err(ProllyServiceError::Domain)?;
+    let work = ProllyWorkCounters {
+        nodes_read: observation.blocks_read,
+        nodes_decoded: discovery_decodes.saturating_add(read.work.nodes_decoded),
+        subtrees_not_traversed: 0,
+        transactions_opened: observation.transactions_opened,
+        bytes_copied: observation.bytes_copied,
+    };
+    Ok(LoadedProllySnapshot { snapshot, work })
+}
+
+fn discover_blocks(
+    session: &mut dyn ProllyReadSession,
+    profile: &ProllyProfile,
+    root: &ProllyRoot,
+    max_blocks: usize,
+    cache: &mut DecodedNodeCache,
+) -> ProllyServiceResult<(Vec<EncodedBlock>, u32)> {
     let mut pending = vec![root.top_node_ref.clone()];
     let mut seen = BTreeSet::new();
     let mut blocks = Vec::new();
-    let max_blocks = usize::try_from(profile.limits.max_graph_facts)
-        .map_err(|_| ProllyServiceError::Domain(vec![ProllyIssue::GraphLimitExceeded]))?;
+    let mut decodes = 0_u32;
     while let Some(node_ref) = pending.pop() {
         if !seen.insert(node_ref.as_str().to_string()) {
             continue;
@@ -51,21 +93,23 @@ pub fn load_prolly_snapshot(
         if blocks.len() >= max_blocks {
             return Err(ProllyServiceError::Domain(vec![ProllyIssue::GraphLimitExceeded]));
         }
-        let bytes = port.read_block(&node_ref).map_err(ProllyServiceError::Port)?.ok_or_else(|| {
+        let bytes = session.read_block(&node_ref).map_err(ProllyServiceError::Port)?.ok_or_else(|| {
             ProllyServiceError::Domain(vec![ProllyIssue::MissingBlock(node_ref.as_str().to_string())])
         })?;
         let block = EncodedBlock {
             node_ref: node_ref.clone(),
             bytes,
         };
-        if let ProllyNode::Internal(internal) = decode_block(profile, &block).map_err(ProllyServiceError::Domain)? {
+        let (node, is_decoded) = decode_block_cached(profile, &block, cache).map_err(ProllyServiceError::Domain)?;
+        if is_decoded {
+            decodes = decodes.saturating_add(1);
+        }
+        if let ProllyNode::Internal(internal) = node {
             pending.extend(internal.children.into_iter().map(|child| child.node_ref));
         }
         blocks.push(block);
     }
-    let snapshot = MapSnapshot { root, blocks };
-    validate_snapshot(profile, &snapshot).map_err(ProllyServiceError::Domain)?;
-    Ok(snapshot)
+    Ok((blocks, decodes))
 }
 
 pub fn publish_prolly_edit(

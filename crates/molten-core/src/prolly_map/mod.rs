@@ -10,6 +10,7 @@
     reason = "validated profile limits bound entries, nodes, graph facts, diffs, and every collection-producing loop"
 )]
 
+mod cache;
 mod differential;
 mod failures;
 mod model;
@@ -19,6 +20,7 @@ mod proof;
 mod retention;
 mod tree;
 
+pub use cache::*;
 pub use differential::*;
 pub use failures::*;
 pub use model::*;

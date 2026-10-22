@@ -25,7 +25,9 @@ let BenchmarkShape = {
   observed_block_bytes | Number,
   observed_reused_blocks | Number,
   observed_diff_records | Number,
-  observed_skipped_equal_nodes | Number,
+  observed_shared_node_count | Number,
+  observed_diff_subtrees_not_traversed | Number,
+  observed_diff_comparison_nodes_decoded | Number,
   observed_gc_candidates | Number,
   observed_restart_verified | Bool,
   credible_consumers | Number,
@@ -50,7 +52,9 @@ let invariants = fun benchmark =>
   && benchmark.observed_block_bytes <= benchmark.retained_bytes_maximum
   && benchmark.observed_reused_blocks >= benchmark.sharing_min_reused_blocks
   && benchmark.observed_diff_records <= benchmark.diff_max_records
-  && benchmark.observed_skipped_equal_nodes > 0
+  && benchmark.observed_shared_node_count > 0
+  && benchmark.observed_diff_subtrees_not_traversed > 0
+  && benchmark.observed_diff_comparison_nodes_decoded == 0
   && benchmark.observed_gc_candidates <= benchmark.gc_candidates_maximum
   && benchmark.observed_restart_verified == true
   && benchmark.credible_consumers == LocalConsumerCount

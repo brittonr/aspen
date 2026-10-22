@@ -7,7 +7,6 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use super::super::*;
-use super::encoding::decode_block;
 
 type OptionalKeyRange = Option<(Vec<u8>, Vec<u8>)>;
 type WalkResult = Result<OptionalKeyRange, Vec<ProllyIssue>>;
@@ -15,6 +14,21 @@ type WalkResult = Result<OptionalKeyRange, Vec<ProllyIssue>>;
 // r[impl molten.prolly_map.canonical_nodes]
 // r[impl molten.prolly_map.history_independence]
 pub fn validate_snapshot(profile: &ProllyProfile, snapshot: &MapSnapshot) -> Result<MapReadResult, Vec<ProllyIssue>> {
+    let mut cache = DecodedNodeCache::operation_scoped(snapshot.blocks.len());
+    validate_snapshot_cached(profile, snapshot, &mut cache)
+}
+
+/// Validate a snapshot, decoding through a decoded-node cache.
+///
+/// The structural walk covers every node of the snapshot exactly as the
+/// uncached validation does. The cache only removes the decode of a block whose
+/// identity and bytes match an already verified decode.
+// r[impl molten.prolly.cache]
+pub fn validate_snapshot_cached(
+    profile: &ProllyProfile,
+    snapshot: &MapSnapshot,
+    cache: &mut DecodedNodeCache,
+) -> Result<MapReadResult, Vec<ProllyIssue>> {
     let mut issues = validate_profile(profile);
     validate_root(profile, &snapshot.root, &mut issues);
     let blocks = block_index(&snapshot.blocks, &mut issues);
@@ -24,7 +38,12 @@ pub fn validate_snapshot(profile: &ProllyProfile, snapshot: &MapSnapshot) -> Res
         return Err(issues);
     }
     let mut state = WalkState::default();
-    walk_node(profile, &blocks, &snapshot.root.top_node_ref, snapshot.root.height, &mut state)?;
+    let mut walk = Walk {
+        profile,
+        blocks: &blocks,
+        cache,
+    };
+    walk.node(&snapshot.root.top_node_ref, snapshot.root.height, &mut state)?;
     let unexpected = blocks
         .keys()
         .filter(|node_ref| !state.closure.contains(node_ref.as_str()))
@@ -48,6 +67,8 @@ pub fn validate_snapshot(profile: &ProllyProfile, snapshot: &MapSnapshot) -> Res
         closure: state.closure.into_iter().map(NodeRef::new).collect(),
         graph_facts: state.graph_facts,
         visited_nodes,
+        leaf_spans: state.leaf_spans,
+        work: state.work,
     })
 }
 
@@ -83,32 +104,87 @@ struct WalkState {
     closure: BTreeSet<String>,
     active: BTreeSet<String>,
     graph_facts: Vec<GraphFact>,
+    leaf_spans: Vec<LeafSpan>,
+    work: ProllyWorkCounters,
 }
 
-fn walk_node(
-    profile: &ProllyProfile,
-    blocks: &BTreeMap<String, &EncodedBlock>,
-    node_ref: &NodeRef,
-    height: u16,
-    state: &mut WalkState,
-) -> WalkResult {
-    if state.closure.contains(node_ref.as_str()) {
-        return existing_range(profile, blocks, node_ref);
+struct Walk<'a, 'c> {
+    profile: &'a ProllyProfile,
+    blocks: &'a BTreeMap<String, &'a EncodedBlock>,
+    cache: &'c mut DecodedNodeCache,
+}
+
+impl Walk<'_, '_> {
+    fn decode(&mut self, node_ref: &NodeRef, state: &mut WalkState) -> Result<ProllyNode, Vec<ProllyIssue>> {
+        let block = self
+            .blocks
+            .get(node_ref.as_str())
+            .ok_or_else(|| vec![ProllyIssue::MissingBlock(node_ref.as_str().to_string())])?;
+        state.work.nodes_read = state.work.nodes_read.saturating_add(1);
+        let (node, is_decoded) = decode_block_cached(self.profile, block, self.cache)?;
+        if is_decoded {
+            state.work.nodes_decoded = state.work.nodes_decoded.saturating_add(1);
+        }
+        Ok(node)
     }
-    if !state.active.insert(node_ref.as_str().to_string()) {
-        return Err(vec![ProllyIssue::TreeCycle(node_ref.as_str().to_string())]);
+
+    fn node(&mut self, node_ref: &NodeRef, height: u16, state: &mut WalkState) -> WalkResult {
+        if state.closure.contains(node_ref.as_str()) {
+            return self.existing_range(node_ref, state);
+        }
+        if !state.active.insert(node_ref.as_str().to_string()) {
+            return Err(vec![ProllyIssue::TreeCycle(node_ref.as_str().to_string())]);
+        }
+        let node = self.decode(node_ref, state)?;
+        let result = match node {
+            ProllyNode::Leaf(leaf) => walk_leaf(leaf, height, state)?,
+            ProllyNode::Internal(internal) => self.internal(internal, height, state)?,
+        };
+        state.active.remove(node_ref.as_str());
+        state.closure.insert(node_ref.as_str().to_string());
+        Ok(result)
     }
-    let block = blocks
-        .get(node_ref.as_str())
-        .ok_or_else(|| vec![ProllyIssue::MissingBlock(node_ref.as_str().to_string())])?;
-    let node = decode_block(profile, block)?;
-    let result = match node {
-        ProllyNode::Leaf(leaf) => walk_leaf(leaf, height, state)?,
-        ProllyNode::Internal(internal) => walk_internal(profile, blocks, internal, height, state)?,
-    };
-    state.active.remove(node_ref.as_str());
-    state.closure.insert(node_ref.as_str().to_string());
-    Ok(result)
+
+    fn internal(&mut self, internal: InternalNode, height: u16, state: &mut WalkState) -> WalkResult {
+        let child_height = height.checked_sub(1).ok_or_else(|| vec![ProllyIssue::TreeHeightExceeded])?;
+        let node_ref = internal.node_ref.clone();
+        let children = internal.children.iter().map(|child| child.node_ref.clone()).collect::<Vec<_>>();
+        let mut actual_min = None;
+        let mut actual_max = None;
+        for child in internal.children {
+            let range = self
+                .node(&child.node_ref, child_height, state)?
+                .ok_or_else(|| vec![ProllyIssue::ChildRangeInvalid])?;
+            if range.0 != child.min_key || range.1 != child.max_key {
+                return Err(vec![ProllyIssue::ChildRangeInvalid]);
+            }
+            if actual_min.is_none() {
+                actual_min = Some(range.0);
+            }
+            actual_max = Some(range.1);
+        }
+        state.graph_facts.push(GraphFact {
+            node_ref,
+            children,
+            complete: true,
+        });
+        Ok(actual_min.zip(actual_max))
+    }
+
+    fn existing_range(&mut self, node_ref: &NodeRef, state: &mut WalkState) -> WalkResult {
+        match self.decode(node_ref, state)? {
+            ProllyNode::Leaf(leaf) => Ok(leaf
+                .entries
+                .first()
+                .zip(leaf.entries.last())
+                .map(|(first, last)| (first.key.clone(), last.key.clone()))),
+            ProllyNode::Internal(internal) => Ok(internal
+                .children
+                .first()
+                .zip(internal.children.last())
+                .map(|(first, last)| (first.min_key.clone(), last.max_key.clone()))),
+        }
+    }
 }
 
 fn walk_leaf(leaf: LeafNode, height: u16, state: &mut WalkState) -> WalkResult {
@@ -120,6 +196,11 @@ fn walk_leaf(leaf: LeafNode, height: u16, state: &mut WalkState) -> WalkResult {
         .first()
         .zip(leaf.entries.last())
         .map(|(first, last)| (first.key.clone(), last.key.clone()));
+    state.leaf_spans.push(LeafSpan {
+        node_ref: leaf.node_ref.clone(),
+        start: state.entries.len(),
+        len: leaf.entries.len(),
+    });
     state.graph_facts.push(GraphFact {
         node_ref: leaf.node_ref,
         children: Vec::new(),
@@ -127,55 +208,6 @@ fn walk_leaf(leaf: LeafNode, height: u16, state: &mut WalkState) -> WalkResult {
     });
     state.entries.extend(leaf.entries);
     Ok(range)
-}
-
-fn walk_internal(
-    profile: &ProllyProfile,
-    blocks: &BTreeMap<String, &EncodedBlock>,
-    internal: InternalNode,
-    height: u16,
-    state: &mut WalkState,
-) -> WalkResult {
-    let child_height = height.checked_sub(1).ok_or_else(|| vec![ProllyIssue::TreeHeightExceeded])?;
-    let node_ref = internal.node_ref.clone();
-    let children = internal.children.iter().map(|child| child.node_ref.clone()).collect::<Vec<_>>();
-    let mut actual_min = None;
-    let mut actual_max = None;
-    for child in internal.children {
-        let range = walk_node(profile, blocks, &child.node_ref, child_height, state)?
-            .ok_or_else(|| vec![ProllyIssue::ChildRangeInvalid])?;
-        if range.0 != child.min_key || range.1 != child.max_key {
-            return Err(vec![ProllyIssue::ChildRangeInvalid]);
-        }
-        if actual_min.is_none() {
-            actual_min = Some(range.0);
-        }
-        actual_max = Some(range.1);
-    }
-    state.graph_facts.push(GraphFact {
-        node_ref,
-        children,
-        complete: true,
-    });
-    Ok(actual_min.zip(actual_max))
-}
-
-fn existing_range(profile: &ProllyProfile, blocks: &BTreeMap<String, &EncodedBlock>, node_ref: &NodeRef) -> WalkResult {
-    let block = blocks
-        .get(node_ref.as_str())
-        .ok_or_else(|| vec![ProllyIssue::MissingBlock(node_ref.as_str().to_string())])?;
-    match decode_block(profile, block)? {
-        ProllyNode::Leaf(leaf) => Ok(leaf
-            .entries
-            .first()
-            .zip(leaf.entries.last())
-            .map(|(first, last)| (first.key.clone(), last.key.clone()))),
-        ProllyNode::Internal(internal) => Ok(internal
-            .children
-            .first()
-            .zip(internal.children.last())
-            .map(|(first, last)| (first.min_key.clone(), last.max_key.clone()))),
-    }
 }
 
 fn validate_root(profile: &ProllyProfile, root: &ProllyRoot, issues: &mut Vec<ProllyIssue>) {

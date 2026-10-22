@@ -100,7 +100,7 @@ fn a_flapping_donor_is_refused_at_transfer_time() {
 #[test]
 fn unbounded_inventories_and_malformed_facts_are_refused() {
     let mut unbounded = input(&[OBJECT_A], Vec::new());
-    unbounded.inventory = (0..MAX_REPAIR_INVENTORY + 1).map(|index| fact(PEER_A, ZONE_A, OBJECT_A, true)).collect();
+    unbounded.inventory = (0..MAX_REPAIR_INVENTORY + 1).map(|_| fact(PEER_A, ZONE_A, OBJECT_A, true)).collect();
     assert!(plan_closure_repair(&unbounded).is_err());
 
     let malformed = input(&[OBJECT_A], vec![ReplicaObjectFact {

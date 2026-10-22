@@ -11,6 +11,7 @@ mod records;
 mod service;
 mod store;
 mod storeretention;
+mod storesession;
 
 pub use ports::*;
 pub use records::*;

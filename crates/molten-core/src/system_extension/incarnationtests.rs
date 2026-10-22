@@ -356,7 +356,7 @@ fn durable_work_is_readmitted_under_a_fresh_claim_after_restart() {
 
     let admission = admit_work_delivery(&instance_b, &durable, Some(&claim)).expect("durable readmission");
     assert_eq!(admission.incarnation, instance_b.incarnation);
-    assert_eq!(admission.claim_ref.as_deref(), Some(&HASH_D[..]));
+    assert_eq!(admission.claim_ref.as_deref(), Some(HASH_D));
 }
 
 #[test]

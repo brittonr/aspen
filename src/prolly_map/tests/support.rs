@@ -97,6 +97,16 @@ impl ProllyBlockStorePort for MemoryPort {
         Ok(self.blocks.get(node_ref.as_str()).cloned())
     }
 
+    fn open_read_session(&self, bounds: ReadSessionBounds) -> ProllyPortResult<Box<dyn ProllyReadSession + '_>> {
+        Ok(Box::new(MemorySession {
+            blocks: &self.blocks,
+            bounds,
+            blocks_read: 0,
+            bytes_copied: 0,
+            is_closed: false,
+        }))
+    }
+
     fn stage_blocks(&mut self, blocks: &[EncodedBlock]) -> ProllyPortResult<()> {
         if self.unknown_mode == UnknownMode::StagingCommitUnknown && !self.staging_attempted {
             self.staging_attempted = true;
@@ -196,5 +206,42 @@ impl ProllyRetentionPort for MemoryPort {
         Ok(GcDeletionOutcome::Deleted {
             deleted: candidates.to_vec(),
         })
+    }
+}
+
+pub(super) struct MemorySession<'a> {
+    blocks: &'a BTreeMap<String, Vec<u8>>,
+    bounds: ReadSessionBounds,
+    blocks_read: u32,
+    bytes_copied: u64,
+    is_closed: bool,
+}
+
+impl ProllyReadSession for MemorySession<'_> {
+    fn read_block(&mut self, node_ref: &NodeRef) -> ProllyPortResult<Option<Vec<u8>>> {
+        if self.is_closed {
+            return Err(ProllyPortError::new("prolly-read-session-closed", "the read session is closed", false));
+        }
+        if self.blocks_read >= self.bounds.max_blocks {
+            return Err(ProllyPortError::new(
+                "prolly-read-session-block-bound",
+                "the read session block bound is reached",
+                false,
+            ));
+        }
+        let bytes = self.blocks.get(node_ref.as_str()).cloned();
+        self.blocks_read += 1;
+        self.bytes_copied += bytes.as_ref().map_or(0, |bytes| bytes.len() as u64);
+        Ok(bytes)
+    }
+
+    fn close(&mut self) -> ReadSessionObservation {
+        self.is_closed = true;
+        ReadSessionObservation {
+            blocks_read: self.blocks_read,
+            bytes_copied: self.bytes_copied,
+            transactions_opened: 1,
+            end: ReadSessionEnd::Closed,
+        }
     }
 }

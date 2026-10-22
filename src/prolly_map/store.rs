@@ -47,6 +47,10 @@ impl LocalProllyBlockStore {
 }
 
 impl ProllyBlockStorePort for LocalProllyBlockStore {
+    fn open_read_session(&self, bounds: ReadSessionBounds) -> ProllyPortResult<Box<dyn ProllyReadSession + '_>> {
+        Ok(Box::new(super::storesession::LocalReadSession::open(&self.database, bounds)?))
+    }
+
     fn read_block(&self, node_ref: &NodeRef) -> ProllyPortResult<Option<Vec<u8>>> {
         let read = self
             .database

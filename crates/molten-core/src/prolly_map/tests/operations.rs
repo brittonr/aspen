@@ -21,7 +21,7 @@ fn edits_share_blocks_and_diff_remains_complete_and_policy_neutral() {
     assert_eq!(diff.records[0].key, updated.key);
     assert!(diff.complete);
     assert!(!diff.selects_merge_winner);
-    assert!(diff.skipped_equal_nodes > 0);
+    assert!(diff.shared_node_count > 0);
 }
 
 #[test]
