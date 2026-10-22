@@ -133,6 +133,7 @@ impl ArtifactKind {
 pub enum RequestedExecutionProfile {
     LegacyCoreV1,
     ComponentV1,
+    TimeSlicedComponentV1,
 }
 
 impl RequestedExecutionProfile {
@@ -140,14 +141,20 @@ impl RequestedExecutionProfile {
         match self {
             Self::LegacyCoreV1 => "molten.wasm.abi.v1",
             Self::ComponentV1 => "molten.wasm.component.v1",
+            Self::TimeSlicedComponentV1 => "molten.wasm.component.time-sliced.v1",
         }
     }
 
     pub const fn required_kind(self) -> ArtifactKind {
         match self {
             Self::LegacyCoreV1 => ArtifactKind::CoreModule,
-            Self::ComponentV1 => ArtifactKind::Component,
+            Self::ComponentV1 | Self::TimeSlicedComponentV1 => ArtifactKind::Component,
         }
+    }
+
+    /// Whether the request asks for the time-sliced execution profile.
+    pub const fn requests_time_slicing(self) -> bool {
+        matches!(self, Self::TimeSlicedComponentV1)
     }
 }
 
@@ -265,6 +272,7 @@ pub struct RuntimeProfile {
     pub features: FeatureCohort,
     pub determinism: DeterminismProfile,
     pub resources: ResourceLimits,
+    pub slicing: Option<SlicingProfile>,
     pub allowed_imports: Vec<String>,
     pub allowed_wasi_interfaces: Vec<String>,
     pub non_claims: Vec<String>,

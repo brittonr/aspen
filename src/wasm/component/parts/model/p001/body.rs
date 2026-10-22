@@ -17,3 +17,12 @@ pub(crate) fn sorted_unique(values: &[String]) -> Vec<String> {
     values.dedup();
     values
 }
+
+/// The time-sliced execution binding: the scheduling quantum and the total
+/// execution budget, bound independently.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SlicingProfile {
+    pub quantum_fuel: u64,
+    pub total_budget_fuel: u64,
+}

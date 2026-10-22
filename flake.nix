@@ -1258,6 +1258,10 @@
                   generated=docs/wasm-component-runtime/generated/profile.json
                   nickel export "$profile" --format json > "$TMPDIR/profile.json"
                   diff -u "$generated" "$TMPDIR/profile.json"
+                  time_sliced_profile=docs/wasm-component-runtime/time-sliced-profile.ncl
+                  time_sliced_generated=docs/wasm-component-runtime/generated/time-sliced-profile.json
+                  nickel export "$time_sliced_profile" --format json > "$TMPDIR/time-sliced-profile.json"
+                  diff -u "$time_sliced_generated" "$TMPDIR/time-sliced-profile.json"
                   expected_wit_hash=83be349bb27975ada30dbe60817c5404df7862babdf02ae229b399886e76d5e8
                   printf '%s  %s\n' "$expected_wit_hash" wit/molten-component-runtime/runtime.wit \
                     | b3sum --check

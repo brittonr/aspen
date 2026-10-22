@@ -73,12 +73,41 @@ Artifact headers are classified before execution:
 
 - `molten.wasm.abi.v1` requires a core module;
 - `molten.wasm.component.v1` requires a component;
+- `molten.wasm.component.time-sliced.v1` requires a component admitted under the
+  time-sliced profile;
 - mismatches deny without fallback or silent reinterpretation.
 
 Both actor and system-extension consumer classes pass through the same
 materialization, admission, runtime, and receipt rails. This establishes
 profile-level readiness only; it does not claim that every existing actor or
 system extension has migrated.
+
+## Time-sliced execution profile
+
+The time-sliced profile is an admitted profile identity, not a flag on the
+synchronous one. It binds a scheduling quantum and an independent total
+execution budget, and admission denies it when either binding is missing or
+malformed. The existing component profile is unchanged and keeps its identity,
+and a time-sliced request under the synchronous profile is denied with a typed
+profile mismatch, as is a synchronous request under the time-sliced profile.
+
+The pure contract around the binding lives in `src/wasm/component/slicing.rs`:
+the slice ledger records the quantum boundaries and refuses to exceed the total
+budget, the pending turn publishes nothing before the callback completes and
+publishes exactly once, and the yielded continuation is re-enqueued as an
+ordinary runnable with the admitted scheduler. A replay compares the recomputed
+slicing with the recorded one and names the first boundary that differs.
+
+The guest-side yielding is not implemented yet. The component's `invoke` export
+is a synchronous WIT export, and the pinned cohort's fuel-based yielding needs
+the async entrypoints that an async component ABI would introduce. Until that
+lands, the admitted profile, the admission boundary, the slice ledger, the
+pending turn, the continuation, and the replay comparison are the delivered
+contract, and no component has yet yielded at a quantum boundary.
+
+A quantum is a work-accounting bound, not elapsed CPU time or a latency
+guarantee. Yielded continuations do not prove fairness of the whole system, and
+time slicing adds no memory or authority isolation.
 
 Focused positive and negative tests live under `src/wasm/component/tests/`.
 Nickel rejection fixtures cover stale or incomplete cohorts, ambient WASI, and

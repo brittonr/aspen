@@ -56,6 +56,7 @@
       "max_wit_bytes": 65536
     },
     "runtime_strategy": "portable-component",
+    "slicing": null,
     "toolchain": {
       "wasi_package": "0.2.6",
       "wasm_tools": "1.240.0",

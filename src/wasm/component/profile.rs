@@ -2,6 +2,7 @@ pub const COMPONENT_PROFILE_SCHEMA: &str = "molten.wasm-component-profile.v1";
 pub const COMPONENT_PROFILE_SCHEMA_VERSION: u32 = 1;
 pub const COMPONENT_PROFILE_SOURCE_LANGUAGE: &str = "nickel";
 pub const COMPONENT_PROFILE_ID: &str = "molten.wasm.component.v1";
+pub const TIME_SLICED_PROFILE_ID: &str = "molten.wasm.component.time-sliced.v1";
 pub const COMPONENT_RUNTIME_STRATEGY: &str = "portable-component";
 pub const COMPONENT_WASMTIME_VERSION: &str = "45.0.0";
 pub const COMPONENT_WASM_TOOLS_VERSION: &str = "1.240.0";
@@ -40,6 +41,10 @@ pub const COMPONENT_NON_CLAIMS: &[&str] = &[
 
 const PROFILE_EXPORT_JSON: &str =
     include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/docs/wasm-component-runtime/generated/profile.json"));
+const TIME_SLICED_PROFILE_EXPORT_JSON: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/docs/wasm-component-runtime/generated/time-sliced-profile.json"
+));
 
 pub fn supported() -> super::model::Result<super::model::RuntimeProfile> {
     let exported: super::model::ProfileExport = serde_json::from_str(PROFILE_EXPORT_JSON).map_err(|error| {
@@ -48,6 +53,20 @@ pub fn supported() -> super::model::Result<super::model::RuntimeProfile> {
             format!("component profile export is invalid: {error}"),
         )
     })?;
+    validate_export(&exported)?;
+    Ok(exported.profile)
+}
+
+/// The admitted time-sliced component profile: the base component profile
+/// with an independent scheduling quantum and total execution budget.
+pub fn time_sliced() -> super::model::Result<super::model::RuntimeProfile> {
+    let exported: super::model::ProfileExport =
+        serde_json::from_str(TIME_SLICED_PROFILE_EXPORT_JSON).map_err(|error| {
+            super::model::Denial::classified(
+                super::model::DenialClass::ProfileDenial,
+                format!("time-sliced component profile export is invalid: {error}"),
+            )
+        })?;
     validate_export(&exported)?;
     Ok(exported.profile)
 }
@@ -82,7 +101,12 @@ pub fn r#ref(profile: &super::model::RuntimeProfile) -> String {
 
 pub fn validate_runtime(profile: &super::model::RuntimeProfile) -> super::model::Result<()> {
     let mut blockers = Vec::new();
-    require_equal(&mut blockers, "profile id", &profile.profile_id, COMPONENT_PROFILE_ID);
+    let is_base_profile = profile.profile_id == COMPONENT_PROFILE_ID;
+    let is_time_sliced_profile = profile.profile_id == TIME_SLICED_PROFILE_ID;
+    if !is_base_profile && !is_time_sliced_profile {
+        blockers.push(format!("component profile id {} is not admitted", profile.profile_id));
+    }
+    validate_slicing(profile, is_time_sliced_profile, &mut blockers);
     if profile.evidence_scope != super::model::EvidenceScope::Production {
         blockers.push("component profile evidence scope must be production".to_string());
     }
@@ -103,6 +127,40 @@ pub fn validate_runtime(profile: &super::model::RuntimeProfile) -> super::model:
         Ok(())
     } else {
         Err(super::model::Denial::from_blockers(blockers))
+    }
+}
+
+// r[impl molten.wasm_component.execution_quantum]
+fn validate_slicing(
+    profile: &super::model::RuntimeProfile,
+    is_time_sliced: bool,
+    blockers: &mut impl crate::bounded::VecSink<String>,
+) {
+    match (is_time_sliced, profile.slicing) {
+        (true, Some(slicing)) => {
+            if slicing.quantum_fuel == 0 {
+                blockers.push_item("the time-sliced profile must bind a positive scheduling quantum".to_string());
+            }
+            if slicing.total_budget_fuel == 0 {
+                blockers.push_item("the time-sliced profile must bind a positive total execution budget".to_string());
+            }
+            if slicing.quantum_fuel > 0
+                && slicing.total_budget_fuel > 0
+                && slicing.total_budget_fuel < slicing.quantum_fuel
+            {
+                blockers
+                    .push_item("the time-sliced total execution budget must cover at least one quantum".to_string());
+            }
+        }
+        (true, None) => {
+            blockers.push_item(
+                "the time-sliced profile must bind a scheduling quantum and a total execution budget".to_string(),
+            );
+        }
+        (false, Some(_)) => {
+            blockers.push_item("the synchronous component profile must not bind a slicing profile".to_string());
+        }
+        (false, None) => {}
     }
 }
 

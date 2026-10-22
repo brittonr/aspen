@@ -6,6 +6,7 @@ let SchemaId = "molten.wasm-component-profile.v1" in
 let SchemaVersion = 1 in
 let SourceLanguage = "nickel" in
 let ProfileId = "molten.wasm.component.v1" in
+let TimeSlicedProfileId = "molten.wasm.component.time-sliced.v1" in
 let EvidenceScope = "production" in
 let RuntimeStrategy = "portable-component" in
 let WasmtimeVersion = "45.0.0" in
@@ -125,9 +126,20 @@ let valid_resources = fun value =>
   && value.max_imports == MaxImports
   && value.max_exports == MaxExports in
 
+let valid_slicing = fun value =>
+  std.is_record value
+  && positive_integer value.quantum_fuel
+  && positive_integer value.total_budget_fuel
+  && value.total_budget_fuel >= value.quantum_fuel in
+
+let slicing_of = fun value => std.record.get_or "slicing" null value in
+
 let valid_profile = fun value =>
   std.is_record value
-  && exact ProfileId value.profile_id
+  && (exact ProfileId value.profile_id || exact TimeSlicedProfileId value.profile_id)
+  && (if exact ProfileId value.profile_id
+      then slicing_of value == null
+      else valid_slicing (slicing_of value))
   && exact EvidenceScope value.evidence_scope
   && exact RuntimeStrategy value.runtime_strategy
   && valid_toolchain value.toolchain

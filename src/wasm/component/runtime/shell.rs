@@ -32,6 +32,7 @@ pub fn execute(request: &ExecutionRequest<'_>) -> ExecutionOutcome {
 
 fn execute_inner(request: &ExecutionRequest<'_>) -> super::super::model::Result<ExecutionOutcome> {
     super::super::profile::validate_runtime(request.profile)?;
+    super::super::slicing::admit_requested_profile(request.profile, request.requested_profile)?;
     super::super::migration::classify_for_profile(request.requested_profile, request.source.component_bytes())?;
     let materialization =
         super::super::evidence::materialization::verify(request.profile, request.evidence_scope, request.source)?;

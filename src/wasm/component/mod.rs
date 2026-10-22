@@ -5,6 +5,8 @@ mod migration;
 mod model;
 mod profile;
 mod runtime;
+#[path = "parts/slicing/p000/body.rs"]
+mod slicing;
 
 pub use admission::ArtifactFacts;
 pub use admission::COMPONENT_INVOKE_EXPORT;
@@ -73,6 +75,7 @@ pub use model::RequestedExecutionProfile;
 pub use model::ResourceLimits;
 pub use model::Result;
 pub use model::RuntimeProfile;
+pub use model::SlicingProfile;
 pub use model::ToolchainCohort;
 pub use model::WitCohort;
 pub use profile::COMPONENT_NON_CLAIMS;
@@ -80,12 +83,21 @@ pub use profile::COMPONENT_PROFILE_ID;
 pub use profile::COMPONENT_WIT_PACKAGE;
 pub use profile::COMPONENT_WIT_SOURCE_REF;
 pub use profile::COMPONENT_WIT_WORLD;
+pub use profile::TIME_SLICED_PROFILE_ID;
 pub use profile::r#ref;
 pub use profile::supported;
+pub use profile::time_sliced;
 pub use profile::validate_runtime;
 pub use runtime::ExecutionOutcome;
 pub use runtime::ExecutionRequest;
 pub use runtime::execute;
+pub use slicing::ContinuationKey;
+pub use slicing::PendingTurn;
+pub use slicing::SliceBoundary;
+pub use slicing::SliceIssue;
+pub use slicing::SliceLedger;
+pub use slicing::SliceReplayMismatch;
+pub use slicing::admit_requested_profile;
 
 #[cfg(test)]
 pub(crate) fn test_identity_bytes() -> Vec<u8> {

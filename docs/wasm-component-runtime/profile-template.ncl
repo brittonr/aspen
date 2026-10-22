@@ -51,6 +51,7 @@ let get = fun field fallback overrides => std.record.get_or field fallback overr
           host_inputs = get "host_inputs" "recorded-effects-only" args,
         },
         resources = get "resources" Contracts.resources args,
+        slicing = get "slicing" null args,
         allowed_imports = get "allowed_imports" [] args,
         allowed_wasi_interfaces = get "allowed_wasi_interfaces" [] args,
         non_claims = get "non_claims" Contracts.non_claims args,
