@@ -176,6 +176,7 @@ pub fn parse_run_readback(value: &preserves::IOValue) -> crate::error::Result<Ru
         world_ref,
         final_state_refs,
         first_divergence: record_optional_divergence(&fields[RUN_FIRST_DIVERGENCE_FIELD_INDEX])?,
+        protocol: parse_protocol_status(&fields[RUN_PROTOCOL_FIELD_INDEX])?,
         run_ref: crate::preserves_rail::canonical_hash(value)?,
     })
 }

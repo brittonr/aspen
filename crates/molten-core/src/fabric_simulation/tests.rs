@@ -357,18 +357,60 @@ fn invariant_evaluation_reports_the_first_exact_failure_boundary() {
             invariant_id: "transaction-version-monotonic".to_string(),
         },
     ];
-    let observations = vec![
-        observation(0, false, &["transaction-version-monotonic"]),
-        observation(1, true, &["transaction-version-monotonic"]),
-    ];
+    let observations = vec![observation(0, false), observation(1, true)];
 
-    let results = evaluate_invariants(&invariants, &observations);
+    let passing = [local_result(
+        "transaction-version-monotonic",
+        crate::protocol_oracle::OracleVerdict::Pass,
+    )];
+    let results = evaluate_invariants(&invariants, &observations, &passing);
 
     assert_eq!(results.len(), invariants.len());
     assert!(!results[0].passed);
     assert_eq!(results[0].first_failure_sequence, Some(1));
     assert!(results[1].passed);
     assert_eq!(results[1].first_failure_sequence, None);
+}
+
+fn local_result(rule: &str, verdict: crate::protocol_oracle::OracleVerdict) -> crate::protocol_oracle::SafetyResult {
+    crate::protocol_oracle::SafetyResult {
+        level: crate::protocol_oracle::SafetyLevel::Local,
+        service: ReferenceSystemKind::TransactionalKeyValue.as_str().to_string(),
+        rule: rule.to_string(),
+        verdict,
+    }
+}
+
+// r[verify molten.fabric_simulation.oracle_independence]
+#[test]
+fn an_extension_invariant_is_decided_by_the_oracle_never_by_a_self_report() {
+    let invariants = vec![SimulationInvariant::ExtensionSemantic {
+        service: ReferenceSystemKind::TransactionalKeyValue,
+        invariant_id: "transaction-version-monotonic".to_string(),
+    }];
+    let observations = vec![observation(0, false), observation(1, false)];
+    let witness = crate::protocol_oracle::FailureWitness {
+        run_sequence: 1,
+        participant: "node-a".to_string(),
+        scheduler_choice_ref: content_ref('e'),
+        projection_ref: content_ref('f'),
+        other_projection_ref: None,
+    };
+    let failed = [local_result(
+        "transaction-version-monotonic",
+        crate::protocol_oracle::OracleVerdict::Fail(witness),
+    )];
+    let results = evaluate_invariants(&invariants, &observations, &failed);
+    assert!(!results[0].passed);
+    assert_eq!(results[0].first_failure_sequence, Some(1));
+
+    let unsupported = evaluate_invariants(&invariants, &observations, &[]);
+    assert!(!unsupported[0].passed, "a rule the oracle does not evaluate never passes");
+    let incomplete = [local_result(
+        "transaction-version-monotonic",
+        crate::protocol_oracle::OracleVerdict::Incomplete,
+    )];
+    assert!(!evaluate_invariants(&invariants, &observations, &incomplete)[0].passed);
 }
 
 #[test]
@@ -783,7 +825,6 @@ fn accept_completion_ignoring_token(
         decision: ReferenceTransitionDecision::Applied,
         required_ports: REQUIRED_SIMULATION_PORT_CLASSES.to_vec(),
         semantic_invariants: vec!["single-authoritative-completion", "completion-requires-current-lease"],
-        state_material: String::new(),
     }
 }
 
@@ -1170,7 +1211,7 @@ fn fault_boundary(kind: SimulationFaultKind) -> FabricPortClass {
     }
 }
 
-fn observation(sequence: u64, ambient_effect: bool, semantic_invariants: &[&str]) -> SimulationObservation {
+fn observation(sequence: u64, ambient_effect: bool) -> SimulationObservation {
     SimulationObservation {
         sequence,
         node_id: "node-a".to_string(),
@@ -1184,7 +1225,7 @@ fn observation(sequence: u64, ambient_effect: bool, semantic_invariants: &[&str]
         resource_bound_bypass: false,
         port_state_machine_violation: false,
         terminal_cleanup_complete: true,
-        semantic_invariants_passed: semantic_invariants.iter().map(|value| (*value).to_string()).collect(),
+        projection_ref: content_ref('d'),
     }
 }
 

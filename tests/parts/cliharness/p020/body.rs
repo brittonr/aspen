@@ -1,5 +1,6 @@
 // r[verify molten.fabric_simulation.operator_workflow]
 // r[verify molten.fabric_simulation.final_validation]
+// r[verify molten.fabric_simulation.protocol_oracle_evidence]
 #[test]
 fn fabric_simulation_cli_runs_replays_shrinks_inspects_and_exports() -> CliResult<()> {
     let dir = temp_dir("fabric-simulation-cli")?;
@@ -30,6 +31,8 @@ fn fabric_simulation_cli_runs_replays_shrinks_inspects_and_exports() -> CliResul
     assert_success(&inspect, "fabric simulation inspect");
     assert!(stdout(&inspect).contains("profile=deterministic-whole-system"));
     assert!(stdout(&inspect).contains("decision=pass"));
+    assert!(stdout(&inspect).contains("fabric-simulation protocol verdict="));
+    assert!(stdout(&inspect).contains("safety-fail=0"));
 
     let replay = molten_cmd()
         .args(["fabric-simulation", "replay"])

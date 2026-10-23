@@ -3,3 +3,4 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_simulation/parts/canon
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_simulation/parts/canonical/p002/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_simulation/parts/canonical/p003/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_simulation/parts/canonical/p004/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_simulation/parts/canonical/p005/body.rs"));

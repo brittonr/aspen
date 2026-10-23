@@ -6,7 +6,8 @@ pub const FABRIC_SIMULATION_DIFFERENTIAL_SCHEMA: &str = "molten.fabric-simulatio
 pub const FABRIC_SIMULATION_SHRINK_SCHEMA: &str = "molten.fabric-simulation.shrink.v1";
 pub const FABRIC_SIMULATION_CLAIM_SCHEMA: &str = "molten.fabric-simulation.claim-profile.v1";
 pub const MAX_CANONICAL_SIMULATION_ITEMS: usize = 4_096;
-const RUN_READBACK_FIELD_COUNT: usize = 16;
+const RUN_READBACK_FIELD_COUNT: usize = 17;
+const RUN_PROTOCOL_FIELD_INDEX: usize = 15;
 const RUN_DECISION_FIELD_INDEX: usize = 1;
 const RUN_PROFILE_FIELD_INDEX: usize = 2;
 const RUN_CHOICE_COUNT_FIELD_INDEX: usize = 3;
@@ -104,6 +105,7 @@ pub struct RunReadback {
     pub world_ref: String,
     pub final_state_refs: Vec<String>,
     pub first_divergence: Option<String>,
+    pub protocol: ProtocolStatus,
     pub run_ref: String,
 }
 
@@ -132,6 +134,7 @@ pub fn observation(
         &observation.state_ref,
         &observation.history_ref,
         &observation.port_event_ref,
+        &observation.projection_ref,
     ] {
         crate::preserves_rail::validate_content_ref(reference)?;
     }
@@ -158,10 +161,7 @@ pub fn observation(
             "terminal-cleanup-complete",
             crate::preserves_rail::bool_value(observation.terminal_cleanup_complete),
         ),
-        field(
-            "semantic-invariants-passed",
-            strings_value(observation.semantic_invariants_passed.iter().map(String::as_str)),
-        ),
+        field("projection-ref", crate::preserves_rail::string(&observation.projection_ref)),
         checks(&[
             "redacted-canonical-observation",
             "generation-explicit",
@@ -224,13 +224,15 @@ pub fn port_event(
 // r[impl molten.fabric_simulation.scheduler]
 // r[impl molten.fabric_simulation.invariants]
 // r[impl molten.fabric_simulation.evidence]
-pub fn run(
-    world_ref: &str,
-    profile: SimulationClaimProfile,
-    summary: SimulationRunSummary,
-    observation_refs: Vec<String>,
-    port_event_refs: Vec<String>,
-) -> crate::error::Result<Run> {
+pub fn run(input: RunInput<'_>) -> crate::error::Result<Run> {
+    let RunInput {
+        world_ref,
+        profile,
+        summary,
+        observation_refs,
+        port_event_refs,
+        protocol,
+    } = input;
     crate::preserves_rail::validate_content_ref(world_ref)?;
     validate_refs("observation", &observation_refs)?;
     validate_refs("port-event", &port_event_refs)?;
@@ -258,6 +260,7 @@ pub fn run(
         field("invariants", crate::preserves_rail::sequence(invariant_values)),
         field("observation-refs", strings_value(observation_refs.iter().map(String::as_str))),
         field("port-event-refs", strings_value(port_event_refs.iter().map(String::as_str))),
+        field("protocol", protocol_status_value(protocol)),
         checks(&[
             "world-bound",
             "single-choice-stream",

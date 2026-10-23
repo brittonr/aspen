@@ -38,6 +38,7 @@ pub mod planning;
 pub mod policy;
 pub mod preserves_profile;
 pub mod prolly_map;
+pub mod protocol_oracle;
 pub mod release_dependency;
 pub mod stack;
 pub mod system_extension;

@@ -43,6 +43,26 @@ fn read_report(path: &std::path::Path) -> molten::error::Result<preserves::IOVal
     molten::preserves_rail::parse_text(&source)
 }
 
+/// Print the bounded protocol oracle status of a run report.
+fn print_protocol_status(protocol: &molten::fabric_simulation::ProtocolStatus) {
+    println!(
+        "fabric-simulation protocol verdict={} evidence={} projections={} gaps={} safety-pass={} safety-fail={} safety-incomplete={} safety-not-evaluated={} liveness-pass={} liveness-fail={} liveness-open={} novelty={} first-failure={}",
+        protocol.verdict,
+        protocol.evidence_ref,
+        protocol.projections,
+        protocol.gaps,
+        protocol.safety_pass,
+        protocol.safety_fail,
+        protocol.safety_incomplete,
+        protocol.safety_not_evaluated,
+        protocol.liveness_pass,
+        protocol.liveness_fail,
+        protocol.liveness_open,
+        protocol.novelty,
+        protocol.first_failure.as_deref().unwrap_or("none"),
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

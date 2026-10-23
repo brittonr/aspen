@@ -322,7 +322,8 @@ pub struct SimulationObservation {
     pub resource_bound_bypass: bool,
     pub port_state_machine_violation: bool,
     pub terminal_cleanup_complete: bool,
-    pub semantic_invariants_passed: Vec<String>,
+    /// The canonical protocol projection of this step's admitted state.
+    pub projection_ref: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

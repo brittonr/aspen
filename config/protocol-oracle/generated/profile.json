@@ -1,0 +1,101 @@
+{
+  "bounds": {
+    "max_counters": 16,
+    "max_participants": 16,
+    "max_records": 4096,
+    "max_state_bytes": 65536,
+    "max_total_bytes": 16777216
+  },
+  "completeness": "lossless",
+  "counters": [
+    {
+      "name": "transitions",
+      "resets_on_generation": false
+    },
+    {
+      "name": "port-events",
+      "resets_on_generation": false
+    },
+    {
+      "name": "storage-operations",
+      "resets_on_generation": false
+    },
+    {
+      "name": "copied-bytes",
+      "resets_on_generation": false
+    }
+  ],
+  "liveness": {
+    "disruptive_faults_block": true,
+    "requires_durability": true,
+    "requires_membership": true,
+    "requires_readiness": true,
+    "virtual_progress_horizon": 64
+  },
+  "non_claims": [
+    "simulation results do not prove KVM, live, production, or release behavior",
+    "oracle results hold only for the recorded world, scheduler, workload, faults, and projections",
+    "work counters are deterministic algorithmic observations, not hardware performance",
+    "an independent oracle can share a defect with the implementation it checks"
+  ],
+  "novelty_fields": [
+    "service",
+    "transition-class",
+    "logical-position",
+    "state"
+  ],
+  "oracle": {
+    "oracle_id": "molten.reference-protocol-oracle",
+    "version": 1
+  },
+  "oracle_ref": "blake3:14bac5bfb5dfd690086f25ff24e9b1865cd22cec314ccf08835a807151a5dbb4",
+  "participants": [
+    {
+      "is_required": true,
+      "participant": "node-transactional-key-value",
+      "service": "transactional-key-value"
+    },
+    {
+      "is_required": true,
+      "participant": "node-replicated-log",
+      "service": "replicated-log"
+    },
+    {
+      "is_required": true,
+      "participant": "node-distributed-scheduler",
+      "service": "distributed-scheduler"
+    }
+  ],
+  "profile_id": "reference-protocol-oracle",
+  "projection_schema": "molten.protocol-projection.v1",
+  "schema": "molten.protocol-oracle-profile.v1",
+  "services": [
+    {
+      "logical_position": "version",
+      "physical_layout": "semantic-only",
+      "safety": [
+        "local",
+        "durability"
+      ],
+      "service": "transactional-key-value"
+    },
+    {
+      "logical_position": "next-offset",
+      "physical_layout": "semantic-only",
+      "safety": [
+        "local",
+        "durability"
+      ],
+      "service": "replicated-log"
+    },
+    {
+      "logical_position": "transition-count",
+      "physical_layout": "semantic-only",
+      "safety": [
+        "local",
+        "durability"
+      ],
+      "service": "distributed-scheduler"
+    }
+  ]
+}

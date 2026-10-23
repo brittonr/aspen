@@ -1,0 +1,127 @@
+{
+  "completeness": [
+    "complete",
+    "partial"
+  ],
+  "durability_facts": [
+    "volatile",
+    "durable",
+    "recovered"
+  ],
+  "encoding": "preserves-canonical-packed",
+  "fields": [
+    {
+      "is_evidential": true,
+      "kind": "string",
+      "name": "schema"
+    },
+    {
+      "is_evidential": true,
+      "kind": "string",
+      "name": "protocol"
+    },
+    {
+      "is_evidential": true,
+      "kind": "symbol",
+      "name": "service"
+    },
+    {
+      "is_evidential": true,
+      "kind": "string",
+      "name": "participant"
+    },
+    {
+      "is_evidential": true,
+      "kind": "unsigned",
+      "name": "generation"
+    },
+    {
+      "is_evidential": true,
+      "kind": "unsigned",
+      "name": "source-sequence"
+    },
+    {
+      "is_evidential": true,
+      "kind": "unsigned",
+      "name": "run-sequence"
+    },
+    {
+      "is_evidential": true,
+      "kind": "content-ref",
+      "name": "scheduler-choice-ref"
+    },
+    {
+      "is_evidential": true,
+      "kind": "symbol",
+      "name": "transition-class"
+    },
+    {
+      "is_evidential": true,
+      "kind": "unsigned",
+      "name": "logical-position"
+    },
+    {
+      "is_evidential": true,
+      "kind": "extension-value",
+      "name": "state"
+    },
+    {
+      "is_evidential": true,
+      "kind": "content-ref",
+      "name": "state-ref"
+    },
+    {
+      "is_evidential": true,
+      "kind": "optional-content-ref",
+      "name": "physical-ref"
+    },
+    {
+      "is_evidential": true,
+      "kind": "content-ref",
+      "name": "history-ref"
+    },
+    {
+      "is_evidential": true,
+      "kind": "symbol",
+      "name": "durability"
+    },
+    {
+      "is_evidential": true,
+      "kind": "unsigned",
+      "name": "progress"
+    },
+    {
+      "is_evidential": true,
+      "kind": "symbol",
+      "name": "completeness"
+    },
+    {
+      "is_evidential": false,
+      "kind": "string-sequence",
+      "name": "reported-invariants"
+    }
+  ],
+  "identity": {
+    "evidence_domain": "molten.protocol-oracle-evidence.v1",
+    "hash": "blake3-derive-key",
+    "novelty_domain": "molten.protocol-novelty.v1",
+    "projection_domain": "molten.protocol-projection.v1",
+    "state_domain": "molten.protocol-state.v1"
+  },
+  "non_claims": [
+    "simulation results do not prove KVM, live, production, or release behavior",
+    "oracle results hold only for the recorded world, scheduler, workload, faults, and projections",
+    "work counters are deterministic algorithmic observations, not hardware performance",
+    "an independent oracle can share a defect with the implementation it checks"
+  ],
+  "projection_schema": "molten.protocol-projection.v1",
+  "record_label": "protocol-projection",
+  "schema": "molten.protocol-observation-contract.v1",
+  "transition_classes": [
+    "initial",
+    "applied",
+    "conflict",
+    "denied",
+    "recovered"
+  ]
+}

@@ -76,7 +76,7 @@ impl ServiceExecutor {
     }
 
     fn current_state_ref(&self) -> String {
-        blake3_ref(format!("{:?}", self.state).as_bytes())
+        reference_state_ref(&self.state)
     }
 }
 
@@ -114,13 +114,22 @@ impl SystemExtensionExecutor for ServiceExecutor {
             .ok_or_else(|| "reference request payload is not registered".to_string())?;
         let transition = apply_reference_operation(&self.state, operation)
             .map_err(|error| format!("reference service transition denied: {error:?}"))?;
+        // The shared local guard runs on every step; a violation is a protocol
+        // invariant result under a fail-stop policy, never an admission error.
+        guard_reference_transition(&self.state, operation, &transition).map_err(|violation| {
+            format!(
+                "reference protocol invariant violated: service={} rule={}",
+                violation.service.as_str(),
+                violation.rule
+            )
+        })?;
         let effects = transition
             .required_ports
             .iter()
             .map(|class| self.effect_for(*class, payload_ref, invocation.generation, invocation.incarnation))
             .collect::<std::result::Result<Vec<_>, _>>()?;
         self.state = transition.next.clone();
-        let state_ref = blake3_ref(transition.state_material.as_bytes());
+        let state_ref = reference_state_ref(&transition.next);
         let decision_ref = blake3_ref(transition.decision.as_str().as_bytes());
         self.last_transition = Some(transition);
         Ok(crate::system_extension::CallbackOutcome {

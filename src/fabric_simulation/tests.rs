@@ -245,3 +245,5 @@ fn reference_world_records_exactly_max_choices_and_denies_one_past() {
     assert!(error.to_string().contains("ChoiceBoundExceeded"), "unexpected max-choices denial: {error}");
 }
 include!("tests/differential.rs");
+
+include!("tests/protocol.rs");

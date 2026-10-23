@@ -112,6 +112,43 @@ The fabric checks six universal invariants:
 Each reference extension owns its semantic invariants.
 The fabric does not define transaction, log, or job semantics.
 
+## Protocol-aware oracles
+
+r[impl molten.fabric_simulation.oracle_independence] A transition's own report never decides an extension-semantic invariant. Observations carry no pass list. Each records the canonical ref of a protocol projection, and the independent oracle (`molten_core::protocol_oracle`) decides every result.
+
+**Projections.** Every reference participant projects its initial state, each admitted transition, and each recovery from the durable image. A projection binds, among other facts:
+
+- the participant, its generation, and its source and run sequences;
+- the scheduler choice, the transition class, and the logical position;
+- the canonical state and its ref, the history ref, and the durability fact;
+- progress and observation completeness.
+
+The transition's reported invariant names travel with the projection as a non-evidential field.
+
+The extension's projector emits canonical Preserves values, and refs are domain-separated BLAKE3 over the canonical encoding. Executor state refs and final state refs use the same projector instead of Rust debug text. A projection whose state ref is not the canonical ref of its state is refused.
+
+**Profile.** `config/protocol-oracle/profile.ncl` is the typed profile. It names the services and their logical positions, the safety levels, the participants, and the completeness mode. It also sets the liveness preconditions, novelty fields, work counters, bounds, and non-claims. Its generated JSON is admitted by `parse_protocol_oracle_profile`.
+
+**Cohort.** A lossless cohort with a sequence gap, a missing required participant, or a partial observation is incomplete and cannot pass. Duplicate sequences and generation drift are malformed.
+
+**Safety levels.** Each result keeps its level and its earliest failure, with the scheduler choice and projection refs:
+
+- *Local:* the extension's rules over one participant's consecutive projections.
+- *Pairwise and cohort:* agreement at shared logical positions. Physical refs are compared only under a canonical-physical profile.
+- *Durability:* a recovered state must be one the participant held at the same position.
+
+**Local guards.** The same pure function, `reference_local_violations`, serves the oracle and the executor guard. The executor applies it to every transition under a fail-stop policy. Malformed commands stay typed admission errors, never invariant violations.
+
+**Liveness.** Liveness is participant-scoped: pass, fail, not evaluated when a precondition is missing (a crash fault makes every participant not evaluated), or incomplete when the end or the virtual-progress horizon was not observed.
+
+**Novelty and counters.** Novelty identities are canonical refs over the profile's fields; `explore_reference_seeds` scores the new protocol state each seed reaches. Work counters are monotonic and compared only within one world, runtime, scheduler, workload, fault, schema, and bounds cohort.
+
+**Evidence.** The run record binds a bounded protocol status, which `fabric-simulation inspect` prints. Evidence binds every identity, result, novelty ref, counter, and non-claim. Only a deterministic-simulation claim is admissible over it; KVM, live, production, release, and hardware-performance claims are refused.
+
+`config/protocol-oracle/consumer-contract.ncl` publishes the projection record, encoding, and identity derivation for a later external adapter. It is checked against the core's field list.
+
+An independent oracle can share a defect with the implementation it checks. Results hold only for the recorded world, schedule, workload, faults, and projections.
+
 ## Reference services
 
 The exit fixture runs three system extensions.

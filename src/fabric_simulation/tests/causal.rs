@@ -11,10 +11,8 @@ fn delayed_completion_changes_whether_an_acknowledged_write_survives_a_crash() {
 
     for fixture in [&durable, &delayed] {
         assert_eq!(fixture.observations.len(), EXPECTED_CAUSAL_WORKLOAD_STEPS);
-        assert_eq!(fixture.observations[0].observation.semantic_invariants_passed, vec![
-            "transaction-version-monotonic".to_string(),
-            "conflict-does-not-mutate".to_string()
-        ]);
+        assert!(fixture.protocol.evidence.projection_refs.contains(&fixture.observations[0].observation.projection_ref));
+        assert_ne!(fixture.protocol.status.verdict, "fail", "the independent oracle accepts the causal run");
     }
     assert_eq!(
         durable.run.summary.choice_records[0].semantic_output_ref,

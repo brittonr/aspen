@@ -385,18 +385,49 @@ fn validate_claims(manifest: &SimulatedWorldManifest, issues: &mut Vec<WorldIssu
     }
 }
 
+/// Evaluate a world's invariants.
+///
+/// Universal invariants read each observation. An extension-semantic invariant
+/// is decided only by the independent protocol oracle's local safety result of
+/// the same service and rule: a transition's own report never establishes it,
+/// an unsupported rule fails, and an incomplete or failed result fails. A rule
+/// whose service took no step is not evaluated and does not fail.
+// r[impl molten.fabric_simulation.oracle_independence]
 pub fn evaluate_invariants(
     invariants: &[SimulationInvariant],
     observations: &[SimulationObservation],
+    protocol: &[crate::protocol_oracle::SafetyResult],
 ) -> Vec<InvariantResult> {
     invariants
         .iter()
-        .map(|invariant| {
-            let failure = observations.iter().find(|observation| !observation_satisfies(invariant, observation));
-            InvariantResult {
-                invariant: invariant.clone(),
-                passed: failure.is_none(),
-                first_failure_sequence: failure.map(|observation| observation.sequence),
+        .map(|invariant| match invariant {
+            SimulationInvariant::Universal(_) => {
+                let failure = observations.iter().find(|observation| !observation_satisfies(invariant, observation));
+                InvariantResult {
+                    invariant: invariant.clone(),
+                    passed: failure.is_none(),
+                    first_failure_sequence: failure.map(|observation| observation.sequence),
+                }
+            }
+            SimulationInvariant::ExtensionSemantic { service, invariant_id } => {
+                let result = protocol.iter().find(|result| {
+                    result.level == crate::protocol_oracle::SafetyLevel::Local
+                        && result.service == service.as_str()
+                        && result.rule == *invariant_id
+                });
+                let (passed, first_failure_sequence) = match result.map(|result| &result.verdict) {
+                    Some(
+                        crate::protocol_oracle::OracleVerdict::Pass
+                        | crate::protocol_oracle::OracleVerdict::NotEvaluated,
+                    ) => (true, None),
+                    Some(crate::protocol_oracle::OracleVerdict::Fail(witness)) => (false, Some(witness.run_sequence)),
+                    Some(crate::protocol_oracle::OracleVerdict::Incomplete) | None => (false, None),
+                };
+                InvariantResult {
+                    invariant: invariant.clone(),
+                    passed,
+                    first_failure_sequence,
+                }
             }
         })
         .collect()
@@ -449,13 +480,12 @@ fn observation_satisfies(invariant: &SimulationInvariant, observation: &Simulati
             valid_ref(&observation.state_ref)
                 && valid_ref(&observation.history_ref)
                 && valid_ref(&observation.port_event_ref)
+                && valid_ref(&observation.projection_ref)
         }
         SimulationInvariant::Universal(UniversalInvariantKind::CompleteTerminalCleanup) => {
             observation.terminal_cleanup_complete
         }
-        SimulationInvariant::ExtensionSemantic { service, invariant_id } => {
-            observation.service != Some(*service) || observation.semantic_invariants_passed.contains(invariant_id)
-        }
+        SimulationInvariant::ExtensionSemantic { .. } => true,
     }
 }
 

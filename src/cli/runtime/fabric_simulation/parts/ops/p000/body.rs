@@ -105,6 +105,7 @@ pub(super) fn inspect(report: std::path::PathBuf) -> molten::error::Result<()> {
         readback.first_divergence.as_deref().unwrap_or("none"),
         readback.run_ref,
     );
+    print_protocol_status(&readback.protocol);
     Ok(())
 }
 

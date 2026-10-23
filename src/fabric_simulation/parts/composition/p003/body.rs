@@ -100,12 +100,13 @@ fn run_prepared_reference_world(
     seed: u64,
 ) -> crate::error::Result<ReferenceFixtureRun> {
     let mut router = DeterministicPortRouter::new(&prepared.world);
+    let mut trace = ProtocolTrace::begin(&prepared)?;
     let ReferenceChoiceTrace {
         scheduler,
         observations,
         choice_records,
         crash_recoveries,
-    } = run_reference_choices(&mut prepared, &mut router, seed)?;
+    } = run_reference_choices(&mut prepared, &mut router, &mut trace, seed)?;
     let scheduler = finish_simulation_scheduler(&prepared.world.admitted, &scheduler).map_err(|error| {
         crate::error::Failure::invalid_harness(format!("reference scheduler finish denied: {error:?}"))
     })?;
@@ -114,13 +115,16 @@ fn run_prepared_reference_world(
         host_evidence_refs,
         service_states,
     } = finish_reference_hosts(&mut prepared, &scheduler)?;
-    let plain_observations = observations.iter().map(|item| item.observation.clone()).collect::<Vec<_>>();
-    let invariant_results = evaluate_invariants(&prepared.world.admitted.manifest.invariants, &plain_observations);
-    let decision = if invariant_results.iter().all(|result| result.passed) {
-        SimulationDecision::Pass
-    } else {
-        SimulationDecision::InvariantFailed
-    };
+    let ReferenceRunVerdict {
+        protocol,
+        invariant_results,
+        decision,
+    } = judge_reference_run(&prepared, trace, &observations, &ProtocolRunContext {
+        seed,
+        scheduler: &scheduler,
+        choice_records: &choice_records,
+        is_disruptive_fault_fired: !crash_recoveries.is_empty(),
+    })?;
     let resource_units = reference_resource_units(&prepared, &router, choice_records.len())?;
     let summary = SimulationRunSummary {
         decision,
@@ -133,13 +137,14 @@ fn run_prepared_reference_world(
     };
     let observation_refs = observations.iter().map(|item| item.observation_ref.clone()).collect();
     let port_event_refs = router.events.iter().map(|item| item.event_ref.clone()).collect();
-    let run = run(
-        &prepared.world.world_ref,
-        SimulationClaimProfile::DeterministicWholeSystem,
+    let run = run(RunInput {
+        world_ref: &prepared.world.world_ref,
+        profile: SimulationClaimProfile::DeterministicWholeSystem,
         summary,
         observation_refs,
         port_event_refs,
-    )?;
+        protocol: &protocol.status,
+    })?;
     let bundle = repro_bundle(&prepared.world, &run, None)?;
     let differential = reference_contract_differential(&prepared.world)?;
     let execution_differential = reference_execution_differential(&prepared, &router.events)?;
@@ -159,6 +164,7 @@ fn run_prepared_reference_world(
         host_evidence_refs,
         crash_recoveries,
         service_states,
+        protocol,
     })
 }
 
@@ -176,6 +182,7 @@ struct ReferenceChoiceTrace {
 fn run_reference_choices(
     prepared: &mut PreparedReferenceWorld,
     router: &mut DeterministicPortRouter,
+    trace: &mut ProtocolTrace,
     seed: u64,
 ) -> crate::error::Result<ReferenceChoiceTrace> {
     let mut pending = prepared.world.admitted.manifest.workload.clone();
@@ -187,21 +194,19 @@ fn run_reference_choices(
     let max_choice_records = usize::try_from(prepared.world.admitted.manifest.bounds.max_choices).map_err(|_| {
         crate::error::Failure::invalid_harness("reference world max-choices bound does not fit usize")
     })?;
-    let mut crash_recoveries = Vec::with_capacity(prepared.world.admitted.manifest.faults.len());
-    let mut fired_recovery_faults = std::collections::BTreeSet::new();
+    let mut recovery = RecoveryProgress {
+        fired_recovery_faults: std::collections::BTreeSet::new(),
+        crash_recoveries: Vec::with_capacity(prepared.world.admitted.manifest.faults.len()),
+    };
     let mut history_material = FIRST_HISTORY_MATERIAL.to_string();
     loop {
         router.begin_choice(scheduler.next_choice_position, scheduler.virtual_tick);
         router.step_boundary_faults();
-        apply_due_recovery_faults(prepared, router, &scheduler, &mut fired_recovery_faults, &mut crash_recoveries)?;
-        let mut eligible = Vec::new();
-        if let Some(step) = pending.first() {
-            eligible.push(workload_choice(step));
-        }
-        eligible.extend(router.storage().eligible_completions(scheduler.virtual_tick));
-        eligible.extend(router.transport().eligible_deliveries(scheduler.virtual_tick));
+        apply_due_recovery_faults(prepared, router, &scheduler, &mut recovery, trace)?;
+        let mut eligible = eligible_choices(pending.first(), router, &scheduler);
         if eligible.is_empty() {
-            let Some(next_tick) = next_readiness_tick(prepared, router, &scheduler, &fired_recovery_faults) else {
+            let Some(next_tick) = next_readiness_tick(prepared, router, &scheduler, &recovery.fired_recovery_faults)
+            else {
                 break;
             };
             scheduler = advance_simulation_time(&prepared.world.admitted, &scheduler, next_tick).map_err(|error| {
@@ -226,6 +231,7 @@ fn run_reference_choices(
                 router: &mut *router,
                 observations: &mut observations,
                 history_material: &mut history_material,
+                trace: &mut *trace,
             };
             execute_workload_step(&mut context, &step, &transition)?
         } else {
@@ -243,32 +249,6 @@ fn run_reference_choices(
         scheduler,
         observations,
         choice_records,
-        crash_recoveries,
+        crash_recoveries: recovery.crash_recoveries,
     })
-}
-
-/// Applies every crash or restart fault whose activation choice or tick has been reached,
-/// rebuilding the hosts from the durable image after each recovery.
-fn apply_due_recovery_faults(
-    prepared: &mut PreparedReferenceWorld,
-    router: &mut DeterministicPortRouter,
-    scheduler: &SimulationSchedulerState,
-    fired_recovery_faults: &mut std::collections::BTreeSet<String>,
-    crash_recoveries: &mut impl crate::bounded::VecSink<ReferenceCrashRecovery>,
-) -> crate::error::Result<()> {
-    for fault in prepared.world.admitted.manifest.faults.clone() {
-        if !matches!(fault.kind, SimulationFaultKind::Crash | SimulationFaultKind::Restart)
-            || (scheduler.next_choice_position < fault.activate_at_choice
-                && scheduler.virtual_tick < fault.activate_at_choice)
-        {
-            continue;
-        }
-        fired_recovery_faults.insert(fault.fault_id.clone());
-        let recovery = router.apply_crash(&fault).map_err(|error| {
-            crate::error::Failure::invalid_harness(format!("reference crash recovery denied: {error:?}"))
-        })?;
-        rebuild_hosts_from_image(prepared, router.storage().durable_image())?;
-        crash_recoveries.push_item(recovery);
-    }
-    Ok(())
 }

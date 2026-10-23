@@ -1740,6 +1740,43 @@
                   fi
                   touch "$out"
                 '';
+            # r[verify molten.fabric_simulation.protocol_oracle_validation]
+            protocolOracleProfileCheck =
+              pkgs.runCommand "molten-protocol-oracle-profile"
+                {
+                  nativeBuildInputs = [
+                    pkgs.diffutils
+                    pkgs.nickel
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  nickel format --check \
+                    config/protocol-oracle/*.ncl \
+                    config/protocol-oracle/fixtures/positive/*.ncl \
+                    config/protocol-oracle/fixtures/negative/*.ncl
+                  nickel export config/protocol-oracle/profile.ncl \
+                    --format json --output "$TMPDIR/profile.json"
+                  cmp config/protocol-oracle/generated/profile.json "$TMPDIR/profile.json"
+                  nickel export config/protocol-oracle/consumer-contract.ncl \
+                    --format json --output "$TMPDIR/consumer-contract.json"
+                  cmp config/protocol-oracle/generated/consumer-contract.json "$TMPDIR/consumer-contract.json"
+                  for fixture in config/protocol-oracle/fixtures/positive/*.ncl
+                  do
+                    nickel export "$fixture" --format json > "$TMPDIR/positive.json"
+                  done
+                  for fixture in config/protocol-oracle/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json \
+                      > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative protocol oracle fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  touch "$out"
+                '';
             prollyMapProfileCheck =
               pkgs.runCommand "molten-prolly-map-profile"
                 {
@@ -3014,6 +3051,7 @@
             world-state-oracle-source = worldStateOracleSourceCheck;
             prolly-map-profile = prollyMapProfileCheck;
             marble-store-config = marbleStoreConfigCheck;
+            protocol-oracle-profile = protocolOracleProfileCheck;
             coordination-delivery-profile = coordinationDeliveryProfileCheck;
             addressable-actor-profile = addressableActorProfileCheck;
             world-operator-profile = worldOperatorProfileCheck;

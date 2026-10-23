@@ -86,7 +86,7 @@ fn finish_reference_hosts(
     for (node_id, host) in prepared.hosts.iter_mut() {
         host.drain(scheduler.virtual_tick)?;
         host.shutdown(scheduler.virtual_tick)?;
-        final_state_refs.push(blake3_ref(format!("{:?}", host.executor().state()).as_bytes()));
+        final_state_refs.push(reference_state_ref(host.executor().state()));
         if service_states.len() >= host_count {
             return Err(crate::error::Failure::invalid_harness(
                 "reference world reports at most one durable service state per host",
@@ -134,6 +134,7 @@ struct WorkloadStepContext<'a> {
     router: &'a mut DeterministicPortRouter,
     observations: &'a mut Vec<Observation>,
     history_material: &'a mut String,
+    trace: &'a mut ProtocolTrace,
 }
 
 fn execute_workload_step(
@@ -146,6 +147,7 @@ fn execute_workload_step(
         router,
         observations,
         history_material,
+        trace,
     } = context;
     router.set_dispatching(&step.node_id, &step.request_ref);
     let host = prepared.hosts.get_mut(&step.node_id).ok_or_else(|| {
@@ -183,6 +185,14 @@ fn execute_workload_step(
         router.events().last().map(|event| event.event_ref.clone()).ok_or_else(|| {
             crate::error::Failure::invalid_harness("reference route emitted no canonical port event")
         })?;
+    let projection_ref = trace.record_step(&StepProjection {
+        step,
+        choice: &transition.record.selected,
+        operations: &prepared.operations,
+        transition: reference_transition,
+        history_ref: &history_ref,
+        router,
+    })?;
     let observation = observation(SimulationObservation {
         sequence: step.sequence,
         node_id: step.node_id.clone(),
@@ -196,11 +206,7 @@ fn execute_workload_step(
         resource_bound_bypass: false,
         port_state_machine_violation: false,
         terminal_cleanup_complete: true,
-        semantic_invariants_passed: reference_transition
-            .semantic_invariants
-            .iter()
-            .map(|invariant| (*invariant).to_string())
-            .collect(),
+        projection_ref,
     })?;
     observations.push(observation);
     Ok(semantic_output_ref)
@@ -210,14 +216,16 @@ fn execute_workload_step(
 fn rebuild_hosts_from_image(
     prepared: &mut PreparedReferenceWorld,
     image: &SimulatedDurableImage,
-) -> crate::error::Result<()> {
+) -> crate::error::Result<std::collections::BTreeMap<String, u64>> {
     let node_ids = prepared.hosts.keys().cloned().collect::<Vec<_>>();
+    let mut replayed = Vec::with_capacity(node_ids.len());
     for node_id in node_ids {
         let Some(admitted) = prepared.admissions.get(&node_id).cloned() else {
             continue;
         };
         let kind = service_kind_for_service_id(&admitted.manifest().service_id, &node_id)?;
         let mut state = initial_reference_state(kind);
+        let mut applied = 0_u64;
         for entry in image.entries() {
             let Some((_, _, operation)) = prepared
                 .operations
@@ -229,8 +237,12 @@ fn rebuild_hosts_from_image(
             let transition = apply_reference_operation(&state, operation).map_err(|error| {
                 crate::error::Failure::invalid_harness(format!("durable image replay denied: {error:?}"))
             })?;
+            if transition.decision == ReferenceTransitionDecision::Applied {
+                applied = applied.saturating_add(1);
+            }
             state = transition.next;
         }
+        replayed.push((node_id.clone(), applied));
         let executor = ServiceExecutor::recovered(
             kind,
             operations_for_kind(&prepared.operations, kind),
@@ -241,7 +253,7 @@ fn rebuild_hosts_from_image(
         host.activate(FIRST_VIRTUAL_TICK)?;
         prepared.hosts.insert(node_id, host);
     }
-    Ok(())
+    Ok(replayed.into_iter().collect())
 }
 
 fn reference_contract_differential(
@@ -276,14 +288,4 @@ fn reference_contract_differential(
         live_trace_refs: &trace_refs,
         normalized_difference_refs: Vec::new(),
     })
-}
-
-fn workload_choice(step: &SimulationWorkloadStep) -> EligibleChoice {
-    EligibleChoice {
-        kind: SchedulerChoiceKind::Runnable,
-        choice_id: workload_choice_id(step.sequence),
-        node_id: step.node_id.clone(),
-        generation: INITIAL_EXTENSION_GENERATION,
-        ready_at_tick: FIRST_VIRTUAL_TICK,
-    }
 }

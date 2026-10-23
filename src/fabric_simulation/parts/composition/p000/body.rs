@@ -46,6 +46,8 @@ pub struct ReferenceFixtureRun {
     pub host_evidence_refs: Vec<String>,
     pub crash_recoveries: Vec<ReferenceCrashRecovery>,
     pub service_states: std::collections::BTreeMap<String, ReferenceServiceState>,
+    /// The independent protocol oracle evidence of the run.
+    pub protocol: ProtocolRunEvidence,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -28,7 +28,7 @@ This example is reasoning over inspected adapter functions, not a reported run. 
 
 ## Observation and causal shrinking
 
-Invariant evaluation scans observations for the first failure of each declared invariant. Extension-semantic checks are scoped to the observation's service; universal checks inspect their corresponding observation fields. This makes the observation producer part of the evidence boundary: a passing evaluator is agreement with supplied observations, not an independent sensor for unmodeled shell activity.
+Invariant evaluation scans observations for the first failure of each universal invariant. Extension-semantic invariants come from the independent protocol oracle's local safety results over canonical projections, never from a transition's reported names; an unsupported or incomplete result fails. This makes the observation producer part of the evidence boundary: a passing evaluator is agreement with supplied observations, not an independent sensor for unmodeled shell activity.
 
 The [shrinker](../../../crates/molten-core/src/fabric_simulation/replay.rs) first admits and reruns the original world. Its failure fingerprint binds decision, failed-invariant identities, and first-failure sequence. Candidate reductions remove workload suffix steps, trailing faults, eligible unused nodes, or reduce positive resource and trace bounds. Each candidate is re-admitted and retained only when rerunning preserves the fingerprint. Invalid candidates are rejected without hidden repair.
 

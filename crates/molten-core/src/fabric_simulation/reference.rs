@@ -179,8 +179,9 @@ pub struct ReferenceServiceTransition {
     pub next: ReferenceServiceState,
     pub decision: ReferenceTransitionDecision,
     pub required_ports: Vec<FabricPortClass>,
+    /// The invariant names the transition reports for itself. A report is
+    /// never evidence: the independent protocol oracle decides every result.
     pub semantic_invariants: Vec<&'static str>,
-    pub state_material: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -466,13 +467,11 @@ fn reference_transition(
     required_ports: Vec<FabricPortClass>,
     semantic_invariants: Vec<&'static str>,
 ) -> ReferenceServiceTransition {
-    let state_material = format!("{next:?}");
     ReferenceServiceTransition {
         next,
         decision,
         required_ports,
         semantic_invariants,
-        state_material,
     }
 }
 
