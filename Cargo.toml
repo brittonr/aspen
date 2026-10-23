@@ -30,6 +30,7 @@ executable-extents = [
   "dep:executable-extent-linux",
   "molten-core/executable-extents",
 ]
+marble-object-store = ["dep:art", "dep:marble"]
 profiler = ["dep:flux-profiler"]
 profiler-alloc = ["profiler", "flux-profiler/alloc-profile"]
 profiler-disabled = ["dep:flux-profiler", "flux-profiler/disable-profiling"]
@@ -66,6 +67,7 @@ name = "molten-native-extension-fixture"
 path = "src/bin/molten-native-extension-fixture.rs"
 
 [dependencies]
+art = { version = "=1.0.0", optional = true }
 artifact-auth-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
 artifact-auth-ed25519 = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
 artifact-binding-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
@@ -82,6 +84,7 @@ data-encoding = { version = "2", optional = true }
 executable-extent-conformance = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
 executable-extent-core = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
 executable-extent-linux = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
+marble = { version = "=16.0.2", optional = true }
 molten-core = { path = "crates/molten-core" }
 molten-node-host = { path = "crates/molten-node-host" }
 cairn = { git = "ssh://git@github.com/OnixResearch/cairn.git", rev = "3b4c280b893f2709aebea21fc51a4f9eeba3fe3b", package = "cairn-core" }

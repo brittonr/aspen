@@ -8,20 +8,29 @@ use molten_core::release_dependency::ArchiveReceiptObservation;
 use molten_core::release_dependency::DependencyObservation;
 use molten_core::release_dependency::DistributionObservation;
 use molten_core::release_dependency::EvidenceFileObservation;
+use molten_core::release_dependency::ManifestTable;
+use molten_core::release_dependency::RegistryDependencyObservation;
 use molten_core::release_dependency::ResolvedPackageIdentity;
 use serde_json::Value as JsonValue;
 use toml::Value as TomlValue;
 
 use crate::profile::DependencyRow;
 use crate::profile::Profile;
+use crate::profile::RegistryDependencyRow;
 
 const GIT_SOURCE_PREFIX: &str = "git+";
 const REVISION_FRAGMENT_SEPARATOR: char = '#';
 const SOURCE_QUERY_SEPARATOR: char = '?';
 const MAX_EVIDENCE_FILE_BYTES: u64 = 1_048_576;
+const MANIFEST_TABLES: [(&str, ManifestTable); 3] = [
+    ("dependencies", ManifestTable::Dependencies),
+    ("dev-dependencies", ManifestTable::DevDependencies),
+    ("build-dependencies", ManifestTable::BuildDependencies),
+];
 
 pub struct RepositoryObservation {
     pub dependencies: Vec<DependencyObservation>,
+    pub registry_dependencies: Vec<RegistryDependencyObservation>,
     pub resolved_package_identities: Vec<ResolvedPackageIdentity>,
     pub unprofiled_git_dependencies: Vec<String>,
     pub archive_receipts: Vec<ArchiveReceiptObservation>,
@@ -37,12 +46,18 @@ pub fn observe_repository(
     let lock = parse_toml_file(&root.join("Cargo.lock"))?;
     let flake_lock = parse_json_file(&root.join("flake.lock"))?;
     let dependencies = observe_dependencies(profile, &manifest, &lock, &flake_lock);
+    let registry_dependencies = profile
+        .registry_dependencies
+        .iter()
+        .map(|row| observe_registry_dependency(row, &manifest, &lock))
+        .collect();
     let resolved_package_identities = resolved_git_identities(&lock);
     let unprofiled_git_dependencies = unprofiled_git_dependencies(profile, &manifest);
     let archive_receipts = observe_archives(profile, &flake_lock, evidence_sources)?;
     let distribution = observe_distribution(root, profile);
     Ok(RepositoryObservation {
         dependencies,
+        registry_dependencies,
         resolved_package_identities,
         unprofiled_git_dependencies,
         archive_receipts,
@@ -111,6 +126,51 @@ fn manifest_dependency<'a>(manifest: &'a TomlValue, row: &DependencyRow) -> Opti
         .and_then(TomlValue::as_table)
         .and_then(|dependencies| dependencies.get(&row.manifest_dependency))
         .and_then(TomlValue::as_table)
+}
+
+fn observe_registry_dependency(
+    row: &RegistryDependencyRow,
+    manifest: &TomlValue,
+    lock: &TomlValue,
+) -> RegistryDependencyObservation {
+    let manifest_entry = MANIFEST_TABLES.iter().find_map(|(section, table)| {
+        manifest
+            .get(*section)
+            .and_then(TomlValue::as_table)
+            .and_then(|entries| entries.get(&row.manifest_dependency))
+            .map(|entry| (*table, entry))
+    });
+    let manifest_version_requirement = manifest_entry.and_then(|(_, entry)| match entry {
+        TomlValue::String(requirement) => Some(requirement.clone()),
+        TomlValue::Table(table) => table.get("version").and_then(TomlValue::as_str).map(str::to_owned),
+        _ => None,
+    });
+    let is_manifest_optional = manifest_entry
+        .and_then(|(_, entry)| entry.get("optional"))
+        .and_then(TomlValue::as_bool)
+        .unwrap_or(false);
+    let lock_package = find_lock_package(lock, &row.package_name, &row.package_version);
+    let lock_string = |key: &str| lock_package.and_then(|package| package.get(key)).and_then(TomlValue::as_str);
+    RegistryDependencyObservation {
+        manifest_dependency: row.manifest_dependency.clone(),
+        manifest_table: manifest_entry.map(|(table, _)| table),
+        manifest_version_requirement,
+        is_manifest_optional,
+        lock_package_version: lock_string("version").map(str::to_owned),
+        lock_source_coordinate: lock_string("source").map(str::to_owned),
+        lock_checksum: lock_string("checksum").map(str::to_owned),
+    }
+}
+
+fn find_lock_package<'a>(lock: &'a TomlValue, package_name: &str, package_version: &str) -> Option<&'a toml::Table> {
+    lock.get("package")
+        .and_then(TomlValue::as_array)?
+        .iter()
+        .filter_map(TomlValue::as_table)
+        .find(|package| {
+            package.get("name").and_then(TomlValue::as_str) == Some(package_name)
+                && package.get("version").and_then(TomlValue::as_str) == Some(package_version)
+        })
 }
 
 fn find_lock_identity(lock: &TomlValue, package_name: &str, package_version: &str) -> Option<ResolvedPackageIdentity> {
@@ -233,6 +293,64 @@ mod tests {
     use super::*;
 
     const REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const CRATES_IO: &str = "registry+https://github.com/rust-lang/crates.io-index";
+    const CHECKSUM: &str = "c00d04008994fed635a52323bbe1dd8c0947292183585ddf8f1090615fafc3c6";
+
+    fn registry_row(name: &str, version: &str) -> RegistryDependencyRow {
+        RegistryDependencyRow {
+            manifest_dependency: name.to_owned(),
+            package_name: name.to_owned(),
+            package_version: version.to_owned(),
+            source_kind: "crates-io".to_owned(),
+            source_coordinate: CRATES_IO.to_owned(),
+            checksum: CHECKSUM.to_owned(),
+            transport_policy: "crates.io".to_owned(),
+            plane: "implementation".to_owned(),
+            disposition: "optional-runtime".to_owned(),
+        }
+    }
+
+    #[test]
+    fn registry_observation_reads_table_and_string_requirements_with_lock_identity() {
+        let manifest: TomlValue = toml::from_str(
+            r#"
+            [dependencies]
+            marble = { version = "=16.0.2", optional = true }
+            [dev-dependencies]
+            art = "=1.0.0"
+            "#,
+        )
+        .expect("manifest parses");
+        let lock: TomlValue = toml::from_str(&format!(
+            r#"
+            [[package]]
+            name = "marble"
+            version = "15.0.0"
+            source = "{CRATES_IO}"
+            checksum = "{REVISION}"
+            [[package]]
+            name = "marble"
+            version = "16.0.2"
+            source = "{CRATES_IO}"
+            checksum = "{CHECKSUM}"
+            "#
+        ))
+        .expect("lock parses");
+
+        let marble = observe_registry_dependency(&registry_row("marble", "16.0.2"), &manifest, &lock);
+        assert_eq!(marble.manifest_table, Some(ManifestTable::Dependencies));
+        assert_eq!(marble.manifest_version_requirement.as_deref(), Some("=16.0.2"));
+        assert!(marble.is_manifest_optional);
+        assert_eq!(marble.lock_package_version.as_deref(), Some("16.0.2"));
+        assert_eq!(marble.lock_source_coordinate.as_deref(), Some(CRATES_IO));
+        assert_eq!(marble.lock_checksum.as_deref(), Some(CHECKSUM));
+
+        let art = observe_registry_dependency(&registry_row("art", "1.0.0"), &manifest, &lock);
+        assert_eq!(art.manifest_table, Some(ManifestTable::DevDependencies));
+        assert_eq!(art.manifest_version_requirement.as_deref(), Some("=1.0.0"));
+        assert!(!art.is_manifest_optional);
+        assert_eq!(art.lock_checksum, None);
+    }
 
     #[test]
     fn git_source_parser_accepts_exact_https_source() {

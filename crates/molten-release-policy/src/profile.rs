@@ -4,19 +4,22 @@ use std::process::Command;
 use molten_core::release_dependency::ArchiveReceiptExpectation;
 use molten_core::release_dependency::CanonicalValenceAuthority;
 use molten_core::release_dependency::DependencyExpectation;
+use molten_core::release_dependency::DependencyPlane;
 use molten_core::release_dependency::DistributionProfile;
 use molten_core::release_dependency::EvidenceFileExpectation;
+use molten_core::release_dependency::RegistryDependencyExpectation;
 use molten_core::release_dependency::ReleaseDisposition;
 use molten_core::release_dependency::SourceKind;
 use molten_core::release_dependency::TransportPolicy;
 use serde::Deserialize;
 
-const PROFILE_SCHEMA: &str = "molten.release-dependency-profile.v1";
+const PROFILE_SCHEMA: &str = "molten.release-dependency-profile.v2";
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Profile {
     pub schema: String,
     pub dependencies: Vec<DependencyRow>,
+    pub registry_dependencies: Vec<RegistryDependencyRow>,
     pub canonical_valence: CanonicalValenceRow,
     pub archive_receipts: Vec<ArchiveReceiptRow>,
     pub distribution: DistributionRow,
@@ -32,6 +35,19 @@ pub struct DependencyRow {
     pub immutable_revision: String,
     pub nix_input: String,
     pub transport_policy: String,
+    pub disposition: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RegistryDependencyRow {
+    pub manifest_dependency: String,
+    pub package_name: String,
+    pub package_version: String,
+    pub source_kind: String,
+    pub source_coordinate: String,
+    pub checksum: String,
+    pub transport_policy: String,
+    pub plane: String,
     pub disposition: String,
 }
 
@@ -91,6 +107,10 @@ impl Profile {
         self.dependencies.iter().map(DependencyRow::to_core).collect()
     }
 
+    pub fn registry_dependency_expectations(&self) -> Result<Vec<RegistryDependencyExpectation>, String> {
+        self.registry_dependencies.iter().map(RegistryDependencyRow::to_core).collect()
+    }
+
     pub fn canonical_valence_authority(&self) -> CanonicalValenceAuthority {
         CanonicalValenceAuthority {
             source_coordinate: self.canonical_valence.source_coordinate.clone(),
@@ -128,14 +148,7 @@ impl DependencyRow {
                 return Err(format!("unsupported transport policy for {}: {other}", self.manifest_dependency));
             }
         };
-        let disposition = match self.disposition.as_str() {
-            "runtime" => ReleaseDisposition::Runtime,
-            "optional-runtime" => ReleaseDisposition::OptionalRuntime,
-            "development" => ReleaseDisposition::Development,
-            other => {
-                return Err(format!("unsupported release disposition for {}: {other}", self.manifest_dependency));
-            }
-        };
+        let disposition = parse_disposition(&self.manifest_dependency, &self.disposition)?;
         Ok(DependencyExpectation {
             manifest_dependency: self.manifest_dependency.clone(),
             package_name: self.package_name.clone(),
@@ -147,6 +160,49 @@ impl DependencyRow {
             transport_policy,
             disposition,
         })
+    }
+}
+
+impl RegistryDependencyRow {
+    fn to_core(&self) -> Result<RegistryDependencyExpectation, String> {
+        let source_kind = match self.source_kind.as_str() {
+            "crates-io" => SourceKind::CratesIo,
+            other => {
+                return Err(format!("unsupported registry source kind for {}: {other}", self.manifest_dependency));
+            }
+        };
+        let transport_policy = match self.transport_policy.as_str() {
+            "crates.io" => TransportPolicy::CratesIo,
+            other => {
+                return Err(format!("unsupported registry transport policy for {}: {other}", self.manifest_dependency));
+            }
+        };
+        let plane = match self.plane.as_str() {
+            "implementation" => DependencyPlane::Implementation,
+            "development" => DependencyPlane::Development,
+            other => return Err(format!("unsupported dependency plane for {}: {other}", self.manifest_dependency)),
+        };
+        let disposition = parse_disposition(&self.manifest_dependency, &self.disposition)?;
+        Ok(RegistryDependencyExpectation {
+            manifest_dependency: self.manifest_dependency.clone(),
+            package_name: self.package_name.clone(),
+            package_version: self.package_version.clone(),
+            source_kind,
+            source_coordinate: self.source_coordinate.clone(),
+            checksum: self.checksum.clone(),
+            transport_policy,
+            plane,
+            disposition,
+        })
+    }
+}
+
+fn parse_disposition(manifest_dependency: &str, disposition: &str) -> Result<ReleaseDisposition, String> {
+    match disposition {
+        "runtime" => Ok(ReleaseDisposition::Runtime),
+        "optional-runtime" => Ok(ReleaseDisposition::OptionalRuntime),
+        "development" => Ok(ReleaseDisposition::Development),
+        other => Err(format!("unsupported release disposition for {manifest_dependency}: {other}")),
     }
 }
 
@@ -174,7 +230,44 @@ impl ArchiveReceiptRow {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     const PROFILE_FIXTURE: &str = include_str!("../../../config/release-dependencies/fixtures/positive/exact-pins.ncl");
+
+    fn registry_row() -> RegistryDependencyRow {
+        RegistryDependencyRow {
+            manifest_dependency: "marble".to_owned(),
+            package_name: "marble".to_owned(),
+            package_version: "16.0.2".to_owned(),
+            source_kind: "crates-io".to_owned(),
+            source_coordinate: "registry+https://github.com/rust-lang/crates.io-index".to_owned(),
+            checksum: "c00d04008994fed635a52323bbe1dd8c0947292183585ddf8f1090615fafc3c6".to_owned(),
+            transport_policy: "crates.io".to_owned(),
+            plane: "implementation".to_owned(),
+            disposition: "optional-runtime".to_owned(),
+        }
+    }
+
+    #[test]
+    fn registry_row_conversion_parses_plane_and_rejects_unknown_values() {
+        let expectation = registry_row().to_core().expect("reviewed registry row converts");
+        assert_eq!(expectation.plane, DependencyPlane::Implementation);
+        assert_eq!(expectation.disposition, ReleaseDisposition::OptionalRuntime);
+        assert_eq!(expectation.source_kind, SourceKind::CratesIo);
+        assert_eq!(expectation.transport_policy, TransportPolicy::CratesIo);
+
+        let mut plane = registry_row();
+        plane.plane = "runtime".to_owned();
+        let mut source_kind = registry_row();
+        source_kind.source_kind = "git".to_owned();
+        let mut transport = registry_row();
+        transport.transport_policy = "https".to_owned();
+        let mut disposition = registry_row();
+        disposition.disposition = "implementation".to_owned();
+        for row in [plane, source_kind, transport, disposition] {
+            assert!(row.to_core().is_err(), "unknown value admitted: {row:?}");
+        }
+    }
 
     #[test]
     fn fixture_remains_an_explicit_profile_import() {

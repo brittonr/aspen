@@ -193,7 +193,7 @@ fn initialize(database: &redb::Database) -> ProllyPortResult<()> {
         .map_err(|error| redb_error(ProllyPortPhase::Staging, ProllyPortFailureKind::Commit, error))
 }
 
-fn encode_head(head: &PublishedProllyRoot) -> ProllyPortResult<Vec<u8>> {
+pub(super) fn encode_head(head: &PublishedProllyRoot) -> ProllyPortResult<Vec<u8>> {
     let text = format!(
         "{}\n{}\n{}\n{}\n{}\n{}\n{}\n",
         head.generation,
@@ -243,7 +243,7 @@ pub(super) fn decode_head(bytes: &[u8]) -> ProllyPortResult<PublishedProllyRoot>
     })
 }
 
-fn expected_matches(expected: &ExpectedProllyRoot, observed: Option<&PublishedProllyRoot>) -> bool {
+pub(super) fn expected_matches(expected: &ExpectedProllyRoot, observed: Option<&PublishedProllyRoot>) -> bool {
     match (expected.root_ref.as_ref(), observed) {
         (None, None) => expected.generation == 0,
         (Some(expected_ref), Some(observed)) => {
@@ -253,7 +253,7 @@ fn expected_matches(expected: &ExpectedProllyRoot, observed: Option<&PublishedPr
     }
 }
 
-fn validate_map_id(value: &str) -> ProllyPortResult<()> {
+pub(super) fn validate_map_id(value: &str) -> ProllyPortResult<()> {
     if value.is_empty()
         || value.len() > MAX_MAP_ID_BYTES
         || !value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))

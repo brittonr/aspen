@@ -16,8 +16,8 @@
     "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-node-host#0.1.0",
     "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "3ecb474ec18be7dc452fc5a200a99005453d1cf521da533fe10e3373adb9d8d5",
-  "inputsHash": "c5a8cf7c7d9aac684a2661f724bee42fc484eb5b8ab17fb2892cc4096a742a84",
+  "cargoLockHash": "2beee6525a368907246a99fc3f158e89110956b8f8b37f86c5d03890e53b4d8c",
+  "inputsHash": "f2436f46c9f71b99bc5cf68fd2d5c598da2d1501d1d1864e6f9f0c12ec5708a8",
   "crates": {
     "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec-core@0.1.0": {
       "crateName": "bounded-exec-core",
@@ -6654,7 +6654,7 @@
           "externCrateName": "data_encoding"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@1.0.109",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117",
           "externCrateName": "syn"
         }
       ],
@@ -23698,7 +23698,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.4.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.5.0",
           "externCrateName": "heck"
         },
         {

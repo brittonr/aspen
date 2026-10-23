@@ -30,6 +30,7 @@ pub mod fabric_simulation;
 pub mod fabric_time;
 pub mod fabric_transport;
 pub mod live_binding;
+pub mod marble_store;
 pub mod node_ingress;
 pub mod nominal;
 pub mod outside_in;

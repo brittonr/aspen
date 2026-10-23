@@ -20,6 +20,7 @@ let SchemaMigrationSource = "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3U
 let SchemaIdentitySource = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git" in
 let TransactionalReconciliationRevision = "eb2bd3441753af97bfcb247cef7cc22d72675b62" in
 let TransactionalReconciliationSource = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git" in
+let CratesIoIndex = "registry+https://github.com/rust-lang/crates.io-index" in
 let ArchiveNonClaims = [
   "dependency satisfaction proves presented receipt linkage only",
   "dependency satisfaction does not prove upstream correctness or remote trust",
@@ -27,7 +28,7 @@ let ArchiveNonClaims = [
 ]
 in
 {
-  schema = "molten.release-dependency-profile.v1",
+  schema = "molten.release-dependency-profile.v2",
   dependencies = [
     {
       manifest_dependency = "artifact-auth-core",
@@ -259,6 +260,30 @@ in
       nix_input = "hegel-src",
       transport_policy = "https",
       disposition = "development",
+    },
+  ],
+  registry_dependencies = [
+    {
+      manifest_dependency = "art",
+      package_name = "art",
+      package_version = "1.0.0",
+      source_kind = "crates-io",
+      source_coordinate = CratesIoIndex,
+      checksum = "41e7ba0ded1ee3730fe4445fbdf4754756b2edd86617f19507c89d3b71383277",
+      transport_policy = "crates.io",
+      plane = "implementation",
+      disposition = "optional-runtime",
+    },
+    {
+      manifest_dependency = "marble",
+      package_name = "marble",
+      package_version = "16.0.2",
+      source_kind = "crates-io",
+      source_coordinate = CratesIoIndex,
+      checksum = "c00d04008994fed635a52323bbe1dd8c0947292183585ddf8f1090615fafc3c6",
+      transport_policy = "crates.io",
+      plane = "implementation",
+      disposition = "optional-runtime",
     },
   ],
   canonical_valence = {

@@ -1,0 +1,25 @@
+{
+  "backend": "redb",
+  "marble": {
+    "block_ids": {
+      "end": 4398046511104,
+      "start": 1024
+    },
+    "catalog_ids": {
+      "end": 1,
+      "start": 0
+    },
+    "executor_queue_depth": 64,
+    "maintenance_every_committed_batches": 64,
+    "max_object_bytes": 1048576,
+    "read_cache_entries": 4096
+  },
+  "non_claims": [
+    "the spike changes no dataspace, vat, networking, or replication semantics",
+    "the spike does not change the default storage path",
+    "marble object identifiers are physical handles, not content identity",
+    "measurements record one workload on one host and do not prove runtime superiority",
+    "durability covers only batches marble atomically recovered"
+  ],
+  "schema": "molten.prolly-store-selection.v1"
+}

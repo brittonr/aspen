@@ -2,7 +2,7 @@ let Contracts = import "../../contracts.ncl" in
 let RevisionA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" in
 let RevisionB = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" in
 {
-  schema = "molten.release-dependency-profile.v1",
+  schema = "molten.release-dependency-profile.v2",
   dependencies = [
     {
       manifest_dependency = "first-package",
@@ -27,6 +27,7 @@ let RevisionB = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" in
       disposition = "runtime",
     },
   ],
+  registry_dependencies = [],
   canonical_valence = {
     source_coordinate = "https://github.com/OnixResearch/valence.git",
     immutable_revision = RevisionA,

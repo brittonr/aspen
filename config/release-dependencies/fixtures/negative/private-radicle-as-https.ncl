@@ -2,7 +2,7 @@ let Contracts = import "../../contracts.ncl" in
 let Revision = "025d9636f0161777710dac37b3c210ca0ad9483f" in
 let Source = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB" in
 {
-  schema = "molten.release-dependency-profile.v1",
+  schema = "molten.release-dependency-profile.v2",
   dependencies = [
     {
       manifest_dependency = "executable-extent-core",
@@ -16,6 +16,7 @@ let Source = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB" in
       disposition = "optional-runtime",
     }
   ],
+  registry_dependencies = [],
   canonical_valence = {
     source_coordinate = "https://github.com/OnixResearch/valence.git",
     immutable_revision = "5f1c2ba5072c6f9622fa59b1af20502985f569fd",

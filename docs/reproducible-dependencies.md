@@ -10,6 +10,19 @@ Bounded Exec uses its canonical read-only HTTPS source at revision
 Other OnixResearch Cargo sources retain their reviewed pins and immutable
 archive inputs for sandboxed Nix builds.
 
+Schema `molten.release-dependency-profile.v2` adds `registry_dependencies`
+rows for direct crates.io pins. Each row binds the manifest dependency, package
+name, exact version, the crates.io index source, the Cargo.lock SHA-256
+checksum, transport `crates.io`, a dependency plane, and a release disposition.
+The validator requires an exact `=<version>` manifest requirement, a matching
+`optional` flag for `optional-runtime` rows, and lock version, source, and
+checksum equality. It classifies each pin onto its plane edge: `implementation`
+rows must sit in the root `[dependencies]` table and `development` rows in
+`[dev-dependencies]`, and a `development` plane requires the `development`
+disposition. `marble` 16.0.2 and `art` 1.0.0 are optional implementation pins
+behind the `marble-object-store` feature. A registry row binds the version, the
+checksum, and the manifest plane. It does not review upstream code.
+
 The `molten-release-policy` shell reads the Nickel export, `Cargo.toml`,
 `Cargo.lock`, `flake.lock`, configured archive evidence, and distribution
 artifacts. It passes normalized in-memory observations to the pure

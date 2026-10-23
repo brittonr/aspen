@@ -123,6 +123,27 @@ The shell deletes candidates only after exact root and pin comparison, current-g
 
 The comparison and the deletion are indivisible. The adapter compares the current durable roots, the current pins, and the retention generation against the admission inventory inside the same write transaction that deletes the candidates. A mismatch returns a typed outcome and deletes nothing: a stale admission cannot remove content that a later publication made reachable, and a block that is pinned now is never deleted. The publication path pins the blocks it stages before it stages them, so a garbage collection cannot remove content an in-progress publication still needs, and it releases the pin once the publication reaches a terminal outcome.
 
+## Marble-plus-art store spike
+
+r[impl aspen.marble_store.boundary] The optional `marble-object-store` feature adds `MarbleArtBlockStore`, a second implementation of the block-store and retention ports. It was built so the storage-path decision could rest on a measured comparison. It changes no dataspace, vat, networking, or replication semantics.
+
+`config/marble-store/selection.ncl` selects the backend. Its generated JSON feeds `parse_prolly_store_selection` and `open_prolly_store`. The reviewed selection is Redb, and its contract rejects a different default. Selecting marble without the feature fails with `prolly-store-backend-unavailable`.
+
+Identity and storage:
+
+- BLAKE3 stays the only content identity. Each block is framed with its 32-byte digest.
+- A marble `ObjectId` is a private physical handle. The core allocates handles from separate catalog and block ranges, and an exhausted block range fails the whole batch closed.
+- An adaptive radix trie maps each digest to its handle. The trie lives in memory only, so every open rebuilds it from the batches marble atomically recovered. A batch whose file was never renamed into place contributes no mapping.
+- Heads, pins, and the retention generation live in one catalog object that is rewritten in a single batch.
+
+Execution and faults:
+
+- One bounded executor worker opens the heap and runs every blocking operation and every scheduled maintenance. A full queue is refused.
+- A failed `write_batch` poisons the instance until it is reopened, because marble may already have installed part of the batch at runtime.
+- Marble opens its heap by filesystem path, outside the capability-rooted namespaces.
+
+The decision record is `config/marble-store/decision.ncl`. It records write, read, recovery, and space numbers for both stores on two Prolly workloads and keeps the current path. Its contract and `validate_spike_decision` reject a proof claim, a keep or replace verdict with missing numbers, and a replace verdict that its own numbers contradict. The numbers record one unoptimized run on one host; they claim nothing beyond that run.
+
 ## DoltLite differential boundary
 
 The Prolly map compares ordered text rows and outcomes with the pinned DoltLite oracle.

@@ -1,0 +1,147 @@
+{
+  "claim_verb": "records",
+  "findings": [
+    "point reads record 1.8x to 4.3x slower on marble-art: every uncached read crosses the executor and reads its object from the heap",
+    "recovery records 1.55x slower on the large workload: art is in memory only, so every open reads every live object to rebuild the digest index",
+    "batch writes record 0.44x to 0.91x of the Redb time",
+    "space amplification records 1.1x to 1.5x on marble-art against 10.7x to 91x on Redb, whose file length includes preallocated pages",
+    "marble 16.0.2 builds slices over uninitialized memory in its read path (uninit_boxed_slice, read_range_at), which is undefined behavior",
+    "marble 16.0.2 sizes a recovery read from an on-disk length before checking a checksum and panics through assert and unwrap on inconsistent state",
+    "a failed marble write_batch can leave new identifiers installed in the runtime location table, so the adapter must poison the instance until reopen",
+    "marble opens its heap by ambient filesystem path, outside the capability-rooted node-state namespaces"
+  ],
+  "host": "Linux 6.18.50 x86_64, 32 threads, ZFS dataset datapool/tmp, unoptimized dev profile, marble 16.0.2 with fsync_each_batch, art 1.0.0, read cache 64 entries, maintenance every 4 batches, one run on 2026-10-22",
+  "measurements": [
+    {
+      "backend": "redb-current",
+      "metric": "batch-write",
+      "unit": "nanoseconds",
+      "value": 2009037,
+      "workload_ref": "prolly-64-entries-1-update"
+    },
+    {
+      "backend": "redb-current",
+      "metric": "point-read",
+      "unit": "nanoseconds",
+      "value": 7018,
+      "workload_ref": "prolly-64-entries-1-update"
+    },
+    {
+      "backend": "redb-current",
+      "metric": "recovery",
+      "unit": "nanoseconds",
+      "value": 1650719,
+      "workload_ref": "prolly-64-entries-1-update"
+    },
+    {
+      "backend": "redb-current",
+      "metric": "space-amplification",
+      "unit": "permille",
+      "value": 91142,
+      "workload_ref": "prolly-64-entries-1-update"
+    },
+    {
+      "backend": "marble-art",
+      "metric": "batch-write",
+      "unit": "nanoseconds",
+      "value": 875789,
+      "workload_ref": "prolly-64-entries-1-update"
+    },
+    {
+      "backend": "marble-art",
+      "metric": "point-read",
+      "unit": "nanoseconds",
+      "value": 12458,
+      "workload_ref": "prolly-64-entries-1-update"
+    },
+    {
+      "backend": "marble-art",
+      "metric": "recovery",
+      "unit": "nanoseconds",
+      "value": 1663283,
+      "workload_ref": "prolly-64-entries-1-update"
+    },
+    {
+      "backend": "marble-art",
+      "metric": "space-amplification",
+      "unit": "permille",
+      "value": 1500,
+      "workload_ref": "prolly-64-entries-1-update"
+    },
+    {
+      "backend": "redb-current",
+      "metric": "batch-write",
+      "unit": "nanoseconds",
+      "value": 6953607,
+      "workload_ref": "prolly-4096-entries-32x16-updates"
+    },
+    {
+      "backend": "redb-current",
+      "metric": "point-read",
+      "unit": "nanoseconds",
+      "value": 6546,
+      "workload_ref": "prolly-4096-entries-32x16-updates"
+    },
+    {
+      "backend": "redb-current",
+      "metric": "recovery",
+      "unit": "nanoseconds",
+      "value": 39806659,
+      "workload_ref": "prolly-4096-entries-32x16-updates"
+    },
+    {
+      "backend": "redb-current",
+      "metric": "space-amplification",
+      "unit": "permille",
+      "value": 10698,
+      "workload_ref": "prolly-4096-entries-32x16-updates"
+    },
+    {
+      "backend": "marble-art",
+      "metric": "batch-write",
+      "unit": "nanoseconds",
+      "value": 6327593,
+      "workload_ref": "prolly-4096-entries-32x16-updates"
+    },
+    {
+      "backend": "marble-art",
+      "metric": "point-read",
+      "unit": "nanoseconds",
+      "value": 28096,
+      "workload_ref": "prolly-4096-entries-32x16-updates"
+    },
+    {
+      "backend": "marble-art",
+      "metric": "recovery",
+      "unit": "nanoseconds",
+      "value": 61822765,
+      "workload_ref": "prolly-4096-entries-32x16-updates"
+    },
+    {
+      "backend": "marble-art",
+      "metric": "space-amplification",
+      "unit": "permille",
+      "value": 1114,
+      "workload_ref": "prolly-4096-entries-32x16-updates"
+    }
+  ],
+  "non_claims": [
+    "the spike changes no dataspace, vat, networking, or replication semantics",
+    "the spike does not change the default storage path",
+    "marble object identifiers are physical handles, not content identity",
+    "measurements record one workload on one host and do not prove runtime superiority",
+    "durability covers only batches marble atomically recovered"
+  ],
+  "schema": "molten.marble-store-decision.v1",
+  "verdict": "keep-current",
+  "workloads": [
+    {
+      "description": "One 64-entry Prolly map publication and one single-key update, then GC of unreachable blocks; mean per publication and per block read.",
+      "workload_ref": "prolly-64-entries-1-update"
+    },
+    {
+      "description": "One 4096-entry Prolly map publication and 32 update rounds of 16 keys each, then GC of unreachable blocks; mean per publication and per block read.",
+      "workload_ref": "prolly-4096-entries-32x16-updates"
+    }
+  ]
+}

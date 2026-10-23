@@ -1,6 +1,6 @@
 let Contracts = import "../../contracts.ncl" in
 {
-  schema = "molten.release-dependency-profile.v1",
+  schema = "molten.release-dependency-profile.v2",
   dependencies = [{
     manifest_dependency = "floating",
     package_name = "floating",
@@ -12,6 +12,7 @@ let Contracts = import "../../contracts.ncl" in
     transport_policy = "https",
     disposition = "runtime",
   }],
+  registry_dependencies = [],
   canonical_valence = {
     source_coordinate = "https://github.com/OnixResearch/valence.git",
     immutable_revision = "5f1c2ba5072c6f9622fa59b1af20502985f569fd",

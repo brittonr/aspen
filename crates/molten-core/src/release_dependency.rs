@@ -1,9 +1,15 @@
+mod registry;
+
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+
+use self::registry::registry_material_rows;
+use self::registry::validate_registry_rows;
 
 const SHA1_HEX_LENGTH: usize = 40;
 const BLAKE3_HEX_LENGTH: usize = 64;
 const MAX_DEPENDENCY_ROWS: usize = 64;
+const MAX_REGISTRY_ROWS: usize = 64;
 const MAX_ARCHIVE_RECEIPTS: usize = 16;
 const MAX_EVIDENCE_FILES_PER_RECEIPT: usize = 16;
 const MAX_DISTRIBUTION_ARTIFACTS: usize = 64;
@@ -18,6 +24,7 @@ const UNIVERSAL_COMPLIANCE_NON_CLAIM: &str = "does not prove compliance in every
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SourceKind {
     Git,
+    CratesIo,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -25,6 +32,7 @@ pub enum TransportPolicy {
     Https,
     PrivateRadicle,
     SshPinnedWithNixArchive,
+    CratesIo,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -32,6 +40,21 @@ pub enum ReleaseDisposition {
     Runtime,
     OptionalRuntime,
     Development,
+}
+
+/// Dependency-graph edge a registry pin is classified onto.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DependencyPlane {
+    Implementation,
+    Development,
+}
+
+/// Root-manifest table that declares a dependency.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ManifestTable {
+    Dependencies,
+    DevDependencies,
+    BuildDependencies,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,6 +81,32 @@ pub struct DependencyObservation {
     pub lock_revision: Option<String>,
     pub nix_input: String,
     pub nix_revision: Option<String>,
+}
+
+/// Reviewed crates.io pin: exact version, Cargo.lock checksum, and manifest plane.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegistryDependencyExpectation {
+    pub manifest_dependency: String,
+    pub package_name: String,
+    pub package_version: String,
+    pub source_kind: SourceKind,
+    pub source_coordinate: String,
+    pub checksum: String,
+    pub transport_policy: TransportPolicy,
+    pub plane: DependencyPlane,
+    pub disposition: ReleaseDisposition,
+}
+
+/// Root-manifest and Cargo.lock facts observed for one registry pin.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegistryDependencyObservation {
+    pub manifest_dependency: String,
+    pub manifest_table: Option<ManifestTable>,
+    pub manifest_version_requirement: Option<String>,
+    pub is_manifest_optional: bool,
+    pub lock_package_version: Option<String>,
+    pub lock_source_coordinate: Option<String>,
+    pub lock_checksum: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -125,6 +174,8 @@ pub struct DistributionObservation {
 pub struct ReleaseDependencyInput {
     pub dependencies: Vec<DependencyExpectation>,
     pub observations: Vec<DependencyObservation>,
+    pub registry_dependencies: Vec<RegistryDependencyExpectation>,
+    pub registry_observations: Vec<RegistryDependencyObservation>,
     pub resolved_package_identities: Vec<ResolvedPackageIdentity>,
     pub unprofiled_git_dependencies: Vec<String>,
     pub canonical_valence: CanonicalValenceAuthority,
@@ -140,6 +191,7 @@ pub enum DiagnosticCode {
     DuplicateDependency,
     DuplicatePackageIdentity,
     FloatingRevision,
+    FloatingVersion,
     InvalidArchiveReceipt,
     InvalidDistributionProfile,
     InvalidSourceRow,
@@ -150,6 +202,7 @@ pub enum DiagnosticCode {
     MissingSourceRow,
     NixDrift,
     NonCanonicalValence,
+    PlaneDrift,
     UnprofiledGitDependency,
 }
 
@@ -182,6 +235,7 @@ pub fn validate_release_dependencies(input: &ReleaseDependencyInput) -> ReleaseD
     let mut diagnostics = Vec::new();
     validate_bounds(input, &mut diagnostics);
     validate_dependency_rows(input, &mut diagnostics);
+    validate_registry_rows(input, &mut diagnostics);
     validate_resolved_package_identities(input, &mut diagnostics);
     validate_unprofiled_dependencies(input, &mut diagnostics);
     validate_canonical_valence(input, &mut diagnostics);
@@ -199,6 +253,13 @@ pub fn validate_release_dependencies(input: &ReleaseDependencyInput) -> ReleaseD
 fn validate_bounds(input: &ReleaseDependencyInput, diagnostics: &mut Vec<ReleaseDependencyDiagnostic>) {
     check_bound("dependency rows", input.dependencies.len(), MAX_DEPENDENCY_ROWS, diagnostics);
     check_bound("dependency observations", input.observations.len(), MAX_DEPENDENCY_ROWS, diagnostics);
+    check_bound("registry dependency rows", input.registry_dependencies.len(), MAX_REGISTRY_ROWS, diagnostics);
+    check_bound(
+        "registry dependency observations",
+        input.registry_observations.len(),
+        MAX_REGISTRY_ROWS,
+        diagnostics,
+    );
     check_bound(
         "resolved package identities",
         input.resolved_package_identities.len(),
@@ -336,6 +397,7 @@ fn validate_expectation(expectation: &DependencyExpectation, diagnostics: &mut V
             expectation.source_coordinate.starts_with("ssh://git@github.com/")
                 && !expectation.nix_input.trim().is_empty()
         }
+        TransportPolicy::CratesIo => false,
     };
     if expectation.source_kind != SourceKind::Git || !transport_valid {
         push_diagnostic(
@@ -713,6 +775,7 @@ fn push_diagnostic(
 
 fn canonical_report_material(input: &ReleaseDependencyInput, diagnostics: &[ReleaseDependencyDiagnostic]) -> String {
     let mut rows = dependency_material_rows(input);
+    rows.extend(registry_material_rows(input));
     rows.extend(archive_material_rows(input));
     rows.extend(distribution_material_rows(input));
     rows.extend(diagnostics.iter().map(|diagnostic| {
@@ -917,7 +980,7 @@ mod tests {
         }
     }
 
-    fn valid_input() -> ReleaseDependencyInput {
+    pub(super) fn valid_input() -> ReleaseDependencyInput {
         let basalt = dependency("basalt", "basalt", "0.1.0", BASALT_SOURCE, BASALT_REVISION, "basalt-src");
         let valence = dependency(
             "valence",
@@ -933,6 +996,8 @@ mod tests {
         ReleaseDependencyInput {
             dependencies: vec![basalt.clone(), valence.clone()],
             observations: vec![observation(&valence), observation(&basalt)],
+            registry_dependencies: Vec::new(),
+            registry_observations: Vec::new(),
             resolved_package_identities: vec![
                 ResolvedPackageIdentity {
                     package_name: basalt.package_name.clone(),

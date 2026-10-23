@@ -1702,6 +1702,44 @@
                   fi
                   touch "$out"
                 '';
+            # r[verify aspen.marble_store.boundary]
+            marbleStoreConfigCheck =
+              pkgs.runCommand "molten-marble-store-config"
+                {
+                  nativeBuildInputs = [
+                    pkgs.diffutils
+                    pkgs.nickel
+                    pkgs.ripgrep
+                  ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cd "$src"
+                  nickel format --check \
+                    config/marble-store/*.ncl \
+                    config/marble-store/fixtures/negative/*.ncl
+                  nickel export config/marble-store/selection.ncl \
+                    --format json --output "$TMPDIR/selection.json"
+                  cmp config/marble-store/generated/selection.json "$TMPDIR/selection.json"
+                  nickel export config/marble-store/decision.ncl \
+                    --format json --output "$TMPDIR/decision.json"
+                  cmp config/marble-store/generated/decision.json "$TMPDIR/decision.json"
+                  for fixture in config/marble-store/fixtures/negative/*.ncl
+                  do
+                    if nickel export "$fixture" --format json \
+                      > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
+                      echo "negative marble store fixture unexpectedly exported: $fixture" >&2
+                      exit 1
+                    fi
+                  done
+                  if rg -n 'std::fs|std::path|std::env|std::time|std::thread|\b(marble|art)::|std::process|println!|eprintln!' \
+                    crates/molten-core/src/marble_store; then
+                    echo "effect or storage-crate type leaked into the marble store core" >&2
+                    exit 1
+                  fi
+                  touch "$out"
+                '';
             prollyMapProfileCheck =
               pkgs.runCommand "molten-prolly-map-profile"
                 {
@@ -2975,6 +3013,7 @@
             world-state-oracle-profile = worldStateOracleProfileCheck;
             world-state-oracle-source = worldStateOracleSourceCheck;
             prolly-map-profile = prollyMapProfileCheck;
+            marble-store-config = marbleStoreConfigCheck;
             coordination-delivery-profile = coordinationDeliveryProfileCheck;
             addressable-actor-profile = addressableActorProfileCheck;
             world-operator-profile = worldOperatorProfileCheck;

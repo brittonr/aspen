@@ -1,5 +1,6 @@
 let Prelude = import "../../docs/nickel-contract-prelude.ncl" in
 let MaximumDependencyRows = 64 in
+let MaximumRegistryRows = 64 in
 let MaximumArchiveReceipts = 16 in
 let MaximumEvidenceFiles = 16 in
 let MaximumDistributionArtifacts = 64 in
@@ -9,6 +10,11 @@ let ExactRevision =
   )
 in
 let Blake3Hex =
+  Prelude.contract (fun value =>
+    std.is_string value && std.string.is_match "^[0-9a-f]{64}$" value
+  )
+in
+let RegistryChecksum =
   Prelude.contract (fun value =>
     std.is_string value && std.string.is_match "^[0-9a-f]{64}$" value
   )
@@ -64,6 +70,27 @@ let DependencyContract =
       disposition | ReleaseDisposition,
     },
     Prelude.contract dependency_transport_matches
+  ]
+in
+let DependencyPlane = Prelude.contract (Prelude.is_one_of ["implementation", "development"]) in
+let registry_plane_matches_disposition = fun dependency =>
+  (dependency.disposition == "development") == (dependency.plane == "development")
+in
+let RegistryDependencyContract =
+  std.contract.Sequence [
+    {
+      manifest_dependency | Prelude.contracts.StableId,
+      package_name | Prelude.contracts.StableId,
+      package_version | Prelude.contracts.Semver,
+      source_kind | Prelude.contract (Prelude.is_exact_string "crates-io"),
+      source_coordinate
+        | Prelude.contract (Prelude.is_exact_string "registry+https://github.com/rust-lang/crates.io-index"),
+      checksum | RegistryChecksum,
+      transport_policy | Prelude.contract (Prelude.is_exact_string "crates.io"),
+      plane | DependencyPlane,
+      disposition | ReleaseDisposition,
+    },
+    Prelude.contract registry_plane_matches_disposition
   ]
 in
 let EvidenceFile = {
@@ -127,16 +154,25 @@ let shared_nix_inputs_are_consistent = fun rows =>
 in
 let profile_invariants = fun profile =>
   Prelude.non_empty_distinct_by (fun row => row.manifest_dependency) profile.dependencies
+  && Prelude.distinct_by
+    (fun row => row.manifest_dependency)
+    (profile.dependencies @ profile.registry_dependencies)
   && shared_nix_inputs_are_consistent profile.dependencies
   && Prelude.non_empty_distinct_by (fun receipt => receipt.id) profile.archive_receipts
   && std.array.length profile.dependencies <= MaximumDependencyRows
+  && std.array.length profile.registry_dependencies <= MaximumRegistryRows
   && std.array.length profile.archive_receipts <= MaximumArchiveReceipts
 in
 let ProfileContract =
   std.contract.Sequence [
     {
-      schema | Prelude.contract (Prelude.is_exact_string "molten.release-dependency-profile.v1"),
+      schema | Prelude.contract (Prelude.is_exact_string "molten.release-dependency-profile.v2"),
       dependencies | std.contract.Sequence [Prelude.contracts.NonEmptyArray, Array DependencyContract],
+      registry_dependencies
+        | std.contract.Sequence [
+          Prelude.contract (Prelude.is_bounded_array MaximumRegistryRows),
+          Array RegistryDependencyContract,
+        ],
       canonical_valence | CanonicalValence,
       archive_receipts | std.contract.Sequence [Prelude.contracts.NonEmptyArray, Array ArchiveReceiptContract],
       distribution | DistributionContract,
@@ -147,6 +183,7 @@ in
 {
   Profile = ProfileContract,
   Dependency = DependencyContract,
+  RegistryDependency = RegistryDependencyContract,
   ArchiveReceipt = ArchiveReceiptContract,
   Distribution = DistributionContract,
 }

@@ -33,6 +33,8 @@ fn run() -> Result<(), String> {
     let input = ReleaseDependencyInput {
         dependencies: profile.dependency_expectations()?,
         observations: observations.dependencies,
+        registry_dependencies: profile.registry_dependency_expectations()?,
+        registry_observations: observations.registry_dependencies,
         resolved_package_identities: observations.resolved_package_identities,
         unprofiled_git_dependencies: observations.unprofiled_git_dependencies,
         canonical_valence: profile.canonical_valence_authority(),
