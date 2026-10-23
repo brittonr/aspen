@@ -34,6 +34,62 @@ impl RedbReplicaPort {
         &self.snapshot_store_ref
     }
 
+    /// The rejoin admission of this replica's storage, as a readback.
+    ///
+    /// Storage that serves admits the replica as a voter. Storage that is
+    /// quarantined, repaired, or uncertain admits nothing on local facts alone:
+    /// it needs protocol reconciliation, log or snapshot validation, current
+    /// membership, and a resolved term and vote first. Startup recovery does
+    /// not consult this yet: the peer-query recovery path it needs is open
+    /// work in `recover-from-storage-faults`.
+    // r[impl molten.consensus.repair_admission]
+    pub fn storage_admission(&self) -> molten_core::consensus_recovery::RepairAdmission {
+        let is_serving = self.adapter.health() == crate::fabric_durability::AdapterHealth::Serving;
+        molten_core::consensus_recovery::admit_repaired_participant(
+            &molten_core::consensus_recovery::RepairAdmissionInput {
+                is_persistent_state_suspect: !is_serving || self.adapter.is_repair_observed(),
+                is_storage_serving: is_serving,
+                is_protocol_reconciled: false,
+                is_log_or_snapshot_validated: false,
+                is_membership_current: false,
+                hard_state: molten_core::consensus_recovery::HardStateDecision::KeepLocal,
+                current_term: 0,
+            },
+        )
+    }
+
+    /// Explicitly reconcile storage that a local repair reopened, by its own
+    /// consistency, so startup recovery can read it. The repair stays
+    /// recorded, and `storage_admission` keeps reporting the store as suspect.
+    // r[impl molten.fabric_durability.adapter_quarantine]
+    pub fn reconcile_repaired_storage(self) -> crate::error::Result<Self> {
+        let repaired = crate::fabric_durability::AdapterHealth::Quarantined(
+            crate::fabric_durability::QuarantineReason::RepairedOnOpen,
+        );
+        if self.adapter.health() != repaired {
+            return Ok(self);
+        }
+        let Self {
+            adapter,
+            durable_log_ref,
+            snapshot_store_ref,
+        } = self;
+        let adapter = adapter
+            .reopen_and_reconcile(crate::fabric_durability::ReconciliationReference::SelfConsistent)
+            .map_err(|failure| failure.error)?;
+        if adapter.health() != crate::fabric_durability::AdapterHealth::Serving {
+            return Err(crate::error::Failure::invalid_harness(format!(
+                "repaired replica storage did not reconcile: {:?}",
+                adapter.health()
+            )));
+        }
+        Ok(Self {
+            adapter,
+            durable_log_ref,
+            snapshot_store_ref,
+        })
+    }
+
     pub fn plan_recovery(&self, start_plan: ReplicaStartPlan) -> crate::error::Result<ReplicaPlan> {
         if !self.adapter.state().buffered_log.is_empty() {
             return Err(crate::error::Failure::invalid_harness(

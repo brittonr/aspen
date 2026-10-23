@@ -41,7 +41,7 @@ fn profile(kind: DurableAdapterKind) -> DurableStateProfile {
     }
 }
 
-fn descriptor() -> DurableNamespaceDescriptor {
+pub(crate) fn descriptor() -> DurableNamespaceDescriptor {
     DurableNamespaceDescriptor {
         schema: DURABLE_STATE_NAMESPACE_SCHEMA.to_string(),
         profile_ref: PROFILE_REF.to_string(),

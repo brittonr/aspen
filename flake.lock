@@ -849,6 +849,23 @@
         "type": "github"
       }
     },
+    "durable-file-publication-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1786439773,
+        "narHash": "sha256-kd74vui4byAC32OnH7Wn1sw9IW4PWjSw/VThvdnd380=",
+        "ref": "refs/heads/main",
+        "rev": "8e05e74e24b45f752d77145c4455385daaf6d6ab",
+        "revCount": 11,
+        "type": "git",
+        "url": "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git"
+      },
+      "original": {
+        "rev": "8e05e74e24b45f752d77145c4455385daaf6d6ab",
+        "type": "git",
+        "url": "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git"
+      }
+    },
     "dylint-src": {
       "flake": false,
       "locked": {
@@ -2525,6 +2542,7 @@
         "chaoscontrol-src": "chaoscontrol-src",
         "choregraph-src": "choregraph-src",
         "doltlite-src": "doltlite-src",
+        "durable-file-publication-src": "durable-file-publication-src",
         "executable-extent-octet": "executable-extent-octet",
         "executable-extent-src": "executable-extent-src",
         "flake-utils": "flake-utils_9",

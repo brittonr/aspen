@@ -6,10 +6,12 @@
 pub mod cache;
 pub mod ownership;
 
+mod storagefault;
 mod transition;
 
 use std::collections::BTreeMap;
 
+pub use storagefault::*;
 pub use transition::*;
 
 use crate::fabric::valid_blake3_ref;

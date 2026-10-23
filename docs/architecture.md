@@ -295,6 +295,32 @@ Do not use Raft for:
 
 Raft commands are canonical Molten command envelopes. The replicated state machine is deterministic and side-effect free; adapters persist logs/snapshots and publish resulting facts only after admission and commit.
 
+## Storage faults and recovery
+
+r[impl molten.fabric_durability.storage_fault_outcomes] A durable mutation reports one typed persistence observation to the pure core (`fabric_durability::storagefault`): not applied, applied and process-visible, synchronization observed, outcome unknown, or corrupt or inconsistent. The core acknowledges durability only when the observation satisfies the requested level. A Redb commit error is an unknown outcome, never success, because an `fsync` or commit error does not prove that no bytes reached storage.
+
+An unknown outcome, corruption, a snapshot payload whose BLAKE3 identity does not match, or a Redb repair at open quarantines the `RedbDurableStateAdapter`. A quarantined adapter serves only status and an explicit reopen. Its last acknowledged state never advances, and retrying the failed call never clears quarantine. `reopen_and_reconcile` closes and reopens the store and compares the read-back with one of three references:
+
+- the adapter's last acknowledged state;
+- a supplied reference, such as one established by protocol recovery;
+- the store's own consistency, for a store with no reference (records decode, the recovery evaluation admits, and payloads match).
+
+The adapter serves again only after a fresh transaction rewrites the reconciled content and observes its own synchronization, because a same-boot read-back may come from page cache rather than the medium. A local repair stays recorded after reconciliation.
+
+Snapshot payloads are published through the pinned [Durable File Publication](https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git) contract. The payload is staged, synchronized, published without replacement under its content-addressed name, and its parent directory synchronized before the snapshot metadata commits. A failed parent synchronization leaves the payload visible with unknown durability; the metadata is withheld and the adapter quarantines until reconciliation. A retry then verifies the existing destination's identity before committing metadata.
+
+Local database repair restores structure; it does not prove that a Raft replica retained committed history. The pure `consensus_recovery` core makes several decisions from Raft facts keyed by term and index:
+
+- It repairs entries, never truncating a committed one. It removes an entry only when a quorum of voters lacks it, and waits when commitment is unknown.
+- It fences a lost term and vote record instead of copying a peer's.
+- It accepts a snapshot repair only with one content identity at a committed index.
+- It evaluates participant-scoped recovery progress as pass, fail, not-evaluated, or incomplete.
+- It admits a repaired participant as a voter only after storage serves, protocol reconciliation completes, the log or snapshot validates, membership is current, and the term and vote are resolved.
+
+`RedbReplicaPort::storage_admission` reads back that admission. Startup recovery does not consult it yet, because the peer-query recovery path that would execute the repair plans over the replica transport is open work.
+
+Storage-fault receipts bind the candidate, Molten profile, Redb version, kernel, filesystem, mount options, device profile, and fault schedule. They fail closed when a cohort identity is missing or changed. They state that local repair, checksums, and passing campaigns do not prove arbitrary hardware, kernels, filesystems, schedules, or whole-cluster safety, liveness, or release readiness.
+
 ## Policy and evidence
 
 Every trust-boundary action is admitted before side effects occur.

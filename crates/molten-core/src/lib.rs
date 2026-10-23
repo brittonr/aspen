@@ -12,6 +12,7 @@ pub mod addressable_actor;
 pub mod cluster_harness;
 pub mod codec;
 pub mod committed_stream;
+pub mod consensus_recovery;
 pub mod content_replication;
 pub mod content_store_adapter;
 pub mod coordination_delivery;

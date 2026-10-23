@@ -74,8 +74,9 @@ async fn build_node_with_root(
     let identity = runtime_identity(group, &state, fabric_binding_refs.clone());
     let mut plan = start_plan(group, state, fabric_binding_refs);
     let (transport, session_ref) = transport_for(node_id, endpoints, protocol_ref)?;
-    let durability = durability_for_root(node_id, durable_log_ref, snapshot_store_ref, durability_root)?;
+    let mut durability = durability_for_root(node_id, durable_log_ref, snapshot_store_ref, durability_root)?;
     let recovery_ref = if startup_mode == NodeStartupMode::Recover {
+        durability = durability.reconcile_repaired_storage()?;
         let recovery = durability.plan_recovery(plan)?;
         plan = recovery.start_plan;
         Some(recovery.recovery_ref)

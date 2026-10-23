@@ -34,6 +34,10 @@
       url = "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525";
       flake = false;
     };
+    durable-file-publication-src = {
+      url = "git+https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=8e05e74e24b45f752d77145c4455385daaf6d6ab";
+      flake = false;
+    };
     artifact-src = {
       url = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1";
       flake = false;
@@ -112,6 +116,7 @@
       onixpkgs,
       basalt-src,
       bounded-exec-src,
+      durable-file-publication-src,
       artifact-src,
       choregraph-src,
       chaoscontrol-src,
@@ -247,6 +252,27 @@
             && boundedExecPackage.package.name == "bounded-exec"
           ) "Molten Bounded Exec Cargo/Nix source identity, package set, workspace, or license drifted";
           bounded-exec-src;
+        durableFilePublicationRevision = "8e05e74e24b45f752d77145c4455385daaf6d6ab";
+        durableFilePublicationRepository = "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git";
+        durableFilePublicationDependency = artifactRootDependencies."durable-file-publication";
+        durableFilePublicationExpectedLockSource = "git+${durableFilePublicationRepository}?rev=${durableFilePublicationRevision}#${durableFilePublicationRevision}";
+        durableFilePublicationLockPackages = builtins.filter (
+          package: (package.source or "") == durableFilePublicationExpectedLockSource
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        durableFilePublicationPackage = builtins.fromTOML (
+          builtins.readFile (durable-file-publication-src + "/Cargo.toml")
+        );
+        durableFilePublicationSource =
+          assert pkgs.lib.assertMsg (
+            durableFilePublicationDependency.git == durableFilePublicationRepository
+            && durableFilePublicationDependency.rev == durableFilePublicationRevision
+            && durableFilePublicationDependency.version == "0.1.0"
+            && durable-file-publication-src.rev == durableFilePublicationRevision
+            && map (package: package.name) durableFilePublicationLockPackages == [ "durable-file-publication" ]
+            && durableFilePublicationPackage.package.name == "durable-file-publication"
+            && durableFilePublicationPackage.package.license == "MIT OR Apache-2.0"
+          ) "Molten Durable File Publication Cargo/Nix source identity, package, or license drifted";
+          durable-file-publication-src;
         choregraphRevision = "b3e08e19750f53bdbcae970cdf58a47a791ed20b";
         choregraphRepository = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git";
         choregraphHistoryDependencies = [
@@ -463,6 +489,8 @@
         localGitSources = pkgs.lib.filterAttrs (_key: src: src != null) {
           "${artifactRepository}#${artifactRevision}" = maybeCleanLocalGitSource artifactSource;
           "${boundedExecRepository}#${boundedExecRevision}" = maybeCleanLocalGitSource boundedExecSource;
+          "${durableFilePublicationRepository}#${durableFilePublicationRevision}" =
+            maybeCleanLocalGitSource durableFilePublicationSource;
           "${executableExtentRepository}#${executableExtentRevision}" =
             maybeCleanLocalGitSource executableExtentSource;
           "${kamaciteRepository}#${kamaciteRevision}" = maybeCleanLocalGitSource kamaciteSource;

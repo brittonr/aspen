@@ -58,21 +58,19 @@ fn load_state(
     Ok(state)
 }
 
-fn persist_log(database: &redb::Database, records: &[LogRecord]) -> crate::error::Result<()> {
-    let write = database.begin_write().map_err(adapter_error)?;
-    {
+fn persist_log(database: &redb::Database, records: &[LogRecord]) -> PersistenceAttempt {
+    write_observed(database, |write| {
         let mut table = write.open_table(LOG_TABLE).map_err(adapter_error)?;
         for record in records {
             let bytes = encode_log_record(record)?;
             table.insert(record.sequence, bytes.as_slice()).map_err(adapter_error)?;
         }
-    }
-    write.commit().map_err(adapter_error)
+        Ok(())
+    })
 }
 
-fn replace_log(database: &redb::Database, records: &[LogRecord]) -> crate::error::Result<()> {
-    let write = database.begin_write().map_err(adapter_error)?;
-    {
+fn replace_log(database: &redb::Database, records: &[LogRecord]) -> PersistenceAttempt {
+    write_observed(database, |write| {
         let mut table = write.open_table(LOG_TABLE).map_err(adapter_error)?;
         let keys = table
             .iter()
@@ -86,17 +84,12 @@ fn replace_log(database: &redb::Database, records: &[LogRecord]) -> crate::error
             let bytes = encode_log_record(record)?;
             table.insert(record.sequence, bytes.as_slice()).map_err(adapter_error)?;
         }
-    }
-    write.commit().map_err(adapter_error)
+        Ok(())
+    })
 }
 
-fn persist_ordered_batch(
-    database: &redb::Database,
-    request: &AtomicBatchRequest,
-    next: &DurableState,
-) -> crate::error::Result<()> {
-    let write = database.begin_write().map_err(adapter_error)?;
-    {
+fn persist_ordered_batch(database: &redb::Database, request: &AtomicBatchRequest, next: &DurableState) -> PersistenceAttempt {
+    write_observed(database, |write| {
         let mut table = write.open_table(ORDERED_TABLE).map_err(adapter_error)?;
         for mutation in &request.mutations {
             match mutation {
@@ -112,47 +105,34 @@ fn persist_ordered_batch(
                 }
             }
         }
-    }
-    write.commit().map_err(adapter_error)
+        Ok(())
+    })
 }
 
-fn persist_snapshot(
-    root: &crate::local_store::DurableStoreRoot,
-    database: &redb::Database,
-    request: &SnapshotRequest,
-    bytes: &[u8],
-    next: &DurableState,
-) -> crate::error::Result<()> {
-    let snapshot = next.snapshots.get(&request.snapshot_ref).ok_or_else(|| {
-        crate::error::Failure::invalid_harness("admitted snapshot transition produced no snapshot")
-    })?;
-    let relative = format!("{SNAPSHOT_DIRECTORY}/{}.bin", snapshot_file_stem(&request.content_ref)?);
-    root.root().write(&crate::local_store::Locator::parse(&relative)?, bytes)?;
-    let encoded = encode_snapshot(snapshot)?;
-    let write = database.begin_write().map_err(adapter_error)?;
-    {
+/// Commit the metadata of a snapshot whose payload is already published.
+fn persist_snapshot_metadata(database: &redb::Database, request: &SnapshotRequest, next: &DurableState) -> PersistenceAttempt {
+    write_observed(database, |write| {
+        let snapshot = next.snapshots.get(&request.snapshot_ref).ok_or_else(|| {
+            crate::error::Failure::invalid_harness("admitted snapshot transition produced no snapshot")
+        })?;
+        let encoded = encode_snapshot(snapshot)?;
         let mut table = write.open_table(SNAPSHOT_TABLE).map_err(adapter_error)?;
         table.insert(request.snapshot_ref.as_str(), encoded.as_slice()).map_err(adapter_error)?;
-    }
-    write.commit().map_err(adapter_error)
+        Ok(())
+    })
 }
 
-fn persist_effect(
-    database: &redb::Database,
-    command: &EffectTransactionCommand,
-    next: &DurableState,
-) -> crate::error::Result<()> {
-    let transaction_id = effect_transaction_id(command);
-    let effect = next.effects.get(transaction_id).ok_or_else(|| {
-        crate::error::Failure::invalid_harness("admitted effect transition produced no effect state")
-    })?;
-    let encoded = encode_effect(effect)?;
-    let write = database.begin_write().map_err(adapter_error)?;
-    {
+fn persist_effect(database: &redb::Database, command: &EffectTransactionCommand, next: &DurableState) -> PersistenceAttempt {
+    write_observed(database, |write| {
+        let transaction_id = effect_transaction_id(command);
+        let effect = next.effects.get(transaction_id).ok_or_else(|| {
+            crate::error::Failure::invalid_harness("admitted effect transition produced no effect state")
+        })?;
+        let encoded = encode_effect(effect)?;
         let mut table = write.open_table(EFFECT_TABLE).map_err(adapter_error)?;
         table.insert(transaction_id, encoded.as_slice()).map_err(adapter_error)?;
-    }
-    write.commit().map_err(adapter_error)
+        Ok(())
+    })
 }
 
 fn effect_transaction_id(command: &EffectTransactionCommand) -> &str {

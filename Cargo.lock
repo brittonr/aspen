@@ -1881,6 +1881,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56899898ce76aaf4a0f24d914c97ea6ed976d42fec6ad33fcbb0a1103e07b2b0"
 
 [[package]]
+name = "durable-file-publication"
+version = "0.1.0"
+source = "git+https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=8e05e74e24b45f752d77145c4455385daaf6d6ab#8e05e74e24b45f752d77145c4455385daaf6d6ab"
+dependencies = [
+ "rustix",
+]
+
+[[package]]
 name = "dyn-clone"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4414,6 +4422,7 @@ dependencies = [
  "choregraph-history",
  "clap 4.6.1",
  "data-encoding",
+ "durable-file-publication",
  "executable-extent-conformance",
  "executable-extent-core",
  "executable-extent-linux",

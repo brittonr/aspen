@@ -1,23 +1,23 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015",
+  "workspaceRoot": "/home/brittonr/git/OnixResearch/aspen",
   "roots": [
-    "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015#molten@0.1.0",
-    "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015#molten@0.1.0",
-    "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015#molten@0.1.0",
-    "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-core#0.1.0",
-    "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-node-host#0.1.0",
-    "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-release-policy#0.1.0",
-    "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-release-policy#0.1.0"
+    "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-node-host#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0",
+    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten": "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015#molten@0.1.0",
-    "molten-core": "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-core#0.1.0",
-    "molten-node-host": "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-node-host#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-release-policy#0.1.0"
+    "molten": "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0",
+    "molten-core": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0",
+    "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-node-host#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "4d815280a2d23fb019500548bfd497f3a47884eca94b433cd961e838a4daa29d",
-  "inputsHash": "84c64d7f69fcf1097514f2ff0e6e8b16b6e35d3a4602080082cf891da4d03f01",
+  "cargoLockHash": "3ecb474ec18be7dc452fc5a200a99005453d1cf521da533fe10e3373adb9d8d5",
+  "inputsHash": "c5a8cf7c7d9aac684a2661f724bee42fc484eb5b8ab17fb2892cc4096a742a84",
   "crates": {
     "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec-core@0.1.0": {
       "crateName": "bounded-exec-core",
@@ -83,6 +83,41 @@
       "description": "Bounded child-process execution with concurrent capture, deadlines, cancellation, and owned teardown.",
       "license": "AGPL-3.0-or-later",
       "repository": "https://github.com/OnixResearch/bounded-exec"
+    },
+    "git+https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=8e05e74e24b45f752d77145c4455385daaf6d6ab#durable-file-publication@0.1.0": {
+      "crateName": "durable-file-publication",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git",
+        "rev": "8e05e74e24b45f752d77145c4455385daaf6d6ab",
+        "sha256": "sha256-kd74vui4byAC32OnH7Wn1sw9IW4PWjSw/VThvdnd380="
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustix@1.1.4",
+          "externCrateName": "rustix"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Bounded capability-relative publication of one regular file",
+      "license": "MIT OR Apache-2.0",
+      "repository": "rad://z3tAR4For7qw8ZirkJzoDw1VNDDLM"
     },
     "git+https://github.com/brittonr/chaoscontrol.git?rev=b8c440ea3b19df796542e58e8ee36200e1c3db85#chaoscontrol-snapshot-descriptor@0.1.0": {
       "crateName": "chaoscontrol-snapshot-descriptor",
@@ -1190,7 +1225,7 @@
       "license": "MPL-2.0",
       "repository": "https://github.com/OnixResearch/valence"
     },
-    "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015#molten@0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0": {
       "crateName": "molten",
       "version": "0.1.0",
       "edition": "2024",
@@ -1254,6 +1289,10 @@
           "externCrateName": "clap"
         },
         {
+          "packageId": "git+https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=8e05e74e24b45f752d77145c4455385daaf6d6ab#durable-file-publication@0.1.0",
+          "externCrateName": "durable_file_publication"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#iroh@1.0.0",
           "externCrateName": "iroh"
         },
@@ -1274,11 +1313,11 @@
           "externCrateName": "kamacite_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-node-host#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-node-host#0.1.0",
           "externCrateName": "molten_node_host"
         },
         {
@@ -1431,7 +1470,7 @@
       "description": "Molten Rust project",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -1495,7 +1534,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-node-host#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-node-host#0.1.0": {
       "crateName": "molten-node-host",
       "version": "0.1.0",
       "edition": "2024",
@@ -1515,7 +1554,7 @@
           "externCrateName": "cap_std"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         }
       ],
@@ -1542,7 +1581,7 @@
       "description": "Capability-rooted node host boundary for Molten",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -1558,7 +1597,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/aspen-worktrees/guided-goal-completion-20261015/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {

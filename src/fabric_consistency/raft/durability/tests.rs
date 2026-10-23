@@ -247,3 +247,53 @@ fn entry(index: u64, label: &str) -> ReplicatedEntry {
         command_schema_ref: super::tests::test_ref("durable-command-schema"),
     }
 }
+
+// r[verify molten.consensus.repair_admission]
+// r[verify molten.consensus.storage_fault_validation]
+#[test]
+fn a_locally_repaired_replica_store_reports_no_rejoin_role() {
+    let root = crate::test_support::process_workspace("live-raft-repaired-store").expect("workspace");
+    let disk = crate::fabric_durability::tests::FaultDisk::default();
+    let open = |disk: &crate::fabric_durability::tests::FaultDisk| {
+        crate::fabric_durability::RedbDurableStateAdapter::open_with(
+            &root,
+            crate::fabric_durability::tests::profile(crate::fabric_durability::DurableAdapterKind::LiveRedb),
+            crate::fabric_durability::tests::descriptor(),
+            disk.source(),
+            crate::fabric_durability::PublicationSource::Linux,
+        )
+        .expect("Redb adapter over the simulated medium")
+    };
+    let mut port = RedbReplicaPort::new(
+        open(&disk),
+        super::tests::test_ref("repaired-durable-log"),
+        super::tests::test_ref("repaired-snapshot-store"),
+    )
+    .expect("replica durability port");
+    port.persist_hard_state(TERM, Some("node-a")).expect("durable vote");
+    assert_eq!(port.storage_admission().role, Some(molten_core::consensus_recovery::RejoinRole::Voter));
+
+    let repaired = RedbReplicaPort::new(
+        open(&disk.power_loss_image()),
+        super::tests::test_ref("repaired-durable-log"),
+        super::tests::test_ref("repaired-snapshot-store"),
+    )
+    .expect("replica durability port over the repaired store");
+    let admission = repaired.storage_admission();
+    assert_eq!(admission.role, None, "local repair alone admits no role");
+    assert!(admission.blockers.contains(&molten_core::consensus_recovery::AdmissionBlocker::StorageNotServing));
+    assert!(
+        admission
+            .blockers
+            .contains(&molten_core::consensus_recovery::AdmissionBlocker::ProtocolNotReconciled)
+    );
+
+    let reconciled = repaired.reconcile_repaired_storage().expect("explicit storage reconciliation");
+    assert_eq!(reconciled.adapter().health(), crate::fabric_durability::AdapterHealth::Serving);
+    assert!(reconciled.adapter().is_repair_observed(), "the repair stays recorded");
+    assert_eq!(
+        reconciled.storage_admission().role,
+        None,
+        "storage reconciliation is not protocol recovery: the store stays suspect for voting"
+    );
+}
