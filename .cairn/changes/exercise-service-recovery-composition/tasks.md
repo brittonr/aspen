@@ -17,8 +17,12 @@
 ## Live twin
 
 - [ ] [serial] Add the real-process twin covering crash-restart fencing, durable readmission, storm termination, and the generation upgrade, with observations mapped to the deterministic assertion vocabulary and timing checks on admitted observations. r[molten.testing.service_recovery_composition]
-      The real-process twin stays open until `exercise-node-processes-under-faults` lands the outside-in process-fault
-      track and its observation conventions.
+      `exercise-node-processes-under-faults` has landed the outside-in process-fault track, but the twin stays open on a
+      missing runtime surface: real `molten node` processes do not host system-extension recovery groups, supervision,
+      durable-work readmission, or generation upgrades. `plan_recovery`, `plan_lifecycle_transition`,
+      `admit_work_delivery`, `admit_facade_timer`, and `plan_resource_admission` run only in the pure-core harness, and
+      no node command installs or observes them. Hosting them in the node is mechanism work that this change does not
+      own; the twin waits for a change that hosts supervision in node processes.
 
 ## Validation and closeout
 

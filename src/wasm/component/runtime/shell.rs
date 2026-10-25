@@ -31,6 +31,20 @@ pub fn execute(request: &ExecutionRequest<'_>) -> ExecutionOutcome {
 }
 
 fn execute_inner(request: &ExecutionRequest<'_>) -> super::super::model::Result<ExecutionOutcome> {
+    let admitted = admit_request(request)?;
+    execute_admitted(request, &admitted.plan, &admitted.input_bytes, admitted.input_ref)
+}
+
+/// A request that passed every admission boundary before execution.
+pub(super) struct AdmittedRequest {
+    pub(super) plan: super::super::admission::ExecutionPlan,
+    pub(super) input_bytes: Vec<u8>,
+    pub(super) input_ref: String,
+}
+
+/// Admit a request: profile, requested profile, migration, materialization,
+/// artifact facts, import surface, plan, and canonical bounded input.
+pub(super) fn admit_request(request: &ExecutionRequest<'_>) -> super::super::model::Result<AdmittedRequest> {
     super::super::profile::validate_runtime(request.profile)?;
     super::super::slicing::admit_requested_profile(request.profile, request.requested_profile)?;
     super::super::migration::classify_for_profile(request.requested_profile, request.source.component_bytes())?;
@@ -65,7 +79,11 @@ fn execute_inner(request: &ExecutionRequest<'_>) -> super::super::model::Result<
     }
     let input_ref = crate::preserves_rail::canonical_hash(request.input)
         .map_err(|error| super::super::model::Denial::new(format!("component input identity failed: {error}")))?;
-    execute_admitted(request, &plan, &input_bytes, input_ref)
+    Ok(AdmittedRequest {
+        plan,
+        input_bytes,
+        input_ref,
+    })
 }
 
 fn execute_admitted(
@@ -139,7 +157,7 @@ fn execute_admitted(
     })
 }
 
-fn decode_output(
+pub(super) fn decode_output(
     profile: &super::super::model::RuntimeProfile,
     output_bytes: &[u8],
 ) -> super::super::model::Result<(preserves::IOValue, String)> {
@@ -166,17 +184,17 @@ fn decode_output(
     Ok((output, output_ref))
 }
 
-struct PlanReceiptInput<'a> {
-    plan: &'a super::super::admission::ExecutionPlan,
-    stage: super::super::evidence::receipt::Stage,
-    input_ref: Option<String>,
-    output_ref: Option<String>,
-    fuel_limit: Option<u64>,
-    fuel_remaining: Option<u64>,
-    parent_refs: Vec<String>,
+pub(super) struct PlanReceiptInput<'a> {
+    pub(super) plan: &'a super::super::admission::ExecutionPlan,
+    pub(super) stage: super::super::evidence::receipt::Stage,
+    pub(super) input_ref: Option<String>,
+    pub(super) output_ref: Option<String>,
+    pub(super) fuel_limit: Option<u64>,
+    pub(super) fuel_remaining: Option<u64>,
+    pub(super) parent_refs: Vec<String>,
 }
 
-fn plan_receipt(
+pub(super) fn plan_receipt(
     request: &ExecutionRequest<'_>,
     input: PlanReceiptInput<'_>,
 ) -> super::super::model::Result<super::super::evidence::receipt::ExecutionRecord> {

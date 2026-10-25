@@ -1,10 +1,15 @@
 mod bindings;
 mod denial;
 mod shell;
+mod sliced;
+mod slicedshell;
 
 pub use shell::ExecutionOutcome;
 pub use shell::ExecutionRequest;
 pub use shell::execute;
+pub use slicedshell::SliceProgress;
+pub use slicedshell::SlicedExecution;
+pub use slicedshell::start_sliced_execution;
 
 type Linker<T> = wasmtime::component::Linker<T>;
 type Compiled = wasmtime::component::Component;

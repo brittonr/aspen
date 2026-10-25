@@ -1,5 +1,7 @@
 use super::super::*;
 
+mod yielding;
+
 const QUANTUM_FUEL: u64 = 1_000;
 const TOTAL_BUDGET_FUEL: u64 = 10_000;
 
@@ -131,6 +133,6 @@ fn a_yielded_continuation_is_requeued_as_an_ordinary_runnable() {
     let key = continuation.runnable_key();
     assert_eq!(key.service_id, "molten.fixture.component");
     assert_eq!(key.runnable_id, "callback-1");
-    let command = continuation.requeue_command(0);
-    assert_eq!(command, molten_core::fabric_time::SchedulerCommand::Wake { key, priority: 0 });
+    let command = continuation.requeue_command();
+    assert_eq!(command, molten_core::fabric_time::SchedulerCommand::Yield { key });
 }

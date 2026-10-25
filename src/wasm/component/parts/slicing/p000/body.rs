@@ -6,11 +6,9 @@
 // the pending turn that publishes nothing before the callback completes, and
 // the continuation that the admitted scheduler re-selects after a yield.
 //
-// The guest-side yielding under the pinned cohort's async entrypoints is not
-// implemented here: the component's `invoke` export is a synchronous WIT
-// export, and the cohort's fuel-based yielding needs the async entrypoints
-// that an async component ABI would introduce. This module is the contract
-// that execution must satisfy.
+// The runtime's sliced invocation suspends a synchronous guest export every
+// quantum of fuel through the cohort's asynchronous entrypoints; this module
+// is the pure contract that execution satisfies.
 
 /// One recorded quantum boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -186,12 +184,12 @@ impl ContinuationKey {
         }
     }
 
-    /// The command that re-enqueues the continuation with the admitted
-    /// scheduler after a yield.
-    pub fn requeue_command(&self, priority: i32) -> molten_core::fabric_time::SchedulerCommand {
-        molten_core::fabric_time::SchedulerCommand::Wake {
+    /// The command that re-enqueues the running continuation with the
+    /// admitted scheduler after a yield: the scheduler moves it back to ready
+    /// behind the runnables already waiting.
+    pub fn requeue_command(&self) -> molten_core::fabric_time::SchedulerCommand {
+        molten_core::fabric_time::SchedulerCommand::Yield {
             key: self.runnable_key(),
-            priority,
         }
     }
 }

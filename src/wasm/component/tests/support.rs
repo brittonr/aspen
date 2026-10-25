@@ -28,7 +28,10 @@ pub struct Fixture {
 
 impl Fixture {
     pub fn new(consumer: Consumer) -> Self {
-        let profile = supported().expect("supported component profile");
+        Self::with_profile(consumer, supported().expect("supported component profile"))
+    }
+
+    pub fn with_profile(consumer: Consumer, profile: RuntimeProfile) -> Self {
         let component_bytes = identity_bytes();
         let wit_bytes =
             include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/wit/molten-component-runtime/runtime.wit")).to_vec();
@@ -86,6 +89,14 @@ impl Fixture {
             envelope: &self.envelope,
             component_bytes: &self.component_bytes,
             wit_bytes: &self.wit_bytes,
+        }
+    }
+
+    /// A time-sliced execution request for this fixture.
+    pub fn sliced_request<'a>(&'a self, input: &'a preserves::IOValue) -> ExecutionRequest<'a> {
+        ExecutionRequest {
+            requested_profile: RequestedExecutionProfile::TimeSlicedComponentV1,
+            ..self.request(input)
         }
     }
 
@@ -170,6 +181,28 @@ fn identity_invoke_body() -> String {
          i32.store\n\
          i32.const {FIXTURE_RESULT_ADDRESS}"
     )
+}
+
+/// A component that spins for `iterations` loop turns, then echoes its input.
+pub fn cpu_heavy_bytes(iterations: u32) -> Vec<u8> {
+    let invoke_body = format!(
+        "(local $remaining i32)\n\
+         i32.const {iterations}\n\
+         local.set $remaining\n\
+         (block $done\n\
+           (loop $spin\n\
+             local.get $remaining\n\
+             i32.eqz\n\
+             br_if $done\n\
+             local.get $remaining\n\
+             i32.const 1\n\
+             i32.sub\n\
+             local.set $remaining\n\
+             br $spin))\n\
+         {}",
+        identity_invoke_body()
+    );
+    bytes_with_guest(FIXED_MEMORY_LIMITS, "", &invoke_body)
 }
 
 pub fn over_limit_memory_bytes() -> (Vec<u8>, u64) {

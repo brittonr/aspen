@@ -144,9 +144,12 @@ fn validate_identity(
     if facts.artifact_kind != super::model::ArtifactKind::Component {
         blockers.push_item("component execution plan received a core module".to_string());
     }
-    if facts.declared_profile_id != super::profile::COMPONENT_PROFILE_ID
-        || facts.declared_profile_id != profile.profile_id
-    {
+    let is_admitted_profile = [
+        super::profile::COMPONENT_PROFILE_ID,
+        super::profile::TIME_SLICED_PROFILE_ID,
+    ]
+    .contains(&facts.declared_profile_id.as_str());
+    if !is_admitted_profile || facts.declared_profile_id != profile.profile_id {
         blockers.push_item("component artifact declared profile is stale or mismatched".to_string());
     }
     if facts.declared_cohort_ref != super::profile::r#ref(profile)

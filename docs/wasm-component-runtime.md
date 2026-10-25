@@ -98,12 +98,14 @@ publishes exactly once, and the yielded continuation is re-enqueued as an
 ordinary runnable with the admitted scheduler. A replay compares the recomputed
 slicing with the recorded one and names the first boundary that differs.
 
-The guest-side yielding is not implemented yet. The component's `invoke` export
-is a synchronous WIT export, and the pinned cohort's fuel-based yielding needs
-the async entrypoints that an async component ABI would introduce. Until that
-lands, the admitted profile, the admission boundary, the slice ledger, the
-pending turn, the continuation, and the replay comparison are the delivered
-contract, and no component has yet yielded at a quantum boundary.
+r[impl molten.wasm_component.execution_quantum] `start_sliced_execution` runs a component under the time-sliced profile. It passes the same admission, materialization, and receipt rails as a synchronous execution. The store suspends the guest every quantum of fuel through Wasmtime's fuel-based asynchronous yielding, and the guest's `invoke` export stays a synchronous WIT export: the host drives it through the asynchronous entrypoint and polls one slice at a time.
+
+`SlicedExecution::run_slice` either yields or completes:
+
+- A yield records a quantum boundary and returns the scheduler's `Yield` command for the continuation. The admitted scheduler returns the running continuation to the ready queue behind the work already waiting.
+- Completion records the final partial slice, so the ledger's consumption equals the fuel the store spent. The turn publishes exactly once.
+
+A spent budget at any slice keeps the existing `fuel-exhausted` classification. A resumed slice continues from its suspension point: the fuel a sliced run spends equals the fuel of the same synchronous run.
 
 A quantum is a work-accounting bound, not elapsed CPU time or a latency
 guarantee. Yielded continuations do not prove fairness of the whole system, and
