@@ -174,3 +174,48 @@ fn a_synchronous_request_cannot_start_a_sliced_execution() {
     let denied = start_sliced_execution(&synchronous, continuation("synchronous", 1)).err().expect("denied");
     assert!(!denied.is_pass());
 }
+
+/// A real sliced component execution driven as the composition's saturating work.
+struct WasmtimeSaturation<'a, 'b> {
+    execution: &'b mut SlicedExecution<'a>,
+}
+
+impl crate::harness::composition::SaturatingWork for WasmtimeSaturation<'_, '_> {
+    fn run_slice(&mut self) -> crate::harness::composition::SaturationSlice {
+        match self.execution.run_slice() {
+            SliceProgress::Yielded { .. } => crate::harness::composition::SaturationSlice::Yielded,
+            SliceProgress::Completed(outcome) => crate::harness::composition::SaturationSlice::Ended {
+                is_within_budget: outcome.is_pass(),
+            },
+        }
+    }
+}
+
+// r[verify molten.testing.service_recovery_composition]
+#[test]
+fn the_saturation_scenario_holds_with_real_wasmtime_slices() {
+    let fixture = sliced_fixture(super::super::support::cpu_heavy_bytes(SPIN_ITERATIONS));
+    let input = super::super::support::input_value();
+    let request = fixture.sliced_request(&input);
+    let scenario = crate::harness::composition::FailureScenario::CpuSaturationUnderTimeSlicing;
+    for (variant, is_expected_to_hold) in [
+        (crate::harness::composition::ScenarioVariant::Correct, true),
+        (crate::harness::composition::ScenarioVariant::SlicingDisabled, false),
+    ] {
+        let mut execution = start_sliced_execution(&request, continuation("saturating", 1)).expect("admitted");
+        let mut work = WasmtimeSaturation {
+            execution: &mut execution,
+        };
+        let facts = crate::harness::composition::run_saturation_scenario(variant, &mut work).expect("scenario runs");
+        assert!(facts.saturating_work_bounded, "both variants must complete the same bounded callback");
+        assert_eq!(facts.sibling_progressed, is_expected_to_hold, "{}: {facts:?}", variant.as_str());
+        let outcomes = crate::harness::composition::evaluate_properties(scenario, &facts);
+        let property = outcomes
+            .iter()
+            .find(|outcome| {
+                outcome.property == crate::harness::composition::ServiceProperty::UnaffectedServicesContinue
+            })
+            .expect("the saturation scenario evaluates sibling progress");
+        assert_eq!(property.holds, is_expected_to_hold, "{}: {property:?}", variant.as_str());
+    }
+}

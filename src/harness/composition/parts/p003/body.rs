@@ -67,6 +67,14 @@ pub fn evaluate_properties(
                 "the restart storm reached a terminal outcome inside the admitted window".to_string(),
             );
         }
+        FailureScenario::CpuSaturationUnderTimeSlicing => {
+            record(
+                ServiceProperty::UnaffectedServicesContinue,
+                facts.sibling_progressed && facts.saturating_work_bounded,
+                "the sibling completed between the saturating callback's slices, and the callback ended within its budget"
+                    .to_string(),
+            );
+        }
         FailureScenario::GenerationUpgradeWithStaleWorkRejection => {
             record(
                 ServiceProperty::StaleInstancesLoseInfluence,

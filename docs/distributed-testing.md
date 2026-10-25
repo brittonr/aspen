@@ -40,18 +40,22 @@ under a current claim, uncertain external effects are not blindly repeated, and 
 inside the admitted window.
 
 The scenarios are the member failure with the dependent restart, the delayed pre-restart event delivery, the durable
-work readmission, the uncertain effect surfacing, the queue overload, the restart storm to escalation, and the generation
-upgrade with stale-work rejection. Each scenario asserts every property that applies to it, so a regression in one
-mechanism fails several scenarios.
+work readmission, the uncertain effect surfacing, the queue overload, the restart storm to escalation, the generation
+upgrade with stale-work rejection, and CPU saturation under the admitted time-sliced component profile. The saturation
+scenario drives both modeled fuel-ledger work and a real Wasmtime callback through the admitted FIFO scheduler; the
+independent sibling completes between callback slices while the callback remains within its fuel budget. Each scenario
+asserts every property that applies to it, so a regression in one mechanism fails several scenarios.
 
-Two deliberately broken variants keep the property assertions honest. The fencing-removed variant restarts without
-advancing the incarnation, and the group-budget-reset variant clears the restart history on every replacement. The
+Three deliberately broken variants keep the property assertions honest. The fencing-removed variant restarts without
+advancing the incarnation, the group-budget-reset variant clears the restart history on every replacement, and the
+slicing-disabled variant ignores callback yields until the callback ends, delaying the sibling until after it. The
 harness must fail the matching property for each; a passing broken variant would mean the property assertion is
 vacuous. A failing property is evidence against the mechanism that owns it, not a patch inside the composition.
 
-The CPU-saturation case under the time-sliced execution profile and the real-process twin are not part of this
-composition yet: the first needs the admitted time-sliced profile, and the second needs the outside-in process-fault
-track and its observation conventions.
+The real-process twin remains open. The outside-in process-fault track has landed, but real `molten node` processes do
+not host the system-extension recovery groups, supervision, durable-work readmission, or generation upgrades needed
+for the twin's observations. The deterministic scenarios and the in-process Wasmtime callback are not live-process,
+whole-runtime-correctness, production-readiness, or performance evidence.
 
 ## Local multiprocess harness
 

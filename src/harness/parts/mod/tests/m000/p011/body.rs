@@ -1,6 +1,6 @@
     use crate::harness::composition::*;
 
-    const SCENARIOS: [FailureScenario; 7] = [
+    const SCENARIOS: [FailureScenario; 8] = [
         FailureScenario::MemberFailureWithDependentRestart,
         FailureScenario::DelayedPreRestartEventDelivery,
         FailureScenario::DurableWorkReadmission,
@@ -8,6 +8,7 @@
         FailureScenario::QueueOverload,
         FailureScenario::RestartStormToEscalation,
         FailureScenario::GenerationUpgradeWithStaleWorkRejection,
+        FailureScenario::CpuSaturationUnderTimeSlicing,
     ];
 
     #[test]
@@ -81,6 +82,26 @@
         assert!(
             violated.is_some_and(|outcome| !outcome.holds),
             "the broken budget variant must fail the storm property"
+        );
+    }
+
+    // r[verify molten.testing.service_recovery_composition]
+    #[test]
+    fn disabled_slicing_starves_the_sibling_and_violates_the_unaffected_services_property() {
+        let definitions = group_definitions().expect("the composition definitions are admitted");
+        let scenario = FailureScenario::CpuSaturationUnderTimeSlicing;
+        let correct = run_scenario(&definitions, scenario, ScenarioVariant::Correct).expect("the scenario runs");
+        assert!(correct.sibling_progressed);
+        assert!(correct.saturating_work_bounded);
+        let broken = run_scenario(&definitions, scenario, ScenarioVariant::SlicingDisabled).expect("the scenario runs");
+        assert!(!broken.sibling_progressed, "without slicing the sibling waits for the saturating callback");
+        assert!(broken.saturating_work_bounded);
+        let outcomes = evaluate_properties(scenario, &broken);
+        assert!(
+            outcomes
+                .iter()
+                .any(|outcome| outcome.property == ServiceProperty::UnaffectedServicesContinue && !outcome.holds),
+            "the disabled-slicing variant must fail the unaffected-services property"
         );
     }
 

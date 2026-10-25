@@ -12,6 +12,7 @@ pub enum FailureScenario {
     QueueOverload,
     RestartStormToEscalation,
     GenerationUpgradeWithStaleWorkRejection,
+    CpuSaturationUnderTimeSlicing,
 }
 
 impl FailureScenario {
@@ -24,6 +25,7 @@ impl FailureScenario {
             Self::QueueOverload => "queue-overload",
             Self::RestartStormToEscalation => "restart-storm-to-escalation",
             Self::GenerationUpgradeWithStaleWorkRejection => "generation-upgrade-with-stale-work-rejection",
+            Self::CpuSaturationUnderTimeSlicing => "cpu-saturation-under-time-slicing",
         }
     }
 }
@@ -37,6 +39,9 @@ pub enum ScenarioVariant {
     FencingRemoved,
     /// The group restart budget is reset on every replacement.
     GroupBudgetReset,
+    /// A saturating callback's yields are ignored, so it runs to its end
+    /// before the scheduler selects anything else.
+    SlicingDisabled,
 }
 
 impl ScenarioVariant {
@@ -45,6 +50,7 @@ impl ScenarioVariant {
             Self::Correct => "correct",
             Self::FencingRemoved => "fencing-removed",
             Self::GroupBudgetReset => "group-budget-reset",
+            Self::SlicingDisabled => "slicing-disabled",
         }
     }
 }
@@ -62,6 +68,8 @@ pub struct ScenarioFacts {
     pub stale_generation_acted: bool,
     pub dependent_restarted_after_dependency: bool,
     pub restarted_member_incarnation_advanced: bool,
+    /// A saturating callback ended within its execution budget.
+    pub saturating_work_bounded: bool,
 }
 
 impl ScenarioFacts {
@@ -79,6 +87,7 @@ impl ScenarioFacts {
             stale_generation_acted: false,
             dependent_restarted_after_dependency: false,
             restarted_member_incarnation_advanced: false,
+            saturating_work_bounded: false,
         }
     }
 }

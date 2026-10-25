@@ -19,6 +19,7 @@ pub fn run_scenario(
         FailureScenario::QueueOverload => queue_overload(),
         FailureScenario::RestartStormToEscalation => restart_storm(definitions, variant),
         FailureScenario::GenerationUpgradeWithStaleWorkRejection => generation_upgrade(),
+        FailureScenario::CpuSaturationUnderTimeSlicing => cpu_saturation(variant),
     }
 }
 
