@@ -130,6 +130,12 @@ This isolated Cargo workspace is not a root dependency or a production host
 entrypoint. The existing `adopt-shared-wasm-component-runtime` change remains
 separate and incomplete; this pilot does not satisfy its cutover gates.
 
+The [adoption compatibility preflight](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-26-compatibility-preflight.md)
+records two published-API blockers: no resumable fuel-quantum invocation, and no
+failure-phase observation for Molten's staged receipts. An executable probe
+observed the same normalized trap class for instantiation and invocation traps.
+The local runtime and its coherent profile/receipt cohort remain unchanged.
+
 **Immediate outcome:** the corrected external API executes the Molten actor
 fixture at immutable producer revision
 `ce9b222be993c43e9960ce7c12aed2a5130ecf76`. Both dependencies and `source.ncl`

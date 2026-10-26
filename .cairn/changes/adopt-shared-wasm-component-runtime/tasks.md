@@ -2,9 +2,11 @@
 
 ## Phase 1: Prerequisites and baseline
 
-- [ ] [serial] Record current component runtime, actor, system-extension, effect-hostcall, receipt, and negative-fixture baseline results before core changes. r[molten.wasm_component_adoption.parity] r[molten.wasm_component_adoption.validation]
+- [x] [serial] Record current component runtime, actor, system-extension, effect-hostcall, receipt, and negative-fixture baseline results before core changes. r[molten.wasm_component_adoption.parity] r[molten.wasm_component_adoption.validation]
+  - Evidence: [2026-10-26 compatibility preflight](evidence/2026-10-26-compatibility-preflight.md#executed-local-product-baseline): 85 selected runtime/extension/hostcall cases and 11 selected actor-ABI cases passed in two overlapping selections; no product source changes.
 - [ ] [serial] Pin completed immutable `hardened-wasmtime-runtime` and Mantle consumer-verifier revisions with matching contracts and source evidence. r[molten.wasm_component_adoption.prerequisite]
 - [ ] [serial] Freeze the parity corpus and define exact local-to-shared request, blocker, outcome, resource, and receipt-payload mappings. r[molten.wasm_component_adoption.parity] r[molten.wasm_component_adoption.cutover]
+  - Blocked by published execution API compatibility, not missing producer archives: the shell has no resumable fuel-quantum invocation and omits the failure phase required by Molten's staged receipts. See [the executable preflight and source inventory](evidence/2026-10-26-compatibility-preflight.md). Keep the complete local cohort; no default cutover or synthetic Mantle-bundle substitution.
 
 ## Phase 2: Adapter and parity
 
