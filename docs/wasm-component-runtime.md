@@ -115,3 +115,79 @@ Focused positive and negative tests live under `src/wasm/component/tests/`.
 Nickel rejection fixtures cover stale or incomplete cohorts, ambient WASI, and
 nondeterministic growth under
 `docs/wasm-component-runtime/fixtures/negative/`.
+
+## Standalone extracted-runtime boundary pilot
+
+<!-- r[impl molten.hwr_consumer_pilot.actor] -->
+<!-- r[impl molten.hwr_consumer_pilot.boundary] -->
+<!-- r[impl molten.hwr_consumer_pilot.pin] -->
+<!-- r[impl molten.hwr_consumer_pilot.evidence] -->
+
+The Molten Wasm component runtime maintainers (`brittonr/aspen`) own
+[`pilots/hwr-consumer/`](../pilots/hwr-consumer/) and the native Cairn archive
+[`pilot-hwr-consumer`](../.cairn/archive/1970-01-01-pilot-hwr-consumer/verification.md).
+This isolated Cargo workspace is not a root dependency or a production host
+entrypoint. The existing `adopt-shared-wasm-component-runtime` change remains
+separate and incomplete; this pilot does not satisfy its cutover gates.
+
+**Immediate outcome:** the corrected external API executes the Molten actor
+fixture at immutable producer revision
+`ce9b222be993c43e9960ce7c12aed2a5130ecf76`. Both dependencies and `source.ncl`
+select that revision and its explicit Radicle publisher namespace. The command
+returned `Completed`, exact bytes `070000002a000000`, and 9,973 remaining fuel
+from 10,000; malformed, oversized and missing-epoch cases returned their exact
+denials. This is pilot execution, not production host adoption.
+
+The manifest, pilot lockfile and provenance record were reviewed together;
+the locked execution resolved the qualified external source without a path
+override. These source-identity observations do not establish source trust.
+
+**Durable contribution:** Molten-owned `actor` world, `actor-turn` export, WIT
+identity, embedded actual Component Model guest, explicit feature policy and
+resource limits, exact import/export materialization facts, consumer-operated
+epoch handle, and exact actor-output and denial assertions against the reusable
+mechanism. The synthetic eight-byte turn preserves actor id 7 and changes counter
+41 to 42. It is deliberately not the production Preserves actor ABI.
+
+From the repository root, run the locked standalone consumer:
+
+```sh
+CARGO_NET_GIT_FETCH_WITH_CLI=true nix develop -c cargo run --locked --manifest-path pilots/hwr-consumer/Cargo.toml
+```
+
+Prerequisites are the repository Rust cohort and linker, the Radicle remote
+helper and access to the manifest's exact publisher namespace and revision,
+plus registry dependencies. The unqualified Radicle adapter exposes canonical
+main only; the explicit publisher also exposes the immutable candidate branch.
+The producer push reported no seeds, so network replication is not claimed.
+The standalone command does not build the root Molten
+workspace. It generates actual component binary bytes from the embedded WAT,
+hashes those exact bytes, admits no imports/WASI, requires the exact root export,
+and runs with 10,000 fuel, eight-byte input/output limits, one fixed 64-KiB memory,
+and an explicitly operated 1,000-tick epoch deadline. The consumer's driver ticks
+every 10 ms and is stopped and joined before outcome assertions.
+
+<!-- r[verify molten.hwr_consumer_pilot.actor] -->
+<!-- r[verify molten.hwr_consumer_pilot.boundary] -->
+
+Success prints the exact `Completed` output `070000002a000000` (`bytes=8`),
+observed positive remaining fuel below 10,000, `GuestDenied` for a malformed turn,
+`InputLimitExceeded` for oversized input, and `DeadlineDenied` for an absent epoch
+handle. These outcomes were observed in the pinned standalone run. Actor policy,
+WIT/schema binding, and output meaning remain consumer-owned; producer success
+does not independently prove a WIT world or confer product authority.
+
+`profile.ncl` owns the pilot policy and `profile.json` is its wire projection
+(`nickel export pilots/hwr-consumer/profile.ncl`). Its `production` and `nickel`
+markers are required by the existing extracted document schema; they grant no
+production evidence scope to this fixture. WIT changes require remeasuring
+`wit/actor.wit` with BLAKE3 and updating its policy reference and `src/main.rs`
+identity together. The fixture is embedded loose bytes, not a Mantle bundle.
+Molten retains all production materialization trust, policy, Basalt/UCAN,
+canonical Preserves, actor lifecycle, receipt, replay, and release decisions.
+
+**Non-claims:** no production cutover, local/shared parity, Mantle provenance,
+policy or authority admission, canonical product receipts, actor persistence or
+effect execution, host isolation, performance result, whole-system safety, or
+release eligibility. No main runtime source, root dependency cohort, or historical
+archive is changed by this pilot.

@@ -1,0 +1,18 @@
+[package]
+name = "molten-hwr-consumer-pilot"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[workspace]
+
+[workspace.metadata.octet]
+default_scope = ["--workspace"]
+cargo_check_args = ["--all-targets"]
+
+[dependencies]
+blake3 = "=1.8.2"
+hardened-wasmtime-runtime = { git = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx", rev = "ce9b222be993c43e9960ce7c12aed2a5130ecf76" }
+hardened-wasmtime-shell = { git = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx", rev = "ce9b222be993c43e9960ce7c12aed2a5130ecf76" }
+wat = "=1.257.1"

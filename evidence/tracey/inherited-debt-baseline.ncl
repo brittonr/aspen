@@ -17,12 +17,12 @@ let BaselineMetadata = {
 in
 let metadata | BaselineMetadata = {
   schema = "molten.inherited-tracey-debt-baseline.v1",
-  observed_date = "2026-10-25",
+  observed_date = "2026-10-26",
   baseline_origin_revision = "9842cc6453a00ed943a866549bb4307c8502d575",
   requirement_root = ".cairn/specs",
   evidence_roots = ["src", "crates", "tests", "tools", "docs", "scripts", "flake.nix"],
-  requirements = 2962,
-  referenced = 1028,
+  requirements = 2966,
+  referenced = 1032,
   uncovered = 1934,
   dangling = 0,
   uncovered_list = "evidence/tracey/inherited-debt-baseline.txt",

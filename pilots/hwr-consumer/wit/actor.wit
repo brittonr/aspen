@@ -1,0 +1,8 @@
+package molten:component-runtime@1.0.0;
+
+// Pilot-only actor turn: little-endian actor-id:u32 and counter:u32.
+// A successful turn preserves the actor id and increments the counter.
+// This carrier is not the production canonical Preserves actor contract.
+world actor {
+    export actor-turn: func(input: list<u8>) -> result<list<u8>, string>;
+}

@@ -1,0 +1,59 @@
+# Pilot-owned policy, not a production evidence assertion. The extracted
+# document schema currently requires its production/source-language markers.
+{
+  schema_id = "molten.wasm-component-profile.v1",
+  schema_version = 1,
+  source_language = "nickel",
+  profile = {
+    allowed_imports = [],
+    allowed_wasi_interfaces = [],
+    determinism = {
+      fuel_interruption = true,
+      host_inputs = "recorded-effects-only",
+      memory_growth = "fixed",
+      nan_canonicalization = true,
+      relaxed_simd_deterministic = true,
+      table_growth = "fixed",
+    },
+    evidence_scope = "production",
+    features = {
+      bulk_memory = true, component_async = false, component_model = true,
+      custom_page_sizes = false, exceptions = false, extended_const = false,
+      function_references = false, gc = false, memory64 = false,
+      multi_memory = false, multi_value = true, reference_types = true,
+      relaxed_simd = false, simd = true, tail_call = false, threads = false,
+      wide_arithmetic = false,
+    },
+    non_claims = [
+      "not-production-adoption", "not-materialization-trust", "not-authority",
+      "not-release-eligibility", "not-whole-system-safety", "not-build-trust-transfer",
+    ],
+    profile_id = "molten.wasm.component.v1",
+    resources = {
+      fuel = 10000,
+      max_component_bytes = 65536,
+      max_concurrency = 1,
+      max_exports = 1,
+      max_hostcall_bytes = 8,
+      max_imports = 1,
+      max_instances = 2,
+      max_memories = 1,
+      max_memory_bytes = 65536,
+      max_result_bytes = 12,
+      max_stack_bytes = 524288,
+      max_table_elements = 1,
+      max_tables = 1,
+      max_wit_bytes = 4096,
+    },
+    runtime_strategy = "portable-component",
+    toolchain = {
+      wasi_package = "0.2.6", wasm_tools = "1.240.0", wasmparser = "0.240.0",
+      wasmtime = "45.0.0", wasmtime_wasi = "45.0.0", wit_bindgen = "0.46.0",
+    },
+    wit = {
+      package = "molten:component-runtime@1.0.0",
+      source_ref = "blake3:e6b69908a1dcba063fd438d2cf44776ee5f7d7b7919f14aeefce766e72bfd82c",
+      world = "actor",
+    },
+  },
+}
