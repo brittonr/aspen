@@ -39,6 +39,32 @@ Adapter hooks map local implementation points to these names. Source lines and w
 
 A lost response after possible submission enters the uncertain path. The harness never changes that result into a safe retry.
 
+### Committed-change subscriber
+
+<!-- r[impl molten.observations.stream] -->
+
+The v2 local profile requires `committed-subscriber:publication-before-ack` at
+`before-response`. It checkpoints one prior committed event, publishes three
+events in one later revision, receives a one-event page without acknowledging it,
+then discards the volatile subscription cursor and resumes from the acknowledged
+checkpoint. Every published event must be redelivered in order, including the
+unacknowledged prefix; stable-identity deduplication must yield exactly the
+published sequence. A cursor ordinal is the inclusive lower bound of the next
+event within its revision, so bounded pages cannot skip an ordinal.
+
+This is a deterministic in-process subscriber restart, not an operating-system
+process crash or a persistence-adapter test. The stream remains owned by the
+producer throughout. The 17-restart budget covers 16 existing world-adapter
+restarts and this one modeled subscriber restart. The case admits 2–64 events
+and a positive page bound smaller than the publication; there is no wall-clock
+or delivery-election change.
+
+The subscriber result fails if its checkpoint advanced before acknowledgement,
+delivery is missing or reordered, the service/epoch/phase or event identities
+cross, the modeled restart is absent, or deduplication differs. Missing subscriber
+evidence cannot produce an aggregate pass. Receipt validation independently
+rechecks that evidence and rejects a forged passing disposition.
+
 ## Recovery classes
 
 Owner cores return one of these classes:
@@ -101,7 +127,10 @@ The generated JSON is at:
 
 `config/world-faults/generated/local-deterministic.json`
 
-Rust tests compare the generated profile with the Rust projection. Negative fixtures reject missing phases, wall-clock winners, zero limits, and witness overclaims.
+The generated export is checked against Nickel, and the executed smoke scenario
+checks its v2 Rust profile identity. Positive and negative fixtures cover the
+subscriber role, phase and bounds alongside missing world phases, wall-clock
+winners, zero limits, and witness overclaims.
 
 ## Receipt meaning
 
@@ -115,8 +144,15 @@ The canonical Preserves receipt binds:
 - owner decisions;
 - schedule outcomes;
 - unsupported rows;
+- subscriber phase, acknowledged checkpoints, published and delivered events,
+  deduplicated sequence, modeled restart count and diagnostics;
 - all required non-claims.
 
 A passing receipt proves bounded agreement for the exercised cohort. It does not prove universal crash safety or physical power-loss behavior.
+
+Profiles, profile identity domain, canonical receipt record and receipt identity
+domain use v2 for the required subscriber role. Old v1 receipts are historical
+evidence, not acceptance of the v2 profile. Stream event/cursor identity formats
+are unchanged; the cursor comparison repair restores their next-event contract.
 
 It does not prove storage correctness. It does not establish release eligibility.

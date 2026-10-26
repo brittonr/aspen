@@ -38,4 +38,6 @@ pub mod fabric_simulation {
     }
 }
 
+pub mod committed_stream;
+
 pub mod world_faults;

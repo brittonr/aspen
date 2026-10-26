@@ -1,7 +1,5 @@
 //! The stable identities of the committed-change stream.
 
-use std::collections::BTreeSet;
-
 use super::*;
 
 const EVENT_IDENTITY_CONTEXT: &str = "onixresearch.molten.committed-stream.event.identity.v1";
@@ -20,8 +18,7 @@ pub fn committed_change_identity(event: &CommittedChangeEvent) -> String {
         &event.ordinal.to_string(),
         event.payload_ref.as_str(),
     ] {
-        let length = u64::try_from(field.len()).unwrap_or(u64::MAX);
-        hasher.update(&length.to_be_bytes());
+        update_length(&mut hasher, field.len());
         hasher.update(field.as_bytes());
     }
     format!("blake3:{}", hasher.finalize().to_hex())
@@ -36,8 +33,7 @@ pub fn stream_cursor_identity(cursor: &StreamCursor) -> String {
         &cursor.revision.to_string(),
         &cursor.ordinal.to_string(),
     ] {
-        let length = u64::try_from(field.len()).unwrap_or(u64::MAX);
-        hasher.update(&length.to_be_bytes());
+        update_length(&mut hasher, field.len());
         hasher.update(field.as_bytes());
     }
     format!("blake3:{}", hasher.finalize().to_hex())
@@ -50,18 +46,30 @@ pub fn stream_cursor_identity(cursor: &StreamCursor) -> String {
 /// order. Deduplication never authorizes: an event that was already seen is
 /// still an event that a reader must admit.
 pub fn deduplicate_events(events: &[CommittedChangeEvent]) -> DeduplicationOutcome {
-    let mut seen: BTreeSet<&str> = BTreeSet::new();
+    let mut seen = std::collections::BTreeSet::<&str>::new();
     let mut unique = Vec::with_capacity(events.len());
-    let mut duplicate_refs = Vec::new();
-    for event in events {
-        if seen.insert(event.event_ref.as_str()) {
-            unique.push(event.clone());
-        } else {
-            duplicate_refs.push(event.event_ref.clone());
-        }
-    }
+    let duplicate_refs = events
+        .iter()
+        .filter_map(|event| {
+            if seen.insert(event.event_ref.as_str()) {
+                unique.push(event.clone());
+                None
+            } else {
+                Some(event.event_ref.clone())
+            }
+        })
+        .collect();
     DeduplicationOutcome {
         events: unique,
         duplicate_refs,
     }
+}
+
+fn update_length(hasher: &mut blake3::Hasher, length: usize) {
+    const { assert!(size_of::<usize>() <= size_of::<u64>()) };
+    let native = length.to_be_bytes();
+    let mut encoded = [0_u8; size_of::<u64>()];
+    let offset = encoded.len() - native.len();
+    encoded[offset..].copy_from_slice(&native);
+    hasher.update(&encoded);
 }

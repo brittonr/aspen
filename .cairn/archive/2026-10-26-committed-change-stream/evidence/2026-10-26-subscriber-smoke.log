@@ -1,0 +1,30 @@
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+   Compiling molten-core v0.1.0 (/home/brittonr/git/OnixResearch/.worktrees/aspen-committed-subscriber-20261026/crates/molten-core)
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 22.12s
+profile_ref=blake3:4879d730e10241f9e078655ab33cbf32aaee7a8d343a73776e80ac34bcfb0513
+phase=before-response
+restart_count=1
+checkpoint_preserved=true
+published_ordinals=[0, 1, 2]
+resumed_ordinals=[0, 1, 2]
+deduplicated_event_refs=["blake3:a79e631953da1b9bc65366c1e4d24bc036d004ca306b45efda659e16f77d18e0", "blake3:9d3f7b44fdf08fae55d8220c7059a02ebf7124f1fdcb5aebeeca3316cc61a26f", "blake3:b56ab386f72524affa53f61fd506e659ddf2ac5bfebc87aa67c891721d2f009d"]
+restart_before_ack=passed
+dropped_event=failed
+denial_diagnostics=[SubscriberObservationMismatch("post-restart-bound")]
+
+
+Wall time: 25.16 seconds
+Nickel/Rust profile identity: MATCH

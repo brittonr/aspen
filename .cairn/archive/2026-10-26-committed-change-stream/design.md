@@ -85,6 +85,15 @@ is committed or explicitly resolved, never while unknown.
 - Crash coverage at the existing fault-conformance phases: subscriber restart after
   publication but before acknowledgement.
 
+The world-fault v2 profile adds a required committed-change subscriber role at
+`before-response`: checkpoint an earlier event, publish several events in one
+revision, receive a bounded page without acknowledging, discard volatile delivery
+state, and resume only from the acknowledged checkpoint. Exact replay, unchanged
+checkpoint, stable identities and deduplication are independently revalidated in
+the canonical v2 receipt. A missing or tampered observation cannot yield aggregate
+pass. This is an in-process deterministic restart, not process-crash or storage
+durability evidence; no new broker, dataspace or delivery semantics are introduced.
+
 ## Risks
 
 - Duplicated observation surfaces can drift; the design keeps each guarantee in its

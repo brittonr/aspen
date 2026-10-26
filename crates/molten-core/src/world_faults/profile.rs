@@ -4,7 +4,7 @@ const FIRST_CONTENDER_SUFFIX: &str = "left";
 const SECOND_CONTENDER_SUFFIX: &str = "right";
 const FIRST_NODE_ID: &str = "node-a";
 const SECOND_NODE_ID: &str = "node-b";
-const PROFILE_NAME: &str = "local-deterministic-process-restart-v1";
+const PROFILE_NAME: &str = "local-deterministic-process-restart-v2";
 const ADAPTER_PROFILE: &str = "deterministic-semantic-phase-v1";
 
 // r[impl molten.world_faults.profile]
@@ -27,6 +27,14 @@ pub fn standard_world_fault_profile(source_revision: &str) -> Result<WorldFaultP
         limits: WorldFaultLimits::standard(),
         cases,
         schedules,
+        subscriber: CommittedSubscriberCase {
+            case_id: "committed-subscriber:publication-before-ack".to_string(),
+            phase: FaultPhase::BeforeResponse,
+            service_id: "service:committed-subscriber".to_string(),
+            stream_epoch: 1,
+            event_count: 3,
+            buffer_bound: 1,
+        },
     };
     let issues = validate_world_fault_profile(&profile);
     if issues.is_empty() { Ok(profile) } else { Err(issues) }

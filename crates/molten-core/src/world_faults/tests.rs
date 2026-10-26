@@ -1,3 +1,5 @@
+mod subscriber_receipt;
+
 use super::*;
 use crate::fabric_simulation::AdmittedSimulatedWorld;
 use crate::fabric_simulation::ExtensionCoreIdentity;
@@ -75,8 +77,14 @@ fn bounded_matrix_passes_supported_rows_and_retains_witness_and_physical_nonclai
     let profile = standard_world_fault_profile(TEST_SOURCE_REVISION).expect("fault profile");
     let observations = passing_observations(&profile);
     let schedules = passing_schedules(&profile);
-    let receipt = build_world_fault_conformance_receipt(&inventory, &profile, &observations, schedules)
-        .expect("bounded conformance receipt");
+    let receipt = build_world_fault_conformance_receipt(
+        &inventory,
+        &profile,
+        &observations,
+        schedules,
+        exercise_committed_subscriber_case(&profile.subscriber).ok(),
+    )
+    .expect("bounded conformance receipt");
 
     assert_eq!(receipt.decision, ConformanceDisposition::Passed);
     assert!(!receipt.results.is_empty());
@@ -111,9 +119,14 @@ fn success_missing_and_corrupt_observations_fail_conservatively() {
     target.read_back.status = DurableReadBackStatus::Missing;
     target.read_back.state_ref = None;
     target.read_back.record_ref = None;
-    let receipt =
-        build_world_fault_conformance_receipt(&inventory, &profile, &observations, passing_schedules(&profile))
-            .expect("failing receipt remains bounded evidence");
+    let receipt = build_world_fault_conformance_receipt(
+        &inventory,
+        &profile,
+        &observations,
+        passing_schedules(&profile),
+        exercise_committed_subscriber_case(&profile.subscriber).ok(),
+    )
+    .expect("failing receipt remains bounded evidence");
     assert_eq!(receipt.decision, ConformanceDisposition::Failed);
     assert!(receipt.results.iter().any(|result| {
         result.diagnostics.contains(&WorldFaultIssue::SuccessWithoutDurableReadBack(result.case_id.clone()))
@@ -125,8 +138,14 @@ fn success_missing_and_corrupt_observations_fail_conservatively() {
         .find(|observation| observation.phase == FaultPhase::BeforeSubmit)
         .expect("before-submit observation");
     target.read_back.status = DurableReadBackStatus::Corrupt;
-    let receipt = build_world_fault_conformance_receipt(&inventory, &profile, &corrupt, passing_schedules(&profile))
-        .expect("corrupt receipt");
+    let receipt = build_world_fault_conformance_receipt(
+        &inventory,
+        &profile,
+        &corrupt,
+        passing_schedules(&profile),
+        exercise_committed_subscriber_case(&profile.subscriber).ok(),
+    )
+    .expect("corrupt receipt");
     assert_eq!(receipt.decision, ConformanceDisposition::Failed);
 }
 
@@ -152,9 +171,14 @@ fn lost_response_and_local_rollback_never_create_retry_or_witness_claims() {
     rollback.read_back.record_ref = Some(reference("rolled-back-record"));
     rollback.read_back.independent_witness = false;
 
-    let receipt =
-        build_world_fault_conformance_receipt(&inventory, &profile, &observations, passing_schedules(&profile))
-            .expect("negative conformance receipt");
+    let receipt = build_world_fault_conformance_receipt(
+        &inventory,
+        &profile,
+        &observations,
+        passing_schedules(&profile),
+        exercise_committed_subscriber_case(&profile.subscriber).ok(),
+    )
+    .expect("negative conformance receipt");
     assert_eq!(receipt.decision, ConformanceDisposition::Failed);
     assert!(receipt.results.iter().flat_map(|result| &result.diagnostics).any(|issue| {
         matches!(

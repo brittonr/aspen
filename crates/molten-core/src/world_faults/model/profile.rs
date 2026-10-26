@@ -125,4 +125,15 @@ pub struct WorldFaultProfile {
     pub limits: WorldFaultLimits,
     pub cases: Vec<WorldFaultCase>,
     pub schedules: Vec<ConcurrentSchedule>,
+    pub subscriber: CommittedSubscriberCase,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommittedSubscriberCase {
+    pub case_id: String,
+    pub phase: FaultPhase,
+    pub service_id: String,
+    pub stream_epoch: u64,
+    pub event_count: u32,
+    pub buffer_bound: u32,
 }

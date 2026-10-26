@@ -105,6 +105,15 @@ fn owner_core_misclassification_is_recorded_as_failure_without_shell_compensatio
                 .iter()
                 .any(|issue| matches!(issue, WorldFaultIssue::UnsafeRetryAfterPossibleSubmit(_)))
     }));
+
+    // Both receipts remain Failed due to the owner error; their identities must
+    // still distinguish the subscriber's independently observed checkpoint.
+    let mut receipt = outcome.receipt;
+    let mut subscriber = receipt.subscriber.observation.take().expect("subscriber observation");
+    subscriber.checkpoint_after_restart.ordinal += 1;
+    receipt.subscriber = evaluate_committed_subscriber(&profile.subscriber, Some(subscriber));
+    let changed = canonical_world_fault_receipt(&receipt, &profile).expect("changed failed receipt");
+    assert_ne!(changed.record_ref, outcome.record.record_ref);
 }
 
 // r[verify molten.world_faults.receipt]

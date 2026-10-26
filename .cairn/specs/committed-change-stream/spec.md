@@ -44,6 +44,25 @@ committed change.
 - THEN it MUST receive every committed event after C within retention, or an
   explicit gap signal requiring resnapshot.
 
+#### Scenario: Restart after publication but before acknowledgement
+
+- GIVEN a subscriber checkpoint before a committed publication and a delivered
+  page whose next cursor has not been acknowledged
+- WHEN the deterministic fault-conformance subscriber restarts at `before-response`
+  and restores only its acknowledged checkpoint
+- THEN every published event MUST be redelivered within retention, including the
+  unacknowledged page, and stable-identity deduplication MUST preserve the exact
+  committed sequence
+- AND missing, crossed, reordered or falsely acknowledged evidence MUST prevent a
+  passing conformance receipt.
+
+#### Scenario: A bounded page ends inside a multi-event revision
+
+- GIVEN several committed events share one revision and a page ends before its
+  last ordinal
+- WHEN the subscriber resumes from the returned next-event cursor
+- THEN it MUST receive the next ordinal rather than skip it.
+
 #### Scenario: Snapshot plus watermark misses nothing
 
 - GIVEN a subscriber that takes a snapshot and its watermark

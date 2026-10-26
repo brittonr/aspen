@@ -9,8 +9,10 @@ let RequiredScheduleSteps = 64 in
 let RequiredAdapters = 9 in
 let MaximumAdapters = 16 in
 let MaximumUnsupportedRows = 16 in
-let MaximumRestarts = 16 in
+let MaximumRestarts = 17 in
 let MaximumObservations = 72 in
+let MinimumSubscriberEvents = 2 in
+let MaximumSubscriberEvents = 64 in
 let Blake3Ref =
   Prelude.contract (fun value =>
     std.is_string value && std.string.is_match "^blake3:[0-9a-f]{64}$" value
@@ -140,6 +142,23 @@ let CaseContract = {
   expected_decision | RecoveryClass,
 }
 in
+let SubscriberContract =
+  std.contract.Sequence [
+    {
+      case_id | Prelude.contracts.NonEmptyString,
+      phase | Prelude.contract (Prelude.is_exact_string "before-response"),
+      service_id | Prelude.contracts.NonEmptyString,
+      stream_epoch | PositiveInteger,
+      event_count | PositiveInteger,
+      buffer_bound | PositiveInteger,
+    },
+    Prelude.contract (fun subscriber =>
+      subscriber.event_count >= MinimumSubscriberEvents
+      && subscriber.event_count <= MaximumSubscriberEvents
+      && subscriber.buffer_bound < subscriber.event_count
+    )
+  ]
+in
 let StepContract = {
   position | NonNegativeInteger,
   operation_id | Blake3Ref,
@@ -229,7 +248,7 @@ in
 let ProfileContract =
   std.contract.Sequence [
     {
-      schema | Prelude.contract (Prelude.is_exact_string "molten.world-fault-profile.v1"),
+      schema | Prelude.contract (Prelude.is_exact_string "molten.world-fault-profile.v2"),
       profile_name | Prelude.contracts.NonEmptyString,
       source_revision | SourceRevision,
       inventory_ref | Blake3Ref,
@@ -238,6 +257,7 @@ let ProfileContract =
       adapters | std.contract.Sequence [Prelude.contract (fun values => std.array.length values == RequiredAdapters), Array AdapterContract],
       cases | std.contract.Sequence [Prelude.contract (fun values => std.array.length values == RequiredCases), Array CaseContract],
       schedules | std.contract.Sequence [Prelude.contract (fun values => std.array.length values == RequiredSchedules), Array ScheduleContract],
+      subscriber | SubscriberContract,
       unexplained_numeric_thresholds | Array Number,
       claims_independent_witness | Bool,
       claims_physical_power_loss | Bool,
@@ -251,5 +271,6 @@ in
   Adapter = AdapterContract,
   Case = CaseContract,
   Schedule = ScheduleContract,
+  Subscriber = SubscriberContract,
   Step = StepContract,
 }

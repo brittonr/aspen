@@ -46,7 +46,8 @@ pub fn commit_transition(
         return Err(CommittedStreamIssue::InvalidEventCount);
     }
     let revision = stream.revision.checked_add(1).ok_or(CommittedStreamIssue::RevisionOverflow)?;
-    let mut committed = Vec::with_capacity(input.event_count as usize);
+    let event_count = usize::try_from(input.event_count).map_err(|_| CommittedStreamIssue::InvalidEventCount)?;
+    let mut committed = Vec::with_capacity(event_count);
     for ordinal in 0..input.event_count {
         let event = CommittedChangeEvent {
             event_ref: String::new(),
@@ -72,7 +73,7 @@ pub fn commit_transition(
 }
 
 // r[impl molten.observations.cursors]
-/// Subscribe to the events after a cursor.
+/// Subscribe from the inclusive next-event cursor.
 ///
 /// The subscription is bounded. A cursor behind the retained window produces an
 /// explicit retention gap, a cursor from a prior epoch is rejected, and a cursor
@@ -80,8 +81,9 @@ pub fn commit_transition(
 pub fn subscribe(
     stream: &CommittedChangeStream,
     cursor: &StreamCursor,
-    buffer_bound: usize,
+    buffer_bound: u32,
 ) -> Result<SubscriptionOutcome, CommittedStreamIssue> {
+    let buffer_bound = usize::try_from(buffer_bound).map_err(|_| CommittedStreamIssue::InvalidBufferBound)?;
     if buffer_bound == 0 || buffer_bound > MAX_SUBSCRIPTION_EVENTS {
         return Err(CommittedStreamIssue::InvalidBufferBound);
     }
@@ -102,9 +104,9 @@ pub fn subscribe(
     }
     let mut events = Vec::with_capacity(buffer_bound);
     for event in &stream.events {
-        let after_cursor =
-            event.revision > cursor.revision || (event.revision == cursor.revision && event.ordinal > cursor.ordinal);
-        if after_cursor {
+        let is_after_cursor =
+            event.revision > cursor.revision || (event.revision == cursor.revision && event.ordinal >= cursor.ordinal);
+        if is_after_cursor {
             if events.len() == buffer_bound {
                 break;
             }

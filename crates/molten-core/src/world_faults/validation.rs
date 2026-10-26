@@ -16,6 +16,7 @@ pub fn validate_world_fault_profile(profile: &WorldFaultProfile) -> Vec<WorldFau
     validate_non_empty("source-revision", &profile.source_revision, &mut issues);
     validate_ref("inventory-ref", &profile.inventory_ref, &mut issues);
     validate_limits(profile.limits, &mut issues);
+    issues.extend(validate_committed_subscriber_case(&profile.subscriber));
     check_bound("adapters", profile.adapters.len(), profile.limits.max_adapters, &mut issues);
     check_bound("cases", profile.cases.len(), profile.limits.max_cases, &mut issues);
     check_bound("schedules", profile.schedules.len(), profile.limits.max_schedules, &mut issues);

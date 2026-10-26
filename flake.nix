@@ -924,6 +924,9 @@
           cp ${./checks/world-faults-octet/dylint.toml} "$out/dylint.toml"
           cp ${./checks/world-faults-octet/src/lib.rs} "$out/src/lib.rs"
           cp -R ${./crates/molten-core/src/world_faults} "$out/src/world_faults"
+          cp -R ${./crates/molten-core/src/committed_stream} "$out/src/committed_stream"
+          chmod u+w "$out/src/committed_stream/tests/mod.rs"
+          cp ${./checks/world-faults-octet/empty-tests.rs} "$out/src/committed_stream/tests/mod.rs"
           chmod u+w "$out/src/world_faults/tests.rs"
           cp ${./checks/world-faults-octet/empty-tests.rs} "$out/src/world_faults/tests.rs"
         '';
@@ -1576,11 +1579,16 @@
                   nickel format --check \
                     config/world-faults/contracts.ncl \
                     config/world-faults/profiles/local-deterministic.ncl \
+                    config/world-faults/fixtures/positive/*.ncl \
                     config/world-faults/fixtures/negative/*.ncl
                   nickel export config/world-faults/profiles/local-deterministic.ncl \
                     --format json --output "$TMPDIR/local-deterministic.json"
                   cmp config/world-faults/generated/local-deterministic.json \
                     "$TMPDIR/local-deterministic.json"
+                  for fixture in config/world-faults/fixtures/positive/*.ncl
+                  do
+                    nickel export "$fixture" --format json --output "$TMPDIR/positive.json"
+                  done
                   for fixture in config/world-faults/fixtures/negative/*.ncl
                   do
                     if nickel export "$fixture" --format json \
@@ -2944,8 +2952,8 @@
                   test "$actual_schema_count" -eq "$expected_schema_count"
                   for schema_id in \
                     molten.world-mutation-inventory.v1 \
-                    molten.world-fault-profile.v1 \
-                    molten.world-fault-conformance-receipt.v1
+                    molten.world-fault-profile.v2 \
+                    molten.world-fault-conformance-receipt.v2
                   do
                     rg -F "<schema-id \"$schema_id\">" "$schema_root" >/dev/null
                   done

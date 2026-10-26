@@ -1,0 +1,153 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/committed-change-stream/specs/committed-change-stream/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/committed-change-stream/specs/committed-change-stream/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "committed-change-stream",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "e34ee4182256a5b1afa38e7d6bb38ab400d7166ddf6c26c500a35d1ba79b2e2d",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "3d8baa4bdfd1a7116d7961034e4aaa2250ac19945650f0f90096484b6f9b8446",
+    "receipt_hash": "19b1f781cdf78cc7cb8586d12b9f325a49ec12db3bc692d3d1a41289540bd88b",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/committed-change-stream/specs/committed-change-stream/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "bd3568f1df6501e7a6e733a84c30b18e4ec56ce54bccb683400a06d02c5b81da",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "ca2f66eb258f89934080649382e58d4a19b595f667dc122e0f134451680f8192",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "833d5bc7958847cba1fa633f493464ff1b27f9e912ba3bbfb49c2bf63ea44b72",
+        "destination": ".cairn/specs/committed-change-stream/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "14857af06fe6080ef34781136c93a1e2383040a137dc6447838f5aec2aedcdfb",
+        "operations": [
+          {
+            "block_hash": "87687c11f4ffe170a89866c57f7c49e5a5c76805c49a8c6d53982ecb579c1370",
+            "heading": "### Requirement: Committed transitions are durably ordered per service",
+            "kind": "modified",
+            "requirement_id": "molten.observations.stream"
+          },
+          {
+            "block_hash": "c6a20e7119a54f947b8986fca49bef1f3def507465abfbf9c3924653c56d28c2",
+            "heading": "### Requirement: Cursors are resumable, bounded, and gap-explicit",
+            "kind": "modified",
+            "requirement_id": "molten.observations.cursors"
+          },
+          {
+            "block_hash": "258ad669b034adb7060407edb3b62dac28c04f4d2ca5556fb71215d7996b6b05",
+            "heading": "### Requirement: Publication eligibility is profile-specific and receipt-bound",
+            "kind": "modified",
+            "requirement_id": "molten.observations.eligibility"
+          },
+          {
+            "block_hash": "2b2b5678220a8b24f723434334ffb9031025d6666581107857ead5048017b16b",
+            "heading": "### Requirement: Stream possession grants no content authority",
+            "kind": "modified",
+            "requirement_id": "molten.observations.authorization"
+          },
+          {
+            "block_hash": "c71f5e561b96ab7202bfc1fcad866aaaf937a8342faa1f293aea9edd05ddf6e4",
+            "heading": "### Requirement: The stream and the gate keep their negative coverage",
+            "kind": "modified",
+            "requirement_id": "molten.observations.tests"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "modified",
+            "requirement_id": "molten.observations.stream",
+            "state": "already_applied"
+          },
+          {
+            "kind": "modified",
+            "requirement_id": "molten.observations.cursors",
+            "state": "applied"
+          },
+          {
+            "kind": "modified",
+            "requirement_id": "molten.observations.eligibility",
+            "state": "already_applied"
+          },
+          {
+            "kind": "modified",
+            "requirement_id": "molten.observations.authorization",
+            "state": "already_applied"
+          },
+          {
+            "kind": "modified",
+            "requirement_id": "molten.observations.tests",
+            "state": "already_applied"
+          }
+        ],
+        "source": ".cairn/changes/committed-change-stream/specs/committed-change-stream/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "14857af06fe6080ef34781136c93a1e2383040a137dc6447838f5aec2aedcdfb",
+          "exists": true,
+          "path": "./.cairn/specs/committed-change-stream/spec.md"
+        }
+      ],
+      "manifest_hash": "ac0f2ff55f2d9c2f8150be08247cad116ac53162c058e0580f825d591d4ff83f"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "ca2f66eb258f89934080649382e58d4a19b595f667dc122e0f134451680f8192",
+          "exists": true,
+          "path": "./.cairn/specs/committed-change-stream/spec.md"
+        }
+      ],
+      "manifest_hash": "6671836adfb748444e4c6c62f99f1653150646a4f854d2de22eb98e32776a36e"
+    },
+    "kind": "sync",
+    "manifest_hash": "0c61460865f4bd76b47769439425332c06a13f9e36ec311fbb37695bec281367"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "5b1f2f98f6b9680a7d73eb83400d72c0ee53b48b9180ef519082ac4b3bbaa56f",
+  "policy": "cairn-default",
+  "policy_hash": "3d8baa4bdfd1a7116d7961034e4aaa2250ac19945650f0f90096484b6f9b8446",
+  "profile_identity_hash": "9c10863fe304981423243dc0368507f9f323c4177580b67066a607b209a516a5",
+  "reasons": [],
+  "receipt_hash": "e7205ad55611442c9ae01bd62c22c78242411d7927c2d1c00a15eb92daa8d0fa",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

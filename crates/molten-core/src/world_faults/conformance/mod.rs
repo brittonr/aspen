@@ -55,6 +55,7 @@ pub fn build_world_fault_conformance_receipt(
     profile: &WorldFaultProfile,
     observations: &[WorldOperationObservation],
     schedule_results: Vec<ConcurrentScheduleResult>,
+    subscriber_observation: Option<CommittedSubscriberObservation>,
 ) -> Result<WorldFaultConformanceReceipt, Vec<WorldFaultIssue>> {
     let mut structural = validate_world_mutation_inventory(inventory, &registered_world_mutation_names());
     structural.extend(validate_world_fault_profile(profile));
@@ -122,10 +123,12 @@ pub fn build_world_fault_conformance_receipt(
     }
     normalized_schedule_results.sort_by(|left, right| left.schedule_id.cmp(&right.schedule_id));
 
+    let subscriber = evaluate_committed_subscriber(&profile.subscriber, subscriber_observation);
     let is_failed = results.iter().any(|result| result.disposition == ConformanceDisposition::Failed)
         || normalized_schedule_results
             .iter()
-            .any(|result| result.disposition == ConformanceDisposition::Failed);
+            .any(|result| result.disposition == ConformanceDisposition::Failed)
+        || subscriber.disposition == ConformanceDisposition::Failed;
     let schedule_refs = profile
         .schedules
         .iter()
@@ -141,6 +144,7 @@ pub fn build_world_fault_conformance_receipt(
         limits: profile.limits,
         results,
         schedules: normalized_schedule_results,
+        subscriber,
         unsupported_rows,
         decision: if is_failed {
             ConformanceDisposition::Failed

@@ -178,3 +178,27 @@ fn a_subscription_is_bounded_and_a_zero_bound_is_refused() {
         CommittedStreamIssue::InvalidBufferBound
     );
 }
+
+// r[verify molten.observations.cursors]
+// r[verify molten.observations.stream]
+#[test]
+fn bounded_pages_do_not_skip_events_within_one_committed_revision() {
+    let mut stream = stream();
+    let mut input = commit_input(PAYLOAD_REF);
+    input.event_count = 3;
+    let committed = commit_transition(&mut stream, &input).expect("multi-event commit");
+    let mut cursor = StreamCursor::start(SERVICE_ID, 1);
+    for expected in committed {
+        let SubscriptionOutcome::Events { events, next_cursor } =
+            subscribe(&stream, &cursor, 1).expect("bounded subscription")
+        else {
+            panic!("retained events must remain resumable");
+        };
+        assert_eq!(events, vec![expected]);
+        cursor = next_cursor;
+    }
+    assert_eq!(subscribe(&stream, &cursor, 1).expect("completed subscription"), SubscriptionOutcome::Events {
+        events: Vec::new(),
+        next_cursor: cursor,
+    });
+}

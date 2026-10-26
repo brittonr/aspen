@@ -1,4 +1,6 @@
 use super::*;
+use crate::committed_stream::CommittedChangeEvent;
+use crate::committed_stream::StreamCursor;
 use crate::fabric_simulation::EligibleChoice;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -164,9 +166,30 @@ pub struct WorldFaultConformanceReceipt {
     pub limits: WorldFaultLimits,
     pub results: Vec<WorldFaultConformanceResult>,
     pub schedules: Vec<ConcurrentScheduleResult>,
+    pub subscriber: CommittedSubscriberResult,
     pub unsupported_rows: Vec<UnsupportedConformanceRow>,
     pub decision: ConformanceDisposition,
     pub mutation_authorized_by_evidence: bool,
     pub cleanup_authorized_by_evidence: bool,
     pub non_claims: Vec<WorldFaultNonClaim>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommittedSubscriberObservation {
+    pub case_id: String,
+    pub phase: FaultPhase,
+    pub checkpoint_before: StreamCursor,
+    pub checkpoint_after_restart: StreamCursor,
+    pub published: Vec<CommittedChangeEvent>,
+    pub delivered_before_restart: Vec<CommittedChangeEvent>,
+    pub delivered_after_restart: Vec<CommittedChangeEvent>,
+    pub deduplicated: Vec<CommittedChangeEvent>,
+    pub restart_count: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommittedSubscriberResult {
+    pub observation: Option<CommittedSubscriberObservation>,
+    pub disposition: ConformanceDisposition,
+    pub diagnostics: Vec<WorldFaultIssue>,
 }

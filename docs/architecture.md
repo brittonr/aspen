@@ -199,6 +199,12 @@ it exactly. Possessing an event, a cursor, or a stream position authorizes
 nothing: reading the content an event references still requires the existing
 current capability checks.
 
+The world-fault v2 profile exercises subscriber restart after publication but
+before acknowledgement using the committed-stream APIs. It retains only the
+acknowledged cursor, requires complete bounded replay and exact identity dedup,
+and binds the observations into the canonical fault receipt. This deterministic
+in-process exercise does not establish OS-crash or storage-durability behavior.
+
 ## Vat/object layer: Goblins-inspired
 
 The public local runtime model remains Syndicate/SAM-style: actors, entities, facets, assertions, retractions, `Observe` patterns, and turns. A vat is an optional internal execution structure that a Rust, Wasm, or Steel actor/service may host when it needs fine-grained object-capability state.

@@ -43,6 +43,7 @@ pub struct StreamCursor {
     pub service_id: StreamServiceId,
     pub stream_epoch: u64,
     pub revision: u64,
+    /// The inclusive lower bound for the next event within this revision.
     pub ordinal: u32,
 }
 

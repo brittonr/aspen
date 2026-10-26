@@ -62,6 +62,8 @@ pub enum WorldFaultIssue {
     },
     ScheduleNodeGenerationZero(String),
     ObservationMissing(String),
+    SubscriberInvalidCase(&'static str),
+    SubscriberObservationMismatch(&'static str),
     DuplicateObservation(String),
     ObservationOperationMismatch(String),
     ObservationPhaseMismatch(String),

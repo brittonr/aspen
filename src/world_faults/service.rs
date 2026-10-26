@@ -17,6 +17,7 @@ pub struct WorldFaultHarnessOutcome {
 // r[impl molten.world_faults.interruption]
 // r[impl molten.world_faults.recovery]
 // r[impl molten.world_faults.receipt]
+// r[impl molten.observations.stream]
 pub fn run_world_fault_conformance(
     inventory: &WorldMutationInventory,
     profile: &WorldFaultProfile,
@@ -73,7 +74,12 @@ pub fn run_world_fault_conformance(
         schedules.push(evaluate_concurrent_schedule(schedule, execution.observations, execution.scheduler_choices));
     }
 
-    let receipt = build_world_fault_conformance_receipt(inventory, profile, &observations, schedules)
+    if restart_count >= profile.limits.max_restarts {
+        return Err(Failure::invalid_harness("world fault subscriber restart bound exceeded"));
+    }
+    let subscriber = exercise_committed_subscriber_case(&profile.subscriber)
+        .map_err(|issues| core_error("committed subscriber fault case", issues))?;
+    let receipt = build_world_fault_conformance_receipt(inventory, profile, &observations, schedules, Some(subscriber))
         .map_err(|issues| core_error("world fault conformance", issues))?;
     let record = canonical_world_fault_receipt(&receipt, profile)?;
     let persisted_receipt_ref = ports.receipts.publish_receipt(&record)?;

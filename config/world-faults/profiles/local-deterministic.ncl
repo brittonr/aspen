@@ -1,7 +1,7 @@
 let Contracts = import "../contracts.ncl" in
 let SourceRevision = "06cd7ca465550d2a35e0511cbbd7989e434d8f51" in
 let InventoryRef = "blake3:d2d36a4685dbfcee16075e508a70592e51e6df12f86b58d039d5b961b985d367" in
-let RustProfileRef = "blake3:c7dc3a3c40e1d2cc1618bac585ecbeaa5178d94b4290607018c74cf8a94aaa3c" in
+let RustProfileRef = "blake3:4879d730e10241f9e078655ab33cbf32aaee7a8d343a73776e80ac34bcfb0513" in
 let OperationGeneration = 1 in
 let NodeGeneration = 1 in
 let Mutations = [
@@ -257,8 +257,8 @@ let schedule = fun item =>
   }
 in
 {
-  schema = "molten.world-fault-profile.v1",
-  profile_name = "local-deterministic-process-restart-v1",
+  schema = "molten.world-fault-profile.v2",
+  profile_name = "local-deterministic-process-restart-v2",
   source_revision = SourceRevision,
   inventory_ref = InventoryRef,
   rust_profile_ref = RustProfileRef,
@@ -269,11 +269,19 @@ in
     max_adapters = 16,
     max_observations = 72,
     max_unsupported_rows = 16,
-    max_restarts = 16,
+    max_restarts = 17,
   },
   adapters = Adapters,
   cases = Cases,
   schedules = std.array.map schedule ConcurrentMutations,
+  subscriber = {
+    case_id = "committed-subscriber:publication-before-ack",
+    phase = "before-response",
+    service_id = "service:committed-subscriber",
+    stream_epoch = 1,
+    event_count = 3,
+    buffer_bound = 1,
+  },
   unexplained_numeric_thresholds = [],
   claims_independent_witness = false,
   claims_physical_power_loss = false,

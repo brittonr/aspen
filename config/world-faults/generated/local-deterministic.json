@@ -793,13 +793,13 @@
     "max_adapters": 16,
     "max_cases": 72,
     "max_observations": 72,
-    "max_restarts": 16,
+    "max_restarts": 17,
     "max_schedule_steps": 64,
     "max_schedules": 8,
     "max_unsupported_rows": 16
   },
-  "profile_name": "local-deterministic-process-restart-v1",
-  "rust_profile_ref": "blake3:c7dc3a3c40e1d2cc1618bac585ecbeaa5178d94b4290607018c74cf8a94aaa3c",
+  "profile_name": "local-deterministic-process-restart-v2",
+  "rust_profile_ref": "blake3:4879d730e10241f9e078655ab33cbf32aaee7a8d343a73776e80ac34bcfb0513",
   "schedules": [
     {
       "mutation": "head",
@@ -1506,7 +1506,15 @@
       "winner_source": "declared-interleaving"
     }
   ],
-  "schema": "molten.world-fault-profile.v1",
+  "schema": "molten.world-fault-profile.v2",
   "source_revision": "06cd7ca465550d2a35e0511cbbd7989e434d8f51",
+  "subscriber": {
+    "buffer_bound": 1,
+    "case_id": "committed-subscriber:publication-before-ack",
+    "event_count": 3,
+    "phase": "before-response",
+    "service_id": "service:committed-subscriber",
+    "stream_epoch": 1
+  },
   "unexplained_numeric_thresholds": []
 }

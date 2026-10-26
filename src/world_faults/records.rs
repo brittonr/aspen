@@ -1,12 +1,14 @@
+mod subscriber;
+
 use molten_core::world_faults::*;
 use preserves::IOValue;
 
 use crate::error::Failure;
 use crate::error::Result;
 
-pub const WORLD_FAULT_RECEIPT_RECORD: &str = "molten-world-fault-conformance-receipt-v1";
+pub const WORLD_FAULT_RECEIPT_RECORD: &str = "molten-world-fault-conformance-receipt-v2";
 
-const WORLD_FAULT_RECEIPT_CONTEXT: &str = "onixresearch.molten.world-fault-conformance.record.v1";
+const WORLD_FAULT_RECEIPT_CONTEXT: &str = "onixresearch.molten.world-fault-conformance.record.v2";
 const MAX_WORLD_FAULT_RECEIPT_BYTES: usize = 1_048_576;
 
 #[derive(Debug, Clone)]
@@ -35,6 +37,7 @@ pub fn canonical_world_fault_receipt(
         limits_value(receipt.limits),
         field("results", sequence(receipt.results.iter().map(result_value).collect())),
         field("schedules", sequence(receipt.schedules.iter().map(schedule_result_value).collect())),
+        field("subscriber", subscriber::result_value(&receipt.subscriber)),
         field("unsupported-rows", sequence(receipt.unsupported_rows.iter().map(unsupported_value).collect())),
         field("decision", string(receipt.decision.as_str())),
         field("mutation-authorized-by-evidence", boolean(receipt.mutation_authorized_by_evidence)),
@@ -236,6 +239,8 @@ fn issue_code(issue: &WorldFaultIssue) -> &'static str {
         WorldFaultIssue::UnsupportedRowDropped(_) => "unsupported-row-dropped",
         WorldFaultIssue::ReceiptNonClaimMissing(_) => "receipt-non-claim-missing",
         WorldFaultIssue::EvidenceAuthorityOverclaim => "evidence-authority-overclaim",
+        WorldFaultIssue::SubscriberInvalidCase(_) => "subscriber-invalid-case",
+        WorldFaultIssue::SubscriberObservationMismatch(_) => "subscriber-observation-mismatch",
     }
 }
 

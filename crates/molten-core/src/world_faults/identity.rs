@@ -1,7 +1,7 @@
 use super::*;
 
 const INVENTORY_IDENTITY_DOMAIN: &str = "molten.world-mutation-inventory.identity.v1";
-const PROFILE_IDENTITY_DOMAIN: &str = "molten.world-fault-profile.identity.v1";
+const PROFILE_IDENTITY_DOMAIN: &str = "molten.world-fault-profile.identity.v2";
 const SCHEDULE_IDENTITY_DOMAIN: &str = "molten.world-fault-schedule.identity.v1";
 const BLAKE3_PREFIX: &str = "blake3:";
 const BLAKE3_HEX_LENGTH: usize = 64;
@@ -130,6 +130,12 @@ pub fn identify_world_fault_profile(profile: &WorldFaultProfile) -> Result<Strin
     for schedule in &profile.schedules {
         encode_schedule(&mut encoder, schedule);
     }
+    encoder.push_string("subscriber-case-id", &profile.subscriber.case_id);
+    encoder.push_string("subscriber-phase", profile.subscriber.phase.as_str());
+    encoder.push_string("subscriber-service-id", &profile.subscriber.service_id);
+    encoder.push_u64(profile.subscriber.stream_epoch);
+    encoder.push_u64(u64::from(profile.subscriber.event_count));
+    encoder.push_u64(u64::from(profile.subscriber.buffer_bound));
     Ok(content_ref(&encoder.finish()?))
 }
 

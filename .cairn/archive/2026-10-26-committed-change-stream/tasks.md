@@ -40,11 +40,14 @@
       replicated requirement, the local profile, the replica-count-only refusal, the incomplete observation, and the
       receipt identity. The shell fixture shows the bound receipt and the refusal to claim content the profile cannot
       admit.
-- [ ] [serial] Extend the fault-conformance phases with subscriber restart after publication but before acknowledgement. r[molten.observations.stream]
-      The fault-conformance phases live in the world-fault conformance profile, which exercises the world's
-      reconciliation rather than a subscriber of the committed-change stream. The subscriber restart is covered by the
-      resume fixture, which resumes from a cursor after the producer committed further events. The phase stays open
-      until the conformance profile gains a committed-change subscriber role.
+- [x] [serial] Extend the fault-conformance phases with subscriber restart after publication but before acknowledgement. r[molten.observations.stream]
+      The v2 world-fault profile requires a committed-change subscriber at `before-response`.
+      The executable exercise restores only its acknowledged checkpoint, replays every bounded
+      page including the unacknowledged prefix, and deduplicates by stable identity. The receipt
+      independently revalidates complete ordered replay; missing or tampered evidence denies pass.
+      A reproduced within-revision cursor skip is fixed and kept as a regression. This models
+      subscriber restart in process, not OS-crash or persistence durability. See
+      `evidence/2026-10-26-subscriber-verification.md` and its retained initial failures.
 
 ## Phase 5: Validation
 

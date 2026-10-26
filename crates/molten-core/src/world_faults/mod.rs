@@ -28,6 +28,7 @@ mod inventory;
 mod model;
 mod profile;
 mod schedule;
+mod subscriber;
 mod validation;
 
 pub use conformance::*;
@@ -36,6 +37,7 @@ pub use inventory::*;
 pub use model::*;
 pub use profile::*;
 pub use schedule::*;
+pub use subscriber::*;
 pub use validation::*;
 
 #[cfg(test)]

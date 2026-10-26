@@ -23,6 +23,7 @@ pub fn validate_world_fault_receipt(
             value: receipt.profile_ref.clone(),
         });
     }
+    validate_subscriber_result(receipt, profile, &mut issues);
     if receipt.mutation_authorized_by_evidence || receipt.cleanup_authorized_by_evidence {
         issues.push(WorldFaultIssue::EvidenceAuthorityOverclaim);
     }
@@ -43,4 +44,35 @@ pub fn validate_world_fault_receipt(
     issues.sort();
     issues.dedup();
     issues
+}
+
+fn validate_subscriber_result(
+    receipt: &WorldFaultConformanceReceipt,
+    profile: &WorldFaultProfile,
+    issues: &mut Vec<WorldFaultIssue>,
+) {
+    let diagnostics =
+        super::super::subscriber::subscriber_diagnostics(&profile.subscriber, receipt.subscriber.observation.as_ref());
+    let expected = if diagnostics.is_empty() {
+        ConformanceDisposition::Passed
+    } else {
+        ConformanceDisposition::Failed
+    };
+    if receipt.subscriber.disposition != expected {
+        issues.push(WorldFaultIssue::SubscriberObservationMismatch("result-disposition"));
+    }
+    if receipt.subscriber.diagnostics != diagnostics {
+        issues.push(WorldFaultIssue::SubscriberObservationMismatch("result-diagnostics"));
+    }
+    let is_failed = expected == ConformanceDisposition::Failed
+        || receipt.results.iter().any(|result| result.disposition == ConformanceDisposition::Failed)
+        || receipt.schedules.iter().any(|result| result.disposition == ConformanceDisposition::Failed);
+    let aggregate = if is_failed {
+        ConformanceDisposition::Failed
+    } else {
+        ConformanceDisposition::Passed
+    };
+    if receipt.decision != aggregate {
+        issues.push(WorldFaultIssue::SubscriberObservationMismatch("aggregate-disposition"));
+    }
 }

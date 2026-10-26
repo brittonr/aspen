@@ -1,0 +1,23 @@
+[
+  {
+    "stage": "proposal",
+    "valid": true,
+    "verdict": "PASS",
+    "receipt_hash": "6f10cfec5acb68f5c3ac704c15d36917bab3ddbeab9ce6d5dc2655e0f8f6439c",
+    "input_hash": "31c644bb6141975724782f7b74741624f0a27c799d172f91d90bd93f455a3e11"
+  },
+  {
+    "stage": "design",
+    "valid": true,
+    "verdict": "PASS",
+    "receipt_hash": "3b55155e3b49398b3ce83a4024ec5c209b2609b06d55c2a8e4c68fbabf9ed56f",
+    "input_hash": "e58484c47baa60703720caab0fc636e221ce8cc328909c54a435154c8929e8ad"
+  },
+  {
+    "stage": "tasks",
+    "valid": true,
+    "verdict": "PASS",
+    "receipt_hash": "7f109155da19a3abf8988dd552af86a2890d01a305febe1e87da2dc8419d82b5",
+    "input_hash": "e998878a3555d64cbc1462c14a48e0847ce43dd0c710f8f50f497819a0d8163d"
+  }
+]
