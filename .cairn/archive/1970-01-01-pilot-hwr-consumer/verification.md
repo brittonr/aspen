@@ -100,3 +100,12 @@ successful root source gate or a commit. Both root and `/tmp` storage were full.
 Only this runtime-boundary task's completed compilation caches were removed;
 the root verification cache and its failed gate observations were retained.
 No hook, lint or source gate was disabled.
+
+After clearing only the completed task caches, the retry created commit
+`93b245a26`. Whitespace, root formatting and the required root Octet hook passed.
+The root `status.json` reported `clean`, zero total/warning/error findings and
+a successful Cargo process, with configuration identity
+`b3:2b46918cdad7431d09fa6fc374bcf94bc3d51eb0a23f7a278f6c40b59298fa64`
+and profile identity
+`b3:a37946124e9477919893b99b205e4d5e58ebdf5ca18550c59c61cf94905221ae`.
+This successful retry does not erase the failed storage observation above.
