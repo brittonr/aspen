@@ -1,0 +1,69 @@
+{
+  "phase": "Succeeded",
+  "run": {
+    "cancel_requested": false,
+    "id": "61e5b60a86d56fa09e53631f126d6d857f2e81dea5c380baa1fadd244b7defe8",
+    "spec": {
+      "name": "demo",
+      "tasks": [
+        {
+          "component": "ad371b4b4bf34c80c6a63d693ee30de04c3aade9dc6c0f637ce2b394b721a4cc",
+          "dependencies": [],
+          "fuel": 1000000,
+          "id": "a",
+          "inputs": [],
+          "max_attempts": 2,
+          "max_output_bytes": 1024,
+          "required_labels": {},
+          "resources": {
+            "cpu_millis": 1000,
+            "memory_bytes": 16777216,
+            "slots": 1
+          },
+          "retry_delay_ticks": 1,
+          "timeout_ms": 5000
+        },
+        {
+          "component": "ad371b4b4bf34c80c6a63d693ee30de04c3aade9dc6c0f637ce2b394b721a4cc",
+          "dependencies": [
+            "a"
+          ],
+          "fuel": 1000000,
+          "id": "b",
+          "inputs": [],
+          "max_attempts": 2,
+          "max_output_bytes": 1024,
+          "required_labels": {},
+          "resources": {
+            "cpu_millis": 1000,
+            "memory_bytes": 16777216,
+            "slots": 1
+          },
+          "retry_delay_ticks": 1,
+          "timeout_ms": 5000
+        }
+      ]
+    },
+    "spec_ref": "55094dbf00e8555fa9d637ec8248a6e598fb25af8cd2df6d80983b756371d6c4",
+    "tasks": {
+      "a": {
+        "number": 1,
+        "phase": {
+          "Succeeded": {
+            "output": "ed53edd46070bae2811316d2ecabd484248f9e1438b0c9efddd2ace71bf76370",
+            "result": "5eab76d7a592ef6cd2d65543c598fc5f1ae57d903614c1d70d11a925a5401045"
+          }
+        }
+      },
+      "b": {
+        "number": 1,
+        "phase": {
+          "Succeeded": {
+            "output": "ed53edd46070bae2811316d2ecabd484248f9e1438b0c9efddd2ace71bf76370",
+            "result": "1ddadb30bad200f46003e08c2cb87234a379c1fb2cad7acf3cf13292ccd41e09"
+          }
+        }
+      }
+    }
+  }
+}

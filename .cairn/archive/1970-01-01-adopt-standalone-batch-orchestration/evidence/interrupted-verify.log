@@ -1,0 +1,302 @@
+
+== Toolchain ==
+rustc 1.98.0-nightly (31a9463c6 2026-05-25)
+cargo 1.98.0-nightly (4d1f98451 2026-05-15)
+
+== Architecture/source checks ==
+PASS: seven-crate dependency graph; pure cores/application have no matched ambient imports; no implementation stubs.
+Scope: lexical and manifest checks only. Rust parsing, type checking and runtime behavior are not established.
+
+== Format authored source ==
+
+== Actual Rust unit, adapter, and separate-process tests ==
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+   Compiling molten-orchestrator-adapters v0.2.0 (/home/brittonr/git/OnixResearch/.worktrees/aspen-adopt-batch-20261025/pilots/orchestration/adapters)
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+   Compiling molten-orchestrator-cli v0.2.0 (/home/brittonr/git/OnixResearch/.worktrees/aspen-adopt-batch-20261025/pilots/orchestration/cli)
+    Finished `test` profile [unoptimized] target(s) in 17.24s
+     Running unittests src/lib.rs (/home/brittonr/.cache/aspen-batch-20261025/target/debug/deps/molten_batch_application-081dfdab0073b11b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/home/brittonr/.cache/aspen-batch-20261025/target/debug/deps/molten_batch_core-c65d1827736084c3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/batch.rs (/home/brittonr/.cache/aspen-batch-20261025/target/debug/deps/batch-15e5a2e1da3faf9c)
+
+running 14 tests
+test worker_restart_preserves_tombstones_and_stops_in_process_work ... ok
+test failed_dependency_blocks_children ... ok
+test worker_duplicate_and_capacity_rejection_do_not_start_twice ... ok
+test independent_pending_tasks_prevent_premature_terminal_run_status ... ok
+test cancel_retains_active_reservation_until_teardown ... ok
+test uncertain_attempt_holds_capacity_and_cannot_be_replaced ... ok
+test dag_executes_only_after_dependencies_and_reserves_capacity ... ok
+test retry_requires_stopped_terminal_and_advanced_epoch ... ok
+test restore_rejects_missing_history_and_false_resource_release ... ok
+test stale_and_drained_nodes_are_not_eligible ... ok
+test late_success_cannot_override_committed_cancel ... ok
+test duplicate_submit_is_idempotent_but_key_rebinding_denies ... ok
+test cancellation_tombstone_blocks_delayed_start ... ok
+test cycle_missing_dependency_and_duplicate_task_are_denied ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (/home/brittonr/.cache/aspen-batch-20261025/target/debug/deps/molten_orchestrator_adapters-5fcfb47580248dd5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/contracts.rs (/home/brittonr/.cache/aspen-batch-20261025/target/debug/deps/contracts-8ff0a5515a635c58)
+
+running 2 tests
+test unknown_worker_acceptance_does_not_mint_a_launch_ticket ... ok
+test unknown_before_or_after_commit_never_dispatches ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests/execution.rs (/home/brittonr/.cache/aspen-batch-20261025/target/debug/deps/execution-b53e36bfacd62c13)
+
+running 6 tests
+test cancellation_before_execution_is_latched ... ok
+test infinite_component_is_bounded_by_fuel_or_deadline ... ok
+test no_host_imports_are_provided ... ok
+test actual_wasmtime_component_abi_returns_bytes ... ok
+test output_limit_rejects_after_stopped_execution ... ok
+test memory_growth_above_grant_is_denied ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/root.rs (/home/brittonr/.cache/aspen-batch-20261025/target/debug/deps/root-157fbdd8775bcf53)
+
+running 1 test
+test capability_publication_syncs_the_held_directory_after_rename ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/storage.rs (/home/brittonr/.cache/aspen-batch-20261025/target/debug/deps/storage-b1282d57663abdf3)
+
+running 6 tests
+test root_refuses_parent_paths_and_symlinked_database ... ok
+test content_roundtrip_is_idempotent_and_checks_bytes ... ok
+test database_exclusive_lock_prevents_two_live_process_owners ... ok
+test exact_whole_state_cas_has_one_winner ... ok
+test actual_redb_reopen_preserves_state_and_content ... ok
+test worker_reopen_recovers_interrupted_attempt_without_reexecution ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running unittests src/lib.rs (/home/brittonr/.cache/aspen-batch-20261025/target/debug/deps/molten_orchestrator_application-ba87ad1139244c5e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/contracts.rs (/home/brittonr/.cache/aspen-batch-20261025/target/debug/deps/contracts-0b64832063fe0309)
+
+running 17 tests
+test conflict_performs_no_worker_effect ... ok
+test explicit_unknown_worker_result_is_not_safe_to_retry ... ok
+test lost_observation_commit_never_repeats_start ... ok
+test revocation_after_commit_prevents_worker_effect ... ok
+test storage_error_after_claim_is_not_a_prestart_failure_or_retry_grant ... ok
+test two_stale_proposals_cannot_both_commit_in_the_contract_fake ... ok
+test unknown_before_commit_does_not_dispatch_or_blindly_retry ... ok
+test completion_admission_is_bound_to_exact_result ... ok
+test worker_error_is_recorded_as_unknown_not_safe_to_retry ... ok
+test completion_is_not_overwritten_by_second_result ... ok
+test stale_completion_has_no_admission_or_commit_effect ... ok
+test missing_run_never_dispatches ... ok
+test persist_then_recheck_then_dispatch_then_record ... ok
+test explicit_worker_rejection_does_not_implicitly_create_another_attempt ... ok
+test admission_failure_before_claim_has_no_mutation ... ok
+test current_completion_can_reconcile_unknown_without_worker_call ... ok
+test unknown_after_commit_cannot_be_redispatched_after_host_restart ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/home/brittonr/.cache/aspen-batch-20261025/target/debug/deps/molten_orchestrator-1c66dadd00439523)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/e2e.rs (/home/brittonr/.cache/aspen-batch-20261025/target/debug/deps/e2e-512c2e6ad75d1192)
+
+running 1 test
+test real_two_worker_dag_restart_idempotency_and_unenrolled_peer_denial ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.11s
+
+     Running unittests src/lib.rs (/home/brittonr/.cache/aspen-batch-20261025/target/debug/deps/molten_orchestrator_codec-3b1ec2a01332c727)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/canonical.rs (/home/brittonr/.cache/aspen-batch-20261025/target/debug/deps/canonical-4ac87536df5eeb84)
+
+running 5 tests
+test floats_and_excessive_nesting_are_not_admitted ... ok
+test schema_domain_separation_changes_identity ... ok
+test roundtrip_rejects_modified_canonical_and_projection ... ok
+test wire_rejects_wrong_schema_trailing_data_and_duplicate_keys ... ok
+test projection_matches_an_independently_written_preserves_value ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src/lib.rs (/home/brittonr/.cache/aspen-batch-20261025/target/debug/deps/molten_orchestrator_core-480c303473b90fe6)
+
+running 1 test
+test overflow_tests::revision_overflow_fails_without_mutation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/transitions.rs (/home/brittonr/.cache/aspen-batch-20261025/target/debug/deps/transitions-6f02c8d00ee1f1d3)
+
+running 9 tests
+test every_fence_dimension_is_checked_before_mutation ... ok
+test uncertain_start_is_not_a_retry_grant ... ok
+test completion_before_dispatch_is_denied ... ok
+test terminal_and_definite_rejection_are_absorbing ... ok
+test same_owner_from_earlier_attempt_is_rejected ... ok
+test successful_lifecycle_advances_revisions ... ok
+test persisted_dispatch_cannot_be_dispatched_again ... ok
+test plan_is_pure_and_repeatable ... ok
+test bounded_sequences_never_dispatch_twice_or_change_fence ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+== Clippy ==
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+    Checking molten-orchestrator-adapters v0.2.0 (/home/brittonr/git/OnixResearch/.worktrees/aspen-adopt-batch-20261025/pilots/orchestration/adapters)
+    Checking molten-orchestrator-cli v0.2.0 (/home/brittonr/git/OnixResearch/.worktrees/aspen-adopt-batch-20261025/pilots/orchestration/cli)
+    Finished `dev` profile [unoptimized] target(s) in 8.30s
+
+== Build executable ==
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.27
+   Compiling serde_core v1.0.229
+   Compiling serde v1.0.229
+   Compiling libc v0.2.191
+   Compiling cfg-if v1.0.5
+   Compiling log v0.4.34
+   Compiling pin-project-lite v0.2.17
+   Compiling typenum v1.20.1
+   Compiling portable-atomic v1.15.0
+   Compiling version_check v0.9.5
+   Compiling bytes v1.12.1
+   Compiling futures-core v0.3.34
+   Compiling critical-section v1.2.0
+   Compiling find-msvc-tools v0.1.15
+   Compiling syn v3.0.9
+   Compiling syn v2.0.119
+   Compiling shlex v2.0.1
+   Compiling bitflags v2.13.2
+   Compiling cc v1.10.0
+   Compiling socket2 v0.6.5
+   Compiling errno v0.3.14
+   Compiling generic-array v0.14.7
+   Compiling cfg_aliases v0.2.2
+   Compiling foldhash v0.2.0
+   Compiling stable_deref_trait v1.2.1
+   Compiling synstructure v0.14.0
+   Compiling libm v0.2.16
+   Compiling hashbrown v0.17.1
+   Compiling signal-hook-registry v1.4.8
+   Compiling mio v1.2.4
+   Compiling slab v0.4.12
+   Compiling rand_core v0.10.1
+   Compiling serde_derive v1.0.229
+   Compiling zerofrom-derive v0.1.8
+   Compiling yoke-derive v0.8.4
+   Compiling tokio-macros v2.7.2
+   Compiling zeroize_derive v1.5.0
+   Compiling zerovec-derive v0.11.7
+   Compiling tokio v1.54.1
+   Compiling zeroize v1.9.1
+   Compiling futures-macro v0.3.34
+   Compiling futures-task v0.3.34
+   Compiling zerofrom v0.1.8
+   Compiling yoke v0.8.4
+   Compiling futures-sink v0.3.34
+   Compiling displaydoc v0.2.7
+   Compiling heck v0.5.0
+   Compiling zerovec v0.11.9
+   Compiling futures-util v0.3.34
+   Compiling subtle v2.6.1
+   Compiling crypto-common v0.1.7
+   Compiling smallvec v1.16.4
+   Compiling cpufeatures v0.3.1
+   Compiling tinystr v0.8.5
+   Compiling writeable v0.6.4
+   Compiling thiserror v2.0.21
+   Compiling litemap v0.8.3
+   Compiling once_cell v1.21.4
+   Compiling potential_utf v0.1.6
+   Compiling icu_locale_core v2.4.0
+   Compiling zerotrie v0.2.5
+   Compiling ipnet v2.12.2
+   Compiling tracing-core v0.1.36
+   Compiling tracing-attributes v0.1.31
+   Compiling thiserror-impl v2.0.21
+   Compiling ring v0.17.14
+   Compiling unicode-xid v0.2.6
+   Compiling getrandom v0.4.3
+   Compiling itoa v1.0.18
+   Compiling icu_normalizer_data v2.4.0
+   Compiling utf8_iter v1.0.4
+   Compiling icu_properties_data v2.4.0
+   Compiling icu_collections v2.4.0
+   Compiling tracing v0.1.44
+   Compiling icu_provider v2.4.0
+   Compiling rustls-pki-types v1.15.1
+   Compiling getrandom v0.2.17
+   Compiling wasmtime-internal-core v45.0.0
+   Compiling percent-encoding v2.3.2
+   Compiling semver v1.0.28
+   Compiling equivalent v1.0.3
+   Compiling untrusted v0.9.0
+   Compiling icu_normalizer v2.4.0
+   Compiling icu_properties v2.4.0
+   Compiling memchr v2.8.3
+   Compiling rustls v0.23.46
+   Compiling rustc-hash v2.1.3
+   Compiling cranelift-srcgen v0.132.3
+   Compiling unicode-segmentation v1.13.3
+   Compiling cpufeatures v0.2.17
+
+[Showing lines 1-300 of 573. Use :301 to continue]

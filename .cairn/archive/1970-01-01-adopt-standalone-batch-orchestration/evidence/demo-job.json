@@ -1,0 +1,41 @@
+{
+  "name": "demo",
+  "tasks": [
+    {
+      "id": "a",
+      "component": "ad371b4b4bf34c80c6a63d693ee30de04c3aade9dc6c0f637ce2b394b721a4cc",
+      "inputs": [],
+      "dependencies": [],
+      "resources": {
+        "cpu_millis": 1000,
+        "memory_bytes": 16777216,
+        "slots": 1
+      },
+      "required_labels": {},
+      "fuel": 1000000,
+      "timeout_ms": 5000,
+      "max_output_bytes": 1024,
+      "max_attempts": 2,
+      "retry_delay_ticks": 1
+    },
+    {
+      "id": "b",
+      "component": "ad371b4b4bf34c80c6a63d693ee30de04c3aade9dc6c0f637ce2b394b721a4cc",
+      "inputs": [],
+      "dependencies": [
+        "a"
+      ],
+      "resources": {
+        "cpu_millis": 1000,
+        "memory_bytes": 16777216,
+        "slots": 1
+      },
+      "required_labels": {},
+      "fuel": 1000000,
+      "timeout_ms": 5000,
+      "max_output_bytes": 1024,
+      "max_attempts": 2,
+      "retry_delay_ticks": 1
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+[workspace]
+[package]
+name = "orchestrator-concat-guest"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+[lib]
+crate-type = ["cdylib"]
+[dependencies]
+wit-bindgen = "=0.46.0"
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+panic = "abort"

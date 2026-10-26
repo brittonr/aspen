@@ -1,0 +1,9 @@
+pending_references=3
+pending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness
+requirements=2962
+referenced=1028
+uncovered=1934
+baseline_entries=1934
+dangling=0
+non_claim=inherited requirements remain uncovered until direct evidence references them
+verdict=pass

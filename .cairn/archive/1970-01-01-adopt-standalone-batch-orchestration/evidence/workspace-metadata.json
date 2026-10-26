@@ -1,0 +1,51 @@
+{
+  "workspace_root": "/home/brittonr/git/OnixResearch/.worktrees/aspen-adopt-batch-20261025/pilots/orchestration",
+  "packages": [
+    {
+      "name": "molten-orchestrator-core",
+      "version": "0.1.0",
+      "license": "AGPL-3.0-or-later",
+      "rust_version": "1.94"
+    },
+    {
+      "name": "molten-orchestrator-application",
+      "version": "0.1.0",
+      "license": "AGPL-3.0-or-later",
+      "rust_version": "1.94"
+    },
+    {
+      "name": "molten-batch-core",
+      "version": "0.2.0",
+      "license": "AGPL-3.0-or-later",
+      "rust_version": "1.94"
+    },
+    {
+      "name": "molten-batch-application",
+      "version": "0.2.0",
+      "license": "AGPL-3.0-or-later",
+      "rust_version": "1.94"
+    },
+    {
+      "name": "molten-orchestrator-codec",
+      "version": "0.2.0",
+      "license": "AGPL-3.0-or-later",
+      "rust_version": "1.94"
+    },
+    {
+      "name": "molten-orchestrator-adapters",
+      "version": "0.2.0",
+      "license": "AGPL-3.0-or-later",
+      "rust_version": "1.94"
+    },
+    {
+      "name": "molten-orchestrator-cli",
+      "version": "0.2.0",
+      "license": "AGPL-3.0-or-later",
+      "rust_version": "1.94"
+    }
+  ],
+  "member_count": 7,
+  "registry_dependencies": [
+    "registry+https://github.com/rust-lang/crates.io-index"
+  ]
+}

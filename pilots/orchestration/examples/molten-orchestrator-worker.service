@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Example ONLY. Install the validated binary and initialize/protect the state
+# root first. Tune memory/CPU to the declared worker capacity and JIT overhead.
+[Unit]
+Description=Molten standalone pure-component batch worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=molten-orchestrator
+Group=molten-orchestrator
+ExecStart=/usr/local/bin/molten-orchestrator serve --root /var/lib/molten-orchestrator-worker
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=90
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/molten-orchestrator-worker
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+TasksMax=256
+MemoryMax=2G
+CPUQuota=200%
+LimitNOFILE=4096
+# Wasmtime JIT needs executable mappings. Do not enable MemoryDenyWriteExecute.
+
+[Install]
+WantedBy=multi-user.target

@@ -18,6 +18,15 @@ The bounded execution port keeps executable policy in the pure core and process 
 
 No global coordination mechanism is mandatory. OpenRaft is not selected, adapted, or used. A consistency service is an explicit optional extension, and local verified transition laws do not imply whole-system correctness.
 
+The [standalone batch pilot](standalone-batch-orchestration.md) under
+`pilots/orchestration` is a separate seven-crate workspace with its own explicit
+operator policy and Redb databases. Its controller/worker application ports compose
+Iroh and import-free Wasmtime adapters, but are not installed in the admitted
+Molten runtime. Adoption does not change dispatcher, fabric-port or ALPN
+registries, system-tier manifests, root workspace membership, or Basalt/Cairn
+authority. Native integration requires the separate per-port gates in the pilot's
+integration plan; successful same-host DAG execution grants no system authority.
+
 ## Executable system-extension tier
 
 Long-running protocol and distributed-service implementations run through the separate system-extension host described in [`system-extension-runtime.md`](system-extension-runtime.md). A canonical manifest binds implementation identity, lifecycle callbacks, exact fabric-port versions, capabilities, policy/provenance evidence, finite resources, execution profile, state schema, compatible migrations, evidence profile, and non-claims. System-tier admission is required in addition to artifact availability; ordinary plugin metadata, service names, transport identity, and receipts cannot substitute for it.

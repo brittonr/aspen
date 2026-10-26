@@ -1,6 +1,10 @@
 # Batch Orchestration Adoption Specification
 
-## ADDED Requirements
+## Purpose
+
+Defines the `batch-orchestration-adoption` capability.
+
+## Requirements
 
 ### Requirement: Vendored pilot source carries exact provenance
 
@@ -75,7 +79,7 @@ NOT proceed by removing installer guards on a moved checkout.
 #### Scenario: The base commit matches
 
 - GIVEN a clean worktree at `bb6f3830ee7327da9875ea85a8c8e25697eddc35`
-- WHEN `apply.py --check`, `git apply`, and `scripts/reference-tests.sh` run
+- WHEN `apply.py` in default dry-run mode, `git apply --check`, `git apply`, and `scripts/reference-tests.sh` run
 - THEN the patch MUST apply cleanly and every reference regression MUST pass with
   repository dependencies available.
 

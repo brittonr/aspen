@@ -17,10 +17,10 @@
     "release-readiness",
     "whole-system-correctness"
   ],
-  "observed_date": "2026-10-22",
-  "referenced": 1021,
+  "observed_date": "2026-10-25",
+  "referenced": 1028,
   "requirement_root": ".cairn/specs",
-  "requirements": 2955,
+  "requirements": 2962,
   "scanner": "tools/tracey/inherited_debt_guard.rs",
   "schema": "molten.inherited-tracey-debt-baseline.v1",
   "uncovered": 1934,

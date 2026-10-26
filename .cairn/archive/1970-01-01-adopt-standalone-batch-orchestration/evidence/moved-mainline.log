@@ -1,0 +1,2 @@
+exit-code: 1
+ERROR: Expected HEAD bb6f3830ee7327da9875ea85a8c8e25697eddc35. Use a separate branch/worktree at this commit; no reset is performed.

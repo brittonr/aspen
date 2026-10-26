@@ -46,10 +46,15 @@ a reason to weaken assertions.
 
 ### Use the guarded patch path for the reference scheduler change
 
-The `lease_epoch` patch applies only through `apply.py --check` guards at the exact
+The `lease_epoch` patch applies only through `apply.py` default dry-run guards at the exact
 base commit in a clean worktree. If the checkout has moved, reconciliation is explicit;
 the guards are never removed to force an apply. `scripts/reference-tests.sh` runs with
 repository dependencies before the patch is considered landed.
+
+The delivered installer has no `--check` flag; default dry-run generates and checks
+the patch without applying it. Adoption verifies that unchanged installer and patch
+in a separate historical worktree. Current mainline's job/owner/epoch-bound
+`assignment_token` API is preserved rather than replaced with the old command shape.
 
 ### Keep the pilot unenrolled
 

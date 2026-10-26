@@ -1,0 +1,10 @@
+{
+  "workspace_root": "/home/brittonr/git/OnixResearch/.worktrees/aspen-adopt-batch-20261025",
+  "packages": [
+    "molten",
+    "molten-core",
+    "molten-node-host",
+    "molten-release-policy"
+  ],
+  "pilot_enrolled": false
+}

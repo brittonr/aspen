@@ -182,6 +182,15 @@ Cairn roadmap status: active production-readiness changes live under `.cairn/cha
 - `operator-dogfood-retention-gc-workflow`
 - `operator-dogfood-release-evidence-bundle`
 
+## Standalone batch orchestration pilot
+
+The separate seven-crate workspace in `pilots/orchestration` runs bounded,
+import-free component DAGs through real Redb, Iroh and Wasmtime adapters. It is not
+part of the root Cargo workspace or an admitted Molten system extension. See
+[`docs/standalone-batch-orchestration.md`](docs/standalone-batch-orchestration.md)
+for provenance, strict verification, the real-process demo and gated integration
+boundaries.
+
 ## Schema identity core pilot
 
 Molten runs a bounded adapter pilot against the published `schema-identity-core` cohort. See [`docs/schema-identity-core-pilot.md`](docs/schema-identity-core-pilot.md).

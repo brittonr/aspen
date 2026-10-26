@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+[package]
+name = "molten-orchestrator-adapters"
+version = "0.2.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+molten-batch-core = { path = "../batch-core" }
+molten-batch-application = { path = "../batch-application" }
+molten-orchestrator-codec = { path = "../codec" }
+serde = { workspace = true, features = ["std"] }
+serde_json.workspace = true
+async-trait.workspace = true
+anyhow.workspace = true
+redb = "=4.1.0"
+cap-std = "3"
+cap-fs-ext = "3"
+base64 = "0.22"
+iroh = { version = "=1.0.0", default-features = false, features = ["tls-ring"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "signal", "io-util"] }
+wasmtime = { version = "=45.0.0", default-features = false, features = ["cranelift", "runtime", "std", "component-model", "wat"] }
+
+[dev-dependencies]
+cap-tempfile = "3"
+tempfile = "3"
