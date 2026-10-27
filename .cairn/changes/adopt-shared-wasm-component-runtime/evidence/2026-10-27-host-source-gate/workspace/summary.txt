@@ -1,0 +1,39 @@
+--- octet summary ---
+Status: warning-only
+Findings: 12
+Warnings: 12
+Errors: 0
+Autofixable: 0
+Tool: cargo-octet 0.1.0
+Toolchain: nightly-2026-03-21-x86_64-unknown-linux-gnu
+Profile: workspace-metadata
+Config hash: b3:1d43777ce80504f00ce20b5683f39a2ca6cc0581630a3d9c137825c14dfa0a54
+Profile hash: b3:fb49eb83fc54e70159e95454e6db832a65cbfa1d19743ee53c8bffe662d2b91f
+
+By crate:
+  molten        12
+
+By effect:
+  resource        6
+  unknown         6
+
+By lint:
+  non_trait_imports              4
+  platform_dependent_cast        4
+  module_file_count              2
+  path_segment_repetition        2
+
+Index:
+  F1   module_file_count       molten  src/system_extension/native_host/artifact.rs:1
+  F2   module_file_count       molten  src/system_extension/native_host/artifact.rs:1
+  F3   platform_dependent_cast molten  src/wasm/component/effect/host/authority.rs:24
+  F4   platform_dependent_cast molten  src/wasm/component/effect/host/authority.rs:24
+  F5   path_segment_repetition molten  src/wasm/component/effect/host/authority.rs:33
+  F6   path_segment_repetition molten  src/wasm/component/effect/host/authority.rs:33
+  F7   platform_dependent_cast molten  src/wasm/component/effect/host/authority.rs:34
+  F8   platform_dependent_cast molten  src/wasm/component/effect/host/authority.rs:34
+  F9   non_trait_imports       molten  src/wasm/component/effect/host/mod.rs:15
+  F10  non_trait_imports       molten  src/wasm/component/effect/host/mod.rs:15
+  F11  non_trait_imports       molten  src/wasm/component/effect/host/mod.rs:16
+  F12  non_trait_imports       molten  src/wasm/component/effect/host/mod.rs:16
+---

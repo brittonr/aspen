@@ -71,9 +71,20 @@ references, lifecycle fences, monotone sequence, admitted artifact/handler/opera
 and capability references before using existing effect ports. Replay binds full
 carrier identities and run/handler/turn/boundary/sequence without live fallback.
 WIT errors remain carrier/host failures, not invented policy or effect results.
-No production effect adapter or actor/extension adoption is claimed. Shapes,
-identity rules, ownership and repeatability commands are specified in the
-[contract-only effect world](wasm-component-runtime.md#contract-only-effect-request-world).
+The inactive `wasm_component::host` adapter implements this admission boundary
+through the existing native callback value port. Host-owned current inputs carry
+the actual installed manifest/profile, finite limits and Basalt/UCAN services;
+the guest cannot grant itself authority by naming them. Its capability-ledger
+value adapter performs bounded no-follow reads and independently measures bytes.
+Request/intent publication precedes the blob read; response/completion publication
+precedes success. Post-reservation host failures poison the session rather than
+becoming policy denials or automatic retries. Publication is process-visible,
+not a durable multi-file transaction. Exact offline replay has no live effect
+port or authority-grant input and stops at its first divergence.
+No engine/linker activation, production actor/extension adoption or durable nonce
+store is claimed. Shapes and ownership are specified in the
+[candidate contract](wasm-component-runtime.md#contract-only-effect-request-world)
+and [inactive host boundary](wasm-component-runtime.md#inactive-effect-host-adapter).
 
 Published Mantle intake independently remeasures every declared member through
 source directory capabilities and verifies an exclusively leased private

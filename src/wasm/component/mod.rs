@@ -34,6 +34,7 @@ pub use effect::decode_host_request;
 pub use effect::decode_host_response;
 pub use effect::encode_host_request;
 pub use effect::encode_host_response;
+pub use effect::host;
 pub use effect::host_world;
 pub use evidence::Admission;
 pub use evidence::AdmissionEnvelope;

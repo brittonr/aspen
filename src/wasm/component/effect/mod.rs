@@ -2,6 +2,7 @@
 
 mod bounds;
 mod declaration;
+pub mod host;
 mod intake;
 mod reply;
 

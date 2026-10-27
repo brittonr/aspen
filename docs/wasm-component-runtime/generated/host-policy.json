@@ -1,0 +1,16 @@
+{
+  "backends": {},
+  "contracts": {
+    "component-blob-get": {
+      "abilities": [
+        "blob/get"
+      ],
+      "description": "Read a canonical blob through the inactive component effect host adapter.",
+      "id": "component-blob-get",
+      "resource_prefixes": [
+        "molten://blob/"
+      ]
+    }
+  },
+  "schema_version": "ucan-nickel-contracts.policy.v1"
+}

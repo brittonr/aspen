@@ -5,6 +5,7 @@ mod executor;
 mod journal;
 mod materialization;
 mod service;
+mod valueport;
 mod wire;
 
 #[cfg(test)]
@@ -16,4 +17,5 @@ pub use executor::*;
 pub use journal::*;
 pub use materialization::*;
 pub use service::*;
+pub use valueport::CapabilityCallbackValuePort;
 pub use wire::*;

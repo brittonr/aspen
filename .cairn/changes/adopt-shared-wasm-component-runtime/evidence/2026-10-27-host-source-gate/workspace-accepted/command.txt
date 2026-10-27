@@ -1,0 +1,1 @@
+cargo octet check --artifact-dir .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-accepted

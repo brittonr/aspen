@@ -62,13 +62,14 @@ denials. See the [immutable v4 continuation evidence](../.cairn/changes/adopt-sh
 Public execution and both existing consumer paths still use the complete local
 runtime. The [earlier frozen mapping and counterexamples](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-26-runtime-adoption-parity.md)
 remain historical evidence; they are not current v4 failures. Operated product
-deadlines, an admitted effect host adapter, matching production materializations,
+deadlines, effect-world linker activation, matching production materializations,
 real shared actor/extension installation and coupled cutover/rollback remain
 acceptance gates.
 
-The effect-request world is now defined as a contract-only candidate below; no
-production host adapter, shared-runtime actor or extension installation, or
-production rollback is claimed. Cutover must move the immutable dependency,
+The effect-request world remains an unadmitted execution candidate. The inactive
+host adapter below is independently exercised, but no production linker,
+shared-runtime actor/extension installation or production rollback is claimed.
+Cutover must move the immutable dependency,
 adapter, profile/WIT, actor, extension, materialization and receipt cohorts
 together after complete parity and product-consumer evidence. Rollback restores
 that entire previous cohort, never one consumer or receipt producer alone.
@@ -137,8 +138,8 @@ monotone request sequence, admitted artifact/handler/operation and capability
 references before any dispatch through existing Molten effect ports. Replay
 must bind complete request and response carrier identities together with
 run/handler/turn/boundary and sequence, preserve the nested effect identity,
-and never fall back to live effects. These are current admission and replay
-obligations, not claims that a production adapter implements them.
+and never fall back to live effects. The inactive adapter below implements these
+obligations; production execution activation remains a separate gate.
 
 **Maintenance owner:** Molten Wasm component runtime maintainers
 (`brittonr/aspen`) own this WIT, Nickel contract, codecs and effect-port meaning.
@@ -153,6 +154,55 @@ nix build .#checks.x86_64-linux.wasm-component-profile
 The rail retains all existing profile checks and rejects effect-contract WASI
 imports, extra operations, execution activation, and changed depth/node bounds.
 It proves contract consistency, not execution admission or consumer adoption.
+
+## Inactive effect host adapter
+
+`wasm_component::host::Session` implements the closed `blob.get` operation through
+the existing `NativeCallbackValuePort`; it installs no engine, linker or WASI.
+Host-owned `CurrentInput` supplies the installed effect manifest and handler
+profile, exact artifact/grant/capability references, current generation and
+incarnation, finite limits, Nickel-exported Basalt policy, trusted issuer/holder
+and caller-owned UCAN verification, revocation, caveat and replay services.
+Guest-supplied references must match these independently measured current facts.
+
+The resource is `molten://blob/OBJECT-CONTENT-REF`, ability `blob/get`, Basalt
+contract `component-blob-get`. The pinned compact Ed25519 UCAN profile verifies
+the token, holder signature and consume-once nonce. The holder signs the complete
+canonical carrier plus run, handler, turn and boundary identities. Verification
+time and clock-skew tolerance are explicit caller policy, not ambient host time.
+The policy fixture is authored in `wasm-component-runtime/host-policy.ncl`; its
+generated JSON is checked by the existing component-profile Nix rail:
+
+```sh
+nix develop -c nickel export docs/wasm-component-runtime/host-policy.ncl --format json --output docs/wasm-component-runtime/generated/host-policy.json
+nix develop -c cargo test --locked -p molten --lib -- wasm_component::effect::host
+```
+
+`system_extension::CapabilityCallbackValuePort` provides bounded canonical value
+storage through a supplied Ledger namespace capability, with no-follow reads and
+independent byte measurement. Admission precedes dispatch. Canonical request and
+intent publication precede the protected blob read; response and context-bound
+completion publication precede returning success. Authority denial returns a
+canonical deny with no output or blob read. A post-reservation port or recording
+failure poisons the session: uncertainty is neither policy denial nor permission
+to retry. Publication is process-visible, not durable or transactionally atomic.
+
+`wasm_component::host::Replay` accepts an independently identified completion
+record and exact recorded response bytes. It checks scope, lifecycle, monotone
+sequence, outer and nested request identity, materialized output and intent
+linkage, stopping at the first divergence. It accepts no live effect port or
+authority input. The ordinary deterministic effect-log DTO remains a separate
+compatible projection, not a replacement for this complete carrier binding.
+
+**Immediate outcome:** signed admitted retrieval, denied retrieval and exact
+offline playback through real capability-backed bytes. **Durable capability:**
+reusable current-admission and uncertainty boundaries owned by Molten's component
+runtime maintainers; native-host maintainers own the shared value-port mechanism.
+The [host continuation evidence](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-adapter.md)
+records executed cases and repeatability. No effect-world execution activation,
+production actor/extension installation, durable nonce-store selection, full
+runtime adoption, host isolation or release eligibility is claimed.
+
 
 ## Materialization and evidence
 

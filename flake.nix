@@ -1381,6 +1381,10 @@
                   nickel export --stdin-format json --format json < "$TMPDIR/effect-contract.json" \
                     > "$TMPDIR/effect-contract-readback.json"
                   diff -u "$effect_generated" "$TMPDIR/effect-contract-readback.json"
+                  host_policy=docs/wasm-component-runtime/host-policy.ncl
+                  host_policy_generated=docs/wasm-component-runtime/generated/host-policy.json
+                  nickel export "$host_policy" --format json > "$TMPDIR/host-policy.json"
+                  diff -u "$host_policy_generated" "$TMPDIR/host-policy.json"
                   expected_wit_hash=83be349bb27975ada30dbe60817c5404df7862babdf02ae229b399886e76d5e8
                   printf '%s  %s\n' "$expected_wit_hash" wit/molten-component-runtime/runtime.wit \
                     | b3sum --check

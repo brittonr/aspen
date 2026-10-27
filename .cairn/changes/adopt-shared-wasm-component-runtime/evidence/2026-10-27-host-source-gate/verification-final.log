@@ -1,0 +1,3003 @@
+=== cargo octet check -p molten --artifact-dir .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/library-final -- --lib ===
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+   Compiling zerocopy v0.8.48
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+   Compiling build-script-build v0.8.48
+    Checking   Compiling zerocopy v0.8.48 ppv-lite86 v0.2.21
+
+    Checking ahash v0.8.12
+   Compiling ahash v0.8.12
+    Checking hashbrown v0.14.5
+   Compiling ppv_lite86 v0.2.21
+    Checking rand_chacha v0.3.1
+   Compiling rand_chacha v0.3.1
+    Checking rand v0.8.6
+    Checking rand_chacha v0.9.0
+   Compiling hashbrown v0.14.5
+   Compiling rand_chacha v0.9.0
+    Checking rand v0.9.4
+   Compiling rand v0.8.6
+    Checking num-bigint-dig v0.8.6
+    Checking dashmap v6.2.1
+   Compiling rand v0.9.4
+   Compiling num_bigint_dig v0.8.6
+    Checking rsa v0.9.10
+   Compiling dashmap v6.2.1
+    Checking lasso v0.7.3
+   Compiling rsa v0.9.10
+    Checking jsonwebtoken v11.0.0
+   Compiling lasso v0.7.3
+    Checking secretspec v0.17.0
+   Compiling jsonwebtoken v11.0.0
+    Checking steel-parser v0.8.2
+   Compiling secretspec v0.17.0
+    Checking basalt v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)
+   Compiling steel_parser v0.8.2
+    Checking steel-core v0.8.2
+   Compiling basalt v0.1.0
+    Checking molten-core v0.1.0 (/dev/shm/aspen-component-host-adapter-20261027/crates/molten-core)
+   Compiling steel v0.8.2
+   Compiling molten_core v0.1.0
+    Checking molten-node-host v0.1.0 (/dev/shm/aspen-component-host-adapter-20261027/crates/molten-node-host)
+   Compiling molten_node_host v0.1.0
+    Checking molten v0.1.0 (/dev/shm/aspen-component-host-adapter-20261027)
+   Compiling molten v0.1.0
+    Finished    Finished checking
+ `dev` profile [unoptimized] target(s) in 47.39s
+--- octet summary ---
+Status: clean
+Findings: 0
+Warnings: 0
+Errors: 0
+Autofixable: 0
+Tool: cargo-octet 0.1.0
+Toolchain: nightly-2026-03-21-x86_64-unknown-linux-gnu
+Profile: workspace-metadata
+Config hash: b3:e583912b201723653a8c3220c8b5c79fc15332d51f17982564879b5cca280de0
+Profile hash: b3:baed297a16b2399483b4da6da8505272af86c3209d6a1758a97c950eea77e0e1
+---
+=== cargo octet object corpus receipt --output .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-final/object-corpus-receipt.json src src/job/dag.rs src/main.rs src/node/daemon.rs src/node/runtime.rs src/octet/gate.rs src/upgrades/mod.rs ===
+wrote object corpus receipt: .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-final/object-corpus-receipt.json
+=== cargo run --locked -- test octet artifacts import --artifacts .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-final --ledger /dev/shm/aspen-host-gate-ledger-20261027 --receipt-out .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-final/artifact-ledger-receipt.preserves ===
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.24
+   Compiling serde_core v1.0.228
+   Compiling syn v2.0.117
+   Compiling serde v1.0.228
+   Compiling cfg-if v1.0.4
+   Compiling libc v0.2.186
+   Compiling serde_derive v1.0.228
+   Compiling version_check v0.9.5
+   Compiling equivalent v1.0.2
+   Compiling zeroize_derive v1.5.0
+   Compiling zeroize v1.9.0
+   Compiling libm v0.2.16
+   Compiling jobserver v0.1.34
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v1.3.0
+   Compiling cc v1.2.62
+   Compiling hashbrown v0.17.1
+   Compiling smallvec v1.15.1
+   Compiling generic-array v0.14.7
+   Compiling itoa v1.0.18
+   Compiling anyhow v1.0.102
+   Compiling portable-atomic v1.13.1
+   Compiling indexmap v2.14.0
+   Compiling scopeguard v1.2.0
+   Compiling crypto-common v0.1.7
+   Compiling autocfg v1.5.1
+   Compiling once_cell v1.21.4
+   Compiling foldhash v0.2.0
+   Compiling semver v1.0.28
+   Compiling lock_api v0.4.14
+   Compiling getrandom v0.2.17
+   Compiling fnv v1.0.7
+   Compiling cpufeatures v0.2.17
+   Compiling bytes v1.11.1
+   Compiling block-buffer v0.10.4
+   Compiling unicode-xid v0.2.6
+   Compiling digest v0.10.7
+   Compiling mio v1.2.0
+   Compiling synstructure v0.13.2
+   Compiling socket2 v0.6.3
+   Compiling thiserror-impl v2.0.18
+   Compiling memchr v2.8.1
+   Compiling heck v0.5.0
+   Compiling rustc_version v0.4.1
+   Compiling tokio-macros v2.7.0
+   Compiling futures-macro v0.3.32
+   Compiling tokio v1.52.3
+   Compiling zmij v1.0.21
+   Compiling futures-util v0.3.32
+   Compiling spin v0.9.8
+   Compiling unicode-segmentation v1.13.2
+   Compiling zerofrom-derive v0.1.7
+   Compiling num-traits v0.2.19
+   Compiling log v0.4.30
+   Compiling zerofrom v0.1.8
+   Compiling yoke-derive v0.8.2
+   Compiling thiserror v2.0.18
+   Compiling rustversion v1.0.22
+   Compiling yoke v0.8.2
+   Compiling cfg_aliases v0.2.1
+   Compiling parking_lot_core v0.9.12
+   Compiling regex-syntax v0.8.10
+   Compiling zerovec-derive v0.11.3
+   Compiling rustix v1.1.4
+   Compiling getrandom v0.4.2
+   Compiling zerovec v0.11.6
+   Compiling blake3 v1.8.5
+   Compiling displaydoc v0.2.5
+   Compiling tracing-core v0.1.36
+   Compiling tinystr v0.8.3
+   Compiling syn v1.0.109
+   Compiling icu_locale_core v2.2.0
+   Compiling potential_utf v0.1.5
+   Compiling zerotrie v0.2.4
+   Compiling tracing-attributes v0.1.31
+   Compiling crossbeam-utils v0.8.21
+   Compiling icu_properties_data v2.2.0
+   Compiling tracing v0.1.44
+   Compiling icu_collections v2.2.0
+   Compiling icu_provider v2.2.0
+   Compiling serde_json v1.0.149
+   Compiling sha2 v0.10.9
+   Compiling rand_core v0.6.4
+   Compiling icu_normalizer_data v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling ring v0.17.14
+   Compiling rustls-pki-types v1.14.1
+   Compiling strsim v0.11.1
+   Compiling icu_normalizer v2.2.0
+   Compiling ipnet v2.12.0
+   Compiling unicode-width v0.1.14
+   Compiling idna_adapter v1.2.2
+   Compiling convert_case v0.10.0
+   Compiling wasmtime-internal-core v45.0.0
+   Compiling derive_more-impl v2.1.1
+   Compiling idna v1.1.0
+   Compiling tokio-util v0.7.18
+   Compiling heapless v0.7.17
+   Compiling rustls v0.23.40
+   Compiling leb128fmt v0.1.0
+   Compiling derive_more v2.1.1
+   Compiling der v0.7.10
+   Compiling url v2.5.8
+   Compiling rustls-webpki v0.103.13
+   Compiling aho-corasick v1.1.4
+   Compiling bytemuck v1.25.0
+   Compiling regex-automata v0.4.14
+   Compiling cranelift-bitset v0.132.0
+   Compiling spki v0.7.3
+   Compiling cobs v0.3.0
+   Compiling http v1.4.1
+   Compiling postcard-derive v0.2.2
+   Compiling bitflags v2.11.1
+   Compiling crc32fast v1.5.0
+   Compiling postcard v1.1.3
+   Compiling pkcs8 v0.10.2
+   Compiling uuid v1.23.1
+   Compiling num-integer v0.1.46
+   Compiling chacha20 v0.10.0
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling httparse v1.10.1
+   Compiling zerocopy v0.8.48
+   Compiling rand v0.10.1
+   Compiling parking_lot v0.12.5
+   Compiling cranelift-srcgen v0.132.0
+   Compiling typenum v1.20.0
+   Compiling cranelift-assembler-x64-meta v0.132.0
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+   Compiling futures-executor v0.3.32
+   Compiling pin-project-internal v1.1.13
+   Compiling pin-project v1.1.13
+   Compiling crossbeam-epoch v0.9.18
+   Compiling pulley-macros v45.0.0
+   Compiling target-lexicon v0.13.5
+   Compiling foldhash v0.1.5
+   Compiling powerfmt v0.2.0
+   Compiling ident_case v1.0.1
+   Compiling deranged v0.5.8
+   Compiling darling_core v0.20.11
+   Compiling futures v0.3.32
+   Compiling cranelift-entity v0.132.0
+   Compiling regex v1.12.3
+   Compiling signature v2.2.0
+   Compiling gimli v0.33.0
+   Compiling lazy_static v1.5.0
+   Compiling hmac v0.12.1
+   Compiling wasmtime-internal-versioned-export-macros v45.0.0
+   Compiling paste v1.0.15
+   Compiling cranelift-isle v0.132.0
+   Compiling num-conv v0.2.2
+   Compiling time-core v0.1.8
+   Compiling cranelift-bforest v0.132.0
+   Compiling darling_macro v0.20.11
+   Compiling h2 v0.4.14
+   Compiling pulley-interpreter v45.0.0
+   Compiling wasmparser v0.248.0
+   Compiling n0-error-macros v1.0.0
+   Compiling spez v0.1.2
+   Compiling toml_datetime v0.7.5+spec-1.1.0
+   Compiling object v0.39.1
+   Compiling dtoa v0.4.8
+   Compiling cranelift-codegen-shared v0.132.0
+   Compiling base64 v0.13.1
+   Compiling cranelift-codegen-meta v0.132.0
+   Compiling n0-error v1.0.0
+   Compiling darling v0.20.11
+   Compiling cranelift-assembler-x64 v0.132.0
+   Compiling http-body v1.0.1
+   Compiling proc-macro-error-attr v1.0.4
+   Compiling async-trait v0.1.89
+   Compiling serde_bytes v0.11.19
+   Compiling id-arena v2.3.0
+   Compiling cpp_demangle v0.4.5
+   Compiling der v0.8.0
+   Compiling cranelift-codegen v0.132.0
+   Compiling derive_builder_core v0.20.2
+   Compiling wasm-encoder v0.248.0
+   Compiling num-bigint v0.4.6
+   Compiling n0-future v0.3.2
+   Compiling inout v0.1.4
+   Compiling proc-macro-error v1.0.4
+   Compiling serde_spanned v1.1.1
+   Compiling wasmtime-internal-component-util v45.0.0
+   Compiling ansi_term v0.12.1
+   Compiling winnow v1.0.3
+   Compiling toml v0.9.12+spec-1.1.0
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling cipher v0.4.4
+   Compiling derive_builder_macro v0.20.2
+   Compiling spki v0.8.0
+   Compiling wasmprinter v0.248.0
+   Compiling ppv-lite86 v0.2.21
+   Compiling regalloc2 v0.15.1
+   Compiling tokio-rustls v0.26.4
+   Compiling textwrap v0.11.0
+   Compiling ff v0.13.1
+   Compiling vergen-lib v9.1.0
+   Compiling noq-udp v1.0.0
+   Compiling curve25519-dalek v5.0.0-rc.0
+   Compiling indexmap v1.9.3
+   Compiling universal-hash v0.5.1
+   Compiling bitflags v1.3.2
+   Compiling fixedbitset v0.5.7
+   Compiling pkg-config v0.3.33
+   Compiling strsim v0.8.0
+   Compiling vec_map v0.8.2
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling serdect v0.4.3
+   Compiling toml_edit v0.25.11+spec-1.1.0
+   Compiling polyval v0.6.2
+   Compiling sec1 v0.7.3
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling rustls-native-certs v0.8.3
+   Compiling hyper v1.9.0
+   Compiling group v0.13.0
+   Compiling wasmtime-environ v45.0.0
+   Compiling pkcs8 v0.11.0
+   Compiling derive_builder v0.20.2
+   Compiling netlink-packet-core v0.8.1
+   Compiling hkdf v0.12.4
+   Compiling crypto-bigint v0.5.5
+   Compiling vergen v9.1.0
+   Compiling heck v0.3.3
+   Compiling data-encoding v2.11.0
+   Compiling io-lifetimes v2.0.4
+   Compiling hashbrown v0.12.3
+   Compiling heck v0.4.1
+   Compiling ed25519 v3.0.0
+   Compiling data-encoding-macro-internal v0.1.18
+   Compiling structopt-derive v0.4.18
+   Compiling elliptic-curve v0.13.8
+   Compiling hyper-util v0.1.20
+   Compiling rustls-platform-verifier v0.7.0
+   Compiling ghash v0.5.1
+   Compiling proc-macro-crate v3.5.0
+   Compiling sha2 v0.11.0
+   Compiling ctr v0.9.2
+   Compiling aes v0.8.4
+   Compiling time v0.3.47
+   Compiling num-iter v0.1.45
+   Compiling prefix-trie v0.8.4
+   Compiling webpki-roots v1.0.7
+   Compiling tempfile v3.27.0
+   Compiling crossbeam-channel v0.5.15
+   Compiling vergen-gitcl v9.1.0
+   Compiling curve25519-dalek v4.1.3
+   Compiling aead v0.5.2
+   Compiling num_threads v0.1.7
+   Compiling wasmparser v0.239.0
+   Compiling siphasher v1.0.3
+   Compiling getrandom v0.3.4
+   Compiling wasmtime-internal-unwinder v45.0.0
+   Compiling fastbloom v0.17.0
+   Compiling phf_shared v0.11.3
+   Compiling aes-gcm v0.10.3
+   Compiling hickory-proto v0.26.1
+   Compiling ed25519-dalek v3.0.0-rc.0
+   Compiling data-encoding-macro v0.1.20
+   Compiling http-body-util v0.1.3
+   Compiling rfc6979 v0.4.0
+   Compiling hashbrown v0.15.5
+   Compiling noq v1.0.0
+   Compiling netlink-sys v0.8.8
+   Compiling atty v0.2.14
+   Compiling errno v0.3.14
+   Compiling enum-assoc v1.3.0
+   Compiling verus_syn v0.0.0-2026-01-25-0057
+   Compiling term v1.2.1
+   Compiling glob v0.3.3
+   Compiling zstd-safe v7.2.4
+   Compiling wasmtime-internal-cranelift v45.0.0
+   Compiling signal-hook v0.3.18
+   Compiling bit-vec v0.8.0
+   Compiling keccak v0.1.6
+   Compiling either v1.16.0
+   Compiling verus_prettyplease v0.0.0-2026-01-25-0057
+   Compiling io-extras v0.18.4
+   Compiling netdev v0.44.0
+   Compiling precomputed-hash v0.1.1
+   Compiling same-file v1.0.6
+   Compiling new_debug_unreachable v1.0.6
+   Compiling object v0.37.3
+   Compiling string_cache v0.8.9
+   Compiling walkdir v2.5.0
+   Compiling noq-proto v1.0.0
+   Compiling moka v0.12.15
+   Compiling itertools v0.14.0
+   Compiling sha3 v0.10.9
+   Compiling bit-set v0.8.0
+   Compiling ascii-canvas v4.0.0
+   Compiling signal-hook-registry v1.4.8
+   Compiling clap v2.34.0
+   Compiling tower v0.5.3
+   Compiling ecdsa v0.16.9
+   Compiling iroh-base v1.0.0
+   Compiling hickory-net v0.26.1
+   Compiling num_enum_derive v0.7.6
+   Compiling netlink-packet-route v0.29.0
+   Compiling cranelift-frontend v0.132.0
+   Compiling cranelift-native v0.132.0
+   Compiling petgraph v0.7.1
+   Compiling rand_chacha v0.3.1
+   Compiling ed25519 v2.2.3
+   Compiling lalrpop-util v0.22.2
+   Compiling safe_arch v1.0.0
+   Compiling wasm-encoder v0.250.0
+   Compiling tokio-stream v0.1.18
+   Compiling arc-swap v1.9.1
+   Compiling netwatch v0.19.0
+   Compiling iroh-dns v1.0.0
+   Compiling ena v0.14.4
+   Compiling iroh-metrics-derive v1.0.1
+   Compiling strum_macros v0.28.0
+   Compiling ittapi-sys v0.4.0
+   Compiling proc-macro-error-attr v0.4.12
+   Compiling thread_local v1.1.9
+   Compiling num-bigint-dig v0.8.6
+   Compiling malachite-nz v0.9.1
+   Compiling pico-args v0.5.0
+   Compiling rayon-core v1.13.0
+   Compiling cap-primitives v3.4.5
+   Compiling convert_case v0.4.0
+   Compiling winch-codegen v45.0.0
+   Compiling hickory-resolver v0.26.1
+   Compiling lalrpop v0.22.2
+   Compiling strum v0.28.0
+   Compiling iroh-metrics v1.0.1
+   Compiling wast v250.0.0
+   Compiling wide v1.4.0
+   Compiling ed25519-dalek v2.2.0
+   Compiling rand v0.8.6
+   Compiling num_enum v0.7.6
+   Compiling rand_core v0.9.5
+   Compiling preserves v5.0.0-rc.7
+   Compiling iroh-relay v1.0.0
+   Compiling structopt v0.3.26
+   Compiling tower-http v0.6.11
+   Compiling netlink-proto v0.12.0
+   Compiling fs-set-times v0.20.3
+   Compiling hyper-rustls v0.27.9
+   Compiling wit-parser v0.248.0
+   Compiling netlink-packet-route v0.31.0
+   Compiling n0-watcher v1.0.0
+   Compiling wasmtime-internal-jit-debug v45.0.0
+   Compiling wasmtime-internal-fiber v45.0.0
+   Compiling malachite-base v0.9.1
+   Compiling crossbeam-deque v0.8.6
+   Compiling attohttpc v0.30.1
+   Compiling syn-mid v0.5.4
+   Compiling rustix-linux-procfs v0.1.1
+   Compiling proc-macro2-diagnostics v0.10.1
+   Compiling proc-macro-error v0.4.12
+   Compiling ahash v0.8.12
+   Compiling dirs-sys-next v0.1.2
+   Compiling redb v2.6.3
+   Compiling litrs v1.0.0
+   Compiling vstd v0.0.0-2026-01-25-0057
+   Compiling prettyplease v0.2.37
+   Compiling linkme-impl v0.3.37
+   Compiling thiserror v1.0.69
+   Compiling proc-macro-hack v0.5.20+deprecated
+   Compiling wasmtime-internal-cache v45.0.0
+   Compiling wasm-encoder v0.239.0
+   Compiling wasmtime-internal-component-macro v45.0.0
+   Compiling tokio-websockets v0.13.2
+   Compiling document-features v0.2.12
+   Compiling petgraph v0.6.5
+   Compiling directories-next v2.0.0
+   Compiling igd-next v0.17.0
+   Compiling wasmtime-internal-wit-bindgen v45.0.0
+   Compiling backtrace v0.3.76
+   Compiling reqwest v0.13.4
+   Compiling verus_builtin_macros v0.0.0-2026-01-25-0057
+   Compiling signal-hook-mio v0.2.5
+   Compiling preserves-schema v6.0.0-rc.6
+   Compiling rand_chacha v0.9.0
+   Compiling zstd v0.13.3
+   Compiling wat v1.250.0
+   Compiling verus_state_machines_macros v0.0.0-2026-01-25-0057
+   Compiling primeorder v0.13.6
+   Compiling wasmtime v45.0.0
+   Compiling debugid v0.8.0
+   Compiling pkcs1 v0.7.5
+   Compiling iroh v1.0.0
+   Compiling lru v0.18.0
+   Compiling seize v0.5.1
+   Compiling thiserror-impl v1.0.69
+   Compiling syn v3.0.4
+   Compiling ref-cast v1.0.25
+   Compiling linkme v0.3.37
+   Compiling yansi v1.0.1
+   Compiling cap-std v3.4.5
+   Compiling leb128 v0.2.6
+   Compiling wast v35.0.2
+   Compiling clap_builder v4.6.0
+   Compiling papaya v0.2.4
+   Compiling rsa v0.9.10
+   Compiling fxprof-processed-profile v0.8.1
+   Compiling wasm-compose v0.248.0
+   Compiling ittapi v0.4.0
+   Compiling wasmtime-internal-winch v45.0.0
+   Compiling rand v0.9.4
+   Compiling syndicate-schema-plugin v0.12.0-rc.1
+   Compiling crossterm v0.29.0
+   Compiling backtrace-ext v0.2.1
+   Compiling portmapper v0.19.0
+   Compiling malachite-q v0.9.1
+   Compiling rayon v1.12.0
+   Compiling chrono v0.4.44
+   Compiling fuzzy-matcher v0.3.7
+   Compiling wit-parser v0.239.0
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+   Compiling yasna v0.6.0
+   Compiling snafu-derive v0.8.9
+   Compiling num-rational v0.4.2
+   Compiling addr2line v0.26.1
+   Compiling wasmtime-internal-jit-icache-coherence v45.0.0
+   Compiling logos-codegen v0.16.1
+   Compiling backon v1.6.0
+   Compiling terminal_size v0.4.4
+   Compiling memfd v0.6.5
+   Compiling clap_derive v4.6.1
+   Compiling ref-cast-impl v1.0.25
+   Compiling miette-derive v7.6.0
+   Compiling encoding_rs v0.8.35
+   Compiling inquire v0.9.4
+   Compiling miette v7.6.0
+   Compiling verified-logic v0.2.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)
+   Compiling clap v4.6.1
+   Compiling logos-derive v0.16.1
+   Compiling rcgen v0.14.8
+   Compiling snafu v0.8.9
+   Compiling wasm-metadata v0.239.0
+   Compiling genawaiter-proc-macro v0.99.1
+   Compiling hashbrown v0.14.5
+   Compiling malachite-float v0.9.1
+   Compiling witx v0.9.1
+   Compiling ouroboros_macro v0.18.5
+   Compiling hashlink v0.10.0
+   Compiling p256 v0.13.2
+   Compiling p384 v0.13.1
+   Compiling nickel-lang-parser v0.3.0
+   Compiling k256 v0.13.4
+   Compiling flate2 v1.1.9
+   Compiling ucan-core v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)
+   Compiling codespan-reporting v0.13.1
+   Compiling concurrent-queue v2.5.0
+   Compiling iddqd v0.4.5
+   Compiling bounded-http-core v0.1.0 (https://seed.radicle.garden/z4ARxEt93T6gJTrTZpUyKHMAemPiv.git?rev=5abc2b93e0f288aba251a0750ce2d716eb9757fc#5abc2b93)
+   Compiling replay-ledger-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+   Compiling revocation-view-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+   Compiling content-identity-core v0.1.0 (https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git?rev=7f55597b5dc879b7601856e8d7fd0dbacaa2a498#7f55597b)
+   Compiling inplace-vec-builder v0.1.1
+   Compiling secrecy v0.10.3
+   Compiling irpc-derive v0.17.0
+   Compiling etcetera v0.11.0
+   Compiling redb v4.1.0
+   Compiling wiggle-macro v45.0.0
+   Compiling icu_casemap_data v2.2.0
+   Compiling wit-bindgen-rust v0.46.0
+   Compiling cap-fs-ext v3.4.5
+   Compiling secretspec v0.17.0
+   Compiling saphyr-parser v0.0.6
+   Compiling range-collections v0.4.6
+   Compiling ouroboros v0.18.5
+   Compiling irpc v0.17.0
+   Compiling genawaiter v0.99.1
+   Compiling schema-identity-core v0.1.0 (https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#2562c8aa)
+   Compiling ucan v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)
+   Compiling bounded-http v0.1.0 (https://seed.radicle.garden/z4ARxEt93T6gJTrTZpUyKHMAemPiv.git?rev=5abc2b93e0f288aba251a0750ce2d716eb9757fc#5abc2b93)
+   Compiling event-listener v5.4.1
+   Compiling codespan v0.13.1
+   Compiling ucan-nostr v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)
+   Compiling jsonwebtoken v11.0.0
+   Compiling wiggle-generate v45.0.0
+   Compiling malachite v0.9.1
+   Compiling dashmap v6.2.1
+   Compiling wit-component v0.239.0
+   Compiling logos v0.16.1
+   Compiling nickel-lang-vector v0.2.0
+   Compiling wit-bindgen-core v0.46.0
+   Compiling nickel-lang-core v0.18.0
+   Compiling toml_edit v0.24.1+spec-1.1.0
+   Compiling iroh-io v0.6.2
+   Compiling artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling castaway v0.2.4
+   Compiling nix v0.30.1
+   Compiling iroh-blobs v0.103.0
+   Compiling num-complex v0.4.6
+   Compiling md-5 v0.10.6
+   Compiling bigdecimal v0.4.10
+   Compiling im-rc v15.1.0
+   Compiling positioned-io v0.3.5
+   Compiling wit-bindgen-rust-macro v0.46.0
+   Compiling redb v3.1.3
+   Compiling generic_singleton v0.5.3
+   Compiling bao-tree v0.16.0
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling num v0.4.3
+   Compiling compact_str v0.8.2
+   Compiling syndicate v0.44.0-rc.3
+   Compiling lasso v0.7.3
+   Compiling basalt v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)
+   Compiling event-listener-strategy v0.5.4
+   Compiling schema-migration-core v0.1.0 (https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#4fe90e13)
+   Compiling iroh-util v0.6.0
+   Compiling kamacite-core v0.1.0 (ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#d76fe4ab)
+   Compiling iroh-tickets v1.0.0
+   Compiling nested_enum_utils v0.2.3
+   Compiling codegen v0.2.0
+   Compiling futures-concurrency v7.7.1
+   Compiling sharded-slab v0.1.7
+   Compiling rand_xoshiro v0.6.0
+   Compiling tracing-log v0.1.4
+   Compiling tracing-serde v0.1.3
+   Compiling reflink-copy v0.1.29
+   Compiling choregraph-history v0.1.0 (https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#b3e08e19)
+   Compiling iroh-docs v0.101.0
+   Compiling ordered-float v5.3.0
+   Compiling sha-1 v0.10.1
+   Compiling thin-vec v0.2.18
+   Compiling wit-bindgen v0.46.0
+   Compiling indoc v2.0.7
+   Compiling wasmparser v0.240.0
+   Compiling molten-core v0.1.0 (/dev/shm/aspen-component-host-adapter-20261027/crates/molten-core)
+   Compiling steel-parser v0.8.2
+   Compiling iroh-gossip v0.101.0
+   Compiling tracing-subscriber v0.2.25
+   Compiling steel-gen v0.8.2
+   Compiling icu_casemap v2.2.0
+   Compiling async-channel v2.5.0
+   Compiling wiggle v45.0.0
+   Compiling preserves v4.996.0
+   Compiling im-lists v0.11.4
+   Compiling cap-net-ext v3.4.5
+   Compiling wasmtime-wasi-io v45.0.0
+   Compiling cap-time-ext v3.4.5
+   Compiling tracing-futures v0.2.5
+   Compiling codespan-reporting v0.11.1
+   Compiling crunch-wasm-component-core v0.1.0 (ssh://git@github.com/OnixResearch/mantle.git?rev=c99556e5c91dfd13fcc261dc451f471359d47c38#c99556e5)
+   Compiling hardened-wasmtime-runtime v0.1.0 (rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c#cf4a1913)
+   Compiling crossbeam-queue v0.3.12
+   Compiling xattr v1.6.1
+   Compiling polling v3.11.0
+   Compiling tokio-util v0.6.10
+   Compiling blake2 v0.10.6
+   Compiling steel-quickscope v0.3.2
+   Compiling bincode v1.3.3
+   Compiling serde-error v0.1.3
+   Compiling filetime v0.2.29
+   Compiling which v8.0.2
+   Compiling steel-derive v0.8.2
+   Compiling bounded-exec v0.1.0 (https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#29dac88e)
+   Compiling tar v0.4.46
+   Compiling steel-core v0.8.2
+   Compiling mantle-wasm-consumer-verifier v0.1.0 (ssh://git@github.com/OnixResearch/mantle.git?rev=c99556e5c91dfd13fcc261dc451f471359d47c38#c99556e5)
+   Compiling hardened-wasmtime-shell v0.1.0 (rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c#cf4a1913)
+   Compiling wasmtime-wasi v45.0.0
+   Compiling cairn-core v0.1.0 (ssh://git@github.com/OnixResearch/cairn.git?rev=3b4c280b893f2709aebea21fc51a4f9eeba3fe3b#3b4c280b)
+   Compiling molten-node-host v0.1.0 (/dev/shm/aspen-component-host-adapter-20261027/crates/molten-node-host)
+   Compiling nickel-lang v2.2.0
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+   Compiling artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+   Compiling valence-core v0.1.0 (ssh://git@github.com/OnixResearch/valence.git?rev=5f1c2ba5072c6f9622fa59b1af20502985f569fd#5f1c2ba5)
+   Compiling chaoscontrol-snapshot-descriptor v0.1.0 (https://github.com/brittonr/chaoscontrol.git?rev=b8c440ea3b19df796542e58e8ee36200e1c3db85#b8c440ea)
+   Compiling durable-file-publication v0.1.0 (https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=8e05e74e24b45f752d77145c4455385daaf6d6ab#8e05e74e)
+   Compiling molten v0.1.0 (/dev/shm/aspen-component-host-adapter-20261027)
+    Finished `dev` profile [unoptimized] target(s) in 13m 27s
+     Running `/dev/shm/aspen-runtime-target-20261026/debug/molten test octet artifacts import --artifacts .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-final --ledger /dev/shm/aspen-host-gate-ledger-20261027 --receipt-out .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-final/artifact-ledger-receipt.preserves`
+octet artifact ledger receipt blake3:4537a7cd71cddf435fdca119bd2679672003a4e15a52da90358c67efc5ba8f51 written to .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-final/artifact-ledger-receipt.preserves
+octet artifacts import decision=pass receipt=blake3:4537a7cd71cddf435fdca119bd2679672003a4e15a52da90358c67efc5ba8f51 imported=6 ledger=/dev/shm/aspen-host-gate-ledger-20261027
+=== cargo run --locked -- test octet gate --artifacts .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-final --profile strict-ci --receipt-out .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-final/gate-receipt.preserves ===
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+    Finished `dev` profile [unoptimized] target(s) in 0.77s
+     Running `/dev/shm/aspen-runtime-target-20261026/debug/molten test octet gate --artifacts .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-final --profile strict-ci --receipt-out .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-final/gate-receipt.preserves`
+octet gate receipt blake3:b5700389a2bf36825f1a473221de2c013068460c424784cfd7eabef5d12d8b9b written to .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-final/gate-receipt.preserves
+octet gate pass receipt=blake3:b5700389a2bf36825f1a473221de2c013068460c424784cfd7eabef5d12d8b9b
+=== cargo run --locked -- test octet remediation plan --artifacts .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-final --lib-artifacts .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/library-final --focused-object-corpus .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-final/object-corpus-receipt.json --receipt-out .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-final/remediation-plan.preserves ===
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+    Finished `dev` profile [unoptimized] target(s) in 0.32s
+     Running `/dev/shm/aspen-runtime-target-20261026/debug/molten test octet remediation plan --artifacts .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-final --lib-artifacts .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/library-final --focused-object-corpus .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-final/object-corpus-receipt.json --receipt-out .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-final/remediation-plan.preserves`
+octet remediation plan blake3:aa236c0a099d2571a0f94c10d76040ac88ade151d5eea2a839dc19b39b992e68 written to .cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-source-gate/workspace-final/remediation-plan.preserves
+octet remediation plan receipt=blake3:aa236c0a099d2571a0f94c10d76040ac88ade151d5eea2a839dc19b39b992e68
+=== cargo test --locked --workspace --lib --quiet ===
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+
+running 1778 tests
+....................................................................................... 87/1778
+....................................................................................... 174/1778
+....................................................................................... 261/1778
+....................................................................................... 348/1778
+....................................................................................... 435/1778
+....................................................................................... 522/1778
+....................................................................................... 609/1778
+....................................................................................... 696/1778
+....................................................................................... 783/1778
+....................................................................................... 870/1778
+....................................................................................... 957/1778
+....................................................................................... 1044/1778
+....................................................................................... 1131/1778
+....................................................................................... 1218/1778
+....................................................................................... 1305/1778
+....................................................................................... 1392/1778
+....................................................................................... 1479/1778
+....................................................................................... 1566/1778
+....................................................................................... 1653/1778
+....................................................................................... 1740/1778
+......................................
+test result: ok. 1778 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.95s
+
+
+running 629 tests
+....................................................................................... 87/629
+....................................................................................... 174/629
+....................................................................................... 261/629
+....................................................................................... 348/629
+....................................................................................... 435/629
+....................................................................................... 522/629
+....................................................................................... 609/629
+....................
+test result: ok. 629 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.93s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+=== cargo clippy --locked --workspace --all-targets -- -D warnings ===
+    Checking serde_core v1.0.228
+    Checking cfg-if v1.0.4
+    Checking libc v0.2.186
+    Checking serde v1.0.228
+    Checking zeroize v1.9.0
+    Checking allocator-api2 v0.2.21
+    Checking memchr v2.8.1
+    Checking foldhash v0.2.0
+    Checking typenum v1.20.0
+    Checking log v0.4.30
+    Checking equivalent v1.0.2
+    Checking subtle v2.6.1
+    Checking hashbrown v0.17.1
+    Checking smallvec v1.15.1
+    Checking libm v0.2.16
+    Checking generic-array v0.14.7
+    Checking portable-atomic v1.13.1
+    Checking indexmap v2.14.0
+    Checking pin-project-lite v0.2.17
+    Checking crypto-common v0.1.7
+    Checking critical-section v1.2.0
+    Checking bitflags v2.11.1
+    Checking once_cell v1.21.4
+    Checking itoa v1.0.18
+    Checking scopeguard v1.2.0
+    Checking cpufeatures v0.3.0
+    Checking lock_api v0.4.14
+    Checking getrandom v0.2.17
+    Checking const-oid v0.9.6
+    Checking stable_deref_trait v1.2.1
+    Checking bytes v1.11.1
+    Checking block-buffer v0.10.4
+    Checking digest v0.10.7
+    Checking anyhow v1.0.102
+    Checking mio v1.2.0
+    Checking futures-core v0.3.32
+    Checking cpufeatures v0.2.17
+    Checking socket2 v0.6.3
+    Checking rand_core v0.10.1
+    Checking tokio v1.52.3
+    Checking spin v0.9.8
+    Checking base64ct v1.8.3
+    Checking zerofrom v0.1.8
+    Checking num-traits v0.2.19
+    Checking futures-io v0.3.32
+    Checking yoke v0.8.2
+    Checking linux-raw-sys v0.12.1
+    Checking getrandom v0.4.2
+    Checking rustix v1.1.4
+    Checking thiserror v2.0.18
+    Checking futures-sink v0.3.32
+    Checking zerovec v0.11.6
+    Checking arrayvec v0.7.6
+    Checking slab v0.4.12
+    Checking arrayref v0.3.9
+    Checking constant_time_eq v0.4.2
+    Checking futures-channel v0.3.32
+    Checking blake3 v1.8.5
+    Checking futures-task v0.3.32
+    Checking writeable v0.6.3
+    Checking futures-util v0.3.32
+    Checking tinystr v0.8.3
+    Checking litemap v0.8.2
+    Checking icu_locale_core v2.2.0
+    Checking potential_utf v0.1.5
+    Checking zerotrie v0.2.4
+    Checking hashbrown v0.16.1
+    Checking utf8_iter v1.0.4
+    Checking icu_provider v2.2.0
+    Checking icu_collections v2.2.0
+    Checking zmij v1.0.21
+    Checking base64 v0.22.1
+    Checking serde_json v1.0.149
+    Checking icu_properties_data v2.2.0
+    Checking sha2 v0.10.9
+    Checking rand_core v0.6.4
+    Checking fastrand v2.4.1
+    Checking icu_properties v2.2.0
+    Checking icu_normalizer_data v2.2.0
+    Checking rustls-pki-types v1.14.1
+    Checking fnv v1.0.7
+    Checking percent-encoding v2.3.2
+    Checking icu_normalizer v2.2.0
+    Checking tracing-core v0.1.36
+    Checking untrusted v0.9.0
+    Checking idna_adapter v1.2.2
+    Checking ring v0.17.14
+    Checking parking_lot_core v0.9.12
+    Checking idna v1.1.0
+    Checking form_urlencoded v1.2.2
+    Checking pem-rfc7468 v0.7.0
+    Checking zerocopy v0.8.48
+    Checking der v0.7.10
+    Checking tracing v0.1.44
+    Checking url v2.5.8
+    Checking rustls-webpki v0.103.13
+    Checking derive_more v2.1.1
+    Checking either v1.16.0
+    Checking rustls v0.23.40
+    Checking spki v0.7.3
+    Checking crossbeam-utils v0.8.21
+    Checking uuid v1.23.1
+    Checking num-integer v0.1.46
+    Checking ipnet v2.12.0
+    Checking unicode-width v0.2.2
+    Checking pkcs8 v0.10.2
+    Checking crc32fast v1.5.0
+    Checking parking_lot v0.12.5
+    Checking rustc-demangle v0.1.27
+    Checking httparse v1.10.1
+    Checking aho-corasick v1.1.4
+    Checking rustc-hash v2.1.2
+    Checking regex-syntax v0.8.10
+    Checking data-encoding v2.11.0
+    Checking unicode-width v0.1.14
+    Checking regex-automata v0.4.14
+    Checking signature v2.2.0
+    Checking tokio-util v0.7.18
+    Checking lazy_static v1.5.0
+    Checking hmac v0.12.1
+    Checking byteorder v1.5.0
+    Checking winnow v1.0.3
+    Checking hash32 v0.2.1
+    Checking toml_parser v1.1.2+spec-1.1.0
+    Checking regex v1.12.3
+    Checking toml_datetime v0.7.5+spec-1.1.0
+    Checking winnow v0.7.15
+    Checking toml_writer v1.1.1+spec-1.1.0
+    Checking bytemuck v1.25.0
+    Checking heapless v0.7.17
+    Checking num-bigint v0.4.6
+    Checking cobs v0.3.0
+    Checking chacha20 v0.10.0
+    Checking http v1.4.1
+    Checking serde_bytes v0.11.19
+    Checking postcard v1.1.3
+    Checking rand v0.10.1
+    Checking wasmtime-internal-core v45.0.0
+    Checking serde_spanned v1.1.1
+    Checking ryu v1.0.23
+    Checking termcolor v1.4.1
+    Checking toml v0.9.12+spec-1.1.0
+    Checking ppv-lite86 v0.2.21
+    Checking ff v0.13.1
+    Checking bumpalo v3.20.3
+    Checking parking v2.2.1
+    Checking base16ct v0.2.0
+    Checking group v0.13.0
+    Checking sec1 v0.7.3
+    Checking cranelift-bitset v0.132.0
+    Checking hkdf v0.12.4
+    Checking tempfile v3.27.0
+    Checking crypto-bigint v0.5.5
+    Checking futures-executor v0.3.32
+    Checking pin-project v1.1.13
+    Checking elliptic-curve v0.13.8
+    Checking num-iter v0.1.45
+    Checking crossbeam-epoch v0.9.18
+    Checking webpki-roots v1.0.7
+    Checking semver v1.0.28
+    Checking adler2 v2.0.1
+    Checking simd-adler32 v0.3.10
+    Checking atomic-waker v1.1.2
+    Checking leb128fmt v0.1.0
+    Checking miniz_oxide v0.8.9
+    Checking futures v0.3.32
+    Checking cranelift-entity v0.132.0
+    Checking rfc6979 v0.4.0
+    Checking itertools v0.14.0
+    Checking gimli v0.33.0
+    Checking errno v0.3.14
+    Checking strsim v0.11.1
+    Checking colorchoice v1.0.5
+    Checking signal-hook-registry v1.4.8
+    Checking ecdsa v0.16.9
+    Checking cranelift-bforest v0.132.0
+    Checking curve25519-dalek v4.1.3
+    Checking getrandom v0.3.4
+    Checking target-lexicon v0.13.5
+    Checking h2 v0.4.14
+    Checking wasmparser v0.248.0
+    Checking futures-lite v2.6.1
+    Checking rand_chacha v0.3.1
+    Checking ed25519 v2.2.3
+    Checking hybrid-array v0.4.12
+    Checking thread_local v1.1.9
+    Checking dtoa v0.4.8
+    Checking base64 v0.13.1
+    Checking gimli v0.32.3
+    Checking utf8parse v0.2.2
+    Checking anstyle-parse v1.0.0
+    Checking n0-error v1.0.0
+    Checking ed25519-dalek v2.2.0
+    Checking addr2line v0.25.1
+    Checking rand v0.8.6
+    Checking rand_core v0.9.5
+    Checking signal-hook v0.3.18
+    Checking object v0.37.3
+    Checking http-body v1.0.1
+    Checking pem-rfc7468 v1.0.0
+    Checking anstyle-query v1.1.5
+    Checking unicode-segmentation v1.13.2
+    Checking tinyvec_macros v0.1.1
+    Checking const-oid v0.10.2
+    Checking is_terminal_polyfill v1.70.2
+    Checking anstyle v1.0.14
+    Checking der v0.8.0
+    Checking anstream v1.0.0
+    Checking tinyvec v1.11.0
+    Checking backtrace v0.3.76
+    Checking signal-hook-mio v0.2.5
+    Checking num-bigint-dig v0.8.6
+    Checking rand_chacha v0.9.0
+    Checking object v0.39.1
+    Checking block-buffer v0.12.0
+    Checking crypto-common v0.2.2
+    Checking wasm-encoder v0.248.0
+    Checking primeorder v0.13.6
+    Checking pkcs1 v0.7.5
+    Checking inout v0.1.4
+    Checking is_ci v1.2.0
+    Checking clap_lex v1.1.0
+    Checking verus_builtin v0.0.0-2026-01-25-0057
+    Checking diatomic-waker v0.2.3
+[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).
+[kache] Caching is disabled for this build — compilation still succeeds,
+[kache] just without cache hits or stores (everything builds uncached).
+[kache] This is usually a storage issue: the cache directory is on a
+[kache] filesystem that doesn't support reliable file locking, or it is
+[kache] being accessed from more than one machine at the same time.
+[kache] → set KACHE_CACHE_DIR to a fast, local, single-machine path
+    Checking cordyceps v0.3.4
+    Checking unicode-linebreak v0.1.5
+    Checking tower-service v0.3.3
+    Checking spin v0.10.0
+    Checking arbitrary v1.4.2
+    Checking try-lock v0.2.5
+    Checking want v0.3.1
+    Checking cranelift-control v0.132.0
+    Checking futures-buffered v0.2.13
+    Checking textwrap v0.16.2
+    Checking vstd v0.0.0-2026-01-25-0057
+    Checking clap_builder v4.6.0
+    Checking supports-color v3.0.2
+    Checking cipher v0.4.4
+    Checking rsa v0.9.10
+    Checking digest v0.11.3
+    Checking rand v0.9.4
+    Checking backtrace-ext v0.2.1
+    Checking crossterm v0.29.0
+    Checking cranelift-assembler-x64 v0.132.0
+    Checking cpp_demangle v0.4.5
+    Checking io-lifetimes v2.0.4
+    Checking spki v0.8.0
+    Checking redb v2.6.3
+    Checking preserves v5.0.0-rc.7
+    Checking fuzzy-matcher v0.3.7
+    Checking wasmprinter v0.248.0
+    Checking pulley-interpreter v45.0.0
+    Checking regalloc2 v0.15.1
+    Checking tokio-rustls v0.26.4
+    Checking content-identity-core v0.1.0 (https://seed.radicle.garden/zA14jhTdwST4PxPBdsryc4zS7Kpq.git?rev=7f55597b5dc879b7601856e8d7fd0dbacaa2a498#7f55597b)
+    Checking terminal_size v0.4.4
+    Checking universal-hash v0.5.1
+    Checking supports-unicode v3.0.0
+    Checking httpdate v1.0.3
+    Checking jiff-core v0.1.0
+    Checking bs58 v0.5.1
+    Checking powerfmt v0.2.0
+    Checking owo-colors v4.4.0
+    Checking dyn-clone v1.0.20
+    Checking cranelift-codegen-shared v0.132.0
+    Checking wasmtime-internal-component-util v45.0.0
+    Checking opaque-debug v0.3.1
+    Checking base16ct v1.0.0
+    Checking supports-hyperlinks v3.2.0
+    Checking openssl-probe v0.2.1
+    Checking miette v7.6.0
+    Checking rustls-native-certs v0.8.3
+    Checking serdect v0.4.3
+    Checking polyval v0.6.2
+    Checking wasmtime-environ v45.0.0
+    Checking cranelift-codegen v0.132.0
+    Checking inquire v0.9.4
+    Checking deranged v0.5.8
+    Checking verified-logic v0.2.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)
+    Checking jiff v0.2.35
+    Checking hyper v1.9.0
+    Checking clap v4.6.1
+    Checking schema-identity-core v0.1.0 (https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#2562c8aa)
+    Checking snafu v0.8.9
+    Checking pkcs8 v0.11.0
+    Checking n0-future v0.3.2
+    Checking linkme v0.3.37
+    Checking p256 v0.13.2
+    Checking p384 v0.13.1
+    Checking netlink-packet-core v0.8.1
+    Checking k256 v0.13.4
+    Checking flate2 v1.1.9
+    Checking ucan-core v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)
+    Checking iddqd v0.4.5
+    Checking bounded-http-core v0.1.0 (https://seed.radicle.garden/z4ARxEt93T6gJTrTZpUyKHMAemPiv.git?rev=5abc2b93e0f288aba251a0750ce2d716eb9757fc#5abc2b93)
+    Checking revocation-view-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+    Checking replay-ledger-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+    Checking secrecy v0.10.3
+    Checking etcetera v0.11.0
+    Checking signature v3.0.0
+    Checking num-conv v0.2.2
+    Checking dotenvy v0.15.7
+    Checking time-core v0.1.8
+    Checking colored v3.1.1
+    Checking detect-coding-agent v0.1.1
+    Checking time v0.3.47
+    Checking secretspec v0.17.0
+    Checking ed25519 v3.0.0
+    Checking ucan v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)
+    Checking bounded-http v0.1.0 (https://seed.radicle.garden/z4ARxEt93T6gJTrTZpUyKHMAemPiv.git?rev=5abc2b93e0f288aba251a0750ce2d716eb9757fc#5abc2b93)
+    Checking ucan-nostr v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)
+    Checking jsonwebtoken v11.0.0
+    Checking noq-udp v1.0.0
+    Checking curve25519-dalek v5.0.0-rc.0
+    Checking io-extras v0.18.4
+    Checking hyper-util v0.1.20
+    Checking ghash v0.5.1
+    Checking rustls-platform-verifier v0.7.0
+    Checking fs-set-times v0.20.3
+    Checking sha2 v0.11.0
+    Checking ctr v0.9.2
+    Checking aes v0.8.4
+    Checking prefix-trie v0.8.4
+    Checking crossbeam-channel v0.5.15
+    Checking artifact-auth-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+    Checking rustix-linux-procfs v0.1.1
+    Checking aead v0.5.2
+    Checking ambient-authority v0.0.2
+    Checking maybe-owned v0.3.4
+    Checking siphasher v1.0.3
+    Checking tower-layer v0.3.3
+    Checking fastbloom v0.17.0
+    Checking cap-primitives v3.4.5
+    Checking aes-gcm v0.10.3
+    Checking hickory-proto v0.26.1
+    Checking ed25519-dalek v3.0.0-rc.0
+    Checking basalt v0.1.0 (ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#89675cd4)
+    Checking data-encoding-macro v0.1.20
+    Checking schema-migration-core v0.1.0 (https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#4fe90e13)
+    Checking kamacite-core v0.1.0 (ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#d76fe4ab)
+    Checking http-body-util v0.1.3
+    Checking netlink-sys v0.8.8
+    Checking choregraph-history v0.1.0 (https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#b3e08e19)
+    Checking rand_pcg v0.10.2
+    Checking sync_wrapper v1.0.2
+    Checking artifact-binding-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+    Checking identity-hash v0.1.0
+    Checking lru-slab v0.1.2
+    Checking transactional-reconciliation-core v0.1.0 (https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=eb2bd3441753af97bfcb247cef7cc22d72675b62#eb2bd344)
+    Checking sorted-index-buffer v0.2.1
+    Checking tagptr v0.2.0
+    Checking noq-proto v1.0.0
+    Checking moka v0.12.15
+    Checking tower v0.5.3
+    Checking iroh-base v1.0.0
+    Checking hickory-net v0.26.1
+    Checking wasmtime-internal-unwinder v45.0.0
+    Checking zstd-sys v2.0.16+zstd.1.5.7
+    Checking netlink-packet-route v0.29.0
+    Checking cranelift-frontend v0.132.0
+    Checking cranelift-native v0.132.0
+    Checking wasm-encoder v0.250.0
+    Checking safe_arch v1.0.0
+    Checking tokio-stream v0.1.18
+    Checking arc-swap v1.9.1
+    Checking resolv-conf v0.7.6
+    Checking iana-time-zone v0.1.65
+    Checking xml-rs v0.8.28
+    Checking mac-addr v0.3.0
+    Checking xmltree v0.10.3
+    Checking netdev v0.44.0
+    Checking hickory-resolver v0.26.1
+    Checking iroh-metrics v1.0.1
+    Checking strum v0.28.0
+    Checking noq v1.0.0
+    Checking wide v1.4.0
+    Checking wast v250.0.0
+    Checking wasmtime-internal-cranelift v45.0.0
+    Checking zstd-safe v7.2.4
+    Checking num_enum v0.7.6
+    Checking tower-http v0.6.11
+    Checking cap-std v3.4.5
+    Checking molten-core v0.1.0 (/dev/shm/aspen-component-host-adapter-20261027/crates/molten-core)
+    Checking netlink-proto v0.12.0
+    Checking hyper-rustls v0.27.9
+    Checking netlink-packet-route v0.31.0
+    Checking n0-watcher v1.0.0
+    Checking malachite-base v0.9.1
+    Checking crossbeam-deque v0.8.6
+    Checking attohttpc v0.30.1
+    Checking simple-dns v0.11.3
+    Checking dirs-sys-next v0.1.2
+    Checking simdutf8 v0.1.5
+    Checking fixedbitset v0.4.2
+    Checking foldhash v0.1.5
+    Checking static_assertions v1.1.0
+    Checking sha1_smol v1.0.1
+    Checking hashbrown v0.15.5
+    Checking tokio-websockets v0.13.2
+    Checking petgraph v0.6.5
+    Checking iroh-dns v1.0.0
+    Checking directories-next v2.0.0
+    Checking igd-next v0.17.0
+    Checking rayon-core v1.13.0
+    Checking malachite-nz v0.9.1
+    Checking netwatch v0.19.0
+    Checking reqwest v0.13.4
+    Checking zstd v0.13.3
+    Checking wat v1.250.0
+    Checking winch-codegen v45.0.0
+    Checking ittapi-sys v0.4.0
+    Checking debugid v0.8.0
+    Checking lru v0.18.0
+    Checking seize v0.5.1
+    Checking arrayvec v0.5.2
+    Checking heck v0.5.0
+    Checking cmov v0.5.3
+    Checking typed-arena v2.0.2
+    Checking pretty v0.12.5
+    Checking ctutils v0.4.2
+    Checking wasm-compose v0.248.0
+    Checking papaya v0.2.4
+    Checking iroh-relay v1.0.0
+    Checking fxprof-processed-profile v0.8.1
+    Checking ittapi v0.4.0
+    Checking wasmtime-internal-winch v45.0.0
+    Checking malachite-q v0.9.1
+    Checking wasmtime-internal-cache v45.0.0
+    Checking portmapper v0.19.0
+    Checking wasmtime-internal-fiber v45.0.0
+    Checking wasmtime-internal-jit-debug v45.0.0
+    Checking rayon v1.12.0
+    Checking ahash v0.8.12
+    Checking chrono v0.4.44
+    Checking yasna v0.6.0
+    Checking addr2line v0.26.1
+    Checking wasmtime-internal-jit-icache-coherence v45.0.0
+    Checking num-rational v0.4.2
+    Checking backon v1.6.0
+    Checking pem v3.0.6
+    Checking memfd v0.6.5
+    Checking encoding_rs v0.8.35
+    Checking bitmaps v3.2.1
+    Checking ansi_term v0.12.1
+    Checking wasmtime v45.0.0
+    Checking imbl-sized-chunks v0.1.3
+    Checking ref-cast v1.0.25
+    Checking rcgen v0.14.8
+    Checking iroh v1.0.0
+    Checking hashbrown v0.14.5
+    Checking malachite-float v0.9.1
+    Checking cap-fs-ext v3.4.5
+    Checking hashlink v0.10.0
+    Checking codespan-reporting v0.13.1
+    Checking textwrap v0.11.0
+    Checking concurrent-queue v2.5.0
+    Checking inplace-vec-builder v0.1.1
+    Checking atty v0.2.14
+    Checking genawaiter-macro v0.99.1
+    Checking vec_map v0.8.2
+    Checking arraydeque v0.5.1
+    Checking binary-merge v0.1.2
+    Checking hashbrown v0.12.3
+    Checking strsim v0.8.0
+    Checking regex-syntax v0.6.29
+    Checking bitflags v1.3.2
+    Checking aliasable v0.1.3
+    Checking regex-automata v0.1.10
+    Checking ouroboros v0.18.5
+    Checking clap v2.34.0
+    Checking indexmap v1.9.3
+    Checking range-collections v0.4.6
+    Checking saphyr-parser v0.0.6
+    Checking genawaiter v0.99.1
+    Checking irpc v0.17.0
+    Checking event-listener v5.4.1
+    Checking codespan v0.13.1
+    Checking malachite v0.9.1
+    Checking dashmap v6.2.1
+    Checking logos v0.16.1
+    Checking nickel-lang-vector v0.2.0
+    Checking iroh-io v0.6.2
+    Checking toml_edit v0.24.1+spec-1.1.0
+    Checking lalrpop-util v0.22.2
+    Checking castaway v0.2.4
+    Checking num-complex v0.4.6
+    Checking md-5 v0.10.6
+    Checking bitmaps v2.1.0
+    Checking vte v0.14.1
+    Checking positioned-io v0.3.5
+    Checking anymap3 v1.0.1
+    Checking glob v0.3.3
+    Checking fixedbitset v0.5.7
+    Checking simple-counter v0.1.0
+    Checking hex v0.4.3
+    Checking unsafe-libyaml v0.2.11
+    Checking self_cell v1.2.2
+    Checking serde_yaml v0.9.34+deprecated
+    Checking bao-tree v0.16.0
+    Checking nickel-lang-parser v0.3.0
+    Checking futures-concurrency v7.7.1
+    Checking generic_singleton v0.5.3
+    Checking strip-ansi-escapes v0.2.1
+    Checking sized-chunks v0.6.5
+    Checking num v0.4.3
+    Checking compact_str v0.8.2
+    Checking lasso v0.7.3
+    Checking event-listener-strategy v0.5.4
+    Checking icu_casemap_data v2.2.0
+    Checking redb v4.1.0
+    Checking structopt v0.3.26
+    Checking codegen v0.2.0
+    Checking matchers v0.0.1
+    Checking iroh-util v0.6.0
+    Checking iroh-tickets v1.0.0
+    Checking sharded-slab v0.1.7
+    Checking tracing-log v0.1.4
+    Checking tracing-serde v0.1.3
+    Checking rand_xoshiro v0.6.0
+    Checking reflink-copy v0.1.29
+    Checking ordered-float v5.3.0
+    Checking sha-1 v0.10.1
+    Checking json_scanner v0.1.0
+    Checking thin-vec v0.2.18
+    Checking convert_case v0.4.0
+    Checking nickel-lang-core v0.18.0
+    Checking preserves-schema v6.0.0-rc.6
+    Checking steel-parser v0.8.2
+    Checking iroh-blobs v0.103.0
+    Checking im-rc v15.1.0
+    Checking tracing-subscriber v0.2.25
+    Checking steel-gen v0.8.2
+    Checking icu_casemap v2.2.0
+    Checking async-channel v2.5.0
+    Checking wiggle v45.0.0
+    Checking nix v0.30.1
+    Checking preserves v4.996.0
+    Checking bigdecimal v0.4.10
+    Checking im-lists v0.11.4
+    Checking redb v3.1.3
+    Checking iroh-gossip v0.101.0
+    Checking molten-node-host v0.1.0 (/dev/shm/aspen-component-host-adapter-20261027/crates/molten-node-host)
+    Checking wasmtime-wasi-io v45.0.0
+    Checking cap-net-ext v3.4.5
+    Checking cap-time-ext v3.4.5
+    Checking tracing-futures v0.2.5
+    Checking codespan-reporting v0.11.1
+    Checking crossbeam-queue v0.3.12
+    Checking crunch-wasm-component-core v0.1.0 (ssh://git@github.com/OnixResearch/mantle.git?rev=c99556e5c91dfd13fcc261dc451f471359d47c38#c99556e5)
+    Checking hardened-wasmtime-runtime v0.1.0 (rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c#cf4a1913)
+    Checking xattr v1.6.1
+    Checking polling v3.11.0
+    Checking tokio-util v0.6.10
+    Checking blake2 v0.10.6
+    Checking steel-quickscope v0.3.2
+    Checking shared_vector v0.4.5
+    Checking bincode v1.3.3
+    Checking serde-error v0.1.3
+    Checking filetime v0.2.29
+    Checking which v8.0.2
+    Checking xdg v3.0.0
+    Checking bounded-exec-core v0.1.0 (https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#29dac88e)
+    Checking weak-table v0.3.2
+    Checking env_home v0.1.0
+    Checking bounded-exec v0.1.0 (https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#29dac88e)
+    Checking steel-core v0.8.2
+    Checking tar v0.4.46
+    Checking iroh-docs v0.101.0
+    Checking syndicate v0.44.0-rc.3
+    Checking mantle-wasm-consumer-verifier v0.1.0 (ssh://git@github.com/OnixResearch/mantle.git?rev=c99556e5c91dfd13fcc261dc451f471359d47c38#c99556e5)
+    Checking hardened-wasmtime-shell v0.1.0 (rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c#cf4a1913)
+    Checking wasmtime-wasi v45.0.0
+    Checking cairn-core v0.1.0 (ssh://git@github.com/OnixResearch/cairn.git?rev=3b4c280b893f2709aebea21fc51a4f9eeba3fe3b#3b4c280b)
+    Checking wit-bindgen v0.46.0
+    Checking nickel-lang v2.2.0
+    Checking wasmparser v0.240.0
+    Checking artifact-auth-ed25519 v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d)
+    Checking valence-core v0.1.0 (ssh://git@github.com/OnixResearch/valence.git?rev=5f1c2ba5072c6f9622fa59b1af20502985f569fd#5f1c2ba5)
+    Checking half v2.7.1
+    Checking chaoscontrol-snapshot-descriptor v0.1.0 (https://github.com/brittonr/chaoscontrol.git?rev=b8c440ea3b19df796542e58e8ee36200e1c3db85#b8c440ea)
+    Checking durable-file-publication v0.1.0 (https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=8e05e74e24b45f752d77145c4455385daaf6d6ab#8e05e74e)
+    Checking ciborium-io v0.2.2
+    Checking ciborium-ll v0.2.2
+    Checking cap-tempfile v3.4.5
+    Checking ciborium v0.2.2
+    Checking molten v0.1.0 (/dev/shm/aspen-component-host-adapter-20261027)
+    Checking hegeltest v0.14.12 (https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#ed949b80)
+    Checking schema-identity-conformance v0.1.0 (https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#2562c8aa)
+    Checking molten-release-policy v0.1.0 (/dev/shm/aspen-component-host-adapter-20261027/crates/molten-release-policy)
+    Finished `dev` profile [unoptimized] target(s) in 8m 02s
+=== cargo fmt --all --check ===
+=== nixfmt --check flake.nix ===
+=== nix run 'path:/home/brittonr/git/OnixResearch/cairn#cairn' -- validate --root . --policy /home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json --strict ===
+{
+  "change_issues": [],
+  "changes": 16,
+  "cross_repo_dependencies": [],
+  "cross_repo_evidence_issues": [],
+  "findings": [],
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_selection": {
+    "blake3": "7a67802377005c18ebded42899e7f564f5d87087b6c14ca70464b35886f340a9",
+    "installation_receipt": false,
+    "locator": "/home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json",
+    "source": "explicit"
+  },
+  "profile_issues": [],
+  "receipt_hash": "6a2f079c9abe35f3f9f4c5d081f3b38f152a78c34e5f9b59c99b0d062a15586c",
+  "resolution": {
+    "diagnostics": [],
+    "locator_consulted": false,
+    "registry_lookup": "local_locator_only",
+    "selected": {
+      "project_identity": null,
+      "root": ".",
+      "source": "explicit_root",
+      "store_id": null,
+      "store_identity": null
+    },
+    "valid": true
+  },
+  "spec_findings": [],
+  "spec_issues": [],
+  "spec_substance": [
+    {
+      "path": "./.cairn/changes/add-chaoscontrol-consensus-conformance/specs/consensus/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 11,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./.cairn/changes/add-chaoscontrol-consensus-conformance/specs/testing-harness/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 8,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./.cairn/changes/add-collaboration-scope-system-extension/specs/collaboration-scope/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 19,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./.cairn/changes/add-consensus-fast-path-acceleration/specs/consensus/spec.md",
+      "requirement_blocks": 11,
+      "scenario_blocks": 22,
+      "substantive_requirement_blocks": 11
+    },
+    {
+      "path": "./.cairn/changes/add-linux-ebpf-observability-adapter/specs/linux-ebpf-observability/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./.cairn/changes/add-live-consensus-reliability-adapter/specs/consensus/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./.cairn/changes/add-live-consensus-reliability-adapter/specs/testing-harness/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 8,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./.cairn/changes/add-world-head-rollback-witnessing/specs/world-commit/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 10,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./.cairn/changes/adopt-shared-wasm-component-runtime/specs/wasm-component-runtime-adoption/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 13,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./.cairn/changes/enforce-introduction-before-reference/specs/runtime-spine/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 4,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./.cairn/changes/exercise-service-recovery-composition/specs/testing-harness/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 3,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./.cairn/changes/federated-pull-system-extension/specs/federated-pull-sync/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./.cairn/changes/harden-world-replay-observation-boundary/specs/world-commit/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./.cairn/changes/pilot-marble-object-store/specs/marble-object-store/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 8,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/changes/pilot-spacewasm-core-runtime-profile/specs/spacewasm-core-runtime/spec.md",
+      "requirement_blocks": 12,
+      "scenario_blocks": 21,
+      "substantive_requirement_blocks": 12
+    },
+    {
+      "path": "./.cairn/changes/pilot-wrpc-component-transport/specs/component-rpc-pilot/spec.md",
+      "requirement_blocks": 11,
+      "scenario_blocks": 17,
+      "substantive_requirement_blocks": 11
+    },
+    {
+      "path": "./.cairn/changes/recover-from-storage-faults/specs/consensus/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 11,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./.cairn/changes/recover-from-storage-faults/specs/durable-state-ports/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 7,
+      "substantive_requirement_blocks": 4
+    },
+    {
+      "path": "./.cairn/changes/require-node-startup-source-gate-evidence/specs/node-runtime/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 8,
+      "substantive_requirement_blocks": 4
+    },
+    {
+      "path": "./.cairn/specs/addressable-actor-runtime/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 10,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/artifact-auth-adoption/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 13,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./.cairn/specs/artifact-auth-operational-receipt/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 7,
+      "substantive_requirement_blocks": 4
+    },
+    {
+      "path": "./.cairn/specs/artifact-auth-shell-verification/spec.md",
+      "requirement_blocks": 3,
+      "scenario_blocks": 3,
+      "substantive_requirement_blocks": 3
+    },
+    {
+      "path": "./.cairn/specs/artifact-registry/spec.md",
+      "requirement_blocks": 36,
+      "scenario_blocks": 58,
+      "substantive_requirement_blocks": 36
+    },
+    {
+      "path": "./.cairn/specs/artifact-release-snapshots/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 10,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./.cairn/specs/authority-identity-revocation/spec.md",
+      "requirement_blocks": 52,
+      "scenario_blocks": 45,
+      "substantive_requirement_blocks": 52
+    },
+    {
+      "path": "./.cairn/specs/batch-orchestration-adoption/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 12,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/bounded-execution/spec.md",
+      "requirement_blocks": 12,
+      "scenario_blocks": 24,
+      "substantive_requirement_blocks": 12
+    },
+    {
+      "path": "./.cairn/specs/catalog/spec.md",
+      "requirement_blocks": 46,
+      "scenario_blocks": 57,
+      "substantive_requirement_blocks": 46
+    },
+    {
+      "path": "./.cairn/specs/choreography/spec.md",
+      "requirement_blocks": 36,
+      "scenario_blocks": 49,
+      "substantive_requirement_blocks": 36
+    },
+    {
+      "path": "./.cairn/specs/cluster-harness/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 3,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./.cairn/specs/committed-change-stream/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 13,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./.cairn/specs/confidentiality/spec.md",
+      "requirement_blocks": 14,
+      "scenario_blocks": 20,
+      "substantive_requirement_blocks": 14
+    },
+    {
+      "path": "./.cairn/specs/consensus/spec.md",
+      "requirement_blocks": 78,
+      "scenario_blocks": 126,
+      "substantive_requirement_blocks": 78
+    },
+    {
+      "path": "./.cairn/specs/content-addressed-chunk-store/spec.md",
+      "requirement_blocks": 51,
+      "scenario_blocks": 74,
+      "substantive_requirement_blocks": 51
+    },
+    {
+      "path": "./.cairn/specs/content-replication/spec.md",
+      "requirement_blocks": 25,
+      "scenario_blocks": 49,
+      "substantive_requirement_blocks": 25
+    },
+    {
+      "path": "./.cairn/specs/coordination/spec.md",
+      "requirement_blocks": 56,
+      "scenario_blocks": 74,
+      "substantive_requirement_blocks": 56
+    },
+    {
+      "path": "./.cairn/specs/dag-sync/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./.cairn/specs/dataspace-access-cache/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 9,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/delivery/spec.md",
+      "requirement_blocks": 30,
+      "scenario_blocks": 37,
+      "substantive_requirement_blocks": 30
+    },
+    {
+      "path": "./.cairn/specs/dev-function-profiling/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./.cairn/specs/durable-state-ports/spec.md",
+      "requirement_blocks": 17,
+      "scenario_blocks": 35,
+      "substantive_requirement_blocks": 17
+    },
+    {
+      "path": "./.cairn/specs/evaluation-cache/spec.md",
+      "requirement_blocks": 23,
+      "scenario_blocks": 28,
+      "substantive_requirement_blocks": 23
+    },
+    {
+      "path": "./.cairn/specs/evidence-gates/spec.md",
+      "requirement_blocks": 189,
+      "scenario_blocks": 244,
+      "substantive_requirement_blocks": 189
+    },
+    {
+      "path": "./.cairn/specs/explicit-effect-handle-scoping/spec.md",
+      "requirement_blocks": 20,
+      "scenario_blocks": 0,
+      "substantive_requirement_blocks": 20
+    },
+    {
+      "path": "./.cairn/specs/fabric-membership-placement/spec.md",
+      "requirement_blocks": 11,
+      "scenario_blocks": 21,
+      "substantive_requirement_blocks": 11
+    },
+    {
+      "path": "./.cairn/specs/fabric-observability/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 15,
+      "substantive_requirement_blocks": 8
+    },
+    {
+      "path": "./.cairn/specs/fabric-simulation/spec.md",
+      "requirement_blocks": 32,
+      "scenario_blocks": 69,
+      "substantive_requirement_blocks": 32
+    },
+    {
+      "path": "./.cairn/specs/fabric-time-scheduling/spec.md",
+      "requirement_blocks": 36,
+      "scenario_blocks": 69,
+      "substantive_requirement_blocks": 36
+    },
+    {
+      "path": "./.cairn/specs/fabric-transport/spec.md",
+      "requirement_blocks": 14,
+      "scenario_blocks": 31,
+      "substantive_requirement_blocks": 14
+    },
+    {
+      "path": "./.cairn/specs/federated-pull-sync/spec.md",
+      "requirement_blocks": 20,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 20
+    },
+    {
+      "path": "./.cairn/specs/filesystem-materialization/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 7
+    },
+    {
+      "path": "./.cairn/specs/generation-retirement/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 8,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./.cairn/specs/hwr-consumer-pilot/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 9,
+      "substantive_requirement_blocks": 4
+    },
+    {
+      "path": "./.cairn/specs/job-dag/spec.md",
+      "requirement_blocks": 37,
+      "scenario_blocks": 39,
+      "substantive_requirement_blocks": 37
+    },
+    {
+      "path": "./.cairn/specs/kache-nix-rust/spec.md",
+      "requirement_blocks": 3,
+      "scenario_blocks": 6,
+      "substantive_requirement_blocks": 3
+    },
+    {
+      "path": "./.cairn/specs/live-artifact-binding/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 7,
+      "substantive_requirement_blocks": 4
+    },
+    {
+      "path": "./.cairn/specs/local-artifact-catalog/spec.md",
+      "requirement_blocks": 21,
+      "scenario_blocks": 0,
+      "substantive_requirement_blocks": 21
+    },
+    {
+      "path": "./.cairn/specs/local-artifact-registry/spec.md",
+      "requirement_blocks": 12,
+      "scenario_blocks": 12,
+      "substantive_requirement_blocks": 12
+    },
+    {
+      "path": "./.cairn/specs/local-catalog-mcp-readonly/spec.md",
+      "requirement_blocks": 16,
+      "scenario_blocks": 0,
+      "substantive_requirement_blocks": 16
+    },
+    {
+      "path": "./.cairn/specs/local-evaluation-cache/spec.md",
+      "requirement_blocks": 27,
+      "scenario_blocks": 11,
+      "substantive_requirement_blocks": 27
+    },
+    {
+      "path": "./.cairn/specs/local-executable-transcripts/spec.md",
+      "requirement_blocks": 51,
+      "scenario_blocks": 26,
+      "substantive_requirement_blocks": 51
+    },
+    {
+      "path": "./.cairn/specs/local-schema-identity/spec.md",
+      "requirement_blocks": 12,
+      "scenario_blocks": 13,
+      "substantive_requirement_blocks": 12
+    },
+    {
+      "path": "./.cairn/specs/local-structured-rewrite/spec.md",
+      "requirement_blocks": 14,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 14
+    },
+    {
+      "path": "./.cairn/specs/marble-object-store/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 8,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/nickel-toolchain/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 8,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./.cairn/specs/node-replication-pilot/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 11,
+      "substantive_requirement_blocks": 9
+    },
+    {
+      "path": "./.cairn/specs/node-runtime/spec.md",
+      "requirement_blocks": 98,
+      "scenario_blocks": 178,
+      "substantive_requirement_blocks": 98
+    },
+    {
+      "path": "./.cairn/specs/object-store-cas-coordinator/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 7,
+      "substantive_requirement_blocks": 4
+    },
+    {
+      "path": "./.cairn/specs/operator-workflow/spec.md",
+      "requirement_blocks": 68,
+      "scenario_blocks": 84,
+      "substantive_requirement_blocks": 68
+    },
+    {
+      "path": "./.cairn/specs/peer-bootstrap-negotiation/spec.md",
+      "requirement_blocks": 55,
+      "scenario_blocks": 46,
+      "substantive_requirement_blocks": 55
+    },
+    {
+      "path": "./.cairn/specs/persistent-node-identity/spec.md",
+      "requirement_blocks": 25,
+      "scenario_blocks": 25,
+      "substantive_requirement_blocks": 25
+    },
+    {
+      "path": "./.cairn/specs/plugin-host/spec.md",
+      "requirement_blocks": 50,
+      "scenario_blocks": 57,
+      "substantive_requirement_blocks": 50
+    },
+    {
+      "path": "./.cairn/specs/project/spec.md",
+      "requirement_blocks": 137,
+      "scenario_blocks": 175,
+      "substantive_requirement_blocks": 137
+    },
+    {
+      "path": "./.cairn/specs/prolly-publication-integrity/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 9,
+      "substantive_requirement_blocks": 4
+    },
+    {
+      "path": "./.cairn/specs/prolly-storage-work-reduction/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 10,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./.cairn/specs/remote-artifact-sync/spec.md",
+      "requirement_blocks": 26,
+      "scenario_blocks": 38,
+      "substantive_requirement_blocks": 26
+    },
+    {
+      "path": "./.cairn/specs/resource-governance-backpressure/spec.md",
+      "requirement_blocks": 24,
+      "scenario_blocks": 17,
+      "substantive_requirement_blocks": 24
+    },
+    {
+      "path": "./.cairn/specs/runtime-patterns/spec.md",
+      "requirement_blocks": 39,
+      "scenario_blocks": 46,
+      "substantive_requirement_blocks": 39
+    },
+    {
+      "path": "./.cairn/specs/runtime-spine/spec.md",
+      "requirement_blocks": 350,
+      "scenario_blocks": 519,
+      "substantive_requirement_blocks": 350
+    },
+    {
+      "path": "./.cairn/specs/semantic-operation-adoption/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 7,
+      "substantive_requirement_blocks": 5
+    },
+    {
+      "path": "./.cairn/specs/system-extension-runtime/spec.md",
+      "requirement_blocks": 36,
+      "scenario_blocks": 77,
+      "substantive_requirement_blocks": 36
+    },
+    {
+      "path": "./.cairn/specs/testing-harness/spec.md",
+      "requirement_blocks": 330,
+      "scenario_blocks": 508,
+      "substantive_requirement_blocks": 330
+    },
+    {
+      "path": "./.cairn/specs/unison-typed-storage/spec.md",
+      "requirement_blocks": 25,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 25
+    },
+    {
+      "path": "./.cairn/specs/upgrade-sessions/spec.md",
+      "requirement_blocks": 24,
+      "scenario_blocks": 14,
+      "substantive_requirement_blocks": 24
+    },
+    {
+      "path": "./.cairn/specs/wasm-component-performance/spec.md",
+      "requirement_blocks": 10,
+      "scenario_blocks": 16,
+      "substantive_requirement_blocks": 10
+    },
+    {
+      "path": "./.cairn/specs/wasm-component-runtime/spec.md",
+      "requirement_blocks": 14,
+      "scenario_blocks": 25,
+      "substantive_requirement_blocks": 14
+    },
+    {
+      "path": "./.cairn/specs/wasm-import-admission/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 8,
+      "substantive_requirement_blocks": 6
+    },
+    {
+      "path": "./.cairn/specs/wasm-performance/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 5,
+      "substantive_requirement_blocks": 1
+    },
+    {
+      "path": "./.cairn/specs/world-commit/spec.md",
+      "requirement_blocks": 126,
+      "scenario_blocks": 208,
+      "substantive_requirement_blocks": 126
+    }
+  ],
+  "specs_validated": 90,
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-chaoscontrol-consensus-conformance/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 38,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-chaoscontrol-consensus-conformance/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 15,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-chaoscontrol-consensus-conformance/specs/consensus/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 11,
+      "substantive_lines": 42,
+      "substantive_requirement_blocks": 5,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-chaoscontrol-consensus-conformance/specs/testing-harness/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 8,
+      "substantive_lines": 29,
+      "substantive_requirement_blocks": 5,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 17,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-chaoscontrol-consensus-conformance/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 21,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 17,
+      "task_done": 3,
+      "task_in_progress": 0,
+      "task_todo": 14
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-collaboration-scope-system-extension/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 68,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-collaboration-scope-system-extension/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 31,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-collaboration-scope-system-extension/specs/collaboration-scope/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 19,
+      "substantive_lines": 70,
+      "substantive_requirement_blocks": 9,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 24,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-collaboration-scope-system-extension/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 24,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 24,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 24
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-consensus-fast-path-acceleration/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 32,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-consensus-fast-path-acceleration/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 11,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-consensus-fast-path-acceleration/specs/consensus/spec.md",
+      "requirement_blocks": 11,
+      "scenario_blocks": 22,
+      "substantive_lines": 91,
+      "substantive_requirement_blocks": 11,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 18,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-consensus-fast-path-acceleration/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 24,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 18,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 18
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-linux-ebpf-observability-adapter/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 31,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-linux-ebpf-observability-adapter/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 16,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-linux-ebpf-observability-adapter/specs/linux-ebpf-observability/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 16,
+      "substantive_lines": 64,
+      "substantive_requirement_blocks": 8,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 19,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-linux-ebpf-observability-adapter/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 19,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 19,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 19
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-live-consensus-reliability-adapter/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 45,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-live-consensus-reliability-adapter/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 20,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-live-consensus-reliability-adapter/specs/consensus/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 14,
+      "substantive_lines": 49,
+      "substantive_requirement_blocks": 7,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-live-consensus-reliability-adapter/specs/testing-harness/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 8,
+      "substantive_lines": 29,
+      "substantive_requirement_blocks": 5,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 19,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-live-consensus-reliability-adapter/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 20,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 19,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 19
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-world-head-rollback-witnessing/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 35,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-world-head-rollback-witnessing/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 21,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-world-head-rollback-witnessing/specs/world-commit/spec.md",
+      "requirement_blocks": 7,
+      "scenario_blocks": 10,
+      "substantive_lines": 41,
+      "substantive_requirement_blocks": 7,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 14,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/add-world-head-rollback-witnessing/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 14,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 14,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 14
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/adopt-shared-wasm-component-runtime/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 30,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/adopt-shared-wasm-component-runtime/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 17,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/adopt-shared-wasm-component-runtime/specs/wasm-component-runtime-adoption/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 13,
+      "substantive_lines": 49,
+      "substantive_requirement_blocks": 9,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 14,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/adopt-shared-wasm-component-runtime/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 19,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 14,
+      "task_done": 6,
+      "task_in_progress": 0,
+      "task_todo": 8
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/enforce-introduction-before-reference/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 28,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/enforce-introduction-before-reference/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 25,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/enforce-introduction-before-reference/specs/runtime-spine/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 4,
+      "substantive_lines": 13,
+      "substantive_requirement_blocks": 1,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 9,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/enforce-introduction-before-reference/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 12,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 9,
+      "task_done": 8,
+      "task_in_progress": 0,
+      "task_todo": 1
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/exercise-service-recovery-composition/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 12,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/exercise-service-recovery-composition/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 15,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/exercise-service-recovery-composition/specs/testing-harness/spec.md",
+      "requirement_blocks": 1,
+      "scenario_blocks": 3,
+      "substantive_lines": 10,
+      "substantive_requirement_blocks": 1,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 6,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/exercise-service-recovery-composition/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 20,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 6,
+      "task_done": 4,
+      "task_in_progress": 0,
+      "task_todo": 2
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/federated-pull-system-extension/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 22,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/federated-pull-system-extension/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 12,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/federated-pull-system-extension/specs/federated-pull-sync/spec.md",
+      "requirement_blocks": 8,
+      "scenario_blocks": 14,
+      "substantive_lines": 50,
+      "substantive_requirement_blocks": 8,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 13,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/federated-pull-system-extension/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 19,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 13,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 13
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/harden-world-replay-observation-boundary/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 29,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/harden-world-replay-observation-boundary/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 25,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/harden-world-replay-observation-boundary/specs/world-commit/spec.md",
+      "requirement_blocks": 9,
+      "scenario_blocks": 16,
+      "substantive_lines": 58,
+      "substantive_requirement_blocks": 9,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 13,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/harden-world-replay-observation-boundary/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 13,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 13,
+      "task_done": 12,
+      "task_in_progress": 0,
+      "task_todo": 1
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/pilot-marble-object-store/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 13,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/pilot-marble-object-store/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 12,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/pilot-marble-object-store/specs/marble-object-store/spec.md",
+      "requirement_blocks": 6,
+      "scenario_blocks": 8,
+      "substantive_lines": 31,
+      "substantive_requirement_blocks": 6,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 12,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/pilot-marble-object-store/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 12,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 12,
+      "task_done": 11,
+      "task_in_progress": 0,
+      "task_todo": 1
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/pilot-spacewasm-core-runtime-profile/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 28,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/pilot-spacewasm-core-runtime-profile/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 14,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/pilot-spacewasm-core-runtime-profile/specs/spacewasm-core-runtime/spec.md",
+      "requirement_blocks": 12,
+      "scenario_blocks": 21,
+      "substantive_lines": 76,
+      "substantive_requirement_blocks": 12,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 10,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/pilot-spacewasm-core-runtime-profile/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 10,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 10,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 10
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/pilot-wrpc-component-transport/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 30,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/pilot-wrpc-component-transport/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 13,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/pilot-wrpc-component-transport/specs/component-rpc-pilot/spec.md",
+      "requirement_blocks": 11,
+      "scenario_blocks": 17,
+      "substantive_lines": 63,
+      "substantive_requirement_blocks": 11,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 9,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/pilot-wrpc-component-transport/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 9,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 9,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 9
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/recover-from-storage-faults/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 23,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/recover-from-storage-faults/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 28,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/recover-from-storage-faults/specs/consensus/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 11,
+      "substantive_lines": 38,
+      "substantive_requirement_blocks": 5,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/recover-from-storage-faults/specs/durable-state-ports/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 7,
+      "substantive_lines": 25,
+      "substantive_requirement_blocks": 4,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 15,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/recover-from-storage-faults/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 22,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 15,
+      "task_done": 13,
+      "task_in_progress": 0,
+      "task_todo": 2
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/require-node-startup-source-gate-evidence/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 17,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/require-node-startup-source-gate-evidence/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 14,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/require-node-startup-source-gate-evidence/specs/node-runtime/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 8,
+      "substantive_lines": 28,
+      "substantive_requirement_blocks": 4,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 14,
+      "kind": "tasks",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/require-node-startup-source-gate-evidence/tasks.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 16,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 14,
+      "task_done": 2,
+      "task_in_progress": 0,
+      "task_todo": 12
+    }
+  ],
+  "substance_findings": [],
+  "substance_issues": [],
+  "valid": true,
+  "workflow_profiles": [
+    {
+      "acceptance_ids": [],
+      "non_claims": [
+        "workflow state proves only the selected policy graph and observed structural artifact facts",
+        "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+        "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+        "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+      ],
+      "profile_identity_hash": "9a4b2272366cefdf77eaeabe3ba72b1cc122b5301635370a3970817071579b75",
+      "review_receipt_hashes": [],
+      "spec_effect": "delta",
+      "workflow_profile": "spec-driven",
+      "workflow_profile_compatibility_fallback": false,
+      "workflow_profile_source": "change_create",
+      "workflow_profile_version": 1
+    },
+    {
+      "acceptance_ids": [],
+      "non_claims": [
+        "workflow state proves only the selected policy graph and observed structural artifact facts",
+        "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+        "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+        "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+      ],
+      "profile_identity_hash": "6904cd537ad2dc8dac2da2503f50a40c98adf6bef876f694009ec9bd0b5ce8a8",
+      "review_receipt_hashes": [],
+      "spec_effect": "delta",
+      "workflow_profile": "spec-driven",
+      "workflow_profile_compatibility_fallback": false,
+      "workflow_profile_source": "change_create",
+      "workflow_profile_version": 1
+    },
+    {
+      "acceptance_ids": [],
+      "non_claims": [
+        "workflow state proves only the selected policy graph and observed structural artifact facts",
+        "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+        "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+        "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+      ],
+      "profile_identity_hash": "5ac55a2310e37431f444e0b517a612bcc68af6b6a010320faac825f24557cf19",
+      "review_receipt_hashes": [],
+      "spec_effect": "delta",
+      "workflow_profile": "spec-driven",
+      "workflow_profile_compatibility_fallback": false,
+      "workflow_profile_source": "change_create",
+      "workflow_profile_version": 1
+    },
+    {
+      "acceptance_ids": [],
+      "non_claims": [
+        "workflow state proves only the selected policy graph and observed structural artifact facts",
+        "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+        "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+        "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+      ],
+      "profile_identity_hash": "99e05cec2de285df7772c3ca402a245b9f35f45a618673c23aee1dd4d6b91053",
+      "review_receipt_hashes": [],
+      "spec_effect": "delta",
+      "workflow_profile": "spec-driven",
+      "workflow_profile_compatibility_fallback": false,
+      "workflow_profile_source": "change_create",
+      "workflow_profile_version": 1
+    },
+    {
+      "acceptance_ids": [],
+      "non_claims": [
+        "workflow state proves only the selected policy graph and observed structural artifact facts",
+        "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+        "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+        "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+      ],
+      "profile_identity_hash": "007434a1ac6ca39b5e27c0349d95dd48c6e048d2053e3a6cfd9ddbaf92579e75",
+      "review_receipt_hashes": [],
+      "spec_effect": "delta",
+      "workflow_profile": "spec-driven",
+      "workflow_profile_compatibility_fallback": false,
+      "workflow_profile_source": "change_create",
+      "workflow_profile_version": 1
+    },
+    {
+      "acceptance_ids": [],
+      "non_claims": [
+        "workflow state proves only the selected policy graph and observed structural artifact facts",
+        "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+        "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+        "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+      ],
+      "profile_identity_hash": "775c93f5d3bcd8eee29423983343878699f2403f4f02d938e2dfa931f30fed63",
+      "review_receipt_hashes": [],
+      "spec_effect": "delta",
+      "workflow_profile": "spec-driven",
+      "workflow_profile_compatibility_fallback": false,
+      "workflow_profile_source": "change_create",
+      "workflow_profile_version": 1
+    }
+  ]
+}

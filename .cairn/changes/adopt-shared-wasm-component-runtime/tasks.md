@@ -19,8 +19,9 @@
 
 - [x] [serial] Define the versioned Molten effect-request import, canonical Preserves carrier, closed operations, authority and resource inputs, recorded-effect binding, and no-WASI linker profile. r[molten.wasm_component_adoption.hostcalls]
   - Evidence: [contract-only effect-world continuation](evidence/2026-10-27-boundary-parity.md#contract-only-effect-world-continuation), exact candidate Nickel/WIT, bounded canonical codecs and a real generated-WIT carrier invocation. `execution_admitted=false`; definition does not close the following adapter, effect-dispatch, consumer or cutover tasks.
-- [ ] [serial] Implement the product host adapter through existing effect ports with current policy, Basalt/UCAN, generation, resource, and replay admission before dispatch. r[molten.wasm_component_adoption.hostcalls] r[molten.wasm_component_adoption.boundary]
-- [ ] [parallel] Add admitted and denied effect-request fixtures with exact request, response, replay, and receipt bindings. r[molten.wasm_component_adoption.hostcalls] r[molten.wasm_component_adoption.validation]
+- [x] [serial] Implement the product host adapter through existing effect ports with current policy, Basalt/UCAN, generation, resource, and replay admission before dispatch. r[molten.wasm_component_adoption.hostcalls] r[molten.wasm_component_adoption.boundary]
+- [x] [parallel] Add admitted and denied effect-request fixtures with exact request, response, replay, and receipt bindings. r[molten.wasm_component_adoption.hostcalls] r[molten.wasm_component_adoption.validation]
+  - Evidence: [inactive host-adapter continuation](evidence/2026-10-27-host-adapter.md): genuine signed UCAN/holder admission, actual capability-backed canonical blob and recording bytes, current-policy/lifecycle/resource denials before protected reads, complete offline replay without live fallback, and poisoned-session handling of uncertain publication. The public-API smoke admitted and denied retrieval with exactly one protected read. No effect-world linker, actor/extension installation, durable nonce-store selection or cutover is claimed.
 - [ ] [serial] Wire one ordinary actor and one system extension through non-test product composition roots and matching Mantle bundles. r[molten.wasm_component_adoption.consumers]
 
 ## Phase 4: Cutover and evidence
