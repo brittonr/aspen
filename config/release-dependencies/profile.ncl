@@ -20,7 +20,7 @@ let SchemaMigrationSource = "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3U
 let SchemaIdentitySource = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git" in
 let TransactionalReconciliationRevision = "eb2bd3441753af97bfcb247cef7cc22d72675b62" in
 let TransactionalReconciliationSource = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git" in
-let HardenedWasmtimeRevision = "6381322a68407da71325c4c33113d11ada9af67f" in
+let HardenedWasmtimeRevision = "cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c" in
 let HardenedWasmtimeSource = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx" in
 let MantleWasmVerifierRevision = "c99556e5c91dfd13fcc261dc451f471359d47c38" in
 let MantleWasmVerifierSource = "ssh://git@github.com/OnixResearch/mantle.git" in
@@ -333,16 +333,20 @@ in
       source_coordinate = HardenedWasmtimeSource,
       source_revision = HardenedWasmtimeRevision,
       nix_input = "hardened-wasmtime-src",
-      archive_path = ".cairn/archive/1970-01-01-add-resumable-component-invocation",
+      archive_path = ".cairn/archive/1970-01-01-preserve-component-execution-boundaries",
       status = "archived",
       evidence_files = [
         {
-          relative_path = ".cairn/archive/1970-01-01-add-resumable-component-invocation/tasks.md",
-          blake3 = "7b574713753488d51e9b90265b11858830b3e52967f06cc4a74bc9c757bc5ed6",
+          relative_path = ".cairn/archive/1970-01-01-preserve-component-execution-boundaries/tasks.md",
+          blake3 = "d4a6554a7a61162d339bf9dc515be4e5725847ef8cb7c5b3167e1543fb8aea87",
         },
         {
           relative_path = "crates/hardened-wasmtime-shell/src/lib.rs",
-          blake3 = "66345f4b74adaf80740b776ef097931aa1c41c049780fe1b49927cc294467fcc",
+          blake3 = "510b2cf96efd92c096d8d780a844e272c7811317aee3dc94fed891df89f59fa0",
+        },
+        {
+          relative_path = ".cairn/archive/1970-01-01-preserve-component-execution-boundaries/verification.md",
+          blake3 = "ad9639e51a32ab13ff4aaae009c96155cd7d11d23e0c79c3864fbe467f127e04",
         },
       ],
       non_claims = ArchiveNonClaims,

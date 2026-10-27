@@ -1,7 +1,9 @@
 use super::super::*;
 
 mod fixtures;
+mod initialization;
 mod rejection;
+mod resources;
 
 const DEADLINE_TICKS: u64 = 1_000;
 const SLICE_LIMIT: usize = 1_000;
@@ -172,56 +174,30 @@ fn retained_shared_slices_preserve_callback_ledger_receipts_and_single_publicati
 }
 
 #[test]
-fn admitted_start_work_is_a_scheduling_counterexample_not_a_receipt_fuel_difference() {
-    let mut fixture = super::support::Fixture::with_profile(Consumer::Actor, time_sliced().expect("sliced profile"));
-    fixture.replace_component_bytes(fixtures::expensive_start());
-    let input = super::support::input_value();
-    let request = fixture.sliced_request(&input);
-    let mut local = start_sliced_execution(&request, continuation()).expect("local start");
-    let mut shared = runtime(&fixture)
-        .start_sliced(&request, continuation(), DEADLINE_TICKS)
-        .unwrap_or_else(|outcome| panic!("{:?}", outcome.diagnostics));
-    let (local_boundaries, local_outcome) = local_slices(&mut local);
-    let (shared_boundaries, shared_outcome) = shared_slices(&mut shared);
-    assert!(local_outcome.is_pass(), "{:?}", local_outcome.diagnostics);
-    assert!(shared_outcome.is_pass(), "{:?}", shared_outcome.diagnostics);
-    compare(&local_outcome, &shared_outcome);
-    assert_ne!(
-        local_boundaries, shared_boundaries,
-        "upstream exposes instantiation suspensions to the callback scheduler"
-    );
-    assert_ne!(local.ledger(), Some(shared.ledger()));
-    assert_eq!(local.ledger().expect("local ledger").consumed_fuel, shared.ledger().consumed_fuel);
-    println!(
-        "start-work local_boundaries={local_boundaries:?} shared_boundaries={shared_boundaries:?} local_ledger={:?} shared_ledger={:?}",
-        local.ledger(),
-        shared.ledger()
-    );
-}
-
-#[test]
-fn two_admitted_per_memory_bounds_exceed_the_shared_aggregate_bound() {
-    let mut fixture = super::support::Fixture::new(Consumer::Actor);
-    fixture.replace_component_bytes(fixtures::aggregate_memory());
-    fixture.facts.memory.initial = 129 * 65_536;
-    fixture.facts.memory.maximum = Some(fixture.facts.memory.initial);
-    fixture.facts.memories = 2;
-    fixture.facts.instances = 2;
-    let input = super::support::input_value();
-    let request = fixture.request(&input);
-    let local = execute(&request);
-    let shared = runtime(&fixture).execute(&request, DEADLINE_TICKS);
-    assert!(local.is_pass(), "{:?}", local.diagnostics);
-    assert!(!shared.is_pass());
-    assert_eq!(shared.receipts.iter().map(|receipt| receipt.input.stage).collect::<Vec<_>>(), vec![
-        Stage::Inspection,
-        Stage::Denial
-    ]);
-    assert_eq!(
-        shared.receipts.last().expect("denial").input.trap_class.as_deref(),
-        Some("component-instantiation-denied")
-    );
-    println!("aggregate-memory local={:?} shared={:?}", local.receipts, shared.receipts);
+fn two_admitted_per_memory_bounds_preserve_complete_execution() {
+    // r[verify molten.wasm_component_adoption.parity]
+    // r[verify molten.wasm_component.resources]
+    for consumer in [Consumer::Actor, Consumer::SystemExtension] {
+        let mut fixture = super::support::Fixture::new(consumer);
+        fixture.replace_component_bytes(fixtures::aggregate_memory());
+        // Inspection reports the largest declaration, not the sum of memories.
+        fixture.facts.memory.initial = 129 * 65_536;
+        fixture.facts.memory.maximum = Some(fixture.facts.memory.initial);
+        fixture.facts.memories = 2;
+        fixture.facts.instances = 2;
+        let (local, shared) = compare_synchronous(&fixture);
+        assert!(local.is_pass(), "{:?}", local.diagnostics);
+        assert!(shared.is_pass(), "{:?}", shared.diagnostics);
+        assert_eq!(local.output, Some(super::support::input_value()));
+        assert_eq!(local.receipts.iter().map(|receipt| receipt.input.stage).collect::<Vec<_>>(), vec![
+            Stage::Inspection,
+            Stage::Instantiation,
+            Stage::Execution
+        ]);
+        let fuel_remaining =
+            local.receipts.last().expect("execution receipt").input.fuel_remaining.expect("success fuel");
+        assert!(fuel_remaining < fixture.profile.resources.fuel);
+    }
 }
 
 #[test]
@@ -267,22 +243,4 @@ fn retained_cancellation_releases_the_shared_concurrency_permit() {
     let mut local = start_sliced_execution(&request, continuation()).expect("local start");
     let (_, expected) = local_slices(&mut local);
     compare(&expected, &completed);
-}
-
-#[test]
-fn sliced_instantiation_failure_preserves_inspection_only_parentage() {
-    let mut fixture = super::support::Fixture::with_profile(Consumer::Actor, time_sliced().expect("sliced profile"));
-    fixture.replace_component_bytes(fixtures::start_trap());
-    let input = super::support::input_value();
-    let request = fixture.sliced_request(&input);
-    let local = match start_sliced_execution(&request, continuation()) {
-        Ok(_) => panic!("start trap cannot instantiate locally"),
-        Err(outcome) => outcome,
-    };
-    let mut shared = runtime(&fixture)
-        .start_sliced(&request, continuation(), DEADLINE_TICKS)
-        .unwrap_or_else(|outcome| panic!("{:?}", outcome.diagnostics));
-    let (boundaries, outcome) = shared_slices(&mut shared);
-    assert!(boundaries.is_empty());
-    compare(&local, &outcome);
 }

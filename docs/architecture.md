@@ -41,10 +41,13 @@ The optional [content-replication extension](content-replication.md) derives cur
 
 Molten retains component profile/WIT, canonical Preserves, materialization,
 authority, actor/extension lifecycle, effects, replay and receipt meaning.
-The pinned hardened Wasmtime mechanism is evaluated by a test-only adapter;
-the complete local runtime remains the product default because executed
-start-function scheduling and aggregate-memory counterexamples fail parity.
-Producer publication and passing ordinary fixtures cannot override that gate.
+The pinned hardened Wasmtime v4 mechanism is evaluated by a test-only adapter.
+Its explicit instantiation checkpoint and independent memory ceilings correct
+the exercised scheduling/allocation counterexamples without changing the
+admitted product profile or WIT. The complete local runtime remains the product
+default until operated product deadlines, effect admission, matching production
+bundles, real actor/extension composition and coupled cutover/rollback pass.
+Producer publication and passing parity fixtures do not authorize that cutover.
 
 Published Mantle intake independently remeasures every declared member through
 source directory capabilities and verifies an exclusively leased private

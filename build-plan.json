@@ -16,8 +16,8 @@
     "molten-node-host": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-node-host#0.1.0",
     "molten-release-policy": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "cf56514fc2d07953d2a97ce0d2b84965e9653bf26b7879e5807cf410ecf09f61",
-  "inputsHash": "08217d592cb7e246c58e1830e1565f96cab4b6d47d074f510cbd6897d581af97",
+  "cargoLockHash": "c360f6c619257a7449775642316583ab4d7bc8191aefc31adafc704254e2e2da",
+  "inputsHash": "a143967d8306f94ee791381a769c583a083f48ecb83cbdb6094b3daf2296b8e4",
   "crates": {
     "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec-core@0.1.0": {
       "crateName": "bounded-exec-core",
@@ -656,7 +656,7 @@
       "description": "Pure no-std immutable branchable event history for Choregraph consumers.",
       "license": "AGPL-3.0-or-later"
     },
-    "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=6381322a68407da71325c4c33113d11ada9af67f#hardened-wasmtime-runtime@0.1.0": {
+    "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c#hardened-wasmtime-runtime@0.1.0": {
       "crateName": "hardened-wasmtime-runtime",
       "version": "0.1.0",
       "edition": "2024",
@@ -664,9 +664,9 @@
       "source": {
         "type": "git",
         "url": "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx",
-        "rev": "6381322a68407da71325c4c33113d11ada9af67f",
+        "rev": "cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c",
         "subDir": "crates/hardened-wasmtime-runtime",
-        "sha256": "sha256-f7T1ToL6QJnSYQS8A0yZ76nx/ZUvjeUd7uatd5MNuPM="
+        "sha256": "sha256-i+N+OVTdZk7t68IkVYj2EzS/8UfgN3YQ1DjFdGg3+Xg="
       },
       "features": [],
       "dependencies": [
@@ -696,7 +696,7 @@
       "description": "Product-neutral Wasmtime profile admission, normalized outcomes, and bounded execution mechanics",
       "license": "MIT"
     },
-    "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=6381322a68407da71325c4c33113d11ada9af67f#hardened-wasmtime-shell@0.1.0": {
+    "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c#hardened-wasmtime-shell@0.1.0": {
       "crateName": "hardened-wasmtime-shell",
       "version": "0.1.0",
       "edition": "2024",
@@ -704,9 +704,9 @@
       "source": {
         "type": "git",
         "url": "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx",
-        "rev": "6381322a68407da71325c4c33113d11ada9af67f",
+        "rev": "cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c",
         "subDir": "crates/hardened-wasmtime-shell",
-        "sha256": "sha256-f7T1ToL6QJnSYQS8A0yZ76nx/ZUvjeUd7uatd5MNuPM="
+        "sha256": "sha256-i+N+OVTdZk7t68IkVYj2EzS/8UfgN3YQ1DjFdGg3+Xg="
       },
       "features": [],
       "dependencies": [
@@ -715,7 +715,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=6381322a68407da71325c4c33113d11ada9af67f#hardened-wasmtime-runtime@0.1.0",
+          "packageId": "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c#hardened-wasmtime-runtime@0.1.0",
           "externCrateName": "hardened_wasmtime_runtime"
         },
         {
@@ -1459,11 +1459,11 @@
           "externCrateName": "durable_file_publication"
         },
         {
-          "packageId": "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=6381322a68407da71325c4c33113d11ada9af67f#hardened-wasmtime-runtime@0.1.0",
+          "packageId": "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c#hardened-wasmtime-runtime@0.1.0",
           "externCrateName": "hardened_wasmtime_runtime"
         },
         {
-          "packageId": "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=6381322a68407da71325c4c33113d11ada9af67f#hardened-wasmtime-shell@0.1.0",
+          "packageId": "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c#hardened-wasmtime-shell@0.1.0",
           "externCrateName": "hardened_wasmtime_shell"
         },
         {
@@ -4950,7 +4950,7 @@
           "externCrateName": "termcolor"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#unicode-width@0.2.2",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#unicode-width@0.1.14",
           "externCrateName": "unicode_width"
         }
       ],
@@ -6832,7 +6832,7 @@
           "externCrateName": "data_encoding"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@1.0.109",
           "externCrateName": "syn"
         }
       ],
@@ -23877,7 +23877,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.5.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.4.1",
           "externCrateName": "heck"
         },
         {

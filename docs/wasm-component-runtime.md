@@ -42,19 +42,28 @@ ambient WASI is never inherited from the process.
 
 ## Shared-runtime adoption status
 
-The root dependency cohort pins `hwr.shell.v3` at
-`6381322a68407da71325c4c33113d11ada9af67f` and the published Mantle consumer
+The root dependency cohort pins `hwr.shell.v4` at
+`cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c` and the published Mantle consumer
 verifier at `c99556e5c91dfd13fcc261dc451f471359d47c38`. The source gate binds
 their completed native archives and exact evidence digests. These pins are
 prerequisites, not authorization to change the execution backend.
 
-The adapter under `runtime/shared/` is test-only. Public execution and both
-existing consumer paths still use the complete local runtime. Executed dual-run
-fixtures found different start-function scheduling boundaries and different
-per-memory versus aggregate memory admission; either blocks cutover. Pointer
-traps, valid oversized output, staged receipts, successful fuel readback and
-ordinary retained slices agree in the exercised cases. See the
-[frozen mapping and execution record](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-26-runtime-adoption-parity.md).
+The adapter under `runtime/shared/` remains test-only. Its bounded initialization
+driver consumes typed Instantiation yields through the successful checkpoint
+before exposing callback polls, preserving the existing callback ledger without
+resetting fuel or restarting the guest. The checked memory translation retains
+the product's per-memory ceiling and derives a redundant aggregate bound from
+that ceiling times the already admitted memory count; no product limit, profile
+identity or WIT bytes are widened or changed.
+
+The original start-work and two-129-page-memory cases now agree on complete
+canonical receipts and callback ledgers, with paired actual memory-size/count
+denials. See the [immutable v4 continuation evidence](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-boundary-parity.md).
+Public execution and both existing consumer paths still use the complete local
+runtime. The [earlier frozen mapping and counterexamples](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-26-runtime-adoption-parity.md)
+remain historical evidence; they are not current v4 failures. Operated product
+deadlines, the effect world, matching production materializations, real shared
+actor/extension installation and coupled cutover/rollback remain acceptance gates.
 
 No effect-request world, shared-runtime actor or extension installation, or
 production rollback is claimed. Cutover must move the immutable dependency,

@@ -39,10 +39,8 @@ impl super::EngineAdapter {
                 return Err(super::denied(request, &admitted, denial, vec![inspection]).unwrap_or_else(early_denial));
             }
         };
-        // Upstream defers instantiation to the first poll. Do not claim its
-        // successful receipt until the typed terminal phase proves it.
         let prepared = std::sync::Arc::new(prepared);
-        let invocation = match prepared.start_sliced(
+        let mut invocation = match prepared.start_sliced(
             hardened_wasmtime_shell::SliceOptions {
                 export: super::super::super::admission::COMPONENT_INVOKE_EXPORT.to_string(),
                 input: std::mem::take(&mut admitted.input_bytes),
@@ -59,6 +57,9 @@ impl super::EngineAdapter {
                 .unwrap_or_else(early_denial));
             }
         };
+        if let Err(denial) = initialize(&mut invocation, &ledger) {
+            return Err(super::denied(request, &admitted, denial, vec![inspection]).unwrap_or_else(early_denial));
+        }
         Ok(PendingInvocation {
             request,
             admitted,
@@ -74,6 +75,35 @@ fn resource_denial(detail: impl Into<String>) -> super::super::super::model::Den
     super::super::super::model::Denial::classified(super::super::super::model::DenialClass::ResourceDenial, detail)
 }
 
+// Match the local shell: finish bounded initialization before exposing callback polls.
+fn initialize(
+    invocation: &mut hardened_wasmtime_shell::ResumableInvocation,
+    ledger: &super::super::super::slicing::SliceLedger,
+) -> super::super::super::model::Result<()> {
+    let polls = ledger
+        .total_budget_fuel
+        .checked_div(ledger.quantum_fuel)
+        .and_then(|slices| slices.checked_add(1))
+        .ok_or_else(|| resource_denial("the slice budget admits no instantiation polls"))?;
+    for _ in 0..polls {
+        match invocation
+            .run_slice()
+            .map_err(|issue| resource_denial(format!("retained initialization denied: {issue:?}")))?
+        {
+            hardened_wasmtime_shell::SliceStep::Yielded(observation)
+                if observation.phase == hardened_wasmtime_runtime::outcomes::InvocationPhase::Instantiation => {}
+            hardened_wasmtime_shell::SliceStep::Instantiated(_) => return Ok(()),
+            hardened_wasmtime_shell::SliceStep::Completed(observation) => {
+                return Err(super::observation_denial(&observation));
+            }
+            hardened_wasmtime_shell::SliceStep::Yielded(_) => {
+                return Err(resource_denial("callback work preceded the instantiation checkpoint"));
+            }
+        }
+    }
+    Err(resource_denial("component instantiation did not complete within the slice budget"))
+}
+
 impl PendingInvocation<'_> {
     pub(crate) fn ledger(&self) -> &super::super::super::slicing::SliceLedger {
         &self.ledger
@@ -87,7 +117,9 @@ impl PendingInvocation<'_> {
             ));
         };
         match invocation.run_slice() {
-            Ok(hardened_wasmtime_shell::SliceStep::Yielded(observation)) => {
+            Ok(hardened_wasmtime_shell::SliceStep::Yielded(observation))
+                if observation.phase == hardened_wasmtime_runtime::outcomes::InvocationPhase::Invocation =>
+            {
                 // Configured quantum observations are not measured per-poll fuel.
                 // Preserve the local ledger convention, with terminal fuel readback.
                 match self.ledger.record_boundary(observation.quantum_fuel) {
@@ -118,6 +150,9 @@ impl PendingInvocation<'_> {
                         .unwrap_or_else(|denial| super::super::denial::denied_outcome(self.request, denial));
                 super::super::slicedshell::SliceProgress::Completed(outcome)
             }
+            Ok(
+                hardened_wasmtime_shell::SliceStep::Instantiated(_) | hardened_wasmtime_shell::SliceStep::Yielded(_),
+            ) => self.fail(resource_denial("unexpected instantiation observation after the checkpoint")),
             Err(issue) => self.fail(resource_denial(format!("retained shared invocation denied: {issue:?}"))),
         }
     }

@@ -51,18 +51,26 @@ fn bounds(
     resources: &super::super::super::model::ResourceLimits,
 ) -> super::super::super::model::Result<hardened_wasmtime_runtime::resource::admission::RuntimeBounds> {
     let page_bytes = hardened_wasmtime_runtime::resource::admission::WASM_PAGE_BYTES;
-    if !resources.max_memory_bytes.is_multiple_of(page_bytes) {
+    if resources.max_memory_bytes == 0 || resources.max_memories == 0 {
+        return Err(resource_denial("shared memory size and count bounds must be positive"));
+    }
+    if resources.max_memory_bytes.checked_rem(page_bytes) != Some(0) {
         return Err(resource_denial("shared memory bound must be page aligned"));
     }
+    let max_memory_pages = resources
+        .max_memory_bytes
+        .checked_div(page_bytes)
+        .ok_or_else(|| resource_denial("shared page width is zero"))?;
+    // Local StoreLimits applies the byte ceiling independently to every memory.
+    // Bound cumulative allocations without reducing that per-memory allowance.
+    let max_total_memory_pages = max_memory_pages
+        .checked_mul(resources.max_memories)
+        .ok_or_else(|| resource_denial("shared aggregate memory bound overflowed"))?;
     Ok(hardened_wasmtime_runtime::resource::admission::RuntimeBounds {
         fuel: resources.fuel,
         max_stack_bytes: resources.max_stack_bytes,
-        max_memory_pages: bound(
-            resources
-                .max_memory_bytes
-                .checked_div(page_bytes)
-                .ok_or_else(|| resource_denial("shared page width is zero"))?,
-        )?,
+        max_memory_pages: bound(max_memory_pages)?,
+        max_total_memory_pages: bound(max_total_memory_pages)?,
         max_tables: bound(resources.max_tables)?,
         max_table_elements: bound(resources.max_table_elements)?,
         max_instances: bound(resources.max_instances)?,
@@ -121,4 +129,28 @@ pub(super) fn prepare_denial(error: hardened_wasmtime_shell::PrepareError) -> su
         }
     };
     super::super::super::model::Denial::classified(class, format!("shared preparation denied: {error:?}"))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn construction_rejects_unrepresentable_memory_allowances() {
+        let page_bytes = hardened_wasmtime_runtime::resource::admission::WASM_PAGE_BYTES;
+        let mut profile = super::super::super::super::profile::supported().expect("supported profile");
+        // Each input fits its own producer field; only their aggregate crosses u32.
+        // Saturating or truncating the aggregate would incorrectly build an engine.
+        let aggregate_overflow_bytes = (u64::from(u32::MAX) / 4 + 1) * page_bytes;
+        for (max_memory_bytes, max_memories) in [
+            (0, 4),
+            (page_bytes, 0),
+            (page_bytes + 1, 4),
+            (aggregate_overflow_bytes, 4),
+            (2 * page_bytes, u64::MAX),
+        ] {
+            profile.resources.max_memory_bytes = max_memory_bytes;
+            profile.resources.max_memories = max_memories;
+            let denial = super::build(&profile).err().expect("invalid memory allowance must deny runtime construction");
+            assert_eq!(denial.canonical_class(), "resource-denial");
+        }
+    }
 }

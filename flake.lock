@@ -1761,16 +1761,16 @@
     "hardened-wasmtime-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1793063518,
-        "narHash": "sha256-f7T1ToL6QJnSYQS8A0yZ76nx/ZUvjeUd7uatd5MNuPM=",
+        "lastModified": 1793073369,
+        "narHash": "sha256-i+N+OVTdZk7t68IkVYj2EzS/8UfgN3YQ1DjFdGg3+Xg=",
         "ref": "refs/heads/main",
-        "rev": "6381322a68407da71325c4c33113d11ada9af67f",
-        "revCount": 62,
+        "rev": "cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c",
+        "revCount": 63,
         "type": "git",
         "url": "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx"
       },
       "original": {
-        "rev": "6381322a68407da71325c4c33113d11ada9af67f",
+        "rev": "cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c",
         "type": "git",
         "url": "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx"
       }

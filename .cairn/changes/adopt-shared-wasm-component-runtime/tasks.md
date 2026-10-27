@@ -6,14 +6,14 @@
   - Evidence: [2026-10-26 compatibility preflight](evidence/2026-10-26-compatibility-preflight.md#executed-local-product-baseline): 85 selected runtime/extension/hostcall cases and 11 selected actor-ABI cases passed in two overlapping selections; no product source changes.
 - [x] [serial] Pin completed immutable `hardened-wasmtime-runtime` and Mantle consumer-verifier revisions with matching contracts and source evidence. r[molten.wasm_component_adoption.prerequisite]
 - [x] [serial] Freeze the parity corpus and define exact local-to-shared request, blocker, outcome, resource, and receipt-payload mappings. r[molten.wasm_component_adoption.parity] r[molten.wasm_component_adoption.cutover]
-  - Evidence: [immutable inputs, frozen mapping and executed counterexamples](evidence/2026-10-26-runtime-adoption-parity.md). The earlier [resumable prerequisite handoff](evidence/2026-10-26-resumable-prerequisite-handoff.md) is integrated. One-versus-fifteen exposed start-work yields and per-memory-versus-aggregate admission still block cutover. Keep the complete local cohort and the candidate test-only; no synthetic positive production Mantle bundle or default backend change.
+  - Evidence: [immutable inputs, frozen mapping and original counterexamples](evidence/2026-10-26-runtime-adoption-parity.md), followed by the [published v4 correction and unchanged-cohort parity](evidence/2026-10-27-boundary-parity.md). The candidate remains test-only and the complete local cohort remains the production default. No synthetic positive production Mantle bundle or default backend change is admitted.
 
 ## Phase 2: Adapter and parity
 
 - [ ] [serial] Implement the thin Molten adapter while keeping product profile, materialization, actor, extension, effect, replay, receipt, and policy types outside the shared runtime. r[molten.wasm_component_adoption.cutover] r[molten.wasm_component_adoption.boundary]
 - [ ] [parallel] Dual-run positive pure execution, canonical output, trap, fuel, deadline, resource, and cleanup fixtures. r[molten.wasm_component_adoption.parity] r[molten.wasm_component_adoption.validation]
 - [ ] [parallel] Dual-run negative loose bundle, wrong world, undeclared import, stale evidence, malformed output, resource, fallback, and receipt-overclaim fixtures. r[molten.wasm_component_adoption.parity] r[molten.wasm_component_adoption.validation] r[molten.wasm_component_adoption.nonclaims]
-  - Blocked on the executed parity counterexamples above. The candidate exercises real shared execution but is not an activated product adapter. Operated deadlines and complete production consumer/materialization evidence remain unproved; passing counterexample regressions does not close these tasks.
+  - The original scheduling/memory counterexamples are corrected by the immutable v4 producer and reviewed mapping. Operated product deadlines and complete production consumer/materialization/effect evidence remain unproved; the exercised import-free corpus does not close these end-to-end tasks.
 
 ## Phase 3: Product hostcall and consumers
 

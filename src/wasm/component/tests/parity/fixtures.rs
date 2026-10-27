@@ -1,8 +1,8 @@
-const ECHO: &str = "i32.const 2048 i32.const 0 i32.store8
+pub(super) const ECHO: &str = "i32.const 2048 i32.const 0 i32.store8
     i32.const 2052 local.get 0 i32.store
     i32.const 2056 local.get 1 i32.store i32.const 2048";
 
-fn encode(
+pub(super) fn encode(
     memory_pages: u32,
     core_items: &str,
     invoke_body: &str,

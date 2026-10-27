@@ -39,7 +39,7 @@
       flake = false;
     };
     hardened-wasmtime-src = {
-      url = "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=6381322a68407da71325c4c33113d11ada9af67f";
+      url = "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c";
       flake = false;
     };
     mantle-wasm-verifier-src = {
@@ -283,7 +283,7 @@
             && durableFilePublicationPackage.package.license == "MIT OR Apache-2.0"
           ) "Molten Durable File Publication Cargo/Nix source identity, package, or license drifted";
           durable-file-publication-src;
-        hardenedWasmtimeRevision = "6381322a68407da71325c4c33113d11ada9af67f";
+        hardenedWasmtimeRevision = "cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c";
         hardenedWasmtimeRepository = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx";
         hardenedWasmtimeDependencies = [
           artifactRootDependencies.hardened-wasmtime-runtime
@@ -313,7 +313,8 @@
                 ]
               && hardenedWasmtimeWorkspace.workspace.package.license == "MIT"
               && builtins.pathExists (
-                hardened-wasmtime-src + "/.cairn/archive/1970-01-01-add-resumable-component-invocation/tasks.md"
+                hardened-wasmtime-src
+                + "/.cairn/archive/1970-01-01-preserve-component-execution-boundaries/tasks.md"
               )
             )
             "Molten hardened Wasmtime Cargo/Nix source identity, package set, license, or completed publication drifted";

@@ -8,8 +8,8 @@
     "molten-core": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-core#0.1.0",
     "molten-release-policy": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "cf56514fc2d07953d2a97ce0d2b84965e9653bf26b7879e5807cf410ecf09f61",
-  "inputsHash": "bbba2cb394a63d48918957ea9c09239b9b023fc31125338b69dc53ad8b041b21",
+  "cargoLockHash": "c360f6c619257a7449775642316583ab4d7bc8191aefc31adafc704254e2e2da",
+  "inputsHash": "52534371afd795fb33407c293217fe083c0ef4efe18cb23a1a62ffe5fc03ab3a",
   "crates": {
     "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#schema-migration-core@0.1.0": {
       "crateName": "schema-migration-core",
@@ -3974,6 +3974,34 @@
       "description": "A Rust port of Google's SwissTable hash map",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/hashbrown"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#heck@0.4.1": {
+      "crateName": "heck",
+      "version": "0.4.1",
+      "edition": "2018",
+      "sha256": "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Without Boats <woboats@gmail.com>"
+      ],
+      "description": "heck is a case conversion library.",
+      "homepage": "https://github.com/withoutboats/heck",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/withoutboats/heck"
     },
     "registry+https://github.com/rust-lang/crates.io-index#heck@0.5.0": {
       "crateName": "heck",
@@ -8157,7 +8185,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.5.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.4.1",
           "externCrateName": "heck"
         },
         {
