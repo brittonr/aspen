@@ -1,0 +1,58 @@
+// Disposable observation over unmodified immutable producer code, not product wiring.
+mod pinned_fixture {
+    include!("/home/brittonr/.cargo/git/checkouts/mantle-f0d31b6b0e1ad65b/c99556e/tests/wasm_component_cli.rs");
+
+    pub fn observe(output: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+        let fixture = CliFixture::new();
+        let report = crunch_wasm_component::run_component_pipeline(
+            fixture.request.clone(),
+            crunch_wasm_component::PipelinePaths {
+                evidence_dir: output.to_path_buf(),
+                scratch_parent: output.parent().ok_or("output lacks publication parent")?.to_path_buf(),
+            },
+        )?;
+        println!("producer_status={}", report.final_status);
+        println!("producer_blockers={:?}", report.blockers);
+        std::fs::write(output.with_extension("execution-report.json"), serde_json::to_vec_pretty(&report)?)?;
+        if report.final_status != "succeeded" {
+            return Err("producer did not complete".into());
+        }
+        crunch_wasm_component::verify_pipeline_execution_report_files(&report)?;
+        let bundle = report.materialization_bundle.as_ref().ok_or("producer omitted bundle")?;
+        crunch_wasm_component::verify_materialization_bundle_files(bundle)?;
+        let source_path = std::path::Path::new(&bundle.source_closure.logical_path);
+        println!("producer_remeasurement=pass");
+        println!("source_closure_is_directory={}", source_path.is_dir());
+        println!("source_closure_digest={}", bundle.source_closure.digest_blake3);
+        println!("source_closure_size={}", bundle.source_closure.size_bytes);
+        let structural = mantle_wasm_consumer_verifier::verify_consumer_bundle(bundle.clone());
+        println!("consumer_structural_status={:?}", structural.status);
+        // Producer locators are absolute logical paths. This disposable observer
+        // uses / only to resolve its own freshly produced declared member paths.
+        let consumer = mantle_wasm_consumer_verifier::ConsumerRoot::open(std::path::Path::new("/"))
+            .map_err(|error| format!("opening consumer observer root: {error:?}"))?;
+        let observed = consumer.verify_bundle(bundle.clone())
+            .map_err(|error| format!("observing producer members: {error:?}"))?;
+        println!("consumer_byte_status={:?}", observed.status);
+        for member in &observed.members {
+            println!("member role={} status={:?} digest={}", member.role, member.status, member.digest_blake3);
+        }
+        std::fs::write(output.with_extension("consumer-report.json"), serde_json::to_vec_pretty(&observed)?)?;
+        if structural.status != mantle_wasm_consumer_verifier::ConsumerVerificationStatus::Verified {
+            return Err("structural layer did not verify producer output".into());
+        }
+        if observed.status != mantle_wasm_consumer_verifier::ConsumerVerificationStatus::Blocked {
+            return Err("unexpected consumer byte-layer status".into());
+        }
+        if !observed.members.iter().any(|member| member.role == "source-closure"
+            && member.status == Some(mantle_wasm_consumer_verifier::ConsumerMemberStatus::Missing)) {
+            return Err("source closure failure was not observed".into());
+        }
+        Ok(())
+    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let output = std::env::args_os().nth(1).ok_or("expected new evidence directory")?;
+    pinned_fixture::observe(std::path::Path::new(&output))
+}

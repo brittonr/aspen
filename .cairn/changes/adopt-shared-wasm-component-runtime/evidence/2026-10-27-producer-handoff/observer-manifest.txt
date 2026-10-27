@@ -1,0 +1,13 @@
+[package]
+name = "aspen-mantle-boundary-witness"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+crunch-wasm-component = { path = "/home/brittonr/.cargo/git/checkouts/mantle-f0d31b6b0e1ad65b/c99556e/crates/crunch-wasm-component" }
+crunch-wasm-component-core = { path = "/home/brittonr/.cargo/git/checkouts/mantle-f0d31b6b0e1ad65b/c99556e/crates/crunch-wasm-component-core" }
+mantle-wasm-consumer-verifier = { path = "/home/brittonr/.cargo/git/checkouts/mantle-f0d31b6b0e1ad65b/c99556e/crates/mantle-wasm-consumer-verifier", features = ["std"] }
+assert_cmd = "2"
+serde_json = "1"
+sha2 = "0.10"
+tempfile = "3"

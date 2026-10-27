@@ -58,6 +58,10 @@ One ordinary actor path and one system-extension callback path must load Mantle-
 
 The product fixture must include at least one successful pure invocation, one admitted effect request, one denied effect request, one trap, and one resource denial.
 
+The [2026-10-27 real producer handoff](evidence/2026-10-27-producer-handoff.md) establishes an additional prerequisite: Mantle revision `c99556e5c91dfd13fcc261dc451f471359d47c38` publishes a framed directory source closure, but its published consumer byte layer accepts only regular files. A successful producer run and producer remeasurement therefore do not imply a verified consumer byte layer. Molten's independent capability-rooted intake also needs the producer's bounded tree identity and snapshot contract before it can retain a matching source tree.
+
+The change is explicitly blocked on that immutable handoff. Mantle owns the producer/verifier repair and publication; Molten owns the subsequent pin, capability-rooted integration and product acceptance. Keep the complete local runtime and all current execution-admission restrictions unchanged. No synthetic positive bundle, archive-as-file substitution, source-tree omission or fabricated Bytes report is an alternative.
+
 ### Make cutover and rollback coupled
 
 Cutover removes product-local Wasmtime decision logic or leaves only a thin compatibility adapter. The dependency revision, adapter, configuration, and product fixtures move together.

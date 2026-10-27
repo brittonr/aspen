@@ -1,0 +1,155 @@
+{
+  "schema": "mantle-wasm-component-pipeline-execution-report-v1",
+  "request_blake3": "75be5ae8d3d690dfe73ee24b033a72ebce563575fd8af6a815d7ed7c1e0c0a7e",
+  "cohort_blake3": "834b36cbab0dd827e074974edcf40adbb8ad8f8e7d701820f2dd7d2f68a81495",
+  "stage_receipts": [
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "package-resolution",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wkg",
+      "program_blake3": "4281299907ec5d70ec0b25c65dc082575d0958b298e20759090d0fc073531863",
+      "args": [
+        "wit",
+        "fetch",
+        "--config",
+        "/dev/shm/aspen-mantle-boundary-witness-20261027/.mantle-wasm-component-work-E9JuTW/source/.mantle/wasm-component/wkg-config.toml",
+        "--cache",
+        "/dev/shm/aspen-mantle-boundary-witness-20261027/.mantle-wasm-component-work-E9JuTW/wkg-cache",
+        "--wit-dir",
+        "/dev/shm/aspen-mantle-boundary-witness-20261027/.mantle-wasm-component-work-E9JuTW/source/wit",
+        "--type",
+        "wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/dev/shm/aspen-mantle-boundary-witness-20261027/.mantle-wasm-component-work-E9JuTW/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/dev/shm/aspen-mantle-boundary-witness-20261027/.mantle-wasm-component-work-E9JuTW/target",
+        "HOME": "/dev/shm/aspen-mantle-boundary-witness-20261027/.mantle-wasm-component-work-E9JuTW/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/dev/shm/aspen-mantle-boundary-witness-20261027/.mantle-wasm-component-work-E9JuTW/wkg-cache",
+        "WKG_CONFIG_FILE": "/dev/shm/aspen-mantle-boundary-witness-20261027/.mantle-wasm-component-work-E9JuTW/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/dev/shm/aspen-runtime-tmp-20261026/nix-shell.lpWE2G/.tmpWlC75X/registry"
+      ],
+      "network_admitted": false,
+      "status": "failed",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "67a0bea1019d78124cf4aa06c6ed3df20ad8ff514ea5c762b2c1b67b7668955d",
+      "output_blake3": null,
+      "receipt_blake3": "6d67dbf97f2eafd7ae08643d71f03a378e1f2150de3491928ff6e77976c7825a"
+    }
+  ],
+  "artifacts": [
+    {
+      "role": "checked-wkg-lock",
+      "path": "/dev/shm/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/wkg.lock",
+      "digest_blake3": "4d943019537f1e732f994d6abc139a6db2eef96a04bf5bde4002237db3c73aa8",
+      "size_bytes": 291
+    }
+  ],
+  "blockers": [
+    {
+      "code": "wkg-execution-failed",
+      "stage_key": "package-resolution",
+      "message": "bwrap: Can't chdir to /dev/shm/aspen-mantle-boundary-witness-20261027/.mantle-wasm-component-work-E9JuTW/source: No such file or directory"
+    }
+  ],
+  "octet_validations": [],
+  "component_report": {
+    "schema": "mantle-wasm-component-build-report-v1",
+    "nodes": [
+      {
+        "identity_blake3": "af3272070ab1a9e1b8f043fc764a8257a77468eb505f604591d51c3ef4450618",
+        "stage_key": "checked-lock",
+        "kind": "lock",
+        "status": "succeeded",
+        "parents": [],
+        "artifact": {
+          "logical_path": "/dev/shm/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/wkg.lock",
+          "digest_blake3": "4d943019537f1e732f994d6abc139a6db2eef96a04bf5bde4002237db3c73aa8",
+          "size_bytes": 291
+        },
+        "tool_identity_blake3": null,
+        "profile_identity_blake3": "e4cad68f395760e231f06b9cf180e33718998bcb510c7d831c6dc76bffc6f310",
+        "claims": [
+          "exact-input-identities"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "281c52b82cc7406656a1b53d2b501098a85327c052f4b2905e9d9c1c06908aab",
+        "stage_key": "package-resolution",
+        "kind": "package-resolution",
+        "status": "failed",
+        "parents": [
+          "af3272070ab1a9e1b8f043fc764a8257a77468eb505f604591d51c3ef4450618"
+        ],
+        "artifact": {
+          "logical_path": "/dev/shm/aspen-runtime-tmp-20261026/nix-shell.lpWE2G/.tmpWlC75X/registry/demo/dep/0.1.0.wasm",
+          "digest_blake3": "c2d371abd39a3ae27295233d15d92034ed6542cd8967c053659b9f5cbe449dba",
+          "size_bytes": 200
+        },
+        "tool_identity_blake3": "4281299907ec5d70ec0b25c65dc082575d0958b298e20759090d0fc073531863",
+        "profile_identity_blake3": "e4cad68f395760e231f06b9cf180e33718998bcb510c7d831c6dc76bffc6f310",
+        "claims": [
+          "exact-input-identities"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "1ff371043456cce4699b387261d9d4d162b3e7e83132e1f7c87aeb7b23c72af7",
+        "stage_key": "materialization-bundle",
+        "kind": "materialization-bundle",
+        "status": "not-run",
+        "parents": [
+          "281c52b82cc7406656a1b53d2b501098a85327c052f4b2905e9d9c1c06908aab"
+        ],
+        "artifact": null,
+        "tool_identity_blake3": null,
+        "profile_identity_blake3": null,
+        "claims": [],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      }
+    ],
+    "non_claims": [
+      "not-component-behavior-correctness",
+      "not-octet-policy-interpretation",
+      "not-release-eligibility",
+      "not-runtime-authority",
+      "not-runtime-sandboxing"
+    ],
+    "report_identity_blake3": "65ccd11bcaca07a87a18ecb85f12c1fbb47678e225bfa1195e4e849b79e394c6"
+  },
+  "materialization_bundle": null,
+  "component_attestation": null,
+  "release_binding": null,
+  "final_status": "blocked",
+  "report_blake3": "0f1f21d39b606d6e11abbc7c9c96ca0e66d0fd35d510b3ff4cb2d0aff4bbf212",
+  "non_claims": [
+    "not-component-behavior-correctness",
+    "not-runtime-authority",
+    "not-runtime-sandboxing",
+    "not-release-eligibility",
+    "not-octet-policy-interpretation"
+  ]
+}

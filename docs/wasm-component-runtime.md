@@ -59,12 +59,23 @@ identity or WIT bytes are widened or changed.
 The original start-work and two-129-page-memory cases now agree on complete
 canonical receipts and callback ledgers, with paired actual memory-size/count
 denials. See the [immutable v4 continuation evidence](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-boundary-parity.md).
-Public execution and both existing consumer paths still use the complete local
-runtime. The [earlier frozen mapping and counterexamples](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-26-runtime-adoption-parity.md)
+Public component execution still uses the complete local runtime. The existing
+actor harness and sandboxed extension fixture execute legacy core modules; they
+are not shared Component Model consumer installations. The [earlier frozen mapping and counterexamples](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-26-runtime-adoption-parity.md)
 remain historical evidence; they are not current v4 failures. Operated product
 deadlines, effect-world linker activation, matching production materializations,
 real shared actor/extension installation and coupled cutover/rollback remain
 acceptance gates.
+
+The adoption is explicitly blocked on the [reproduced Mantle materialization handoff](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-producer-handoff.md).
+The actual pinned pipeline succeeds and its own remeasurement passes, but the
+published consumer byte layer reports its directory source closure missing
+while all 36 file members match. Molten's independent private-snapshot intake
+is also file-only. Mantle must publish compatible bounded tree verification;
+Molten must then pin it and implement matching capability-rooted intake before
+consumer acceptance. A source archive substituted for the declared tree, a
+rewritten bundle, or a fabricated Bytes report would change the evidence
+contract and is not an admissible workaround.
 
 The effect-request world remains an unadmitted execution candidate. The inactive
 host adapter below is independently exercised, but no production linker,
