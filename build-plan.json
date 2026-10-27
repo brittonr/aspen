@@ -1,23 +1,23 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/aspen",
+  "workspaceRoot": "/dev/shm/aspen-runtime-cutover-20261026",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-node-host#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0"
+    "path+file:///dev/shm/aspen-runtime-cutover-20261026#molten@0.1.0",
+    "path+file:///dev/shm/aspen-runtime-cutover-20261026#molten@0.1.0",
+    "path+file:///dev/shm/aspen-runtime-cutover-20261026#molten@0.1.0",
+    "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-core#0.1.0",
+    "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-node-host#0.1.0",
+    "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-release-policy#0.1.0",
+    "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten": "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0",
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0",
-    "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-node-host#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0"
+    "molten": "path+file:///dev/shm/aspen-runtime-cutover-20261026#molten@0.1.0",
+    "molten-core": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-core#0.1.0",
+    "molten-node-host": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-node-host#0.1.0",
+    "molten-release-policy": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "2beee6525a368907246a99fc3f158e89110956b8f8b37f86c5d03890e53b4d8c",
-  "inputsHash": "f2436f46c9f71b99bc5cf68fd2d5c598da2d1501d1d1864e6f9f0c12ec5708a8",
+  "cargoLockHash": "cf56514fc2d07953d2a97ce0d2b84965e9653bf26b7879e5807cf410ecf09f61",
+  "inputsHash": "08217d592cb7e246c58e1830e1565f96cab4b6d47d074f510cbd6897d581af97",
   "crates": {
     "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec-core@0.1.0": {
       "crateName": "bounded-exec-core",
@@ -656,6 +656,86 @@
       "description": "Pure no-std immutable branchable event history for Choregraph consumers.",
       "license": "AGPL-3.0-or-later"
     },
+    "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=6381322a68407da71325c4c33113d11ada9af67f#hardened-wasmtime-runtime@0.1.0": {
+      "crateName": "hardened-wasmtime-runtime",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx",
+        "rev": "6381322a68407da71325c4c33113d11ada9af67f",
+        "subDir": "crates/hardened-wasmtime-runtime",
+        "sha256": "sha256-f7T1ToL6QJnSYQS8A0yZ76nx/ZUvjeUd7uatd5MNuPM="
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
+          "externCrateName": "serde_json"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Product-neutral Wasmtime profile admission, normalized outcomes, and bounded execution mechanics",
+      "license": "MIT"
+    },
+    "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=6381322a68407da71325c4c33113d11ada9af67f#hardened-wasmtime-shell@0.1.0": {
+      "crateName": "hardened-wasmtime-shell",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx",
+        "rev": "6381322a68407da71325c4c33113d11ada9af67f",
+        "subDir": "crates/hardened-wasmtime-shell",
+        "sha256": "sha256-f7T1ToL6QJnSYQS8A0yZ76nx/ZUvjeUd7uatd5MNuPM="
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=6381322a68407da71325c4c33113d11ada9af67f#hardened-wasmtime-runtime@0.1.0",
+          "externCrateName": "hardened_wasmtime_runtime"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#wasmtime@45.0.0",
+          "externCrateName": "wasmtime"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Thin imperative shell owning the Wasmtime engine, store, linker, epoch binding, and bounded invocation",
+      "license": "MIT"
+    },
     "git+ssh://git@github.com/OnixResearch/basalt.git?rev=89675cd4f585f837323c049e4a25f7b94c903038#basalt@0.1.0": {
       "crateName": "basalt",
       "version": "0.1.0",
@@ -1069,6 +1149,92 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/OnixResearch/kamacite"
     },
+    "git+ssh://git@github.com/OnixResearch/mantle.git?rev=c99556e5c91dfd13fcc261dc451f471359d47c38#crunch-wasm-component-core@0.1.0": {
+      "crateName": "crunch-wasm-component-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "ssh://git@github.com/OnixResearch/mantle.git",
+        "rev": "c99556e5c91dfd13fcc261dc451f471359d47c38",
+        "subDir": "crates/crunch-wasm-component-core",
+        "sha256": "sha256-QBGFdskiynOprC3k3nVX0RV9r08ozll+cqb686mbGBk="
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
+          "externCrateName": "serde_json"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "license": "AGPL-3.0-or-later"
+    },
+    "git+ssh://git@github.com/OnixResearch/mantle.git?rev=c99556e5c91dfd13fcc261dc451f471359d47c38#mantle-wasm-consumer-verifier@0.1.0": {
+      "crateName": "mantle-wasm-consumer-verifier",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "ssh://git@github.com/OnixResearch/mantle.git",
+        "rev": "c99556e5c91dfd13fcc261dc451f471359d47c38",
+        "subDir": "crates/mantle-wasm-consumer-verifier",
+        "sha256": "sha256-QBGFdskiynOprC3k3nVX0RV9r08ozll+cqb686mbGBk="
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "git+ssh://git@github.com/OnixResearch/mantle.git?rev=c99556e5c91dfd13fcc261dc451f471359d47c38#crunch-wasm-component-core@0.1.0",
+          "externCrateName": "crunch_wasm_component_core"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
+          "externCrateName": "serde_json"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Published consumer contract for verifying Mantle WebAssembly component materialization bundles",
+      "license": "AGPL-3.0-or-later"
+    },
     "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#artifact-auth-core@0.1.0": {
       "crateName": "artifact-auth-core",
       "version": "0.1.0",
@@ -1225,7 +1391,7 @@
       "license": "MPL-2.0",
       "repository": "https://github.com/OnixResearch/valence"
     },
-    "path+file:///home/brittonr/git/OnixResearch/aspen#molten@0.1.0": {
+    "path+file:///dev/shm/aspen-runtime-cutover-20261026#molten@0.1.0": {
       "crateName": "molten",
       "version": "0.1.0",
       "edition": "2024",
@@ -1293,6 +1459,14 @@
           "externCrateName": "durable_file_publication"
         },
         {
+          "packageId": "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=6381322a68407da71325c4c33113d11ada9af67f#hardened-wasmtime-runtime@0.1.0",
+          "externCrateName": "hardened_wasmtime_runtime"
+        },
+        {
+          "packageId": "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=6381322a68407da71325c4c33113d11ada9af67f#hardened-wasmtime-shell@0.1.0",
+          "externCrateName": "hardened_wasmtime_shell"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#iroh@1.0.0",
           "externCrateName": "iroh"
         },
@@ -1313,11 +1487,15 @@
           "externCrateName": "kamacite_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0",
+          "packageId": "git+ssh://git@github.com/OnixResearch/mantle.git?rev=c99556e5c91dfd13fcc261dc451f471359d47c38#mantle-wasm-consumer-verifier@0.1.0",
+          "externCrateName": "mantle_wasm_consumer_verifier"
+        },
+        {
+          "packageId": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-node-host#0.1.0",
+          "packageId": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-node-host#0.1.0",
           "externCrateName": "molten_node_host"
         },
         {
@@ -1470,7 +1648,7 @@
       "description": "Molten Rust project",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0": {
+    "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -1534,7 +1712,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-node-host#0.1.0": {
+    "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-node-host#0.1.0": {
       "crateName": "molten-node-host",
       "version": "0.1.0",
       "edition": "2024",
@@ -1554,7 +1732,7 @@
           "externCrateName": "cap_std"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0",
+          "packageId": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         }
       ],
@@ -1581,7 +1759,7 @@
       "description": "Capability-rooted node host boundary for Molten",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-release-policy#0.1.0": {
+    "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -1597,7 +1775,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/aspen/crates/molten-core#0.1.0",
+          "packageId": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
@@ -22770,6 +22948,7 @@
         "type": "crates-io"
       },
       "features": [
+        "alloc",
         "default",
         "indexmap",
         "preserve_order",
@@ -25392,7 +25571,8 @@
         "type": "crates-io"
       },
       "features": [
-        "default"
+        "default",
+        "std"
       ],
       "dependencies": [],
       "buildDependencies": [],
@@ -29509,6 +29689,78 @@
       "license": "Apache-2.0 WITH LLVM-exception",
       "repository": "https://github.com/bytecodealliance/wasmtime"
     },
+    "registry+https://github.com/rust-lang/crates.io-index#wasmtime-internal-winch@45.0.0": {
+      "crateName": "wasmtime-internal-winch",
+      "version": "45.0.0",
+      "edition": "2024",
+      "sha256": "d2aceb92b48b6e3a5cc2a05ab7a2dcb565eaf86fb870d04664b7f12cf9bba39a",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "component-model",
+        "gc",
+        "gc-copying",
+        "gc-drc",
+        "gc-null",
+        "stack-switching",
+        "threads"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cranelift-codegen@0.132.0",
+          "externCrateName": "cranelift_codegen"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gimli@0.33.0",
+          "externCrateName": "gimli"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#log@0.4.30",
+          "externCrateName": "log"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#object@0.39.1",
+          "externCrateName": "object"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#target-lexicon@0.13.5",
+          "externCrateName": "target_lexicon"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#wasmparser@0.248.0",
+          "externCrateName": "wasmparser"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#wasmtime-environ@45.0.0",
+          "externCrateName": "wasmtime_environ"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#wasmtime-internal-cranelift@45.0.0",
+          "externCrateName": "wasmtime_cranelift"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#winch-codegen@45.0.0",
+          "externCrateName": "winch_codegen"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Wasmtime Project Developers"
+      ],
+      "description": "INTERNAL: Integration between Wasmtime and Winch",
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "repository": "https://github.com/bytecodealliance/wasmtime"
+    },
     "registry+https://github.com/rust-lang/crates.io-index#wasmtime-internal-wit-bindgen@45.0.0": {
       "crateName": "wasmtime-internal-wit-bindgen",
       "version": "45.0.0",
@@ -29759,7 +30011,8 @@
         "threads",
         "wasmtime-jit-debug",
         "wasmtime-jit-icache-coherence",
-        "wat"
+        "wat",
+        "winch"
       ],
       "dependencies": [
         {
@@ -29921,6 +30174,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#wasmtime-internal-versioned-export-macros@45.0.0",
           "externCrateName": "wasmtime_versioned_export_macros"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#wasmtime-internal-winch@45.0.0",
+          "externCrateName": "wasmtime_winch"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#wat@1.250.0",
@@ -30361,6 +30618,85 @@
         "Alex Crichton <alex@alexcrichton.com>"
       ],
       "description": "Runtime components of wiggle code generator",
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "repository": "https://github.com/bytecodealliance/wasmtime"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#winch-codegen@45.0.0": {
+      "crateName": "winch-codegen",
+      "version": "45.0.0",
+      "edition": "2024",
+      "sha256": "3128bd53313b132e8737d7d318edbc438bab1abe525ac037bbf9857839e717e2",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "gc",
+        "gc-copying",
+        "gc-drc",
+        "gc-null",
+        "stack-switching",
+        "threads"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cranelift-assembler-x64@0.132.0",
+          "externCrateName": "cranelift_assembler_x64"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cranelift-codegen@0.132.0",
+          "externCrateName": "cranelift_codegen"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#gimli@0.33.0",
+          "externCrateName": "gimli"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#regalloc2@0.15.1",
+          "externCrateName": "regalloc2"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#smallvec@1.15.1",
+          "externCrateName": "smallvec"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#target-lexicon@0.13.5",
+          "externCrateName": "target_lexicon"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
+          "externCrateName": "thiserror"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#wasmparser@0.248.0",
+          "externCrateName": "wasmparser"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#wasmtime-environ@45.0.0",
+          "externCrateName": "wasmtime_environ"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#wasmtime-internal-core@45.0.0",
+          "externCrateName": "wasmtime_core"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#wasmtime-internal-cranelift@45.0.0",
+          "externCrateName": "wasmtime_cranelift"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Winch Project Developers"
+      ],
+      "description": "Winch code generation library",
       "license": "Apache-2.0 WITH LLVM-exception",
       "repository": "https://github.com/bytecodealliance/wasmtime"
     },

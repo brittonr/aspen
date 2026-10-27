@@ -24,7 +24,7 @@ hashes="$root/crate-hashes.json"
 
 sources() {
   # One "url rev crate@version" line per distinct git url and revision in Cargo.lock.
-  # `git+rad://` sources are feature-gated and outside the generated plans, so they stay excluded.
+  # Include private Radicle sources: the shared runtime is in the default consumer graph.
   awk '
     /^name = / { name = $3; gsub(/"/, "", name) }
     /^version = / { version = $3; gsub(/"/, "", version) }
@@ -32,7 +32,6 @@ sources() {
       source = $3
       gsub(/"/, "", source)
       sub(/^git\+/, "", source)
-      if (source ~ /^rad:/) next
       split(source, parts, "#")
       split(parts[1], query, /[?]rev=/)
       key = query[1] " " query[2]

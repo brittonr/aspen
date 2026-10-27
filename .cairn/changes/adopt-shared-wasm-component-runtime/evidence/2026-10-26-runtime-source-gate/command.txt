@@ -1,0 +1,1 @@
+cargo octet check --artifact-dir /dev/shm/aspen-runtime-verification-20261026/octet-verified

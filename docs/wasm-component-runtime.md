@@ -40,12 +40,54 @@ linker has no host functions. A future profile must declare each import and
 provide a matching policy, authority, resource, and recorded-effect reference;
 ambient WASI is never inherited from the process.
 
+## Shared-runtime adoption status
+
+The root dependency cohort pins `hwr.shell.v3` at
+`6381322a68407da71325c4c33113d11ada9af67f` and the published Mantle consumer
+verifier at `c99556e5c91dfd13fcc261dc451f471359d47c38`. The source gate binds
+their completed native archives and exact evidence digests. These pins are
+prerequisites, not authorization to change the execution backend.
+
+The adapter under `runtime/shared/` is test-only. Public execution and both
+existing consumer paths still use the complete local runtime. Executed dual-run
+fixtures found different start-function scheduling boundaries and different
+per-memory versus aggregate memory admission; either blocks cutover. Pointer
+traps, valid oversized output, staged receipts, successful fuel readback and
+ordinary retained slices agree in the exercised cases. See the
+[frozen mapping and execution record](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-26-runtime-adoption-parity.md).
+
+No effect-request world, shared-runtime actor or extension installation, or
+production rollback is claimed. Cutover must move the immutable dependency,
+adapter, profile/WIT, actor, extension, materialization and receipt cohorts
+together after complete parity and product-consumer evidence. Rollback restores
+that entire previous cohort, never one consumer or receipt producer alone.
+
 ## Materialization and evidence
 
 Production execution accepts only portable component and WIT bytes remeasured
 from a complete Mantle bundle. Loose bytes are test-only and cannot produce
 production evidence. Bundle references are externally linked rather than
 embedded recursively, so circular self-attestation is rejected.
+
+The published producer schema `mantle-wasm-component-materialization-bundle-v1`
+has an explicit `VerifiedBundle::load` intake; it is not translated
+into the older Molten `MantleBundle` DTO. The caller supplies source and private
+staging-parent directory capabilities plus an admitted fresh staging leaf, and
+must exclusively lease that staging namespace throughout the call. Source
+parents and leaves are opened no-follow; every declared member is remeasured
+under finite byte bounds and copied into fresh private staging. The published
+path-based verifier sees only that descriptor-backed snapshot, not mutable
+source parents. Ordinary success and failure remove only the owned child;
+cleanup failure denies the load. This bridge requires Linux `/proc/self/fd`.
+
+The intake requires the actual published Structural and Bytes reports, exact
+role/digest/length observations, the admitted Molten profile digest and WIT,
+and portable component bytes. Structural success alone, missing bytes, profile
+drift, AOT, or a reused stage denies. The producer bundle identity is preserved
+unchanged; component and WIT snapshots remain owned through invocation. The
+separate Molten admission envelope still supplies policy, authority, resource,
+Valence and Cairn references. Neither verification nor a consumer label
+installs an actor, extension or shared-runtime backend.
 
 Canonical component receipts cover inspection, instantiation, execution,
 hostcall, denial, and migration stages. They bind component and WIT identities,

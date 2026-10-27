@@ -4,15 +4,16 @@
 
 - [x] [serial] Record current component runtime, actor, system-extension, effect-hostcall, receipt, and negative-fixture baseline results before core changes. r[molten.wasm_component_adoption.parity] r[molten.wasm_component_adoption.validation]
   - Evidence: [2026-10-26 compatibility preflight](evidence/2026-10-26-compatibility-preflight.md#executed-local-product-baseline): 85 selected runtime/extension/hostcall cases and 11 selected actor-ABI cases passed in two overlapping selections; no product source changes.
-- [ ] [serial] Pin completed immutable `hardened-wasmtime-runtime` and Mantle consumer-verifier revisions with matching contracts and source evidence. r[molten.wasm_component_adoption.prerequisite]
-- [ ] [serial] Freeze the parity corpus and define exact local-to-shared request, blocker, outcome, resource, and receipt-payload mappings. r[molten.wasm_component_adoption.parity] r[molten.wasm_component_adoption.cutover]
-  - The missing producer APIs are superseded by [the immutable resumable prerequisite handoff](evidence/2026-10-26-resumable-prerequisite-handoff.md): `hwr.shell.v3` is published at `6381322a68407da71325c4c33113d11ada9af67f` and independently exercised. Dependency/Mantle integration and full local/shared mapping/parity remain open. Keep the complete local cohort; no default cutover or synthetic Mantle-bundle substitution. The [earlier executable preflight](evidence/2026-10-26-compatibility-preflight.md) remains historical evidence.
+- [x] [serial] Pin completed immutable `hardened-wasmtime-runtime` and Mantle consumer-verifier revisions with matching contracts and source evidence. r[molten.wasm_component_adoption.prerequisite]
+- [x] [serial] Freeze the parity corpus and define exact local-to-shared request, blocker, outcome, resource, and receipt-payload mappings. r[molten.wasm_component_adoption.parity] r[molten.wasm_component_adoption.cutover]
+  - Evidence: [immutable inputs, frozen mapping and executed counterexamples](evidence/2026-10-26-runtime-adoption-parity.md). The earlier [resumable prerequisite handoff](evidence/2026-10-26-resumable-prerequisite-handoff.md) is integrated. One-versus-fifteen exposed start-work yields and per-memory-versus-aggregate admission still block cutover. Keep the complete local cohort and the candidate test-only; no synthetic positive production Mantle bundle or default backend change.
 
 ## Phase 2: Adapter and parity
 
 - [ ] [serial] Implement the thin Molten adapter while keeping product profile, materialization, actor, extension, effect, replay, receipt, and policy types outside the shared runtime. r[molten.wasm_component_adoption.cutover] r[molten.wasm_component_adoption.boundary]
 - [ ] [parallel] Dual-run positive pure execution, canonical output, trap, fuel, deadline, resource, and cleanup fixtures. r[molten.wasm_component_adoption.parity] r[molten.wasm_component_adoption.validation]
 - [ ] [parallel] Dual-run negative loose bundle, wrong world, undeclared import, stale evidence, malformed output, resource, fallback, and receipt-overclaim fixtures. r[molten.wasm_component_adoption.parity] r[molten.wasm_component_adoption.validation] r[molten.wasm_component_adoption.nonclaims]
+  - Blocked on the executed parity counterexamples above. The candidate exercises real shared execution but is not an activated product adapter. Operated deadlines and complete production consumer/materialization evidence remain unproved; passing counterexample regressions does not close these tasks.
 
 ## Phase 3: Product hostcall and consumers
 

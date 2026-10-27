@@ -26,6 +26,7 @@ pub use evidence::MANTLE_COMPONENT_BUNDLE_SCHEMA;
 pub use evidence::MantleBundle;
 pub use evidence::MaterializedObjectIdentity;
 pub use evidence::Stage;
+pub use evidence::VerifiedBundle;
 pub use evidence::build;
 pub use evidence::mantle_bundle_ref;
 pub use evidence::replay_receipts_match;

@@ -1,5 +1,7 @@
 mod bindings;
 mod denial;
+#[cfg(test)]
+pub(crate) mod shared;
 mod shell;
 mod sliced;
 mod slicedshell;

@@ -1758,6 +1758,23 @@
         "type": "github"
       }
     },
+    "hardened-wasmtime-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793063518,
+        "narHash": "sha256-f7T1ToL6QJnSYQS8A0yZ76nx/ZUvjeUd7uatd5MNuPM=",
+        "ref": "refs/heads/main",
+        "rev": "6381322a68407da71325c4c33113d11ada9af67f",
+        "revCount": 62,
+        "type": "git",
+        "url": "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx"
+      },
+      "original": {
+        "rev": "6381322a68407da71325c4c33113d11ada9af67f",
+        "type": "git",
+        "url": "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx"
+      }
+    },
     "hegel-src": {
       "flake": false,
       "locked": {
@@ -1884,6 +1901,23 @@
         "rev": "2c636b1b25353a1b0befa5af48dc68615cd686dd",
         "type": "git",
         "url": "rad://z3DJe8tEdQuXpzTkfqCYQq6ZUqqkb"
+      }
+    },
+    "mantle-wasm-verifier-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793056478,
+        "narHash": "sha256-QBGFdskiynOprC3k3nVX0RV9r08ozll+cqb686mbGBk=",
+        "owner": "OnixResearch",
+        "repo": "mantle",
+        "rev": "c99556e5c91dfd13fcc261dc451f471359d47c38",
+        "type": "github"
+      },
+      "original": {
+        "owner": "OnixResearch",
+        "repo": "mantle",
+        "rev": "c99556e5c91dfd13fcc261dc451f471359d47c38",
+        "type": "github"
       }
     },
     "mathlib-src": {
@@ -2547,9 +2581,11 @@
         "executable-extent-src": "executable-extent-src",
         "flake-utils": "flake-utils_9",
         "flux-src": "flux-src",
+        "hardened-wasmtime-src": "hardened-wasmtime-src",
         "hegel-src": "hegel-src",
         "kamacite-src": "kamacite-src",
         "mantle-executable-extent-src": "mantle-executable-extent-src",
+        "mantle-wasm-verifier-src": "mantle-wasm-verifier-src",
         "nickel-cli": "nickel-cli",
         "nixpkgs": "nixpkgs_9",
         "octet-cutover-src": "octet-cutover-src",

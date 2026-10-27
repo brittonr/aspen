@@ -20,6 +20,10 @@ let SchemaMigrationSource = "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3U
 let SchemaIdentitySource = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git" in
 let TransactionalReconciliationRevision = "eb2bd3441753af97bfcb247cef7cc22d72675b62" in
 let TransactionalReconciliationSource = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git" in
+let HardenedWasmtimeRevision = "6381322a68407da71325c4c33113d11ada9af67f" in
+let HardenedWasmtimeSource = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx" in
+let MantleWasmVerifierRevision = "c99556e5c91dfd13fcc261dc451f471359d47c38" in
+let MantleWasmVerifierSource = "ssh://git@github.com/OnixResearch/mantle.git" in
 let CratesIoIndex = "registry+https://github.com/rust-lang/crates.io-index" in
 let ArchiveNonClaims = [
   "dependency satisfaction proves presented receipt linkage only",
@@ -30,6 +34,39 @@ in
 {
   schema = "molten.release-dependency-profile.v2",
   dependencies = [
+    {
+      manifest_dependency = "hardened-wasmtime-runtime",
+      package_name = "hardened-wasmtime-runtime",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = HardenedWasmtimeSource,
+      immutable_revision = HardenedWasmtimeRevision,
+      nix_input = "hardened-wasmtime-src",
+      transport_policy = "private-radicle",
+      disposition = "runtime",
+    },
+    {
+      manifest_dependency = "hardened-wasmtime-shell",
+      package_name = "hardened-wasmtime-shell",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = HardenedWasmtimeSource,
+      immutable_revision = HardenedWasmtimeRevision,
+      nix_input = "hardened-wasmtime-src",
+      transport_policy = "private-radicle",
+      disposition = "runtime",
+    },
+    {
+      manifest_dependency = "mantle-wasm-consumer-verifier",
+      package_name = "mantle-wasm-consumer-verifier",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = MantleWasmVerifierSource,
+      immutable_revision = MantleWasmVerifierRevision,
+      nix_input = "mantle-wasm-verifier-src",
+      transport_policy = "ssh-pinned-nix-archive",
+      disposition = "runtime",
+    },
     {
       manifest_dependency = "artifact-auth-core",
       package_name = "artifact-auth-core",
@@ -291,6 +328,44 @@ in
     immutable_revision = ValenceRevision,
   },
   archive_receipts = [
+    {
+      id = "hardened-wasmtime-resumable",
+      source_coordinate = HardenedWasmtimeSource,
+      source_revision = HardenedWasmtimeRevision,
+      nix_input = "hardened-wasmtime-src",
+      archive_path = ".cairn/archive/1970-01-01-add-resumable-component-invocation",
+      status = "archived",
+      evidence_files = [
+        {
+          relative_path = ".cairn/archive/1970-01-01-add-resumable-component-invocation/tasks.md",
+          blake3 = "7b574713753488d51e9b90265b11858830b3e52967f06cc4a74bc9c757bc5ed6",
+        },
+        {
+          relative_path = "crates/hardened-wasmtime-shell/src/lib.rs",
+          blake3 = "66345f4b74adaf80740b776ef097931aa1c41c049780fe1b49927cc294467fcc",
+        },
+      ],
+      non_claims = ArchiveNonClaims,
+    },
+    {
+      id = "mantle-wasm-consumer-verifier",
+      source_coordinate = MantleWasmVerifierSource,
+      source_revision = MantleWasmVerifierRevision,
+      nix_input = "mantle-wasm-verifier-src",
+      archive_path = ".cairn/archive/2026-09-10-publish-wasm-component-consumer-verifier",
+      status = "archived",
+      evidence_files = [
+        {
+          relative_path = ".cairn/archive/2026-09-10-publish-wasm-component-consumer-verifier/tasks.md",
+          blake3 = "a68bfd649ca9e902cb1d75432da172e8e7c32c60faeebe199cb6b06e34d203e6",
+        },
+        {
+          relative_path = "crates/mantle-wasm-consumer-verifier/README.md",
+          blake3 = "581dbd8a948a1139d44961498580e9405d651640d738f8478d5d57483eb76342",
+        },
+      ],
+      non_claims = ArchiveNonClaims,
+    },
     {
       id = "valence-integrity",
       source_coordinate = "https://github.com/OnixResearch/valence.git",

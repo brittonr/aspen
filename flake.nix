@@ -38,6 +38,14 @@
       url = "git+https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=8e05e74e24b45f752d77145c4455385daaf6d6ab";
       flake = false;
     };
+    hardened-wasmtime-src = {
+      url = "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=6381322a68407da71325c4c33113d11ada9af67f";
+      flake = false;
+    };
+    mantle-wasm-verifier-src = {
+      url = "github:OnixResearch/mantle/c99556e5c91dfd13fcc261dc451f471359d47c38";
+      flake = false;
+    };
     artifact-src = {
       url = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1";
       flake = false;
@@ -117,6 +125,8 @@
       basalt-src,
       bounded-exec-src,
       durable-file-publication-src,
+      hardened-wasmtime-src,
+      mantle-wasm-verifier-src,
       artifact-src,
       choregraph-src,
       chaoscontrol-src,
@@ -273,6 +283,72 @@
             && durableFilePublicationPackage.package.license == "MIT OR Apache-2.0"
           ) "Molten Durable File Publication Cargo/Nix source identity, package, or license drifted";
           durable-file-publication-src;
+        hardenedWasmtimeRevision = "6381322a68407da71325c4c33113d11ada9af67f";
+        hardenedWasmtimeRepository = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx";
+        hardenedWasmtimeDependencies = [
+          artifactRootDependencies.hardened-wasmtime-runtime
+          artifactRootDependencies.hardened-wasmtime-shell
+        ];
+        hardenedWasmtimeExpectedLockSource = "git+${hardenedWasmtimeRepository}?rev=${hardenedWasmtimeRevision}#${hardenedWasmtimeRevision}";
+        hardenedWasmtimeLockPackages = builtins.filter (
+          package: (package.source or "") == hardenedWasmtimeExpectedLockSource
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        hardenedWasmtimeWorkspace = builtins.fromTOML (
+          builtins.readFile (hardened-wasmtime-src + "/Cargo.toml")
+        );
+        hardenedWasmtimeSource =
+          assert pkgs.lib.assertMsg
+            (
+              builtins.all (
+                dependency:
+                dependency.git == hardenedWasmtimeRepository
+                && dependency.rev == hardenedWasmtimeRevision
+                && dependency.version == "0.1.0"
+              ) hardenedWasmtimeDependencies
+              && hardened-wasmtime-src.rev == hardenedWasmtimeRevision
+              &&
+                builtins.sort builtins.lessThan (map (package: package.name) hardenedWasmtimeLockPackages) == [
+                  "hardened-wasmtime-runtime"
+                  "hardened-wasmtime-shell"
+                ]
+              && hardenedWasmtimeWorkspace.workspace.package.license == "MIT"
+              && builtins.pathExists (
+                hardened-wasmtime-src + "/.cairn/archive/1970-01-01-add-resumable-component-invocation/tasks.md"
+              )
+            )
+            "Molten hardened Wasmtime Cargo/Nix source identity, package set, license, or completed publication drifted";
+          hardened-wasmtime-src;
+        mantleWasmVerifierRevision = "c99556e5c91dfd13fcc261dc451f471359d47c38";
+        mantleWasmVerifierRepository = "ssh://git@github.com/OnixResearch/mantle.git";
+        mantleWasmVerifierDependency = artifactRootDependencies.mantle-wasm-consumer-verifier;
+        mantleWasmVerifierExpectedLockSource = "git+${mantleWasmVerifierRepository}?rev=${mantleWasmVerifierRevision}#${mantleWasmVerifierRevision}";
+        mantleWasmVerifierLockPackages = builtins.filter (
+          package: (package.source or "") == mantleWasmVerifierExpectedLockSource
+        ) (builtins.fromTOML (builtins.readFile ./Cargo.lock)).package;
+        mantleWasmVerifierWorkspace = builtins.fromTOML (
+          builtins.readFile (mantle-wasm-verifier-src + "/Cargo.toml")
+        );
+        mantleWasmVerifierSource =
+          assert pkgs.lib.assertMsg
+            (
+              mantleWasmVerifierDependency.git == mantleWasmVerifierRepository
+              && mantleWasmVerifierDependency.rev == mantleWasmVerifierRevision
+              && mantleWasmVerifierDependency.version == "0.1.0"
+              && mantle-wasm-verifier-src.rev == mantleWasmVerifierRevision
+              &&
+                builtins.sort builtins.lessThan (map (package: package.name) mantleWasmVerifierLockPackages) == [
+                  "crunch-wasm-component-core"
+                  "mantle-wasm-consumer-verifier"
+                ]
+              && mantleWasmVerifierWorkspace.workspace.package.license == "AGPL-3.0-or-later"
+              && builtins.elem "crates/mantle-wasm-consumer-verifier" mantleWasmVerifierWorkspace.workspace.members
+              && builtins.pathExists (
+                mantle-wasm-verifier-src
+                + "/.cairn/archive/2026-09-10-publish-wasm-component-consumer-verifier/tasks.md"
+              )
+            )
+            "Molten Mantle Wasm verifier Cargo/Nix source identity, package set, license, or completed publication drifted";
+          mantle-wasm-verifier-src;
         choregraphRevision = "b3e08e19750f53bdbcae970cdf58a47a791ed20b";
         choregraphRepository = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git";
         choregraphHistoryDependencies = [
@@ -491,6 +567,10 @@
           "${boundedExecRepository}#${boundedExecRevision}" = maybeCleanLocalGitSource boundedExecSource;
           "${durableFilePublicationRepository}#${durableFilePublicationRevision}" =
             maybeCleanLocalGitSource durableFilePublicationSource;
+          "${hardenedWasmtimeRepository}#${hardenedWasmtimeRevision}" =
+            maybeCleanLocalGitSource hardenedWasmtimeSource;
+          "${mantleWasmVerifierRepository}#${mantleWasmVerifierRevision}" =
+            maybeCleanLocalGitSource mantleWasmVerifierSource;
           "${executableExtentRepository}#${executableExtentRevision}" =
             maybeCleanLocalGitSource executableExtentSource;
           "${kamaciteRepository}#${kamaciteRevision}" = maybeCleanLocalGitSource kamaciteSource;
@@ -1979,6 +2059,8 @@
                     --root . \
                     --evidence-source valence-integrity=${valence-src} \
                     --evidence-source octet-cutover=${octet-cutover-src} \
+                    --evidence-source hardened-wasmtime-resumable=${hardenedWasmtimeSource} \
+                    --evidence-source mantle-wasm-consumer-verifier=${mantleWasmVerifierSource} \
                     > "$out"
                   nickel export config/release-dependencies/fixtures/positive/exact-pins.ncl \
                     > "$TMPDIR/release-profile-positive.json"

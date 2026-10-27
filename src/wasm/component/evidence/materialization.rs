@@ -1,3 +1,8 @@
+mod linkage;
+mod published;
+
+pub use published::VerifiedBundle;
+
 pub const MANTLE_COMPONENT_BUNDLE_SCHEMA: &str = "mantle.component-materialization-bundle.v1";
 pub const COMPONENT_ADMISSION_ENVELOPE_SCHEMA: &str = "molten.component-admission-envelope.v1";
 const MAX_COMPONENT_EVIDENCE_REFS: usize = 128;
@@ -57,6 +62,11 @@ pub enum ArtifactSource<'a> {
         component_bytes: &'a [u8],
         wit_bytes: &'a [u8],
     },
+    PublishedMantle {
+        materialization: &'a VerifiedBundle,
+        envelope: &'a AdmissionEnvelope,
+        consumer: super::super::model::Consumer,
+    },
     TestOnlyLoose {
         component_bytes: &'a [u8],
         wit_bytes: &'a [u8],
@@ -67,12 +77,14 @@ impl<'a> ArtifactSource<'a> {
     pub const fn component_bytes(self) -> &'a [u8] {
         match self {
             Self::Mantle { component_bytes, .. } | Self::TestOnlyLoose { component_bytes, .. } => component_bytes,
+            Self::PublishedMantle { materialization, .. } => materialization.component_bytes(),
         }
     }
 
     pub const fn wit_bytes(self) -> &'a [u8] {
         match self {
             Self::Mantle { wit_bytes, .. } | Self::TestOnlyLoose { wit_bytes, .. } => wit_bytes,
+            Self::PublishedMantle { materialization, .. } => materialization.wit_bytes(),
         }
     }
 }
@@ -144,6 +156,11 @@ pub fn verify(
             measured_component: &component,
             measured_wit: &wit,
         }),
+        ArtifactSource::PublishedMantle {
+            materialization,
+            envelope,
+            consumer,
+        } => materialization.admit(profile, requested_scope, envelope, consumer),
         ArtifactSource::TestOnlyLoose {
             component_bytes: _,
             wit_bytes: _,
@@ -225,7 +242,7 @@ fn verify_bundle(input: BundleVerificationInput<'_>) -> super::super::model::Res
         blockers.push("Mantle component bundle WIT identity does not match the admitted profile".to_string());
     }
     validate_bundle_refs(input.bundle, &mut blockers);
-    validate_envelope(input.bundle, input.envelope, &mut blockers);
+    linkage::validate(&input.bundle.bundle_ref, input.envelope, &mut blockers);
     if !input.bundle.has_portable_bytes || input.bundle.has_precompiled_bytes {
         blockers
             .push("initial component cohort admits portable bytes and rejects precompiled deserialization".to_string());
@@ -267,28 +284,5 @@ fn validate_bundle_refs(bundle: &MantleBundle, blockers: &mut impl crate::bounde
     }
     if !bundle.embedded_admission_refs.is_empty() {
         blockers.push_item("Mantle component bundle embeds circular Valence or Cairn admission evidence".to_string());
-    }
-}
-
-fn validate_envelope(
-    bundle: &MantleBundle,
-    envelope: &AdmissionEnvelope,
-    blockers: &mut impl crate::bounded::VecSink<String>,
-) {
-    if envelope.schema_id != COMPONENT_ADMISSION_ENVELOPE_SCHEMA || envelope.bundle_ref != bundle.bundle_ref {
-        blockers.push_item("component admission envelope is stale or bound to another bundle".to_string());
-    }
-    for (label, refs) in [
-        ("Valence sidecar", &envelope.valence_sidecar_refs),
-        ("Cairn acceptance", &envelope.cairn_acceptance_refs),
-        ("policy", &envelope.policy_refs),
-        ("authority", &envelope.authority_refs),
-        ("resource", &envelope.resource_refs),
-    ] {
-        if refs.len() > MAX_COMPONENT_EVIDENCE_REFS || !super::super::model::valid_ref_collection(refs) {
-            blockers.push_item(format!(
-                "component admission envelope {label} refs are missing, malformed, duplicate, or unsorted"
-            ));
-        }
     }
 }

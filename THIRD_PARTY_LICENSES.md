@@ -7,6 +7,9 @@ The sparse `vendor/` directory records upstream `Cargo.toml.orig` material rathe
 | Paths | Upstream terms recorded by the package or upstream workspace |
 |---|---|
 | Cargo packages `artifact-auth-core`, `artifact-auth-ed25519`, and `artifact-binding-core` from `OnixResearch/onix-artifact` revision `c932138d880ddf4c2967f4c024b489b5c0022bf1` | MIT OR Apache-2.0 |
+| Cargo packages `hardened-wasmtime-runtime` and `hardened-wasmtime-shell` from `rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx` revision `6381322a68407da71325c4c33113d11ada9af67f` | MIT |
+| Cargo packages `mantle-wasm-consumer-verifier` and `crunch-wasm-component-core` from `OnixResearch/mantle` revision `c99556e5c91dfd13fcc261dc451f471359d47c38` | AGPL-3.0-or-later |
+| `tests/fixtures/wasm-component-runtime/kamacite-mantle-hello-bundle.json`, copied unchanged from `crates/mantle-wasm-consumer-verifier/tests/fixtures/` at Mantle revision `c99556e5c91dfd13fcc261dc451f471359d47c38` | AGPL-3.0-or-later |
 | Cargo packages `flux-profiler`, `flux-profiler-macros`, `flux-communication`, `flux-timing`, `flux-utils`, `type-hash`, and `type-hash-derive` from `gattaca-com/flux` revision `2a1916465ae6649aebef3758233cfea98e5d33db` | Apache-2.0 AND MIT |
 | `vendor/datafusion-*` | Apache-2.0; ASF source headers remain authoritative |
 | `vendor/iroh*`, `vendor/portmapper-*`, `vendor/postcard`, `vendor/genawaiter-*` | MIT OR Apache-2.0 (legacy `MIT/Apache-2.0` spelling is equivalent package metadata) |

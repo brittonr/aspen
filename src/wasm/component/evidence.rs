@@ -8,6 +8,7 @@ pub use materialization::COMPONENT_ADMISSION_ENVELOPE_SCHEMA;
 pub use materialization::MANTLE_COMPONENT_BUNDLE_SCHEMA;
 pub use materialization::MantleBundle;
 pub use materialization::MaterializedObjectIdentity;
+pub use materialization::VerifiedBundle;
 pub use materialization::mantle_bundle_ref;
 pub use materialization::verify;
 pub use receipt::COMPONENT_RECEIPT_SCHEMA;

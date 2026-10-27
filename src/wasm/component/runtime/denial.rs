@@ -120,6 +120,20 @@ fn context(source: super::super::evidence::materialization::ArtifactSource<'_>) 
                 resource_refs: valid_refs(&envelope.resource_refs),
             }
         }
+        super::super::evidence::materialization::ArtifactSource::PublishedMantle {
+            materialization,
+            envelope,
+            consumer,
+        } => Context {
+            bundle_ref: Some(materialization.bundle_ref().to_string()),
+            consumer,
+            mantle_evidence_refs: valid_refs(materialization.mantle_evidence_refs()),
+            valence_evidence_refs: valid_refs(&envelope.valence_sidecar_refs),
+            cairn_evidence_refs: valid_refs(&envelope.cairn_acceptance_refs),
+            policy_refs: valid_refs(&envelope.policy_refs),
+            authority_refs: valid_refs(&envelope.authority_refs),
+            resource_refs: valid_refs(&envelope.resource_refs),
+        },
         super::super::evidence::materialization::ArtifactSource::TestOnlyLoose { .. } => Context {
             bundle_ref: None,
             consumer: super::super::model::Consumer::Actor,

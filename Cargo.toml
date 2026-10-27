@@ -84,7 +84,10 @@ data-encoding = { version = "2", optional = true }
 executable-extent-conformance = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
 executable-extent-core = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
 executable-extent-linux = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
+hardened-wasmtime-runtime = { git = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx", rev = "6381322a68407da71325c4c33113d11ada9af67f", version = "0.1.0" }
+hardened-wasmtime-shell = { git = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx", rev = "6381322a68407da71325c4c33113d11ada9af67f", version = "0.1.0" }
 marble = { version = "=16.0.2", optional = true }
+mantle-wasm-consumer-verifier = { git = "ssh://git@github.com/OnixResearch/mantle.git", rev = "c99556e5c91dfd13fcc261dc451f471359d47c38", version = "0.1.0" }
 molten-core = { path = "crates/molten-core" }
 molten-node-host = { path = "crates/molten-node-host" }
 cairn = { git = "ssh://git@github.com/OnixResearch/cairn.git", rev = "3b4c280b893f2709aebea21fc51a4f9eeba3fe3b", package = "cairn-core" }

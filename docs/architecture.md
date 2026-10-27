@@ -37,6 +37,22 @@ Recovery-group supervision is admitted per system extension: an ordered member s
 
 The optional [content-replication extension](content-replication.md) derives current availability from admitted inventory and retains per-content deficits independently of executable actions. Historical transfer success cannot hide same-epoch loss: a fresh bounded repair needs fresh verification, while exact-operation replay retains only its original outcome. Cleanup preserves replica and fault-domain minima in the cumulative remainder; the shell separately admits deletion and cannot publish completion for unresolved demand or cleanup.
 
+## Component execution adoption
+
+Molten retains component profile/WIT, canonical Preserves, materialization,
+authority, actor/extension lifecycle, effects, replay and receipt meaning.
+The pinned hardened Wasmtime mechanism is evaluated by a test-only adapter;
+the complete local runtime remains the product default because executed
+start-function scheduling and aggregate-memory counterexamples fail parity.
+Producer publication and passing ordinary fixtures cannot override that gate.
+
+Published Mantle intake independently remeasures every declared member through
+source directory capabilities and verifies an exclusively leased private
+snapshot through the published consumer verifier. It preserves the producer
+bundle identity and still requires the separate Molten admission envelope.
+It grants no actor/extension installation or effect authority. See the
+[component runtime boundary and adoption status](wasm-component-runtime.md#shared-runtime-adoption-status).
+
 ## Fabric time, scheduling, and entropy
 
 The admitted runtime described in [`fabric-time-scheduler-runtime.md`](fabric-time-scheduler-runtime.md) keeps wall-clock observations, monotonic instants, logical event positions, and virtual instants as distinct canonical domains. Checked arithmetic and explicit evidence-bound conversion prevent silent crossing. Generation-fenced one-shot/periodic timers, a bounded runnable scheduler, purpose/capability-bound entropy streams, uncertainty-aware deadlines, finite retry plans, and local/fenced lease decisions share pure transition cores in `molten-core`.
