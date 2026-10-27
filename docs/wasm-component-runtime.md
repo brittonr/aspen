@@ -62,14 +62,97 @@ denials. See the [immutable v4 continuation evidence](../.cairn/changes/adopt-sh
 Public execution and both existing consumer paths still use the complete local
 runtime. The [earlier frozen mapping and counterexamples](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-26-runtime-adoption-parity.md)
 remain historical evidence; they are not current v4 failures. Operated product
-deadlines, the effect world, matching production materializations, real shared
-actor/extension installation and coupled cutover/rollback remain acceptance gates.
+deadlines, an admitted effect host adapter, matching production materializations,
+real shared actor/extension installation and coupled cutover/rollback remain
+acceptance gates.
 
-No effect-request world, shared-runtime actor or extension installation, or
+The effect-request world is now defined as a contract-only candidate below; no
+production host adapter, shared-runtime actor or extension installation, or
 production rollback is claimed. Cutover must move the immutable dependency,
 adapter, profile/WIT, actor, extension, materialization and receipt cohorts
 together after complete parity and product-consumer evidence. Rollback restores
 that entire previous cohort, never one consumer or receipt producer alone.
+
+## Contract-only effect-request world
+
+**Immediate outcome:** Molten defines the candidate
+`molten.wasm.component.effects.v1`, not an admitted execution profile.
+[`effect-contract.ncl`](wasm-component-runtime/effect-contract.ncl) is the positive
+export of the exact [`effect-contracts.ncl`](wasm-component-runtime/effect-contracts.ncl)
+contract; [`generated/effect-contract.json`](wasm-component-runtime/generated/effect-contract.json)
+is its deterministic projection. `execution_admitted=false` is mandatory.
+The existing import-free production profiles/WIT, defaults, local runtime and
+test-only shared adapter are unchanged. Defining or decoding this contract does
+not install a linker, host adapter, actor or system extension.
+
+**Durable capability:** the product-owned
+[`wit/molten-component-effects/runtime.wit`](../wit/molten-component-effects/runtime.wit)
+pins package `molten:component-effects@1.0.0`, world `actor-effects`, and source
+identity `blake3:9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2`.
+Its only import is `effect-request` and only export is `invoke`; both have type
+`func(list<u8>) -> result<list<u8>, string>`. No WASI or other ambient import is
+permitted. The closed operation set contains only `effect_id="blob.get"`,
+`operation="get"`, `capability="hostcall:blob-get"`.
+
+The versioned canonical packed Preserves carriers have these ordered shapes
+(uppercase names below denote fields, not literal symbols):
+
+```text
+<component-effect-request-v1 "molten.component-effect-request.v1"
+  GENERATION INCARNATION SEQUENCE
+  <import-grant "effect-request" "hostcall:blob-get"
+    POLICY-REF AUTHORITY-REF RESOURCE-REF RECORDED-EFFECT-REF>
+  EFFECT-REQUEST <blob-get OBJECT-CONTENT-REF>>
+
+<component-effect-response-v1 "molten.component-effect-response.v1"
+  REQUEST-CARRIER-REF EFFECT-RESPONSE OUTPUT-OPTION>
+```
+
+`GENERATION`, `INCARNATION` and `SEQUENCE` are unsigned 64-bit integers.
+`EFFECT-REQUEST` and `EFFECT-RESPONSE` retain the existing canonical
+`effect-request-v1` and `effect-response-v1` DTO semantics. Every reference must
+parse canonically. The nested effect request's `input_ref` must equal the
+canonical identity of the materialized `<blob-get OBJECT-CONTENT-REF>` payload.
+
+There are two distinct request identities: `REQUEST-CARRIER-REF` is BLAKE3 over
+the complete canonical request carrier, including its fences and sequence;
+the nested effect response's `request_ref` names only the nested canonical
+`effect-request-v1` value. They are not interchangeable. `OUTPUT-OPTION` is
+exactly `<some OUTPUT>` or `<none>`. A `pass` response requires materialized
+`OUTPUT` whose canonical identity equals the nested response's `output_ref`;
+a `deny` response has neither an output reference nor materialized output.
+WIT `Err(string)` denotes carrier/host failure, never a fabricated policy
+denial or successful effect.
+
+Each complete request or response packet is at most 65,536 bytes, with
+`max_depth=32` (root depth zero) and `max_nodes=4096` values/nodes. These same
+structural bounds apply to encoder output and decoder input. Annotations and
+embedded values are rejected before recursive values are constructed; trailing
+bytes and noncanonical encodings are rejected. Shape, identity and bounds
+validation is not admission, and recording is not effect success.
+
+A host adapter must freshly recheck the exact policy, Basalt/UCAN authority,
+resource and recorded-effect references, generation/incarnation fences,
+monotone request sequence, admitted artifact/handler/operation and capability
+references before any dispatch through existing Molten effect ports. Replay
+must bind complete request and response carrier identities together with
+run/handler/turn/boundary and sequence, preserve the nested effect identity,
+and never fall back to live effects. These are current admission and replay
+obligations, not claims that a production adapter implements them.
+
+**Maintenance owner:** Molten Wasm component runtime maintainers
+(`brittonr/aspen`) own this WIT, Nickel contract, codecs and effect-port meaning.
+From the repository root, regenerate the projection and repeat the combined
+positive export/readback, exact WIT-hash and negative-fixture rail:
+
+```sh
+nix develop -c nickel export docs/wasm-component-runtime/effect-contract.ncl --format json --output docs/wasm-component-runtime/generated/effect-contract.json
+nix build .#checks.x86_64-linux.wasm-component-profile
+```
+
+The rail retains all existing profile checks and rejects effect-contract WASI
+imports, extra operations, execution activation, and changed depth/node bounds.
+It proves contract consistency, not execution admission or consumer adoption.
 
 ## Materialization and evidence
 

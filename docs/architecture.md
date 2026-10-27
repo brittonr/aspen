@@ -49,6 +49,32 @@ default until operated product deadlines, effect admission, matching production
 bundles, real actor/extension composition and coupled cutover/rollback pass.
 Producer publication and passing parity fixtures do not authorize that cutover.
 
+The separate `molten.wasm.component.effects.v1` candidate defines the versioned
+`molten:component-effects@1.0.0` / `actor-effects` world but keeps
+`execution_admitted=false`. Its closed linker declares only `effect-request`
+and `invoke`, with no WASI; its sole operation is `blob.get` / `get` under
+`hostcall:blob-get`. Canonical `component-effect-request-v1` carriers bind
+generation, incarnation, sequence, import-grant references, the existing nested
+`effect-request-v1`, and materialized `<blob-get OBJECT-CONTENT-REF>` input.
+Canonical `component-effect-response-v1` carriers bind the full request-carrier
+identity separately from the nested effect response's request identity and
+carry exactly `<some OUTPUT>` or `<none>`. A pass requires output matching its
+canonical reference; denial has neither. Both directions are bounded to 65,536
+bytes, depth 32 (root zero) and 4,096 values/nodes for encoding and decoding;
+annotations, embedded values, trailing bytes and noncanonical input are denied.
+
+Molten's runtime maintainers own this contract and its repeatable export/readback,
+WIT-hash and negative-fixture rail. The immediate outcome is a durable wire and
+operation definition, not execution activation. Decoding never grants authority:
+a production host must freshly recheck exact policy/Basalt-UCAN/resource/recorded
+references, lifecycle fences, monotone sequence, admitted artifact/handler/operation
+and capability references before using existing effect ports. Replay binds full
+carrier identities and run/handler/turn/boundary/sequence without live fallback.
+WIT errors remain carrier/host failures, not invented policy or effect results.
+No production effect adapter or actor/extension adoption is claimed. Shapes,
+identity rules, ownership and repeatability commands are specified in the
+[contract-only effect world](wasm-component-runtime.md#contract-only-effect-request-world).
+
 Published Mantle intake independently remeasures every declared member through
 source directory capabilities and verifies an exclusively leased private
 snapshot through the published consumer verifier. It preserves the producer

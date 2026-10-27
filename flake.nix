@@ -1374,14 +1374,31 @@
                   time_sliced_generated=docs/wasm-component-runtime/generated/time-sliced-profile.json
                   nickel export "$time_sliced_profile" --format json > "$TMPDIR/time-sliced-profile.json"
                   diff -u "$time_sliced_generated" "$TMPDIR/time-sliced-profile.json"
+                  effect_contract=docs/wasm-component-runtime/effect-contract.ncl
+                  effect_generated=docs/wasm-component-runtime/generated/effect-contract.json
+                  nickel export "$effect_contract" --format json > "$TMPDIR/effect-contract.json"
+                  diff -u "$effect_generated" "$TMPDIR/effect-contract.json"
+                  nickel export --stdin-format json --format json < "$TMPDIR/effect-contract.json" \
+                    > "$TMPDIR/effect-contract-readback.json"
+                  diff -u "$effect_generated" "$TMPDIR/effect-contract-readback.json"
                   expected_wit_hash=83be349bb27975ada30dbe60817c5404df7862babdf02ae229b399886e76d5e8
                   printf '%s  %s\n' "$expected_wit_hash" wit/molten-component-runtime/runtime.wit \
+                    | b3sum --check
+                  expected_effect_wit_hash=9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2
+                  test "$(nickel export "$effect_contract" --field wit.source_ref --format text)" \
+                    = "blake3:$expected_effect_wit_hash"
+                  printf '%s  %s\n' "$expected_effect_wit_hash" wit/molten-component-effects/runtime.wit \
                     | b3sum --check
                   for fixture in \
                     docs/wasm-component-runtime/fixtures/negative/stale-cohort.ncl \
                     docs/wasm-component-runtime/fixtures/negative/incomplete-cohort.ncl \
                     docs/wasm-component-runtime/fixtures/negative/ambient-wasi.ncl \
-                    docs/wasm-component-runtime/fixtures/negative/nondeterministic-growth.ncl
+                    docs/wasm-component-runtime/fixtures/negative/nondeterministic-growth.ncl \
+                    docs/wasm-component-runtime/fixtures/negative/effect-contract-wasi-import.ncl \
+                    docs/wasm-component-runtime/fixtures/negative/effect-contract-extra-operation.ncl \
+                    docs/wasm-component-runtime/fixtures/negative/effect-contract-execution-admitted.ncl \
+                    docs/wasm-component-runtime/fixtures/negative/effect-contract-max-depth.ncl \
+                    docs/wasm-component-runtime/fixtures/negative/effect-contract-max-nodes.ncl
                   do
                     if nickel export "$fixture" --format json > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
                       echo "negative Wasm component profile fixture unexpectedly exported: $fixture" >&2

@@ -1,0 +1,46 @@
+{
+  "allowed_exports": [
+    "invoke"
+  ],
+  "allowed_imports": [
+    "effect-request"
+  ],
+  "allowed_wasi_interfaces": [],
+  "closed_operations": [
+    {
+      "capability": "hostcall:blob-get",
+      "effect_id": "blob.get",
+      "operation": "get"
+    }
+  ],
+  "execution_admitted": false,
+  "max_depth": 32,
+  "max_nodes": 4096,
+  "max_request_bytes": 65536,
+  "max_response_bytes": 65536,
+  "non_claims": [
+    "carrier-is-not-authority",
+    "decoding-is-not-admission",
+    "recording-is-not-effect-success",
+    "contract-is-not-consumer-installation"
+  ],
+  "profile_id": "molten.wasm.component.effects.v1",
+  "request_schema": "molten.component-effect-request.v1",
+  "required_current_inputs": [
+    "policy",
+    "basalt-ucan",
+    "generation",
+    "incarnation",
+    "resources",
+    "recorded-effect",
+    "request-sequence"
+  ],
+  "response_schema": "molten.component-effect-response.v1",
+  "schema_id": "molten.wasm-component-effects.v1",
+  "schema_version": 1,
+  "wit": {
+    "package": "molten:component-effects@1.0.0",
+    "source_ref": "blake3:9478f7ddd9380bcbe898f2101d615674067e0f167ddc6f0fc345553751b5eaa2",
+    "world": "actor-effects"
+  }
+}

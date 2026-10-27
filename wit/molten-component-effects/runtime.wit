@@ -1,0 +1,14 @@
+package molten:component-effects@1.0.0;
+
+/// Explicit requests only: the host retains admission and effect authority.
+world actor-effects {
+  /// Canonical packed Preserves, bounded independently in each direction.
+  type preserves-payload = list<u8>;
+
+  /// Only the reviewed closed operation set may reach an admitted product port.
+  /// A successful carrier is not permission or successful effect execution.
+  import effect-request: func(request: preserves-payload) -> result<preserves-payload, string>;
+
+  /// Existing component invocation carrier; no ambient WASI is imported.
+  export invoke: func(input: preserves-payload) -> result<preserves-payload, string>;
+}

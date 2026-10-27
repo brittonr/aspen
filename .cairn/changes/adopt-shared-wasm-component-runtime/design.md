@@ -36,6 +36,14 @@ The adapter validates operation, capability, policy, authority, resource, replay
 
 No WASI interface, ambient process state, or undeclared host function enters the linker.
 
+The contract-only candidate is `molten.wasm.component.effects.v1`, WIT package `molten:component-effects@1.0.0`, world `actor-effects`. Its only import is `effect-request`, its only export is `invoke`, and its sole operation is `blob.get` / `get` under `hostcall:blob-get`. Both functions use `func(list<u8>) -> result<list<u8>, string>`. The exact Nickel contract requires `execution_admitted=false`; declaring this surface cannot activate an execution profile.
+
+The request carrier binds unsigned generation, incarnation and sequence, exact policy/authority/resource/recorded-effect references, the existing canonical effect request and materialized `<blob-get OBJECT-CONTENT-REF>`. The response binds the complete request-carrier identity separately from the nested effect response's request identity, preserving the existing effect-port DTO contract. A successful response carries the exact materialized output matching its canonical reference; a denial carries neither output nor output reference.
+
+Each complete carrier is bounded to 65,536 bytes, nesting depth 32 with root depth zero, and 4,096 nodes. Preflight traversal bounds recursive decoding and rejects annotations and embedded values; strict canonical intake rejects trailing values and alternate encodings. WIT errors are carrier/host failures, not invented policy denials or effect success.
+
+The future host adapter must independently recheck current policy, Basalt/UCAN, resources, recorded-effect facts, lifecycle fences, monotone sequence and the admitted artifact/handler/capabilities before dispatch. Replay binds complete carrier identities plus run, handler, turn, boundary and sequence without live fallback. Contract codecs and declared-surface checks are not this adapter or production consumer installation. Exact wire shapes, maintenance ownership and regeneration/check commands live in [the governing contract section](../../../docs/wasm-component-runtime.md#contract-only-effect-request-world).
+
 ### Activate real product consumers
 
 One ordinary actor path and one system-extension callback path must load Mantle-materialized components through normal manifests and composition roots. Test-only loose bytes and direct unit calls do not satisfy this requirement.
