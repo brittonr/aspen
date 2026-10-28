@@ -1,0 +1,275 @@
+[
+  {
+    "reason": "compiler-artifact",
+    "package_id": "registry+https://github.com/rust-lang/crates.io-index#cap-std@3.4.5",
+    "manifest_path": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cap-std-3.4.5/Cargo.toml",
+    "target": {
+      "kind": [
+        "custom-build"
+      ],
+      "crate_types": [
+        "bin"
+      ],
+      "name": "build-script-build",
+      "src_path": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cap-std-3.4.5/build.rs",
+      "edition": "2021",
+      "doc": false,
+      "doctest": false,
+      "test": false
+    },
+    "profile": {
+      "opt_level": "0",
+      "debuginfo": 0,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": false
+    },
+    "features": [
+      "default"
+    ],
+    "filenames": [
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/build/cap-std-e23356b09e4485d5/build-script-build"
+    ],
+    "executable": null,
+    "fresh": true
+  },
+  {
+    "reason": "compiler-artifact",
+    "package_id": "registry+https://github.com/rust-lang/crates.io-index#cap-std@4.0.2",
+    "manifest_path": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cap-std-4.0.2/Cargo.toml",
+    "target": {
+      "kind": [
+        "custom-build"
+      ],
+      "crate_types": [
+        "bin"
+      ],
+      "name": "build-script-build",
+      "src_path": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cap-std-4.0.2/build.rs",
+      "edition": "2021",
+      "doc": false,
+      "doctest": false,
+      "test": false
+    },
+    "profile": {
+      "opt_level": "0",
+      "debuginfo": 0,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": false
+    },
+    "features": [
+      "default"
+    ],
+    "filenames": [
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/build/cap-std-2a6a260632d18306/build-script-build"
+    ],
+    "executable": null,
+    "fresh": true
+  },
+  {
+    "reason": "compiler-artifact",
+    "package_id": "registry+https://github.com/rust-lang/crates.io-index#cap-std@3.4.5",
+    "manifest_path": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cap-std-3.4.5/Cargo.toml",
+    "target": {
+      "kind": [
+        "lib"
+      ],
+      "crate_types": [
+        "lib"
+      ],
+      "name": "cap_std",
+      "src_path": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cap-std-3.4.5/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "profile": {
+      "opt_level": "0",
+      "debuginfo": 0,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": false
+    },
+    "features": [
+      "default"
+    ],
+    "filenames": [
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/deps/libcap_std-4e50d46ea05b7414.rlib",
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/deps/libcap_std-4e50d46ea05b7414.rmeta"
+    ],
+    "executable": null,
+    "fresh": true
+  },
+  {
+    "reason": "compiler-artifact",
+    "package_id": "registry+https://github.com/rust-lang/crates.io-index#cap-std@4.0.2",
+    "manifest_path": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cap-std-4.0.2/Cargo.toml",
+    "target": {
+      "kind": [
+        "lib"
+      ],
+      "crate_types": [
+        "lib"
+      ],
+      "name": "cap_std",
+      "src_path": "/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cap-std-4.0.2/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "profile": {
+      "opt_level": "0",
+      "debuginfo": 0,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": false
+    },
+    "features": [
+      "default"
+    ],
+    "filenames": [
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/deps/libcap_std-438e64b62ed602cd.rlib",
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/deps/libcap_std-438e64b62ed602cd.rmeta"
+    ],
+    "executable": null,
+    "fresh": true
+  },
+  {
+    "reason": "compiler-artifact",
+    "package_id": "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c#hardened-wasmtime-runtime@0.1.0",
+    "manifest_path": "/home/brittonr/.cargo/git/checkouts/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx-0b10900455b8570d/cf4a191/crates/hardened-wasmtime-runtime/Cargo.toml",
+    "target": {
+      "kind": [
+        "lib"
+      ],
+      "crate_types": [
+        "lib"
+      ],
+      "name": "hardened_wasmtime_runtime",
+      "src_path": "/home/brittonr/.cargo/git/checkouts/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx-0b10900455b8570d/cf4a191/crates/hardened-wasmtime-runtime/src/lib.rs",
+      "edition": "2024",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "profile": {
+      "opt_level": "0",
+      "debuginfo": 0,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": false
+    },
+    "features": [],
+    "filenames": [
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/deps/libhardened_wasmtime_runtime-89816da4b3964217.rlib",
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/deps/libhardened_wasmtime_runtime-89816da4b3964217.rmeta"
+    ],
+    "executable": null,
+    "fresh": true
+  },
+  {
+    "reason": "compiler-artifact",
+    "package_id": "git+ssh://git@github.com/OnixResearch/mantle.git?rev=e1827a8cc1cacf2810aa2314dc8971177832a8f0#mantle-wasm-consumer-verifier@0.1.0",
+    "manifest_path": "/home/brittonr/.cargo/git/checkouts/mantle-f0d31b6b0e1ad65b/e1827a8/crates/mantle-wasm-consumer-verifier/Cargo.toml",
+    "target": {
+      "kind": [
+        "lib"
+      ],
+      "crate_types": [
+        "lib"
+      ],
+      "name": "mantle_wasm_consumer_verifier",
+      "src_path": "/home/brittonr/.cargo/git/checkouts/mantle-f0d31b6b0e1ad65b/e1827a8/crates/mantle-wasm-consumer-verifier/src/lib.rs",
+      "edition": "2024",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "profile": {
+      "opt_level": "0",
+      "debuginfo": 0,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": false
+    },
+    "features": [
+      "default",
+      "std"
+    ],
+    "filenames": [
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/deps/libmantle_wasm_consumer_verifier-358f784a70d25b2b.rlib",
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/deps/libmantle_wasm_consumer_verifier-358f784a70d25b2b.rmeta"
+    ],
+    "executable": null,
+    "fresh": true
+  },
+  {
+    "reason": "compiler-artifact",
+    "package_id": "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c#hardened-wasmtime-shell@0.1.0",
+    "manifest_path": "/home/brittonr/.cargo/git/checkouts/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx-0b10900455b8570d/cf4a191/crates/hardened-wasmtime-shell/Cargo.toml",
+    "target": {
+      "kind": [
+        "lib"
+      ],
+      "crate_types": [
+        "lib"
+      ],
+      "name": "hardened_wasmtime_shell",
+      "src_path": "/home/brittonr/.cargo/git/checkouts/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx-0b10900455b8570d/cf4a191/crates/hardened-wasmtime-shell/src/lib.rs",
+      "edition": "2024",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "profile": {
+      "opt_level": "0",
+      "debuginfo": 0,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": false
+    },
+    "features": [],
+    "filenames": [
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/deps/libhardened_wasmtime_shell-da2293bda8662e15.rlib",
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/deps/libhardened_wasmtime_shell-da2293bda8662e15.rmeta"
+    ],
+    "executable": null,
+    "fresh": true
+  },
+  {
+    "reason": "compiler-artifact",
+    "package_id": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026#molten@0.1.0",
+    "manifest_path": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/Cargo.toml",
+    "target": {
+      "kind": [
+        "lib"
+      ],
+      "crate_types": [
+        "lib"
+      ],
+      "name": "molten",
+      "src_path": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/src/lib.rs",
+      "edition": "2024",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "profile": {
+      "opt_level": "0",
+      "debuginfo": 0,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": false
+    },
+    "features": [],
+    "filenames": [
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/libmolten.rlib",
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/deps/libmolten-b3ce96dccb503da1.rmeta"
+    ],
+    "executable": null,
+    "fresh": false
+  }
+]

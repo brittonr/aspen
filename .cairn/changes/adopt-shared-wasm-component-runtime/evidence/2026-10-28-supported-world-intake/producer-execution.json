@@ -1,0 +1,1589 @@
+{
+  "schema": "mantle-wasm-component-pipeline-execution-report-v1",
+  "request_blake3": "ef9902a029a6ecad775643e4ac8db77963eda3c1bc12fd3d1416e0d6dd25c8d9",
+  "cohort_blake3": "4747263ad5c687ba0df0747aef63b5c63f8908f6be02fb35c72bbe80a982fbf8",
+  "stage_receipts": [
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "package-resolution",
+      "program": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/wkg",
+      "program_blake3": "4281299907ec5d70ec0b25c65dc082575d0958b298e20759090d0fc073531863",
+      "args": [
+        "wit",
+        "fetch",
+        "--config",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/.mantle/wasm-component/wkg-config.toml",
+        "--cache",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wkg-cache",
+        "--wit-dir",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/wit",
+        "--type",
+        "wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target",
+        "HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/home",
+        "RUSTC": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wkg-cache",
+        "WKG_CONFIG_FILE": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/home/brittonr/mop28/.tmpYUWKwE/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "c96f4f5c5d3e60b1d6168997c029e3e61c8b64d7369b4b7fb2808907e3b085f1"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "binding-generation",
+      "program": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/wit-bindgen",
+      "program_blake3": "72ff98829ca7f643bad659ac4e7a2dff0c1e084a24caeda3bbfdc18dcc4674fa",
+      "args": [
+        "rust",
+        "--world",
+        "actor",
+        "--generate-all",
+        "--out-dir",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/generated-bindings",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/wit"
+      ],
+      "environment": {
+        "CARGO_HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target",
+        "HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/home",
+        "RUSTC": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wkg-cache",
+        "WKG_CONFIG_FILE": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/home/brittonr/mop28/.tmpYUWKwE/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "4a01cfefbc72b53dd3ce3a5e6ec46485f9d5dcfcdd23b4af25c609d55abb180f",
+      "output_blake3": null,
+      "receipt_blake3": "5bc3435f00ce2c5c979610e34491a82d7ff784c0422ca8f93f46b4105b66ab62"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "compilation",
+      "program": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/cargo",
+      "program_blake3": "d8a9d6b2508ab7ab4229ef0e3b2a980d6a647c56f22948b6e6058666d262d3f0",
+      "args": [
+        "build",
+        "--locked",
+        "--offline",
+        "--release",
+        "--target",
+        "wasm32-wasip2",
+        "--package",
+        "mantle-wasm-production-fixture"
+      ],
+      "environment": {
+        "CARGO_HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target",
+        "CARGO_TARGET_WASM32_WASIP2_LINKER": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/wasm-component-ld",
+        "HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/home",
+        "RUSTC": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "RUSTFLAGS": "-C link-arg=--skip-wit-component",
+        "WKG_CACHE_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wkg-cache",
+        "WKG_CONFIG_FILE": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [
+        {
+          "name": "rustc",
+          "path": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/rustc",
+          "digest_blake3": "f375ca51558b0ddd263eae7fd39d5f045d49e8491e9303bf109f15a93869fe1b"
+        },
+        {
+          "name": "wasm-component-ld",
+          "path": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/wasm-component-ld",
+          "digest_blake3": "9152c4c4269abcbe28df77fa7c7bfb55a996af43ceca20036379fa2ab21c351f"
+        }
+      ],
+      "read_only_inputs": [
+        "/home/brittonr/mop28/.tmpYUWKwE/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "fa5f22a27f09339219254e7cba2e020f90fd4fa58366b57b52cb30304cb079d2",
+      "output_blake3": "f0c16113c9b035d6eb5094cb7e610b87c8b517f8e81d6a9068cfde55072724bc",
+      "receipt_blake3": "56c7fc82332fd24ec179991a7ca7f636be4e3f8a2550b6ec059a11f4ce4bb972"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "compiled-validation",
+      "program": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "validate",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target/wasm32-wasip2/release/mantle_wasm_production_fixture.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target",
+        "HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/home",
+        "RUSTC": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wkg-cache",
+        "WKG_CONFIG_FILE": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/home/brittonr/mop28/.tmpYUWKwE/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "f84276a4d39d57caf693697d424ad72793d198be6458f5bdbd745d5acff93908"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "wizer-first",
+      "program": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/wizer",
+      "program_blake3": "036209124b1f08ade34bc6d26870f440271332e8e50385cc8028329d7a2d40b2",
+      "args": [
+        "--init-func",
+        "wizer.initialize",
+        "--inherit-env=false",
+        "--inherit-stdio=false",
+        "-o",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wizer-first-core.wasm",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target/wasm32-wasip2/release/mantle_wasm_production_fixture.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target",
+        "HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/home",
+        "RUSTC": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wkg-cache",
+        "WKG_CONFIG_FILE": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/home/brittonr/mop28/.tmpYUWKwE/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": "472f6e9e67b50f85f32ff9fc054f38c3cbd291ee61a4279d1ce3b1560a1d93a5",
+      "receipt_blake3": "963bb1e2903b6280500f8d798e8c2070d0c74fe8306103527599ba30abbc033f"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "wizer-repeated",
+      "program": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/wizer",
+      "program_blake3": "036209124b1f08ade34bc6d26870f440271332e8e50385cc8028329d7a2d40b2",
+      "args": [
+        "--init-func",
+        "wizer.initialize",
+        "--inherit-env=false",
+        "--inherit-stdio=false",
+        "-o",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wizer-repeated-core.wasm",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target/wasm32-wasip2/release/mantle_wasm_production_fixture.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target",
+        "HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/home",
+        "RUSTC": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wkg-cache",
+        "WKG_CONFIG_FILE": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/home/brittonr/mop28/.tmpYUWKwE/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": "472f6e9e67b50f85f32ff9fc054f38c3cbd291ee61a4279d1ce3b1560a1d93a5",
+      "receipt_blake3": "41b48a8d57a88b0f058fbd6b1f56fd8dc7c71e3e6596ad1c7d7098d757bff998"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "componentization",
+      "program": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "component",
+        "new",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wizer-first-core.wasm",
+        "-o",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/componentized.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target",
+        "HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/home",
+        "RUSTC": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wkg-cache",
+        "WKG_CONFIG_FILE": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/home/brittonr/mop28/.tmpYUWKwE/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": "5ee1a75de9df948316eeb9673701b014b9531b71819e1e38e998a64605f3386b",
+      "receipt_blake3": "8867920f908d5cc7cb5fefb1c85d14ca8c6f8b58d4fed71bd63e122368e71543"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "componentized-validation",
+      "program": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "validate",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/componentized.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target",
+        "HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/home",
+        "RUSTC": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wkg-cache",
+        "WKG_CONFIG_FILE": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/home/brittonr/mop28/.tmpYUWKwE/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "5c3b4a2b3627fa3a09ce50c23f166f4b6a3d4a353f0335e9587875beb04f665f"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "composition",
+      "program": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/wac",
+      "program_blake3": "1d023e364726085a7a2fd53b6f2e1d4e6267b921836fd003c96a1774072adeab",
+      "args": [
+        "compose",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/.mantle/wasm-component/composition.wac",
+        "--dep",
+        "root:component=/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/componentized.wasm",
+        "--output",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/composed.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target",
+        "HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/home",
+        "RUSTC": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wkg-cache",
+        "WKG_CONFIG_FILE": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/home/brittonr/mop28/.tmpYUWKwE/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": "a746e7284365cfd9a50f3b172dea496a4cd233757f172138a8df802054b05ed6",
+      "receipt_blake3": "7b7fe41b28c5da61ef26fd6e8049711dcf3fd4b2ac9fa92b1ddc1235b9fca605"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "composed-validation",
+      "program": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "validate",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/composed.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target",
+        "HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/home",
+        "RUSTC": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wkg-cache",
+        "WKG_CONFIG_FILE": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/home/brittonr/mop28/.tmpYUWKwE/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "e172d14553f2a59350ef6ec0080e9d5518bdf52a8e76da879065b3099e74217b"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "virtualization-input-inspection",
+      "program": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "component",
+        "wit",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/composed.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target",
+        "HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/home",
+        "RUSTC": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wkg-cache",
+        "WKG_CONFIG_FILE": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/home/brittonr/mop28/.tmpYUWKwE/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "e612a5dbe55b5513c0756345a283e3c0096e2b9ee1bb9a4d68e6164618957437",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "d8bcc19e10faf59d5987197914ae8e0fa6af16c95ec6155634a90c9f073330cd"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "virtualized-validation",
+      "program": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "validate",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/virtualized.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target",
+        "HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/home",
+        "RUSTC": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wkg-cache",
+        "WKG_CONFIG_FILE": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/home/brittonr/mop28/.tmpYUWKwE/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "15c7190bafbe976f14147354a5bc3c467b36f9e27f478eb67e05de5cf082efe7"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "metadata-normalization",
+      "program": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "strip",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/virtualized.wasm",
+        "-o",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/normalized.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target",
+        "HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/home",
+        "RUSTC": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wkg-cache",
+        "WKG_CONFIG_FILE": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/home/brittonr/mop28/.tmpYUWKwE/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": "e3e1c38cb8bbc4c9866f1791f1f7f10cb48f8de2db10eb8a66de4eada9f49199",
+      "receipt_blake3": "5c4c99e327ca136fd2ad9995f1f2221ec9afa8d57a44a962e0668e3711fdc722"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "portable-validation",
+      "program": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "validate",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/normalized.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target",
+        "HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/home",
+        "RUSTC": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wkg-cache",
+        "WKG_CONFIG_FILE": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/home/brittonr/mop28/.tmpYUWKwE/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "8b07937971f710c7f45c61448a0c214d5fc3c31131fb70c881a1506cee5308da"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "runtime-smoke",
+      "program": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/wasmtime",
+      "program_blake3": "e8168340d31722b18e5665d66f8be05343d7ccfc8fc38dc23d7c60b2f9d6aea8",
+      "args": [
+        "run",
+        "--invoke",
+        "invoke([1,2,3])",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/normalized.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target",
+        "HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/home",
+        "RUSTC": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wkg-cache",
+        "WKG_CONFIG_FILE": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/home/brittonr/mop28/.tmpYUWKwE/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "35035785ecd2ccd193772956301606983a82ff4293b43a4d778fa4bd952aca72",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "28b6f064a3cb033b9bc16879967500f8addf1c3aa4ad01e9d807a0bc01aafe45"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "octet-validation",
+      "program": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/cargo-octet",
+      "program_blake3": "07b39dc4aa40ebef6a890b1c57b8cf03c44df98f85e58cda27ab1d893f582de8",
+      "args": [
+        "evidence",
+        "collect",
+        "--rail",
+        "wasm-artifact",
+        "--input",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/normalized.wasm",
+        "--config",
+        "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/share/mantle/octet/wasm-artifact-profiles.json",
+        "--profile",
+        "molten-component-baseline",
+        "--parent-artifact",
+        "mantle:e3e1c38cb8bbc4c9866f1791f1f7f10cb48f8de2db10eb8a66de4eada9f49199",
+        "--artifact-dir",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/octet-final",
+        "--output-format",
+        "json"
+      ],
+      "environment": {
+        "CARGO_HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target",
+        "HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/home",
+        "RUSTC": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wkg-cache",
+        "WKG_CONFIG_FILE": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/home/brittonr/mop28/.tmpYUWKwE/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "2071f43f5a4d2ddab0cdcd6844455d69da720b1ce3f4e3653d7beb802c54f173",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "a2d09681f10aaa8bff0645a4988057d669eb577e69fe003dad2e295d155d0ad3"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "octet-artifact-verification",
+      "program": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/cargo-octet",
+      "program_blake3": "07b39dc4aa40ebef6a890b1c57b8cf03c44df98f85e58cda27ab1d893f582de8",
+      "args": [
+        "artifact",
+        "verify",
+        "--artifact-dir",
+        "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/octet-final",
+        "--output-format",
+        "json"
+      ],
+      "environment": {
+        "CARGO_HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/target",
+        "HOME": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/home",
+        "RUSTC": "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/wkg-cache",
+        "WKG_CONFIG_FILE": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/.mantle-wasm-component-work-MkUVG8/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/home/brittonr/mop28/.tmpYUWKwE/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "3e18369efc4d59cd454eb686a8525978d097b4bb686b470ec873618d02c222fa",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "4245b143b3af8c55428984d5ceaf938ffb01a8a6d3fd20cf3932dd327ddb9a7d"
+    }
+  ],
+  "artifacts": [
+    {
+      "role": "checked-wkg-lock",
+      "path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/wkg.lock",
+      "digest_blake3": "4d943019537f1e732f994d6abc139a6db2eef96a04bf5bde4002237db3c73aa8",
+      "size_bytes": 291
+    },
+    {
+      "role": "compiled-core-module",
+      "path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/compiled-core.wasm",
+      "digest_blake3": "f0c16113c9b035d6eb5094cb7e610b87c8b517f8e81d6a9068cfde55072724bc",
+      "size_bytes": 4017
+    },
+    {
+      "role": "wizer-core-output",
+      "path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/wizer-first-core.wasm",
+      "digest_blake3": "472f6e9e67b50f85f32ff9fc054f38c3cbd291ee61a4279d1ce3b1560a1d93a5",
+      "size_bytes": 3988
+    },
+    {
+      "role": "wizer-repeated-core-output",
+      "path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/wizer-repeated-core.wasm",
+      "digest_blake3": "472f6e9e67b50f85f32ff9fc054f38c3cbd291ee61a4279d1ce3b1560a1d93a5",
+      "size_bytes": 3988
+    },
+    {
+      "role": "wizer-componentized-output",
+      "path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/componentized.wasm",
+      "digest_blake3": "5ee1a75de9df948316eeb9673701b014b9531b71819e1e38e998a64605f3386b",
+      "size_bytes": 4072
+    },
+    {
+      "role": "composed-component",
+      "path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/composed.wasm",
+      "digest_blake3": "a746e7284365cfd9a50f3b172dea496a4cd233757f172138a8df802054b05ed6",
+      "size_bytes": 4236
+    },
+    {
+      "role": "virtualized-component",
+      "path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/virtualized.wasm",
+      "digest_blake3": "a746e7284365cfd9a50f3b172dea496a4cd233757f172138a8df802054b05ed6",
+      "size_bytes": 4236
+    },
+    {
+      "role": "normalized-portable-component",
+      "path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/normalized.wasm",
+      "digest_blake3": "e3e1c38cb8bbc4c9866f1791f1f7f10cb48f8de2db10eb8a66de4eada9f49199",
+      "size_bytes": 3700
+    },
+    {
+      "role": "octet-receipt",
+      "path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/octet-evidence-rail-receipt.json",
+      "digest_blake3": "2071f43f5a4d2ddab0cdcd6844455d69da720b1ce3f4e3653d7beb802c54f173",
+      "size_bytes": 4726
+    },
+    {
+      "role": "octet-summary",
+      "path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/octet-summary.txt",
+      "digest_blake3": "1f3b72902371c4a6731e6bd700258b02e6a71acb7e970f66b73f967ecb803f18",
+      "size_bytes": 1353
+    },
+    {
+      "role": "octet-provenance",
+      "path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/octet-provenance.jsonl",
+      "digest_blake3": "7de323ef237535bbbdb964e1ba93bf1e5bf76baa145f69e9d5e9af997a0672e9",
+      "size_bytes": 1044
+    },
+    {
+      "role": "octet-exact-artifact",
+      "path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/octet-wasm-artifact.bin",
+      "digest_blake3": "e3e1c38cb8bbc4c9866f1791f1f7f10cb48f8de2db10eb8a66de4eada9f49199",
+      "size_bytes": 3700
+    },
+    {
+      "role": "octet-artifact-verification",
+      "path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/octet-artifact-verification.json",
+      "digest_blake3": "3e18369efc4d59cd454eb686a8525978d097b4bb686b470ec873618d02c222fa",
+      "size_bytes": 1252
+    },
+    {
+      "role": "component-materialization-bundle",
+      "path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/materialization-bundle.json",
+      "digest_blake3": "66cef818908347a132eb798e861a6011204bef7c83d95434798a943a997f66f5",
+      "size_bytes": 17419
+    },
+    {
+      "role": "component-artifact-attestation",
+      "path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/component-attestation.json",
+      "digest_blake3": "de838096da5cd5bf86d6939a649839529ec280229fb85366fe423f649913fce9",
+      "size_bytes": 2975
+    },
+    {
+      "role": "component-release-binding",
+      "path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/component-release-binding.json",
+      "digest_blake3": "ffb35b0adb478610ae0f2ddca78a0ebed086681285169e5374237a7c2ae79a28",
+      "size_bytes": 1484
+    }
+  ],
+  "blockers": [],
+  "octet_validations": [
+    {
+      "stage_key": "octet-validation",
+      "artifact": {
+        "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/normalized.wasm",
+        "digest_blake3": "e3e1c38cb8bbc4c9866f1791f1f7f10cb48f8de2db10eb8a66de4eada9f49199",
+        "size_bytes": 3700
+      },
+      "receipt": {
+        "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/octet-evidence-rail-receipt.json",
+        "digest_blake3": "2071f43f5a4d2ddab0cdcd6844455d69da720b1ce3f4e3653d7beb802c54f173",
+        "size_bytes": 4726
+      },
+      "verification_report": {
+        "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/octet-artifact-verification.json",
+        "digest_blake3": "3e18369efc4d59cd454eb686a8525978d097b4bb686b470ec873618d02c222fa",
+        "size_bytes": 1252
+      },
+      "profile_blake3": "24dc3346b817ee2645b000922a612a1988f63914b49688a8b72ebb758316c846",
+      "cohort_blake3": "c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a",
+      "source_repository": "https://github.com/OnixResearch/octet",
+      "source_revision": "0e0e5dc8461b8b32c286de362c290b3f3ea2deee",
+      "package_name": "cargo-octet",
+      "package_version": "0.1.0",
+      "config_blake3": "48aabf8dc2ad189ebe051ddce48746a8f878fcbcebf506007c505085e9a8ed83",
+      "decision": "passed"
+    }
+  ],
+  "component_report": {
+    "schema": "mantle-wasm-component-build-report-v1",
+    "nodes": [
+      {
+        "identity_blake3": "890044ccd2949ea3a5a91ef3b8a26963594010595584e546ddfed52c155339db",
+        "stage_key": "checked-lock",
+        "kind": "lock",
+        "status": "succeeded",
+        "parents": [],
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/wkg.lock",
+          "digest_blake3": "4d943019537f1e732f994d6abc139a6db2eef96a04bf5bde4002237db3c73aa8",
+          "size_bytes": 291
+        },
+        "tool_identity_blake3": null,
+        "profile_identity_blake3": "2e0e17a47fa6f22c59956b2d6beb7934cbea7778385fcbdd4b480df354f650b5",
+        "claims": [
+          "exact-input-identities"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "073daa3059b1d00064489565ad9a2c9f341c54d4fc8ff5d70eee7f02ae7adeab",
+        "stage_key": "package-resolution",
+        "kind": "package-resolution",
+        "status": "succeeded",
+        "parents": [
+          "890044ccd2949ea3a5a91ef3b8a26963594010595584e546ddfed52c155339db"
+        ],
+        "artifact": {
+          "logical_path": "/home/brittonr/mop28/.tmpYUWKwE/registry/demo/dep/0.1.0.wasm",
+          "digest_blake3": "c2d371abd39a3ae27295233d15d92034ed6542cd8967c053659b9f5cbe449dba",
+          "size_bytes": 200
+        },
+        "tool_identity_blake3": "4281299907ec5d70ec0b25c65dc082575d0958b298e20759090d0fc073531863",
+        "profile_identity_blake3": "2e0e17a47fa6f22c59956b2d6beb7934cbea7778385fcbdd4b480df354f650b5",
+        "claims": [
+          "exact-input-identities"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "850ab2810ea5f99315bf4d31811ba5b377b34293d7c6087c1c23853d99670339",
+        "stage_key": "binding-generation",
+        "kind": "binding-generation",
+        "status": "succeeded",
+        "parents": [
+          "073daa3059b1d00064489565ad9a2c9f341c54d4fc8ff5d70eee7f02ae7adeab"
+        ],
+        "artifact": null,
+        "tool_identity_blake3": "72ff98829ca7f643bad659ac4e7a2dff0c1e084a24caeda3bbfdc18dcc4674fa",
+        "profile_identity_blake3": null,
+        "claims": [
+          "exact-input-identities"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "bf3d7e0455717a85ce4b414f78ea993396fc84d025ee64f5f39c0c91bf3e57b2",
+        "stage_key": "compilation",
+        "kind": "compilation",
+        "status": "succeeded",
+        "parents": [
+          "850ab2810ea5f99315bf4d31811ba5b377b34293d7c6087c1c23853d99670339"
+        ],
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/compiled-core.wasm",
+          "digest_blake3": "f0c16113c9b035d6eb5094cb7e610b87c8b517f8e81d6a9068cfde55072724bc",
+          "size_bytes": 4017
+        },
+        "tool_identity_blake3": "f375ca51558b0ddd263eae7fd39d5f045d49e8491e9303bf109f15a93869fe1b",
+        "profile_identity_blake3": null,
+        "claims": [
+          "exact-input-identities"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "f297a0483a5a466c7da861812c6b7a09e6e24b859f7c6c6b4e2b5f5c8da8c75d",
+        "stage_key": "compiled-validation",
+        "kind": "build-validation",
+        "status": "succeeded",
+        "parents": [
+          "bf3d7e0455717a85ce4b414f78ea993396fc84d025ee64f5f39c0c91bf3e57b2"
+        ],
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/compiled-core.wasm",
+          "digest_blake3": "f0c16113c9b035d6eb5094cb7e610b87c8b517f8e81d6a9068cfde55072724bc",
+          "size_bytes": 4017
+        },
+        "tool_identity_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+        "profile_identity_blake3": null,
+        "claims": [
+          "core-module-validated"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "bc2287955cb5f12398fb043c23873c3171588e4c827c28ba551a4060007f9b18",
+        "stage_key": "wizer",
+        "kind": "wizer",
+        "status": "succeeded",
+        "parents": [
+          "f297a0483a5a466c7da861812c6b7a09e6e24b859f7c6c6b4e2b5f5c8da8c75d"
+        ],
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/wizer-first-core.wasm",
+          "digest_blake3": "472f6e9e67b50f85f32ff9fc054f38c3cbd291ee61a4279d1ce3b1560a1d93a5",
+          "size_bytes": 3988
+        },
+        "tool_identity_blake3": "036209124b1f08ade34bc6d26870f440271332e8e50385cc8028329d7a2d40b2",
+        "profile_identity_blake3": "e5f6f5932518b1cd069b7fa29e05f71e970404f0e235cb000b0d9cd2371e36ed",
+        "claims": [
+          "repeated-transform-matched"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "bd8db54d9efaf0c32a7a0ab775d8848a36fc2e3d29237577ba5d66d07f7d4678",
+        "stage_key": "componentization",
+        "kind": "componentization",
+        "status": "succeeded",
+        "parents": [
+          "bc2287955cb5f12398fb043c23873c3171588e4c827c28ba551a4060007f9b18"
+        ],
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/componentized.wasm",
+          "digest_blake3": "5ee1a75de9df948316eeb9673701b014b9531b71819e1e38e998a64605f3386b",
+          "size_bytes": 4072
+        },
+        "tool_identity_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+        "profile_identity_blake3": "e5f6f5932518b1cd069b7fa29e05f71e970404f0e235cb000b0d9cd2371e36ed",
+        "claims": [
+          "exact-input-identities"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "178f0c6119e1123d1b2fe08b4c2a00ee3deccbde1e782abd10b850b7b29c6c31",
+        "stage_key": "componentized-validation",
+        "kind": "build-validation",
+        "status": "succeeded",
+        "parents": [
+          "bd8db54d9efaf0c32a7a0ab775d8848a36fc2e3d29237577ba5d66d07f7d4678"
+        ],
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/componentized.wasm",
+          "digest_blake3": "5ee1a75de9df948316eeb9673701b014b9531b71819e1e38e998a64605f3386b",
+          "size_bytes": 4072
+        },
+        "tool_identity_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+        "profile_identity_blake3": null,
+        "claims": [
+          "portable-bytes-validated"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "9276c05dbc9100b0238f4b1adb7119b5c7c05393f3a079b02e1ecf9b3dc2776a",
+        "stage_key": "composition",
+        "kind": "composition",
+        "status": "succeeded",
+        "parents": [
+          "178f0c6119e1123d1b2fe08b4c2a00ee3deccbde1e782abd10b850b7b29c6c31"
+        ],
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/composed.wasm",
+          "digest_blake3": "a746e7284365cfd9a50f3b172dea496a4cd233757f172138a8df802054b05ed6",
+          "size_bytes": 4236
+        },
+        "tool_identity_blake3": "1d023e364726085a7a2fd53b6f2e1d4e6267b921836fd003c96a1774072adeab",
+        "profile_identity_blake3": null,
+        "claims": [
+          "exact-input-identities"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "ae4ff3a58f6194d696243c3ae270962c29d571db76a2c8cc4cc26b0ae8b98146",
+        "stage_key": "composed-validation",
+        "kind": "build-validation",
+        "status": "succeeded",
+        "parents": [
+          "9276c05dbc9100b0238f4b1adb7119b5c7c05393f3a079b02e1ecf9b3dc2776a"
+        ],
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/composed.wasm",
+          "digest_blake3": "a746e7284365cfd9a50f3b172dea496a4cd233757f172138a8df802054b05ed6",
+          "size_bytes": 4236
+        },
+        "tool_identity_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+        "profile_identity_blake3": null,
+        "claims": [
+          "portable-bytes-validated"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "dcd4f867cbd2c19af3edb527ac02ffadeaf724fb6171a714b38bda4f55c7449d",
+        "stage_key": "virtualization",
+        "kind": "virtualization",
+        "status": "succeeded",
+        "parents": [
+          "ae4ff3a58f6194d696243c3ae270962c29d571db76a2c8cc4cc26b0ae8b98146"
+        ],
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/virtualized.wasm",
+          "digest_blake3": "a746e7284365cfd9a50f3b172dea496a4cd233757f172138a8df802054b05ed6",
+          "size_bytes": 4236
+        },
+        "tool_identity_blake3": null,
+        "profile_identity_blake3": "9a9fa0b49ca414565ac71dbd0c72d51b580e46c9c476ce886ace42317cdb0ca8",
+        "claims": [
+          "deny-all-virtualization-planned"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "7b7c904aaa9cb84f8d5a6f87a5bda3cf084b6c8dd58726234e49f55979146ac4",
+        "stage_key": "virtualized-validation",
+        "kind": "build-validation",
+        "status": "succeeded",
+        "parents": [
+          "dcd4f867cbd2c19af3edb527ac02ffadeaf724fb6171a714b38bda4f55c7449d"
+        ],
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/virtualized.wasm",
+          "digest_blake3": "a746e7284365cfd9a50f3b172dea496a4cd233757f172138a8df802054b05ed6",
+          "size_bytes": 4236
+        },
+        "tool_identity_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+        "profile_identity_blake3": null,
+        "claims": [
+          "portable-bytes-validated"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "0706a2a9481ab5446d1bbd7185cf1483a75c2bc5440942490869b009c5bf38b2",
+        "stage_key": "metadata-normalization",
+        "kind": "metadata-normalization",
+        "status": "succeeded",
+        "parents": [
+          "7b7c904aaa9cb84f8d5a6f87a5bda3cf084b6c8dd58726234e49f55979146ac4"
+        ],
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/normalized.wasm",
+          "digest_blake3": "e3e1c38cb8bbc4c9866f1791f1f7f10cb48f8de2db10eb8a66de4eada9f49199",
+          "size_bytes": 3700
+        },
+        "tool_identity_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+        "profile_identity_blake3": null,
+        "claims": [
+          "exact-input-identities"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "7c2e2592f9f0230e667eca4678c5df47e1f4320fe79fc94726790adb55d3dc7e",
+        "stage_key": "portable-validation",
+        "kind": "build-validation",
+        "status": "succeeded",
+        "parents": [
+          "0706a2a9481ab5446d1bbd7185cf1483a75c2bc5440942490869b009c5bf38b2"
+        ],
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/normalized.wasm",
+          "digest_blake3": "e3e1c38cb8bbc4c9866f1791f1f7f10cb48f8de2db10eb8a66de4eada9f49199",
+          "size_bytes": 3700
+        },
+        "tool_identity_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+        "profile_identity_blake3": null,
+        "claims": [
+          "portable-bytes-validated"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "31b5f741410eb22265a0c851bf56b137730508a072175f90494cee1ace36f72e",
+        "stage_key": "runtime-smoke",
+        "kind": "build-validation",
+        "status": "succeeded",
+        "parents": [
+          "7c2e2592f9f0230e667eca4678c5df47e1f4320fe79fc94726790adb55d3dc7e"
+        ],
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/normalized.wasm",
+          "digest_blake3": "e3e1c38cb8bbc4c9866f1791f1f7f10cb48f8de2db10eb8a66de4eada9f49199",
+          "size_bytes": 3700
+        },
+        "tool_identity_blake3": "e8168340d31722b18e5665d66f8be05343d7ccfc8fc38dc23d7c60b2f9d6aea8",
+        "profile_identity_blake3": "605a53191900ec2c8016cacc1e17c2338e9cda5423115dd5bb993e5082975910",
+        "claims": [
+          "exact-input-identities"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "519fd076e3f3d820a8577bff7c3a43be06a37ee720889ef66dc3163c8d095464",
+        "stage_key": "octet-validation",
+        "kind": "octet-validation",
+        "status": "succeeded",
+        "parents": [
+          "31b5f741410eb22265a0c851bf56b137730508a072175f90494cee1ace36f72e"
+        ],
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/octet-evidence-rail-receipt.json",
+          "digest_blake3": "2071f43f5a4d2ddab0cdcd6844455d69da720b1ce3f4e3653d7beb802c54f173",
+          "size_bytes": 4726
+        },
+        "tool_identity_blake3": "07b39dc4aa40ebef6a890b1c57b8cf03c44df98f85e58cda27ab1d893f582de8",
+        "profile_identity_blake3": "24dc3346b817ee2645b000922a612a1988f63914b49688a8b72ebb758316c846",
+        "claims": [
+          "octet-report-bound"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "a613a19e59a85e978a674cfcd5467e9b065bdb0be1a1872a12bfaad3c128be2d",
+        "stage_key": "aot",
+        "kind": "aot",
+        "status": "not-run",
+        "parents": [
+          "519fd076e3f3d820a8577bff7c3a43be06a37ee720889ef66dc3163c8d095464"
+        ],
+        "artifact": null,
+        "tool_identity_blake3": "e8168340d31722b18e5665d66f8be05343d7ccfc8fc38dc23d7c60b2f9d6aea8",
+        "profile_identity_blake3": null,
+        "claims": [],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "2a17d5c728c5efb176693a4f2a5ab205f8b41923232757759f0c0fcb5206855d",
+        "stage_key": "materialization-bundle",
+        "kind": "materialization-bundle",
+        "status": "succeeded",
+        "parents": [
+          "a613a19e59a85e978a674cfcd5467e9b065bdb0be1a1872a12bfaad3c128be2d"
+        ],
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/materialization-bundle.json",
+          "digest_blake3": "66cef818908347a132eb798e861a6011204bef7c83d95434798a943a997f66f5",
+          "size_bytes": 17419
+        },
+        "tool_identity_blake3": null,
+        "profile_identity_blake3": "8b622bd5b9364333f6b144715d8a7154ac31171c0783b690acec928fc999e429",
+        "claims": [
+          "materialization-objects-rehashable"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      }
+    ],
+    "non_claims": [
+      "not-component-behavior-correctness",
+      "not-octet-policy-interpretation",
+      "not-release-eligibility",
+      "not-runtime-authority",
+      "not-runtime-sandboxing"
+    ],
+    "report_identity_blake3": "72cf9558730f92a6780a20aa1a92501d8d5e8ff71896402729a28913816b6c74"
+  },
+  "materialization_bundle": {
+    "schema": "mantle-wasm-component-materialization-bundle-v1",
+    "name": "mantle-wasm-production-fixture",
+    "manifest_blake3": "3dc9d7d452819c543b1833a2f52222f6b9f4a8076a8eebf52b0738392a925bd7",
+    "cohort_blake3": "4747263ad5c687ba0df0747aef63b5c63f8908f6be02fb35c72bbe80a982fbf8",
+    "wit_inputs": [
+      {
+        "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/inputs/selected-world.wit",
+        "digest_blake3": "83be349bb27975ada30dbe60817c5404df7862babdf02ae229b399886e76d5e8",
+        "size_bytes": 423
+      }
+    ],
+    "package_inputs": [
+      {
+        "package": "demo:dep",
+        "version": "0.1.0",
+        "registry": "local",
+        "protocol_digest": "sha256:a11ba8ad11065a2b857612c159fa0132145b8ce13951a18c2a4650825dd7bfa0",
+        "object": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/inputs/packages/package-0.wasm",
+          "digest_blake3": "c2d371abd39a3ae27295233d15d92034ed6542cd8967c053659b9f5cbe449dba",
+          "size_bytes": 200
+        }
+      }
+    ],
+    "source_closure": {
+      "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/inputs/source",
+      "digest_blake3": "afb70067b2b37a3185d7f15b816ebd81f1f0df9924fc28a49f29364589a01899",
+      "size_bytes": 8436
+    },
+    "lock": {
+      "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/wkg.lock",
+      "digest_blake3": "4d943019537f1e732f994d6abc139a6db2eef96a04bf5bde4002237db3c73aa8",
+      "size_bytes": 291
+    },
+    "final_portable": {
+      "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/normalized.wasm",
+      "digest_blake3": "e3e1c38cb8bbc4c9866f1791f1f7f10cb48f8de2db10eb8a66de4eada9f49199",
+      "size_bytes": 3700
+    },
+    "expected_octet_profile_blake3": "24dc3346b817ee2645b000922a612a1988f63914b49688a8b72ebb758316c846",
+    "expected_runtime_profile_blake3": "605a53191900ec2c8016cacc1e17c2338e9cda5423115dd5bb993e5082975910",
+    "stage_receipts": [
+      {
+        "stage_key": "aot",
+        "kind": "aot",
+        "receipt_blake3": "a613a19e59a85e978a674cfcd5467e9b065bdb0be1a1872a12bfaad3c128be2d",
+        "receipt": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/stage-receipts/aot.json",
+          "digest_blake3": "a613a19e59a85e978a674cfcd5467e9b065bdb0be1a1872a12bfaad3c128be2d",
+          "size_bytes": 440
+        },
+        "artifact": null
+      },
+      {
+        "stage_key": "binding-generation",
+        "kind": "binding-generation",
+        "receipt_blake3": "850ab2810ea5f99315bf4d31811ba5b377b34293d7c6087c1c23853d99670339",
+        "receipt": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/stage-receipts/binding-generation.json",
+          "digest_blake3": "850ab2810ea5f99315bf4d31811ba5b377b34293d7c6087c1c23853d99670339",
+          "size_bytes": 496
+        },
+        "artifact": null
+      },
+      {
+        "stage_key": "checked-lock",
+        "kind": "lock",
+        "receipt_blake3": "890044ccd2949ea3a5a91ef3b8a26963594010595584e546ddfed52c155339db",
+        "receipt": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/stage-receipts/checked-lock.json",
+          "digest_blake3": "890044ccd2949ea3a5a91ef3b8a26963594010595584e546ddfed52c155339db",
+          "size_bytes": 644
+        },
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/wkg.lock",
+          "digest_blake3": "4d943019537f1e732f994d6abc139a6db2eef96a04bf5bde4002237db3c73aa8",
+          "size_bytes": 291
+        }
+      },
+      {
+        "stage_key": "compilation",
+        "kind": "compilation",
+        "receipt_blake3": "bf3d7e0455717a85ce4b414f78ea993396fc84d025ee64f5f39c0c91bf3e57b2",
+        "receipt": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/stage-receipts/compilation.json",
+          "digest_blake3": "bf3d7e0455717a85ce4b414f78ea993396fc84d025ee64f5f39c0c91bf3e57b2",
+          "size_bytes": 727
+        },
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/compiled-core.wasm",
+          "digest_blake3": "f0c16113c9b035d6eb5094cb7e610b87c8b517f8e81d6a9068cfde55072724bc",
+          "size_bytes": 4017
+        }
+      },
+      {
+        "stage_key": "compiled-validation",
+        "kind": "build-validation",
+        "receipt_blake3": "f297a0483a5a466c7da861812c6b7a09e6e24b859f7c6c6b4e2b5f5c8da8c75d",
+        "receipt": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/stage-receipts/compiled-validation.json",
+          "digest_blake3": "f297a0483a5a466c7da861812c6b7a09e6e24b859f7c6c6b4e2b5f5c8da8c75d",
+          "size_bytes": 739
+        },
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/compiled-core.wasm",
+          "digest_blake3": "f0c16113c9b035d6eb5094cb7e610b87c8b517f8e81d6a9068cfde55072724bc",
+          "size_bytes": 4017
+        }
+      },
+      {
+        "stage_key": "componentization",
+        "kind": "componentization",
+        "receipt_blake3": "bd8db54d9efaf0c32a7a0ab775d8848a36fc2e3d29237577ba5d66d07f7d4678",
+        "receipt": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/stage-receipts/componentization.json",
+          "digest_blake3": "bd8db54d9efaf0c32a7a0ab775d8848a36fc2e3d29237577ba5d66d07f7d4678",
+          "size_bytes": 799
+        },
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/componentized.wasm",
+          "digest_blake3": "5ee1a75de9df948316eeb9673701b014b9531b71819e1e38e998a64605f3386b",
+          "size_bytes": 4072
+        }
+      },
+      {
+        "stage_key": "componentized-validation",
+        "kind": "build-validation",
+        "receipt_blake3": "178f0c6119e1123d1b2fe08b4c2a00ee3deccbde1e782abd10b850b7b29c6c31",
+        "receipt": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/stage-receipts/componentized-validation.json",
+          "digest_blake3": "178f0c6119e1123d1b2fe08b4c2a00ee3deccbde1e782abd10b850b7b29c6c31",
+          "size_bytes": 747
+        },
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/componentized.wasm",
+          "digest_blake3": "5ee1a75de9df948316eeb9673701b014b9531b71819e1e38e998a64605f3386b",
+          "size_bytes": 4072
+        }
+      },
+      {
+        "stage_key": "composed-validation",
+        "kind": "build-validation",
+        "receipt_blake3": "ae4ff3a58f6194d696243c3ae270962c29d571db76a2c8cc4cc26b0ae8b98146",
+        "receipt": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/stage-receipts/composed-validation.json",
+          "digest_blake3": "ae4ff3a58f6194d696243c3ae270962c29d571db76a2c8cc4cc26b0ae8b98146",
+          "size_bytes": 737
+        },
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/composed.wasm",
+          "digest_blake3": "a746e7284365cfd9a50f3b172dea496a4cd233757f172138a8df802054b05ed6",
+          "size_bytes": 4236
+        }
+      },
+      {
+        "stage_key": "composition",
+        "kind": "composition",
+        "receipt_blake3": "9276c05dbc9100b0238f4b1adb7119b5c7c05393f3a079b02e1ecf9b3dc2776a",
+        "receipt": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/stage-receipts/composition.json",
+          "digest_blake3": "9276c05dbc9100b0238f4b1adb7119b5c7c05393f3a079b02e1ecf9b3dc2776a",
+          "size_bytes": 722
+        },
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/composed.wasm",
+          "digest_blake3": "a746e7284365cfd9a50f3b172dea496a4cd233757f172138a8df802054b05ed6",
+          "size_bytes": 4236
+        }
+      },
+      {
+        "stage_key": "metadata-normalization",
+        "kind": "metadata-normalization",
+        "receipt_blake3": "0706a2a9481ab5446d1bbd7185cf1483a75c2bc5440942490869b009c5bf38b2",
+        "receipt": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/stage-receipts/metadata-normalization.json",
+          "digest_blake3": "0706a2a9481ab5446d1bbd7185cf1483a75c2bc5440942490869b009c5bf38b2",
+          "size_bytes": 746
+        },
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/normalized.wasm",
+          "digest_blake3": "e3e1c38cb8bbc4c9866f1791f1f7f10cb48f8de2db10eb8a66de4eada9f49199",
+          "size_bytes": 3700
+        }
+      },
+      {
+        "stage_key": "octet-validation",
+        "kind": "octet-validation",
+        "receipt_blake3": "519fd076e3f3d820a8577bff7c3a43be06a37ee720889ef66dc3163c8d095464",
+        "receipt": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/stage-receipts/octet-validation.json",
+          "digest_blake3": "519fd076e3f3d820a8577bff7c3a43be06a37ee720889ef66dc3163c8d095464",
+          "size_bytes": 809
+        },
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/octet-evidence-rail-receipt.json",
+          "digest_blake3": "2071f43f5a4d2ddab0cdcd6844455d69da720b1ce3f4e3653d7beb802c54f173",
+          "size_bytes": 4726
+        }
+      },
+      {
+        "stage_key": "package-resolution",
+        "kind": "package-resolution",
+        "receipt_blake3": "073daa3059b1d00064489565ad9a2c9f341c54d4fc8ff5d70eee7f02ae7adeab",
+        "receipt": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/stage-receipts/package-resolution.json",
+          "digest_blake3": "073daa3059b1d00064489565ad9a2c9f341c54d4fc8ff5d70eee7f02ae7adeab",
+          "size_bytes": 733
+        },
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/inputs/packages/package-0.wasm",
+          "digest_blake3": "c2d371abd39a3ae27295233d15d92034ed6542cd8967c053659b9f5cbe449dba",
+          "size_bytes": 200
+        }
+      },
+      {
+        "stage_key": "portable-validation",
+        "kind": "build-validation",
+        "receipt_blake3": "7c2e2592f9f0230e667eca4678c5df47e1f4320fe79fc94726790adb55d3dc7e",
+        "receipt": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/stage-receipts/portable-validation.json",
+          "digest_blake3": "7c2e2592f9f0230e667eca4678c5df47e1f4320fe79fc94726790adb55d3dc7e",
+          "size_bytes": 739
+        },
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/normalized.wasm",
+          "digest_blake3": "e3e1c38cb8bbc4c9866f1791f1f7f10cb48f8de2db10eb8a66de4eada9f49199",
+          "size_bytes": 3700
+        }
+      },
+      {
+        "stage_key": "runtime-smoke",
+        "kind": "build-validation",
+        "receipt_blake3": "31b5f741410eb22265a0c851bf56b137730508a072175f90494cee1ace36f72e",
+        "receipt": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/stage-receipts/runtime-smoke.json",
+          "digest_blake3": "31b5f741410eb22265a0c851bf56b137730508a072175f90494cee1ace36f72e",
+          "size_bytes": 793
+        },
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/normalized.wasm",
+          "digest_blake3": "e3e1c38cb8bbc4c9866f1791f1f7f10cb48f8de2db10eb8a66de4eada9f49199",
+          "size_bytes": 3700
+        }
+      },
+      {
+        "stage_key": "virtualization",
+        "kind": "virtualization",
+        "receipt_blake3": "dcd4f867cbd2c19af3edb527ac02ffadeaf724fb6171a714b38bda4f55c7449d",
+        "receipt": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/stage-receipts/virtualization.json",
+          "digest_blake3": "dcd4f867cbd2c19af3edb527ac02ffadeaf724fb6171a714b38bda4f55c7449d",
+          "size_bytes": 740
+        },
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/virtualized.wasm",
+          "digest_blake3": "a746e7284365cfd9a50f3b172dea496a4cd233757f172138a8df802054b05ed6",
+          "size_bytes": 4236
+        }
+      },
+      {
+        "stage_key": "virtualized-validation",
+        "kind": "build-validation",
+        "receipt_blake3": "7b7c904aaa9cb84f8d5a6f87a5bda3cf084b6c8dd58726234e49f55979146ac4",
+        "receipt": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/stage-receipts/virtualized-validation.json",
+          "digest_blake3": "7b7c904aaa9cb84f8d5a6f87a5bda3cf084b6c8dd58726234e49f55979146ac4",
+          "size_bytes": 743
+        },
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/virtualized.wasm",
+          "digest_blake3": "a746e7284365cfd9a50f3b172dea496a4cd233757f172138a8df802054b05ed6",
+          "size_bytes": 4236
+        }
+      },
+      {
+        "stage_key": "wizer",
+        "kind": "wizer",
+        "receipt_blake3": "bc2287955cb5f12398fb043c23873c3171588e4c827c28ba551a4060007f9b18",
+        "receipt": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/stage-receipts/wizer.json",
+          "digest_blake3": "bc2287955cb5f12398fb043c23873c3171588e4c827c28ba551a4060007f9b18",
+          "size_bytes": 784
+        },
+        "artifact": {
+          "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/wizer-first-core.wasm",
+          "digest_blake3": "472f6e9e67b50f85f32ff9fc054f38c3cbd291ee61a4279d1ce3b1560a1d93a5",
+          "size_bytes": 3988
+        }
+      }
+    ],
+    "wizer": {
+      "schema": "mantle-wasm-component-wizer-admission-v1",
+      "input": {
+        "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/compiled-core.wasm",
+        "digest_blake3": "f0c16113c9b035d6eb5094cb7e610b87c8b517f8e81d6a9068cfde55072724bc",
+        "size_bytes": 4017
+      },
+      "output": {
+        "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/wizer-first-core.wasm",
+        "digest_blake3": "472f6e9e67b50f85f32ff9fc054f38c3cbd291ee61a4279d1ce3b1560a1d93a5",
+        "size_bytes": 3988
+      },
+      "repeated_output": {
+        "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/wizer-repeated-core.wasm",
+        "digest_blake3": "472f6e9e67b50f85f32ff9fc054f38c3cbd291ee61a4279d1ce3b1560a1d93a5",
+        "size_bytes": 3988
+      },
+      "componentized_output": {
+        "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/componentized.wasm",
+        "digest_blake3": "5ee1a75de9df948316eeb9673701b014b9531b71819e1e38e998a64605f3386b",
+        "size_bytes": 4072
+      },
+      "cohort_blake3": "4747263ad5c687ba0df0747aef63b5c63f8908f6be02fb35c72bbe80a982fbf8",
+      "configuration_blake3": "e5f6f5932518b1cd069b7fa29e05f71e970404f0e235cb000b0d9cd2371e36ed",
+      "compilation_receipt_blake3": "56c7fc82332fd24ec179991a7ca7f636be4e3f8a2550b6ec059a11f4ce4bb972",
+      "first_transform_receipt_blake3": "963bb1e2903b6280500f8d798e8c2070d0c74fe8306103527599ba30abbc033f",
+      "repeated_transform_receipt_blake3": "41b48a8d57a88b0f058fbd6b1f56fd8dc7c71e3e6596ad1c7d7098d757bff998",
+      "componentization_receipt_blake3": "8867920f908d5cc7cb5fefb1c85d14ca8c6f8b58d4fed71bd63e122368e71543",
+      "deterministic_outputs_match": true,
+      "eligible_for_bundle": true,
+      "receipt_blake3": "7c87f5a83ab628a9e33e124e26c2caf1c9b4dadddd5063740bdba2ee31777789"
+    },
+    "aot": null,
+    "non_claims": [
+      "not-component-behavior-correctness",
+      "not-octet-policy-interpretation",
+      "not-release-eligibility",
+      "not-runtime-authority",
+      "not-runtime-sandboxing"
+    ],
+    "bundle_identity_blake3": "8b622bd5b9364333f6b144715d8a7154ac31171c0783b690acec928fc999e429"
+  },
+  "component_attestation": {
+    "schema": "mantle-wasm-component-artifact-attestation-v1",
+    "materialization_bundle_blake3": "8b622bd5b9364333f6b144715d8a7154ac31171c0783b690acec928fc999e429",
+    "materialization_bundle_object": {
+      "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/materialization-bundle.json",
+      "digest_blake3": "66cef818908347a132eb798e861a6011204bef7c83d95434798a943a997f66f5",
+      "size_bytes": 17419
+    },
+    "component_report_blake3": "72cf9558730f92a6780a20aa1a92501d8d5e8ff71896402729a28913816b6c74",
+    "stage_node_blake3": [
+      "890044ccd2949ea3a5a91ef3b8a26963594010595584e546ddfed52c155339db",
+      "073daa3059b1d00064489565ad9a2c9f341c54d4fc8ff5d70eee7f02ae7adeab",
+      "850ab2810ea5f99315bf4d31811ba5b377b34293d7c6087c1c23853d99670339",
+      "bf3d7e0455717a85ce4b414f78ea993396fc84d025ee64f5f39c0c91bf3e57b2",
+      "f297a0483a5a466c7da861812c6b7a09e6e24b859f7c6c6b4e2b5f5c8da8c75d",
+      "bc2287955cb5f12398fb043c23873c3171588e4c827c28ba551a4060007f9b18",
+      "bd8db54d9efaf0c32a7a0ab775d8848a36fc2e3d29237577ba5d66d07f7d4678",
+      "178f0c6119e1123d1b2fe08b4c2a00ee3deccbde1e782abd10b850b7b29c6c31",
+      "9276c05dbc9100b0238f4b1adb7119b5c7c05393f3a079b02e1ecf9b3dc2776a",
+      "ae4ff3a58f6194d696243c3ae270962c29d571db76a2c8cc4cc26b0ae8b98146",
+      "dcd4f867cbd2c19af3edb527ac02ffadeaf724fb6171a714b38bda4f55c7449d",
+      "7b7c904aaa9cb84f8d5a6f87a5bda3cf084b6c8dd58726234e49f55979146ac4",
+      "0706a2a9481ab5446d1bbd7185cf1483a75c2bc5440942490869b009c5bf38b2",
+      "7c2e2592f9f0230e667eca4678c5df47e1f4320fe79fc94726790adb55d3dc7e",
+      "31b5f741410eb22265a0c851bf56b137730508a072175f90494cee1ace36f72e",
+      "519fd076e3f3d820a8577bff7c3a43be06a37ee720889ef66dc3163c8d095464",
+      "a613a19e59a85e978a674cfcd5467e9b065bdb0be1a1872a12bfaad3c128be2d",
+      "2a17d5c728c5efb176693a4f2a5ab205f8b41923232757759f0c0fcb5206855d"
+    ],
+    "final_portable": {
+      "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/normalized.wasm",
+      "digest_blake3": "e3e1c38cb8bbc4c9866f1791f1f7f10cb48f8de2db10eb8a66de4eada9f49199",
+      "size_bytes": 3700
+    },
+    "octet_profile_blake3": "24dc3346b817ee2645b000922a612a1988f63914b49688a8b72ebb758316c846",
+    "octet_cohort_blake3": "c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a",
+    "octet_report": {
+      "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/octet-evidence-rail-receipt.json",
+      "digest_blake3": "2071f43f5a4d2ddab0cdcd6844455d69da720b1ce3f4e3653d7beb802c54f173",
+      "size_bytes": 4726
+    },
+    "aot": null,
+    "non_claims": [
+      "not-component-behavior-correctness",
+      "not-octet-policy-interpretation",
+      "not-release-eligibility",
+      "not-runtime-authority",
+      "not-runtime-sandboxing"
+    ],
+    "attestation_blake3": "e3cb9b0bb3c0e2b41771168cbde895528744c6fb12150340b006691cc52b8695"
+  },
+  "release_binding": {
+    "schema": "mantle-wasm-component-release-binding-v1",
+    "materialization_bundle_blake3": "8b622bd5b9364333f6b144715d8a7154ac31171c0783b690acec928fc999e429",
+    "materialization_bundle_object": {
+      "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/materialization-bundle.json",
+      "digest_blake3": "66cef818908347a132eb798e861a6011204bef7c83d95434798a943a997f66f5",
+      "size_bytes": 17419
+    },
+    "artifact_attestation_blake3": "e3cb9b0bb3c0e2b41771168cbde895528744c6fb12150340b006691cc52b8695",
+    "portable": {
+      "logical_path": "/home/brittonr/.cache/mantle-octet-profiles-20261028/cohort-final/supported-selected/producer-output/artifacts/normalized.wasm",
+      "digest_blake3": "e3e1c38cb8bbc4c9866f1791f1f7f10cb48f8de2db10eb8a66de4eada9f49199",
+      "size_bytes": 3700
+    },
+    "target_specific_native": null,
+    "octet_profile_blake3": "24dc3346b817ee2645b000922a612a1988f63914b49688a8b72ebb758316c846",
+    "octet_cohort_blake3": "c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a",
+    "octet_report_blake3": "2071f43f5a4d2ddab0cdcd6844455d69da720b1ce3f4e3653d7beb802c54f173",
+    "release_eligible": false,
+    "non_claims": [
+      "not-component-behavior-correctness",
+      "not-octet-policy-interpretation",
+      "not-release-eligibility",
+      "not-runtime-authority",
+      "not-runtime-sandboxing"
+    ],
+    "release_binding_blake3": "2dadd28d24f5a899b5993d38974c515c5fca879c307bce5b2ded2ce52f096e6e"
+  },
+  "final_status": "succeeded",
+  "report_blake3": "96d7aeb05a8fe716ef4f0859acb167321251753ffe91af1c3d9d6691766de632",
+  "non_claims": [
+    "not-component-behavior-correctness",
+    "not-runtime-authority",
+    "not-runtime-sandboxing",
+    "not-release-eligibility",
+    "not-octet-policy-interpretation"
+  ]
+}

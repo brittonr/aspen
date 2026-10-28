@@ -43,7 +43,7 @@
       flake = false;
     };
     mantle-wasm-verifier-src = {
-      url = "github:OnixResearch/mantle/cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0";
+      url = "github:OnixResearch/mantle/e1827a8cc1cacf2810aa2314dc8971177832a8f0";
       flake = false;
     };
     artifact-src = {
@@ -319,7 +319,7 @@
             )
             "Molten hardened Wasmtime Cargo/Nix source identity, package set, license, or completed publication drifted";
           hardened-wasmtime-src;
-        mantleWasmVerifierRevision = "cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0";
+        mantleWasmVerifierRevision = "e1827a8cc1cacf2810aa2314dc8971177832a8f0";
         mantleWasmVerifierRepository = "ssh://git@github.com/OnixResearch/mantle.git";
         mantleWasmVerifierDependency = artifactRootDependencies.mantle-wasm-consumer-verifier;
         mantleWasmVerifierExpectedLockSource = "git+${mantleWasmVerifierRepository}?rev=${mantleWasmVerifierRevision}#${mantleWasmVerifierRevision}";

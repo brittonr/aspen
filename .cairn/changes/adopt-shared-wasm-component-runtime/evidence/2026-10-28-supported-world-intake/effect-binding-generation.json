@@ -1,0 +1,15 @@
+{
+  "command": [
+    "/nix/store/mycwcrzb1j2aap7h02jqfbfqimrm1qj2-mantle-wasm-component-toolchain-v1/bin/wit-bindgen",
+    "rust",
+    "--world",
+    "actor-effects",
+    "--generate-all",
+    "--out-dir",
+    "/home/brittonr/.cache/aspen-component-adoption-20261028/effect-profile-probe",
+    "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/wit/molten-component-effects/runtime.wit"
+  ],
+  "exit": 0,
+  "stdout": "",
+  "stderr": "Generating \"/home/brittonr/.cache/aspen-component-adoption-20261028/effect-profile-probe/actor_effects.rs\"\n"
+}

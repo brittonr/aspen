@@ -44,9 +44,10 @@ ambient WASI is never inherited from the process.
 
 The root dependency cohort pins `hwr.shell.v4` at
 `cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c` and the published Mantle consumer
-verifier at `cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0`. The source gate binds
-their completed native archives and exact evidence digests. These pins are
-prerequisites, not authorization to change the execution backend.
+verifier at `e1827a8cc1cacf2810aa2314dc8971177832a8f0`. The source gate binds
+their completed native archives and exact evidence digests, including Mantle's
+closed Octet profile selection. These pins are prerequisites, not authorization
+to change the execution backend.
 
 The adapter under `runtime/shared/` remains test-only. Its bounded initialization
 driver consumes typed Instantiation yields through the successful checkpoint
@@ -68,17 +69,18 @@ real shared actor/extension installation and coupled cutover/rollback remain
 acceptance gates.
 
 The [original directory-missing handoff](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-producer-handoff.md)
-is retained as a historical counterexample. The published tree-aware Mantle pin
-now verifies all 37 members and copies the unchanged directory source through
-its bounded capability-rooted API. Molten maintains no second tree walker or
-digest algorithm. A [fresh pinned real-pipeline intake](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-source-tree-intake.md#immutable-publication-and-executed-pinned-intake)
-retains exact component/WIT bytes, requires complete Structural+Bytes report
-agreement and denies empty-directory source drift with private-lease cleanup.
-That execution deliberately uses an unadmitted intake-only profile, not the
-supported production cohort. The [separate supported-world artifact-policy denial](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-source-tree-intake.md#distinct-supported-world-prerequisite)
-still blocks genuine matching actor/extension materialization. Consumer-installation
-tasks remain unchecked; no bundle rewrite, fabricated Bytes report, profile
-weakening, runtime activation or completed shared adoption is admitted.
+and [original supported-world artifact denial](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-source-tree-intake.md#distinct-supported-world-prerequisite)
+remain historical counterexamples. The current published Mantle pin retains
+tree-aware verification and adds explicit closed Octet profile selection.
+The [immutable supported-world continuation](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-28-supported-world-intake.md)
+now accepts a genuine producer bundle under the unchanged supported Molten
+profile/WIT, retains exact component/WIT bytes, requires complete Structural+Bytes
+agreement, and denies empty-directory source drift with private-lease cleanup.
+This resolves import-free supported-world materialization, not execution or
+actor/extension installation. The normalized effect-world probe is separately
+denied by the selected artifact profile. Consumer-installation tasks remain
+unchecked; no bundle rewrite, fabricated Bytes report, profile weakening,
+runtime activation or completed shared adoption is admitted.
 
 The effect-request world remains an unadmitted execution candidate. The inactive
 host adapter below is independently exercised, but no production linker,
@@ -252,8 +254,9 @@ regression corpus retains unchanged genuine producer bytes and rejects tree
 drift (including added empty directories), symlink substitution, missing or
 unsupported nodes and over-bound inputs. These implementation cases are not
 real-pipeline production acceptance, actor/extension installation or cutover;
-the [immutable pin and executed fresh intake](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-source-tree-intake.md#immutable-publication-and-executed-pinned-intake)
-separately prove private intake, not supported-world materialization.
+the [original immutable probe intake](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-source-tree-intake.md#immutable-publication-and-executed-pinned-intake)
+and [current supported-world intake](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-28-supported-world-intake.md)
+separately prove private intake, not runtime invocation or consumer installation.
 
 The intake requires the actual published Structural and Bytes reports, exact
 role/digest/length observations, the admitted Molten profile digest and WIT,

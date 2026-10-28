@@ -1,0 +1,23 @@
+{
+  "command": [
+    "nix",
+    "build",
+    ".#checks.x86_64-linux.release-dependency-profile",
+    ".#checks.x86_64-linux.git-source-hash-binding",
+    ".#checks.x86_64-linux.wasm-component-profile",
+    ".#checks.x86_64-linux.nextest-config",
+    "--no-link",
+    "--print-out-paths",
+    "--option",
+    "builders",
+    "",
+    "--max-jobs",
+    "2",
+    "--cores",
+    "2",
+    "-L"
+  ],
+  "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+  "exit": 0,
+  "log": "/home/brittonr/.cache/aspen-component-adoption-20261028/targeted-nix.log"
+}

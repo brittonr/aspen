@@ -22,7 +22,7 @@ let TransactionalReconciliationRevision = "eb2bd3441753af97bfcb247cef7cc22d72675
 let TransactionalReconciliationSource = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git" in
 let HardenedWasmtimeRevision = "cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c" in
 let HardenedWasmtimeSource = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx" in
-let MantleWasmVerifierRevision = "cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0" in
+let MantleWasmVerifierRevision = "e1827a8cc1cacf2810aa2314dc8971177832a8f0" in
 let MantleWasmVerifierSource = "ssh://git@github.com/OnixResearch/mantle.git" in
 let CratesIoIndex = "registry+https://github.com/rust-lang/crates.io-index" in
 let ArchiveNonClaims = [
@@ -370,6 +370,14 @@ in
         {
           relative_path = ".cairn/archive/1970-01-01-verify-wasm-source-closure-trees/evidence/2026-10-27-verification.md",
           blake3 = "691c117450a84e9eaa4d98235a7ff7b1c18f72660f1b19b247a31bf6fd44aeca",
+        },
+        {
+          relative_path = ".cairn/archive/2026-10-28-select-octet-component-profiles/tasks.md",
+          blake3 = "b8f6b0c99772dffc43b1abb288c42998e2b31510859c72325c41e18625102be5",
+        },
+        {
+          relative_path = ".cairn/archive/2026-10-28-select-octet-component-profiles/evidence/2026-10-28-profile-selection.md",
+          blake3 = "0c25d040bea97458f9de1dd10f20a79dd8e760e6b61a8325ca5a37d9807e8e63",
         },
       ],
       non_claims = ArchiveNonClaims,

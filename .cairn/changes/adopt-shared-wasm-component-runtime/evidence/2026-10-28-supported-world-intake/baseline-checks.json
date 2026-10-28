@@ -1,0 +1,36 @@
+[
+  {
+    "name": "pinned-runtime-baseline",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "molten",
+      "--lib",
+      "--",
+      "wasm_component",
+      "wasm_executor",
+      "wasm_preserves_abi",
+      "system_extension::tests"
+    ],
+    "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+    "exit": 0,
+    "log": "/home/brittonr/.cache/aspen-component-adoption-20261028/pinned-runtime-baseline.log"
+  },
+  {
+    "name": "pinned-product-library",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "-p",
+      "molten",
+      "--lib",
+      "--message-format=json"
+    ],
+    "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+    "exit": 0,
+    "log": "/home/brittonr/.cache/aspen-component-adoption-20261028/pinned-product-library.log"
+  }
+]

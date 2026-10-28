@@ -1,0 +1,62 @@
+these 6 derivations will be built:
+  /nix/store/71q17hdwzvg5pbiwnrjikgj6xj3w1jp5-molten-nextest-config-check.drv
+  /nix/store/hhfp2j9zfirpfx85pya9p1siva5y2495-molten-git-source-hash-binding.drv
+  /nix/store/mfrka25gcf8l0my8sib3pz01g6n6pp08-rust_molten-core-0.1.0.drv
+  /nix/store/sadphf17qjxf8b1jpyzkqinxyq1k25kc-rust_molten-release-policy-0.1.0.drv
+  /nix/store/jxcamilr3isz11lzizxzw4ldh2y6hzzm-molten-release-dependency-profile.drv
+  /nix/store/s4nj5b9ks7nw8ix29a733kikkhg1dy1q-molten-wasm-component-profile.drv
+building '/nix/store/hhfp2j9zfirpfx85pya9p1siva5y2495-molten-git-source-hash-binding.drv'...
+building '/nix/store/71q17hdwzvg5pbiwnrjikgj6xj3w1jp5-molten-nextest-config-check.drv'...
+building '/nix/store/s4nj5b9ks7nw8ix29a733kikkhg1dy1q-molten-wasm-component-profile.drv'...
+molten-wasm-component-profile> wit/molten-component-runtime/runtime.wit: OK
+molten-wasm-component-profile> wit/molten-component-effects/runtime.wit: OK
+building '/nix/store/mfrka25gcf8l0my8sib3pz01g6n6pp08-rust_molten-core-0.1.0.drv'...
+rust_molten-core> Running phase: unpackPhase
+rust_molten-core> unpacking source archive /nix/store/3g7gq5mbs7zscvh2xn7ymh11x632aysw-source
+rust_molten-core> source root is source
+rust_molten-core> Running phase: patchPhase
+rust_molten-core> Running phase: updateAutotoolsGnuConfigScriptsPhase
+rust_molten-core> Running phase: configurePhase
+rust_molten-core> Running cd .
+rust_molten-core> Running phase: buildPhase
+rust_molten-core> Building src/lib.rs (molten-core)
+rust_molten-core> Running env rustc --crate-name molten_core src/lib.rs --out-dir target/lib -L dependency=target/deps --cap-lints allow -L native=/nix/store/87nn7rigjjxvfgf43jlmn4nmdns5v6c3-rust_ring-0.17.14-lib/lib/ring.out -C opt-level=3 -C codegen-units=1 --remap-path-prefix=/build=/ --remap-path-prefix=/nix/store/c7qcfda063a1d95gfprn2xlhcvrpp1fl-rust-default-1.98.0-nightly-2026-05-26=/rustc --extern artifact_auth_core=/nix/store/lgjffflzfl6rc1xrg29mpynxdv7xcznh-rust_artifact-auth-core-0.1.0-lib/lib/libartifact_auth_core-e33fa1375c.rlib --extern artifact_binding_core=/nix/store/yp50nq8rm952ggx2zkswd0aysaf3m7lz-rust_artifact-binding-core-0.1.0-lib/lib/libartifact_binding_core-a3468ffbff.rlib --extern basalt=/nix/store/4qpabzs60vja4975glbgx2611wcl948a-rust_basalt-0.1.0-lib/lib/libbasalt-2a04acc747.rlib --extern blake3=/nix/store/9n3zi5ys0pkpv4qkw4hrfkwrjvc3xj6b-rust_blake3-1.8.5-lib/lib/libblake3-fd8763e228.rlib --extern choregraph_history=/nix/store/jd1v4x5f2rl6igg06mv76xgyvaslzvgk-rust_choregraph-history-0.1.0-lib/lib/libchoregraph_history-7bfb7c9ede.rlib --extern content_identity_core=/nix/store/c5ijyzrw6y1f7ciw7sckyc834nxar7b0-rust_content-identity-core-0.1.0-lib/lib/libcontent_identity_core-5921711a20.rlib --extern kamacite_core=/nix/store/y32z4vqymy7liq8cwnjglidfz30lykvr-rust_kamacite-core-0.1.0-lib/lib/libkamacite_core-0a30f1d57f.rlib --extern schema_migration_core=/nix/store/j9l0krjj4f7yd2px73gs3aw9y2k0ay6d-rust_schema-migration-core-0.1.0-lib/lib/libschema_migration_core-e868e549dd.rlib --extern serde=/nix/store/l4l73lhsjga0n37192vcxsbh8sh8n6f4-rust_serde-1.0.228-lib/lib/libserde-33edf14fd1.rlib --extern transactional_reconciliation_core=/nix/store/wz3yixchh7v1iryk6fncwa00x78dazbz-rust_transactional-reconciliation-core-0.1.0-lib/lib/libtransactional_reconciliation_core-db63aa69ad.rlib --edition 2024 -C linker=/nix/store/788mx070y81zjlg5ipcl0cra3afviw9k-gcc-wrapper-15.2.0/bin/cc -C metadata=7e5ab79959 -C extra-filename=-7e5ab79959 --crate-type lib -L native=/nix/store/87nn7rigjjxvfgf43jlmn4nmdns5v6c3-rust_ring-0.17.14-lib/lib/ring.out --color always
+rust_molten-core> buildPhase completed in 1 minutes 33 seconds
+rust_molten-core> Running phase: installPhase
+rust_molten-core> Running phase: fixupPhase
+rust_molten-core> shrinking RPATHs of ELF executables and libraries in /nix/store/m6ldi8i4h6mfzwx49hmm0r1mllibn5yn-rust_molten-core-0.1.0
+rust_molten-core> checking for references to /build/ in /nix/store/m6ldi8i4h6mfzwx49hmm0r1mllibn5yn-rust_molten-core-0.1.0...
+rust_molten-core> patching script interpreter paths in /nix/store/m6ldi8i4h6mfzwx49hmm0r1mllibn5yn-rust_molten-core-0.1.0
+rust_molten-core> shrinking RPATHs of ELF executables and libraries in /nix/store/ad6g0kgx3y7sg4khjkilpb17cn65kgmg-rust_molten-core-0.1.0-lib
+rust_molten-core> checking for references to /build/ in /nix/store/ad6g0kgx3y7sg4khjkilpb17cn65kgmg-rust_molten-core-0.1.0-lib...
+rust_molten-core> patching script interpreter paths in /nix/store/ad6g0kgx3y7sg4khjkilpb17cn65kgmg-rust_molten-core-0.1.0-lib
+rust_molten-core> stripping (with command strip and flags -S -p) in  /nix/store/ad6g0kgx3y7sg4khjkilpb17cn65kgmg-rust_molten-core-0.1.0-lib/lib
+building '/nix/store/sadphf17qjxf8b1jpyzkqinxyq1k25kc-rust_molten-release-policy-0.1.0.drv'...
+rust_molten-release-policy> Running phase: unpackPhase
+rust_molten-release-policy> unpacking source archive /nix/store/qas3vpighigx4pw34nmxblyzmxg931jw-source
+rust_molten-release-policy> source root is source
+rust_molten-release-policy> Running phase: patchPhase
+rust_molten-release-policy> Running phase: updateAutotoolsGnuConfigScriptsPhase
+rust_molten-release-policy> Running phase: configurePhase
+rust_molten-release-policy> Running cd .
+rust_molten-release-policy> Running phase: buildPhase
+rust_molten-release-policy> Building src/lib.rs (molten-release-policy)
+rust_molten-release-policy> Running env rustc --crate-name molten_release_policy src/lib.rs --out-dir target/lib -L dependency=target/deps --cap-lints allow -L native=/nix/store/87nn7rigjjxvfgf43jlmn4nmdns5v6c3-rust_ring-0.17.14-lib/lib/ring.out -C opt-level=3 -C codegen-units=1 --remap-path-prefix=/build=/ --remap-path-prefix=/nix/store/c7qcfda063a1d95gfprn2xlhcvrpp1fl-rust-default-1.98.0-nightly-2026-05-26=/rustc --extern blake3=/nix/store/9n3zi5ys0pkpv4qkw4hrfkwrjvc3xj6b-rust_blake3-1.8.5-lib/lib/libblake3-fd8763e228.rlib --extern molten_core=/nix/store/ad6g0kgx3y7sg4khjkilpb17cn65kgmg-rust_molten-core-0.1.0-lib/lib/libmolten_core-7e5ab79959.rlib --extern serde=/nix/store/l4l73lhsjga0n37192vcxsbh8sh8n6f4-rust_serde-1.0.228-lib/lib/libserde-33edf14fd1.rlib --extern serde_json=/nix/store/fa5rfwgyr0vfcfba5cdzpv9cnvcgvp2p-rust_serde_json-1.0.149-lib/lib/libserde_json-287f3b2ecb.rlib --extern toml=/nix/store/z81d618wr0yvd6bfyxir5gwxcbch4hxh-rust_toml-0.9.12+spec-1.1.0-lib/lib/libtoml-57a4324258.rlib --edition 2024 -C linker=/nix/store/788mx070y81zjlg5ipcl0cra3afviw9k-gcc-wrapper-15.2.0/bin/cc -C metadata=3e2fd7d528 -C extra-filename=-3e2fd7d528 --crate-type lib -L native=/nix/store/87nn7rigjjxvfgf43jlmn4nmdns5v6c3-rust_ring-0.17.14-lib/lib/ring.out --color always
+rust_molten-release-policy> Building molten-release-policy (src/main.rs)
+rust_molten-release-policy> Running env rustc --crate-name molten_release_policy src/main.rs --crate-type bin -C opt-level=3 -C codegen-units=1 --remap-path-prefix=/build=/ --remap-path-prefix=/nix/store/c7qcfda063a1d95gfprn2xlhcvrpp1fl-rust-default-1.98.0-nightly-2026-05-26=/rustc --extern blake3=/nix/store/9n3zi5ys0pkpv4qkw4hrfkwrjvc3xj6b-rust_blake3-1.8.5-lib/lib/libblake3-fd8763e228.rlib --extern molten_core=/nix/store/ad6g0kgx3y7sg4khjkilpb17cn65kgmg-rust_molten-core-0.1.0-lib/lib/libmolten_core-7e5ab79959.rlib --extern serde=/nix/store/l4l73lhsjga0n37192vcxsbh8sh8n6f4-rust_serde-1.0.228-lib/lib/libserde-33edf14fd1.rlib --extern serde_json=/nix/store/fa5rfwgyr0vfcfba5cdzpv9cnvcgvp2p-rust_serde_json-1.0.149-lib/lib/libserde_json-287f3b2ecb.rlib --extern toml=/nix/store/z81d618wr0yvd6bfyxir5gwxcbch4hxh-rust_toml-0.9.12+spec-1.1.0-lib/lib/libtoml-57a4324258.rlib --edition 2024 -C linker=/nix/store/788mx070y81zjlg5ipcl0cra3afviw9k-gcc-wrapper-15.2.0/bin/cc --out-dir target/bin -L dependency=target/deps -L native=/nix/store/87nn7rigjjxvfgf43jlmn4nmdns5v6c3-rust_ring-0.17.14-lib/lib/ring.out --extern molten_release_policy=target/lib/libmolten_release_policy-3e2fd7d528.rlib --cap-lints allow -L native=/nix/store/87nn7rigjjxvfgf43jlmn4nmdns5v6c3-rust_ring-0.17.14-lib/lib/ring.out --color always
+rust_molten-release-policy> Running phase: installPhase
+rust_molten-release-policy> Running phase: fixupPhase
+rust_molten-release-policy> shrinking RPATHs of ELF executables and libraries in /nix/store/4a8z97ghrlsnqb2qv2793rj7zz2rqb80-rust_molten-release-policy-0.1.0
+rust_molten-release-policy> shrinking /nix/store/4a8z97ghrlsnqb2qv2793rj7zz2rqb80-rust_molten-release-policy-0.1.0/bin/molten-release-policy
+rust_molten-release-policy> checking for references to /build/ in /nix/store/4a8z97ghrlsnqb2qv2793rj7zz2rqb80-rust_molten-release-policy-0.1.0...
+rust_molten-release-policy> patching script interpreter paths in /nix/store/4a8z97ghrlsnqb2qv2793rj7zz2rqb80-rust_molten-release-policy-0.1.0
+rust_molten-release-policy> stripping (with command strip and flags -S -p) in  /nix/store/4a8z97ghrlsnqb2qv2793rj7zz2rqb80-rust_molten-release-policy-0.1.0/bin
+rust_molten-release-policy> shrinking RPATHs of ELF executables and libraries in /nix/store/62zcqzqzvav33fdpiiplylpj873frm2c-rust_molten-release-policy-0.1.0-lib
+rust_molten-release-policy> checking for references to /build/ in /nix/store/62zcqzqzvav33fdpiiplylpj873frm2c-rust_molten-release-policy-0.1.0-lib...
+rust_molten-release-policy> patching script interpreter paths in /nix/store/62zcqzqzvav33fdpiiplylpj873frm2c-rust_molten-release-policy-0.1.0-lib
+rust_molten-release-policy> stripping (with command strip and flags -S -p) in  /nix/store/62zcqzqzvav33fdpiiplylpj873frm2c-rust_molten-release-policy-0.1.0-lib/lib
+building '/nix/store/jxcamilr3isz11lzizxzw4ldh2y6hzzm-molten-release-dependency-profile.drv'...
+/nix/store/9mih7wn77zn8q6gvnx7606n5nv40ih1i-molten-release-dependency-profile
+/nix/store/nq5s049y86jcaahl39lf4pda9zgc5rff-molten-git-source-hash-binding
+/nix/store/ddgzs5byzb8vawp4gjk8wg77f3g8dbjm-molten-wasm-component-profile
+/nix/store/xk0iwn5q4r7pi0sx204bm534f628rs87-molten-nextest-config-check

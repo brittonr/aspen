@@ -1,0 +1,1 @@
+cargo octet check --artifact-dir /home/brittonr/.cache/aspen-component-adoption-20261028/source-gate/workspace

@@ -1,0 +1,112 @@
+{
+  "cohort_identity_blake3": "4747263ad5c687ba0df0747aef63b5c63f8908f6be02fb35c72bbe80a982fbf8",
+  "octet": {
+    "config_digest_blake3": "48aabf8dc2ad189ebe051ddce48746a8f878fcbcebf506007c505085e9a8ed83",
+    "config_path": "share/mantle/octet/wasm-artifact-profiles.json",
+    "package_name": "cargo-octet",
+    "package_version": "0.1.0",
+    "profile_id": "portable-component-baseline",
+    "profile_identity_blake3": "e8fbf118b283d63a3662af4853a2ce5f4a1777c18fe37e0be0dc1e235fd707bd",
+    "profiles": [
+      {
+        "profile_id": "portable-component-baseline",
+        "profile_identity_blake3": "e8fbf118b283d63a3662af4853a2ce5f4a1777c18fe37e0be0dc1e235fd707bd"
+      },
+      {
+        "profile_id": "molten-component-baseline",
+        "profile_identity_blake3": "24dc3346b817ee2645b000922a612a1988f63914b49688a8b72ebb758316c846"
+      }
+    ],
+    "source_repository": "https://github.com/OnixResearch/octet",
+    "source_revision": "0e0e5dc8461b8b32c286de362c290b3f3ea2deee",
+    "wasm_tools_cohort_identity_blake3": "c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a"
+  },
+  "rust_target": "wasm32-wasip2",
+  "schema": "mantle-wasm-component-toolchain-v1",
+  "tools": [
+    {
+      "binary_digest_blake3": "d8a9d6b2508ab7ab4229ef0e3b2a980d6a647c56f22948b6e6058666d262d3f0",
+      "name": "cargo",
+      "path": "bin/cargo",
+      "version": "1.90.0",
+      "version_output": "cargo 1.90.0 (840b83a10 2025-07-30)"
+    },
+    {
+      "binary_digest_blake3": "f375ca51558b0ddd263eae7fd39d5f045d49e8491e9303bf109f15a93869fe1b",
+      "name": "rustc",
+      "path": "bin/rustc",
+      "version": "1.90.0",
+      "version_output": "rustc 1.90.0 (1159e78c4 2025-09-14)"
+    },
+    {
+      "binary_digest_blake3": "9152c4c4269abcbe28df77fa7c7bfb55a996af43ceca20036379fa2ab21c351f",
+      "name": "wasm-component-ld",
+      "path": "bin/wasm-component-ld",
+      "version": "0.5.15",
+      "version_output": "wasm-component-ld 0.5.15"
+    },
+    {
+      "binary_digest_blake3": "4281299907ec5d70ec0b25c65dc082575d0958b298e20759090d0fc073531863",
+      "name": "wkg",
+      "path": "bin/wkg",
+      "version": "0.15.0",
+      "version_output": "wkg 0.15.0"
+    },
+    {
+      "binary_digest_blake3": "72ff98829ca7f643bad659ac4e7a2dff0c1e084a24caeda3bbfdc18dcc4674fa",
+      "name": "wit-bindgen",
+      "path": "bin/wit-bindgen",
+      "version": "0.55.0",
+      "version_output": "wit-bindgen-cli 0.55.0"
+    },
+    {
+      "binary_digest_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "name": "wasm-tools",
+      "path": "bin/wasm-tools",
+      "version": "1.245.1",
+      "version_output": "wasm-tools 1.245.1"
+    },
+    {
+      "binary_digest_blake3": "1d023e364726085a7a2fd53b6f2e1d4e6267b921836fd003c96a1774072adeab",
+      "name": "wac",
+      "path": "bin/wac",
+      "version": "0.9.0",
+      "version_output": "wac-cli 0.9.0"
+    },
+    {
+      "binary_digest_blake3": "62b473914b22e9159ebc8ea6f778d872191387ced396eb53c7cccfdecb2ebfde",
+      "name": "wasi-virt",
+      "path": "bin/wasi-virt",
+      "version": "0.2.0",
+      "version_output": "wasi-virt 0.2.0"
+    },
+    {
+      "binary_digest_blake3": "036209124b1f08ade34bc6d26870f440271332e8e50385cc8028329d7a2d40b2",
+      "name": "wizer",
+      "path": "bin/wizer",
+      "version": "10.0.0",
+      "version_output": "wizer 10.0.0"
+    },
+    {
+      "binary_digest_blake3": "e8168340d31722b18e5665d66f8be05343d7ccfc8fc38dc23d7c60b2f9d6aea8",
+      "name": "wasmtime",
+      "path": "bin/wasmtime",
+      "version": "43.0.0",
+      "version_output": "wasmtime 43.0.0"
+    },
+    {
+      "binary_digest_blake3": "cd5be4481cfe2e79bbf4183ef9122dd15c3ce379594b67121a4b540ac920864e",
+      "name": "bwrap",
+      "path": "bin/bwrap",
+      "version": "0.11.0",
+      "version_output": "bubblewrap 0.11.0"
+    },
+    {
+      "binary_digest_blake3": "07b39dc4aa40ebef6a890b1c57b8cf03c44df98f85e58cda27ab1d893f582de8",
+      "name": "cargo-octet",
+      "path": "bin/cargo-octet",
+      "version": "0.1.0",
+      "version_output": "cargo-octet 0.1.0"
+    }
+  ]
+}

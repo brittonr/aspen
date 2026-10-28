@@ -1,0 +1,15 @@
+{
+  "command": [
+    "nix",
+    "develop",
+    "--option",
+    "builders",
+    "",
+    "-c",
+    "python3",
+    "/home/brittonr/.cache/aspen-component-adoption-20261028/run_canonical.py"
+  ],
+  "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+  "exit": 1,
+  "observation": "AssertionError in operand preflight: historical corpus contained src/wasm/component/evidence/materialization/published/tests/producer_files.rs, already renamed to producerfiles.rs. Corrected only that observer operand before starting the source-gate sequence. No product change or failed gate rerun."
+}

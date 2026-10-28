@@ -1,0 +1,11 @@
+{
+  "documents": [
+    "docs/wasm-component-runtime.md",
+    ".cairn/changes/adopt-shared-wasm-component-runtime/design.md",
+    ".cairn/changes/adopt-shared-wasm-component-runtime/tasks.md",
+    ".cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-28-supported-world-intake.md"
+  ],
+  "local_targets_checked": 58,
+  "missing_targets": [],
+  "scope": "relative path targets only; no anchor or external-network validity claim"
+}

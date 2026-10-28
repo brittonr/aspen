@@ -60,7 +60,7 @@ The product fixture must include at least one successful pure invocation, one ad
 
 The [2026-10-27 original producer handoff](evidence/2026-10-27-producer-handoff.md) recorded a historical prerequisite: Mantle revision `c99556e5c91dfd13fcc261dc451f471359d47c38` published a framed directory source closure, but its published consumer byte layer accepted only regular files. Producer success and remeasurement therefore did not establish verified consumer bytes. The completed tree-aware publication and Molten private intake below resolve that specific mismatch without changing source identity.
 
-The change remains blocked on the [separate supported-world artifact-policy denial](evidence/2026-10-27-source-tree-intake.md#distinct-supported-world-prerequisite), not the historical directory-missing result. Keep the complete local runtime and all current execution-admission restrictions unchanged. No synthetic positive production bundle, archive-as-file substitution, source-tree omission, fabricated Bytes report or weaker artifact profile is an alternative.
+The [published closed-profile selection and immutable supported-world intake](evidence/2026-10-28-supported-world-intake.md) resolve the original import-free supported-world artifact denial. Adoption remains blocked on a distinct reviewed effect-world cohort: the normalized generated effect guest fails the current selected Octet profile, and the exact product effect contract still requires `execution_admitted=false`. Keep the complete local runtime and all current execution-admission restrictions unchanged. No synthetic positive production bundle, archive-as-file substitution, source-tree omission, fabricated Bytes report or weaker artifact profile is an alternative.
 
 The implementation continuation gives private intake a typed reference to the
 published `MaterializationBundle` and calls the provider's
@@ -71,9 +71,10 @@ role remains a no-follow regular file, with shared-path conflicts denied and
 selected component/WIT bytes captured unchanged. A private source copy alone
 does not admit execution: the unchanged DTO must still receive complete
 Structural+Bytes report agreement over the snapshot, and cleanup failure denies.
-The [published immutable provider pin and fresh real-pipeline intake](evidence/2026-10-27-source-tree-intake.md#immutable-publication-and-executed-pinned-intake)
-now exercise those integration gates. Their explicitly unadmitted probe profile
-does not establish supported-world materialization or product consumer installation.
+The [original published immutable provider pin and fresh probe intake](evidence/2026-10-27-source-tree-intake.md#immutable-publication-and-executed-pinned-intake)
+and [current immutable supported-world continuation](evidence/2026-10-28-supported-world-intake.md)
+exercise those integration gates. Neither private intake nor supported-world
+materialization establishes runtime invocation or product consumer installation.
 
 ### Make cutover and rollback coupled
 

@@ -1,0 +1,44 @@
+use std::path::Path;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<_> = std::env::args_os().skip(1).collect();
+    if args.len() != 4 {
+        return Err("expected bundle JSON, owned staging parent, component path, source-tree path".into());
+    }
+    let profile = molten::wasm_component::supported().map_err(|error| format!("profile: {error:?}"))?;
+    let profile_ref = molten::wasm_component::r#ref(&profile);
+    let json = std::fs::read(&args[0])?;
+    let source = cap_std::fs::Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
+    let stage = cap_std::fs::Dir::open_ambient_dir(Path::new(&args[1]), cap_std::ambient_authority())?;
+    let original_component = std::fs::read(&args[2])?;
+    let loaded = molten::wasm_component::VerifiedBundle::load(
+        &source, &stage, "successful-private-snapshot", &json, &profile,
+    ).map_err(|error| format!("genuine producer intake: {error:?}"))?;
+    assert_eq!(loaded.component_bytes(), original_component);
+    assert_eq!(
+        molten::wasm_component::MaterializedObjectIdentity::measure(loaded.wit_bytes())
+            .map_err(|error| format!("WIT measurement: {error:?}"))?.content_ref,
+        profile.wit.source_ref,
+    );
+    assert!(!stage.try_exists("successful-private-snapshot")?);
+    println!("profile_ref={profile_ref}");
+    println!("bundle_ref={}", loaded.bundle_ref());
+    println!("structural_report={:?}", loaded.structural_report());
+    println!("complete_report={:?}", loaded.verification_report());
+    println!("independent_observations={:?}", loaded.member_observations());
+    println!("private_snapshot=accepted component_bytes={} wit_bytes={} stage_removed=true",
+        loaded.component_bytes().len(), loaded.wit_bytes().len());
+
+    let added_directory = Path::new(&args[3]).join("witness-added-empty-directory");
+    std::fs::create_dir(&added_directory)?;
+    let drift = molten::wasm_component::VerifiedBundle::load(
+        &source, &stage, "source-drift-denial", &json, &profile,
+    );
+    std::fs::remove_dir(&added_directory)?;
+    assert!(drift.is_err(), "added empty directory must alter producer source identity");
+    assert!(!stage.try_exists("source-drift-denial")?);
+    assert_eq!(loaded.component_bytes(), original_component);
+    println!("source_empty_directory_drift=denied stage_removed=true retained_component_unchanged=true");
+    println!("scope=private_snapshot_intake_only execution_exercised=false profile_scope=supported-product");
+    Ok(())
+}

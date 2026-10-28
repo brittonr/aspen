@@ -1,0 +1,15 @@
+{
+  "command": [
+    "git",
+    "diff",
+    "--quiet",
+    "d4663cbdf4eba8b61607dcb242a86be42097445a",
+    "--",
+    "src/world_replay/boundary/tests/admission.rs"
+  ],
+  "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+  "exit": 0,
+  "stdout": "",
+  "stderr": "",
+  "meaning": "The failing unrelated world-replay test file is unchanged from fetched origin/molten d4663cbdf4eba8b61607dcb242a86be42097445a. No failed check was rerun."
+}

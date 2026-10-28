@@ -1499,7 +1499,7 @@ dependencies = [
 [[package]]
 name = "crunch-wasm-component-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/mantle.git?rev=cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0#cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0"
+source = "git+ssh://git@github.com/OnixResearch/mantle.git?rev=e1827a8cc1cacf2810aa2314dc8971177832a8f0#e1827a8cc1cacf2810aa2314dc8971177832a8f0"
 dependencies = [
  "blake3",
  "serde",
@@ -2140,7 +2140,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4418,7 +4418,7 @@ dependencies = [
 [[package]]
 name = "mantle-wasm-consumer-verifier"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/mantle.git?rev=cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0#cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0"
+source = "git+ssh://git@github.com/OnixResearch/mantle.git?rev=e1827a8cc1cacf2810aa2314dc8971177832a8f0#e1827a8cc1cacf2810aa2314dc8971177832a8f0"
 dependencies = [
  "blake3",
  "bounded-tree-cap",
@@ -6480,7 +6480,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6548,7 +6548,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6740,7 +6740,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b55fb86dfd3a2f5f76ea78310a88f96c4ea21a3031f8d212443d56123fd0521"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7546,7 +7546,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
