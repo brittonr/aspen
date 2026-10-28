@@ -1,0 +1,7 @@
+{
+  "provider_package_ids": [
+    "git+ssh://git@github.com/OnixResearch/mantle.git?rev=cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0#crunch-wasm-component-core@0.1.0",
+    "git+ssh://git@github.com/OnixResearch/mantle.git?rev=cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0#mantle-wasm-consumer-verifier@0.1.0"
+  ],
+  "driver": "/dev/shm/aspen-mantle-tree-smoke-20261027/intake-immutable"
+}

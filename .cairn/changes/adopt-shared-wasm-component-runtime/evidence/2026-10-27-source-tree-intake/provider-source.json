@@ -1,0 +1,14 @@
+{
+  "command": [
+    "nix",
+    "eval",
+    "--raw",
+    "--impure",
+    "--expr",
+    "(builtins.getFlake \"path:/dev/shm/aspen-mantle-source-trees-20261027\").inputs.mantle-wasm-verifier-src.outPath"
+  ],
+  "cwd": "/dev/shm/aspen-mantle-source-trees-20261027",
+  "exit": 0,
+  "stdout": "/nix/store/8pv2l16xjhqnk4121gyhf8zv6apsraii-source",
+  "stderr": ""
+}

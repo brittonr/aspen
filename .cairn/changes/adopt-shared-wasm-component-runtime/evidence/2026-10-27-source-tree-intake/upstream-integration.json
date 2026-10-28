@@ -1,0 +1,31 @@
+{
+  "records": [
+    {
+      "command": [
+        "env",
+        "GIT_SSH_COMMAND=ssh -o ServerAliveInterval=20 -o ServerAliveCountMax=120 -o TCPKeepAlive=yes",
+        "git",
+        "fetch",
+        "origin",
+        "molten"
+      ],
+      "cwd": "/dev/shm/aspen-mantle-source-trees-20261027",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "From github.com:brittonr/aspen\n * branch                molten     -> FETCH_HEAD\n"
+    },
+    {
+      "command": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "origin/molten",
+        "HEAD"
+      ],
+      "cwd": "/dev/shm/aspen-mantle-source-trees-20261027",
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}

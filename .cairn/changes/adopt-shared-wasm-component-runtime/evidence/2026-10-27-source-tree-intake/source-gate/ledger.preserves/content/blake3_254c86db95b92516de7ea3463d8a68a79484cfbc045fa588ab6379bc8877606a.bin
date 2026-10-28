@@ -1,0 +1,23 @@
+´³octet-status-artifact-v1±molten.octet.status-artifact.v1´³name±status.json„´³content-ref±Gblake3:7d8e9c35d6611f48ad5eadd943fbac79f0cfd4d5066985c777bab520fe465b4d„´³content±¬{
+  "status": "clean",
+  "exit_code": 0,
+  "output_format": "human",
+  "metadata": {
+    "tool_name": "cargo-octet",
+    "tool_version": "0.1.0",
+    "rustc_version": "rustc 1.96.0-nightly (ac7f9ec7d 2026-03-20)",
+    "toolchain": "nightly-2026-03-21-x86_64-unknown-linux-gnu",
+    "profile_name": "workspace-metadata",
+    "profile_hash": "b3:f01310cf3de555ae370d18eeb74dda62594f5c4c2cd02662531938c66a5130a3",
+    "config_hash": "b3:fdd464272dc857c149aa35d0ee59e3a9920022f72bec5c45d77d7773d1f136d5"
+  },
+  "total_findings": 0,
+  "warning_findings": 0,
+  "error_findings": 0,
+  "autofixable_findings": 0,
+  "cargo_process_exit": {
+    "classification": "success",
+    "code": 0
+  }
+}
+„´³checksµ´³check±raw-content-ref-bound±pass„´³check±diagnostic-artifact±pass„„„„

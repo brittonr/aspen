@@ -1,0 +1,165 @@
+{
+  "records": [
+    {
+      "check": "release-dependency-profile",
+      "command": [
+        "nix",
+        "build",
+        "path:/dev/shm/aspen-mantle-source-trees-20261027#checks.x86_64-linux.release-dependency-profile",
+        "--no-link",
+        "-L",
+        "--option",
+        "builders",
+        "",
+        "--option",
+        "build-dir",
+        "/nix/var/nix/builds",
+        "--max-jobs",
+        "2",
+        "--cores",
+        "2"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": "this derivation will be built:\n  /nix/store/2s4qg2lhjgp4p31ad6d3ypkkjpvlyll5-molten-release-dependency-profile.drv\nbuilding '/nix/store/2s4qg2lhjgp4p31ad6d3ypkkjpvlyll5-molten-release-dependency-profile.drv'...\n"
+    },
+    {
+      "check": "git-source-hash-binding",
+      "command": [
+        "nix",
+        "build",
+        "path:/dev/shm/aspen-mantle-source-trees-20261027#checks.x86_64-linux.git-source-hash-binding",
+        "--no-link",
+        "-L",
+        "--option",
+        "builders",
+        "",
+        "--option",
+        "build-dir",
+        "/nix/var/nix/builds",
+        "--max-jobs",
+        "2",
+        "--cores",
+        "2"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": "this derivation will be built:\n  /nix/store/0c1rlcphhyfk0hs4x2r08jj9fv6xmg2w-molten-git-source-hash-binding.drv\nbuilding '/nix/store/0c1rlcphhyfk0hs4x2r08jj9fv6xmg2w-molten-git-source-hash-binding.drv'...\n"
+    },
+    {
+      "check": "wasm-component-profile",
+      "command": [
+        "nix",
+        "build",
+        "path:/dev/shm/aspen-mantle-source-trees-20261027#checks.x86_64-linux.wasm-component-profile",
+        "--no-link",
+        "-L",
+        "--option",
+        "builders",
+        "",
+        "--option",
+        "build-dir",
+        "/nix/var/nix/builds",
+        "--max-jobs",
+        "2",
+        "--cores",
+        "2"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": "this derivation will be built:\n  /nix/store/ql9ixpmslc8xzbv3f201n6gbnsasphgs-molten-wasm-component-profile.drv\nbuilding '/nix/store/ql9ixpmslc8xzbv3f201n6gbnsasphgs-molten-wasm-component-profile.drv'...\nmolten-wasm-component-profile> wit/molten-component-runtime/runtime.wit: OK\nmolten-wasm-component-profile> wit/molten-component-effects/runtime.wit: OK\n"
+    },
+    {
+      "check": "materialization-authority",
+      "command": [
+        "nix",
+        "build",
+        "path:/dev/shm/aspen-mantle-source-trees-20261027#checks.x86_64-linux.materialization-authority",
+        "--no-link",
+        "-L",
+        "--option",
+        "builders",
+        "",
+        "--option",
+        "build-dir",
+        "/nix/var/nix/builds",
+        "--max-jobs",
+        "2",
+        "--cores",
+        "2"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": "this derivation will be built:\n  /nix/store/hirwrkvb116xwy6g6wzf70m7a813iy9s-molten-materialization-authority.drv\nbuilding '/nix/store/hirwrkvb116xwy6g6wzf70m7a813iy9s-molten-materialization-authority.drv'...\nmolten-materialization-authority> Error: 3 error(s) found in code.\nmolten-materialization-authority> Help: Scan succeeded and found error level diagnostics in the codebase.\nmolten-materialization-authority> \n"
+    },
+    {
+      "check": "cap-std-store-authority",
+      "command": [
+        "nix",
+        "build",
+        "path:/dev/shm/aspen-mantle-source-trees-20261027#checks.x86_64-linux.cap-std-store-authority",
+        "--no-link",
+        "-L",
+        "--option",
+        "builders",
+        "",
+        "--option",
+        "build-dir",
+        "/nix/var/nix/builds",
+        "--max-jobs",
+        "2",
+        "--cores",
+        "2"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": "this derivation will be built:\n  /nix/store/ygps8gm39gki3a4wyv7ww5rifcqjpbn7-molten-cap-std-store-authority.drv\nbuilding '/nix/store/ygps8gm39gki3a4wyv7ww5rifcqjpbn7-molten-cap-std-store-authority.drv'...\nmolten-cap-std-store-authority> Error: 4 error(s) found in code.\nmolten-cap-std-store-authority> Help: Scan succeeded and found error level diagnostics in the codebase.\nmolten-cap-std-store-authority> \n"
+    },
+    {
+      "check": "cap-std-test-workspaces",
+      "command": [
+        "nix",
+        "build",
+        "path:/dev/shm/aspen-mantle-source-trees-20261027#checks.x86_64-linux.cap-std-test-workspaces",
+        "--no-link",
+        "-L",
+        "--option",
+        "builders",
+        "",
+        "--option",
+        "build-dir",
+        "/nix/var/nix/builds",
+        "--max-jobs",
+        "2",
+        "--cores",
+        "2"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": "this derivation will be built:\n  /nix/store/kbf1x656yk61fz69xfj0sf38bz79f5w7-molten-cap-std-test-workspaces.drv\nbuilding '/nix/store/kbf1x656yk61fz69xfj0sf38bz79f5w7-molten-cap-std-test-workspaces.drv'...\nmolten-cap-std-test-workspaces> Error: 3 error(s) found in code.\nmolten-cap-std-test-workspaces> Help: Scan succeeded and found error level diagnostics in the codebase.\nmolten-cap-std-test-workspaces> \nmolten-cap-std-test-workspaces> ERROR: src/local_store_tests.rs: No such file or directory (os error 2)\n"
+    },
+    {
+      "check": "inherited-tracey-debt",
+      "command": [
+        "nix",
+        "build",
+        "path:/dev/shm/aspen-mantle-source-trees-20261027#checks.x86_64-linux.inherited-tracey-debt",
+        "--no-link",
+        "-L",
+        "--option",
+        "builders",
+        "",
+        "--option",
+        "build-dir",
+        "/nix/var/nix/builds",
+        "--max-jobs",
+        "2",
+        "--cores",
+        "2"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": "this derivation will be built:\n  /nix/store/m77vvv25hl4qmb4a51a92c348alcjgyp-molten-inherited-tracey-debt.drv\nbuilding '/nix/store/m77vvv25hl4qmb4a51a92c348alcjgyp-molten-inherited-tracey-debt.drv'...\nmolten-inherited-tracey-debt> \nmolten-inherited-tracey-debt> running 9 tests\nmolten-inherited-tracey-debt> test tests::missing_requirement_root_fails_closed ... ok\nmolten-inherited-tracey-debt> test tests::only_native_active_spec_paths_supply_pending_definitions ... ok\nmolten-inherited-tracey-debt> test tests::accepted_overlap_is_not_pending_and_does_not_mask_debt_growth ... ok\nmolten-inherited-tracey-debt> test tests::pending_identity_becomes_dangling_when_its_delta_is_removed ... ok\nmolten-inherited-tracey-debt> test tests::malformed_markers_and_baselines_fail ... ok\nmolten-inherited-tracey-debt> test tests::drift_and_dangling_fail ... ok\nmolten-inherited-tracey-debt> test tests::exact_baseline_passes ... ok\nmolten-inherited-tracey-debt> test tests::pending_resolution_preserves_accepted_debt_and_unknown_denial ... ok\nmolten-inherited-tracey-debt> test tests::only_added_and_modified_requirement_sections_admit_pending_ids ... ok\nmolten-inherited-tracey-debt> \nmolten-inherited-tracey-debt> test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\nmolten-inherited-tracey-debt> \nmolten-inherited-tracey-debt> pending_references=8\nmolten-inherited-tracey-debt> pending_non_claim=identity resolution only; not accepted coverage, marker truth, package validity, runtime behavior, sync/archive authority, or release readiness\nmolten-inherited-tracey-debt> requirements=2966\nmolten-inherited-tracey-debt> referenced=1032\nmolten-inherited-tracey-debt> uncovered=1934\nmolten-inherited-tracey-debt> baseline_entries=1934\nmolten-inherited-tracey-debt> dangling=0\nmolten-inherited-tracey-debt> non_claim=inherited requirements remain uncovered until direct evidence references them\nmolten-inherited-tracey-debt> verdict=pass\nmolten-inherited-tracey-debt> \nmolten-inherited-tracey-debt> running 4 tests\nmolten-inherited-tracey-debt> test tests::inventory_is_conservative_and_grouped ... ok\nmolten-inherited-tracey-debt> test tests::missing_and_duplicate_definitions_fail ... ok\nmolten-inherited-tracey-debt> test tests::non_claim_is_explicit ... ok\nmolten-inherited-tracey-debt> test tests::malformed_baselines_and_namespaces_fail ... ok\nmolten-inherited-tracey-debt> \nmolten-inherited-tracey-debt> test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\nmolten-inherited-tracey-debt> \nmolten-inherited-tracey-debt> baseline_entries=1934\nmolten-inherited-tracey-debt> classified_entries=1934\nmolten-inherited-tracey-debt> accepted_implementation_unestablished=1934\nmolten-inherited-tracey-debt> specification_groups=38\nmolten-inherited-tracey-debt> source_area_groups=109\nmolten-inherited-tracey-debt> non_claim=classification does not establish implementation, replacement, obsolescence, or invalidity\nmolten-inherited-tracey-debt> verdict=pass\n"
+    }
+  ]
+}

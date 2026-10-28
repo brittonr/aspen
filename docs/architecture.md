@@ -86,10 +86,13 @@ store is claimed. Shapes and ownership are specified in the
 [candidate contract](wasm-component-runtime.md#contract-only-effect-request-world)
 and [inactive host boundary](wasm-component-runtime.md#inactive-effect-host-adapter).
 
-Published Mantle intake independently remeasures every declared member through
-source directory capabilities and verifies an exclusively leased private
-snapshot through the published consumer verifier. It preserves the producer
-bundle identity and still requires the separate Molten admission envelope.
+Published Mantle intake delegates bounded directory source-closure identity and
+copying to Mantle; every other role remains an independently measured regular
+file. Opened source and staging capabilities bridge to the published verifier,
+which must agree with every private-snapshot observation at Structural+Bytes.
+The producer's tree framing, bundle identity, and empty directories are retained;
+this is not an atomic snapshot of a concurrently mutable source. The separate
+Molten admission envelope remains required.
 It grants no actor/extension installation or effect authority. See the
 [component runtime boundary and adoption status](wasm-component-runtime.md#shared-runtime-adoption-status).
 

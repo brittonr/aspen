@@ -1,0 +1,311 @@
+{
+  "schema": "mantle-wasm-component-pipeline-request-v1",
+  "manifest": {
+    "schema": "mantle-wasm-component-manifest-v1",
+    "name": "mantle-wasm-production-fixture",
+    "package_resolution": {
+      "default_registry": "local",
+      "registries": [
+        {
+          "namespace": "demo",
+          "registry": "local",
+          "backend": "local",
+          "oci_registry": null,
+          "namespace_prefix": "",
+          "protocol": "https",
+          "local_root": "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry",
+          "credential_handle": null
+        }
+      ],
+      "requirements": [
+        {
+          "package": "demo:dep",
+          "requirement": "=0.1.0",
+          "registry": "local",
+          "kind": "wit"
+        }
+      ],
+      "local_overrides": [],
+      "lock_path": "wkg.lock"
+    },
+    "wit": {
+      "package": "demo:app",
+      "world": "app",
+      "source": {
+        "logical_path": "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/source/wit/app.wit",
+        "digest_blake3": "fd3be085e9be42ba03ba132e243c4ac9f6c015398a7410995e6d602206bb17b7",
+        "size_bytes": 115
+      }
+    },
+    "implementation": {
+      "source": {
+        "logical_path": "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/source",
+        "digest_blake3": "e3c55a6434da88070b9c2338efc5b2553da1c2ceae3c469b735f08cd276f20aa",
+        "size_bytes": 4145
+      },
+      "package": "mantle-wasm-production-fixture",
+      "crate_name": "mantle_wasm_production_fixture",
+      "features": [],
+      "profile": "release"
+    },
+    "cohort": {
+      "rust_toolchain": {
+        "version": "1.90.0",
+        "executable": {
+          "logical_path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+          "digest_blake3": "f375ca51558b0ddd263eae7fd39d5f045d49e8491e9303bf109f15a93869fe1b",
+          "size_bytes": 164
+        },
+        "configuration_identity_blake3": "f375ca51558b0ddd263eae7fd39d5f045d49e8491e9303bf109f15a93869fe1b"
+      },
+      "rust_target": "wasm32-wasip2",
+      "wkg": {
+        "version": "0.15.0",
+        "executable": {
+          "logical_path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wkg",
+          "digest_blake3": "4281299907ec5d70ec0b25c65dc082575d0958b298e20759090d0fc073531863",
+          "size_bytes": 28885056
+        },
+        "configuration_identity_blake3": "4281299907ec5d70ec0b25c65dc082575d0958b298e20759090d0fc073531863"
+      },
+      "wit_bindgen": {
+        "version": "0.55.0",
+        "executable": {
+          "logical_path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wit-bindgen",
+          "digest_blake3": "72ff98829ca7f643bad659ac4e7a2dff0c1e084a24caeda3bbfdc18dcc4674fa",
+          "size_bytes": 20743376
+        },
+        "configuration_identity_blake3": "72ff98829ca7f643bad659ac4e7a2dff0c1e084a24caeda3bbfdc18dcc4674fa"
+      },
+      "wasm_component_ld": {
+        "version": "0.5.15",
+        "executable": {
+          "logical_path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-component-ld",
+          "digest_blake3": "9152c4c4269abcbe28df77fa7c7bfb55a996af43ceca20036379fa2ab21c351f",
+          "size_bytes": 5523272
+        },
+        "configuration_identity_blake3": "9152c4c4269abcbe28df77fa7c7bfb55a996af43ceca20036379fa2ab21c351f"
+      },
+      "wasm_tools": {
+        "version": "1.245.1",
+        "executable": {
+          "logical_path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+          "digest_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+          "size_bytes": 20882840
+        },
+        "configuration_identity_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8"
+      },
+      "wac": {
+        "version": "0.9.0",
+        "executable": {
+          "logical_path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wac",
+          "digest_blake3": "1d023e364726085a7a2fd53b6f2e1d4e6267b921836fd003c96a1774072adeab",
+          "size_bytes": 21384952
+        },
+        "configuration_identity_blake3": "1d023e364726085a7a2fd53b6f2e1d4e6267b921836fd003c96a1774072adeab"
+      },
+      "wasi_virt": {
+        "version": "0.2.0",
+        "executable": {
+          "logical_path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasi-virt",
+          "digest_blake3": "62b473914b22e9159ebc8ea6f778d872191387ced396eb53c7cccfdecb2ebfde",
+          "size_bytes": 5110864
+        },
+        "configuration_identity_blake3": "62b473914b22e9159ebc8ea6f778d872191387ced396eb53c7cccfdecb2ebfde"
+      },
+      "wizer": {
+        "version": "10.0.0",
+        "executable": {
+          "logical_path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wizer",
+          "digest_blake3": "036209124b1f08ade34bc6d26870f440271332e8e50385cc8028329d7a2d40b2",
+          "size_bytes": 24327056
+        },
+        "configuration_identity_blake3": "036209124b1f08ade34bc6d26870f440271332e8e50385cc8028329d7a2d40b2"
+      },
+      "wasmtime": {
+        "version": "43.0.0",
+        "executable": {
+          "logical_path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasmtime",
+          "digest_blake3": "e8168340d31722b18e5665d66f8be05343d7ccfc8fc38dc23d7c60b2f9d6aea8",
+          "size_bytes": 69346296
+        },
+        "configuration_identity_blake3": "e8168340d31722b18e5665d66f8be05343d7ccfc8fc38dc23d7c60b2f9d6aea8"
+      }
+    },
+    "composition": {
+      "package": "demo:composition",
+      "source_wac": "package demo:composition;\nlet app = new root:component { ... };\nexport app.run;\n",
+      "nodes": [
+        {
+          "id": "app",
+          "package": "root:component",
+          "world": "root",
+          "artifact": {
+            "logical_path": "/mantle/pending/compiled.wasm",
+            "digest_blake3": "cc8740a472d4fdc531ac148edbfbbbd42fdc50bed592e4fd0e6c94a7a1f2cee7",
+            "size_bytes": 1
+          },
+          "required_imports": []
+        }
+      ],
+      "edges": [],
+      "output_world": "root",
+      "import_dependencies": false
+    },
+    "virtualization": {
+      "defaults_overridden": true,
+      "rules": [
+        {
+          "subsystem": "stdio",
+          "mode": "allow",
+          "value": null,
+          "value_identity_blake3": null,
+          "input": null,
+          "guest_path": null,
+          "review_id": "fixture-reviewed-stdio"
+        }
+      ],
+      "expected_remaining_imports": []
+    },
+    "validation_profiles": {
+      "octet_artifact_profile_identity_blake3": "e8fbf118b283d63a3662af4853a2ce5f4a1777c18fe37e0be0dc1e235fd707bd",
+      "expected_runtime_profile_identity_blake3": "2f8e9be2c51bf74d0b8b09811720a6d332e0cae546627832fd5481d7cead8a32"
+    },
+    "wizer": {
+      "mode": "deterministic",
+      "initialization_entrypoint": "wizer.initialize",
+      "deterministic_virtual_imports": [],
+      "linker_split": {
+        "linker": "wasm-component-ld",
+        "linker_args": [
+          "--skip-wit-component"
+        ],
+        "compile_environment": {
+          "CARGO_TARGET_WASM32_WASIP2_LINKER": "wasm-component-ld",
+          "RUSTFLAGS": "-C link-arg=--skip-wit-component"
+        }
+      },
+      "componentization": {
+        "tool": "wasm-tools",
+        "args": []
+      }
+    },
+    "aot": {
+      "mode": "disabled",
+      "target": null,
+      "cpu_features": [],
+      "wasmtime_configuration_identity_blake3": null
+    },
+    "outputs": [
+      {
+        "name": "component",
+        "path": "component.wasm",
+        "class": "validated-portable-component"
+      }
+    ],
+    "non_claims": [
+      "not-component-behavior-correctness",
+      "not-runtime-authority",
+      "not-runtime-sandboxing",
+      "not-release-eligibility",
+      "not-octet-policy-interpretation"
+    ]
+  },
+  "generated_inputs": [
+    {
+      "name": "wkg-manifest",
+      "target": ".mantle/wasm-component/wkg.toml",
+      "output_class": "tool-input",
+      "owner": {
+        "schema": "mantle-wasm-component-generated-input-receipt-v1",
+        "generator": "mantle-wasm-component-export",
+        "export_name": "wkg-manifest",
+        "source_identity_blake3": "e3c55a6434da88070b9c2338efc5b2553da1c2ceae3c469b735f08cd276f20aa",
+        "dependency_identity_blake3": "c2d371abd39a3ae27295233d15d92034ed6542cd8967c053659b9f5cbe449dba"
+      },
+      "content": "[overrides]\n"
+    },
+    {
+      "name": "wkg-config",
+      "target": ".mantle/wasm-component/wkg-config.toml",
+      "output_class": "tool-input",
+      "owner": {
+        "schema": "mantle-wasm-component-generated-input-receipt-v1",
+        "generator": "mantle-wasm-component-export",
+        "export_name": "wkg-config",
+        "source_identity_blake3": "e3c55a6434da88070b9c2338efc5b2553da1c2ceae3c469b735f08cd276f20aa",
+        "dependency_identity_blake3": "c2d371abd39a3ae27295233d15d92034ed6542cd8967c053659b9f5cbe449dba"
+      },
+      "content": "default_registry = \"local\"\n\n[namespace_registries]\n\"demo\" = \"local\"\n\n[registry.\"local\"]\ndefault = \"local\"\n[registry.\"local\".local]\nroot = \"/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry\"\n"
+    },
+    {
+      "name": "wac-source",
+      "target": ".mantle/wasm-component/composition.wac",
+      "output_class": "composition-input",
+      "owner": {
+        "schema": "mantle-wasm-component-generated-input-receipt-v1",
+        "generator": "mantle-wasm-component-export",
+        "export_name": "wac-source",
+        "source_identity_blake3": "e3c55a6434da88070b9c2338efc5b2553da1c2ceae3c469b735f08cd276f20aa",
+        "dependency_identity_blake3": "c2d371abd39a3ae27295233d15d92034ed6542cd8967c053659b9f5cbe449dba"
+      },
+      "content": "package demo:composition;\nlet app = new root:component { ... };\nexport app.run;\n"
+    },
+    {
+      "name": "command-plan",
+      "target": ".mantle/wasm-component/command-plan.json",
+      "output_class": "tool-input",
+      "owner": {
+        "schema": "mantle-wasm-component-generated-input-receipt-v1",
+        "generator": "mantle-wasm-component-export",
+        "export_name": "command-plan",
+        "source_identity_blake3": "e3c55a6434da88070b9c2338efc5b2553da1c2ceae3c469b735f08cd276f20aa",
+        "dependency_identity_blake3": "c2d371abd39a3ae27295233d15d92034ed6542cd8967c053659b9f5cbe449dba"
+      },
+      "content": "{}"
+    },
+    {
+      "name": "runtime-profile",
+      "target": ".mantle/wasm-component/runtime-profile.json",
+      "output_class": "runtime-profile",
+      "owner": {
+        "schema": "mantle-wasm-component-generated-input-receipt-v1",
+        "generator": "mantle-wasm-component-export",
+        "export_name": "runtime-profile",
+        "source_identity_blake3": "e3c55a6434da88070b9c2338efc5b2553da1c2ceae3c469b735f08cd276f20aa",
+        "dependency_identity_blake3": "c2d371abd39a3ae27295233d15d92034ed6542cd8967c053659b9f5cbe449dba"
+      },
+      "content": "{}"
+    }
+  ],
+  "toolchain_manifest": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/share/mantle/wasm-component-toolchain.json",
+  "source_root": "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/source",
+  "wit_relative_path": "wit",
+  "package_materializations": [
+    {
+      "package": "demo:dep",
+      "version": "0.1.0",
+      "registry": "local",
+      "protocol_digest": "sha256:a11ba8ad11065a2b857612c159fa0132145b8ce13951a18c2a4650825dd7bfa0",
+      "object": {
+        "logical_path": "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry/demo/dep/0.1.0.wasm",
+        "digest_blake3": "c2d371abd39a3ae27295233d15d92034ed6542cd8967c053659b9f5cbe449dba",
+        "size_bytes": 200
+      }
+    }
+  ],
+  "cargo_component_relative_path": "wasm32-wasip2/release/mantle_wasm_production_fixture.wasm",
+  "cargo_core_module_relative_path": "wasm32-wasip2/release/mantle_wasm_production_fixture.wasm",
+  "composition_dependencies": [
+    {
+      "package": "root:component",
+      "source": "compiled-component"
+    }
+  ],
+  "package_resolution_network": false,
+  "runtime_invoke": "run()",
+  "expected_runtime_stdout": "42\n",
+  "aot_target": "x86_64-unknown-linux-gnu",
+  "aot_cpu_features": [],
+  "aot_configuration_args": []
+}

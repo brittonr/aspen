@@ -43,7 +43,7 @@
       flake = false;
     };
     mantle-wasm-verifier-src = {
-      url = "github:OnixResearch/mantle/c99556e5c91dfd13fcc261dc451f471359d47c38";
+      url = "github:OnixResearch/mantle/cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0";
       flake = false;
     };
     artifact-src = {
@@ -319,7 +319,7 @@
             )
             "Molten hardened Wasmtime Cargo/Nix source identity, package set, license, or completed publication drifted";
           hardened-wasmtime-src;
-        mantleWasmVerifierRevision = "c99556e5c91dfd13fcc261dc451f471359d47c38";
+        mantleWasmVerifierRevision = "cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0";
         mantleWasmVerifierRepository = "ssh://git@github.com/OnixResearch/mantle.git";
         mantleWasmVerifierDependency = artifactRootDependencies.mantle-wasm-consumer-verifier;
         mantleWasmVerifierExpectedLockSource = "git+${mantleWasmVerifierRepository}?rev=${mantleWasmVerifierRevision}#${mantleWasmVerifierRevision}";
@@ -346,6 +346,10 @@
               && builtins.pathExists (
                 mantle-wasm-verifier-src
                 + "/.cairn/archive/2026-09-10-publish-wasm-component-consumer-verifier/tasks.md"
+              )
+              && builtins.pathExists (
+                mantle-wasm-verifier-src
+                + "/.cairn/archive/1970-01-01-verify-wasm-source-closure-trees/tasks.md"
               )
             )
             "Molten Mantle Wasm verifier Cargo/Nix source identity, package set, license, or completed publication drifted";

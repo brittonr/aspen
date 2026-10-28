@@ -1,0 +1,333 @@
+{
+  "schema": "mantle-wasm-component-materialization-bundle-v1",
+  "name": "mantle-wasm-production-fixture",
+  "manifest_blake3": "e9294c1e35eebe728d3386d5dbfb4c46b6d1ce7ce91e1fdaa968f4a97166beba",
+  "cohort_blake3": "834b36cbab0dd827e074974edcf40adbb8ad8f8e7d701820f2dd7d2f68a81495",
+  "wit_inputs": [
+    {
+      "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/inputs/selected-world.wit",
+      "digest_blake3": "fd3be085e9be42ba03ba132e243c4ac9f6c015398a7410995e6d602206bb17b7",
+      "size_bytes": 115
+    }
+  ],
+  "package_inputs": [
+    {
+      "package": "demo:dep",
+      "version": "0.1.0",
+      "registry": "local",
+      "protocol_digest": "sha256:a11ba8ad11065a2b857612c159fa0132145b8ce13951a18c2a4650825dd7bfa0",
+      "object": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/inputs/packages/package-0.wasm",
+        "digest_blake3": "c2d371abd39a3ae27295233d15d92034ed6542cd8967c053659b9f5cbe449dba",
+        "size_bytes": 200
+      }
+    }
+  ],
+  "source_closure": {
+    "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/inputs/source",
+    "digest_blake3": "e3c55a6434da88070b9c2338efc5b2553da1c2ceae3c469b735f08cd276f20aa",
+    "size_bytes": 4145
+  },
+  "lock": {
+    "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/wkg.lock",
+    "digest_blake3": "4d943019537f1e732f994d6abc139a6db2eef96a04bf5bde4002237db3c73aa8",
+    "size_bytes": 291
+  },
+  "final_portable": {
+    "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/normalized.wasm",
+    "digest_blake3": "d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6",
+    "size_bytes": 265
+  },
+  "expected_octet_profile_blake3": "e8fbf118b283d63a3662af4853a2ce5f4a1777c18fe37e0be0dc1e235fd707bd",
+  "expected_runtime_profile_blake3": "e9b83b41aca9816f2ac79a0da43fb6fe629a0c212c131dc718aa199cbc030068",
+  "stage_receipts": [
+    {
+      "stage_key": "aot",
+      "kind": "aot",
+      "receipt_blake3": "f3a46b9caf0b20e54f33554130bc878c655953082f47d772f850f20e20c11ece",
+      "receipt": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/stage-receipts/aot.json",
+        "digest_blake3": "f3a46b9caf0b20e54f33554130bc878c655953082f47d772f850f20e20c11ece",
+        "size_bytes": 440
+      },
+      "artifact": null
+    },
+    {
+      "stage_key": "binding-generation",
+      "kind": "binding-generation",
+      "receipt_blake3": "24b7775337185d21aa297ea1fe621d992e3be7e4ed1acda53e807acc42c6f085",
+      "receipt": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/stage-receipts/binding-generation.json",
+        "digest_blake3": "24b7775337185d21aa297ea1fe621d992e3be7e4ed1acda53e807acc42c6f085",
+        "size_bytes": 496
+      },
+      "artifact": null
+    },
+    {
+      "stage_key": "checked-lock",
+      "kind": "lock",
+      "receipt_blake3": "734432a21882be73032c2f92c2ec9a83e5e7a53a066b9087feff80592c0c1aa3",
+      "receipt": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/stage-receipts/checked-lock.json",
+        "digest_blake3": "734432a21882be73032c2f92c2ec9a83e5e7a53a066b9087feff80592c0c1aa3",
+        "size_bytes": 603
+      },
+      "artifact": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/wkg.lock",
+        "digest_blake3": "4d943019537f1e732f994d6abc139a6db2eef96a04bf5bde4002237db3c73aa8",
+        "size_bytes": 291
+      }
+    },
+    {
+      "stage_key": "compilation",
+      "kind": "compilation",
+      "receipt_blake3": "8f632d829cd2a2898739c14b32b66a34b286076e5b9267d756c7330d6030799f",
+      "receipt": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/stage-receipts/compilation.json",
+        "digest_blake3": "8f632d829cd2a2898739c14b32b66a34b286076e5b9267d756c7330d6030799f",
+        "size_bytes": 685
+      },
+      "artifact": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/compiled-core.wasm",
+        "digest_blake3": "4c0d86c668879df8517c574552dae7d97ba2ae51f9e74f135a6cadb112366e23",
+        "size_bytes": 625
+      }
+    },
+    {
+      "stage_key": "compiled-validation",
+      "kind": "build-validation",
+      "receipt_blake3": "392b0be2d9a074e4f797990df25fa8e14601a25a96547f7b4abe8df5b9d12fef",
+      "receipt": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/stage-receipts/compiled-validation.json",
+        "digest_blake3": "392b0be2d9a074e4f797990df25fa8e14601a25a96547f7b4abe8df5b9d12fef",
+        "size_bytes": 697
+      },
+      "artifact": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/compiled-core.wasm",
+        "digest_blake3": "4c0d86c668879df8517c574552dae7d97ba2ae51f9e74f135a6cadb112366e23",
+        "size_bytes": 625
+      }
+    },
+    {
+      "stage_key": "componentization",
+      "kind": "componentization",
+      "receipt_blake3": "f8826d2460ff7073d18c434581c62392075e62e79bfb9540d3f3a4e4e565615a",
+      "receipt": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/stage-receipts/componentization.json",
+        "digest_blake3": "f8826d2460ff7073d18c434581c62392075e62e79bfb9540d3f3a4e4e565615a",
+        "size_bytes": 757
+      },
+      "artifact": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/componentized.wasm",
+        "digest_blake3": "c0c1162cc2428e1336efdb32c4d2c340d553f5b6ff2aa63b43d169b174c23009",
+        "size_bytes": 612
+      }
+    },
+    {
+      "stage_key": "componentized-validation",
+      "kind": "build-validation",
+      "receipt_blake3": "5fcf9d3001d483b8416dc5e8a9cec8a6924e103502902136ba62eb4a682f29e0",
+      "receipt": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/stage-receipts/componentized-validation.json",
+        "digest_blake3": "5fcf9d3001d483b8416dc5e8a9cec8a6924e103502902136ba62eb4a682f29e0",
+        "size_bytes": 705
+      },
+      "artifact": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/componentized.wasm",
+        "digest_blake3": "c0c1162cc2428e1336efdb32c4d2c340d553f5b6ff2aa63b43d169b174c23009",
+        "size_bytes": 612
+      }
+    },
+    {
+      "stage_key": "composed-validation",
+      "kind": "build-validation",
+      "receipt_blake3": "dc4a35a27bd47f21ad5ca424740e288e21590d3b624a241edfdcb4a97329bc1b",
+      "receipt": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/stage-receipts/composed-validation.json",
+        "digest_blake3": "dc4a35a27bd47f21ad5ca424740e288e21590d3b624a241edfdcb4a97329bc1b",
+        "size_bytes": 695
+      },
+      "artifact": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/composed.wasm",
+        "digest_blake3": "7baea27e92251aece462cafd26cb9d7c5dfbc9cf34c41954a5e30380647ebeba",
+        "size_bytes": 720
+      }
+    },
+    {
+      "stage_key": "composition",
+      "kind": "composition",
+      "receipt_blake3": "d6228d9ffcbcd5f37d701cf4770359e117674c27fb61c06234551421e78c292b",
+      "receipt": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/stage-receipts/composition.json",
+        "digest_blake3": "d6228d9ffcbcd5f37d701cf4770359e117674c27fb61c06234551421e78c292b",
+        "size_bytes": 680
+      },
+      "artifact": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/composed.wasm",
+        "digest_blake3": "7baea27e92251aece462cafd26cb9d7c5dfbc9cf34c41954a5e30380647ebeba",
+        "size_bytes": 720
+      }
+    },
+    {
+      "stage_key": "metadata-normalization",
+      "kind": "metadata-normalization",
+      "receipt_blake3": "5f0a0ae5e2cd2713f055be2d0b7d35c9f23a79f91df7f4933a09502a9132f3f8",
+      "receipt": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/stage-receipts/metadata-normalization.json",
+        "digest_blake3": "5f0a0ae5e2cd2713f055be2d0b7d35c9f23a79f91df7f4933a09502a9132f3f8",
+        "size_bytes": 704
+      },
+      "artifact": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/normalized.wasm",
+        "digest_blake3": "d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6",
+        "size_bytes": 265
+      }
+    },
+    {
+      "stage_key": "octet-validation",
+      "kind": "octet-validation",
+      "receipt_blake3": "79a8c679fa681fe9b6601b13297e23dd1f066f5399cd2a3755d09a26cc37ccfc",
+      "receipt": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/stage-receipts/octet-validation.json",
+        "digest_blake3": "79a8c679fa681fe9b6601b13297e23dd1f066f5399cd2a3755d09a26cc37ccfc",
+        "size_bytes": 768
+      },
+      "artifact": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/octet-evidence-rail-receipt.json",
+        "digest_blake3": "14dc77f3912ece6d79f8e752fc464192b5c6988c1c2e3a94fd8242c0fc6a9b80",
+        "size_bytes": 3952
+      }
+    },
+    {
+      "stage_key": "package-resolution",
+      "kind": "package-resolution",
+      "receipt_blake3": "2786a99a3ee2b074261163b9b2bcf877994c02553745f4bf96d18c48ab6e22d9",
+      "receipt": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/stage-receipts/package-resolution.json",
+        "digest_blake3": "2786a99a3ee2b074261163b9b2bcf877994c02553745f4bf96d18c48ab6e22d9",
+        "size_bytes": 760
+      },
+      "artifact": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/inputs/packages/package-0.wasm",
+        "digest_blake3": "c2d371abd39a3ae27295233d15d92034ed6542cd8967c053659b9f5cbe449dba",
+        "size_bytes": 200
+      }
+    },
+    {
+      "stage_key": "portable-validation",
+      "kind": "build-validation",
+      "receipt_blake3": "184dbf16afb70fc4b2cf8483b438d0bb92de85a0348feec720c7a69f03ddaafa",
+      "receipt": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/stage-receipts/portable-validation.json",
+        "digest_blake3": "184dbf16afb70fc4b2cf8483b438d0bb92de85a0348feec720c7a69f03ddaafa",
+        "size_bytes": 697
+      },
+      "artifact": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/normalized.wasm",
+        "digest_blake3": "d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6",
+        "size_bytes": 265
+      }
+    },
+    {
+      "stage_key": "runtime-smoke",
+      "kind": "build-validation",
+      "receipt_blake3": "9264aef40f02e838629c59baf2584e65ce8a510064a4fec8d45df528f8eb3abe",
+      "receipt": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/stage-receipts/runtime-smoke.json",
+        "digest_blake3": "9264aef40f02e838629c59baf2584e65ce8a510064a4fec8d45df528f8eb3abe",
+        "size_bytes": 751
+      },
+      "artifact": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/normalized.wasm",
+        "digest_blake3": "d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6",
+        "size_bytes": 265
+      }
+    },
+    {
+      "stage_key": "virtualization",
+      "kind": "virtualization",
+      "receipt_blake3": "c3c83858655e105aa88c6e25392bbd82cde2f9aed65aa48cc7470080ac1678d8",
+      "receipt": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/stage-receipts/virtualization.json",
+        "digest_blake3": "c3c83858655e105aa88c6e25392bbd82cde2f9aed65aa48cc7470080ac1678d8",
+        "size_bytes": 698
+      },
+      "artifact": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/virtualized.wasm",
+        "digest_blake3": "7baea27e92251aece462cafd26cb9d7c5dfbc9cf34c41954a5e30380647ebeba",
+        "size_bytes": 720
+      }
+    },
+    {
+      "stage_key": "virtualized-validation",
+      "kind": "build-validation",
+      "receipt_blake3": "550036632116d6e252b01d68124489c4bd10d044c86010a59f3ea308da32f50f",
+      "receipt": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/stage-receipts/virtualized-validation.json",
+        "digest_blake3": "550036632116d6e252b01d68124489c4bd10d044c86010a59f3ea308da32f50f",
+        "size_bytes": 701
+      },
+      "artifact": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/virtualized.wasm",
+        "digest_blake3": "7baea27e92251aece462cafd26cb9d7c5dfbc9cf34c41954a5e30380647ebeba",
+        "size_bytes": 720
+      }
+    },
+    {
+      "stage_key": "wizer",
+      "kind": "wizer",
+      "receipt_blake3": "c69b39ee6df0a6fdf2d6e71c5959d4c45f5170d2fa23d8361b5b2f55702ff6b5",
+      "receipt": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/stage-receipts/wizer.json",
+        "digest_blake3": "c69b39ee6df0a6fdf2d6e71c5959d4c45f5170d2fa23d8361b5b2f55702ff6b5",
+        "size_bytes": 742
+      },
+      "artifact": {
+        "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/wizer-first-core.wasm",
+        "digest_blake3": "25fb5a4e525ac35d016c1098b17c0d3d40da5186d1448face663f52daad3c063",
+        "size_bytes": 606
+      }
+    }
+  ],
+  "wizer": {
+    "schema": "mantle-wasm-component-wizer-admission-v1",
+    "input": {
+      "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/compiled-core.wasm",
+      "digest_blake3": "4c0d86c668879df8517c574552dae7d97ba2ae51f9e74f135a6cadb112366e23",
+      "size_bytes": 625
+    },
+    "output": {
+      "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/wizer-first-core.wasm",
+      "digest_blake3": "25fb5a4e525ac35d016c1098b17c0d3d40da5186d1448face663f52daad3c063",
+      "size_bytes": 606
+    },
+    "repeated_output": {
+      "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/wizer-repeated-core.wasm",
+      "digest_blake3": "25fb5a4e525ac35d016c1098b17c0d3d40da5186d1448face663f52daad3c063",
+      "size_bytes": 606
+    },
+    "componentized_output": {
+      "logical_path": "/tmp/aspen-mantle-boundary-witness-20261027/producer-output/artifacts/componentized.wasm",
+      "digest_blake3": "c0c1162cc2428e1336efdb32c4d2c340d553f5b6ff2aa63b43d169b174c23009",
+      "size_bytes": 612
+    },
+    "cohort_blake3": "834b36cbab0dd827e074974edcf40adbb8ad8f8e7d701820f2dd7d2f68a81495",
+    "configuration_blake3": "e5f6f5932518b1cd069b7fa29e05f71e970404f0e235cb000b0d9cd2371e36ed",
+    "compilation_receipt_blake3": "c76d9c34de89f567d8ec299c89dc30c76e055858454288ed5878a427f1501456",
+    "first_transform_receipt_blake3": "ddf06bf359dfaefeeff445c666d114ff7eecaad2276e111ea8528c193821ccae",
+    "repeated_transform_receipt_blake3": "2c6f2a0942bec2173cddf29438150799756711fdece3629f59e4b25cf3961f8a",
+    "componentization_receipt_blake3": "270830059b1b8a01fbf7dfc250dc4e564c0d6daa66866c466c5c814401e3aa8e",
+    "deterministic_outputs_match": true,
+    "eligible_for_bundle": true,
+    "receipt_blake3": "b2f39aa684bdd849bc8c31edb59551fc15620a3d3f61017f02cf8277f5464141"
+  },
+  "aot": null,
+  "non_claims": [
+    "not-component-behavior-correctness",
+    "not-octet-policy-interpretation",
+    "not-release-eligibility",
+    "not-runtime-authority",
+    "not-runtime-sandboxing"
+  ],
+  "bundle_identity_blake3": "93a2e552582646f7c06a299296a33318fb0fbd1913471702a8ecd2efe939d19f"
+}

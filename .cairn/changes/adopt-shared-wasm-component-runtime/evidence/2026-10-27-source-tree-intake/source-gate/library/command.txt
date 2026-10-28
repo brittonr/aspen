@@ -1,0 +1,1 @@
+cargo octet check -p molten --artifact-dir /dev/shm/aspen-mantle-source-trees-20261027/.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-source-tree-intake/source-gate/library -- --lib

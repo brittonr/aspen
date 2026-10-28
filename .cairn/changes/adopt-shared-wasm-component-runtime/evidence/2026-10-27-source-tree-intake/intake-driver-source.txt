@@ -1,0 +1,59 @@
+use std::path::Path;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    let is_probe = arguments.first().is_some_and(|argument| argument == "--intake-probe");
+    let args = if is_probe { &arguments[1..] } else { &arguments[..] };
+    let mut profile = molten::wasm_component::supported().map_err(|error| format!("profile: {error:?}"))?;
+    if is_probe {
+        // A declared observation-only profile, never the admitted product cohort.
+        let wit = b"package demo:app@0.1.0;\n\nworld unused {\n  import demo:dep/add@0.1.0;\n}\n\nworld app {\n  export run: func() -> u32;\n}\n";
+        profile.profile_id = "molten.wasm.component.intake-probe.v1".to_string();
+        profile.wit.package = "demo:app@0.1.0".to_string();
+        profile.wit.world = "app".to_string();
+        profile.wit.source_ref = molten::wasm_component::MaterializedObjectIdentity::measure(wit)
+            .map_err(|error| format!("probe WIT: {error:?}"))?.content_ref;
+    }
+    let profile_ref = molten::wasm_component::r#ref(&profile);
+    if args == [std::ffi::OsString::from("profile")] {
+        println!("{profile_ref}");
+        return Ok(());
+    }
+    if args.len() != 4 { return Err("expected bundle JSON, owned staging parent, component path, source-tree path".into()); }
+    let json = std::fs::read(&args[0])?;
+    let source = cap_std::fs::Dir::open_ambient_dir("/", cap_std::ambient_authority())?;
+    let stage_path = Path::new(&args[1]);
+    let stage = cap_std::fs::Dir::open_ambient_dir(stage_path, cap_std::ambient_authority())?;
+    let original_component = std::fs::read(&args[2])?;
+    let loaded = molten::wasm_component::VerifiedBundle::load(
+        &source, &stage, "successful-private-snapshot", &json, &profile,
+    ).map_err(|error| format!("genuine producer intake: {error:?}"))?;
+    assert_eq!(loaded.component_bytes(), original_component);
+    assert_eq!(
+        molten::wasm_component::MaterializedObjectIdentity::measure(loaded.wit_bytes())
+            .map_err(|error| format!("WIT measurement: {error:?}"))?.content_ref,
+        profile.wit.source_ref,
+    );
+    assert!(!stage.try_exists("successful-private-snapshot")?);
+    println!("profile_ref={profile_ref}");
+    println!("bundle_ref={}", loaded.bundle_ref());
+    println!("structural_report={:?}", loaded.structural_report());
+    println!("complete_report={:?}", loaded.verification_report());
+    println!("independent_observations={:?}", loaded.member_observations());
+    println!("private_snapshot=accepted component_bytes={} wit_bytes={} stage_removed=true",
+        loaded.component_bytes().len(), loaded.wit_bytes().len());
+
+    let added_directory = Path::new(&args[3]).join("witness-added-empty-directory");
+    std::fs::create_dir(&added_directory)?;
+    let drift = molten::wasm_component::VerifiedBundle::load(
+        &source, &stage, "source-drift-denial", &json, &profile,
+    );
+    std::fs::remove_dir(&added_directory)?;
+    assert!(drift.is_err(), "added empty directory must alter producer source identity");
+    assert!(!stage.try_exists("source-drift-denial")?);
+    assert_eq!(loaded.component_bytes(), original_component);
+    println!("source_empty_directory_drift=denied stage_removed=true retained_component_unchanged=true");
+    println!("scope=private_snapshot_intake_only execution_admitted=false");
+    println!("profile_scope={}", if is_probe { "unadmitted-intake-probe" } else { "supported-product" });
+    Ok(())
+}

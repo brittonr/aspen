@@ -1,0 +1,13 @@
+[package]
+name = "molten-source-tree-producer-observer"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+crunch-wasm-component = { git = "ssh://git@github.com/OnixResearch/mantle.git", rev = "cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0" }
+crunch-wasm-component-core = { git = "ssh://git@github.com/OnixResearch/mantle.git", rev = "cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0" }
+mantle-wasm-consumer-verifier = { git = "ssh://git@github.com/OnixResearch/mantle.git", rev = "cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0", features = ["std"] }
+assert_cmd = "2"
+serde_json = "1"
+sha2 = "0.10"
+tempfile = "3"

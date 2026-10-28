@@ -1,0 +1,23 @@
+{
+  "revision": "cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0",
+  "push_observation": {
+    "source": "session background job bg_385",
+    "command": "env GIT_SSH_COMMAND='ssh -o ServerAliveInterval=20 -o ServerAliveCountMax=120 -o TCPKeepAlive=yes' nix develop --option builders '' --max-jobs 2 --cores 2 -c git push origin HEAD:main",
+    "output": "To github.com:OnixResearch/mantle.git\n   5d6583630..cf7623b81  HEAD -> main\n"
+  },
+  "remote_readback": {
+    "command": [
+      "env",
+      "GIT_SSH_COMMAND=ssh -o ServerAliveInterval=20 -o ServerAliveCountMax=120 -o TCPKeepAlive=yes",
+      "git",
+      "ls-remote",
+      "--exit-code",
+      "origin",
+      "refs/heads/main"
+    ],
+    "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+    "exit": 0,
+    "stdout": "cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0\trefs/heads/main\n",
+    "stderr": ""
+  }
+}

@@ -44,7 +44,7 @@ ambient WASI is never inherited from the process.
 
 The root dependency cohort pins `hwr.shell.v4` at
 `cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c` and the published Mantle consumer
-verifier at `c99556e5c91dfd13fcc261dc451f471359d47c38`. The source gate binds
+verifier at `cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0`. The source gate binds
 their completed native archives and exact evidence digests. These pins are
 prerequisites, not authorization to change the execution backend.
 
@@ -67,15 +67,18 @@ deadlines, effect-world linker activation, matching production materializations,
 real shared actor/extension installation and coupled cutover/rollback remain
 acceptance gates.
 
-The adoption is explicitly blocked on the [reproduced Mantle materialization handoff](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-producer-handoff.md).
-The actual pinned pipeline succeeds and its own remeasurement passes, but the
-published consumer byte layer reports its directory source closure missing
-while all 36 file members match. Molten's independent private-snapshot intake
-is also file-only. Mantle must publish compatible bounded tree verification;
-Molten must then pin it and implement matching capability-rooted intake before
-consumer acceptance. A source archive substituted for the declared tree, a
-rewritten bundle, or a fabricated Bytes report would change the evidence
-contract and is not an admissible workaround.
+The [original directory-missing handoff](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-producer-handoff.md)
+is retained as a historical counterexample. The published tree-aware Mantle pin
+now verifies all 37 members and copies the unchanged directory source through
+its bounded capability-rooted API. Molten maintains no second tree walker or
+digest algorithm. A [fresh pinned real-pipeline intake](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-source-tree-intake.md#immutable-publication-and-executed-pinned-intake)
+retains exact component/WIT bytes, requires complete Structural+Bytes report
+agreement and denies empty-directory source drift with private-lease cleanup.
+That execution deliberately uses an unadmitted intake-only profile, not the
+supported production cohort. The [separate supported-world artifact-policy denial](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-source-tree-intake.md#distinct-supported-world-prerequisite)
+still blocks genuine matching actor/extension materialization. Consumer-installation
+tasks remain unchecked; no bundle rewrite, fabricated Bytes report, profile
+weakening, runtime activation or completed shared adoption is admitted.
 
 The effect-request world remains an unadmitted execution candidate. The inactive
 host adapter below is independently exercised, but no production linker,
@@ -228,10 +231,29 @@ into the older Molten `MantleBundle` DTO. The caller supplies source and private
 staging-parent directory capabilities plus an admitted fresh staging leaf, and
 must exclusively lease that staging namespace throughout the call. Source
 parents and leaves are opened no-follow; every declared member is remeasured
-under finite byte bounds and copied into fresh private staging. The published
-path-based verifier sees only that descriptor-backed snapshot, not mutable
-source parents. Ordinary success and failure remove only the owned child;
-cleanup failure denies the load. This bridge requires Linux `/proc/self/fd`.
+under finite byte bounds and copied into fresh private staging. Mantle owns
+directory source-closure framing and bounds (10,000 entries, depth 64 and
+536,870,912 content bytes), including empty directories; only that role may
+contain a tree. Its `ConsumerRoot::copy_source_closure` receives the unchanged
+published bundle and opened source/destination roots. Existing file-valued
+source closures remain supported. Molten keeps its cap-std v3 capabilities and
+bridges their live descriptors to the provider's own root implementation;
+it neither upgrades product capabilities nor exposes implementation-core DTOs
+to pure product types. Other roles remain no-follow regular-file measurements,
+with shared-path identity conflicts and finite member/aggregate byte admission.
+The complete published verifier sees only the resulting private snapshot, never
+mutable source parents. Ordinary success and failure remove only the owned child;
+cleanup failure denies the load. The bridge requires Linux `/proc/self/fd`.
+
+Molten component-runtime maintainers own private snapshot admission, selected
+component/WIT capture and complete Structural+Bytes report agreement; Mantle
+maintainers own source-tree identity and bounded no-follow copying. The focused
+regression corpus retains unchanged genuine producer bytes and rejects tree
+drift (including added empty directories), symlink substitution, missing or
+unsupported nodes and over-bound inputs. These implementation cases are not
+real-pipeline production acceptance, actor/extension installation or cutover;
+the [immutable pin and executed fresh intake](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-source-tree-intake.md#immutable-publication-and-executed-pinned-intake)
+separately prove private intake, not supported-world materialization.
 
 The intake requires the actual published Structural and Bytes reports, exact
 role/digest/length observations, the admitted Molten profile digest and WIT,

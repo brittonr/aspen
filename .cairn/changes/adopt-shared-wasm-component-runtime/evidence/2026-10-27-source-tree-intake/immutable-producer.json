@@ -1,0 +1,48 @@
+{
+  "run_root": "/tmp/mst27/itree-8qkodruu",
+  "profile_scope": "unadmitted-intake-probe",
+  "execution_admitted": false,
+  "records": [
+    {
+      "label": "resolve-published-producer",
+      "command": [
+        "cargo",
+        "update",
+        "--workspace",
+        "--manifest-path",
+        "/dev/shm/aspen-mantle-tree-smoke-20261027/producer/Cargo.toml"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "    Updating git repository `ssh://git@github.com/OnixResearch/mantle.git`\n     Locking 3 packages to latest Rust 1.96.0-nightly compatible versions\n      Adding crunch-wasm-component v0.1.0 (ssh://git@github.com/OnixResearch/mantle.git?rev=cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0#cf7623b8)\n      Adding crunch-wasm-component-core v0.1.0 (ssh://git@github.com/OnixResearch/mantle.git?rev=cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0#cf7623b8)\n      Adding mantle-wasm-consumer-verifier v0.1.0 (ssh://git@github.com/OnixResearch/mantle.git?rev=cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0#cf7623b8)\nnote: pass `--verbose` to see 5 unchanged dependencies behind latest\n"
+    },
+    {
+      "label": "build-published-producer",
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "--manifest-path",
+        "/dev/shm/aspen-mantle-tree-smoke-20261027/producer/Cargo.toml"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stdout": "",
+      "stderr": "[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build \u2014 compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] \u2192 set KACHE_CACHE_DIR to a fast, local, single-machine path\n   Compiling crunch-wasm-component-core v0.1.0 (ssh://git@github.com/OnixResearch/mantle.git?rev=cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0#cf7623b8)\n[kache] the cache index could not be opened after retries (opening index database /var/cache/kache-nix/user-brittonr/index.db: disk I/O error: Error code 4618: disk I/O error).\n[kache] Caching is disabled for this build \u2014 compilation still succeeds,\n[kache] just without cache hits or stores (everything builds uncached).\n[kache] This is usually a storage issue: the cache directory is on a\n[kache] filesystem that doesn't support reliable file locking, or it is\n[kache] being accessed from more than one machine at the same time.\n[kache] \u2192 set KACHE_CACHE_DIR to a fast, local, single-machine path\n   Compiling mantle-wasm-consumer-verifier v0.1.0 (ssh://git@github.com/OnixResearch/mantle.git?rev=cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0#cf7623b8)\n   Compiling crunch-wasm-component v0.1.0 (ssh://git@github.com/OnixResearch/mantle.git?rev=cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0#cf7623b8)\n   Compiling molten-source-tree-producer-observer v0.0.0 (/dev/shm/aspen-mantle-tree-smoke-20261027/producer)\n    Finished `dev` profile [unoptimized] target(s) in 5.82s\n"
+    },
+    {
+      "label": "execute-real-pinned-pipeline",
+      "command": [
+        "/dev/shm/mantle-source-observer-target-20261027/debug/molten-source-tree-producer-observer",
+        "--original-fixture",
+        "blake3:2f8e9be2c51bf74d0b8b09811720a6d332e0cae546627832fd5481d7cead8a32",
+        "/tmp/mst27/itree-8qkodruu/producer-output"
+      ],
+      "cwd": "/dev/shm/mantle-wasm-source-trees-20261027",
+      "exit": 0,
+      "stdout": "producer_status=succeeded\nproducer_blockers=[]\nconsumer_status=Verified layers=Structural,Bytes members=37\nsource_copy=Matched digest=e3c55a6434da88070b9c2338efc5b2553da1c2ceae3c469b735f08cd276f20aa bytes=4145\nbundle_identity=f328a9d65d9a33d19e04bf893315135397225b0a02b66719b142f22a47b6d439\nprofile_ref=blake3:2f8e9be2c51bf74d0b8b09811720a6d332e0cae546627832fd5481d7cead8a32\n",
+      "stderr": ""
+    }
+  ]
+}

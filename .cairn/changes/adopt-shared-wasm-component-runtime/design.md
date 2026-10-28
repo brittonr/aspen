@@ -58,9 +58,22 @@ One ordinary actor path and one system-extension callback path must load Mantle-
 
 The product fixture must include at least one successful pure invocation, one admitted effect request, one denied effect request, one trap, and one resource denial.
 
-The [2026-10-27 real producer handoff](evidence/2026-10-27-producer-handoff.md) establishes an additional prerequisite: Mantle revision `c99556e5c91dfd13fcc261dc451f471359d47c38` publishes a framed directory source closure, but its published consumer byte layer accepts only regular files. A successful producer run and producer remeasurement therefore do not imply a verified consumer byte layer. Molten's independent capability-rooted intake also needs the producer's bounded tree identity and snapshot contract before it can retain a matching source tree.
+The [2026-10-27 original producer handoff](evidence/2026-10-27-producer-handoff.md) recorded a historical prerequisite: Mantle revision `c99556e5c91dfd13fcc261dc451f471359d47c38` published a framed directory source closure, but its published consumer byte layer accepted only regular files. Producer success and remeasurement therefore did not establish verified consumer bytes. The completed tree-aware publication and Molten private intake below resolve that specific mismatch without changing source identity.
 
-The change is explicitly blocked on that immutable handoff. Mantle owns the producer/verifier repair and publication; Molten owns the subsequent pin, capability-rooted integration and product acceptance. Keep the complete local runtime and all current execution-admission restrictions unchanged. No synthetic positive bundle, archive-as-file substitution, source-tree omission or fabricated Bytes report is an alternative.
+The change remains blocked on the [separate supported-world artifact-policy denial](evidence/2026-10-27-source-tree-intake.md#distinct-supported-world-prerequisite), not the historical directory-missing result. Keep the complete local runtime and all current execution-admission restrictions unchanged. No synthetic positive production bundle, archive-as-file substitution, source-tree omission, fabricated Bytes report or weaker artifact profile is an alternative.
+
+The implementation continuation gives private intake a typed reference to the
+published `MaterializationBundle` and calls the provider's
+`ConsumerRoot::copy_source_closure` through the existing Linux descriptor bridge.
+Molten retains its cap-std v3 root capabilities; Mantle owns bounded-tree
+traversal/copy and producer v1 framing, including empty directories. Every other
+role remains a no-follow regular file, with shared-path conflicts denied and
+selected component/WIT bytes captured unchanged. A private source copy alone
+does not admit execution: the unchanged DTO must still receive complete
+Structural+Bytes report agreement over the snapshot, and cleanup failure denies.
+The [published immutable provider pin and fresh real-pipeline intake](evidence/2026-10-27-source-tree-intake.md#immutable-publication-and-executed-pinned-intake)
+now exercise those integration gates. Their explicitly unadmitted probe profile
+does not establish supported-world materialization or product consumer installation.
 
 ### Make cutover and rollback coupled
 

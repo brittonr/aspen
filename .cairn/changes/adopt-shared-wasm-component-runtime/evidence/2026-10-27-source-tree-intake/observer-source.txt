@@ -1,0 +1,69 @@
+// Disposable witness over the real unchanged producer pipeline and public verifier.
+#[allow(dead_code, unused_imports)]
+mod real_fixture {
+    include!(concat!(env!("MANTLE_SOURCE_ROOT"), "/tests/wasm_component_cli.rs"));
+
+    pub fn observe(guest: &Path, profile_ref: &str, output: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        let mut fixture = CliFixture::new();
+        if guest != Path::new("--original-fixture") {
+            let source = PathBuf::from(&fixture.request.source_root);
+            let package_lock = fs::read(source.join("wkg.lock"))?;
+            fs::remove_dir_all(&source)?;
+            crunch_wasm_component::copy_source_tree(guest, &source)?;
+            fs::write(source.join("wkg.lock"), package_lock)?;
+            fixture.request.manifest.implementation.source = source_object(&source, fixture._temp.path());
+            fixture.request.manifest.wit.package = "molten:component-runtime".to_string();
+            fixture.request.manifest.wit.world = "actor".to_string();
+            fixture.request.manifest.wit.source = file_object(&source.join("wit/runtime.wit"));
+            fixture.request.manifest.composition.source_wac = "package demo:composition;\nlet app = new root:component { ... };\nexport app.invoke;\n".to_string();
+            fixture.request.runtime_invoke = Some("invoke([1,2,3])".to_string());
+            fixture.request.expected_runtime_stdout = "ok([1, 2, 3])\n".to_string();
+        }
+        fixture.request.manifest.validation_profiles.expected_runtime_profile_identity_blake3 =
+            Blake3Identity::parse(profile_ref.strip_prefix("blake3:").ok_or("expected canonical profile ref")?.to_string())
+                .map_err(|error| format!("runtime profile identity: {error:?}"))?;
+        let dependency = fixture.request.package_materializations[0].object.digest_blake3.clone();
+        fixture.request.generated_inputs = generated_inputs(&fixture.request, &dependency);
+        let parent = output.parent().ok_or("output requires a parent")?;
+        fs::write(parent.join("resolved-request.json"), serde_json::to_vec_pretty(&fixture.request)?)?;
+        let report = crunch_wasm_component::run_component_pipeline(
+            fixture.request,
+            crunch_wasm_component::PipelinePaths { evidence_dir: output.to_path_buf(), scratch_parent: parent.to_path_buf() },
+        )?;
+        fs::write(parent.join("execution-report.json"), serde_json::to_vec_pretty(&report)?)?;
+        println!("producer_status={}", report.final_status);
+        println!("producer_blockers={:?}", report.blockers);
+        if report.final_status != "succeeded" { return Err("real producer did not complete".into()); }
+        crunch_wasm_component::verify_pipeline_execution_report_files(&report)?;
+        let bundle = report.materialization_bundle.as_ref().ok_or("producer omitted bundle")?;
+        crunch_wasm_component::verify_materialization_bundle_files(bundle)?;
+        let root = mantle_wasm_consumer_verifier::ConsumerRoot::open(Path::new("/"))
+            .map_err(|error| format!("opening explicit fresh-publication observer root: {error:?}"))?;
+        let structural = mantle_wasm_consumer_verifier::verify_consumer_bundle(bundle.clone());
+        let complete = root.verify_bundle(bundle.clone()).map_err(|error| format!("verifier: {error:?}"))?;
+        assert_eq!(structural.status, mantle_wasm_consumer_verifier::ConsumerVerificationStatus::Verified);
+        assert_eq!(complete.status, mantle_wasm_consumer_verifier::ConsumerVerificationStatus::Verified);
+        assert_eq!(complete.layers_completed, [mantle_wasm_consumer_verifier::ConsumerLayer::Structural, mantle_wasm_consumer_verifier::ConsumerLayer::Bytes]);
+        assert!(complete.members.iter().all(|member| member.status == Some(mantle_wasm_consumer_verifier::ConsumerMemberStatus::Matched)));
+        let copied_root_path = parent.join("provider-copy");
+        fs::create_dir(&copied_root_path)?;
+        let copied_root = mantle_wasm_consumer_verifier::ConsumerRoot::open(&copied_root_path)
+            .map_err(|error| format!("private copy root: {error:?}"))?;
+        let copied = root.copy_source_closure(bundle, &copied_root).map_err(|error| format!("copy: {error:?}"))?;
+        assert_eq!(copied.status, Some(mantle_wasm_consumer_verifier::ConsumerMemberStatus::Matched));
+        assert_eq!(copied.digest_blake3, bundle.source_closure.digest_blake3.to_string());
+        assert_eq!(copied.size_bytes, bundle.source_closure.size_bytes);
+        fs::write(parent.join("consumer-report.json"), serde_json::to_vec_pretty(&complete)?)?;
+        println!("consumer_status=Verified layers=Structural,Bytes members={}", complete.members.len());
+        println!("source_copy=Matched digest={} bytes={}", copied.digest_blake3, copied.size_bytes);
+        println!("bundle_identity={}", complete.bundle_identity_blake3.as_deref().ok_or("missing bundle identity")?);
+        println!("profile_ref={profile_ref}");
+        Ok(())
+    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<_> = std::env::args_os().skip(1).collect();
+    if args.len() != 3 { return Err("expected guest directory, canonical profile reference, fresh output directory".into()); }
+    real_fixture::observe(std::path::Path::new(&args[0]), args[1].to_str().ok_or("profile must be UTF-8")?, std::path::Path::new(&args[2]))
+}

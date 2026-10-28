@@ -1,5 +1,5 @@
 //! Private staging bridges authorized directory descriptors to the published
-//! path-only verifier. No source path or ambient root is discovered here.
+//! verifier and bounded source copier. No ambient root is discovered here.
 
 use std::os::fd::AsRawFd;
 
@@ -67,10 +67,10 @@ pub(super) fn create_member(root: &cap_std::fs::Dir, relative: &str) -> super::R
 }
 
 pub(super) fn consumer_root(root: &cap_std::fs::Dir) -> super::Result<mantle_wasm_consumer_verifier::ConsumerRoot> {
-    // Linux descriptor bridge only. The descriptor stays live for the complete
-    // synchronous verification. Its private descendants were created above;
-    // no mutable source-tree symlink can enter the published path traversal.
+    // Linux descriptor bridge only. Both cap-std cohorts retain opened root
+    // capabilities; the caller keeps this descriptor live for the complete
+    // synchronous operation. Provider descendant traversal stays no-follow.
     let descriptor = std::path::PathBuf::from(format!("/proc/self/fd/{}", root.as_raw_fd()));
     mantle_wasm_consumer_verifier::ConsumerRoot::open(&descriptor)
-        .map_err(|_| super::Denial::new("published verifier cannot open the private staging descriptor"))
+        .map_err(|_| super::Denial::new("published verifier cannot open the authorized directory descriptor"))
 }

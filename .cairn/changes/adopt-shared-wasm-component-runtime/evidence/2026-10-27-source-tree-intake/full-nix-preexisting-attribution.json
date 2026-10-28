@@ -1,0 +1,38 @@
+{
+  "full_nix_exit": 1,
+  "records": [
+    {
+      "command": [
+        "git",
+        "status",
+        "--short",
+        "--",
+        "crates/molten-core",
+        "checks/native-system-extension-octet"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "show",
+        "HEAD:checks/native-system-extension-octet/src/system_extension/mod.rs"
+      ],
+      "exit": 0,
+      "stdout": "#![allow(\n    tigerstyle::path_segment_repetition,\n    reason = \"the focused shim preserves exact Molten system-extension names for the real native-host core\"\n)]\n\nconst MAX_TEXT_CHARS: usize = 256;\nconst BLAKE3_PREFIX: &str = \"blake3:\";\nconst BLAKE3_HEX_CHARS: usize = 64;\n\n#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub enum LifecyclePhase {\n    Absent,\n    Installed,\n    Admitted,\n    Initializing,\n    Initialized,\n    Starting,\n    Running,\n    Checkpointing,\n    Recovering,\n    Draining,\n    Drained,\n    Failed,\n    Restarting,\n    Upgrading,\n    RollingBack,\n    ShuttingDown,\n    Quarantined,\n    Stopped,\n    Removed,\n}\n\n#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub enum HealthState {\n    Unknown,\n    Starting,\n    Healthy,\n    Degraded,\n    Failed,\n    Quarantined,\n    Stopped,\n}\n\n#[derive(Debug, Clone, PartialEq, Eq)]\npub struct LifecycleState {\n    pub generation: u64,\n    pub phase: LifecyclePhase,\n    pub restart_attempts: u64,\n    pub health: HealthState,\n    pub checkpoint_ref: Option<String>,\n}\n\n#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]\npub struct ResourceUsage {\n    pub concurrent_callbacks: u64,\n    pub queued_events: u64,\n    pub inflight_bytes: u64,\n    pub open_streams: u64,\n    pub timers: u64,\n    pub effect_requests: u64,\n}\n\nimpl ResourceUsage {\n    pub const fn is_idle(self) -> bool {\n        self.concurrent_callbacks == 0\n            && self.queued_events == 0\n            && self.inflight_bytes == 0\n            && self.open_streams == 0\n            && self.timers == 0\n            && self.effect_requests == 0\n    }\n}\n\npub(crate) fn valid_token(value: &str) -> bool {\n    !value.is_empty()\n        && value.len() <= MAX_TEXT_CHARS\n        && value\n            .chars()\n            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.' | ':'))\n}\n\npub(crate) fn valid_ref(value: &str) -> bool {\n    let Some(hex) = value.strip_prefix(BLAKE3_PREFIX) else {\n        return false;\n    };\n    hex.len() == BLAKE3_HEX_CHARS\n        && hex.chars().all(|character| matches!(character, '0'..='9' | 'a'..='f'))\n}\n\npub mod native_host;\npub use native_host::*;\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "show",
+        "HEAD:src/system_extension/native_host/tests/mod.rs"
+      ],
+      "exit": 0,
+      "stdout": "use std::os::fd::AsRawFd;\n\nuse super::super::*;\nuse super::*;\nuse crate::fabric_durability::*;\n\nconst HASH_A: &str = \"blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\";\nconst HASH_B: &str = \"blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\";\nconst HASH_C: &str = \"blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\";\nconst HASH_D: &str = \"blake3:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\";\nconst GENERATION: u64 = 1;\nconst CALLBACK_BYTES: u64 = 4_096;\nconst MAX_ITEMS: u64 = 16;\nconst PROFILE_LIMIT: u64 = 32;\nconst OPERATION_BYTE_LIMIT: u64 = 65_536;\nconst NAMESPACE_BYTE_LIMIT: u64 = 1_048_576;\nconst PAYLOAD_BYTES: &[u8] = b\"native-payload-v2\";\nconst STATE_BYTES: &[u8] = b\"native-state-v2\";\nconst OUTPUT_BYTES: &[u8] = b\"native-output-v2\";\nconst EFFECT_REQUEST_BYTES: &[u8] = b\"native-effect-request-v2\";\n\nfn value(bytes: &[u8]) -> NativeCallbackValue {\n    NativeCallbackValue {\n        value_ref: crate::preserves_rail::content_ref_from_bytes(bytes),\n        bytes: bytes.to_vec(),\n    }\n}\n\nfn invocation() -> CallbackInvocation {\n    CallbackInvocation {\n        callback: CallbackKind::Request,\n        generation: GENERATION,\n        incarnation: 0,\n        sequence: GENERATION,\n        event_ref: HASH_A.to_string(),\n        payload_ref: Some(value(PAYLOAD_BYTES).value_ref),\n        logical_tick: GENERATION,\n        deadline_tick: PROFILE_LIMIT,\n    }\n}\n\nfn context() -> CallbackContext {\n    CallbackContext {\n        manifest_ref: HASH_A.to_string(),\n        executable_ref: HASH_B.to_string(),\n        instance_id: \"native-fixture\".to_string(),\n        extension_id: \"fixture-extension\".to_string(),\n        service_id: \"fixture-service\".to_string(),\n        state_ref: Some(value(STATE_BYTES).value_ref),\n        policy_refs: vec![HASH_C.to_string()],\n        resource_ref: HASH_D.to_string(),\n        port_binding_refs: vec![HASH_D.to_string()],\n    }\n}\n\nfn effect() -> TypedEffectRequest {\n \n[truncated]",
+      "stderr": ""
+    }
+  ]
+}

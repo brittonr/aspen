@@ -1,3 +1,7 @@
+include!("tests/producerfiles.rs");
+
+mod trees;
+
 use super::*;
 
 fn measure_for_test(
@@ -7,12 +11,34 @@ fn measure_for_test(
     wit: &str,
     profile: &crate::wasm_component::RuntimeProfile,
 ) -> Result<measurement::MeasuredMembers> {
+    let raw = include_bytes!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/wasm-component-runtime/kamacite-mantle-hello-bundle.json"
+    ));
+    let mut value: serde_json::Value = serde_json::from_slice(raw).expect("producer fixture");
+    if let Some(source) = members.iter().find(|member| member.role == "source-closure") {
+        // Existing file-valued measurement cases exercise the real provider
+        // copier, not a synthetic source-tree digest or a mocked observation.
+        value["source_closure"] = serde_json::json!({
+            "logical_path": source.logical_path,
+            "digest_blake3": source.digest,
+            "size_bytes": source.size,
+        });
+    }
+    let bytes = serde_json::to_vec(&value).expect("measurement fixture DTO");
+    let bundle = decode_bundle(&bytes, mantle_wasm_consumer_verifier::verify_consumer_bundle).expect("producer DTO");
     staging::with_private_stage(root, "private-stage", |stage| {
-        measurement::measure_members(root, stage, members, measurement::Selection {
-            component_path: component,
-            wit_path: wit,
-            profile,
-        })
+        measurement::measure_members(
+            root,
+            stage,
+            members,
+            measurement::Selection {
+                component_path: component,
+                wit_path: wit,
+                profile,
+            },
+            &bundle,
+        )
     })
 }
 

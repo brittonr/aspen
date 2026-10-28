@@ -1,0 +1,123 @@
+{
+  "schema_version": "octet-evidence-rail-receipt/v1",
+  "rail_id": "wasm-artifact",
+  "checker_id": "cargo-octet",
+  "mode": "import",
+  "command_argv": [
+    "cargo",
+    "octet",
+    "evidence",
+    "collect",
+    "--rail",
+    "wasm-artifact"
+  ],
+  "workspace_scope": ".",
+  "config_path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/share/mantle/octet/wasm-artifact-profiles.json",
+  "lockfile_identity": "b3:a2455e5ce16e9ff6734daf298b8faf35af2ee5e97ed01ec78ea9c6f1c4d96d60",
+  "checked_rule_families": [
+    "exact-byte-validation",
+    "module-component-classification",
+    "imports-exports-worlds",
+    "memory-table-growth-start",
+    "producer-and-custom-metadata",
+    "resource-limits",
+    "exact-and-interface-identities",
+    "recorded-only-valence-boundary"
+  ],
+  "status": "passed",
+  "finding_counts": {},
+  "bounded_log_identity": "b3:e1fcd585addd53eb4e88e0f90dfc4873cbc2a694a801eb273e3d3e468868f259",
+  "imported_input_identity": "b3:e1fcd585addd53eb4e88e0f90dfc4873cbc2a694a801eb273e3d3e468868f259",
+  "profile": "portable-component-baseline",
+  "non_claims": [
+    "Wasm artifact evidence records bounded static facts and does not prove execution correctness",
+    "Matching normalized interfaces do not prove semantic equivalence or identify one implementation",
+    "Static validation does not prove sandbox effectiveness, capability authority, provenance truth, release eligibility, or whole-system safety",
+    "Producer metadata is recorded input and is not provenance truth"
+  ],
+  "diagnostics": [],
+  "findings": [],
+  "parent_artifacts": [],
+  "wasm_artifact": {
+    "profile_id": "portable-component-baseline",
+    "profile_identity": "b3:e8fbf118b283d63a3662af4853a2ce5f4a1777c18fe37e0be0dc1e235fd707bd",
+    "registry_identity": "b3:f58715eb73f91d8a6fffd565cc3b030e7f1f8296ec8e91851155d1bb5e52bafd",
+    "cohort_id": "wasm-tools-0.253.0",
+    "cohort_identity": "b3:c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a",
+    "exact_artifact_identity": "b3:d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6",
+    "interface_identity": "b3:6fb50c2af371823a4013d9e2b33d2f13e379f42ab325e176be5fdb41d523d10c",
+    "exact_identity_role": "exact-bytes",
+    "interface_identity_role": "normalized-interface-non-equivalence",
+    "input_artifact": "wasm-artifact.bin",
+    "handoff_role": "mantle-exact-byte",
+    "handoff_parent_identities": [
+      "mantle:d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6"
+    ],
+    "verification_role": "recorded_only",
+    "facts": {
+      "artifact_kind": "component",
+      "proposals": [
+        "component-model"
+      ],
+      "imports": [],
+      "exports": [
+        {
+          "namespace": "component",
+          "name": "run",
+          "kind": "Func"
+        },
+        {
+          "namespace": "component",
+          "name": "run",
+          "kind": "Func"
+        },
+        {
+          "namespace": "module",
+          "name": "memory",
+          "kind": "Memory"
+        },
+        {
+          "namespace": "module",
+          "name": "run",
+          "kind": "Func"
+        }
+      ],
+      "worlds": [],
+      "memory_count": 1,
+      "table_count": 0,
+      "function_count": 2,
+      "memories": [
+        {
+          "initial_pages": 16,
+          "maximum_pages": null,
+          "memory64": false,
+          "shared": false,
+          "page_size_log2": 16
+        }
+      ],
+      "tables": [],
+      "max_function_parameter_words": 0,
+      "max_local_words_per_function": 0,
+      "memory_grow_count": 0,
+      "has_start": false,
+      "custom_sections": [
+        "name"
+      ],
+      "producer_sections": 0
+    },
+    "findings": [],
+    "sarif": {
+      "runs": [
+        {
+          "results": [],
+          "tool": {
+            "driver": {
+              "name": "cargo-octet-wasm-artifact"
+            }
+          }
+        }
+      ],
+      "version": "2.1.0"
+    }
+  }
+}

@@ -672,6 +672,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "bounded-tree-cap"
+version = "0.1.0"
+source = "git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25d0933c2fa106aa82d1cc17a496716f06"
+dependencies = [
+ "blake3",
+ "bounded-tree-core",
+ "cap-fs-ext 4.0.2",
+ "cap-std 4.0.2",
+]
+
+[[package]]
+name = "bounded-tree-core"
+version = "0.1.0"
+source = "git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25d0933c2fa106aa82d1cc17a496716f06"
+
+[[package]]
 name = "bs58"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -732,10 +748,22 @@ version = "3.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d5528f85b1e134ae811704e41ef80930f56e795923f866813255bc342cc20654"
 dependencies = [
- "cap-primitives",
- "cap-std",
- "io-lifetimes",
+ "cap-primitives 3.4.5",
+ "cap-std 3.4.5",
+ "io-lifetimes 2.0.4",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "cap-fs-ext"
+version = "4.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d78e5a3368ae89b7cb68186411452b4b9fac8b41be9c19bf3f47c2d2c8e36e6b"
+dependencies = [
+ "cap-primitives 4.0.3",
+ "cap-std 4.0.2",
+ "io-lifetimes 3.0.1",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -744,8 +772,8 @@ version = "3.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20a158160765c6a7d0d8c072a53d772e4cb243f38b04bfcf6b4939cfbe7482e7"
 dependencies = [
- "cap-primitives",
- "cap-std",
+ "cap-primitives 3.4.5",
+ "cap-std 3.4.5",
  "rustix",
  "smallvec",
 ]
@@ -758,8 +786,8 @@ checksum = "b6cf3aea8a5081171859ef57bc1606b1df6999df4f1110f8eef68b30098d1d3a"
 dependencies = [
  "ambient-authority",
  "fs-set-times",
- "io-extras",
- "io-lifetimes",
+ "io-extras 0.18.4",
+ "io-lifetimes 2.0.4",
  "ipnet",
  "maybe-owned",
  "rustix",
@@ -769,14 +797,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "cap-primitives"
+version = "4.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b5f74729fd2f44701d1a8eb47e906cdb3ccd9ec0f02baad85a744b791940b18"
+dependencies = [
+ "ambient-authority",
+ "fs-set-times",
+ "io-extras 0.19.0",
+ "io-lifetimes 3.0.1",
+ "ipnet",
+ "maybe-owned",
+ "rustix",
+ "rustix-linux-procfs",
+ "windows-sys 0.61.2",
+ "winx",
+]
+
+[[package]]
 name = "cap-std"
 version = "3.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6dc3090992a735d23219de5c204927163d922f42f575a0189b005c62d37549a"
 dependencies = [
- "cap-primitives",
- "io-extras",
- "io-lifetimes",
+ "cap-primitives 3.4.5",
+ "io-extras 0.18.4",
+ "io-lifetimes 2.0.4",
+ "rustix",
+]
+
+[[package]]
+name = "cap-std"
+version = "4.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7281235d6e96d3544ca18bba9049be92f4190f8d923e3caef1b5f66cfa752608"
+dependencies = [
+ "cap-primitives 4.0.3",
+ "io-extras 0.19.0",
+ "io-lifetimes 3.0.1",
  "rustix",
 ]
 
@@ -786,7 +844,7 @@ version = "3.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68d8ad5cfac469e58e632590f033d45c66415ef7a8aa801409884818036706f5"
 dependencies = [
- "cap-std",
+ "cap-std 3.4.5",
  "rand 0.8.6",
  "rustix",
  "rustix-linux-procfs",
@@ -800,7 +858,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "def102506ce40c11710a9b16e614af0cde8e76ae51b1f48c04b8d79f4b671a80"
 dependencies = [
  "ambient-authority",
- "cap-primitives",
+ "cap-primitives 3.4.5",
  "iana-time-zone",
  "once_cell",
  "rustix",
@@ -1441,7 +1499,7 @@ dependencies = [
 [[package]]
 name = "crunch-wasm-component-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/mantle.git?rev=c99556e5c91dfd13fcc261dc451f471359d47c38#c99556e5c91dfd13fcc261dc451f471359d47c38"
+source = "git+ssh://git@github.com/OnixResearch/mantle.git?rev=cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0#cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0"
 dependencies = [
  "blake3",
  "serde",
@@ -2337,7 +2395,7 @@ version = "0.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94e7099f6313ecacbe1256e8ff9d617b75d1bcb16a6fddef94866d225a01a14a"
 dependencies = [
- "io-lifetimes",
+ "io-lifetimes 2.0.4",
  "rustix",
  "windows-sys 0.52.0",
 ]
@@ -3423,7 +3481,17 @@ version = "0.18.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2285ddfe3054097ef4b2fe909ef8c3bcd1ea52a8f0d274416caebeef39f04a65"
 dependencies = [
- "io-lifetimes",
+ "io-lifetimes 2.0.4",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "io-extras"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20fd6de4ccfcc187e38bc21cfa543cb5a302cb86a8b114eb7f0bf0dc9f8ac00f"
+dependencies = [
+ "io-lifetimes 3.0.1",
  "windows-sys 0.52.0",
 ]
 
@@ -3432,6 +3500,12 @@ name = "io-lifetimes"
 version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06432fb54d3be7964ecd3649233cddf80db2832f47fec34c01f65b3d9d774983"
+
+[[package]]
+name = "io-lifetimes"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f0fb0570afe1fed943c5c3d4102d5358592d8625fda6a0007fdbe65a92fba96"
 
 [[package]]
 name = "ipconfig"
@@ -4344,9 +4418,13 @@ dependencies = [
 [[package]]
 name = "mantle-wasm-consumer-verifier"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/mantle.git?rev=c99556e5c91dfd13fcc261dc451f471359d47c38#c99556e5c91dfd13fcc261dc451f471359d47c38"
+source = "git+ssh://git@github.com/OnixResearch/mantle.git?rev=cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0#cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0"
 dependencies = [
  "blake3",
+ "bounded-tree-cap",
+ "bounded-tree-core",
+ "cap-fs-ext 4.0.2",
+ "cap-std 4.0.2",
  "crunch-wasm-component-core",
  "serde",
  "serde_json",
@@ -4512,8 +4590,8 @@ dependencies = [
  "blake3",
  "bounded-exec",
  "cairn-core",
- "cap-fs-ext",
- "cap-std",
+ "cap-fs-ext 3.4.5",
+ "cap-std 3.4.5",
  "cap-tempfile",
  "chaoscontrol-snapshot-descriptor",
  "choregraph-history",
@@ -4587,8 +4665,8 @@ dependencies = [
 name = "molten-node-host"
 version = "0.1.0"
 dependencies = [
- "cap-fs-ext",
- "cap-std",
+ "cap-fs-ext 3.4.5",
+ "cap-std 3.4.5",
  "cap-tempfile",
  "molten-core",
  "toml",
@@ -8839,15 +8917,15 @@ dependencies = [
  "async-trait",
  "bitflags 2.11.1",
  "bytes",
- "cap-fs-ext",
+ "cap-fs-ext 3.4.5",
  "cap-net-ext",
- "cap-std",
+ "cap-std 3.4.5",
  "cap-time-ext",
  "cfg-if",
  "fs-set-times",
  "futures",
- "io-extras",
- "io-lifetimes",
+ "io-extras 0.18.4",
+ "io-lifetimes 2.0.4",
  "rand 0.10.1",
  "rustix",
  "thiserror 2.0.18",

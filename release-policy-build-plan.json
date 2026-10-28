@@ -1,15 +1,15 @@
 {
   "version": 1,
-  "workspaceRoot": "/dev/shm/aspen-runtime-cutover-20261026",
+  "workspaceRoot": "/dev/shm/aspen-mantle-source-trees-20261027",
   "roots": [
-    "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-release-policy#0.1.0"
+    "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten-core": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-core#0.1.0",
-    "molten-release-policy": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-release-policy#0.1.0"
+    "molten-core": "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-core#0.1.0",
+    "molten-release-policy": "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "c360f6c619257a7449775642316583ab4d7bc8191aefc31adafc704254e2e2da",
-  "inputsHash": "52534371afd795fb33407c293217fe083c0ef4efe18cb23a1a62ffe5fc03ab3a",
+  "cargoLockHash": "11871396eb35c8560209d76dfd5b1c3df8aff0dc41c7d51707ad6b4f1fedcf72",
+  "inputsHash": "18615712f0e9a34c8746943c8ec88c837760db9a366545b3a3127d1ca44bc144",
   "crates": {
     "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#schema-migration-core@0.1.0": {
       "crateName": "schema-migration-core",
@@ -790,7 +790,7 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/OnixResearch/onix-artifact"
     },
-    "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-core#0.1.0": {
+    "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -854,7 +854,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-release-policy#0.1.0": {
+    "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -870,7 +870,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-core#0.1.0",
+          "packageId": "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {

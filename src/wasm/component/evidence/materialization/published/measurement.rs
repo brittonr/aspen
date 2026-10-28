@@ -31,72 +31,160 @@ pub(super) struct FileIdentity<'a> {
     pub(super) size: u64,
 }
 
+struct CapturedMembers {
+    component_bytes: Option<Vec<u8>>,
+    wit_bytes: Option<Vec<u8>>,
+}
+
 pub(super) fn measure_members(
     root: &cap_std::fs::Dir,
     staging: &cap_std::fs::Dir,
     members: &[super::RequiredMember],
     selection: Selection<'_>,
+    bundle: &mantle_wasm_consumer_verifier::MaterializationBundle,
 ) -> super::Result<MeasuredMembers> {
+    let declared = admit_members(members, &selection)?;
+    let source_observation = copy_source_closure(root, staging, members, bundle)?;
+    let captured = capture_members(root, staging, members, &declared, selection)?;
+    Ok(MeasuredMembers {
+        component_bytes: captured
+            .component_bytes
+            .ok_or_else(|| super::Denial::new("published Mantle final portable member is missing"))?,
+        wit_bytes: captured.wit_bytes.ok_or_else(|| super::Denial::new("published Mantle WIT member is missing"))?,
+        observations: member_observations(members, source_observation)?,
+    })
+}
+
+// Mantle owns source-tree framing and bounded no-follow tree copying. Both
+// roots are bridged from already opened Molten directory capabilities.
+fn copy_source_closure(
+    root: &cap_std::fs::Dir,
+    staging: &cap_std::fs::Dir,
+    members: &[super::RequiredMember],
+    bundle: &mantle_wasm_consumer_verifier::MaterializationBundle,
+) -> super::Result<Option<mantle_wasm_consumer_verifier::ConsumerMemberObservation>> {
+    let Some(source) = members.iter().find(|member| member.role == "source-closure") else {
+        return Ok(None);
+    };
+    let input = super::staging::consumer_root(root)?;
+    let destination = super::staging::consumer_root(staging)?;
+    let observed = input
+        .copy_source_closure(bundle, &destination)
+        .map_err(|_| super::Denial::new("published Mantle source closure could not be privately copied"))?;
+    if observed.role != source.role
+        || observed.digest_blake3 != source.digest
+        || observed.size_bytes != source.size
+        || observed.status != Some(mantle_wasm_consumer_verifier::ConsumerMemberStatus::Matched)
+    {
+        return Err(super::Denial::new("published Mantle source closure copy differs from its declaration"));
+    }
+    Ok(Some(observed))
+}
+
+fn capture_members(
+    root: &cap_std::fs::Dir,
+    staging: &cap_std::fs::Dir,
+    members: &[super::RequiredMember],
+    declared: &std::collections::BTreeMap<&str, (&str, u64)>,
+    selection: Selection<'_>,
+) -> super::Result<CapturedMembers> {
     let Selection {
         component_path,
         wit_path,
-        profile,
+        ..
     } = selection;
-    let declared = admit_members(members)?;
-    let mut component_bytes = None;
-    let mut wit_bytes = None;
-    for (path, (digest, size)) in declared {
-        let capture_bound = if path == component_path {
-            Some(profile.resources.max_component_bytes)
-        } else if path == wit_path {
-            Some(profile.resources.max_wit_bytes)
-        } else {
-            None
-        };
-        if capture_bound.is_some_and(|bound| size > bound) {
-            return Err(super::Denial::new("published Mantle executable member exceeds the admitted profile bound"));
+    let source = members.iter().find(|member| member.role == "source-closure");
+    let mut captured = CapturedMembers {
+        component_bytes: None,
+        wit_bytes: None,
+    };
+    for (&path, &(digest, size)) in declared {
+        let is_selected = path == component_path || path == wit_path;
+        let is_staged_source = source.is_some_and(|source| source.logical_path == path);
+        // File-valued source closures may share a path with another role.
+        // Requiring regular-file measurement for every other role prevents a
+        // directory source from granting directory acceptance to it.
+        if is_staged_source && !is_selected && !has_shared_role(members, path) {
+            continue;
         }
-        let destination = super::staging::create_member(staging, relative_member(path)?)?;
-        let captured = measure_member(
+        let bytes = measure_declared_member(
             root,
+            staging,
             FileIdentity {
                 logical_path: path,
                 digest,
                 size,
             },
-            capture_bound.is_some(),
-            Some(destination),
+            is_selected,
+            is_staged_source,
         )?;
         if path == component_path {
-            component_bytes = Some(captured);
+            captured.component_bytes = Some(bytes);
         } else if path == wit_path {
-            wit_bytes = Some(captured);
+            captured.wit_bytes = Some(bytes);
         }
     }
-    let observations = members
-        .iter()
-        .map(|member| mantle_wasm_consumer_verifier::ConsumerMemberObservation {
+    Ok(captured)
+}
+
+fn has_shared_role(members: &[super::RequiredMember], path: &str) -> bool {
+    members.iter().any(|member| member.logical_path == path && member.role != "source-closure")
+}
+
+fn measure_declared_member(
+    root: &cap_std::fs::Dir,
+    staging: &cap_std::fs::Dir,
+    identity: FileIdentity<'_>,
+    is_selected: bool,
+    is_staged_source: bool,
+) -> super::Result<Vec<u8>> {
+    if is_staged_source {
+        return measure_member(staging, identity, is_selected, None);
+    }
+    let destination = super::staging::create_member(staging, relative_member(identity.logical_path)?)?;
+    measure_member(root, identity, is_selected, Some(destination))
+}
+
+fn member_observations(
+    members: &[super::RequiredMember],
+    source_observation: Option<mantle_wasm_consumer_verifier::ConsumerMemberObservation>,
+) -> super::Result<Vec<mantle_wasm_consumer_verifier::ConsumerMemberObservation>> {
+    let mut observations = Vec::with_capacity(members.len());
+    for member in members {
+        if member.role == "source-closure" {
+            observations.push(
+                source_observation
+                    .clone()
+                    .ok_or_else(|| super::Denial::new("published Mantle source closure was not privately copied"))?,
+            );
+            continue;
+        }
+        observations.push(mantle_wasm_consumer_verifier::ConsumerMemberObservation {
             role: member.role.to_string(),
             digest_blake3: member.digest.clone(),
             size_bytes: member.size,
             status: Some(mantle_wasm_consumer_verifier::ConsumerMemberStatus::Matched),
-        })
-        .collect();
-    Ok(MeasuredMembers {
-        component_bytes: component_bytes
-            .ok_or_else(|| super::Denial::new("published Mantle final portable member is missing"))?,
-        wit_bytes: wit_bytes.ok_or_else(|| super::Denial::new("published Mantle WIT member is missing"))?,
-        observations,
-    })
+        });
+    }
+    Ok(observations)
 }
 
-fn admit_members(members: &[super::RequiredMember]) -> super::Result<std::collections::BTreeMap<&str, (&str, u64)>> {
+fn admit_members<'a>(
+    members: &'a [super::RequiredMember],
+    selection: &Selection<'_>,
+) -> super::Result<std::collections::BTreeMap<&'a str, (&'a str, u64)>> {
     let mut declared = std::collections::BTreeMap::new();
     let mut total = 0_u64;
     for member in members {
         relative_member(&member.logical_path)?;
         if member.size > MAX_MEMBER_BYTES {
             return Err(super::Denial::new("published Mantle member exceeds the byte bound"));
+        }
+        if (member.logical_path == selection.component_path
+            && member.size > selection.profile.resources.max_component_bytes)
+            || (member.logical_path == selection.wit_path && member.size > selection.profile.resources.max_wit_bytes)
+        {
+            return Err(super::Denial::new("published Mantle executable member exceeds the admitted profile bound"));
         }
         if let Some((digest, size)) =
             declared.insert(member.logical_path.as_str(), (member.digest.as_str(), member.size))
@@ -130,7 +218,7 @@ fn relative_member(logical_path: &str) -> super::Result<&str> {
 pub(super) fn measure_member(
     root: &cap_std::fs::Dir,
     member: FileIdentity<'_>,
-    capture: bool,
+    is_captured: bool,
     destination: Option<cap_std::fs::File>,
 ) -> super::Result<Vec<u8>> {
     let FileIdentity {
@@ -150,7 +238,7 @@ pub(super) fn measure_member(
             let file = parent.open_with(part, &options).map_err(|_| {
                 super::Denial::new("published Mantle member is unavailable under the source capability")
             })?;
-            return measure_open_file(file, digest, size, capture, destination);
+            return measure_open_file(file, digest, size, is_captured, destination);
         }
         parent = parent
             .open_dir_nofollow(part)
@@ -163,7 +251,7 @@ fn measure_open_file(
     mut file: cap_std::fs::File,
     digest: &str,
     size: u64,
-    capture: bool,
+    is_captured: bool,
     mut destination: Option<cap_std::fs::File>,
 ) -> super::Result<Vec<u8>> {
     let metadata =
@@ -172,7 +260,7 @@ fn measure_open_file(
         return Err(super::Denial::new("published Mantle member is not a regular file of the declared length"));
     }
     let mut hash = blake3::Hasher::new();
-    let capacity = if capture {
+    let capacity = if is_captured {
         usize::try_from(size).map_err(|_| super::Denial::new("published Mantle capture exceeds the host bound"))?
     } else {
         0
@@ -196,7 +284,7 @@ fn measure_open_file(
                 .write_all(&buffer[..count])
                 .map_err(|_| super::Denial::new("published Mantle private member staging failed"))?;
         }
-        if capture {
+        if is_captured {
             bytes.extend_from_slice(&buffer[..count]);
         }
     }

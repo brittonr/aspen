@@ -1,0 +1,1589 @@
+{
+  "schema": "mantle-wasm-component-pipeline-execution-report-v1",
+  "request_blake3": "c1ee8ca95cf86bd59df7bf86fbe55b858c7eb85094c7fa38f07d35af6dd0f33b",
+  "cohort_blake3": "834b36cbab0dd827e074974edcf40adbb8ad8f8e7d701820f2dd7d2f68a81495",
+  "stage_receipts": [
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "package-resolution",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wkg",
+      "program_blake3": "4281299907ec5d70ec0b25c65dc082575d0958b298e20759090d0fc073531863",
+      "args": [
+        "wit",
+        "fetch",
+        "--config",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/.mantle/wasm-component/wkg-config.toml",
+        "--cache",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wkg-cache",
+        "--wit-dir",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/wit",
+        "--type",
+        "wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target",
+        "HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "6eee20ee12d1099e3e7db84e59f367da88294e39b231aa54038cbe1504403621"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "binding-generation",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wit-bindgen",
+      "program_blake3": "72ff98829ca7f643bad659ac4e7a2dff0c1e084a24caeda3bbfdc18dcc4674fa",
+      "args": [
+        "rust",
+        "--world",
+        "app",
+        "--generate-all",
+        "--out-dir",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/generated-bindings",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/wit"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target",
+        "HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "6cfa647954f1ecec24bec9d4a8bd59461b0be46c982ddb896a9a3a7c155b125a",
+      "output_blake3": null,
+      "receipt_blake3": "f08f5f9e92d66ee72295d93b77faecbbead66432d091e70fb636ea65d9e61a4d"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "compilation",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/cargo",
+      "program_blake3": "d8a9d6b2508ab7ab4229ef0e3b2a980d6a647c56f22948b6e6058666d262d3f0",
+      "args": [
+        "build",
+        "--locked",
+        "--offline",
+        "--release",
+        "--target",
+        "wasm32-wasip2",
+        "--package",
+        "mantle-wasm-production-fixture"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target",
+        "CARGO_TARGET_WASM32_WASIP2_LINKER": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-component-ld",
+        "HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "RUSTFLAGS": "-C link-arg=--skip-wit-component",
+        "WKG_CACHE_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [
+        {
+          "name": "rustc",
+          "path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+          "digest_blake3": "f375ca51558b0ddd263eae7fd39d5f045d49e8491e9303bf109f15a93869fe1b"
+        },
+        {
+          "name": "wasm-component-ld",
+          "path": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-component-ld",
+          "digest_blake3": "9152c4c4269abcbe28df77fa7c7bfb55a996af43ceca20036379fa2ab21c351f"
+        }
+      ],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "862f192ed47eb649be5802780dfcaf787ac3f36288d55a1a20c29ba888367355",
+      "output_blake3": "4c0d86c668879df8517c574552dae7d97ba2ae51f9e74f135a6cadb112366e23",
+      "receipt_blake3": "2baec03dd82c1fc18a191d0ee7eba227107526d7e69668d4bdb972ee333cae95"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "compiled-validation",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "validate",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target/wasm32-wasip2/release/mantle_wasm_production_fixture.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target",
+        "HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "5e73c09e43c92f33a563c733a0ebed1eda8ada4487c5e153341c3bc7912b449f"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "wizer-first",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wizer",
+      "program_blake3": "036209124b1f08ade34bc6d26870f440271332e8e50385cc8028329d7a2d40b2",
+      "args": [
+        "--init-func",
+        "wizer.initialize",
+        "--inherit-env=false",
+        "--inherit-stdio=false",
+        "-o",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wizer-first-core.wasm",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target/wasm32-wasip2/release/mantle_wasm_production_fixture.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target",
+        "HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": "25fb5a4e525ac35d016c1098b17c0d3d40da5186d1448face663f52daad3c063",
+      "receipt_blake3": "0215edbdba0903e75f7164235a117a87347e45535d6269686b01a459071261f4"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "wizer-repeated",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wizer",
+      "program_blake3": "036209124b1f08ade34bc6d26870f440271332e8e50385cc8028329d7a2d40b2",
+      "args": [
+        "--init-func",
+        "wizer.initialize",
+        "--inherit-env=false",
+        "--inherit-stdio=false",
+        "-o",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wizer-repeated-core.wasm",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target/wasm32-wasip2/release/mantle_wasm_production_fixture.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target",
+        "HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": "25fb5a4e525ac35d016c1098b17c0d3d40da5186d1448face663f52daad3c063",
+      "receipt_blake3": "dd0a8a5356efa72224d825c9958c633ce798fe9657cad390b84edd904430728d"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "componentization",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "component",
+        "new",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wizer-first-core.wasm",
+        "-o",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/componentized.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target",
+        "HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": "c0c1162cc2428e1336efdb32c4d2c340d553f5b6ff2aa63b43d169b174c23009",
+      "receipt_blake3": "a2d2b494d642b5123987a4047f3ab6b6f711e1e80d6ce83b63e02485bcf7c028"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "componentized-validation",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "validate",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/componentized.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target",
+        "HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "30837c37694067b7a4c580093166ce86dbfb985d7287be9bf057ca10f8ead92f"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "composition",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wac",
+      "program_blake3": "1d023e364726085a7a2fd53b6f2e1d4e6267b921836fd003c96a1774072adeab",
+      "args": [
+        "compose",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/.mantle/wasm-component/composition.wac",
+        "--dep",
+        "root:component=/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/componentized.wasm",
+        "--output",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/composed.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target",
+        "HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": "7baea27e92251aece462cafd26cb9d7c5dfbc9cf34c41954a5e30380647ebeba",
+      "receipt_blake3": "b80cea655c700c7bc7d404d14fc299d7056cf54721d4057c9b1a6300e4d8e946"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "composed-validation",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "validate",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/composed.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target",
+        "HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "25f70aa00f86257d49bbb4de7b76ed6f9f34f7b72e912a18e8d237348fb0d008"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "virtualization-input-inspection",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "component",
+        "wit",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/composed.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target",
+        "HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "871ff7170dbfb8a8d5c18ce198cbb2ffaa4dffa913dd37a3348552312fef6120",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "db58249ed7ca72a49bf19ddcb9cc04ddaf09e3537a352020dd6dfa7b7700e17d"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "virtualized-validation",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "validate",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/virtualized.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target",
+        "HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "dc2beb14dd56aac1ee05f151fa1d4fed91f9f7c16eafc11cda17b019d0750a4f"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "metadata-normalization",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "strip",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/virtualized.wasm",
+        "-o",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/normalized.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target",
+        "HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": "d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6",
+      "receipt_blake3": "344db7ad657aff45ac1e5e468b745745d6317f279f9847fdb17bb0e31043042c"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "portable-validation",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasm-tools",
+      "program_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+      "args": [
+        "validate",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/normalized.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target",
+        "HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "bf3757c51cddcdef66a72c2ac7fb0e283615b34fd43b0e1de2319d52d2264bbe"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "runtime-smoke",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/wasmtime",
+      "program_blake3": "e8168340d31722b18e5665d66f8be05343d7ccfc8fc38dc23d7c60b2f9d6aea8",
+      "args": [
+        "run",
+        "--invoke",
+        "run()",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/normalized.wasm"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target",
+        "HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "a16072b1b0f8588ee724b9d9fef7771759b1a884dedd56b869049e07fee3559b",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "c87acc456f2a6c7f410471553e5d56395028b09a55b29dde02132ea9361d644f"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "octet-validation",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/cargo-octet",
+      "program_blake3": "40ea0c9c8dd9474eed667a3f953c2bd6d409657ff736cf4bf9657db19136e579",
+      "args": [
+        "evidence",
+        "collect",
+        "--rail",
+        "wasm-artifact",
+        "--input",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/normalized.wasm",
+        "--config",
+        "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/share/mantle/octet/wasm-artifact-profiles.json",
+        "--profile",
+        "portable-component-baseline",
+        "--parent-artifact",
+        "mantle:d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6",
+        "--artifact-dir",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/octet-final",
+        "--output-format",
+        "json"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target",
+        "HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "14dc77f3912ece6d79f8e752fc464192b5c6988c1c2e3a94fd8242c0fc6a9b80",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "b6da9f49c153c7fbe8311120df1c2f2576c8c3ef762f5858ab3cfbd4a73fc061"
+    },
+    {
+      "schema": "mantle-wasm-component-tool-execution-receipt-v2",
+      "stage_key": "octet-artifact-verification",
+      "program": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/cargo-octet",
+      "program_blake3": "40ea0c9c8dd9474eed667a3f953c2bd6d409657ff736cf4bf9657db19136e579",
+      "args": [
+        "artifact",
+        "verify",
+        "--artifact-dir",
+        "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/octet-final",
+        "--output-format",
+        "json"
+      ],
+      "environment": {
+        "CARGO_HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/cargo-home",
+        "CARGO_NET_OFFLINE": "true",
+        "CARGO_TARGET_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/target",
+        "HOME": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/home",
+        "RUSTC": "/nix/store/vvxfl9d1b9a944ca7miswhnxg06cs6jl-mantle-wasm-component-toolchain-v1/bin/rustc",
+        "WKG_CACHE_DIR": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/wkg-cache",
+        "WKG_CONFIG_FILE": "/tmp/mst27/itree-8qkodruu/.mantle-wasm-component-work-lA24BO/source/.mantle/wasm-component/wkg-config.toml"
+      },
+      "tool_dependencies": [],
+      "read_only_inputs": [
+        "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry"
+      ],
+      "network_admitted": false,
+      "status": "succeeded",
+      "stdout_blake3": "b568790f5646d6a5adcb7de3ec7216f2badf7ccfdd57c18f4dade2b3ab2b9f5b",
+      "stderr_blake3": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+      "output_blake3": null,
+      "receipt_blake3": "4783f7f4c89ad28b5a5fb3ebf8b064c0a332da2626587c3f09b545797601d05b"
+    }
+  ],
+  "artifacts": [
+    {
+      "role": "checked-wkg-lock",
+      "path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/wkg.lock",
+      "digest_blake3": "4d943019537f1e732f994d6abc139a6db2eef96a04bf5bde4002237db3c73aa8",
+      "size_bytes": 291
+    },
+    {
+      "role": "compiled-core-module",
+      "path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/compiled-core.wasm",
+      "digest_blake3": "4c0d86c668879df8517c574552dae7d97ba2ae51f9e74f135a6cadb112366e23",
+      "size_bytes": 625
+    },
+    {
+      "role": "wizer-core-output",
+      "path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/wizer-first-core.wasm",
+      "digest_blake3": "25fb5a4e525ac35d016c1098b17c0d3d40da5186d1448face663f52daad3c063",
+      "size_bytes": 606
+    },
+    {
+      "role": "wizer-repeated-core-output",
+      "path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/wizer-repeated-core.wasm",
+      "digest_blake3": "25fb5a4e525ac35d016c1098b17c0d3d40da5186d1448face663f52daad3c063",
+      "size_bytes": 606
+    },
+    {
+      "role": "wizer-componentized-output",
+      "path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/componentized.wasm",
+      "digest_blake3": "c0c1162cc2428e1336efdb32c4d2c340d553f5b6ff2aa63b43d169b174c23009",
+      "size_bytes": 612
+    },
+    {
+      "role": "composed-component",
+      "path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/composed.wasm",
+      "digest_blake3": "7baea27e92251aece462cafd26cb9d7c5dfbc9cf34c41954a5e30380647ebeba",
+      "size_bytes": 720
+    },
+    {
+      "role": "virtualized-component",
+      "path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/virtualized.wasm",
+      "digest_blake3": "7baea27e92251aece462cafd26cb9d7c5dfbc9cf34c41954a5e30380647ebeba",
+      "size_bytes": 720
+    },
+    {
+      "role": "normalized-portable-component",
+      "path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/normalized.wasm",
+      "digest_blake3": "d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6",
+      "size_bytes": 265
+    },
+    {
+      "role": "octet-receipt",
+      "path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/octet-evidence-rail-receipt.json",
+      "digest_blake3": "14dc77f3912ece6d79f8e752fc464192b5c6988c1c2e3a94fd8242c0fc6a9b80",
+      "size_bytes": 3952
+    },
+    {
+      "role": "octet-summary",
+      "path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/octet-summary.txt",
+      "digest_blake3": "c703947cfd6361b8eead8f3a1c9a45be2f2abb6cc2d78228d79326f4ef11a891",
+      "size_bytes": 1237
+    },
+    {
+      "role": "octet-provenance",
+      "path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/octet-provenance.jsonl",
+      "digest_blake3": "fbe5346f1c961956ffe204f52425d32f8637d5368a4b0163a8bb10e8e55e7b23",
+      "size_bytes": 1044
+    },
+    {
+      "role": "octet-exact-artifact",
+      "path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/octet-wasm-artifact.bin",
+      "digest_blake3": "d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6",
+      "size_bytes": 265
+    },
+    {
+      "role": "octet-artifact-verification",
+      "path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/octet-artifact-verification.json",
+      "digest_blake3": "b568790f5646d6a5adcb7de3ec7216f2badf7ccfdd57c18f4dade2b3ab2b9f5b",
+      "size_bytes": 1193
+    },
+    {
+      "role": "component-materialization-bundle",
+      "path": "/tmp/mst27/itree-8qkodruu/producer-output/materialization-bundle.json",
+      "digest_blake3": "82904770ea118141d795daffc01ba7dae340fd2aa4e9015b8154834f5cc4eb18",
+      "size_bytes": 14983
+    },
+    {
+      "role": "component-artifact-attestation",
+      "path": "/tmp/mst27/itree-8qkodruu/producer-output/component-attestation.json",
+      "digest_blake3": "94d5636c4c62145150dcba147d25f7c9b8ab7008e43ebf49fe5f5654662ece60",
+      "size_bytes": 2797
+    },
+    {
+      "role": "component-release-binding",
+      "path": "/tmp/mst27/itree-8qkodruu/producer-output/component-release-binding.json",
+      "digest_blake3": "0ded17a659a14a8c7b7239c63bce7a175f7a23df0ce621ce946a13a22acbeebe",
+      "size_bytes": 1365
+    }
+  ],
+  "blockers": [],
+  "octet_validations": [
+    {
+      "stage_key": "octet-validation",
+      "artifact": {
+        "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/normalized.wasm",
+        "digest_blake3": "d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6",
+        "size_bytes": 265
+      },
+      "receipt": {
+        "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/octet-evidence-rail-receipt.json",
+        "digest_blake3": "14dc77f3912ece6d79f8e752fc464192b5c6988c1c2e3a94fd8242c0fc6a9b80",
+        "size_bytes": 3952
+      },
+      "verification_report": {
+        "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/octet-artifact-verification.json",
+        "digest_blake3": "b568790f5646d6a5adcb7de3ec7216f2badf7ccfdd57c18f4dade2b3ab2b9f5b",
+        "size_bytes": 1193
+      },
+      "profile_blake3": "e8fbf118b283d63a3662af4853a2ce5f4a1777c18fe37e0be0dc1e235fd707bd",
+      "cohort_blake3": "c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a",
+      "source_repository": "https://github.com/OnixResearch/octet",
+      "source_revision": "86ee46b3b9257b145d2dbeb6ce9d9897607db99c",
+      "package_name": "cargo-octet",
+      "package_version": "0.1.0",
+      "config_blake3": "f58715eb73f91d8a6fffd565cc3b030e7f1f8296ec8e91851155d1bb5e52bafd",
+      "decision": "passed"
+    }
+  ],
+  "component_report": {
+    "schema": "mantle-wasm-component-build-report-v1",
+    "nodes": [
+      {
+        "identity_blake3": "2a7b9ba8e6ad6c2c37662a2775c86e38eaa1a9e2674eb0cf7793dbc8f9d83463",
+        "stage_key": "checked-lock",
+        "kind": "lock",
+        "status": "succeeded",
+        "parents": [],
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/wkg.lock",
+          "digest_blake3": "4d943019537f1e732f994d6abc139a6db2eef96a04bf5bde4002237db3c73aa8",
+          "size_bytes": 291
+        },
+        "tool_identity_blake3": null,
+        "profile_identity_blake3": "6654e395b0a976707765edfa9f3c5358341e9e6ab7d7e75b6a0f10b0e13e858a",
+        "claims": [
+          "exact-input-identities"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "ece12dd5d6f4422c2958fc9749131d69bc12414ad3c3f8fc9f23900efceb8a74",
+        "stage_key": "package-resolution",
+        "kind": "package-resolution",
+        "status": "succeeded",
+        "parents": [
+          "2a7b9ba8e6ad6c2c37662a2775c86e38eaa1a9e2674eb0cf7793dbc8f9d83463"
+        ],
+        "artifact": {
+          "logical_path": "/tmp/mst27/nix-shell.gD9KEB/.tmpLcaR23/registry/demo/dep/0.1.0.wasm",
+          "digest_blake3": "c2d371abd39a3ae27295233d15d92034ed6542cd8967c053659b9f5cbe449dba",
+          "size_bytes": 200
+        },
+        "tool_identity_blake3": "4281299907ec5d70ec0b25c65dc082575d0958b298e20759090d0fc073531863",
+        "profile_identity_blake3": "6654e395b0a976707765edfa9f3c5358341e9e6ab7d7e75b6a0f10b0e13e858a",
+        "claims": [
+          "exact-input-identities"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "8a26ae8ee60efee2f9682744d64d54d5f9d1c68f424cccf80dcfc2b8f13dff4b",
+        "stage_key": "binding-generation",
+        "kind": "binding-generation",
+        "status": "succeeded",
+        "parents": [
+          "ece12dd5d6f4422c2958fc9749131d69bc12414ad3c3f8fc9f23900efceb8a74"
+        ],
+        "artifact": null,
+        "tool_identity_blake3": "72ff98829ca7f643bad659ac4e7a2dff0c1e084a24caeda3bbfdc18dcc4674fa",
+        "profile_identity_blake3": null,
+        "claims": [
+          "exact-input-identities"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "73d0527c383b1c2608bb39195f091d1130bef969726db0a04431a8a73c3ed699",
+        "stage_key": "compilation",
+        "kind": "compilation",
+        "status": "succeeded",
+        "parents": [
+          "8a26ae8ee60efee2f9682744d64d54d5f9d1c68f424cccf80dcfc2b8f13dff4b"
+        ],
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/compiled-core.wasm",
+          "digest_blake3": "4c0d86c668879df8517c574552dae7d97ba2ae51f9e74f135a6cadb112366e23",
+          "size_bytes": 625
+        },
+        "tool_identity_blake3": "f375ca51558b0ddd263eae7fd39d5f045d49e8491e9303bf109f15a93869fe1b",
+        "profile_identity_blake3": null,
+        "claims": [
+          "exact-input-identities"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "0073c3a719c4dc59874c45bb0e206140245b01f29896061fc9907d0c503e0ead",
+        "stage_key": "compiled-validation",
+        "kind": "build-validation",
+        "status": "succeeded",
+        "parents": [
+          "73d0527c383b1c2608bb39195f091d1130bef969726db0a04431a8a73c3ed699"
+        ],
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/compiled-core.wasm",
+          "digest_blake3": "4c0d86c668879df8517c574552dae7d97ba2ae51f9e74f135a6cadb112366e23",
+          "size_bytes": 625
+        },
+        "tool_identity_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+        "profile_identity_blake3": null,
+        "claims": [
+          "core-module-validated"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "db6f388c425298551afd267756cdacae010c29087ae4734a6b9de0d67ea3b206",
+        "stage_key": "wizer",
+        "kind": "wizer",
+        "status": "succeeded",
+        "parents": [
+          "0073c3a719c4dc59874c45bb0e206140245b01f29896061fc9907d0c503e0ead"
+        ],
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/wizer-first-core.wasm",
+          "digest_blake3": "25fb5a4e525ac35d016c1098b17c0d3d40da5186d1448face663f52daad3c063",
+          "size_bytes": 606
+        },
+        "tool_identity_blake3": "036209124b1f08ade34bc6d26870f440271332e8e50385cc8028329d7a2d40b2",
+        "profile_identity_blake3": "e5f6f5932518b1cd069b7fa29e05f71e970404f0e235cb000b0d9cd2371e36ed",
+        "claims": [
+          "repeated-transform-matched"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "f1000a51cdfd162dcfc8d30f8610374d91ad84c5e54e234bc2c9bf341a431f51",
+        "stage_key": "componentization",
+        "kind": "componentization",
+        "status": "succeeded",
+        "parents": [
+          "db6f388c425298551afd267756cdacae010c29087ae4734a6b9de0d67ea3b206"
+        ],
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/componentized.wasm",
+          "digest_blake3": "c0c1162cc2428e1336efdb32c4d2c340d553f5b6ff2aa63b43d169b174c23009",
+          "size_bytes": 612
+        },
+        "tool_identity_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+        "profile_identity_blake3": "e5f6f5932518b1cd069b7fa29e05f71e970404f0e235cb000b0d9cd2371e36ed",
+        "claims": [
+          "exact-input-identities"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "8a58d28af397217ee3b0b239e3c8408b7f844452f84831f65bb7260f12f4ac23",
+        "stage_key": "componentized-validation",
+        "kind": "build-validation",
+        "status": "succeeded",
+        "parents": [
+          "f1000a51cdfd162dcfc8d30f8610374d91ad84c5e54e234bc2c9bf341a431f51"
+        ],
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/componentized.wasm",
+          "digest_blake3": "c0c1162cc2428e1336efdb32c4d2c340d553f5b6ff2aa63b43d169b174c23009",
+          "size_bytes": 612
+        },
+        "tool_identity_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+        "profile_identity_blake3": null,
+        "claims": [
+          "portable-bytes-validated"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "27b003cb9bd6e04700427efac291e76a2b9da6fd6e9dec22216399fe1136d3c9",
+        "stage_key": "composition",
+        "kind": "composition",
+        "status": "succeeded",
+        "parents": [
+          "8a58d28af397217ee3b0b239e3c8408b7f844452f84831f65bb7260f12f4ac23"
+        ],
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/composed.wasm",
+          "digest_blake3": "7baea27e92251aece462cafd26cb9d7c5dfbc9cf34c41954a5e30380647ebeba",
+          "size_bytes": 720
+        },
+        "tool_identity_blake3": "1d023e364726085a7a2fd53b6f2e1d4e6267b921836fd003c96a1774072adeab",
+        "profile_identity_blake3": null,
+        "claims": [
+          "exact-input-identities"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "20ca511eb027ef841fb941a4b727a065a477a67550aef978ae2c74c6b7cf2d22",
+        "stage_key": "composed-validation",
+        "kind": "build-validation",
+        "status": "succeeded",
+        "parents": [
+          "27b003cb9bd6e04700427efac291e76a2b9da6fd6e9dec22216399fe1136d3c9"
+        ],
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/composed.wasm",
+          "digest_blake3": "7baea27e92251aece462cafd26cb9d7c5dfbc9cf34c41954a5e30380647ebeba",
+          "size_bytes": 720
+        },
+        "tool_identity_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+        "profile_identity_blake3": null,
+        "claims": [
+          "portable-bytes-validated"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "258a81f28afa3b6ce89247666a2ab7ea00121ac234d8623cfc84dae961318e20",
+        "stage_key": "virtualization",
+        "kind": "virtualization",
+        "status": "succeeded",
+        "parents": [
+          "20ca511eb027ef841fb941a4b727a065a477a67550aef978ae2c74c6b7cf2d22"
+        ],
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/virtualized.wasm",
+          "digest_blake3": "7baea27e92251aece462cafd26cb9d7c5dfbc9cf34c41954a5e30380647ebeba",
+          "size_bytes": 720
+        },
+        "tool_identity_blake3": null,
+        "profile_identity_blake3": "9a9fa0b49ca414565ac71dbd0c72d51b580e46c9c476ce886ace42317cdb0ca8",
+        "claims": [
+          "deny-all-virtualization-planned"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "5d3d8d9fa65c66bd92d8931317cde603c5a5c4679156a237810380237e892ad4",
+        "stage_key": "virtualized-validation",
+        "kind": "build-validation",
+        "status": "succeeded",
+        "parents": [
+          "258a81f28afa3b6ce89247666a2ab7ea00121ac234d8623cfc84dae961318e20"
+        ],
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/virtualized.wasm",
+          "digest_blake3": "7baea27e92251aece462cafd26cb9d7c5dfbc9cf34c41954a5e30380647ebeba",
+          "size_bytes": 720
+        },
+        "tool_identity_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+        "profile_identity_blake3": null,
+        "claims": [
+          "portable-bytes-validated"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "0233ba8c7ab9042cda19d7e164093a92a54e6fd54317ed023a4b2dbb3a5b8d79",
+        "stage_key": "metadata-normalization",
+        "kind": "metadata-normalization",
+        "status": "succeeded",
+        "parents": [
+          "5d3d8d9fa65c66bd92d8931317cde603c5a5c4679156a237810380237e892ad4"
+        ],
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/normalized.wasm",
+          "digest_blake3": "d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6",
+          "size_bytes": 265
+        },
+        "tool_identity_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+        "profile_identity_blake3": null,
+        "claims": [
+          "exact-input-identities"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "3aba5dd965be58bc7f8f9548e153a768e7de6067eee4354325c86c452d2b8c9f",
+        "stage_key": "portable-validation",
+        "kind": "build-validation",
+        "status": "succeeded",
+        "parents": [
+          "0233ba8c7ab9042cda19d7e164093a92a54e6fd54317ed023a4b2dbb3a5b8d79"
+        ],
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/normalized.wasm",
+          "digest_blake3": "d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6",
+          "size_bytes": 265
+        },
+        "tool_identity_blake3": "322182646a578257d178cd818b2573f5c84e53e80aba49697358f848654007f8",
+        "profile_identity_blake3": null,
+        "claims": [
+          "portable-bytes-validated"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "5208b2ea95ca05521071a9edaaababddc9934e0f60f30eebb79b07c4732db600",
+        "stage_key": "runtime-smoke",
+        "kind": "build-validation",
+        "status": "succeeded",
+        "parents": [
+          "3aba5dd965be58bc7f8f9548e153a768e7de6067eee4354325c86c452d2b8c9f"
+        ],
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/normalized.wasm",
+          "digest_blake3": "d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6",
+          "size_bytes": 265
+        },
+        "tool_identity_blake3": "e8168340d31722b18e5665d66f8be05343d7ccfc8fc38dc23d7c60b2f9d6aea8",
+        "profile_identity_blake3": "2f8e9be2c51bf74d0b8b09811720a6d332e0cae546627832fd5481d7cead8a32",
+        "claims": [
+          "exact-input-identities"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "d280e50ef0a49669451c1845cdd4daa6cb34a9f94798761c4e0bfc0bfda33cdf",
+        "stage_key": "octet-validation",
+        "kind": "octet-validation",
+        "status": "succeeded",
+        "parents": [
+          "5208b2ea95ca05521071a9edaaababddc9934e0f60f30eebb79b07c4732db600"
+        ],
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/octet-evidence-rail-receipt.json",
+          "digest_blake3": "14dc77f3912ece6d79f8e752fc464192b5c6988c1c2e3a94fd8242c0fc6a9b80",
+          "size_bytes": 3952
+        },
+        "tool_identity_blake3": "40ea0c9c8dd9474eed667a3f953c2bd6d409657ff736cf4bf9657db19136e579",
+        "profile_identity_blake3": "e8fbf118b283d63a3662af4853a2ce5f4a1777c18fe37e0be0dc1e235fd707bd",
+        "claims": [
+          "octet-report-bound"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "15dc6cf2e9f36c6e420c259d6efbbcf483741a0812896da7a6f1e63eaff9dd26",
+        "stage_key": "aot",
+        "kind": "aot",
+        "status": "not-run",
+        "parents": [
+          "d280e50ef0a49669451c1845cdd4daa6cb34a9f94798761c4e0bfc0bfda33cdf"
+        ],
+        "artifact": null,
+        "tool_identity_blake3": "e8168340d31722b18e5665d66f8be05343d7ccfc8fc38dc23d7c60b2f9d6aea8",
+        "profile_identity_blake3": null,
+        "claims": [],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      },
+      {
+        "identity_blake3": "30de0b8c19faaa227524e18a9599755bc910a84cf4cff50e1806c9d5c22adad6",
+        "stage_key": "materialization-bundle",
+        "kind": "materialization-bundle",
+        "status": "succeeded",
+        "parents": [
+          "15dc6cf2e9f36c6e420c259d6efbbcf483741a0812896da7a6f1e63eaff9dd26"
+        ],
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/materialization-bundle.json",
+          "digest_blake3": "82904770ea118141d795daffc01ba7dae340fd2aa4e9015b8154834f5cc4eb18",
+          "size_bytes": 14983
+        },
+        "tool_identity_blake3": null,
+        "profile_identity_blake3": "f328a9d65d9a33d19e04bf893315135397225b0a02b66719b142f22a47b6d439",
+        "claims": [
+          "materialization-objects-rehashable"
+        ],
+        "non_claims": [
+          "not-component-behavior-correctness",
+          "not-runtime-authority",
+          "not-runtime-sandboxing",
+          "not-release-eligibility",
+          "not-octet-policy-interpretation"
+        ]
+      }
+    ],
+    "non_claims": [
+      "not-component-behavior-correctness",
+      "not-octet-policy-interpretation",
+      "not-release-eligibility",
+      "not-runtime-authority",
+      "not-runtime-sandboxing"
+    ],
+    "report_identity_blake3": "fe9cf3c4bcbd16cbb5e2de636cdca7b4590aeb505d86c3ec3d86003571b7db16"
+  },
+  "materialization_bundle": {
+    "schema": "mantle-wasm-component-materialization-bundle-v1",
+    "name": "mantle-wasm-production-fixture",
+    "manifest_blake3": "e0a30879d492a6bdb451aaa1680755eaccbf9522ebf75147b2b6ad5bddd873eb",
+    "cohort_blake3": "834b36cbab0dd827e074974edcf40adbb8ad8f8e7d701820f2dd7d2f68a81495",
+    "wit_inputs": [
+      {
+        "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/inputs/selected-world.wit",
+        "digest_blake3": "fd3be085e9be42ba03ba132e243c4ac9f6c015398a7410995e6d602206bb17b7",
+        "size_bytes": 115
+      }
+    ],
+    "package_inputs": [
+      {
+        "package": "demo:dep",
+        "version": "0.1.0",
+        "registry": "local",
+        "protocol_digest": "sha256:a11ba8ad11065a2b857612c159fa0132145b8ce13951a18c2a4650825dd7bfa0",
+        "object": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/inputs/packages/package-0.wasm",
+          "digest_blake3": "c2d371abd39a3ae27295233d15d92034ed6542cd8967c053659b9f5cbe449dba",
+          "size_bytes": 200
+        }
+      }
+    ],
+    "source_closure": {
+      "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/inputs/source",
+      "digest_blake3": "e3c55a6434da88070b9c2338efc5b2553da1c2ceae3c469b735f08cd276f20aa",
+      "size_bytes": 4145
+    },
+    "lock": {
+      "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/wkg.lock",
+      "digest_blake3": "4d943019537f1e732f994d6abc139a6db2eef96a04bf5bde4002237db3c73aa8",
+      "size_bytes": 291
+    },
+    "final_portable": {
+      "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/normalized.wasm",
+      "digest_blake3": "d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6",
+      "size_bytes": 265
+    },
+    "expected_octet_profile_blake3": "e8fbf118b283d63a3662af4853a2ce5f4a1777c18fe37e0be0dc1e235fd707bd",
+    "expected_runtime_profile_blake3": "2f8e9be2c51bf74d0b8b09811720a6d332e0cae546627832fd5481d7cead8a32",
+    "stage_receipts": [
+      {
+        "stage_key": "aot",
+        "kind": "aot",
+        "receipt_blake3": "15dc6cf2e9f36c6e420c259d6efbbcf483741a0812896da7a6f1e63eaff9dd26",
+        "receipt": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/stage-receipts/aot.json",
+          "digest_blake3": "15dc6cf2e9f36c6e420c259d6efbbcf483741a0812896da7a6f1e63eaff9dd26",
+          "size_bytes": 440
+        },
+        "artifact": null
+      },
+      {
+        "stage_key": "binding-generation",
+        "kind": "binding-generation",
+        "receipt_blake3": "8a26ae8ee60efee2f9682744d64d54d5f9d1c68f424cccf80dcfc2b8f13dff4b",
+        "receipt": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/stage-receipts/binding-generation.json",
+          "digest_blake3": "8a26ae8ee60efee2f9682744d64d54d5f9d1c68f424cccf80dcfc2b8f13dff4b",
+          "size_bytes": 496
+        },
+        "artifact": null
+      },
+      {
+        "stage_key": "checked-lock",
+        "kind": "lock",
+        "receipt_blake3": "2a7b9ba8e6ad6c2c37662a2775c86e38eaa1a9e2674eb0cf7793dbc8f9d83463",
+        "receipt": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/stage-receipts/checked-lock.json",
+          "digest_blake3": "2a7b9ba8e6ad6c2c37662a2775c86e38eaa1a9e2674eb0cf7793dbc8f9d83463",
+          "size_bytes": 585
+        },
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/wkg.lock",
+          "digest_blake3": "4d943019537f1e732f994d6abc139a6db2eef96a04bf5bde4002237db3c73aa8",
+          "size_bytes": 291
+        }
+      },
+      {
+        "stage_key": "compilation",
+        "kind": "compilation",
+        "receipt_blake3": "73d0527c383b1c2608bb39195f091d1130bef969726db0a04431a8a73c3ed699",
+        "receipt": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/stage-receipts/compilation.json",
+          "digest_blake3": "73d0527c383b1c2608bb39195f091d1130bef969726db0a04431a8a73c3ed699",
+          "size_bytes": 667
+        },
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/compiled-core.wasm",
+          "digest_blake3": "4c0d86c668879df8517c574552dae7d97ba2ae51f9e74f135a6cadb112366e23",
+          "size_bytes": 625
+        }
+      },
+      {
+        "stage_key": "compiled-validation",
+        "kind": "build-validation",
+        "receipt_blake3": "0073c3a719c4dc59874c45bb0e206140245b01f29896061fc9907d0c503e0ead",
+        "receipt": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/stage-receipts/compiled-validation.json",
+          "digest_blake3": "0073c3a719c4dc59874c45bb0e206140245b01f29896061fc9907d0c503e0ead",
+          "size_bytes": 679
+        },
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/compiled-core.wasm",
+          "digest_blake3": "4c0d86c668879df8517c574552dae7d97ba2ae51f9e74f135a6cadb112366e23",
+          "size_bytes": 625
+        }
+      },
+      {
+        "stage_key": "componentization",
+        "kind": "componentization",
+        "receipt_blake3": "f1000a51cdfd162dcfc8d30f8610374d91ad84c5e54e234bc2c9bf341a431f51",
+        "receipt": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/stage-receipts/componentization.json",
+          "digest_blake3": "f1000a51cdfd162dcfc8d30f8610374d91ad84c5e54e234bc2c9bf341a431f51",
+          "size_bytes": 739
+        },
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/componentized.wasm",
+          "digest_blake3": "c0c1162cc2428e1336efdb32c4d2c340d553f5b6ff2aa63b43d169b174c23009",
+          "size_bytes": 612
+        }
+      },
+      {
+        "stage_key": "componentized-validation",
+        "kind": "build-validation",
+        "receipt_blake3": "8a58d28af397217ee3b0b239e3c8408b7f844452f84831f65bb7260f12f4ac23",
+        "receipt": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/stage-receipts/componentized-validation.json",
+          "digest_blake3": "8a58d28af397217ee3b0b239e3c8408b7f844452f84831f65bb7260f12f4ac23",
+          "size_bytes": 687
+        },
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/componentized.wasm",
+          "digest_blake3": "c0c1162cc2428e1336efdb32c4d2c340d553f5b6ff2aa63b43d169b174c23009",
+          "size_bytes": 612
+        }
+      },
+      {
+        "stage_key": "composed-validation",
+        "kind": "build-validation",
+        "receipt_blake3": "20ca511eb027ef841fb941a4b727a065a477a67550aef978ae2c74c6b7cf2d22",
+        "receipt": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/stage-receipts/composed-validation.json",
+          "digest_blake3": "20ca511eb027ef841fb941a4b727a065a477a67550aef978ae2c74c6b7cf2d22",
+          "size_bytes": 677
+        },
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/composed.wasm",
+          "digest_blake3": "7baea27e92251aece462cafd26cb9d7c5dfbc9cf34c41954a5e30380647ebeba",
+          "size_bytes": 720
+        }
+      },
+      {
+        "stage_key": "composition",
+        "kind": "composition",
+        "receipt_blake3": "27b003cb9bd6e04700427efac291e76a2b9da6fd6e9dec22216399fe1136d3c9",
+        "receipt": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/stage-receipts/composition.json",
+          "digest_blake3": "27b003cb9bd6e04700427efac291e76a2b9da6fd6e9dec22216399fe1136d3c9",
+          "size_bytes": 662
+        },
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/composed.wasm",
+          "digest_blake3": "7baea27e92251aece462cafd26cb9d7c5dfbc9cf34c41954a5e30380647ebeba",
+          "size_bytes": 720
+        }
+      },
+      {
+        "stage_key": "metadata-normalization",
+        "kind": "metadata-normalization",
+        "receipt_blake3": "0233ba8c7ab9042cda19d7e164093a92a54e6fd54317ed023a4b2dbb3a5b8d79",
+        "receipt": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/stage-receipts/metadata-normalization.json",
+          "digest_blake3": "0233ba8c7ab9042cda19d7e164093a92a54e6fd54317ed023a4b2dbb3a5b8d79",
+          "size_bytes": 686
+        },
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/normalized.wasm",
+          "digest_blake3": "d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6",
+          "size_bytes": 265
+        }
+      },
+      {
+        "stage_key": "octet-validation",
+        "kind": "octet-validation",
+        "receipt_blake3": "d280e50ef0a49669451c1845cdd4daa6cb34a9f94798761c4e0bfc0bfda33cdf",
+        "receipt": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/stage-receipts/octet-validation.json",
+          "digest_blake3": "d280e50ef0a49669451c1845cdd4daa6cb34a9f94798761c4e0bfc0bfda33cdf",
+          "size_bytes": 750
+        },
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/octet-evidence-rail-receipt.json",
+          "digest_blake3": "14dc77f3912ece6d79f8e752fc464192b5c6988c1c2e3a94fd8242c0fc6a9b80",
+          "size_bytes": 3952
+        }
+      },
+      {
+        "stage_key": "package-resolution",
+        "kind": "package-resolution",
+        "receipt_blake3": "ece12dd5d6f4422c2958fc9749131d69bc12414ad3c3f8fc9f23900efceb8a74",
+        "receipt": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/stage-receipts/package-resolution.json",
+          "digest_blake3": "ece12dd5d6f4422c2958fc9749131d69bc12414ad3c3f8fc9f23900efceb8a74",
+          "size_bytes": 740
+        },
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/inputs/packages/package-0.wasm",
+          "digest_blake3": "c2d371abd39a3ae27295233d15d92034ed6542cd8967c053659b9f5cbe449dba",
+          "size_bytes": 200
+        }
+      },
+      {
+        "stage_key": "portable-validation",
+        "kind": "build-validation",
+        "receipt_blake3": "3aba5dd965be58bc7f8f9548e153a768e7de6067eee4354325c86c452d2b8c9f",
+        "receipt": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/stage-receipts/portable-validation.json",
+          "digest_blake3": "3aba5dd965be58bc7f8f9548e153a768e7de6067eee4354325c86c452d2b8c9f",
+          "size_bytes": 679
+        },
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/normalized.wasm",
+          "digest_blake3": "d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6",
+          "size_bytes": 265
+        }
+      },
+      {
+        "stage_key": "runtime-smoke",
+        "kind": "build-validation",
+        "receipt_blake3": "5208b2ea95ca05521071a9edaaababddc9934e0f60f30eebb79b07c4732db600",
+        "receipt": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/stage-receipts/runtime-smoke.json",
+          "digest_blake3": "5208b2ea95ca05521071a9edaaababddc9934e0f60f30eebb79b07c4732db600",
+          "size_bytes": 733
+        },
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/normalized.wasm",
+          "digest_blake3": "d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6",
+          "size_bytes": 265
+        }
+      },
+      {
+        "stage_key": "virtualization",
+        "kind": "virtualization",
+        "receipt_blake3": "258a81f28afa3b6ce89247666a2ab7ea00121ac234d8623cfc84dae961318e20",
+        "receipt": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/stage-receipts/virtualization.json",
+          "digest_blake3": "258a81f28afa3b6ce89247666a2ab7ea00121ac234d8623cfc84dae961318e20",
+          "size_bytes": 680
+        },
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/virtualized.wasm",
+          "digest_blake3": "7baea27e92251aece462cafd26cb9d7c5dfbc9cf34c41954a5e30380647ebeba",
+          "size_bytes": 720
+        }
+      },
+      {
+        "stage_key": "virtualized-validation",
+        "kind": "build-validation",
+        "receipt_blake3": "5d3d8d9fa65c66bd92d8931317cde603c5a5c4679156a237810380237e892ad4",
+        "receipt": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/stage-receipts/virtualized-validation.json",
+          "digest_blake3": "5d3d8d9fa65c66bd92d8931317cde603c5a5c4679156a237810380237e892ad4",
+          "size_bytes": 683
+        },
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/virtualized.wasm",
+          "digest_blake3": "7baea27e92251aece462cafd26cb9d7c5dfbc9cf34c41954a5e30380647ebeba",
+          "size_bytes": 720
+        }
+      },
+      {
+        "stage_key": "wizer",
+        "kind": "wizer",
+        "receipt_blake3": "db6f388c425298551afd267756cdacae010c29087ae4734a6b9de0d67ea3b206",
+        "receipt": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/stage-receipts/wizer.json",
+          "digest_blake3": "db6f388c425298551afd267756cdacae010c29087ae4734a6b9de0d67ea3b206",
+          "size_bytes": 724
+        },
+        "artifact": {
+          "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/wizer-first-core.wasm",
+          "digest_blake3": "25fb5a4e525ac35d016c1098b17c0d3d40da5186d1448face663f52daad3c063",
+          "size_bytes": 606
+        }
+      }
+    ],
+    "wizer": {
+      "schema": "mantle-wasm-component-wizer-admission-v1",
+      "input": {
+        "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/compiled-core.wasm",
+        "digest_blake3": "4c0d86c668879df8517c574552dae7d97ba2ae51f9e74f135a6cadb112366e23",
+        "size_bytes": 625
+      },
+      "output": {
+        "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/wizer-first-core.wasm",
+        "digest_blake3": "25fb5a4e525ac35d016c1098b17c0d3d40da5186d1448face663f52daad3c063",
+        "size_bytes": 606
+      },
+      "repeated_output": {
+        "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/wizer-repeated-core.wasm",
+        "digest_blake3": "25fb5a4e525ac35d016c1098b17c0d3d40da5186d1448face663f52daad3c063",
+        "size_bytes": 606
+      },
+      "componentized_output": {
+        "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/componentized.wasm",
+        "digest_blake3": "c0c1162cc2428e1336efdb32c4d2c340d553f5b6ff2aa63b43d169b174c23009",
+        "size_bytes": 612
+      },
+      "cohort_blake3": "834b36cbab0dd827e074974edcf40adbb8ad8f8e7d701820f2dd7d2f68a81495",
+      "configuration_blake3": "e5f6f5932518b1cd069b7fa29e05f71e970404f0e235cb000b0d9cd2371e36ed",
+      "compilation_receipt_blake3": "2baec03dd82c1fc18a191d0ee7eba227107526d7e69668d4bdb972ee333cae95",
+      "first_transform_receipt_blake3": "0215edbdba0903e75f7164235a117a87347e45535d6269686b01a459071261f4",
+      "repeated_transform_receipt_blake3": "dd0a8a5356efa72224d825c9958c633ce798fe9657cad390b84edd904430728d",
+      "componentization_receipt_blake3": "a2d2b494d642b5123987a4047f3ab6b6f711e1e80d6ce83b63e02485bcf7c028",
+      "deterministic_outputs_match": true,
+      "eligible_for_bundle": true,
+      "receipt_blake3": "206c055e7d1f900ed1713b3a84d2d231a6cdf4a0db5f15fdda6f5d12b35abd56"
+    },
+    "aot": null,
+    "non_claims": [
+      "not-component-behavior-correctness",
+      "not-octet-policy-interpretation",
+      "not-release-eligibility",
+      "not-runtime-authority",
+      "not-runtime-sandboxing"
+    ],
+    "bundle_identity_blake3": "f328a9d65d9a33d19e04bf893315135397225b0a02b66719b142f22a47b6d439"
+  },
+  "component_attestation": {
+    "schema": "mantle-wasm-component-artifact-attestation-v1",
+    "materialization_bundle_blake3": "f328a9d65d9a33d19e04bf893315135397225b0a02b66719b142f22a47b6d439",
+    "materialization_bundle_object": {
+      "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/materialization-bundle.json",
+      "digest_blake3": "82904770ea118141d795daffc01ba7dae340fd2aa4e9015b8154834f5cc4eb18",
+      "size_bytes": 14983
+    },
+    "component_report_blake3": "fe9cf3c4bcbd16cbb5e2de636cdca7b4590aeb505d86c3ec3d86003571b7db16",
+    "stage_node_blake3": [
+      "2a7b9ba8e6ad6c2c37662a2775c86e38eaa1a9e2674eb0cf7793dbc8f9d83463",
+      "ece12dd5d6f4422c2958fc9749131d69bc12414ad3c3f8fc9f23900efceb8a74",
+      "8a26ae8ee60efee2f9682744d64d54d5f9d1c68f424cccf80dcfc2b8f13dff4b",
+      "73d0527c383b1c2608bb39195f091d1130bef969726db0a04431a8a73c3ed699",
+      "0073c3a719c4dc59874c45bb0e206140245b01f29896061fc9907d0c503e0ead",
+      "db6f388c425298551afd267756cdacae010c29087ae4734a6b9de0d67ea3b206",
+      "f1000a51cdfd162dcfc8d30f8610374d91ad84c5e54e234bc2c9bf341a431f51",
+      "8a58d28af397217ee3b0b239e3c8408b7f844452f84831f65bb7260f12f4ac23",
+      "27b003cb9bd6e04700427efac291e76a2b9da6fd6e9dec22216399fe1136d3c9",
+      "20ca511eb027ef841fb941a4b727a065a477a67550aef978ae2c74c6b7cf2d22",
+      "258a81f28afa3b6ce89247666a2ab7ea00121ac234d8623cfc84dae961318e20",
+      "5d3d8d9fa65c66bd92d8931317cde603c5a5c4679156a237810380237e892ad4",
+      "0233ba8c7ab9042cda19d7e164093a92a54e6fd54317ed023a4b2dbb3a5b8d79",
+      "3aba5dd965be58bc7f8f9548e153a768e7de6067eee4354325c86c452d2b8c9f",
+      "5208b2ea95ca05521071a9edaaababddc9934e0f60f30eebb79b07c4732db600",
+      "d280e50ef0a49669451c1845cdd4daa6cb34a9f94798761c4e0bfc0bfda33cdf",
+      "15dc6cf2e9f36c6e420c259d6efbbcf483741a0812896da7a6f1e63eaff9dd26",
+      "30de0b8c19faaa227524e18a9599755bc910a84cf4cff50e1806c9d5c22adad6"
+    ],
+    "final_portable": {
+      "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/normalized.wasm",
+      "digest_blake3": "d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6",
+      "size_bytes": 265
+    },
+    "octet_profile_blake3": "e8fbf118b283d63a3662af4853a2ce5f4a1777c18fe37e0be0dc1e235fd707bd",
+    "octet_cohort_blake3": "c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a",
+    "octet_report": {
+      "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/octet-evidence-rail-receipt.json",
+      "digest_blake3": "14dc77f3912ece6d79f8e752fc464192b5c6988c1c2e3a94fd8242c0fc6a9b80",
+      "size_bytes": 3952
+    },
+    "aot": null,
+    "non_claims": [
+      "not-component-behavior-correctness",
+      "not-octet-policy-interpretation",
+      "not-release-eligibility",
+      "not-runtime-authority",
+      "not-runtime-sandboxing"
+    ],
+    "attestation_blake3": "7d138498b8d154d30e3642ce640421633b84b2792629b42a315d551e94eba03c"
+  },
+  "release_binding": {
+    "schema": "mantle-wasm-component-release-binding-v1",
+    "materialization_bundle_blake3": "f328a9d65d9a33d19e04bf893315135397225b0a02b66719b142f22a47b6d439",
+    "materialization_bundle_object": {
+      "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/materialization-bundle.json",
+      "digest_blake3": "82904770ea118141d795daffc01ba7dae340fd2aa4e9015b8154834f5cc4eb18",
+      "size_bytes": 14983
+    },
+    "artifact_attestation_blake3": "7d138498b8d154d30e3642ce640421633b84b2792629b42a315d551e94eba03c",
+    "portable": {
+      "logical_path": "/tmp/mst27/itree-8qkodruu/producer-output/artifacts/normalized.wasm",
+      "digest_blake3": "d188411044c9e7cacee8330a82102f642ced6d4ffc1d40861bffa87fd3049ae6",
+      "size_bytes": 265
+    },
+    "target_specific_native": null,
+    "octet_profile_blake3": "e8fbf118b283d63a3662af4853a2ce5f4a1777c18fe37e0be0dc1e235fd707bd",
+    "octet_cohort_blake3": "c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a",
+    "octet_report_blake3": "14dc77f3912ece6d79f8e752fc464192b5c6988c1c2e3a94fd8242c0fc6a9b80",
+    "release_eligible": false,
+    "non_claims": [
+      "not-component-behavior-correctness",
+      "not-octet-policy-interpretation",
+      "not-release-eligibility",
+      "not-runtime-authority",
+      "not-runtime-sandboxing"
+    ],
+    "release_binding_blake3": "f1cea93e68576b1c1d579b8be9b4ecf5243bb94cabd1a22b31711024278a9db4"
+  },
+  "final_status": "succeeded",
+  "report_blake3": "56093793f12ed025447fbfd73e8983c2faa7ffe3b98050f684c0205f70ce3ba8",
+  "non_claims": [
+    "not-component-behavior-correctness",
+    "not-runtime-authority",
+    "not-runtime-sandboxing",
+    "not-release-eligibility",
+    "not-octet-policy-interpretation"
+  ]
+}

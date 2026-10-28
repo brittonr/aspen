@@ -22,7 +22,7 @@ let TransactionalReconciliationRevision = "eb2bd3441753af97bfcb247cef7cc22d72675
 let TransactionalReconciliationSource = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git" in
 let HardenedWasmtimeRevision = "cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c" in
 let HardenedWasmtimeSource = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx" in
-let MantleWasmVerifierRevision = "c99556e5c91dfd13fcc261dc451f471359d47c38" in
+let MantleWasmVerifierRevision = "cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0" in
 let MantleWasmVerifierSource = "ssh://git@github.com/OnixResearch/mantle.git" in
 let CratesIoIndex = "registry+https://github.com/rust-lang/crates.io-index" in
 let ArchiveNonClaims = [
@@ -356,16 +356,20 @@ in
       source_coordinate = MantleWasmVerifierSource,
       source_revision = MantleWasmVerifierRevision,
       nix_input = "mantle-wasm-verifier-src",
-      archive_path = ".cairn/archive/2026-09-10-publish-wasm-component-consumer-verifier",
+      archive_path = ".cairn/archive/1970-01-01-verify-wasm-source-closure-trees",
       status = "archived",
       evidence_files = [
         {
-          relative_path = ".cairn/archive/2026-09-10-publish-wasm-component-consumer-verifier/tasks.md",
-          blake3 = "a68bfd649ca9e902cb1d75432da172e8e7c32c60faeebe199cb6b06e34d203e6",
+          relative_path = ".cairn/archive/1970-01-01-verify-wasm-source-closure-trees/tasks.md",
+          blake3 = "bd63c64838ee125d006b75919d820cfdf9352a36e995cbdcfbb1a5a42469c7fc",
         },
         {
           relative_path = "crates/mantle-wasm-consumer-verifier/README.md",
-          blake3 = "581dbd8a948a1139d44961498580e9405d651640d738f8478d5d57483eb76342",
+          blake3 = "6b93726ac997f97acafcafe5db080373bf0c31bf421e098de1fd1a127260a4fa",
+        },
+        {
+          relative_path = ".cairn/archive/1970-01-01-verify-wasm-source-closure-trees/evidence/2026-10-27-verification.md",
+          blake3 = "691c117450a84e9eaa4d98235a7ff7b1c18f72660f1b19b247a31bf6fd44aeca",
         },
       ],
       non_claims = ArchiveNonClaims,

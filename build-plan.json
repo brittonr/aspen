@@ -1,23 +1,23 @@
 {
   "version": 1,
-  "workspaceRoot": "/dev/shm/aspen-runtime-cutover-20261026",
+  "workspaceRoot": "/dev/shm/aspen-mantle-source-trees-20261027",
   "roots": [
-    "path+file:///dev/shm/aspen-runtime-cutover-20261026#molten@0.1.0",
-    "path+file:///dev/shm/aspen-runtime-cutover-20261026#molten@0.1.0",
-    "path+file:///dev/shm/aspen-runtime-cutover-20261026#molten@0.1.0",
-    "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-core#0.1.0",
-    "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-node-host#0.1.0",
-    "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-release-policy#0.1.0",
-    "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-release-policy#0.1.0"
+    "path+file:///dev/shm/aspen-mantle-source-trees-20261027#molten@0.1.0",
+    "path+file:///dev/shm/aspen-mantle-source-trees-20261027#molten@0.1.0",
+    "path+file:///dev/shm/aspen-mantle-source-trees-20261027#molten@0.1.0",
+    "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-core#0.1.0",
+    "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-node-host#0.1.0",
+    "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-release-policy#0.1.0",
+    "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten": "path+file:///dev/shm/aspen-runtime-cutover-20261026#molten@0.1.0",
-    "molten-core": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-core#0.1.0",
-    "molten-node-host": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-node-host#0.1.0",
-    "molten-release-policy": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-release-policy#0.1.0"
+    "molten": "path+file:///dev/shm/aspen-mantle-source-trees-20261027#molten@0.1.0",
+    "molten-core": "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-core#0.1.0",
+    "molten-node-host": "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-node-host#0.1.0",
+    "molten-release-policy": "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "c360f6c619257a7449775642316583ab4d7bc8191aefc31adafc704254e2e2da",
-  "inputsHash": "a143967d8306f94ee791381a769c583a083f48ecb83cbdb6094b3daf2296b8e4",
+  "cargoLockHash": "11871396eb35c8560209d76dfd5b1c3df8aff0dc41c7d51707ad6b4f1fedcf72",
+  "inputsHash": "e618b45ed7dc5b179a7fb40650feb39bfc4e8b246874235120e43398f7bac3ad",
   "crates": {
     "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec-core@0.1.0": {
       "crateName": "bounded-exec-core",
@@ -656,6 +656,79 @@
       "description": "Pure no-std immutable branchable event history for Choregraph consumers.",
       "license": "AGPL-3.0-or-later"
     },
+    "git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#bounded-tree-cap@0.1.0": {
+      "crateName": "bounded-tree-cap",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git",
+        "rev": "250f3b25d0933c2fa106aa82d1cc17a496716f06",
+        "subDir": "crates/bounded-tree-cap",
+        "sha256": "sha256-ZS8gQ8abQk5Pstm0VuQiGMmOrZUsK3TIJ3SItgwGoEY="
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#bounded-tree-core@0.1.0",
+          "externCrateName": "bounded_tree_core"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-fs-ext@4.0.2",
+          "externCrateName": "cap_fs_ext"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-std@4.0.2",
+          "externCrateName": "cap_std"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Capability-based bounded filesystem-tree observation and copy shell",
+      "license": "AGPL-3.0-or-later",
+      "repository": "rad:zqhtZvsteJhxCJE96dMAZSZ9y1PX"
+    },
+    "git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#bounded-tree-core@0.1.0": {
+      "crateName": "bounded-tree-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git",
+        "rev": "250f3b25d0933c2fa106aa82d1cc17a496716f06",
+        "subDir": "crates/bounded-tree-core",
+        "sha256": "sha256-ZS8gQ8abQk5Pstm0VuQiGMmOrZUsK3TIJ3SItgwGoEY="
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Pure bounded filesystem-tree admission and copy planning",
+      "license": "AGPL-3.0-or-later",
+      "repository": "rad:zqhtZvsteJhxCJE96dMAZSZ9y1PX"
+    },
     "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c#hardened-wasmtime-runtime@0.1.0": {
       "crateName": "hardened-wasmtime-runtime",
       "version": "0.1.0",
@@ -1149,7 +1222,7 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/OnixResearch/kamacite"
     },
-    "git+ssh://git@github.com/OnixResearch/mantle.git?rev=c99556e5c91dfd13fcc261dc451f471359d47c38#crunch-wasm-component-core@0.1.0": {
+    "git+ssh://git@github.com/OnixResearch/mantle.git?rev=cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0#crunch-wasm-component-core@0.1.0": {
       "crateName": "crunch-wasm-component-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -1157,9 +1230,9 @@
       "source": {
         "type": "git",
         "url": "ssh://git@github.com/OnixResearch/mantle.git",
-        "rev": "c99556e5c91dfd13fcc261dc451f471359d47c38",
+        "rev": "cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0",
         "subDir": "crates/crunch-wasm-component-core",
-        "sha256": "sha256-QBGFdskiynOprC3k3nVX0RV9r08ozll+cqb686mbGBk="
+        "sha256": "sha256-USGptbCnYPlgw8E+7AO9ZK1X+chf1/rfZa8EFg1kcDs="
       },
       "features": [],
       "dependencies": [
@@ -1188,7 +1261,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "git+ssh://git@github.com/OnixResearch/mantle.git?rev=c99556e5c91dfd13fcc261dc451f471359d47c38#mantle-wasm-consumer-verifier@0.1.0": {
+    "git+ssh://git@github.com/OnixResearch/mantle.git?rev=cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0#mantle-wasm-consumer-verifier@0.1.0": {
       "crateName": "mantle-wasm-consumer-verifier",
       "version": "0.1.0",
       "edition": "2024",
@@ -1196,9 +1269,9 @@
       "source": {
         "type": "git",
         "url": "ssh://git@github.com/OnixResearch/mantle.git",
-        "rev": "c99556e5c91dfd13fcc261dc451f471359d47c38",
+        "rev": "cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0",
         "subDir": "crates/mantle-wasm-consumer-verifier",
-        "sha256": "sha256-QBGFdskiynOprC3k3nVX0RV9r08ozll+cqb686mbGBk="
+        "sha256": "sha256-USGptbCnYPlgw8E+7AO9ZK1X+chf1/rfZa8EFg1kcDs="
       },
       "features": [
         "default",
@@ -1210,7 +1283,23 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/mantle.git?rev=c99556e5c91dfd13fcc261dc451f471359d47c38#crunch-wasm-component-core@0.1.0",
+          "packageId": "git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#bounded-tree-cap@0.1.0",
+          "externCrateName": "bounded_tree_cap"
+        },
+        {
+          "packageId": "git+https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#bounded-tree-core@0.1.0",
+          "externCrateName": "bounded_tree_core"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-fs-ext@4.0.2",
+          "externCrateName": "cap_fs_ext"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-std@4.0.2",
+          "externCrateName": "cap_std"
+        },
+        {
+          "packageId": "git+ssh://git@github.com/OnixResearch/mantle.git?rev=cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0#crunch-wasm-component-core@0.1.0",
           "externCrateName": "crunch_wasm_component_core"
         },
         {
@@ -1391,7 +1480,7 @@
       "license": "MPL-2.0",
       "repository": "https://github.com/OnixResearch/valence"
     },
-    "path+file:///dev/shm/aspen-runtime-cutover-20261026#molten@0.1.0": {
+    "path+file:///dev/shm/aspen-mantle-source-trees-20261027#molten@0.1.0": {
       "crateName": "molten",
       "version": "0.1.0",
       "edition": "2024",
@@ -1487,15 +1576,15 @@
           "externCrateName": "kamacite_core"
         },
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/mantle.git?rev=c99556e5c91dfd13fcc261dc451f471359d47c38#mantle-wasm-consumer-verifier@0.1.0",
+          "packageId": "git+ssh://git@github.com/OnixResearch/mantle.git?rev=cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0#mantle-wasm-consumer-verifier@0.1.0",
           "externCrateName": "mantle_wasm_consumer_verifier"
         },
         {
-          "packageId": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-core#0.1.0",
+          "packageId": "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
-          "packageId": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-node-host#0.1.0",
+          "packageId": "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-node-host#0.1.0",
           "externCrateName": "molten_node_host"
         },
         {
@@ -1648,7 +1737,7 @@
       "description": "Molten Rust project",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-core#0.1.0": {
+    "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -1712,7 +1801,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-node-host#0.1.0": {
+    "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-node-host#0.1.0": {
       "crateName": "molten-node-host",
       "version": "0.1.0",
       "edition": "2024",
@@ -1732,7 +1821,7 @@
           "externCrateName": "cap_std"
         },
         {
-          "packageId": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-core#0.1.0",
+          "packageId": "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         }
       ],
@@ -1759,7 +1848,7 @@
       "description": "Capability-rooted node host boundary for Molten",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-release-policy#0.1.0": {
+    "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -1775,7 +1864,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///dev/shm/aspen-runtime-cutover-20261026/crates/molten-core#0.1.0",
+          "packageId": "path+file:///dev/shm/aspen-mantle-source-trees-20261027/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
@@ -3951,6 +4040,51 @@
       "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
       "repository": "https://github.com/bytecodealliance/cap-std"
     },
+    "registry+https://github.com/rust-lang/crates.io-index#cap-fs-ext@4.0.2": {
+      "crateName": "cap-fs-ext",
+      "version": "4.0.2",
+      "edition": "2021",
+      "sha256": "d78e5a3368ae89b7cb68186411452b4b9fac8b41be9c19bf3f47c2d2c8e36e6b",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "cap-std",
+        "default",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-primitives@4.0.3",
+          "externCrateName": "cap_primitives"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-std@4.0.2",
+          "externCrateName": "cap_std"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#io-lifetimes@3.0.1",
+          "externCrateName": "io_lifetimes"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Dan Gohman <dev@sunfishcode.online>",
+        "Jakub Konka <kubkon@jakubkonka.com>"
+      ],
+      "description": "Extension traits for `Dir`, `File`, etc.",
+      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/bytecodealliance/cap-std"
+    },
     "registry+https://github.com/rust-lang/crates.io-index#cap-net-ext@3.4.5": {
       "crateName": "cap-net-ext",
       "version": "3.4.5",
@@ -4057,6 +4191,67 @@
       "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
       "repository": "https://github.com/bytecodealliance/cap-std"
     },
+    "registry+https://github.com/rust-lang/crates.io-index#cap-primitives@4.0.3": {
+      "crateName": "cap-primitives",
+      "version": "4.0.3",
+      "edition": "2021",
+      "sha256": "8b5f74729fd2f44701d1a8eb47e906cdb3ccd9ec0f02baad85a744b791940b18",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ambient-authority@0.0.2",
+          "externCrateName": "ambient_authority"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#fs-set-times@0.20.3",
+          "externCrateName": "fs_set_times"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#io-extras@0.19.0",
+          "externCrateName": "io_extras"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#io-lifetimes@3.0.1",
+          "externCrateName": "io_lifetimes"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ipnet@2.12.0",
+          "externCrateName": "ipnet"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#maybe-owned@0.3.4",
+          "externCrateName": "maybe_owned"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustix@1.1.4",
+          "externCrateName": "rustix"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustix-linux-procfs@0.1.1",
+          "externCrateName": "rustix_linux_procfs"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Dan Gohman <dev@sunfishcode.online>",
+        "Jakub Konka <kubkon@jakubkonka.com>"
+      ],
+      "description": "Capability-based primitives",
+      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/bytecodealliance/cap-std"
+    },
     "registry+https://github.com/rust-lang/crates.io-index#cap-std@3.4.5": {
       "crateName": "cap-std",
       "version": "3.4.5",
@@ -4079,6 +4274,53 @@
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#io-lifetimes@2.0.4",
+          "externCrateName": "io_lifetimes"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustix@1.1.4",
+          "externCrateName": "rustix"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Dan Gohman <dev@sunfishcode.online>",
+        "Jakub Konka <kubkon@jakubkonka.com>"
+      ],
+      "description": "Capability-based version of the Rust standard library",
+      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/bytecodealliance/cap-std"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#cap-std@4.0.2": {
+      "crateName": "cap-std",
+      "version": "4.0.2",
+      "edition": "2021",
+      "sha256": "7281235d6e96d3544ca18bba9049be92f4190f8d923e3caef1b5f66cfa752608",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cap-primitives@4.0.3",
+          "externCrateName": "cap_primitives"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#io-extras@0.19.0",
+          "externCrateName": "io_extras"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#io-lifetimes@3.0.1",
           "externCrateName": "io_lifetimes"
         },
         {
@@ -7639,12 +7881,12 @@
           "externCrateName": "block_buffer"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crypto-common@0.1.7",
-          "externCrateName": "crypto_common"
-        },
-        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#const-oid@0.9.6",
           "externCrateName": "const_oid"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crypto-common@0.1.7",
+          "externCrateName": "crypto_common"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#subtle@2.6.1",
@@ -10536,16 +10778,16 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.2.0",
-          "externCrateName": "foldhash"
-        },
-        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#allocator-api2@0.2.21",
           "externCrateName": "allocator_api2"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#equivalent@1.0.2",
           "externCrateName": "equivalent"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.2.0",
+          "externCrateName": "foldhash"
         }
       ],
       "buildDependencies": [],
@@ -12756,11 +12998,74 @@
       "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
       "repository": "https://github.com/sunfishcode/io-extras"
     },
+    "registry+https://github.com/rust-lang/crates.io-index#io-extras@0.19.0": {
+      "crateName": "io-extras",
+      "version": "0.19.0",
+      "edition": "2021",
+      "sha256": "20fd6de4ccfcc187e38bc21cfa543cb5a302cb86a8b114eb7f0bf0dc9f8ac00f",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#io-lifetimes@3.0.1",
+          "externCrateName": "io_lifetimes"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Dan Gohman <dev@sunfishcode.online>"
+      ],
+      "description": "File/socket handle/descriptor utilities",
+      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/sunfishcode/io-extras"
+    },
     "registry+https://github.com/rust-lang/crates.io-index#io-lifetimes@2.0.4": {
       "crateName": "io-lifetimes",
       "version": "2.0.4",
       "edition": "2021",
       "sha256": "06432fb54d3be7964ecd3649233cddf80db2832f47fec34c01f65b3d9d774983",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Dan Gohman <dev@sunfishcode.online>"
+      ],
+      "description": "A low-level I/O ownership and borrowing library",
+      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/sunfishcode/io-lifetimes"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#io-lifetimes@3.0.1": {
+      "crateName": "io-lifetimes",
+      "version": "3.0.1",
+      "edition": "2021",
+      "sha256": "2f0fb0570afe1fed943c5c3d4102d5358592d8625fda6a0007fdbe65a92fba96",
       "source": {
         "type": "crates-io"
       },
@@ -18100,10 +18405,6 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.8.1",
-          "externCrateName": "memchr"
-        },
-        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#crc32fast@1.5.0",
           "externCrateName": "crc32fast"
         },
@@ -18114,6 +18415,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",
           "externCrateName": "indexmap"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.8.1",
+          "externCrateName": "memchr"
         }
       ],
       "buildDependencies": [],
@@ -22956,6 +23261,10 @@
       ],
       "dependencies": [
         {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",
+          "externCrateName": "indexmap"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#itoa@1.0.18",
           "externCrateName": "itoa"
         },
@@ -22970,10 +23279,6 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.21",
           "externCrateName": "zmij"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",
-          "externCrateName": "indexmap"
         }
       ],
       "buildDependencies": [],
@@ -29299,6 +29604,10 @@
       ],
       "dependencies": [
         {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
+          "externCrateName": "anyhow"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.17.1",
           "externCrateName": "hashbrown"
         },
@@ -29309,10 +29618,6 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
-          "externCrateName": "anyhow"
         }
       ],
       "buildDependencies": [],

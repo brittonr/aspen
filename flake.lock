@@ -1906,17 +1906,17 @@
     "mantle-wasm-verifier-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1793056478,
-        "narHash": "sha256-QBGFdskiynOprC3k3nVX0RV9r08ozll+cqb686mbGBk=",
+        "lastModified": 1793151171,
+        "narHash": "sha256-USGptbCnYPlgw8E+7AO9ZK1X+chf1/rfZa8EFg1kcDs=",
         "owner": "OnixResearch",
         "repo": "mantle",
-        "rev": "c99556e5c91dfd13fcc261dc451f471359d47c38",
+        "rev": "cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0",
         "type": "github"
       },
       "original": {
         "owner": "OnixResearch",
         "repo": "mantle",
-        "rev": "c99556e5c91dfd13fcc261dc451f471359d47c38",
+        "rev": "cf7623b81a63e3df9b5d69ad812c4a63ab78c1e0",
         "type": "github"
       }
     },

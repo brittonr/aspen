@@ -1,8 +1,8 @@
-//! Published Mantle structure and Molten-owned capability-rooted byte verification.
+//! Published Mantle structure and capability-rooted private snapshot verification.
 //!
-//! Mantle verifies the unchanged producer DTO over a fresh private byte snapshot.
-//! Source authority remains descriptor-relative and no-follow; the published
-//! path-based shell sees only staged files, never the mutable source tree.
+//! Mantle owns bounded source-tree identity and copying; Molten measures the
+//! remaining file roles. The published verifier sees the unchanged producer DTO
+//! and fresh private snapshot, never mutable ambient source paths.
 
 mod measurement;
 mod staging;
@@ -16,9 +16,9 @@ type Result<T, E = Denial> = std::result::Result<T, E>;
 
 /// A byte snapshot, not runtime, policy, or filesystem authority.
 ///
-/// Construction calls the published structural and byte verifiers. Source files
-/// are independently remeasured and staged under explicit directory authority.
-/// Only the exact remeasured component and selected profile WIT are retained.
+/// Construction calls the published structural and byte verifiers. Source
+/// closures use Mantle's bounded capability-rooted copy; other roles are
+/// independently remeasured. Only the selected component and WIT are retained.
 #[derive(Debug)]
 pub struct VerifiedBundle {
     component_bytes: Vec<u8>,
@@ -109,11 +109,17 @@ impl VerifiedBundle {
             return Err(Denial::new("published Mantle bundle includes unsupported precompiled admission"));
         }
         let wit_path = wit_path.ok_or_else(|| Denial::new("published Mantle bundle lacks the admitted Molten WIT"))?;
-        let measured = measurement::measure_members(root, staging, &members, measurement::Selection {
-            component_path: &component_path,
-            wit_path: &wit_path,
-            profile,
-        })?;
+        let measured = measurement::measure_members(
+            root,
+            staging,
+            &members,
+            measurement::Selection {
+                component_path: &component_path,
+                wit_path: &wit_path,
+                profile,
+            },
+            &bundle,
+        )?;
         let published_root = staging::consumer_root(staging)?;
         let verification_report = published_root
             .verify_bundle(bundle)
@@ -164,7 +170,7 @@ impl VerifiedBundle {
         &self.verification_report
     }
 
-    /// Molten's independent byte observations, not a Mantle ConsumerRoot report.
+    /// Private snapshot observations, including Mantle's bounded source copy.
     pub fn member_observations(&self) -> &[mantle_wasm_consumer_verifier::ConsumerMemberObservation] {
         &self.member_observations
     }
