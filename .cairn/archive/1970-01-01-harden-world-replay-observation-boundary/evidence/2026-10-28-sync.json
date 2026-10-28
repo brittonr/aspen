@@ -1,0 +1,174 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/harden-world-replay-observation-boundary/specs/world-commit/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/harden-world-replay-observation-boundary/specs/world-commit/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "harden-world-replay-observation-boundary",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "e34ee4182256a5b1afa38e7d6bb38ab400d7166ddf6c26c500a35d1ba79b2e2d",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "3d8baa4bdfd1a7116d7961034e4aaa2250ac19945650f0f90096484b6f9b8446",
+    "receipt_hash": "19b1f781cdf78cc7cb8586d12b9f325a49ec12db3bc692d3d1a41289540bd88b",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/harden-world-replay-observation-boundary/specs/world-commit/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "962e995e68c07fc99f0095deccabbceb99db040a296749507912ca7cc47c7839",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "634c82022607935772c9a9d945ae6ed9f2d81898f40273aa95e0c21680ee5336",
+        "blocked": false,
+        "changed": false,
+        "delta_hash": "b792aacaddd5478c051abe32d186ea6750cd72ebeee3ce825ce86346c096e207",
+        "destination": ".cairn/specs/world-commit/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "634c82022607935772c9a9d945ae6ed9f2d81898f40273aa95e0c21680ee5336",
+        "operations": [
+          {
+            "block_hash": "fec0e80022d2e3e69129d5eb091dca0ede462b12adddfe10f3af7331f2d54e71",
+            "heading": "### Requirement: Replay profiles inventory every nondeterministic source",
+            "kind": "added",
+            "requirement_id": "molten.world_replay_boundary.inventory"
+          },
+          {
+            "block_hash": "896c64f68e6d535ebde6823ce262035beaf3d6f85f9f2966859da0c1c1d46d7d",
+            "heading": "### Requirement: Recorded observations bind request and cohort",
+            "kind": "added",
+            "requirement_id": "molten.world_replay_boundary.observations"
+          },
+          {
+            "block_hash": "5777f67c05f784e40b19c97126674d648f3d06faa2dd97446bd287e0b16ed911",
+            "heading": "### Requirement: Logical ordering is explicit",
+            "kind": "added",
+            "requirement_id": "molten.world_replay_boundary.ordering"
+          },
+          {
+            "block_hash": "a8a034f8a29199bfca74d110aa8b163454a476b45a394edfb486cf9c2270bd14",
+            "heading": "### Requirement: Completeness is fail-closed",
+            "kind": "added",
+            "requirement_id": "molten.world_replay_boundary.completeness"
+          },
+          {
+            "block_hash": "63cfb45c2a386227d9d60262b4b996004591f56a2731080076a30b63b86c0a1d",
+            "heading": "### Requirement: Replay does not repeat external effects",
+            "kind": "added",
+            "requirement_id": "molten.world_replay_boundary.effect_sealing"
+          },
+          {
+            "block_hash": "09636bfa79515b98561b644c3a23ff455ce77f1f7b964cc648fb41bc0c5eccbe",
+            "heading": "### Requirement: Trace identity precedes storage optimization",
+            "kind": "added",
+            "requirement_id": "molten.world_replay_boundary.trace_identity"
+          },
+          {
+            "block_hash": "dcc62e308cfb8836d96f4866be844883f021939b03104be9a90e3076679fecb9",
+            "heading": "### Requirement: Native process replay remains opaque and detached",
+            "kind": "added",
+            "requirement_id": "molten.world_replay_boundary.opaque_native"
+          },
+          {
+            "block_hash": "a9dbb3d0cea65ac1ecc85a123690b508402205d583e1b58be4ae46873ab6806f",
+            "heading": "### Requirement: Claims remain bounded",
+            "kind": "added",
+            "requirement_id": "molten.world_replay_boundary.claims"
+          },
+          {
+            "block_hash": "75c702a2a7e9b57f3d851891310e67bf33a7701f1cdb667815d4df11d050932e",
+            "heading": "### Requirement: Verification covers success and denial paths",
+            "kind": "added",
+            "requirement_id": "molten.world_replay_boundary.verification"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.world_replay_boundary.inventory",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.world_replay_boundary.observations",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.world_replay_boundary.ordering",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.world_replay_boundary.completeness",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.world_replay_boundary.effect_sealing",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.world_replay_boundary.trace_identity",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.world_replay_boundary.opaque_native",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.world_replay_boundary.claims",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.world_replay_boundary.verification",
+            "state": "already_applied"
+          }
+        ],
+        "source": ".cairn/changes/harden-world-replay-observation-boundary/specs/world-commit/spec.md"
+      }
+    ]
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "acb9d47af43f211ec63cfeabef431a44b2894212a7adde2e08f0c02cf423d060",
+  "policy": "cairn-default",
+  "policy_hash": "3d8baa4bdfd1a7116d7961034e4aaa2250ac19945650f0f90096484b6f9b8446",
+  "profile_identity_hash": "d82656d66638b94fcf6c245e434677a64326dc472048ccf6361c78f77c096257",
+  "reasons": [],
+  "receipt_hash": "581310ef8f5ae34c06d18736ba289abfe80af3ae22447af143f18ec4b57dca5c",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

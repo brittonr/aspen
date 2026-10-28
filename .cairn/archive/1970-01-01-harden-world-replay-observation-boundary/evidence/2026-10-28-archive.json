@@ -1,0 +1,141 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: harden-world-replay-observation-boundary",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-harden-world-replay-observation-boundary"
+    }
+  ],
+  "blocked": false,
+  "change": "harden-world-replay-observation-boundary",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "e34ee4182256a5b1afa38e7d6bb38ab400d7166ddf6c26c500a35d1ba79b2e2d",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "3d8baa4bdfd1a7116d7961034e4aaa2250ac19945650f0f90096484b6f9b8446",
+    "receipt_hash": "19b1f781cdf78cc7cb8586d12b9f325a49ec12db3bc692d3d1a41289540bd88b",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "f5a0b3837e940496a776b3a276eafb7fd4c9afb809a6b74affb8fc304be45c30",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "a3e2e2a7e695c38c66c4e32bdb5682c14459c77ebddf824a82cb8b8d8a713385",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-harden-world-replay-observation-boundary/design.md"
+        },
+        {
+          "content_hash": "a525fd21f56b84d8881d9ac011f229821e017d8fa42b1e1b6500c87a80172205",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-harden-world-replay-observation-boundary/evidence/2026-10-21-boundary-verification.md"
+        },
+        {
+          "content_hash": "f265899065ab8aedc83f200f8fe9e5b4c8f3cb1e0887d16cf1c6ecd5fcf0a750",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-harden-world-replay-observation-boundary/evidence/2026-10-28-native-process-descriptor.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-harden-world-replay-observation-boundary/metadata.json"
+        },
+        {
+          "content_hash": "a01a3d75cd3d37ea629872945dc24ec23ceb27bcb54072287a6a93d523501f44",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-harden-world-replay-observation-boundary/proposal.md"
+        },
+        {
+          "content_hash": "b792aacaddd5478c051abe32d186ea6750cd72ebeee3ce825ce86346c096e207",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-harden-world-replay-observation-boundary/specs/world-commit/spec.md"
+        },
+        {
+          "content_hash": "3ee984f7cd26795a75f7290688b7e18982bd59cc935425e5ca0e09970e9f8d33",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-harden-world-replay-observation-boundary/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/harden-world-replay-observation-boundary"
+        }
+      ],
+      "manifest_hash": "5ec85ec8a0c4e3cfd235c96564d4017ef557c726f3eb4fa6f8d45eb3f88c71ef"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "a3e2e2a7e695c38c66c4e32bdb5682c14459c77ebddf824a82cb8b8d8a713385",
+          "exists": true,
+          "path": "./.cairn/changes/harden-world-replay-observation-boundary/design.md"
+        },
+        {
+          "content_hash": "a525fd21f56b84d8881d9ac011f229821e017d8fa42b1e1b6500c87a80172205",
+          "exists": true,
+          "path": "./.cairn/changes/harden-world-replay-observation-boundary/evidence/2026-10-21-boundary-verification.md"
+        },
+        {
+          "content_hash": "f265899065ab8aedc83f200f8fe9e5b4c8f3cb1e0887d16cf1c6ecd5fcf0a750",
+          "exists": true,
+          "path": "./.cairn/changes/harden-world-replay-observation-boundary/evidence/2026-10-28-native-process-descriptor.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/harden-world-replay-observation-boundary/metadata.json"
+        },
+        {
+          "content_hash": "a01a3d75cd3d37ea629872945dc24ec23ceb27bcb54072287a6a93d523501f44",
+          "exists": true,
+          "path": "./.cairn/changes/harden-world-replay-observation-boundary/proposal.md"
+        },
+        {
+          "content_hash": "b792aacaddd5478c051abe32d186ea6750cd72ebeee3ce825ce86346c096e207",
+          "exists": true,
+          "path": "./.cairn/changes/harden-world-replay-observation-boundary/specs/world-commit/spec.md"
+        },
+        {
+          "content_hash": "3ee984f7cd26795a75f7290688b7e18982bd59cc935425e5ca0e09970e9f8d33",
+          "exists": true,
+          "path": "./.cairn/changes/harden-world-replay-observation-boundary/tasks.md"
+        }
+      ],
+      "manifest_hash": "9ba24b09af3424c2e0ed0d79f6ce45221ffd6aad4e8fd0264c641282b89d4ce1"
+    },
+    "kind": "archive",
+    "manifest_hash": "edf603a477283884846719e8176bf48c8d426a511cabae9c5b42c09b47470ff5"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "0ea62db1a7a550f26355d35fb22e3cb988ef5c111ffd57a671d98f825cd30708",
+  "policy": "cairn-default",
+  "policy_hash": "3d8baa4bdfd1a7116d7961034e4aaa2250ac19945650f0f90096484b6f9b8446",
+  "profile_identity_hash": "d82656d66638b94fcf6c245e434677a64326dc472048ccf6361c78f77c096257",
+  "reasons": [],
+  "receipt_hash": "2f433f841921be72db65d0063a96b3f2f9ee1ea6bb24bed5e61adb87d3c3fe3f",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
