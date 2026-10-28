@@ -11,7 +11,8 @@
 - [x] [serial] Implement replay adapters that return sealed recorded observations and deny original external effects. r[molten.world_replay_boundary.effect_sealing]
 - [x] [parallel] Bind schedule and asynchronous delivery decisions to explicit logical order and reject wall-clock arrival as hidden ordering authority. r[molten.world_replay_boundary.ordering]
 - [x] [parallel] Add content-addressed trace members and validate identity before any reflink or deduplication optimization. r[molten.world_replay_boundary.trace_identity]
-- [ ] [depends:add-native-process-record-replay-profile] Add detached ChaosControl native-process descriptors as optional opaque diagnostics only. r[molten.world_replay_boundary.opaque_native] Blocked: ChaosControl has not published this profile; generic detached opaque diagnostics are implemented and tested (evidence/2026-10-21-boundary-verification.md).
+- [x] [depends:add-native-process-record-replay-profile] Add detached ChaosControl native-process descriptors as optional opaque diagnostics only. r[molten.world_replay_boundary.opaque_native]
+  - Evidence: [native-process descriptor binding](evidence/2026-10-28-native-process-descriptor.md) binds the ChaosControl `bdb82e9f` profile and descriptor identities with fail-closed shape, cohort, count, and non-claim checks; the descriptor satisfies no slot and carries no semantic claim.
 
 ## Phase 3: Verification and documentation
 

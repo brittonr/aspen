@@ -41,6 +41,9 @@ pub const MAX_REPLAY_SOURCES: usize = 256;
 pub const MAX_REPLAY_OBSERVATIONS: usize = 4_096;
 /// The most opaque diagnostics one boundary attaches.
 pub const MAX_REPLAY_OPAQUE_DIAGNOSTICS: usize = 8;
+pub const MAX_NATIVE_PROCESS_RECORDS: u32 = 64;
+pub const MAX_NATIVE_PROCESS_NON_CLAIMS: usize = 8;
+pub const MAX_NATIVE_PROCESS_TEXT_BYTES: usize = 256;
 /// The longest source identifier, operation identifier, or error class.
 pub const MAX_REPLAY_TEXT_BYTES: usize = 128;
 /// The largest recorded result one observation binds.

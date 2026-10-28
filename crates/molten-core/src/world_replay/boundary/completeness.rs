@@ -214,6 +214,44 @@ fn opaque_blockers(
         if !valid_reference(&diagnostic.descriptor_ref) {
             blockers.push(ReplayBoundaryBlocker::InvalidRecord("opaque-descriptor-ref"));
         }
+        if let Some(native) = &diagnostic.native_process {
+            blockers.extend(native_process_blockers(diagnostic, native));
+        }
+    }
+    blockers
+}
+
+/// A native-process binding stays exact and detached: it must name the same
+/// descriptor and cohort, declare a current replay class, stay within record
+/// and non-claim bounds, and keep every text field bounded. It never satisfies
+/// a slot or changes a semantic decision.
+// r[impl molten.world_replay_boundary.opaque_native]
+fn native_process_blockers(
+    diagnostic: &OpaqueReplayDiagnostic,
+    native: &NativeProcessDiagnostic,
+) -> Vec<ReplayBoundaryBlocker> {
+    let mut blockers = Vec::with_capacity(4);
+    let reference = diagnostic.descriptor_ref.clone();
+    if native.descriptor_ref != diagnostic.descriptor_ref || !valid_reference(&native.descriptor_ref) {
+        blockers.push(ReplayBoundaryBlocker::InvalidRecord("native-process-descriptor"));
+    }
+    if !valid_reference(&native.profile_ref) {
+        blockers.push(ReplayBoundaryBlocker::InvalidRecord("native-process-profile"));
+    }
+    if native.producer_cohort != diagnostic.cohort_ref {
+        blockers.push(ReplayBoundaryBlocker::OpaqueCohortMismatch(reference.clone()));
+    }
+    if native.record_count == 0 || native.record_count > MAX_NATIVE_PROCESS_RECORDS {
+        blockers.push(ReplayBoundaryBlocker::InvalidRecord("native-process-records"));
+    }
+    if native.non_claims.is_empty()
+        || native.non_claims.len() > MAX_NATIVE_PROCESS_NON_CLAIMS
+        || native
+            .non_claims
+            .iter()
+            .any(|claim| claim.is_empty() || claim.len() > MAX_NATIVE_PROCESS_TEXT_BYTES)
+    {
+        blockers.push(ReplayBoundaryBlocker::OpaqueOverclaim(reference.clone()));
     }
     blockers
 }

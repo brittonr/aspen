@@ -79,6 +79,29 @@ pub struct OpaqueReplayDiagnostic {
     pub byte_length: u64,
     pub cohort_ref: String,
     pub claims: Vec<OpaqueDiagnosticClaim>,
+    /// Optional ChaosControl native-process descriptor binding.
+    pub native_process: Option<NativeProcessDiagnostic>,
+}
+
+/// Replay class declared by a ChaosControl native-process descriptor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeProcessReplayClass {
+    RecordedOnly,
+    RecordReplayMatched,
+}
+
+/// Detached binding to one ChaosControl native-process descriptor.
+///
+/// Molten retains only the producer identities and declared shape. It never
+/// interprets records, derives observations, or promotes the descriptor.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeProcessDiagnostic {
+    pub profile_ref: String,
+    pub descriptor_ref: String,
+    pub producer_cohort: String,
+    pub replay_class: NativeProcessReplayClass,
+    pub record_count: u32,
+    pub non_claims: Vec<String>,
 }
 
 /// The observation ledger of one transition trace.
