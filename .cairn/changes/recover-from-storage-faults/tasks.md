@@ -24,7 +24,8 @@
 ## Evidence and closeout
 
 - [x] [serial] Add storage-fault caveats and cohort-bound receipt fields without widening Valence or Cairn claims. r[molten.consensus.storage_fault_claim_boundary]
-- [ ] [parallel] Run pinned ChaosControl campaigns for flush error, write error, corruption, cache retention, restart, local-only recovery, peer repair, global absence, and incomplete observation. r[molten.consensus.storage_fault_recovery_progress] r[molten.consensus.storage_fault_validation] r[molten.fabric_durability.storage_fault_validation] Blocked: ChaosControl `model-guest-storage-flush-failures` (guest flush outcomes, persistent-Raft workloads) has every task open.
+- [x] [parallel] Run pinned ChaosControl campaigns for flush error, write error, corruption, cache retention, restart, local-only recovery, peer repair, global absence, and incomplete observation. r[molten.consensus.storage_fault_recovery_progress] r[molten.consensus.storage_fault_validation] r[molten.fabric_durability.storage_fault_validation]
+  - Evidence: [pinned ChaosControl campaign coverage](evidence/2026-10-28-chaoscontrol-campaign-coverage.md) at provider revision `0b43ae5e`: eight retained request/receipt pairs for flush error, write error, corruption, restart, local-only, peer repair, global absence, and incomplete observation, plus the named cache-retention block tests. Model observations only; no guest, Raft, or Molten behavior is claimed.
 - [x] [serial] Run focused tests, formatting, Clippy, Octet, Cairn gates, and relevant Nix checks. r[molten.consensus.storage_fault_validation] r[molten.fabric_durability.storage_fault_validation]
 
 ## Verification Coverage
