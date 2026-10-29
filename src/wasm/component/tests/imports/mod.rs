@@ -1,4 +1,5 @@
 use super::super::*;
+use super::support::execute;
 
 fn fixture_record(fixture: &super::support::Fixture) -> AdmissionRecord {
     let component_ref = fixture.bundle.component.content_ref.clone();

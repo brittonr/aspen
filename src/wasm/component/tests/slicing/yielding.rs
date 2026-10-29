@@ -1,3 +1,5 @@
+use super::super::support::engine;
+use super::super::support::execute;
 use super::*;
 
 const SPIN_ITERATIONS: u32 = 3_000;
@@ -77,7 +79,8 @@ fn a_cpu_heavy_callback_yields_while_an_unrelated_runnable_completes_between_its
     let fixture = sliced_fixture(super::super::support::cpu_heavy_bytes(SPIN_ITERATIONS));
     let input = super::super::support::input_value();
     let request = fixture.sliced_request(&input);
-    let mut execution = start_sliced_execution(&request, heavy.clone()).expect("admitted sliced execution");
+    let engine = engine(&fixture);
+    let mut execution = engine.start_sliced(&request, heavy.clone()).expect("admitted sliced execution");
     let mut events = Vec::with_capacity(SLICE_LIMIT);
     let mut outcome = None;
     while outcome.is_none() && events.len() < SLICE_LIMIT {
@@ -114,7 +117,7 @@ fn a_cpu_heavy_callback_yields_while_an_unrelated_runnable_completes_between_its
     let sibling_at = events.iter().position(|event| *event == "sibling-completed").expect("sibling ran");
     let completed_at = events.iter().position(|event| *event == "heavy-completed").expect("heavy completed");
     assert!(sibling_at < completed_at, "the sibling completes between the heavy callback's slices: {events:?}");
-    let ledger = execution.ledger().expect("final ledger");
+    let ledger = execution.ledger();
     assert!(ledger.boundaries.len() >= 2);
     let remaining = outcome.receipts.last().and_then(|receipt| receipt.input.fuel_remaining).expect("fuel remaining");
     assert_eq!(ledger.consumed_fuel, ledger.total_budget_fuel - remaining);
@@ -126,7 +129,8 @@ fn a_sliced_execution_stops_at_the_budget_with_the_fuel_exhaustion_classificatio
     let fixture = sliced_fixture(super::super::support::fuel_exhaustion_bytes());
     let input = super::super::support::input_value();
     let request = fixture.sliced_request(&input);
-    let mut execution = start_sliced_execution(&request, continuation("spinning", 1)).expect("admitted");
+    let engine = engine(&fixture);
+    let mut execution = engine.start_sliced(&request, continuation("spinning", 1)).expect("admitted");
     let (slices, outcome) = run_to_completion(&mut execution);
     assert!(slices >= 1, "the spinning guest yields before the budget ends");
     assert!(!outcome.is_pass());
@@ -141,7 +145,8 @@ fn a_resumed_continuation_commits_its_turn_once_and_never_reruns_from_the_start(
     let fixture = sliced_fixture(super::super::support::cpu_heavy_bytes(SPIN_ITERATIONS));
     let input = super::super::support::input_value();
     let sliced_request = fixture.sliced_request(&input);
-    let mut execution = start_sliced_execution(&sliced_request, continuation("resumed", 1)).expect("admitted");
+    let engine = engine(&fixture);
+    let mut execution = engine.start_sliced(&sliced_request, continuation("resumed", 1)).expect("admitted");
     let (slices, outcome) = run_to_completion(&mut execution);
     assert!(slices >= 1);
     assert!(outcome.is_pass());
@@ -157,12 +162,12 @@ fn a_resumed_continuation_commits_its_turn_once_and_never_reruns_from_the_start(
     let single_receipt = single.receipts.last().expect("execution receipt");
     let single_consumed =
         single_receipt.input.fuel_limit.expect("limit") - single_receipt.input.fuel_remaining.expect("remaining");
-    let ledger = execution.ledger().expect("final ledger");
+    let ledger = execution.ledger();
     assert_eq!(ledger.consumed_fuel, single_consumed, "resuming continues the same work instead of rerunning it");
 
-    let mut replayed = start_sliced_execution(&sliced_request, continuation("resumed", 1)).expect("admitted");
+    let mut replayed = engine.start_sliced(&sliced_request, continuation("resumed", 1)).expect("admitted");
     run_to_completion(&mut replayed);
-    assert_eq!(replayed.ledger().expect("ledger").compare_replay(ledger), Ok(()));
+    assert_eq!(replayed.ledger().compare_replay(ledger), Ok(()));
 }
 
 #[test]
@@ -171,7 +176,8 @@ fn a_synchronous_request_cannot_start_a_sliced_execution() {
     let fixture = sliced_fixture(super::super::support::identity_bytes());
     let input = super::super::support::input_value();
     let synchronous = fixture.request(&input);
-    let denied = start_sliced_execution(&synchronous, continuation("synchronous", 1)).err().expect("denied");
+    let engine = engine(&fixture);
+    let denied = engine.start_sliced(&synchronous, continuation("synchronous", 1)).err().expect("denied");
     assert!(!denied.is_pass());
 }
 
@@ -197,12 +203,13 @@ fn the_saturation_scenario_holds_with_real_wasmtime_slices() {
     let fixture = sliced_fixture(super::super::support::cpu_heavy_bytes(SPIN_ITERATIONS));
     let input = super::super::support::input_value();
     let request = fixture.sliced_request(&input);
+    let engine = engine(&fixture);
     let scenario = crate::harness::composition::FailureScenario::CpuSaturationUnderTimeSlicing;
     for (variant, is_expected_to_hold) in [
         (crate::harness::composition::ScenarioVariant::Correct, true),
         (crate::harness::composition::ScenarioVariant::SlicingDisabled, false),
     ] {
-        let mut execution = start_sliced_execution(&request, continuation("saturating", 1)).expect("admitted");
+        let mut execution = engine.start_sliced(&request, continuation("saturating", 1)).expect("admitted");
         let mut work = WasmtimeSaturation {
             execution: &mut execution,
         };

@@ -10,8 +10,8 @@ fn replicated_policy() -> ReplicaPolicy {
     }
 }
 
-fn observations(guarantee: StorageGuaranteeKind) -> EligibilityObservations {
-    EligibilityObservations {
+fn observations(guarantee: StorageGuaranteeKind) -> PublicationObservations {
+    PublicationObservations {
         content_ref: CONTENT_REF.to_string(),
         operation_id: "operation-1".to_string(),
         receiver_set: vec!["peer-b".to_string(), "peer-a".to_string()],
@@ -25,7 +25,7 @@ fn observations(guarantee: StorageGuaranteeKind) -> EligibilityObservations {
 // r[verify molten.observations.tests]
 #[test]
 fn a_replicated_guarantee_satisfies_a_replicated_requirement() {
-    let receipt = check_publication_eligibility(
+    let receipt = check_publication(
         &replicated_policy(),
         &observations(StorageGuaranteeKind::ReplicatedAcrossFaultDomains {
             replicas: 2,
@@ -48,11 +48,11 @@ fn a_replicated_guarantee_satisfies_a_replicated_requirement() {
 // r[verify molten.observations.eligibility]
 #[test]
 fn a_replica_count_alone_never_satisfies_the_gate() {
-    let error = check_publication_eligibility(&replicated_policy(), &observations(StorageGuaranteeKind::Local))
+    let error = check_publication(&replicated_policy(), &observations(StorageGuaranteeKind::Local))
         .expect_err("a local guarantee does not satisfy a replicated requirement");
-    assert_eq!(error, EligibilityIssue::StorageGuaranteeInsufficient);
+    assert_eq!(error, PublicationIssue::StorageGuaranteeInsufficient);
 
-    let error = check_publication_eligibility(
+    let error = check_publication(
         &replicated_policy(),
         &observations(StorageGuaranteeKind::ReplicatedAcrossFaultDomains {
             replicas: 2,
@@ -60,9 +60,9 @@ fn a_replica_count_alone_never_satisfies_the_gate() {
         }),
     )
     .expect_err("one fault domain does not satisfy a two-domain requirement");
-    assert_eq!(error, EligibilityIssue::FaultDomainSpreadInsufficient);
+    assert_eq!(error, PublicationIssue::FaultDomainSpreadInsufficient);
 
-    let error = check_publication_eligibility(
+    let error = check_publication(
         &replicated_policy(),
         &observations(StorageGuaranteeKind::ReplicatedAcrossFaultDomains {
             replicas: 1,
@@ -70,7 +70,7 @@ fn a_replica_count_alone_never_satisfies_the_gate() {
         }),
     )
     .expect_err("one replica does not satisfy a two-replica requirement");
-    assert_eq!(error, EligibilityIssue::ReplicaAvailabilityInsufficient);
+    assert_eq!(error, PublicationIssue::ReplicaAvailabilityInsufficient);
 }
 
 // r[verify molten.observations.eligibility]
@@ -81,7 +81,7 @@ fn a_local_profile_accepts_a_local_guarantee() {
         minimum_verified_replicas: 1,
         minimum_fault_domains: 1,
     };
-    let receipt = check_publication_eligibility(&policy, &observations(StorageGuaranteeKind::Local))
+    let receipt = check_publication(&policy, &observations(StorageGuaranteeKind::Local))
         .expect("a local profile accepts a local guarantee");
     assert_eq!(receipt.storage_guarantee, StorageGuaranteeKind::Local);
 }
@@ -96,8 +96,8 @@ fn an_incomplete_observation_is_refused() {
     });
     invalid.content_ref = "not-a-content-ref".to_string();
     assert_eq!(
-        check_publication_eligibility(&policy, &invalid).expect_err("an invalid content ref is refused"),
-        EligibilityIssue::InvalidContentRef
+        check_publication(&policy, &invalid).expect_err("an invalid content ref is refused"),
+        PublicationIssue::InvalidContentRef
     );
 
     let mut missing_operation = observations(StorageGuaranteeKind::ReplicatedAcrossFaultDomains {
@@ -106,9 +106,8 @@ fn an_incomplete_observation_is_refused() {
     });
     missing_operation.operation_id = String::new();
     assert_eq!(
-        check_publication_eligibility(&policy, &missing_operation)
-            .expect_err("a missing operation identity is refused"),
-        EligibilityIssue::MissingOperationId
+        check_publication(&policy, &missing_operation).expect_err("a missing operation identity is refused"),
+        PublicationIssue::MissingOperationId
     );
 
     let mut empty_receivers = observations(StorageGuaranteeKind::ReplicatedAcrossFaultDomains {
@@ -117,8 +116,8 @@ fn an_incomplete_observation_is_refused() {
     });
     empty_receivers.receiver_set.clear();
     assert_eq!(
-        check_publication_eligibility(&policy, &empty_receivers).expect_err("an empty receiver set is refused"),
-        EligibilityIssue::EmptyReceiverSet
+        check_publication(&policy, &empty_receivers).expect_err("an empty receiver set is refused"),
+        PublicationIssue::EmptyReceiverSet
     );
 }
 
@@ -126,7 +125,7 @@ fn an_incomplete_observation_is_refused() {
 #[test]
 fn the_receipt_identity_binds_its_fields() {
     let policy = replicated_policy();
-    let receipt = check_publication_eligibility(
+    let receipt = check_publication(
         &policy,
         &observations(StorageGuaranteeKind::ReplicatedAcrossFaultDomains {
             replicas: 2,
@@ -137,14 +136,14 @@ fn the_receipt_identity_binds_its_fields() {
     let mut changed = receipt.clone();
     changed.placement_epoch += 1;
     assert_ne!(
-        eligibility_receipt_identity(&changed),
+        identify_publication_receipt(&changed).expect("the changed receipt has representable fields"),
         receipt.receipt_ref,
         "the receipt identity binds the placement epoch"
     );
     let mut changed = receipt.clone();
     changed.receiver_set = vec!["peer-c".to_string()];
     assert_ne!(
-        eligibility_receipt_identity(&changed),
+        identify_publication_receipt(&changed).expect("the changed receipt has representable fields"),
         receipt.receipt_ref,
         "the receipt identity binds the receiver set"
     );

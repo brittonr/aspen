@@ -53,6 +53,31 @@ pub(super) fn cleanup() -> Vec<u8> {
     )
 }
 
+pub(super) fn cleanup_trap() -> Vec<u8> {
+    encode(1, "(func (export \"post\") (param i32) unreachable)", ECHO, "", "(post-return (func $i \"post\"))")
+}
+
+pub(super) fn cleanup_exhaustion() -> Vec<u8> {
+    encode(
+        1,
+        "(func (export \"post\") (param i32) (loop $forever (br $forever)))",
+        ECHO,
+        "",
+        "(post-return (func $i \"post\"))",
+    )
+}
+
+pub(super) fn undeclared_import() -> Vec<u8> {
+    encode(
+        1,
+        "",
+        ECHO,
+        "(type $ambient (instance (export \"read\" (func))))
+         (import \"wasi:cli/environment@0.2.6\" (instance (type $ambient)))",
+        "",
+    )
+}
+
 pub(super) fn expensive_start() -> Vec<u8> {
     encode(
         1,

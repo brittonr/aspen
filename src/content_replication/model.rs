@@ -164,8 +164,8 @@ pub struct ExecutionReceipt {
 pub struct ReconcileOutcome {
     pub instance: ServiceInstance,
     pub plan: Plan,
-    pub repair_plan: ClosureRepairPlan,
-    pub eligibility_receipts: Vec<EligibilityReceipt>,
+    pub repair_plan: ClosurePlan,
+    pub eligibility_receipts: Vec<PublicationReceipt>,
     pub status: Status,
     pub receipt: ExecutionReceipt,
     pub resource_refs: Vec<String>,

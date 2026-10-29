@@ -15,7 +15,7 @@ pub(super) fn publication_eligibility(
     plan: &Plan,
     inventory: &Inventory,
     operations: &[PriorOperation],
-) -> crate::error::Result<Vec<EligibilityReceipt>> {
+) -> crate::error::Result<Vec<PublicationReceipt>> {
     let mut receipts = Vec::with_capacity(plan.replica_deficits.len());
     for deficit in &plan.replica_deficits {
         let mut receivers: Vec<String> = Vec::with_capacity(MAX_ELIGIBILITY_RECEIVERS);
@@ -56,7 +56,7 @@ pub(super) fn publication_eligibility(
         } else {
             StorageGuaranteeKind::Local
         };
-        let observations = EligibilityObservations {
+        let observations = PublicationObservations {
             content_ref: deficit.content_ref.clone(),
             operation_id,
             receiver_set: receivers,
@@ -64,7 +64,7 @@ pub(super) fn publication_eligibility(
             placement_epoch: manifest.placement_epoch,
             storage_guarantee: guarantee,
         };
-        let receipt = check_publication_eligibility(&manifest.policy, &observations).map_err(|issue| {
+        let receipt = check_publication(&manifest.policy, &observations).map_err(|issue| {
             crate::error::Failure::invalid_harness(format!(
                 "publication eligibility denied for {}: {}",
                 observations.content_ref,

@@ -47,14 +47,6 @@ pub(crate) fn denied_outcome(
     request: &super::shell::ExecutionRequest<'_>,
     denial: super::super::model::Denial,
 ) -> super::shell::ExecutionOutcome {
-    denied_outcome_with_backend(request, denial, super::provenance::Backend::Local)
-}
-
-pub(super) fn denied_outcome_with_backend(
-    request: &super::shell::ExecutionRequest<'_>,
-    denial: super::super::model::Denial,
-    backend: super::provenance::Backend,
-) -> super::shell::ExecutionOutcome {
     let component =
         super::super::evidence::materialization::MaterializedObjectIdentity::measure(request.source.component_bytes());
     let wit = super::super::evidence::materialization::MaterializedObjectIdentity::measure(request.source.wit_bytes());
@@ -66,8 +58,8 @@ pub(super) fn denied_outcome_with_backend(
     let profile_ref = super::super::profile::r#ref(request.profile);
     let runtime_configuration_ref =
         super::super::model::content_ref(format!("denied:{profile_ref}:{component_ref}:{wit_ref}").as_bytes());
-    let receipt = super::provenance::bind_configuration_ref(&runtime_configuration_ref, backend).and_then(
-        |runtime_configuration_ref| {
+    let receipt =
+        super::provenance::bind_configuration_ref(&runtime_configuration_ref).and_then(|runtime_configuration_ref| {
             super::super::evidence::receipt::build(super::super::evidence::receipt::Input {
                 stage: super::super::evidence::receipt::Stage::Denial,
                 decision: super::super::evidence::receipt::Decision::Deny,
@@ -95,8 +87,7 @@ pub(super) fn denied_outcome_with_backend(
                 parent_refs: Vec::new(),
                 diagnostics: vec![denial_class],
             })
-        },
-    );
+        });
     super::shell::ExecutionOutcome {
         decision: super::super::evidence::receipt::Decision::Deny,
         output: None,

@@ -1,10 +1,9 @@
-//! Candidate only: product admission and receipts surround the published execution shell.
-//! The local runtime remains the default until the complete parity corpus passes.
+//! The product execution backend: Molten admission and receipts surround the
+//! published shared execution shell. Product meaning stays outside the mechanism.
 
 mod configuration;
 mod hosted;
-#[cfg(test)]
-pub(crate) mod sliced;
+pub(crate) mod retained;
 
 pub(crate) struct EngineAdapter {
     inner: hardened_wasmtime_shell::BoundedRuntime,
@@ -60,7 +59,7 @@ impl EngineAdapter {
         if self.profile_ref != super::super::profile::r#ref(request.profile) {
             return Err(super::super::model::Denial::classified(
                 super::super::model::DenialClass::ProfileDenial,
-                "candidate engine profile differs from admitted request",
+                "engine profile differs from admitted request",
             ));
         }
         if !request.facts.imports.is_empty() {
@@ -103,14 +102,14 @@ impl EngineAdapter {
 pub(super) fn admit(
     request: &super::shell::ExecutionRequest<'_>,
 ) -> super::super::model::Result<super::shell::AdmittedRequest> {
-    super::shell::admit_request(request, super::provenance::Backend::Shared)
+    super::shell::admit_request(request)
 }
 
 pub(crate) fn denied_outcome(
     request: &super::shell::ExecutionRequest<'_>,
     denial: super::super::model::Denial,
 ) -> super::shell::ExecutionOutcome {
-    super::denial::denied_outcome_with_backend(request, denial, super::provenance::Backend::Shared)
+    super::denial::denied_outcome(request, denial)
 }
 
 fn stage(
@@ -188,7 +187,8 @@ fn observation_denial(observation: &hardened_wasmtime_shell::InvocationOutcome) 
                 | hardened_wasmtime_runtime::outcomes::Class::HostFailed
         )
     {
-        // Only Wasmtime invocation errors consult remaining fuel in the local path.
+        // Only Wasmtime invocation errors consult remaining fuel; the stable class is fixed by the frozen
+        // corpus.
         super::super::model::DenialClass::FuelExhausted
     } else {
         match observation.class {
@@ -226,7 +226,7 @@ fn observation_denial(observation: &hardened_wasmtime_shell::InvocationOutcome) 
     };
     super::super::model::Denial::classified(
         class,
-        format!("shared candidate {:?}: {:?}", observation.phase, observation.class),
+        format!("component {:?} denied as {}: {:?}", observation.phase, class.as_str(), observation.class),
     )
 }
 

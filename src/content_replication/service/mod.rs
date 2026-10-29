@@ -174,7 +174,7 @@ pub fn reconcile(
 /// The planning phase of a reconciliation.
 struct Planning {
     plan: Plan,
-    repair_plan: ClosureRepairPlan,
+    repair_plan: ClosurePlan,
     history: Vec<PriorOperation>,
     observed_inventory: Inventory,
 }
@@ -187,7 +187,7 @@ fn plan_reconciliation(
 ) -> crate::error::Result<Planning> {
     let inventory = ports.content.inventory(manifest)?;
     let observed_inventory = inventory.clone();
-    let repair_plan = plan_closure_repair(&closure_repair_input(manifest, &inventory)).map_err(|issue| {
+    let repair_plan = plan_closure(&closure_repair_input(manifest, &inventory)).map_err(|issue| {
         crate::error::Failure::invalid_harness(format!("closure repair planning denied: {issue:?}"))
     })?;
     let history = ports.durable.load_history(manifest)?;

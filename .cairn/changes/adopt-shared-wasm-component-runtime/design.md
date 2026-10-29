@@ -98,6 +98,8 @@ Cutover removes product-local Wasmtime decision logic or leaves only a thin comp
 
 Rollback restores the prior dependency and local adapter together. It cannot retain shared-runtime receipts while restoring local execution, or restore one consumer class only.
 
+**Executed cutover.** The cutover removed product-local Wasmtime decision logic outright; no compatibility adapter remains. The product API is `wasm_component::Engine`. Parity was established against the archived local oracle at `e5fa4549f` (25 paired tests, [baseline](evidence/2026-10-29-cutover/pre-cutover-parity-baseline.json)); the surviving corpus asserts those exact stages, classes, outputs and ledgers. The one deliberate difference is the operated epoch deadline the local oracle lacked, recorded as an approved strengthening in the [runtime guide](../../../docs/wasm-component-runtime.md#shared-runtime-adoption-status). Because the dependency pins did not change, rollback is a single revert of the cutover change; the [rollback exercise](evidence/2026-10-29-cutover/rollback-exercise.json) records that revert applying cleanly and the archived baseline passing again.
+
 ## Functional Core and Imperative Shell
 
 - **Molten core**: profile, materialization, authority, effect, replay, consumer, receipt, cutover, and rollback decisions.

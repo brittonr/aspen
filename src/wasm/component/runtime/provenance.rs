@@ -1,10 +1,4 @@
-//! Execution identity binds admission to the selected backend, not just its inputs.
-
-#[derive(Clone, Copy)]
-pub(super) enum Backend {
-    Local,
-    Shared,
-}
+//! Execution identity binds admission to the shared runtime source cohort, not just its inputs.
 
 /// Canonical source identity of the compiled shared runtime dependency cohort.
 /// This is linkage evidence, not execution, authority, or release approval.
@@ -24,14 +18,10 @@ pub fn source_cohort() -> preserves::IOValue {
 }
 
 // r[impl molten.wasm_component_adoption.consumers]
-pub(super) fn bind_configuration_ref(admission_ref: &str, backend: Backend) -> super::super::model::Result<String> {
-    let source = match backend {
-        Backend::Local => crate::preserves_rail::record("molten-local-component-runtime-v1", Vec::new()),
-        Backend::Shared => source_cohort(),
-    };
+pub(super) fn bind_configuration_ref(admission_ref: &str) -> super::super::model::Result<String> {
     let value = crate::preserves_rail::record("wasm-component-runtime-configuration-v2", vec![
         crate::preserves_rail::string(admission_ref),
-        source,
+        source_cohort(),
     ]);
     crate::preserves_rail::canonical_hash(&value)
         .map_err(|error| super::super::model::Denial::new(format!("runtime source binding failed: {error}")))

@@ -1,4 +1,5 @@
 use super::super::*;
+use super::support::execute;
 
 #[test]
 fn mantle_materialized_executes_through_generated_wit_bindings() {

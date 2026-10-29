@@ -48,7 +48,7 @@ pub fn identify_operation(input: OperationFrame<'_>) -> Result<String, Issue> {
 pub fn identify_repair_plan(
     required_objects: &[String],
     transfers: &[super::repair::ClosureTransfer],
-    completeness: &super::repair::RepairCompleteness,
+    completeness: &super::repair::Completeness,
 ) -> Result<String, Issue> {
     let mut hasher = blake3::Hasher::new_derive_key(REPAIR_PLAN_CONTEXT);
     update(&mut hasher, &required_objects.join(","))?;
@@ -59,7 +59,7 @@ pub fn identify_repair_plan(
         update(&mut hasher, &transfer.donor_peer_id)?;
     }
     update(&mut hasher, completeness.as_str())?;
-    if let super::repair::RepairCompleteness::Incomplete { unrecoverable } = completeness {
+    if let super::repair::Completeness::Incomplete { unrecoverable } = completeness {
         update(&mut hasher, &unrecoverable.join(","))?;
     }
     Ok(format!("blake3:{}", hasher.finalize().to_hex()))

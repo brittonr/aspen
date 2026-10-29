@@ -1,5 +1,11 @@
+//! Frozen adoption corpus. The paired local/shared baseline that established
+//! these expectations is archived with the pre-cutover local oracle under
+//! `evidence/2026-10-29-cutover/`; each test now asserts the exact stages,
+//! stable classes, outputs and ledgers that baseline fixed.
+
 use super::super::*;
 
+mod cleanup;
 mod fixtures;
 mod guest;
 mod guestarena;
@@ -7,46 +13,49 @@ mod initialization;
 mod rejection;
 mod resources;
 
-const DEADLINE_TICKS: u64 = 1_000;
 const SLICE_LIMIT: usize = 1_000;
 
-fn runtime(fixture: &super::support::Fixture) -> super::super::runtime::shared::EngineAdapter {
-    super::super::runtime::shared::EngineAdapter::build(&fixture.profile).expect("candidate runtime")
-}
-
-fn compare(local: &ExecutionOutcome, shared: &ExecutionOutcome) {
-    assert_eq!(local.decision, shared.decision);
-    assert_eq!(local.output, shared.output);
-    // Source/backend identity is intentionally different. Rebuild that reviewed
-    // mapping and its parent hashes; every other canonical field must match.
-    validate_chain(&local.receipts).expect("valid local chain");
-    validate_chain(&shared.receipts).expect("valid shared chain");
-    assert_eq!(local.receipts.len(), shared.receipts.len());
-    let mut mapped = Vec::with_capacity(shared.receipts.len());
-    for (local_record, shared_record) in local.receipts.iter().zip(&shared.receipts) {
-        assert_ne!(local_record.input.runtime_configuration_ref, shared_record.input.runtime_configuration_ref);
-        let mut input = shared_record.input.clone();
-        input.runtime_configuration_ref = local_record.input.runtime_configuration_ref.clone();
-        input.parent_refs =
-            mapped.last().map(|record: &ExecutionRecord| vec![record.receipt_ref.clone()]).unwrap_or_default();
-        mapped.push(build(input).expect("source-mapped canonical receipt"));
-    }
-    assert_eq!(local.receipts, mapped);
-    assert!(replay_receipts_match(&local.receipts, &mapped));
-}
-
-fn compare_synchronous(fixture: &super::support::Fixture) -> (ExecutionOutcome, ExecutionOutcome) {
+fn run(fixture: &super::support::Fixture) -> ExecutionOutcome {
     let input = super::support::input_value();
-    let request = fixture.request(&input);
-    let local = execute(&request);
-    let shared = runtime(fixture).execute(&request, DEADLINE_TICKS);
-    compare(&local, &shared);
-    (local, shared)
+    super::support::execute(&fixture.request(&input))
+}
+
+fn stages(outcome: &ExecutionOutcome) -> Vec<Stage> {
+    outcome.receipts.iter().map(|receipt| receipt.input.stage).collect()
+}
+
+fn denial_class(outcome: &ExecutionOutcome) -> Option<&str> {
+    outcome.receipts.last().and_then(|receipt| receipt.input.trap_class.as_deref())
+}
+
+fn continuation() -> ContinuationKey {
+    ContinuationKey {
+        service_id: "molten.shared-parity".to_string(),
+        generation: 1,
+        runnable_id: "callback".to_string(),
+        occurrence_sequence: 1,
+    }
+}
+
+fn slices(execution: &mut SlicedExecution<'_>) -> (Vec<SliceBoundary>, ExecutionOutcome) {
+    let mut boundaries = Vec::with_capacity(SLICE_LIMIT);
+    for _ in 0..SLICE_LIMIT {
+        match execution.run_slice() {
+            SliceProgress::Yielded { boundary, requeue } => {
+                assert_eq!(requeue, continuation().requeue_command());
+                boundaries.push(boundary);
+            }
+            SliceProgress::Completed(outcome) => return (boundaries, outcome),
+        }
+    }
+    panic!("fixture exceeded bounded polls")
 }
 
 #[test]
-fn shared_candidate_preserves_success_output_cleanup_and_canonical_receipt_inputs() {
+fn success_preserves_output_cleanup_and_canonical_receipt_inputs() {
     // r[verify molten.wasm_component_adoption.parity]
+    // r[verify molten.wasm_component_adoption.cutover]
+    // r[verify molten.wasm_component_adoption.validation]
     for consumer in [Consumer::Actor, Consumer::SystemExtension] {
         for bytes in [
             super::support::identity_bytes(),
@@ -55,16 +64,21 @@ fn shared_candidate_preserves_success_output_cleanup_and_canonical_receipt_input
         ] {
             let mut fixture = super::support::Fixture::new(consumer);
             fixture.replace_component_bytes(bytes);
-            let (local, _) = compare_synchronous(&fixture);
-            assert!(local.is_pass(), "{:?}", local.diagnostics);
+            let outcome = run(&fixture);
+            assert!(outcome.is_pass(), "{:?}", outcome.diagnostics);
+            assert_eq!(outcome.output, Some(super::support::input_value()));
+            assert_eq!(stages(&outcome), vec![Stage::Inspection, Stage::Instantiation, Stage::Execution]);
+            validate_chain(&outcome.receipts).expect("canonical receipt chain");
+            assert!(outcome.receipts.iter().all(|receipt| receipt.input.consumer == consumer));
         }
     }
 }
 
 #[test]
-fn shared_candidate_preserves_typed_failure_phase_and_denial_receipts() {
+fn typed_failures_keep_their_phase_and_denial_receipts() {
     // r[verify molten.wasm_component_adoption.parity]
-    for (bytes, stages, class) in [
+    // r[verify molten.wasm_component_adoption.validation]
+    for (bytes, expected_stages, class) in [
         (fixtures::start_trap(), vec![Stage::Inspection, Stage::Denial], "component-instantiation-denied"),
         (
             fixtures::invoke_trap(),
@@ -94,18 +108,18 @@ fn shared_candidate_preserves_typed_failure_phase_and_denial_receipts() {
     ] {
         let mut fixture = super::support::Fixture::new(Consumer::Actor);
         fixture.replace_component_bytes(bytes);
-        let (local, _) = compare_synchronous(&fixture);
-        assert!(!local.is_pass());
-        assert_eq!(local.receipts.iter().map(|receipt| receipt.input.stage).collect::<Vec<_>>(), stages);
-        let denial = local.receipts.last().expect("denial");
-        assert_eq!(denial.input.trap_class.as_deref(), Some(class));
+        let outcome = run(&fixture);
+        assert!(!outcome.is_pass());
+        assert_eq!(outcome.output, None);
+        assert_eq!(stages(&outcome), expected_stages);
+        assert_eq!(denial_class(&outcome), Some(class));
         // Failed-run fuel is not a receipt input; do not erase successful fuel.
-        assert_eq!(denial.input.fuel_remaining, None);
+        assert_eq!(outcome.receipts.last().expect("denial").input.fuel_remaining, None);
     }
 }
 
 #[test]
-fn shared_candidate_reuses_product_admission_for_wrong_world_stale_facts_and_no_fallback() {
+fn admission_denies_wrong_world_stale_facts_and_core_modules_without_fallback() {
     // r[verify molten.wasm_component_adoption.parity]
     let mut wrong_world = super::support::Fixture::new(Consumer::Actor);
     wrong_world.facts.declared_world = "wrong-world".to_string();
@@ -116,74 +130,47 @@ fn shared_candidate_reuses_product_admission_for_wrong_world_stale_facts_and_no_
     let mut undeclared = super::support::Fixture::new(Consumer::Actor);
     undeclared.facts.imports.push("wasi:cli/environment@0.2.6".to_string());
     for fixture in [wrong_world, stale_facts, core, undeclared] {
-        let (local, _) = compare_synchronous(&fixture);
-        assert!(!local.is_pass());
-        assert_eq!(local.receipts.iter().map(|receipt| receipt.input.stage).collect::<Vec<_>>(), vec![Stage::Denial]);
+        let outcome = run(&fixture);
+        assert!(!outcome.is_pass());
+        assert_eq!(stages(&outcome), vec![Stage::Denial]);
     }
-}
-
-fn continuation() -> ContinuationKey {
-    ContinuationKey {
-        service_id: "molten.shared-parity".to_string(),
-        generation: 1,
-        runnable_id: "callback".to_string(),
-        occurrence_sequence: 1,
-    }
-}
-
-fn local_slices(execution: &mut SlicedExecution<'_>) -> (Vec<SliceBoundary>, ExecutionOutcome) {
-    let mut boundaries = Vec::with_capacity(SLICE_LIMIT);
-    for _ in 0..SLICE_LIMIT {
-        match execution.run_slice() {
-            SliceProgress::Yielded { boundary, requeue } => {
-                assert_eq!(requeue, continuation().requeue_command());
-                boundaries.push(boundary);
-            }
-            SliceProgress::Completed(outcome) => return (boundaries, outcome),
-        }
-    }
-    panic!("local fixture exceeded bounded polls")
-}
-
-fn shared_slices(
-    execution: &mut super::super::runtime::shared::sliced::PendingInvocation<'_>,
-) -> (Vec<SliceBoundary>, ExecutionOutcome) {
-    let mut boundaries = Vec::with_capacity(SLICE_LIMIT);
-    for _ in 0..SLICE_LIMIT {
-        match execution.run_slice() {
-            SliceProgress::Yielded { boundary, requeue } => {
-                assert_eq!(requeue, continuation().requeue_command());
-                boundaries.push(boundary);
-            }
-            SliceProgress::Completed(outcome) => return (boundaries, outcome),
-        }
-    }
-    panic!("shared fixture exceeded bounded polls")
 }
 
 #[test]
-fn retained_shared_slices_preserve_callback_ledger_receipts_and_single_publication() {
+fn retained_slices_keep_callback_ledger_receipts_and_single_publication() {
     // r[verify molten.wasm_component_adoption.parity]
-    for bytes in [
-        super::support::cpu_heavy_bytes(3_000),
-        super::support::fuel_exhaustion_bytes(),
-        super::support::invalid_output_bytes(),
+    // r[verify molten.wasm_component_adoption.cutover]
+    for (bytes, class) in [
+        (super::support::cpu_heavy_bytes(3_000), None),
+        (super::support::fuel_exhaustion_bytes(), Some("fuel-exhausted")),
+        (super::support::invalid_output_bytes(), Some("invalid-preserves-payload")),
     ] {
         let mut fixture =
             super::support::Fixture::with_profile(Consumer::Actor, time_sliced().expect("sliced profile"));
         fixture.replace_component_bytes(bytes);
         let input = super::support::input_value();
         let request = fixture.sliced_request(&input);
-        let mut local = start_sliced_execution(&request, continuation()).expect("local start");
-        let mut shared = runtime(&fixture)
-            .start_sliced(&request, continuation(), DEADLINE_TICKS)
+        let engine = super::support::engine(&fixture);
+        let mut first = engine
+            .start_sliced(&request, continuation())
             .unwrap_or_else(|outcome| panic!("{:?}", outcome.diagnostics));
-        let (local_boundaries, local_outcome) = local_slices(&mut local);
-        let (shared_boundaries, shared_outcome) = shared_slices(&mut shared);
-        assert_eq!(local_boundaries, shared_boundaries);
-        assert_eq!(local.ledger(), Some(shared.ledger()));
-        compare(&local_outcome, &shared_outcome);
-        assert!(matches!(shared.run_slice(), SliceProgress::Completed(outcome) if !outcome.is_pass()));
+        let (boundaries, outcome) = slices(&mut first);
+        assert_eq!(outcome.is_pass(), class.is_none(), "{:?}", outcome.diagnostics);
+        assert_eq!(denial_class(&outcome), class);
+        assert!(first.ledger().boundaries.starts_with(&boundaries));
+        validate_chain(&outcome.receipts).expect("canonical receipt chain");
+        // A completed turn never publishes a second outcome.
+        assert!(matches!(first.run_slice(), SliceProgress::Completed(repeated) if !repeated.is_pass()));
+        let ledger = first.ledger().clone();
+        drop(first);
+        // The same admitted callback replays to an identical ledger and outcome.
+        let mut second = engine
+            .start_sliced(&request, continuation())
+            .unwrap_or_else(|outcome| panic!("{:?}", outcome.diagnostics));
+        let (replayed_boundaries, replayed) = slices(&mut second);
+        assert_eq!(replayed_boundaries, boundaries);
+        assert_eq!(replayed, outcome);
+        assert_eq!(second.ledger().compare_replay(&ledger), Ok(()));
     }
 }
 
@@ -199,62 +186,55 @@ fn two_admitted_per_memory_bounds_preserve_complete_execution() {
         fixture.facts.memory.maximum = Some(fixture.facts.memory.initial);
         fixture.facts.memories = 2;
         fixture.facts.instances = 2;
-        let (local, shared) = compare_synchronous(&fixture);
-        assert!(local.is_pass(), "{:?}", local.diagnostics);
-        assert!(shared.is_pass(), "{:?}", shared.diagnostics);
-        assert_eq!(local.output, Some(super::support::input_value()));
-        assert_eq!(local.receipts.iter().map(|receipt| receipt.input.stage).collect::<Vec<_>>(), vec![
-            Stage::Inspection,
-            Stage::Instantiation,
-            Stage::Execution
-        ]);
+        let outcome = run(&fixture);
+        assert!(outcome.is_pass(), "{:?}", outcome.diagnostics);
+        assert_eq!(outcome.output, Some(super::support::input_value()));
+        assert_eq!(stages(&outcome), vec![Stage::Inspection, Stage::Instantiation, Stage::Execution]);
         let fuel_remaining =
-            local.receipts.last().expect("execution receipt").input.fuel_remaining.expect("success fuel");
+            outcome.receipts.last().expect("execution receipt").input.fuel_remaining.expect("success fuel");
         assert!(fuel_remaining < fixture.profile.resources.fuel);
     }
 }
 
 #[test]
-fn invalid_oversized_output_preserves_pointer_trap_precedence() {
+fn invalid_oversized_output_keeps_pointer_trap_precedence() {
     let mut fixture = super::support::Fixture::new(Consumer::Actor);
     fixture.replace_component_bytes(fixtures::oversized_invalid_span());
-    let (local, _) = compare_synchronous(&fixture);
-    assert!(!local.is_pass());
-    assert_eq!(local.receipts.last().expect("denial").input.trap_class.as_deref(), Some("component-trap"));
+    let outcome = run(&fixture);
+    assert!(!outcome.is_pass());
+    assert_eq!(denial_class(&outcome), Some("component-trap"));
 }
 
 #[test]
-fn valid_oversized_output_preserves_resource_denial_precedence() {
+fn valid_oversized_output_keeps_resource_denial_precedence() {
     let mut fixture = super::support::Fixture::new(Consumer::Actor);
     fixture.replace_component_bytes(fixtures::oversized_valid_span());
     fixture.facts.memory.initial = 2 * 65_536;
     fixture.facts.memory.maximum = Some(fixture.facts.memory.initial);
-    let (local, _) = compare_synchronous(&fixture);
-    assert_eq!(local.receipts.last().expect("denial").input.trap_class.as_deref(), Some("resource-denial"));
+    assert_eq!(denial_class(&run(&fixture)), Some("resource-denial"));
 }
 
 #[test]
-fn retained_cancellation_releases_the_shared_concurrency_permit() {
+fn retained_cancellation_releases_the_concurrency_permit() {
     let mut fixture = super::support::Fixture::with_profile(Consumer::Actor, time_sliced().expect("sliced profile"));
     fixture.replace_component_bytes(super::support::cpu_heavy_bytes(3_000));
     let input = super::support::input_value();
     let request = fixture.sliced_request(&input);
-    let runtime = runtime(&fixture);
-    let mut first = runtime
-        .start_sliced(&request, continuation(), DEADLINE_TICKS)
+    let engine = super::support::engine(&fixture);
+    let mut first = engine
+        .start_sliced(&request, continuation())
         .unwrap_or_else(|outcome| panic!("{:?}", outcome.diagnostics));
     assert!(matches!(first.run_slice(), SliceProgress::Yielded { .. }));
-    let rejected = match runtime.start_sliced(&request, continuation(), DEADLINE_TICKS) {
+    let rejected = match engine.start_sliced(&request, continuation()) {
         Ok(_) => panic!("retained invocation must own the only admitted concurrency slot"),
         Err(outcome) => outcome,
     };
-    assert_eq!(rejected.receipts.last().expect("denial").input.trap_class.as_deref(), Some("resource-denial"));
+    assert_eq!(denial_class(&rejected), Some("resource-denial"));
     drop(first);
-    let mut restarted = runtime
-        .start_sliced(&request, continuation(), DEADLINE_TICKS)
+    let mut restarted = engine
+        .start_sliced(&request, continuation())
         .unwrap_or_else(|outcome| panic!("{:?}", outcome.diagnostics));
-    let (_, completed) = shared_slices(&mut restarted);
-    let mut local = start_sliced_execution(&request, continuation()).expect("local start");
-    let (_, expected) = local_slices(&mut local);
-    compare(&expected, &completed);
+    let (_, completed) = slices(&mut restarted);
+    assert!(completed.is_pass(), "{:?}", completed.diagnostics);
+    assert_eq!(completed.output, Some(input.clone()));
 }

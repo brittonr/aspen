@@ -11,6 +11,8 @@ pub trait EffectRequestHost {
 
 /// One admitted engine and its operated, engine-specific epoch service.
 /// Epoch deadlines interrupt guest work, not a blocked synchronous host call.
+/// This is the only product component execution backend.
+// r[impl molten.wasm_component_adoption.cutover]
 pub struct Engine {
     adapter: super::shared::EngineAdapter,
     epochs: EpochDriver,
@@ -28,6 +30,22 @@ impl Engine {
             return super::shared::denied_outcome(request, driver_denial());
         }
         self.adapter.execute(request, DEADLINE_TICKS)
+    }
+
+    /// Admit and instantiate a time-sliced execution without running guest code.
+    ///
+    /// The returned execution borrows this engine, so its epoch service outlives
+    /// every slice. A request that does not ask for time slicing is denied.
+    // r[impl molten.wasm_component.execution_quantum]
+    pub fn start_sliced<'a>(
+        &'a self,
+        request: &'a super::shell::ExecutionRequest<'a>,
+        continuation: super::super::slicing::ContinuationKey,
+    ) -> Result<super::shared::retained::SlicedExecution<'a>, super::shell::ExecutionOutcome> {
+        if !self.epochs.is_running() {
+            return Err(super::shared::denied_outcome(request, driver_denial()));
+        }
+        self.adapter.start_sliced(request, continuation, DEADLINE_TICKS)
     }
 
     pub fn execute_hosted<H: EffectRequestHost + 'static>(

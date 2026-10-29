@@ -1,0 +1,10 @@
+{
+  "base_revision": "e5fa4549fcf2acf8329eaef8b5b21d1256d1ad13",
+  "command": "cargo test --locked -p molten --lib -- wasm_component::tests::parity",
+  "result": "25 passed; 0 failed",
+  "oracle_archive": "pre-cutover-local-oracle-and-parity-corpus.zip",
+  "oracle_archive_blake3": "7999949c43c5237357badd11051dfab2276bb0e7a7bab189f2ea84b066353563",
+  "members": 32,
+  "known_semantic_delta": "The frozen local oracle has no operated epoch deadline. The shared default adds the existing 1000-tick/1 ms operated deadline (deadline-exceeded). This is an approved strengthening, not paired equality; the local oracle is retained only as this immutable archive.",
+  "boundary": "Pre-cutover paired local/shared observation only. No deletion claim until post-cutover tests pass."
+}

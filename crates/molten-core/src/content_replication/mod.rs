@@ -5,7 +5,6 @@
     reason = "the pure core constructs bounded domain plans and local collections, never infrastructure adapters"
 )]
 
-mod action;
 mod diagnostic;
 mod eligibility;
 mod identity;

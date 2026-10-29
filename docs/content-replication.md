@@ -41,6 +41,11 @@ Closure repair works at the canonical-content boundary: verified blobs and manif
 established. The pure repair planner takes a required-closure set and a bounded inventory of per-replica, per-object
 verification facts.
 
+The Rust facade exposes `ClosureInput`, `ClosurePlan`, `Completeness`, and `plan_closure` from
+`molten_core::content_replication` (also available under its public `repair` module). Owner-repeating repair names
+are removed rather than retained as aliases. Identity framing errors propagate as the existing domain `Issue`;
+the planner never substitutes a zero identity for a failed canonical frame.
+
 Donor eligibility is per object. A replica donates exactly the required objects it holds with a passing verification
 result, so a cohort whose members each hold a different intact subset repairs the whole closure even though no single
 member holds all of it. The plan is bounded, and each transfer names the object and its chosen donor.
@@ -68,6 +73,12 @@ fault domains, and a receipt that omits a binding is refused.
 The gate sits between the transfers and the metadata publication. A local
 development profile and a replicated deployment therefore declare different
 durability explicitly, and the receipt is part of the published evidence.
+
+The Rust facade exposes `PublicationObservations`, `PublicationReceipt`, `PublicationIssue`, `check_publication`,
+and `identify_publication_receipt`. The identity function returns `Result<String, PublicationIssue>` and reports
+`ReceiptFieldTooLong` if a field's byte length cannot fit the canonical `u64` frame; the gate propagates that issue
+instead of hashing a sentinel length. These source API names replace the former eligibility-prefixed names without
+aliases. Canonical identity contexts, field order, bytes, and publication authority rules are unchanged.
 
 ## Imperative shell
 

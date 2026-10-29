@@ -1,6 +1,6 @@
-use super::*;
+use super::super::*;
 
-impl super::planner::PlanningState<'_> {
+impl super::PlanningState<'_> {
     // r[impl molten.content_replication.retention_confidentiality]
     // r[impl molten.audit_f05.residual_policy]
     // r[impl molten.audit_f05.selection]

@@ -23,18 +23,6 @@ impl ExecutionOutcome {
     }
 }
 
-pub fn execute(request: &ExecutionRequest<'_>) -> ExecutionOutcome {
-    match execute_inner(request) {
-        Ok(outcome) => outcome,
-        Err(denial) => super::denial::denied_outcome(request, denial),
-    }
-}
-
-fn execute_inner(request: &ExecutionRequest<'_>) -> super::super::model::Result<ExecutionOutcome> {
-    let admitted = admit_request(request, super::provenance::Backend::Local)?;
-    execute_admitted(request, &admitted.plan, &admitted.input_bytes, admitted.input_ref)
-}
-
 /// A request that passed every admission boundary before execution.
 pub(super) struct AdmittedRequest {
     pub(super) plan: super::super::admission::ExecutionPlan,
@@ -44,10 +32,7 @@ pub(super) struct AdmittedRequest {
 
 /// Admit a request: profile, requested profile, migration, materialization,
 /// artifact facts, import surface, plan, and canonical bounded input.
-pub(super) fn admit_request(
-    request: &ExecutionRequest<'_>,
-    backend: super::provenance::Backend,
-) -> super::super::model::Result<AdmittedRequest> {
+pub(super) fn admit_request(request: &ExecutionRequest<'_>) -> super::super::model::Result<AdmittedRequest> {
     super::super::profile::validate_runtime(request.profile)?;
     super::super::slicing::admit_requested_profile(request.profile, request.requested_profile)?;
     super::super::migration::classify_for_profile(request.requested_profile, request.source.component_bytes())?;
@@ -62,8 +47,7 @@ pub(super) fn admit_request(
         request.facts,
         request.import_grants,
     )?;
-    plan.runtime_configuration_ref =
-        super::provenance::bind_configuration_ref(&plan.runtime_configuration_ref, backend)?;
+    plan.runtime_configuration_ref = super::provenance::bind_configuration_ref(&plan.runtime_configuration_ref)?;
     let input_bytes = crate::preserves_rail::canonical_bytes(request.input).map_err(|error| {
         super::super::model::Denial::classified(
             super::super::model::DenialClass::InvalidPreservesPayload,
@@ -88,77 +72,6 @@ pub(super) fn admit_request(
         plan,
         input_bytes,
         input_ref,
-    })
-}
-
-fn execute_admitted(
-    request: &ExecutionRequest<'_>,
-    plan: &super::super::admission::ExecutionPlan,
-    input_bytes: &[u8],
-    input_ref: String,
-) -> super::super::model::Result<ExecutionOutcome> {
-    let inspection = plan_receipt(request, PlanReceiptInput {
-        plan,
-        stage: super::super::evidence::receipt::Stage::Inspection,
-        input_ref: None,
-        output_ref: None,
-        fuel_limit: None,
-        fuel_remaining: None,
-        parent_refs: Vec::new(),
-    })?;
-    let mut session = match super::instantiate(request.profile, request.source.component_bytes(), request.facts) {
-        Ok(session) => session,
-        Err(denial) => {
-            return super::denial::plan_denied_outcome(request, plan, denial, vec![inspection], Some(input_ref));
-        }
-    };
-    let instantiation = plan_receipt(request, PlanReceiptInput {
-        plan,
-        stage: super::super::evidence::receipt::Stage::Instantiation,
-        input_ref: None,
-        output_ref: None,
-        fuel_limit: None,
-        fuel_remaining: None,
-        parent_refs: vec![inspection.receipt_ref.clone()],
-    })?;
-    let runtime = match super::invoke(&mut session, input_bytes) {
-        Ok(runtime) => runtime,
-        Err(denial) => {
-            return super::denial::plan_denied_outcome(
-                request,
-                plan,
-                denial,
-                vec![inspection, instantiation],
-                Some(input_ref),
-            );
-        }
-    };
-    let (output, output_ref) = match decode_output(request.profile, &runtime.output_bytes) {
-        Ok(output) => output,
-        Err(denial) => {
-            return super::denial::plan_denied_outcome(
-                request,
-                plan,
-                denial,
-                vec![inspection, instantiation],
-                Some(input_ref),
-            );
-        }
-    };
-    let execution = plan_receipt(request, PlanReceiptInput {
-        plan,
-        stage: super::super::evidence::receipt::Stage::Execution,
-        input_ref: Some(input_ref),
-        output_ref: Some(output_ref),
-        fuel_limit: Some(request.profile.resources.fuel),
-        fuel_remaining: Some(runtime.fuel_remaining),
-        parent_refs: vec![instantiation.receipt_ref.clone()],
-    })?;
-    Ok(ExecutionOutcome {
-        decision: super::super::evidence::receipt::Decision::Pass,
-        output: Some(output),
-        receipts: vec![inspection, instantiation, execution],
-        diagnostics: Vec::new(),
     })
 }
 

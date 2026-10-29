@@ -271,3 +271,13 @@ fn bytes_with_guest(memory_limits: &str, extra_guest_items: &str, invoke_body: &
     );
     wat::parse_str(&wat).expect("component fixture WAT")
 }
+
+/// The operated product engine for a fixture's admitted profile.
+pub fn engine(fixture: &Fixture) -> Engine {
+    Engine::build(&fixture.profile).expect("operated component engine")
+}
+
+/// Execute one request through a fresh operated engine for its admitted profile.
+pub fn execute(request: &ExecutionRequest<'_>) -> ExecutionOutcome {
+    Engine::build(request.profile).expect("operated component engine").execute(request)
+}

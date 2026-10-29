@@ -33,7 +33,7 @@ impl StorageGuaranteeKind {
 
 /// The storage observations the gate reads.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EligibilityObservations {
+pub struct PublicationObservations {
     /// The content the publication would publish.
     pub content_ref: String,
     /// The operation that publishes the content.
@@ -50,7 +50,7 @@ pub struct EligibilityObservations {
 
 /// The receipt the gate emits when the requirement is satisfied.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EligibilityReceipt {
+pub struct PublicationReceipt {
     pub content_ref: String,
     pub operation_id: String,
     pub receiver_set: Vec<String>,
@@ -62,7 +62,7 @@ pub struct EligibilityReceipt {
 
 /// Why the gate refused a publication.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum EligibilityIssue {
+pub enum PublicationIssue {
     /// The content reference is not a canonical content reference.
     InvalidContentRef,
     /// The operation identity is empty.
@@ -78,9 +78,11 @@ pub enum EligibilityIssue {
     FaultDomainSpreadInsufficient,
     /// The observed guarantee does not cover the required replicas.
     ReplicaAvailabilityInsufficient,
+    /// A receipt field's byte length cannot be represented in the canonical frame.
+    ReceiptFieldTooLong,
 }
 
-impl EligibilityIssue {
+impl PublicationIssue {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::InvalidContentRef => "invalid-content-ref",
@@ -90,6 +92,7 @@ impl EligibilityIssue {
             Self::StorageGuaranteeInsufficient => "storage-guarantee-insufficient",
             Self::FaultDomainSpreadInsufficient => "fault-domain-spread-insufficient",
             Self::ReplicaAvailabilityInsufficient => "replica-availability-insufficient",
+            Self::ReceiptFieldTooLong => "receipt-field-too-long",
         }
     }
 }
@@ -102,26 +105,26 @@ const ELIGIBILITY_RECEIPT_CONTEXT: &str = "onixresearch.molten.content-replicati
 /// The requirement is the profile's replica policy: the minimum verified
 /// replicas and the minimum fault domains the deployment must observe before
 /// the metadata reference becomes authoritative.
-pub fn check_publication_eligibility(
+pub fn check_publication(
     policy: &ReplicaPolicy,
-    observations: &EligibilityObservations,
-) -> Result<EligibilityReceipt, EligibilityIssue> {
+    observations: &PublicationObservations,
+) -> Result<PublicationReceipt, PublicationIssue> {
     if observations.content_ref.is_empty() || !observations.content_ref.starts_with("blake3:") {
-        return Err(EligibilityIssue::InvalidContentRef);
+        return Err(PublicationIssue::InvalidContentRef);
     }
     if observations.operation_id.is_empty() {
-        return Err(EligibilityIssue::MissingOperationId);
+        return Err(PublicationIssue::MissingOperationId);
     }
     if observations.receiver_set.is_empty() {
-        return Err(EligibilityIssue::EmptyReceiverSet);
+        return Err(PublicationIssue::EmptyReceiverSet);
     }
     if observations.placement_epoch == 0 {
-        return Err(EligibilityIssue::MissingPlacementEpoch);
+        return Err(PublicationIssue::MissingPlacementEpoch);
     }
     let (replicas, fault_domains) = match observations.storage_guarantee {
         StorageGuaranteeKind::Local => {
             if policy.minimum_verified_replicas > 1 || policy.minimum_fault_domains > 1 {
-                return Err(EligibilityIssue::StorageGuaranteeInsufficient);
+                return Err(PublicationIssue::StorageGuaranteeInsufficient);
             }
             (1, 1)
         }
@@ -131,15 +134,15 @@ pub fn check_publication_eligibility(
         } => (replicas, fault_domains),
     };
     if replicas < policy.minimum_verified_replicas {
-        return Err(EligibilityIssue::ReplicaAvailabilityInsufficient);
+        return Err(PublicationIssue::ReplicaAvailabilityInsufficient);
     }
     if fault_domains < policy.minimum_fault_domains {
-        return Err(EligibilityIssue::FaultDomainSpreadInsufficient);
+        return Err(PublicationIssue::FaultDomainSpreadInsufficient);
     }
     let mut receiver_set = observations.receiver_set.clone();
     receiver_set.sort();
     receiver_set.dedup();
-    let receipt = EligibilityReceipt {
+    let receipt = PublicationReceipt {
         content_ref: observations.content_ref.clone(),
         operation_id: observations.operation_id.clone(),
         receiver_set,
@@ -148,14 +151,14 @@ pub fn check_publication_eligibility(
         storage_guarantee: observations.storage_guarantee,
         receipt_ref: String::new(),
     };
-    Ok(EligibilityReceipt {
-        receipt_ref: eligibility_receipt_identity(&receipt),
+    Ok(PublicationReceipt {
+        receipt_ref: identify_publication_receipt(&receipt)?,
         ..receipt
     })
 }
 
 /// The canonical identity of an eligibility receipt.
-pub fn eligibility_receipt_identity(receipt: &EligibilityReceipt) -> String {
+pub fn identify_publication_receipt(receipt: &PublicationReceipt) -> Result<String, PublicationIssue> {
     let mut hasher = blake3::Hasher::new_derive_key(ELIGIBILITY_RECEIPT_CONTEXT);
     let receivers = receipt.receiver_set.join(",");
     for field in [
@@ -166,9 +169,9 @@ pub fn eligibility_receipt_identity(receipt: &EligibilityReceipt) -> String {
         &receipt.placement_epoch.to_string(),
         receipt.storage_guarantee.as_str(),
     ] {
-        let length = u64::try_from(field.len()).unwrap_or(u64::MAX);
+        let length = u64::try_from(field.len()).map_err(|_| PublicationIssue::ReceiptFieldTooLong)?;
         hasher.update(&length.to_be_bytes());
         hasher.update(field.as_bytes());
     }
-    format!("blake3:{}", hasher.finalize().to_hex())
+    Ok(format!("blake3:{}", hasher.finalize().to_hex()))
 }

@@ -6,9 +6,11 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use super::action::TransferBuild;
-use super::action::build_transfer;
-use super::action::denied_plan;
+mod action;
+
+use self::action::TransferBuild;
+use self::action::build_transfer;
+use self::action::denied_plan;
 use super::*;
 
 // r[impl molten.content_replication.planner]

@@ -21,8 +21,8 @@ fn fact(peer_id: &str, fault_domain: &str, object_ref: &str, intact: bool) -> Re
     }
 }
 
-fn input(required: &[&str], inventory: Vec<ReplicaObjectFact>) -> ClosureRepairInput {
-    ClosureRepairInput {
+fn input(required: &[&str], inventory: Vec<ReplicaObjectFact>) -> ClosureInput {
+    ClosureInput {
         required_objects: required.iter().map(|object| (*object).to_string()).collect(),
         inventory,
         max_transfers: MAX_TRANSFERS,
@@ -32,8 +32,8 @@ fn input(required: &[&str], inventory: Vec<ReplicaObjectFact>) -> ClosureRepairI
 // r[verify molten.closure_repair.per_object]
 // r[verify molten.closure_repair.donor_eligibility]
 #[test]
-fn several_partial_donors_repair_the_whole_closure() {
-    let plan = plan_closure_repair(&input(&[OBJECT_A, OBJECT_B, OBJECT_C], vec![
+fn several_partial_donors_recover_every_required_object() {
+    let plan = plan_closure(&input(&[OBJECT_A, OBJECT_B, OBJECT_C], vec![
         fact(PEER_A, ZONE_A, OBJECT_A, true),
         fact(PEER_A, ZONE_A, OBJECT_B, false),
         fact(PEER_B, ZONE_B, OBJECT_B, true),
@@ -58,7 +58,7 @@ fn several_partial_donors_repair_the_whole_closure() {
 // r[verify molten.closure_repair.incomplete_outcome]
 #[test]
 fn an_object_without_an_intact_copy_yields_a_typed_incomplete_repair() {
-    let plan = plan_closure_repair(&input(&[OBJECT_A, OBJECT_B], vec![
+    let plan = plan_closure(&input(&[OBJECT_A, OBJECT_B], vec![
         fact(PEER_A, ZONE_A, OBJECT_A, true),
         fact(PEER_B, ZONE_B, OBJECT_B, false),
     ]))
@@ -82,7 +82,7 @@ fn an_assembly_identity_mismatch_rejects_only_that_object() {
 // r[verify molten.closure_repair.validation]
 #[test]
 fn a_flapping_donor_is_refused_at_transfer_time() {
-    let plan = plan_closure_repair(&input(&[OBJECT_A], vec![fact(PEER_A, ZONE_A, OBJECT_A, true)]))
+    let plan = plan_closure(&input(&[OBJECT_A], vec![fact(PEER_A, ZONE_A, OBJECT_A, true)]))
         .expect("the closure repair plans");
     let transfer = plan.transfers.first().expect("the planned transfer");
 
@@ -101,7 +101,7 @@ fn a_flapping_donor_is_refused_at_transfer_time() {
 fn unbounded_inventories_and_malformed_facts_are_refused() {
     let mut unbounded = input(&[OBJECT_A], Vec::new());
     unbounded.inventory = (0..MAX_REPAIR_INVENTORY + 1).map(|_| fact(PEER_A, ZONE_A, OBJECT_A, true)).collect();
-    assert!(plan_closure_repair(&unbounded).is_err());
+    assert!(plan_closure(&unbounded).is_err());
 
     let malformed = input(&[OBJECT_A], vec![ReplicaObjectFact {
         peer_id: String::new(),
@@ -110,11 +110,11 @@ fn unbounded_inventories_and_malformed_facts_are_refused() {
         present: true,
         identity_verified: true,
     }]);
-    assert!(plan_closure_repair(&malformed).is_err());
+    assert!(plan_closure(&malformed).is_err());
 
     let duplicated = input(&[OBJECT_A], vec![
         fact(PEER_A, ZONE_A, OBJECT_A, true),
         fact(PEER_A, ZONE_A, OBJECT_A, true),
     ]);
-    assert!(plan_closure_repair(&duplicated).is_err());
+    assert!(plan_closure(&duplicated).is_err());
 }

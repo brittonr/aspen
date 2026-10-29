@@ -1,5 +1,19 @@
-/// Retains the upstream store/future. Dropping this value cancels execution.
-pub(crate) struct PendingInvocation<'a> {
+/// What one slice of a sliced execution did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SliceProgress {
+    /// The guest consumed a quantum; re-enqueue the continuation with `requeue`.
+    Yielded {
+        boundary: super::super::super::slicing::SliceBoundary,
+        requeue: molten_core::fabric_time::SchedulerCommand,
+    },
+    /// The execution ended with its final outcome.
+    Completed(super::super::shell::ExecutionOutcome),
+}
+
+/// A time-sliced component execution in progress. It retains the upstream
+/// store and future, so dropping it cancels the execution and releases its
+/// concurrency permit. The turn publishes nothing until the guest returns.
+pub struct SlicedExecution<'a> {
     request: &'a super::super::shell::ExecutionRequest<'a>,
     admitted: super::super::shell::AdmittedRequest,
     receipts: Vec<super::super::super::evidence::receipt::ExecutionRecord>,
@@ -14,7 +28,7 @@ impl super::EngineAdapter {
         request: &'a super::super::shell::ExecutionRequest<'a>,
         continuation: super::super::super::slicing::ContinuationKey,
         deadline_ticks: u64,
-    ) -> Result<PendingInvocation<'a>, super::super::shell::ExecutionOutcome> {
+    ) -> Result<SlicedExecution<'a>, super::super::shell::ExecutionOutcome> {
         let early_denial = |denial| super::denied_outcome(request, denial);
         if !request.requested_profile.requests_time_slicing() {
             return Err(early_denial(super::super::super::model::Denial::classified(
@@ -60,7 +74,7 @@ impl super::EngineAdapter {
         if let Err(denial) = initialize(&mut invocation, &ledger) {
             return Err(super::denied(request, &admitted, denial, vec![inspection]).unwrap_or_else(early_denial));
         }
-        Ok(PendingInvocation {
+        Ok(SlicedExecution {
             request,
             admitted,
             receipts: vec![inspection],
@@ -104,14 +118,14 @@ fn initialize(
     Err(resource_denial("component instantiation did not complete within the slice budget"))
 }
 
-impl PendingInvocation<'_> {
-    pub(crate) fn ledger(&self) -> &super::super::super::slicing::SliceLedger {
+impl SlicedExecution<'_> {
+    pub fn ledger(&self) -> &super::super::super::slicing::SliceLedger {
         &self.ledger
     }
 
-    pub(crate) fn run_slice(&mut self) -> super::super::slicedshell::SliceProgress {
+    pub fn run_slice(&mut self) -> SliceProgress {
         let Some(invocation) = self.invocation.as_mut() else {
-            return super::super::slicedshell::SliceProgress::Completed(super::denied_outcome(
+            return SliceProgress::Completed(super::denied_outcome(
                 self.request,
                 super::super::super::model::Denial::new("the sliced execution already completed"),
             ));
@@ -123,7 +137,7 @@ impl PendingInvocation<'_> {
                 // Configured quantum observations are not measured per-poll fuel.
                 // Preserve the local ledger convention, with terminal fuel readback.
                 match self.ledger.record_boundary(observation.quantum_fuel) {
-                    Ok(boundary) => super::super::slicedshell::SliceProgress::Yielded {
+                    Ok(boundary) => SliceProgress::Yielded {
                         boundary,
                         requeue: self.continuation.requeue_command(),
                     },
@@ -148,7 +162,7 @@ impl PendingInvocation<'_> {
                 let outcome =
                     super::finish(self.request, &self.admitted, std::mem::take(&mut self.receipts), observation)
                         .unwrap_or_else(|denial| super::denied_outcome(self.request, denial));
-                super::super::slicedshell::SliceProgress::Completed(outcome)
+                SliceProgress::Completed(outcome)
             }
             Ok(
                 hardened_wasmtime_shell::SliceStep::Instantiated(_) | hardened_wasmtime_shell::SliceStep::Yielded(_),
@@ -157,10 +171,10 @@ impl PendingInvocation<'_> {
         }
     }
 
-    fn fail(&mut self, denial: super::super::super::model::Denial) -> super::super::slicedshell::SliceProgress {
+    fn fail(&mut self, denial: super::super::super::model::Denial) -> SliceProgress {
         self.invocation = None;
         let outcome = super::denied(self.request, &self.admitted, denial, std::mem::take(&mut self.receipts))
             .unwrap_or_else(|failure| super::denied_outcome(self.request, failure));
-        super::super::slicedshell::SliceProgress::Completed(outcome)
+        SliceProgress::Completed(outcome)
     }
 }

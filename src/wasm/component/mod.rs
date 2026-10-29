@@ -119,9 +119,7 @@ pub use runtime::ExecutionOutcome;
 pub use runtime::ExecutionRequest;
 pub use runtime::SliceProgress;
 pub use runtime::SlicedExecution;
-pub use runtime::execute;
 pub use runtime::source_cohort;
-pub use runtime::start_sliced_execution;
 pub use slicing::ContinuationKey;
 pub use slicing::PendingTurn;
 pub use slicing::SliceBoundary;
@@ -142,9 +140,10 @@ pub(crate) fn test_alternate_bytes() -> Vec<u8> {
 
 #[cfg(test)]
 pub(crate) fn test_precompiled_bytes() -> Vec<u8> {
-    let profile = supported().expect("supported component profile");
-    let component_bytes = test_identity_bytes();
-    runtime::test_precompile(&profile, &component_bytes).expect("precompiled component test fixture")
+    // A native-code artifact is never portable component input; any engine yields one.
+    wasmtime::Engine::default()
+        .precompile_component(&test_identity_bytes())
+        .expect("precompiled component test fixture")
 }
 
 #[cfg(test)]

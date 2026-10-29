@@ -21,40 +21,39 @@ fn memory_fixture(consumer: Consumer, memory_pages: u32, memory_count: u32) -> s
     fixture
 }
 
-fn compare_resource_admission(fixture: &super::super::support::Fixture, is_admitted: bool) {
+fn assert_resource_admission(fixture: &super::super::support::Fixture, is_admitted: bool) {
     // Prove these are actual resource limits, not stale-facts denials.
     super::super::super::admission::inspection::verify_artifact_facts(&fixture.component_bytes, &fixture.facts)
         .expect("resource facts match actual component bytes");
-    let (local, shared) = compare_synchronous(fixture);
-    assert_eq!(local.is_pass(), is_admitted, "{:?}", local.diagnostics);
-    assert_eq!(shared.is_pass(), is_admitted, "{:?}", shared.diagnostics);
+    let outcome = run(fixture);
+    assert_eq!(outcome.is_pass(), is_admitted, "{:?}", outcome.diagnostics);
     if is_admitted {
-        assert_eq!(local.output, Some(super::super::support::input_value()));
+        assert_eq!(outcome.output, Some(super::super::support::input_value()));
     } else {
-        assert_eq!(local.output, None);
-        assert_eq!(local.receipts.iter().map(|record| record.input.stage).collect::<Vec<_>>(), vec![Stage::Denial]);
-        assert_eq!(local.receipts[0].input.trap_class.as_deref(), Some("component-admission-denial"));
+        assert_eq!(outcome.output, None);
+        assert_eq!(stages(&outcome), vec![Stage::Denial]);
+        assert_eq!(outcome.receipts[0].input.trap_class.as_deref(), Some("component-admission-denial"));
     }
 }
 
 #[test]
-fn actual_per_memory_ceiling_preserves_local_and_shared_admission() {
+fn actual_per_memory_ceiling_preserves_admission() {
     // r[verify molten.wasm_component_adoption.parity]
     // r[verify molten.wasm_component.resources]
     for consumer in [Consumer::Actor, Consumer::SystemExtension] {
         for (pages, is_admitted) in [(256, true), (257, false)] {
-            compare_resource_admission(&memory_fixture(consumer, pages, 1), is_admitted);
+            assert_resource_admission(&memory_fixture(consumer, pages, 1), is_admitted);
         }
     }
 }
 
 #[test]
-fn actual_memory_count_ceiling_preserves_local_and_shared_admission() {
+fn actual_memory_count_ceiling_preserves_admission() {
     // r[verify molten.wasm_component_adoption.parity]
     // r[verify molten.wasm_component.resources]
     for consumer in [Consumer::Actor, Consumer::SystemExtension] {
         for (count, is_admitted) in [(4, true), (5, false)] {
-            compare_resource_admission(&memory_fixture(consumer, 1, count), is_admitted);
+            assert_resource_admission(&memory_fixture(consumer, 1, count), is_admitted);
         }
     }
 }

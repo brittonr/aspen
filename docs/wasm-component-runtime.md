@@ -42,57 +42,77 @@ ambient WASI is never inherited from the process.
 
 ## Shared-runtime adoption status
 
+The shared hardened Wasmtime runtime is the only component execution backend.
 The root dependency cohort pins `hwr.shell.v4` at
 `cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c` and the published Mantle consumer
 verifier at `dd2bebab894688d07e7a29c75c1437f4ecc120df`. The source gate binds
 their completed native archives and exact evidence digests, including Mantle's
-closed Octet profile selection. These pins are prerequisites, not authorization
-to change the execution backend.
+closed Octet profile selection.
 
-The import-free adapter under `runtime/shared/` remains a parity candidate rather
-than the default backend. Separate non-test hosted consumer roots are described
-below. The parity adapter's bounded initialization
-driver consumes typed Instantiation yields through the successful checkpoint
-before exposing callback polls, preserving the existing callback ledger without
-resetting fuel or restarting the guest. The checked memory translation retains
-the product's per-memory ceiling and derives a redundant aggregate bound from
-that ceiling times the already admitted memory count; no product limit, profile
-identity or WIT bytes are widened or changed.
+**Ownership.** Molten component-runtime maintainers own the adapter under
+`runtime/shared/`, the product profile and WIT, materialization, admission,
+receipts, replay and authority decisions. The shared runtime owns only
+product-neutral Wasmtime feature, shape, world, import, resource, linker,
+deadline and normalized-outcome mechanism. Shared success never grants or
+strengthens a Molten decision: output, resource, parent and receipt facts are
+revalidated by Molten before product success.
 
-The original start-work and two-129-page-memory cases now agree on complete
-canonical receipts and callback ledgers, with paired actual memory-size/count
-denials. See the [immutable v4 continuation evidence](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-boundary-parity.md).
-Default component execution still uses the complete local runtime. The existing
-actor harness and sandboxed extension fixture execute legacy core modules; they
-are not shared Component Model consumer installations. The [earlier frozen mapping and counterexamples](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-26-runtime-adoption-parity.md)
-remain historical evidence; they are not current v4 failures. The explicit hosted
-roots now have operated deadline, effect and actor/extension evidence below.
-Complete local/shared parity and coupled default-backend cutover/rollback remain
-separate acceptance gates.
+**Operation.** `wasm_component::Engine` builds one admitted engine and operates
+its epoch service. `execute`, `start_sliced` and `execute_hosted` are its only
+execution entrypoints. `SlicedExecution` borrows the engine, so the epoch service
+outlives every slice, and dropping a retained execution cancels it and releases
+its concurrency permit. The actor and extension roots described below use this
+same engine.
+
+**Cutover (2026-10-29).** The cutover removed the free local `execute` and
+`start_sliced_execution` functions, the product-local Wasmtime engine, store,
+instantiation and invocation code, the generated local bindings, the local sliced
+shell and the local runtime-configuration identity. No compatibility shim or
+fallback to a second backend remains. Receipt `runtime_configuration_ref` binds
+only the shared source cohort. Receipts minted before the cutover carry the
+previous local identity; they are never mixed with shared receipts.
+
+**Parity.** The original paired local/shared corpus passed 25 tests at
+`e5fa4549fcf2acf8329eaef8b5b21d1256d1ad13`. The local oracle source and that
+baseline are archived under
+[`evidence/2026-10-29-cutover/`](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-29-cutover/pre-cutover-parity-baseline.json).
+The frozen corpus in `src/wasm/component/tests/parity/` now asserts the exact
+stages, stable classes, outputs, fuel and ledgers that baseline fixed:
+synchronous and sliced success, trap phases, guest denial, invalid and oversized
+output precedence, fuel exhaustion, failed growth, post-return cleanup failure,
+per-memory and memory-count ceilings, wrong world, stale facts, loose bytes,
+stale or circular evidence, hidden ambient imports, core-module non-fallback,
+receipt non-claim retention, retained-slice replay and cancellation.
+
+**Approved semantic delta.** The local oracle had no operated epoch deadline. The
+shared default adds the existing 1,000-tick, 1 ms operated deadline and reports
+`deadline-exceeded`. This is a deliberate strengthening, not paired equality. It
+interrupts guest work only, never a blocked synchronous host call, and the
+operated actor evidence records it after a completed host effect.
+
+**Coupled rollback.** The cutover is one version-control change that moves the
+adapter, profile and WIT wiring, actor and extension consumers, parity fixtures,
+receipt identity and these documents together. Rolling back reverts that change
+as one unit. It restores the local runtime, its generated bindings, the paired
+parity corpus and the local receipt identity for both consumer classes at once.
+It cannot leave shared receipts beside local execution, or one consumer class on
+each backend. The dependency pins did not change in the cutover, so rollback needs
+no lock or plan regeneration. The
+[executed rollback record](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-29-cutover/rollback-exercise.json)
+shows the revert applying cleanly and the archived 25-test baseline passing again.
 
 The [original directory-missing handoff](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-producer-handoff.md)
 and [original supported-world artifact denial](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-source-tree-intake.md#distinct-supported-world-prerequisite)
-remain historical counterexamples. The current published Mantle pin retains
-tree-aware verification and adds explicit closed Octet profile selection.
-The [immutable supported-world continuation](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-28-supported-world-intake.md)
-now accepts a genuine producer bundle under the unchanged supported Molten
-profile/WIT, retains exact component/WIT bytes, requires complete Structural+Bytes
-agreement, and denies empty-directory source drift with private-lease cleanup.
-That record resolves import-free supported-world materialization, not execution
-or actor/extension installation. Its separately denied effect-world probe remains
-historical evidence; the later published effects cohort and operated consumers
-below resolve that prerequisite without rewriting bundles or weakening profiles.
+remain historical counterexamples. The [immutable supported-world continuation](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-28-supported-world-intake.md)
+records import-free materialization under the unchanged supported profile and
+WIT. The contract-only effect-request definition keeps `execution_admitted=false`;
+the separate explicit hosted profile and roots carry the operated evidence below.
 
-The contract-only effect-request definition remains unadmitted; its
-`execution_admitted=false` does not authorize installation. The separate explicit
-hosted profile and non-test roots have bounded operated consumer evidence, not
-default-backend adoption or production rollback evidence.
-Cutover must move the immutable dependency,
-adapter, profile/WIT, actor, extension, materialization and receipt cohorts
-together after complete parity and product-consumer evidence. Rollback restores
-that entire previous cohort, never one consumer or receipt producer alone.
+**Non-claims.** None of this proves Wasmtime, component, effect, actor or extension
+correctness, host isolation, whole-system safety, durable nonce storage,
+synchronous host interruption, or release eligibility.
 
-## Explicit hosted consumer candidate
+## Explicit hosted consumers
 
 The current source exposes `wasm_component::consumer::Actor` for ordinary bounded
 Component Model actor turns and `system_extension::component::Executor` for the
@@ -172,8 +192,7 @@ operated-consumer evidence. No higher-budget diagnostic grants product admission
 export of the exact [`effect-contracts.ncl`](wasm-component-runtime/effect-contracts.ncl)
 contract; [`generated/effect-contract.json`](wasm-component-runtime/generated/effect-contract.json)
 is its deterministic projection. `execution_admitted=false` is mandatory.
-The existing import-free production profiles/WIT, defaults, local runtime and
-test-only shared adapter are unchanged. Defining or decoding this contract does
+The existing import-free production profiles/WIT and defaults are unchanged. Defining or decoding this contract does
 not install a linker, host adapter, actor or system extension.
 
 **Durable capability:** the product-owned
@@ -392,7 +411,7 @@ publishes exactly once, and the yielded continuation is re-enqueued as an
 ordinary runnable with the admitted scheduler. A replay compares the recomputed
 slicing with the recorded one and names the first boundary that differs.
 
-r[impl molten.wasm_component.execution_quantum] `start_sliced_execution` runs a component under the time-sliced profile. It passes the same admission, materialization, and receipt rails as a synchronous execution. The store suspends the guest every quantum of fuel through Wasmtime's fuel-based asynchronous yielding, and the guest's `invoke` export stays a synchronous WIT export: the host drives it through the asynchronous entrypoint and polls one slice at a time.
+r[impl molten.wasm_component.execution_quantum] `Engine::start_sliced` runs a component under the time-sliced profile. It passes the same admission, materialization, and receipt rails as a synchronous execution. The store suspends the guest every quantum of fuel through Wasmtime's fuel-based asynchronous yielding, and the guest's `invoke` export stays a synchronous WIT export: the host drives it through the asynchronous entrypoint and polls one slice at a time.
 
 `SlicedExecution::run_slice` either yields or completes:
 
@@ -428,7 +447,7 @@ The [adoption compatibility preflight](../.cairn/changes/adopt-shared-wasm-compo
 records two published-API blockers: no resumable fuel-quantum invocation, and no
 failure-phase observation for Molten's staged receipts. An executable probe
 observed the same normalized trap class for instantiation and invocation traps.
-The local runtime and its coherent profile/receipt cohort remain unchanged.
+At the time of this pilot the local runtime and its coherent profile/receipt cohort remained unchanged; the later cutover replaced them together.
 
 **Immediate outcome:** the corrected external API executes the Molten actor
 fixture at immutable producer revision

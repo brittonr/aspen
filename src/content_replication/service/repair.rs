@@ -12,7 +12,7 @@ use molten_core::content_replication::*;
 /// are the per-replica, per-object verification facts. Donor eligibility is per
 /// object, so a cohort whose members each hold a different intact subset still
 /// repairs the whole closure.
-pub(super) fn closure_repair_input(manifest: &Manifest, inventory: &Inventory) -> ClosureRepairInput {
+pub(super) fn closure_repair_input(manifest: &Manifest, inventory: &Inventory) -> ClosureInput {
     let required_objects = manifest.contents.iter().map(|rule| rule.content_ref.clone()).collect();
     let facts = inventory
         .replicas
@@ -25,7 +25,7 @@ pub(super) fn closure_repair_input(manifest: &Manifest, inventory: &Inventory) -
             identity_verified: replica.identity_verified,
         })
         .collect();
-    ClosureRepairInput {
+    ClosureInput {
         required_objects,
         inventory: facts,
         max_transfers: manifest.contents.len(),

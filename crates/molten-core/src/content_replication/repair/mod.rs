@@ -11,11 +11,6 @@
 //! Repair recovers bytes matching already-established identities. It creates no
 //! new content identity, and it proves nothing about which head is current.
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-
-use crate::content_replication::Issue;
-
 pub const MAX_REPAIR_OBJECTS: usize = 256;
 pub const MAX_REPAIR_INVENTORY: usize = 4_096;
 
@@ -38,7 +33,7 @@ impl ReplicaObjectFact {
 
 /// The required closure set and the bounded inventory to repair it from.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClosureRepairInput {
+pub struct ClosureInput {
     pub required_objects: Vec<String>,
     pub inventory: Vec<ReplicaObjectFact>,
     pub max_transfers: usize,
@@ -54,14 +49,14 @@ pub struct ClosureTransfer {
 
 /// Whether the repair can recover the whole required closure.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum RepairCompleteness {
+pub enum Completeness {
     /// Every required object has an intact verifiable copy.
     Complete,
     /// At least one required object has no intact verifiable copy.
     Incomplete { unrecoverable: Vec<String> },
 }
 
-impl RepairCompleteness {
+impl Completeness {
     pub const fn as_str(&self) -> &'static str {
         match self {
             Self::Complete => "complete",
@@ -76,13 +71,13 @@ impl RepairCompleteness {
 
 /// The bounded repair plan.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClosureRepairPlan {
+pub struct ClosurePlan {
     pub plan_ref: String,
-    pub completeness: RepairCompleteness,
+    pub completeness: Completeness,
     pub transfers: Vec<ClosureTransfer>,
     pub repaired_objects: Vec<String>,
     pub unrecoverable_objects: Vec<String>,
-    pub issues: Vec<Issue>,
+    pub issues: Vec<super::Issue>,
     pub non_claims: Vec<String>,
 }
 
@@ -92,21 +87,21 @@ pub struct ClosureRepairPlan {
 /// copy. Otherwise the plan is a typed incomplete repair that names the
 /// unrecoverable identities and keeps the transfers for the objects that do
 /// have donors.
-pub fn plan_closure_repair(input: &ClosureRepairInput) -> Result<ClosureRepairPlan, Issue> {
+pub fn plan_closure(input: &ClosureInput) -> Result<ClosurePlan, super::Issue> {
     let issues = validate_input(input);
-    if !issues.is_empty() {
-        return Err(issues.first().copied().unwrap_or(Issue::InvalidManifest));
+    if let Some(issue) = issues.first() {
+        return Err(*issue);
     }
     let mut required = input.required_objects.clone();
     required.sort();
     required.dedup();
-    let mut donors: BTreeMap<&str, Vec<&ReplicaObjectFact>> = BTreeMap::new();
+    let mut donors: std::collections::BTreeMap<&str, Vec<&ReplicaObjectFact>> = std::collections::BTreeMap::new();
     for fact in &input.inventory {
         donors.entry(fact.object_ref.as_str()).or_default().push(fact);
     }
     let mut transfers = Vec::with_capacity(required.len());
     let mut repaired = Vec::with_capacity(required.len());
-    let mut unrecoverable = Vec::new();
+    let mut unrecoverable = Vec::with_capacity(required.len());
     for object in &required {
         let mut candidates = donors
             .get(object.as_str())
@@ -128,14 +123,14 @@ pub fn plan_closure_repair(input: &ClosureRepairInput) -> Result<ClosureRepairPl
         repaired.push(object.clone());
     }
     let completeness = if unrecoverable.is_empty() {
-        RepairCompleteness::Complete
+        Completeness::Complete
     } else {
-        RepairCompleteness::Incomplete {
+        Completeness::Incomplete {
             unrecoverable: unrecoverable.clone(),
         }
     };
-    let plan = ClosureRepairPlan {
-        plan_ref: plan_ref(&required, &transfers, &completeness),
+    let plan = ClosurePlan {
+        plan_ref: super::identity::identify_repair_plan(&required, &transfers, &completeness)?,
         completeness,
         transfers,
         repaired_objects: repaired,
@@ -153,9 +148,9 @@ pub fn plan_closure_repair(input: &ClosureRepairInput) -> Result<ClosureRepairPl
 ///
 /// Verification stays on the receiving side. A mismatch rejects that object
 /// only and never poisons the objects that verified.
-pub fn verify_assembled_object(expected_ref: &str, assembled_ref: &str) -> Result<(), Issue> {
+pub fn verify_assembled_object(expected_ref: &str, assembled_ref: &str) -> Result<(), super::Issue> {
     if expected_ref != assembled_ref {
-        return Err(Issue::InvalidReference);
+        return Err(super::Issue::InvalidReference);
     }
     Ok(())
 }
@@ -164,46 +159,41 @@ pub fn verify_assembled_object(expected_ref: &str, assembled_ref: &str) -> Resul
 ///
 /// A donor that flapped between the plan and the transfer no longer holds an
 /// intact verifiable copy, so the transfer is refused.
-pub fn verify_transfer_donor(transfer: &ClosureTransfer, fact: &ReplicaObjectFact) -> Result<(), Issue> {
+pub fn verify_transfer_donor(transfer: &ClosureTransfer, fact: &ReplicaObjectFact) -> Result<(), super::Issue> {
     if transfer.object_ref != fact.object_ref || transfer.donor_peer_id != fact.peer_id {
-        return Err(Issue::InvalidReference);
+        return Err(super::Issue::InvalidReference);
     }
     if !fact.is_intact_donor() {
-        return Err(Issue::NoVerifiedSource);
+        return Err(super::Issue::NoVerifiedSource);
     }
     Ok(())
 }
 
-fn validate_input(input: &ClosureRepairInput) -> Vec<Issue> {
-    let mut issues = Vec::new();
+fn validate_input(input: &ClosureInput) -> Vec<super::Issue> {
+    let mut issues = Vec::with_capacity(input.inventory.len().saturating_add(4));
     if input.required_objects.is_empty() {
-        issues.push(Issue::InvalidManifest);
+        issues.push(super::Issue::InvalidManifest);
     }
     if input.required_objects.len() > MAX_REPAIR_OBJECTS {
-        issues.push(Issue::TooManyContents);
+        issues.push(super::Issue::TooManyContents);
     }
     if input.inventory.len() > MAX_REPAIR_INVENTORY {
-        issues.push(Issue::TooManyPeers);
+        issues.push(super::Issue::TooManyPeers);
     }
     if input.max_transfers == 0 {
-        issues.push(Issue::InvalidResourceLimit);
+        issues.push(super::Issue::InvalidResourceLimit);
     }
-    let mut seen = BTreeSet::new();
+    let mut seen = std::collections::BTreeSet::new();
     for fact in &input.inventory {
         if fact.peer_id.trim().is_empty() || fact.object_ref.trim().is_empty() {
-            issues.push(Issue::InvalidReference);
+            issues.push(super::Issue::InvalidReference);
             continue;
         }
         if !seen.insert((fact.peer_id.as_str(), fact.object_ref.as_str())) {
-            issues.push(Issue::DuplicateReplica);
+            issues.push(super::Issue::DuplicateReplica);
         }
     }
     issues.sort();
     issues.dedup();
     issues
-}
-
-fn plan_ref(required: &[String], transfers: &[ClosureTransfer], completeness: &RepairCompleteness) -> String {
-    crate::content_replication::identity::identify_repair_plan(required, transfers, completeness)
-        .unwrap_or_else(|_| format!("blake3:{:064x}", 0))
 }

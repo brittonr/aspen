@@ -41,16 +41,17 @@ The optional [content-replication extension](content-replication.md) derives cur
 
 Molten retains component profile/WIT, canonical Preserves, materialization,
 authority, actor/extension lifecycle, effects, replay and receipt meaning.
-The pinned hardened Wasmtime v4 mechanism backs the import-free parity adapter
-and explicit shared-engine candidate roots.
-Its explicit instantiation checkpoint and independent memory ceilings correct
-the exercised scheduling/allocation counterexamples without changing the
-admitted product profile or WIT. The complete local runtime remains the product
-default until operated product deadlines, effect admission, matching production
-bundles, real actor/extension composition and coupled cutover/rollback pass.
-Producer publication and passing parity fixtures do not authorize that cutover.
+The pinned hardened Wasmtime v4 mechanism is the only component execution
+backend. Its explicit instantiation checkpoint and independent memory ceilings
+correct the exercised scheduling/allocation counterexamples without changing the
+admitted product profile or WIT. The local product-owned Wasmtime path was
+removed in one coupled cutover; rollback reverts that change as a unit. See the
+[adoption status](wasm-component-runtime.md#shared-runtime-adoption-status) for
+ownership, the archived paired-parity baseline, the approved operated-deadline
+delta, rollback and non-claims. Producer publication and passing parity do not
+establish component correctness or release eligibility.
 
-The non-test candidate roots are `wasm_component::consumer::Actor` and
+The non-test roots are `wasm_component::consumer::Actor` and
 `system_extension::component::Executor`. Installation binds a verified Mantle
 snapshot, a separate current admission envelope, exact artifact/import facts and
 current grants; neither root accepts loose component bytes as an installation.
@@ -60,7 +61,7 @@ does not interrupt a blocked synchronous host call. Source admission and executi
 are separate facts. The [operated immutable consumer record](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-28-hosted-consumers/2026-10-29-operated-consumers.json)
 retains matching genuine bundles, actor deadline/effect/replay denials and the full
 installed-extension checkpoint/restart lifecycle through the published verifier.
-These bounded observations do not authorize the default-backend cutover.
+These bounded observations do not prove correctness or release eligibility.
 
 The separate `molten.wasm.component.effects.v1` candidate defines the versioned
 `molten:component-effects@1.0.0` / `actor-effects` world but keeps
