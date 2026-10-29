@@ -77,7 +77,7 @@ previous local identity; they are never mixed with shared receipts.
 (post-return cleanup, hidden ambient imports and receipt overclaim); the committed
 tree alone carries 21. The local oracle source and that
 baseline are archived under
-[`evidence/2026-10-29-cutover/`](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-29-cutover/pre-cutover-parity-baseline.json).
+[`evidence/2026-10-29-cutover/`](../.cairn/archive/1970-01-01-adopt-shared-wasm-component-runtime/evidence/2026-10-29-cutover/pre-cutover-parity-baseline.json).
 The frozen corpus in `src/wasm/component/tests/parity/` now asserts the exact
 stages, stable classes, outputs, fuel and ledgers that baseline fixed:
 synchronous and sliced success, trap phases, guest denial, invalid and oversized
@@ -100,12 +100,12 @@ parity corpus and the local receipt identity for both consumer classes at once.
 It cannot leave shared receipts beside local execution, or one consumer class on
 each backend. The dependency pins did not change in the cutover, so rollback needs
 no lock or plan regeneration. The
-[executed rollback record](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-29-cutover/rollback-exercise.json)
+[executed rollback record](../.cairn/archive/1970-01-01-adopt-shared-wasm-component-runtime/evidence/2026-10-29-cutover/rollback-exercise.json)
 shows the revert applying cleanly, restoring the pre-cutover tree exactly, and its 21-test paired corpus and consumer suites passing again.
 
-The [original directory-missing handoff](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-producer-handoff.md)
-and [original supported-world artifact denial](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-source-tree-intake.md#distinct-supported-world-prerequisite)
-remain historical counterexamples. The [immutable supported-world continuation](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-28-supported-world-intake.md)
+The [original directory-missing handoff](../.cairn/archive/1970-01-01-adopt-shared-wasm-component-runtime/evidence/2026-10-27-producer-handoff.md)
+and [original supported-world artifact denial](../.cairn/archive/1970-01-01-adopt-shared-wasm-component-runtime/evidence/2026-10-27-source-tree-intake.md#distinct-supported-world-prerequisite)
+remain historical counterexamples. The [immutable supported-world continuation](../.cairn/archive/1970-01-01-adopt-shared-wasm-component-runtime/evidence/2026-10-28-supported-world-intake.md)
 records import-free materialization under the unchanged supported profile and
 WIT. The contract-only effect-request definition keeps `execution_admitted=false`;
 the separate explicit hosted profile and roots carry the operated evidence below.
@@ -134,7 +134,7 @@ request/response publication; replay has recorded inputs and no live fallback.
 
 Molten's component-runtime maintainers own these roots. The durable contribution
 is repeatable non-test composition, current authority admission, canonical replay
-and installed callback lifecycle execution. The [operated consumer record](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-28-hosted-consumers/2026-10-29-operated-consumers.json)
+and installed callback lifecycle execution. The [operated consumer record](../.cairn/archive/1970-01-01-adopt-shared-wasm-component-runtime/evidence/2026-10-28-hosted-consumers/2026-10-29-operated-consumers.json)
 retains exact immutable pins, commands, complete genuine bundles, checker/Valence
 evidence, canonical receipts and the disposable consumer source closure.
 
@@ -309,7 +309,7 @@ compatible projection, not a replacement for this complete carrier binding.
 offline playback through real capability-backed bytes. **Durable capability:**
 reusable current-admission and uncertainty boundaries owned by Molten's component
 runtime maintainers; native-host maintainers own the shared value-port mechanism.
-The [host continuation evidence](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-adapter.md)
+The [host continuation evidence](../.cairn/archive/1970-01-01-adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-adapter.md)
 records executed cases and repeatability. No effect-world execution activation,
 production actor/extension installation, durable nonce-store selection, full
 runtime adoption, host isolation or release eligibility is claimed.
@@ -349,8 +349,8 @@ regression corpus retains unchanged genuine producer bytes and rejects tree
 drift (including added empty directories), symlink substitution, missing or
 unsupported nodes and over-bound inputs. These implementation cases are not
 real-pipeline production acceptance, actor/extension installation or cutover;
-the [original immutable probe intake](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-source-tree-intake.md#immutable-publication-and-executed-pinned-intake)
-and [current supported-world intake](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-28-supported-world-intake.md)
+the [original immutable probe intake](../.cairn/archive/1970-01-01-adopt-shared-wasm-component-runtime/evidence/2026-10-27-source-tree-intake.md#immutable-publication-and-executed-pinned-intake)
+and [current supported-world intake](../.cairn/archive/1970-01-01-adopt-shared-wasm-component-runtime/evidence/2026-10-28-supported-world-intake.md)
 separately prove private intake, not runtime invocation or consumer installation.
 
 The intake requires the actual published Structural and Bytes reports, exact
@@ -445,7 +445,7 @@ This isolated Cargo workspace is not a root dependency or a production host
 entrypoint. The existing `adopt-shared-wasm-component-runtime` change remains
 separate and incomplete; this pilot does not satisfy its cutover gates.
 
-The [adoption compatibility preflight](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-26-compatibility-preflight.md)
+The [adoption compatibility preflight](../.cairn/archive/1970-01-01-adopt-shared-wasm-component-runtime/evidence/2026-10-26-compatibility-preflight.md)
 records two published-API blockers: no resumable fuel-quantum invocation, and no
 failure-phase observation for Molten's staged receipts. An executable probe
 observed the same normalized trap class for instantiation and invocation traps.

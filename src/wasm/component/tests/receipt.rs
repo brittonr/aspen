@@ -74,6 +74,24 @@ fn every_stage_emits_a_canonical_profile_bound() {
 }
 
 #[test]
+fn a_receipt_chain_never_mixes_runtime_configuration_cohorts() {
+    // r[verify molten.wasm_component_adoption.rollback]
+    // r[verify molten.wasm_component.receipts]
+    let fixture = super::support::Fixture::new(Consumer::Actor);
+    let inspection = build(input(&fixture, Stage::Inspection, Decision::Pass)).expect("inspection receipt");
+    let mut next = input(&fixture, Stage::Instantiation, Decision::Pass);
+    next.parent_refs = vec![inspection.receipt_ref.clone()];
+    let same_cohort = build(next.clone()).expect("same-cohort instantiation receipt");
+    validate_chain(&[inspection.clone(), same_cohort]).expect("one cohort forms a valid chain");
+
+    // Correct parent link and self-consistent identity, but a different cohort.
+    next.runtime_configuration_ref = super::support::fixture_ref("previous-runtime-configuration");
+    let mixed = build(next).expect("self-consistent receipt from another cohort");
+    validate(&mixed).expect("the receipt alone is valid");
+    assert!(validate_chain(&[inspection, mixed]).is_err());
+}
+
+#[test]
 fn stale_cross_profile_and_overclaiming_receipts_fail_closed() {
     // r[verify molten.wasm_component.receipts]
     // r[verify molten.wasm_component.nonclaims]

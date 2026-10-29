@@ -12,9 +12,15 @@ r[molten.artifact_auth_adoption.source] Molten MUST consume its authentication a
 
 #### Scenario: Unified source identity is admissible
 
-- GIVEN Cargo and Nix resolve revision `c932138d880ddf4c2967f4c024b489b5c0022bf1`
+- GIVEN Cargo and Nix resolve revision `5f3962d7471d1547e044f57daeda72f56621fd52`, including Valence's transitive authentication dependencies
 - WHEN Molten evaluates dependency admission
 - THEN it SHALL accept the two authentication packages and binding package while rejecting floating, duplicate, mixed, local, widened, or incompatible sources.
+
+#### Scenario: A transitive dependency introduces another cohort
+
+- GIVEN a direct or transitive authentication package resolves a different source revision
+- WHEN Molten evaluates dependency admission
+- THEN it SHALL deny the mixed graph without ignoring duplicate identities or weakening exact lock admission.
 
 ### Requirement: Molten retains runtime and authority semantics
 

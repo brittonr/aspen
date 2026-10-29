@@ -115,13 +115,24 @@ pub fn validate_against(receipt: &ExecutionRecord, expected_input: &Input) -> su
     Ok(())
 }
 
+/// A chain is one execution: every stage binds the same runtime configuration.
+/// A chain that mixes configurations mixes execution and receipt cohorts, which
+/// a coupled cutover or rollback must never produce.
+// r[impl molten.wasm_component_adoption.rollback]
 pub fn validate_chain(receipts: &[ExecutionRecord]) -> super::super::model::Result<()> {
     if receipts.is_empty() {
         return Err(super::super::model::Denial::new("component receipt chain cannot be empty"));
     }
     let mut previous_ref = None;
+    let mut configuration_ref = None;
     for receipt in receipts {
         validate(receipt)?;
+        let expected_configuration = configuration_ref.get_or_insert(&receipt.input.runtime_configuration_ref);
+        if *expected_configuration != &receipt.input.runtime_configuration_ref {
+            return Err(super::super::model::Denial::new(
+                "component receipt chain mixes runtime configuration cohorts",
+            ));
+        }
         let expected_parent_refs = previous_ref.iter().cloned().collect::<Vec<_>>();
         if receipt.input.parent_refs != expected_parent_refs {
             return Err(super::super::model::Denial::new(

@@ -1104,6 +1104,7 @@ mod tests {
 
     #[test]
     fn floating_and_drifting_sources_fail_closed() {
+        // r[verify molten.wasm_component_adoption.prerequisite]
         let mut input = valid_input();
         input.dependencies[0].immutable_revision = "main".to_owned();
         input.observations[0].lock_revision = Some(DRIFT_REVISION.to_owned());

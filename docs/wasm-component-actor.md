@@ -182,7 +182,7 @@ steps into fabricated evidence or bypass the published bundle verifier.
    bundle-linked envelope or requested execution profile and require denial
    before a live value-port read.
 
-The [2026-10-29 operated consumer record](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-28-hosted-consumers/2026-10-29-operated-consumers.json)
+The [2026-10-29 operated consumer record](../.cairn/archive/1970-01-01-adopt-shared-wasm-component-runtime/evidence/2026-10-28-hosted-consumers/2026-10-29-operated-consumers.json)
 retains an executed instance of this procedure through immutable Mantle
 `dd2bebab894688d07e7a29c75c1437f4ecc120df`, including the disposable consumer
 source closure and canonical receipts. Its installed-extension companion also

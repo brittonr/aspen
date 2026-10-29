@@ -58,7 +58,7 @@ current grants; neither root accepts loose component bytes as an installation.
 Their engine owns its epoch service, while Molten retains authority, effect
 publication, recorded replay and callback lifecycle decisions. Epoch interruption
 does not interrupt a blocked synchronous host call. Source admission and execution
-are separate facts. The [operated immutable consumer record](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-28-hosted-consumers/2026-10-29-operated-consumers.json)
+are separate facts. The [operated immutable consumer record](../.cairn/archive/1970-01-01-adopt-shared-wasm-component-runtime/evidence/2026-10-28-hosted-consumers/2026-10-29-operated-consumers.json)
 retains matching genuine bundles, actor deadline/effect/replay denials and the full
 installed-extension checkpoint/restart lifecycle through the published verifier.
 These bounded observations do not prove correctness or release eligibility.
