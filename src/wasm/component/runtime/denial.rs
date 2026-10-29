@@ -47,6 +47,14 @@ pub(crate) fn denied_outcome(
     request: &super::shell::ExecutionRequest<'_>,
     denial: super::super::model::Denial,
 ) -> super::shell::ExecutionOutcome {
+    denied_outcome_with_backend(request, denial, super::provenance::Backend::Local)
+}
+
+pub(super) fn denied_outcome_with_backend(
+    request: &super::shell::ExecutionRequest<'_>,
+    denial: super::super::model::Denial,
+    backend: super::provenance::Backend,
+) -> super::shell::ExecutionOutcome {
     let component =
         super::super::evidence::materialization::MaterializedObjectIdentity::measure(request.source.component_bytes());
     let wit = super::super::evidence::materialization::MaterializedObjectIdentity::measure(request.source.wit_bytes());
@@ -58,39 +66,71 @@ pub(crate) fn denied_outcome(
     let profile_ref = super::super::profile::r#ref(request.profile);
     let runtime_configuration_ref =
         super::super::model::content_ref(format!("denied:{profile_ref}:{component_ref}:{wit_ref}").as_bytes());
-    let receipt = super::super::evidence::receipt::build(super::super::evidence::receipt::Input {
-        stage: super::super::evidence::receipt::Stage::Denial,
-        decision: super::super::evidence::receipt::Decision::Deny,
-        evidence_scope: request.evidence_scope,
-        consumer: context.consumer,
-        component_ref,
-        wit_ref,
-        profile_ref,
-        runtime_configuration_ref,
-        bundle_ref: context.bundle_ref,
-        imports: super::super::model::sorted_unique(&request.facts.imports),
-        capabilities: Vec::new(),
-        mantle_evidence_refs: context.mantle_evidence_refs,
-        valence_evidence_refs: context.valence_evidence_refs,
-        cairn_evidence_refs: context.cairn_evidence_refs,
-        policy_refs: context.policy_refs,
-        authority_refs: context.authority_refs,
-        resource_refs: context.resource_refs,
-        recorded_effect_refs: Vec::new(),
-        input_ref: None,
-        output_ref: None,
-        fuel_limit: None,
-        fuel_remaining: None,
-        trap_class: Some(denial_class.clone()),
-        parent_refs: Vec::new(),
-        diagnostics: vec![denial_class],
-    });
+    let receipt = super::provenance::bind_configuration_ref(&runtime_configuration_ref, backend).and_then(
+        |runtime_configuration_ref| {
+            super::super::evidence::receipt::build(super::super::evidence::receipt::Input {
+                stage: super::super::evidence::receipt::Stage::Denial,
+                decision: super::super::evidence::receipt::Decision::Deny,
+                evidence_scope: request.evidence_scope,
+                consumer: context.consumer,
+                component_ref,
+                wit_ref,
+                profile_ref,
+                runtime_configuration_ref,
+                bundle_ref: context.bundle_ref,
+                imports: super::super::model::sorted_unique(&request.facts.imports),
+                capabilities: Vec::new(),
+                mantle_evidence_refs: context.mantle_evidence_refs,
+                valence_evidence_refs: context.valence_evidence_refs,
+                cairn_evidence_refs: context.cairn_evidence_refs,
+                policy_refs: context.policy_refs,
+                authority_refs: context.authority_refs,
+                resource_refs: context.resource_refs,
+                recorded_effect_refs: Vec::new(),
+                input_ref: None,
+                output_ref: None,
+                fuel_limit: None,
+                fuel_remaining: None,
+                trap_class: Some(denial_class.clone()),
+                parent_refs: Vec::new(),
+                diagnostics: vec![denial_class],
+            })
+        },
+    );
     super::shell::ExecutionOutcome {
         decision: super::super::evidence::receipt::Decision::Deny,
         output: None,
         receipts: receipt.into_iter().collect(),
         diagnostics: denial.blockers,
     }
+}
+
+/// Deny a post-execution boundary without erasing the execution that occurred.
+// r[impl molten.wasm_component_adoption.consumers]
+pub(crate) fn deny_completed_execution(
+    mut outcome: super::shell::ExecutionOutcome,
+    denial: super::super::model::Denial,
+) -> super::shell::ExecutionOutcome {
+    outcome.decision = super::super::evidence::receipt::Decision::Deny;
+    outcome.output = None;
+    let denial_class = denial.canonical_class().to_string();
+    outcome.diagnostics = denial.blockers;
+    let Some(previous) = outcome.receipts.last() else {
+        outcome.diagnostics.push("completed execution has no receipt to preserve".to_string());
+        return outcome;
+    };
+    let mut input = previous.input.clone();
+    input.stage = super::super::evidence::receipt::Stage::Denial;
+    input.decision = super::super::evidence::receipt::Decision::Deny;
+    input.output_ref = None;
+    input.trap_class = Some(denial_class.clone());
+    input.parent_refs = vec![previous.receipt_ref.clone()];
+    input.diagnostics = vec![denial_class];
+    match super::super::evidence::receipt::build(input) {
+        Ok(receipt) => outcome.receipts.push(receipt),
+        Err(failure) => outcome.diagnostics.extend(failure.blockers),
+    }
+    outcome
 }
 
 struct Context {

@@ -147,6 +147,7 @@ fn validate_identity(
     let is_admitted_profile = [
         super::profile::COMPONENT_PROFILE_ID,
         super::profile::TIME_SLICED_PROFILE_ID,
+        super::effect::HOST_PROFILE_ID,
     ]
     .contains(&facts.declared_profile_id.as_str());
     if !is_admitted_profile || facts.declared_profile_id != profile.profile_id {
@@ -157,7 +158,7 @@ fn validate_identity(
     {
         blockers.push_item("component artifact or materialization cohort identity is stale".to_string());
     }
-    if facts.declared_world != super::profile::COMPONENT_WIT_WORLD || facts.declared_world != profile.wit.world {
+    if facts.declared_world != profile.wit.world {
         blockers.push_item("component artifact WIT world does not match the admitted world".to_string());
     }
     if !facts.exports.iter().any(|value| value == COMPONENT_INVOKE_EXPORT) {

@@ -228,7 +228,7 @@ checksum = "41e7ba0ded1ee3730fe4445fbdf4754756b2edd86617f19507c89d3b71383277"
 [[package]]
 name = "artifact-auth-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d880ddf4c2967f4c024b489b5c0022bf1"
+source = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7471d1547e044f57daeda72f56621fd52"
 dependencies = [
  "blake3",
  "serde",
@@ -237,7 +237,7 @@ dependencies = [
 [[package]]
 name = "artifact-auth-ed25519"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d880ddf4c2967f4c024b489b5c0022bf1"
+source = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7471d1547e044f57daeda72f56621fd52"
 dependencies = [
  "artifact-auth-core",
  "blake3",
@@ -247,7 +247,7 @@ dependencies = [
 [[package]]
 name = "artifact-binding-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d880ddf4c2967f4c024b489b5c0022bf1"
+source = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7471d1547e044f57daeda72f56621fd52"
 
 [[package]]
 name = "ascii-canvas"
@@ -1499,7 +1499,7 @@ dependencies = [
 [[package]]
 name = "crunch-wasm-component-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/mantle.git?rev=e1827a8cc1cacf2810aa2314dc8971177832a8f0#e1827a8cc1cacf2810aa2314dc8971177832a8f0"
+source = "git+ssh://git@github.com/OnixResearch/mantle.git?rev=dd2bebab894688d07e7a29c75c1437f4ecc120df#dd2bebab894688d07e7a29c75c1437f4ecc120df"
 dependencies = [
  "blake3",
  "serde",
@@ -4418,7 +4418,7 @@ dependencies = [
 [[package]]
 name = "mantle-wasm-consumer-verifier"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/mantle.git?rev=e1827a8cc1cacf2810aa2314dc8971177832a8f0#e1827a8cc1cacf2810aa2314dc8971177832a8f0"
+source = "git+ssh://git@github.com/OnixResearch/mantle.git?rev=dd2bebab894688d07e7a29c75c1437f4ecc120df#dd2bebab894688d07e7a29c75c1437f4ecc120df"
 dependencies = [
  "blake3",
  "bounded-tree-cap",
@@ -8226,8 +8226,10 @@ dependencies = [
 [[package]]
 name = "valence-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/valence.git?rev=5f1c2ba5072c6f9622fa59b1af20502985f569fd#5f1c2ba5072c6f9622fa59b1af20502985f569fd"
+source = "git+ssh://git@github.com/OnixResearch/valence.git?rev=9201074343cd9da0ffaf6ec9db690af5b445d663#9201074343cd9da0ffaf6ec9db690af5b445d663"
 dependencies = [
+ "artifact-auth-core",
+ "artifact-auth-ed25519",
  "blake3",
  "iddqd",
  "serde",

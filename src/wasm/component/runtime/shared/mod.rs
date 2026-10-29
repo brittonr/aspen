@@ -2,6 +2,8 @@
 //! The local runtime remains the default until the complete parity corpus passes.
 
 mod configuration;
+mod hosted;
+#[cfg(test)]
 pub(crate) mod sliced;
 
 pub(crate) struct EngineAdapter {
@@ -29,8 +31,7 @@ impl EngineAdapter {
         request: &super::shell::ExecutionRequest<'_>,
         deadline_ticks: u64,
     ) -> super::shell::ExecutionOutcome {
-        self.execute_inner(request, deadline_ticks)
-            .unwrap_or_else(|denial| super::denial::denied_outcome(request, denial))
+        self.execute_inner(request, deadline_ticks).unwrap_or_else(|denial| denied_outcome(request, denial))
     }
 
     fn execute_inner(
@@ -38,7 +39,7 @@ impl EngineAdapter {
         request: &super::shell::ExecutionRequest<'_>,
         deadline_ticks: u64,
     ) -> super::super::model::Result<super::shell::ExecutionOutcome> {
-        let admitted = super::shell::admit_request(request)?;
+        let admitted = admit(request)?;
         let inspection = stage(request, &admitted, super::super::evidence::receipt::Stage::Inspection, Vec::new())?;
         let invocation = match self.prepare(request, deadline_ticks) {
             Ok(invocation) => invocation,
@@ -67,6 +68,21 @@ impl EngineAdapter {
                 "initial component runtime cohort has no admitted host linker bindings",
             ));
         }
+        self.prepare_bound(request, deadline_ticks, &[])
+    }
+
+    fn prepare_bound(
+        &self,
+        request: &super::shell::ExecutionRequest<'_>,
+        deadline_ticks: u64,
+        descriptors: &[hardened_wasmtime_runtime::restricted::imports::Descriptor],
+    ) -> super::super::model::Result<hardened_wasmtime_shell::ComponentInvocation> {
+        if self.profile_ref != super::super::profile::r#ref(request.profile) {
+            return Err(super::super::model::Denial::classified(
+                super::super::model::DenialClass::ProfileDenial,
+                "engine profile differs from admitted request",
+            ));
+        }
         let facts = configuration::facts(request);
         let service = self.epoch_service();
         hardened_wasmtime_shell::ComponentInvocation::prepare(&self.inner, hardened_wasmtime_shell::PrepareOptions {
@@ -74,7 +90,7 @@ impl EngineAdapter {
                 bytes: request.source.component_bytes(),
                 facts: &facts,
             },
-            descriptors: &[],
+            descriptors,
             deadline: hardened_wasmtime_runtime::epoch::deadline::Budget {
                 budget_ticks: deadline_ticks,
             },
@@ -82,6 +98,19 @@ impl EngineAdapter {
         })
         .map_err(configuration::prepare_denial)
     }
+}
+
+pub(super) fn admit(
+    request: &super::shell::ExecutionRequest<'_>,
+) -> super::super::model::Result<super::shell::AdmittedRequest> {
+    super::shell::admit_request(request, super::provenance::Backend::Shared)
+}
+
+pub(crate) fn denied_outcome(
+    request: &super::shell::ExecutionRequest<'_>,
+    denial: super::super::model::Denial,
+) -> super::shell::ExecutionOutcome {
+    super::denial::denied_outcome_with_backend(request, denial, super::provenance::Backend::Shared)
 }
 
 fn stage(
@@ -157,7 +186,6 @@ fn observation_denial(observation: &hardened_wasmtime_shell::InvocationOutcome) 
                 | hardened_wasmtime_runtime::outcomes::Class::GuestPointerRejected
                 | hardened_wasmtime_runtime::outcomes::Class::RuntimeFailed
                 | hardened_wasmtime_runtime::outcomes::Class::HostFailed
-                | hardened_wasmtime_runtime::outcomes::Class::DeadlineExhausted
         )
     {
         // Only Wasmtime invocation errors consult remaining fuel in the local path.
@@ -179,6 +207,9 @@ fn observation_denial(observation: &hardened_wasmtime_shell::InvocationOutcome) 
             hardened_wasmtime_runtime::outcomes::Class::FuelExhausted => {
                 super::super::model::DenialClass::FuelExhausted
             }
+            hardened_wasmtime_runtime::outcomes::Class::DeadlineExhausted => {
+                super::super::model::DenialClass::DeadlineExceeded
+            }
             hardened_wasmtime_runtime::outcomes::Class::GuestDenied => super::super::model::DenialClass::GuestDenial,
             hardened_wasmtime_runtime::outcomes::Class::InputLimitExceeded
             | hardened_wasmtime_runtime::outcomes::Class::OutputLimitExceeded
@@ -190,7 +221,6 @@ fn observation_denial(observation: &hardened_wasmtime_shell::InvocationOutcome) 
             | hardened_wasmtime_runtime::outcomes::Class::GuestPointerRejected
             | hardened_wasmtime_runtime::outcomes::Class::RuntimeFailed
             | hardened_wasmtime_runtime::outcomes::Class::HostFailed
-            | hardened_wasmtime_runtime::outcomes::Class::DeadlineExhausted
             | hardened_wasmtime_runtime::outcomes::Class::Completed => super::super::model::DenialClass::ComponentTrap,
         }
     };
@@ -198,4 +228,38 @@ fn observation_denial(observation: &hardened_wasmtime_shell::InvocationOutcome) 
         class,
         format!("shared candidate {:?}: {:?}", observation.phase, observation.class),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn explicit_deadline_is_not_reclassified_as_trap_or_empty_fuel() {
+        // r[verify molten.wasm_component_adoption.parity]
+        for fuel_remaining in [0, 1] {
+            let observation = hardened_wasmtime_shell::InvocationOutcome {
+                class: hardened_wasmtime_runtime::outcomes::Class::DeadlineExhausted,
+                phase: hardened_wasmtime_runtime::outcomes::InvocationPhase::Invocation,
+                output: Vec::new(),
+                fuel_remaining,
+            };
+            let denial = super::observation_denial(&observation);
+            assert_eq!(denial.canonical_class(), "deadline-exceeded");
+            assert_eq!(
+                super::super::super::model::DenialClass::parse(denial.canonical_class()),
+                Some(super::super::super::model::DenialClass::DeadlineExceeded),
+            );
+            let trapped = hardened_wasmtime_shell::InvocationOutcome {
+                class: hardened_wasmtime_runtime::outcomes::Class::GuestTrapped,
+                phase: observation.phase,
+                output: Vec::new(),
+                fuel_remaining,
+            };
+            let expected = if fuel_remaining == 0 {
+                "fuel-exhausted"
+            } else {
+                "component-trap"
+            };
+            assert_eq!(super::observation_denial(&trapped).canonical_class(), expected);
+        }
+    }
 }

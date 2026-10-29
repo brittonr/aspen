@@ -1,0 +1,586 @@
+got build log for '/nix/store/69dqr9cvc9ssyqwv98515c3d4nhdpq1m-octet-consumer-check.drv' from 'daemon'
+[1m[92m   Compiling[0m find-msvc-tools v0.1.11
+[1m[92m   Compiling[0m shlex v2.0.1
+[1m[92m    Checking[0m cpufeatures v0.3.0
+[1m[92m    Checking[0m cfg-if v1.0.4
+[1m[92m    Checking[0m arrayvec v0.7.8
+[1m[92m    Checking[0m arrayref v0.3.9
+[1m[92m    Checking[0m constant_time_eq v0.4.2
+[1m[92m    Checking[0m artifact-binding-core v0.1.0 (ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+   Compiling cpufeatures v0.3.0
+   Compiling arrayref v0.3.9
+   Compiling cfg_if v1.0.4
+   Compiling constant_time_eq v0.4.2
+[1m[92m   Compiling[0m cc v1.4.4
+   Compiling arrayvec v0.7.8
+   Compiling shlex v2.0.1
+   Compiling find_msvc_tools v0.1.11
+   Compiling artifact_binding_core v0.1.0
+   Compiling cc v1.4.4
+[1m[92m   Compiling[0m blake3 v1.8.5
+   Compiling build-script-build v1.8.5
+   Compiling blake3 v1.8.5
+[1m[92m    Checking[0m choregraph-history v0.1.0 (https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git?rev=b3e08e19750f53bdbcae970cdf58a47a791ed20b#b3e08e19)
+   Compiling choregraph_history v0.1.0
+[1m[92m    Checking[0m molten-world-distribution-octet v0.1.0 (/build/source)
+error: module directory `src/content_replication` contains 8 Rust source files (limit: 7)
+   --> src/content_replication/action.rs:1:1
+    |
+  1 | / use super::*;
+  2 | |
+  3 | | impl super::planner::PlanningState<'_> {
+...   |
+236 | |     })
+237 | | }
+    | |__^
+    |
+    = help: Tiger Style (Module Size): split crowded module directories into smaller responsibility-based submodules Example: mod parser; mod planner; mod executor;
+    = note: see Tiger Style guide: File Length
+    = note: `-D tigerstyle::module-file-count` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(tigerstyle::module_file_count)]`
+
+error: module directory `src/content_replication` contains 8 Rust source files (limit: 7)
+   --> src/content_replication/action.rs:1:1
+    |
+  1 | / use super::*;
+  2 | |
+  3 | | impl super::planner::PlanningState<'_> {
+...   |
+236 | |     })
+237 | | }
+    | |__^
+    |
+    = help: Tiger Style (Module Size): split crowded module directories into smaller responsibility-based submodules Example: mod parser; mod planner; mod executor;
+    = note: see Tiger Style guide: File Length
+    = note: `-D tigerstyle::module-file-count` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(tigerstyle::module_file_count)]`
+
+error: item name `EligibilityObservations` repeats `eligibility` from ancestor path segment `eligibility`
+  --> src/content_replication/eligibility.rs:36:1
+   |
+36 | / pub struct EligibilityObservations {
+37 | |     /// The content the publication would publish.
+38 | |     pub content_ref: String,
+39 | |     /// The operation that publishes the content.
+...  |
+48 | |     pub storage_guarantee: StorageGuaranteeKind,
+49 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+   = note: `-D tigerstyle::path-segment-repetition` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(tigerstyle::path_segment_repetition)]`
+
+error: item name `EligibilityReceipt` repeats `eligibility` from ancestor path segment `eligibility`
+  --> src/content_replication/eligibility.rs:53:1
+   |
+53 | / pub struct EligibilityReceipt {
+54 | |     pub content_ref: String,
+55 | |     pub operation_id: String,
+56 | |     pub receiver_set: Vec<String>,
+...  |
+60 | |     pub receipt_ref: String,
+61 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: item name `EligibilityIssue` repeats `eligibility` from ancestor path segment `eligibility`
+  --> src/content_replication/eligibility.rs:65:1
+   |
+65 | / pub enum EligibilityIssue {
+66 | |     /// The content reference is not a canonical content reference.
+67 | |     InvalidContentRef,
+68 | |     /// The operation identity is empty.
+...  |
+80 | |     ReplicaAvailabilityInsufficient,
+81 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: item name `check_publication_eligibility` repeats `eligibility` from ancestor path segment `eligibility`
+   --> src/content_replication/eligibility.rs:105:1
+    |
+105 | / pub fn check_publication_eligibility(
+106 | |     policy: &ReplicaPolicy,
+107 | |     observations: &EligibilityObservations,
+108 | | ) -> Result<EligibilityReceipt, EligibilityIssue> {
+...   |
+154 | |     })
+155 | | }
+    | |_^
+    |
+    = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+    = note: see Tiger Style guide: Naming
+
+error: item name `eligibility_receipt_identity` repeats `eligibility` from ancestor path segment `eligibility`
+   --> src/content_replication/eligibility.rs:158:1
+    |
+158 | / pub fn eligibility_receipt_identity(receipt: &EligibilityReceipt) -> String {
+159 | |     let mut hasher = blake3::Hasher::new_derive_key(ELIGIBILITY_RECEIPT_CONTEXT);
+160 | |     let receivers = receipt.receiver_set.join(",");
+161 | |     for field in [
+...   |
+173 | |     format!("blake3:{}", hasher.finalize().to_hex())
+174 | | }
+    | |_^
+    |
+    = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+    = note: see Tiger Style guide: Naming
+
+error: extreme sentinel fallback masks absence or failure
+   --> src/content_replication/eligibility.rs:169:22
+    |
+169 |         let length = u64::try_from(field.len()).unwrap_or(u64::MAX);
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (safety): branch explicitly, propagate the missing/error state, or emit tagged fallback text instead of <int>::MAX/<int>::MIN. Example: match u64::try_from(command_index) { Ok(i) => format!("recent_{i}"), Err(_) => "recent_missing_index".to_string() }
+    = note: structured suggestion applicability: MaybeIncorrect
+    = note: see Tiger Style guide: make invalid state explicit
+    = note: `-D tigerstyle::sentinel-fallback` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(tigerstyle::sentinel_fallback)]`
+help: propagate the error instead of masking with sentinel
+    |
+169 -         let length = u64::try_from(field.len()).unwrap_or(u64::MAX);
+169 +         let length = u64::try_from(field.len())?;
+    |
+
+error: fallible integer conversion hides an out-of-range error behind a sentinel fallback
+   --> src/content_replication/eligibility.rs:169:22
+    |
+169 |         let length = u64::try_from(field.len()).unwrap_or(u64::MAX);
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Error Handling): propagate integer conversion failures instead of replacing them with sentinel or default values Example: let id = u32::try_from(raw)?;
+    = note: see Tiger Style guide: Error Handling
+    = note: `-D tigerstyle::fallible-int-fallback` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(tigerstyle::fallible_int_fallback)]`
+
+error: non-trait import `BTreeMap` hides the owner path; prefer the qualified path at the use site
+  --> src/content_replication/repair/mod.rs:14:1
+   |
+14 | use std::collections::BTreeMap;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+   = note: `-D tigerstyle::non-trait-imports` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(tigerstyle::non_trait_imports)]`
+
+error: non-trait import `BTreeSet` hides the owner path; prefer the qualified path at the use site
+  --> src/content_replication/repair/mod.rs:15:1
+   |
+15 | use std::collections::BTreeSet;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `Issue` hides the owner path; prefer the qualified path at the use site
+  --> src/content_replication/repair/mod.rs:17:1
+   |
+17 | use crate::content_replication::Issue;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: item name `ClosureRepairInput` repeats `repair` from ancestor path segment `repair`
+  --> src/content_replication/repair/mod.rs:41:1
+   |
+41 | / pub struct ClosureRepairInput {
+42 | |     pub required_objects: Vec<String>,
+43 | |     pub inventory: Vec<ReplicaObjectFact>,
+44 | |     pub max_transfers: usize,
+45 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: item name `RepairCompleteness` repeats `repair` from ancestor path segment `repair`
+  --> src/content_replication/repair/mod.rs:57:1
+   |
+57 | / pub enum RepairCompleteness {
+58 | |     /// Every required object has an intact verifiable copy.
+59 | |     Complete,
+60 | |     /// At least one required object has no intact verifiable copy.
+61 | |     Incomplete { unrecoverable: Vec<String> },
+62 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: item name `ClosureRepairPlan` repeats `repair` from ancestor path segment `repair`
+  --> src/content_replication/repair/mod.rs:79:1
+   |
+79 | / pub struct ClosureRepairPlan {
+80 | |     pub plan_ref: String,
+81 | |     pub completeness: RepairCompleteness,
+82 | |     pub transfers: Vec<ClosureTransfer>,
+...  |
+86 | |     pub non_claims: Vec<String>,
+87 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: item name `plan_closure_repair` repeats `repair` from ancestor path segment `repair`
+   --> src/content_replication/repair/mod.rs:95:1
+    |
+ 95 | / pub fn plan_closure_repair(input: &ClosureRepairInput) -> Result<ClosureRepairPlan, Issue> {
+ 96 | |     let issues = validate_input(input);
+ 97 | |     if !issues.is_empty() {
+ 98 | |         return Err(issues.first().copied().unwrap_or(Issue::InvalidManifest));
+...   |
+149 | |     Ok(plan)
+150 | | }
+    | |_^
+    |
+    = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+    = note: see Tiger Style guide: Naming
+
+error: collection grows in loop without a prior reservation or explicit local bound
+   --> src/content_replication/repair/mod.rs:120:13
+    |
+120 |             unrecoverable.push(object.clone());
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Bounded Resource Growth): reserve collection capacity or add an explicit local length bound before growing it in a loop Example: let mut items = Vec::with_capacity(limit);
+    = note: structured suggestion applicability: HasPlaceholders
+    = note: see Tiger Style guide: Bounded Resource Growth
+    = note: `-D tigerstyle::unbounded-collection-growth` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(tigerstyle::unbounded_collection_growth)]`
+help: pre-allocate with an explicit capacity before the loop
+    |
+109 -     let mut unrecoverable = Vec::new();
+109 +     let mut unrecoverable = Vec::with_capacity(/* LIMIT */);
+    |
+
+error: collection grows in loop without a prior reservation or explicit local bound
+   --> src/content_replication/repair/mod.rs:194:13
+    |
+194 |             issues.push(Issue::InvalidReference);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Bounded Resource Growth): reserve collection capacity or add an explicit local length bound before growing it in a loop Example: let mut items = Vec::with_capacity(limit);
+    = note: structured suggestion applicability: HasPlaceholders
+    = note: see Tiger Style guide: Bounded Resource Growth
+help: pre-allocate with an explicit capacity before the loop
+    |
+178 -     let mut issues = Vec::new();
+178 +     let mut issues = Vec::with_capacity(/* LIMIT */);
+    |
+
+error: item name `EligibilityObservations` repeats `eligibility` from ancestor path segment `eligibility`
+  --> src/content_replication/eligibility.rs:36:1
+   |
+36 | / pub struct EligibilityObservations {
+37 | |     /// The content the publication would publish.
+38 | |     pub content_ref: String,
+39 | |     /// The operation that publishes the content.
+...  |
+48 | |     pub storage_guarantee: StorageGuaranteeKind,
+49 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+   = note: `-D tigerstyle::path-segment-repetition` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(tigerstyle::path_segment_repetition)]`
+
+error: item name `EligibilityReceipt` repeats `eligibility` from ancestor path segment `eligibility`
+  --> src/content_replication/eligibility.rs:53:1
+   |
+53 | / pub struct EligibilityReceipt {
+54 | |     pub content_ref: String,
+55 | |     pub operation_id: String,
+56 | |     pub receiver_set: Vec<String>,
+...  |
+60 | |     pub receipt_ref: String,
+61 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: item name `EligibilityIssue` repeats `eligibility` from ancestor path segment `eligibility`
+  --> src/content_replication/eligibility.rs:65:1
+   |
+65 | / pub enum EligibilityIssue {
+66 | |     /// The content reference is not a canonical content reference.
+67 | |     InvalidContentRef,
+68 | |     /// The operation identity is empty.
+...  |
+80 | |     ReplicaAvailabilityInsufficient,
+81 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: item name `check_publication_eligibility` repeats `eligibility` from ancestor path segment `eligibility`
+   --> src/content_replication/eligibility.rs:105:1
+    |
+105 | / pub fn check_publication_eligibility(
+106 | |     policy: &ReplicaPolicy,
+107 | |     observations: &EligibilityObservations,
+108 | | ) -> Result<EligibilityReceipt, EligibilityIssue> {
+...   |
+154 | |     })
+155 | | }
+    | |_^
+    |
+    = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+    = note: see Tiger Style guide: Naming
+
+error: item name `eligibility_receipt_identity` repeats `eligibility` from ancestor path segment `eligibility`
+   --> src/content_replication/eligibility.rs:158:1
+    |
+158 | / pub fn eligibility_receipt_identity(receipt: &EligibilityReceipt) -> String {
+159 | |     let mut hasher = blake3::Hasher::new_derive_key(ELIGIBILITY_RECEIPT_CONTEXT);
+160 | |     let receivers = receipt.receiver_set.join(",");
+161 | |     for field in [
+...   |
+173 | |     format!("blake3:{}", hasher.finalize().to_hex())
+174 | | }
+    | |_^
+    |
+    = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+    = note: see Tiger Style guide: Naming
+
+error: extreme sentinel fallback masks absence or failure
+   --> src/content_replication/eligibility.rs:169:22
+    |
+169 |         let length = u64::try_from(field.len()).unwrap_or(u64::MAX);
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (safety): branch explicitly, propagate the missing/error state, or emit tagged fallback text instead of <int>::MAX/<int>::MIN. Example: match u64::try_from(command_index) { Ok(i) => format!("recent_{i}"), Err(_) => "recent_missing_index".to_string() }
+    = note: structured suggestion applicability: MaybeIncorrect
+    = note: see Tiger Style guide: make invalid state explicit
+    = note: `-D tigerstyle::sentinel-fallback` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(tigerstyle::sentinel_fallback)]`
+help: propagate the error instead of masking with sentinel
+    |
+169 -         let length = u64::try_from(field.len()).unwrap_or(u64::MAX);
+169 +         let length = u64::try_from(field.len())?;
+    |
+
+error: fallible integer conversion hides an out-of-range error behind a sentinel fallback
+   --> src/content_replication/eligibility.rs:169:22
+    |
+169 |         let length = u64::try_from(field.len()).unwrap_or(u64::MAX);
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Error Handling): propagate integer conversion failures instead of replacing them with sentinel or default values Example: let id = u32::try_from(raw)?;
+    = note: see Tiger Style guide: Error Handling
+    = note: `-D tigerstyle::fallible-int-fallback` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(tigerstyle::fallible_int_fallback)]`
+
+error: non-trait import `BTreeMap` hides the owner path; prefer the qualified path at the use site
+  --> src/content_replication/repair/mod.rs:14:1
+   |
+14 | use std::collections::BTreeMap;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+   = note: `-D tigerstyle::non-trait-imports` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(tigerstyle::non_trait_imports)]`
+
+error: non-trait import `BTreeSet` hides the owner path; prefer the qualified path at the use site
+  --> src/content_replication/repair/mod.rs:15:1
+   |
+15 | use std::collections::BTreeSet;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: non-trait import `Issue` hides the owner path; prefer the qualified path at the use site
+  --> src/content_replication/repair/mod.rs:17:1
+   |
+17 | use crate::content_replication::Issue;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: Tiger Style (Searchable Owner Paths): keep concrete owner types at their qualified use sites; import traits only for method resolution Example: crate::addr::Addr
+   = note: see Tiger Style guide: Naming
+
+error: item name `ClosureRepairInput` repeats `repair` from ancestor path segment `repair`
+  --> src/content_replication/repair/mod.rs:41:1
+   |
+41 | / pub struct ClosureRepairInput {
+42 | |     pub required_objects: Vec<String>,
+43 | |     pub inventory: Vec<ReplicaObjectFact>,
+44 | |     pub max_transfers: usize,
+45 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: item name `RepairCompleteness` repeats `repair` from ancestor path segment `repair`
+  --> src/content_replication/repair/mod.rs:57:1
+   |
+57 | / pub enum RepairCompleteness {
+58 | |     /// Every required object has an intact verifiable copy.
+59 | |     Complete,
+60 | |     /// At least one required object has no intact verifiable copy.
+61 | |     Incomplete { unrecoverable: Vec<String> },
+62 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: item name `ClosureRepairPlan` repeats `repair` from ancestor path segment `repair`
+  --> src/content_replication/repair/mod.rs:79:1
+   |
+79 | / pub struct ClosureRepairPlan {
+80 | |     pub plan_ref: String,
+81 | |     pub completeness: RepairCompleteness,
+82 | |     pub transfers: Vec<ClosureTransfer>,
+...  |
+86 | |     pub non_claims: Vec<String>,
+87 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+error: item name `plan_closure_repair` repeats `repair` from ancestor path segment `repair`
+   --> src/content_replication/repair/mod.rs:95:1
+    |
+ 95 | / pub fn plan_closure_repair(input: &ClosureRepairInput) -> Result<ClosureRepairPlan, Issue> {
+ 96 | |     let issues = validate_input(input);
+ 97 | |     if !issues.is_empty() {
+ 98 | |         return Err(issues.first().copied().unwrap_or(Issue::InvalidManifest));
+...   |
+149 | |     Ok(plan)
+150 | | }
+    | |_^
+    |
+    = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+    = note: see Tiger Style guide: Naming
+
+error: collection grows in loop without a prior reservation or explicit local bound
+   --> src/content_replication/repair/mod.rs:120:13
+    |
+120 |             unrecoverable.push(object.clone());
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Bounded Resource Growth): reserve collection capacity or add an explicit local length bound before growing it in a loop Example: let mut items = Vec::with_capacity(limit);
+    = note: structured suggestion applicability: HasPlaceholders
+    = note: see Tiger Style guide: Bounded Resource Growth
+    = note: `-D tigerstyle::unbounded-collection-growth` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(tigerstyle::unbounded_collection_growth)]`
+help: pre-allocate with an explicit capacity before the loop
+    |
+109 -     let mut unrecoverable = Vec::new();
+109 +     let mut unrecoverable = Vec::with_capacity(/* LIMIT */);
+    |
+
+error: collection grows in loop without a prior reservation or explicit local bound
+   --> src/content_replication/repair/mod.rs:194:13
+    |
+194 |             issues.push(Issue::InvalidReference);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: Tiger Style (Bounded Resource Growth): reserve collection capacity or add an explicit local length bound before growing it in a loop Example: let mut items = Vec::with_capacity(limit);
+    = note: structured suggestion applicability: HasPlaceholders
+    = note: see Tiger Style guide: Bounded Resource Growth
+help: pre-allocate with an explicit capacity before the loop
+    |
+178 -     let mut issues = Vec::new();
+178 +     let mut issues = Vec::with_capacity(/* LIMIT */);
+    |
+
+error: item name `several_partial_donors_repair_the_whole_closure` repeats `closure` from ancestor path segment `closure`
+  --> src/content_replication/tests/closure.rs:35:1
+   |
+35 | / fn several_partial_donors_repair_the_whole_closure() {
+36 | |     let plan = plan_closure_repair(&input(&[OBJECT_A, OBJECT_B, OBJECT_C], vec![
+37 | |         fact(PEER_A, ZONE_A, OBJECT_A, true),
+38 | |         fact(PEER_A, ZONE_A, OBJECT_B, false),
+...  |
+55 | |     assert!(plan.plan_ref.starts_with("blake3:"));
+56 | | }
+   | |_^
+   |
+   = help: Tiger Style (Searchable Path Names): do not repeat crate or module path words in item names unless documenting a compatibility API Example: guest::spawn_vm
+   = note: see Tiger Style guide: Naming
+
+[1m[91merror[0m: could not compile `molten-world-distribution-octet` (lib) due to 17 previous errors
+[1m[33mwarning[0m: build failed, waiting for other jobs to finish...
+[1m[91merror[0m: could not compile `molten-world-distribution-octet` (lib test) due to 18 previous errors
+--- octet summary ---
+Status: integration-failure
+Findings: 35
+Warnings: 0
+Errors: 35
+Autofixable: 0
+Tool: cargo-octet 0.1.0
+Toolchain: nightly-2026-03-21-x86_64-unknown-linux-gnu
+Profile: workspace-metadata
+Config hash: b3:434e43ecca495f12ab8dc6482e6b55f79ad29d0e79e0fbb43a689bb829c933fc
+Profile hash: b3:f0d7120c1fd322453c5aee57130ce746df31f7c60e0aa986f73d45790082b05e
+
+By crate:
+  molten_world_distribution_octet        35
+
+By effect:
+  unknown         25
+  failure         8
+  resource        2
+
+By lint:
+  path_segment_repetition            19
+  non_trait_imports                  6
+  unbounded_collection_growth        4
+  fallible_int_fallback              2
+  module_file_count                  2
+  sentinel_fallback                  2
+
+Index:
+  F1   module_file_count           molten_world_distribution_octet  src/content_replication/action.rs:1
+  F2   module_file_count           molten_world_distribution_octet  src/content_replication/action.rs:1
+  F3   path_segment_repetition     molten_world_distribution_octet  src/content_replication/eligibility.rs:36
+  F4   path_segment_repetition     molten_world_distribution_octet  src/content_replication/eligibility.rs:36
+  F5   path_segment_repetition     molten_world_distribution_octet  src/content_replication/eligibility.rs:53
+  F6   path_segment_repetition     molten_world_distribution_octet  src/content_replication/eligibility.rs:53
+  F7   path_segment_repetition     molten_world_distribution_octet  src/content_replication/eligibility.rs:65
+  F8   path_segment_repetition     molten_world_distribution_octet  src/content_replication/eligibility.rs:65
+  F9   path_segment_repetition     molten_world_distribution_octet  src/content_replication/eligibility.rs:105
+  F10  path_segment_repetition     molten_world_distribution_octet  src/content_replication/eligibility.rs:105
+  F11  path_segment_repetition     molten_world_distribution_octet  src/content_replication/eligibility.rs:158
+  F12  path_segment_repetition     molten_world_distribution_octet  src/content_replication/eligibility.rs:158
+  F13  fallible_int_fallback       molten_world_distribution_octet  src/content_replication/eligibility.rs:169
+  F14  fallible_int_fallback       molten_world_distribution_octet  src/content_replication/eligibility.rs:169
+  F15  sentinel_fallback           molten_world_distribution_octet  src/content_replication/eligibility.rs:169
+  F16  sentinel_fallback           molten_world_distribution_octet  src/content_replication/eligibility.rs:169
+  F17  non_trait_imports           molten_world_distribution_octet  src/content_replication/repair/mod.rs:14
+  F18  non_trait_imports           molten_world_distribution_octet  src/content_replication/repair/mod.rs:14
+  F19  non_trait_imports           molten_world_distribution_octet  src/content_replication/repair/mod.rs:15
+  F20  non_trait_imports           molten_world_distribution_octet  src/content_replication/repair/mod.rs:15
+  F21  non_trait_imports           molten_world_distribution_octet  src/content_replication/repair/mod.rs:17
+  F22  non_trait_imports           molten_world_distribution_octet  src/content_replication/repair/mod.rs:17
+  F23  path_segment_repetition     molten_world_distribution_octet  src/content_replication/repair/mod.rs:41
+  F24  path_segment_repetition     molten_world_distribution_octet  src/content_replication/repair/mod.rs:41
+  F25  path_segment_repetition     molten_world_distribution_octet  src/content_replication/repair/mod.rs:57
+  F26  path_segment_repetition     molten_world_distribution_octet  src/content_replication/repair/mod.rs:57
+  F27  path_segment_repetition     molten_world_distribution_octet  src/content_replication/repair/mod.rs:79
+  F28  path_segment_repetition     molten_world_distribution_octet  src/content_replication/repair/mod.rs:79
+  F29  path_segment_repetition     molten_world_distribution_octet  src/content_replication/repair/mod.rs:95
+  F30  path_segment_repetition     molten_world_distribution_octet  src/content_replication/repair/mod.rs:95
+  F31  unbounded_collection_growth molten_world_distribution_octet  src/content_replication/repair/mod.rs:120
+  F32  unbounded_collection_growth molten_world_distribution_octet  src/content_replication/repair/mod.rs:120
+  F33  unbounded_collection_growth molten_world_distribution_octet  src/content_replication/repair/mod.rs:194
+  F34  unbounded_collection_growth molten_world_distribution_octet  src/content_replication/repair/mod.rs:194
+  F35  path_segment_repetition     molten_world_distribution_octet  src/content_replication/tests/closure.rs:35
+---

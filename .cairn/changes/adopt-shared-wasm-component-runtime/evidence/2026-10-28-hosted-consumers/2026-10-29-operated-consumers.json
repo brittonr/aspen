@@ -1,0 +1,57 @@
+{
+  "schema": "molten-operated-hosted-consumers-v1",
+  "date": "2026-10-29",
+  "mantle_revision": "dd2bebab894688d07e7a29c75c1437f4ecc120df",
+  "runtime_profile_ref": "blake3:046921e828525584ec883c92b141e224b05d88dfab519af725c2d6645000cdab",
+  "fuel_limit": 100000,
+  "actor_bundle_ref": "blake3:d5424befe8d17db629d4fdfe723115f5f34a12628cc6711bba392fe7ba56320e",
+  "actor_component_ref": "blake3:94de54320c2f9b797d9acdf271efec4e5cecb5072a01b8b0f3a3a27681a3aa7a",
+  "extension_bundle_ref": "blake3:1ae96688f09c39a15f1b45585550f756ed7adb7034ed9f7d57046661385323a1",
+  "extension_component_ref": "blake3:79d2fc52b87c6cfda3dd1a3f6fa1ed65aae819d6a505a13602878704fdae9e68",
+  "extension_source_closure_ref": "blake3:e32a6f9684504787ccd7db7629138f8794a4352eff48bd63a4724c642dc7ded6",
+  "consumers": [
+    {
+      "consumer": "actor",
+      "command": [
+        "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/actor-hosted-effects-smoke",
+        "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-neutral-bundle/materialization-bundle.json",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-published-fixed-memory-cohort/actor",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/fixed-memory-sidecars/neutral-sidecar.json",
+        "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-native-strict-validate.log",
+        "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/docs/wasm-component-runtime/generated/host-policy.json"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-published-fixed-memory-cohort/actor.log"
+    },
+    {
+      "consumer": "extension",
+      "command": [
+        "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/extension-hosted-effects-smoke",
+        "/home/brittonr/.cache/mantle-hosted-effects-20261028/fixed-memory-callback-wide-bundle/materialization-bundle.json",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-published-fixed-memory-cohort/extension",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-published-fixed-memory-cohort/extension-admission.json"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-published-fixed-memory-cohort/extension.log"
+    }
+  ],
+  "extension_report_ref": "blake3:3d5092be7b06fade8717ce3d135863832c5bac1fd6e235033512fc945a9a94bf",
+  "archive": {
+    "file": "2026-10-29-operated-consumers.zip",
+    "bytes": 635114,
+    "blake3": "10df497f5fe223675d601dfa840e9216fc0cc69eb7f9bf8e1e080589d563bec0",
+    "members": 440
+  },
+  "observations": [
+    "Both non-test product composition roots loaded complete genuine Mantle bundles through immutable verifier dd2bebab; the ordinary actor and manifest-installed Dispatcher completed their bounded scenarios.",
+    "Actor observed actual operated deadline after completed host latency, fuel exhaustion, guest trap, malformed result, denied authority with zero protected reads, exact offline replay and replay corruption denials.",
+    "Extension completed initialization/start, admitted and denied requests, stale admission and replay denials, publication certainty boundaries preserving pre-existing initialized state, checkpoint, failed request, restart/recover with refreshed authority, health/drain/shutdown and canonical readback.",
+    "Native guest/product codec interoperability, malformed integers, nesting limits, distinct output/state identities and arena reuse passed seven focused native cases."
+  ],
+  "non_claims": [
+    "No default shared-runtime cutover, full local/shared parity, durable nonce-store selection, crash durability, synchronous host interruption, host isolation, whole-system correctness or release eligibility.",
+    "Strict Cairn validation and linked logs provide bounded evidence linkage, not permission; actual host authority uses current policy and signed UCAN/holder admission."
+  ]
+}

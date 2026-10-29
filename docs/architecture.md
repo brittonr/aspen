@@ -41,13 +41,26 @@ The optional [content-replication extension](content-replication.md) derives cur
 
 Molten retains component profile/WIT, canonical Preserves, materialization,
 authority, actor/extension lifecycle, effects, replay and receipt meaning.
-The pinned hardened Wasmtime v4 mechanism is evaluated by a test-only adapter.
+The pinned hardened Wasmtime v4 mechanism backs the import-free parity adapter
+and explicit shared-engine candidate roots.
 Its explicit instantiation checkpoint and independent memory ceilings correct
 the exercised scheduling/allocation counterexamples without changing the
 admitted product profile or WIT. The complete local runtime remains the product
 default until operated product deadlines, effect admission, matching production
 bundles, real actor/extension composition and coupled cutover/rollback pass.
 Producer publication and passing parity fixtures do not authorize that cutover.
+
+The non-test candidate roots are `wasm_component::consumer::Actor` and
+`system_extension::component::Executor`. Installation binds a verified Mantle
+snapshot, a separate current admission envelope, exact artifact/import facts and
+current grants; neither root accepts loose component bytes as an installation.
+Their engine owns its epoch service, while Molten retains authority, effect
+publication, recorded replay and callback lifecycle decisions. Epoch interruption
+does not interrupt a blocked synchronous host call. Source admission and execution
+are separate facts. The [operated immutable consumer record](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-28-hosted-consumers/2026-10-29-operated-consumers.json)
+retains matching genuine bundles, actor deadline/effect/replay denials and the full
+installed-extension checkpoint/restart lifecycle through the published verifier.
+These bounded observations do not authorize the default-backend cutover.
 
 The separate `molten.wasm.component.effects.v1` candidate defines the versioned
 `molten:component-effects@1.0.0` / `actor-effects` world but keeps
@@ -81,8 +94,9 @@ precedes success. Post-reservation host failures poison the session rather than
 becoming policy denials or automatic retries. Publication is process-visible,
 not a durable multi-file transaction. Exact offline replay has no live effect
 port or authority-grant input and stops at its first divergence.
-No engine/linker activation, production actor/extension adoption or durable nonce
-store is claimed. Shapes and ownership are specified in the
+No production cutover or durable nonce store is claimed. The explicit candidate
+roots still require operated evidence through a published effect-world verifier.
+Shapes and ownership are specified in the
 [candidate contract](wasm-component-runtime.md#contract-only-effect-request-world)
 and [inactive host boundary](wasm-component-runtime.md#inactive-effect-host-adapter).
 

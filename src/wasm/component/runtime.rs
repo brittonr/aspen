@@ -1,11 +1,15 @@
 mod bindings;
-mod denial;
-#[cfg(test)]
+pub(crate) mod denial;
+mod operated;
+mod provenance;
 pub(crate) mod shared;
 mod shell;
 mod sliced;
 mod slicedshell;
 
+pub use operated::EffectRequestHost;
+pub use operated::Engine;
+pub use provenance::source_cohort;
 pub use shell::ExecutionOutcome;
 pub use shell::ExecutionRequest;
 pub use shell::execute;
@@ -15,7 +19,6 @@ pub use slicedshell::start_sliced_execution;
 
 type Linker<T> = wasmtime::component::Linker<T>;
 type Compiled = wasmtime::component::Component;
-type Engine = wasmtime::Engine;
 type Store<T> = wasmtime::Store<T>;
 type StoreLimits = wasmtime::StoreLimits;
 type StoreLimitsBuilder = wasmtime::StoreLimitsBuilder;
@@ -116,7 +119,7 @@ pub(super) fn test_precompile(
     })
 }
 
-fn engine(profile: &super::model::RuntimeProfile) -> super::model::Result<Engine> {
+fn engine(profile: &super::model::RuntimeProfile) -> super::model::Result<wasmtime::Engine> {
     let stack_size = usize::try_from(profile.resources.max_stack_bytes).map_err(|error| {
         super::model::Denial::classified(
             super::model::DenialClass::ResourceDenial,
@@ -145,7 +148,7 @@ fn engine(profile: &super::model::RuntimeProfile) -> super::model::Result<Engine
         .wasm_custom_page_sizes(false)
         .wasm_wide_arithmetic(false)
         .max_wasm_stack(stack_size);
-    Engine::new(&config).map_err(|error| {
+    wasmtime::Engine::new(&config).map_err(|error| {
         super::model::Denial::classified(
             super::model::DenialClass::ProfileDenial,
             format!("component engine configuration failed: {error}"),
@@ -153,7 +156,7 @@ fn engine(profile: &super::model::RuntimeProfile) -> super::model::Result<Engine
     })
 }
 
-fn store(engine: &Engine, profile: &super::model::RuntimeProfile) -> super::model::Result<Store<StoreState>> {
+fn store(engine: &wasmtime::Engine, profile: &super::model::RuntimeProfile) -> super::model::Result<Store<StoreState>> {
     let limits = StoreLimitsBuilder::new()
         .memory_size(to_usize("memory", profile.resources.max_memory_bytes)?)
         .table_elements(to_usize("table", profile.resources.max_table_elements)?)
@@ -174,7 +177,7 @@ fn store(engine: &Engine, profile: &super::model::RuntimeProfile) -> super::mode
 }
 
 fn verify_shape(
-    engine: &Engine,
+    engine: &wasmtime::Engine,
     component: &Compiled,
     facts: &super::admission::ArtifactFacts,
 ) -> super::model::Result<()> {

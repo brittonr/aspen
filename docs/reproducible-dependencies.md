@@ -47,9 +47,13 @@ reviewed release identities.
 ## Canonical Valence migration
 
 Molten consumes `valence-core` from standalone Valence revision
-`5f1c2ba5072c6f9622fa59b1af20502985f569fd`. This is the revision named by
-Octet's completed standalone cutover manifest and contains Valence's archived
-`harden-preserves-integrity-boundaries` change. The profile also binds:
+`9201074343cd9da0ffaf6ec9db690af5b445d663`. This retains the standalone
+identity boundary established by Octet's completed cutover and Valence's archived
+`harden-preserves-integrity-boundaries` change. It also admits actual Octet
+policy-check records as recorded provenance, without admitting them as proof
+cards, promoting their evidence tier, or accepting unknown tiers. The profile binds
+the completed compatibility archive and its actual CLI verification evidence,
+alongside the earlier boundary evidence:
 
 - the Valence archive task bytes;
 - Octet's archived `complete-standalone-valence-cutover` task bytes;
@@ -59,6 +63,14 @@ Octet's completed standalone cutover manifest and contains Valence's archived
 The resolved Cargo graph must contain exactly one `valence-core` source
 identity. Octet remains a separately pinned proof-tool provider; it no longer
 provides Molten's canonical Valence semantics.
+
+Molten and Valence share Artifact revision
+`5f3962d7471d1547e044f57daeda72f56621fd52` through the single non-flake
+`artifact-src` input. The release gate rejects duplicate direct/transitive
+package source identities. The selected package directories retain identical
+existing files and feature sets; the newer source adds package license files
+and prospectively declares AGPL-3.0-or-later while preserving earlier grants.
+Historical source-migration receipts remain scoped to their original cohort.
 
 ## Updating pins
 

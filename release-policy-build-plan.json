@@ -8,8 +8,8 @@
     "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/crates/molten-core#0.1.0",
     "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "04a0283add8fe96a8b766dfeb448a454bc7660c74451a0e158ffeafbf51a3491",
-  "inputsHash": "fb8d4c07ffa58652ccd7c1691fdfb1c6b224ab79c76311701d1c808f28ba93aa",
+  "cargoLockHash": "9d3e49ba82678bfffa9aaba256caf61731581a32fbd91593729673c927c8c0c4",
+  "inputsHash": "60a1caca5cc61e39ca24890cbc569b78e8451e556107e82950098bcea1285901",
   "crates": {
     "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#schema-migration-core@0.1.0": {
       "crateName": "schema-migration-core",
@@ -723,7 +723,7 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/OnixResearch/kamacite"
     },
-    "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#artifact-auth-core@0.1.0": {
+    "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-core@0.1.0": {
       "crateName": "artifact-auth-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -731,9 +731,9 @@
       "source": {
         "type": "git",
         "url": "ssh://git@github.com/OnixResearch/onix-artifact.git",
-        "rev": "c932138d880ddf4c2967f4c024b489b5c0022bf1",
+        "rev": "5f3962d7471d1547e044f57daeda72f56621fd52",
         "subDir": "crates/artifact-auth-core",
-        "sha256": "sha256-XGQLG60DNeY9FUYcOmn6cfYnhCIJzyqf+VW9yofDYFU="
+        "sha256": "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY="
       },
       "features": [
         "default",
@@ -759,10 +759,10 @@
       ],
       "crateBin": [],
       "links": null,
-      "license": "MIT OR Apache-2.0",
+      "license": "AGPL-3.0-or-later",
       "repository": "https://github.com/OnixResearch/onix-artifact"
     },
-    "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#artifact-binding-core@0.1.0": {
+    "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-binding-core@0.1.0": {
       "crateName": "artifact-binding-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -770,9 +770,9 @@
       "source": {
         "type": "git",
         "url": "ssh://git@github.com/OnixResearch/onix-artifact.git",
-        "rev": "c932138d880ddf4c2967f4c024b489b5c0022bf1",
+        "rev": "5f3962d7471d1547e044f57daeda72f56621fd52",
         "subDir": "crates/artifact-binding-core",
-        "sha256": "sha256-XGQLG60DNeY9FUYcOmn6cfYnhCIJzyqf+VW9yofDYFU="
+        "sha256": "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY="
       },
       "features": [],
       "dependencies": [],
@@ -787,7 +787,7 @@
       "crateBin": [],
       "links": null,
       "description": "Pure versioned binding, resolution, reachability, and retirement mechanics",
-      "license": "MIT OR Apache-2.0",
+      "license": "AGPL-3.0-or-later",
       "repository": "https://github.com/OnixResearch/onix-artifact"
     },
     "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/crates/molten-core#0.1.0": {
@@ -802,11 +802,11 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#artifact-auth-core@0.1.0",
+          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-core@0.1.0",
           "externCrateName": "artifact_auth_core"
         },
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#artifact-binding-core@0.1.0",
+          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-binding-core@0.1.0",
           "externCrateName": "artifact_binding_core"
         },
         {

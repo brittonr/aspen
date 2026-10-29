@@ -1,0 +1,56 @@
+{
+  "scope": "Molten hosted-effects prerequisite: one canonical Artifact source",
+  "date": "2026-10-28",
+  "maintenance_owner": "Molten release-dependency and component-runtime maintainers",
+  "consumer": "Molten and its immutable Valence 9201074343cd9da0ffaf6ec9db690af5b445d663 dependency",
+  "previous_direct_revision": "c932138d880ddf4c2967f4c024b489b5c0022bf1",
+  "canonical_source": "ssh://git@github.com/OnixResearch/onix-artifact.git",
+  "canonical_revision": "5f3962d7471d1547e044f57daeda72f56621fd52",
+  "nix_input": "artifact-src",
+  "nix_nar_hash": "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY=",
+  "selected_packages": ["artifact-auth-core", "artifact-auth-ed25519", "artifact-binding-core"],
+  "source_review": {
+    "existing_selected_package_files": "Previously compared package directories have identical existing files; each newer directory adds LICENSE and LICENSE-AGPL only.",
+    "license": "AGPL-3.0-or-later for the new source cohort; earlier MIT OR Apache-2.0 grants remain effective for previously granted material.",
+    "authentication_features_before_and_after": ["default", "serde"],
+    "binding_additional_features_before_and_after": [],
+    "historical_migration_receipts": "Unchanged; their execution and source claims remain scoped to their original cohorts."
+  },
+  "cutover": [
+    "Cargo root, molten-core and both scoped Octet manifests select the canonical revision.",
+    "Cargo regenerated the root lock and removed the duplicate older authentication and binding packages.",
+    "Nix regenerated artifact-src and removed the separate valence-artifact-auth-src input.",
+    "The repository source-hash generator rewrote all 22 revision-qualified hash bindings; existing exact flake.lock fallback supplied the two unavailable HTTPS sources.",
+    "Pinned unit2nix regenerated both workspace and release-policy plans.",
+    "Live-binding source admission and current governing dependency documentation select the same revision.",
+    "Exact source, package-set, license and duplicate-identity admission remain enforced."
+  ],
+  "executed_nix_checks": [
+    {
+      "attribute": "checks.x86_64-linux.release-dependency-profile",
+      "exit": 0,
+      "output": "/nix/store/1l3kmgfdzrjlyabyf4m50likqc2lgy9d-molten-release-dependency-profile"
+    },
+    {
+      "attribute": "checks.x86_64-linux.git-source-hash-binding",
+      "exit": 0,
+      "output": "/nix/store/69yg43jdzxz1lkn46h97pwb689dd7xcr-molten-git-source-hash-binding"
+    },
+    {
+      "attribute": "checks.x86_64-linux.wasm-component-profile",
+      "exit": 0,
+      "output": "/nix/store/bwrznvrxrswy2z25w119kv818xq67l8b-molten-wasm-component-profile"
+    },
+    {
+      "attribute": "checks.x86_64-linux.artifact-auth-radicle-cutover",
+      "exit": 0,
+      "output": "/nix/store/r89fgb1g02i1hz1dyjwyjaagzrakzycy-molten-artifact-auth-radicle-cutover"
+    }
+  ],
+  "rollback": "Restore the complete prior Cargo/Nix/policy/live-binding/Valence cohort together, regenerate both locks, source hashes and both plans with their owning tools, and rerun source admission. Do not restore only the direct Artifact revision while retaining the newer Valence source.",
+  "non_claims": [
+    "These source and profile observations do not prove actor or extension execution, host effects, durable replay, upstream correctness, legal compliance, deployment, whole-system safety or release eligibility.",
+    "No unpublished Mantle revision, mutable producer source or sibling dependency override is admitted.",
+    "The previously observed broad Nix failure is not rerun or promoted to a pass by these focused checks."
+  ]
+}

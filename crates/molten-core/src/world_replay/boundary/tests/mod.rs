@@ -4,6 +4,7 @@ use super::super::*;
 
 mod admission;
 mod evidence;
+mod native;
 
 fn admit(request: &WorldReplayPlanRequest) -> Result<ReplayObservationAdmission, Vec<ReplayBoundaryBlocker>> {
     admit_replay_observations(&request.boundary, &request.trace)

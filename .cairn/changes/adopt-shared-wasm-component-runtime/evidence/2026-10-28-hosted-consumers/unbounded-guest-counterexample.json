@@ -1,0 +1,50 @@
+{
+  "scope": "Genuine hosted materialization counterexample before source-owned fixed-memory flags",
+  "date": "2026-10-29",
+  "verifier_revision": "8d1f700f78c26ed3423793e6ad36d91a6b4c8de7",
+  "maintenance_owners": ["Mantle Wasm component fixture maintainers", "Molten component-extension fixture maintainers"],
+  "actor": {
+    "bundle": "/home/brittonr/.cache/mantle-hosted-effects-20261028/neutral-bundle-closed/materialization-bundle.json",
+    "bundle_identity_blake3": "e9f156e1e10e85ac01ff32944dc284c8e550f0e82614a7ca891730d09a3aeeaf",
+    "component_blake3": "db83d1d091b1dc4dfe92a2dd0a9c9b300fcef8a94a6fdb39d6855f374b49b657",
+    "component_size_bytes": 6123,
+    "result": "Published structural verification and complete private-snapshot Structural+Bytes intake succeeded; disposable fact collection then denied actual memory declaration is not fixed.",
+    "actual_memory_declaration": "(memory (;0;) 21)",
+    "actual_maximum": null,
+    "observation": "/home/brittonr/.cache/aspen-hosted-effects-20261028/neutral-published-observed.wat:21",
+    "original_run": "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-published-cohort/commands.json",
+    "original_byte_report": "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-published-cohort/actor/mantle-structural-bytes-report.json"
+  },
+  "extension": {
+    "bundle": "/home/brittonr/.cache/mantle-hosted-effects-20261028/callback-bundle-local/materialization-bundle.json",
+    "command": [
+      "/home/brittonr/.cache/aspen-component-adoption-20261028/target/debug/extension-hosted-effects-smoke",
+      "/home/brittonr/.cache/mantle-hosted-effects-20261028/callback-bundle-local/materialization-bundle.json",
+      "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-published-cohort/extension",
+      "/home/brittonr/.cache/aspen-hosted-effects-20261028/extension-admission-published.json"
+    ],
+    "exit": 1,
+    "result": "Published private-snapshot intake succeeded; disposable fact collection denied memory is not fixed.",
+    "original_byte_report": "/home/brittonr/.cache/aspen-hosted-effects-20261028/operated-published-cohort/extension/mantle-byte-verification.json",
+    "runner_correction": "An earlier command used the actor observer's argument shape and returned usage. The extension observer actually requires bundle, fresh output directory and AdmissionInput JSON; the later command above used that contract."
+  },
+  "unchanged_product_requirement": {
+    "profile": "molten.wasm.component.effects.v1",
+    "memory_growth": "fixed",
+    "max_memory_bytes": 16777216,
+    "implementation": "src/wasm/component/admission/inspection.rs requires each declared memory maximum to equal its initial size."
+  },
+  "source_fix": {
+    "molten_file": "examples/component-extension/.cargo/config.toml",
+    "preserved_flag": "target-feature=-sign-ext",
+    "added_linker_arguments": ["--initial-memory=2097152", "--max-memory=2097152"],
+    "expected_shape": "32 fixed pages, within the unchanged 16 MiB ceiling",
+    "verification_state_at_recording": "Fresh producer-owned builds and subsequent genuine consumer invocation required; no post-fix success claimed in this counterexample record."
+  },
+  "non_claims": [
+    "Neither failed observer reached successful actor/extension installation or guest invocation.",
+    "No original bundle, generated component, product memory policy or fact collector was rewritten to bypass the denial.",
+    "The attached Cairn tasks-gate reference has advisory mantle-default/legacy_default source scope, not execution or release acceptance.",
+    "Absolute original-run paths are local retention locations, not portable product inputs or durable availability claims."
+  ]
+}

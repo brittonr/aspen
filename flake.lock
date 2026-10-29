@@ -118,16 +118,16 @@
     "artifact-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1785173333,
-        "narHash": "sha256-XGQLG60DNeY9FUYcOmn6cfYnhCIJzyqf+VW9yofDYFU=",
+        "lastModified": 1792547389,
+        "narHash": "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY=",
         "ref": "refs/heads/main",
-        "rev": "c932138d880ddf4c2967f4c024b489b5c0022bf1",
-        "revCount": 17,
+        "rev": "5f3962d7471d1547e044f57daeda72f56621fd52",
+        "revCount": 21,
         "type": "git",
         "url": "ssh://git@github.com/OnixResearch/onix-artifact.git"
       },
       "original": {
-        "rev": "c932138d880ddf4c2967f4c024b489b5c0022bf1",
+        "rev": "5f3962d7471d1547e044f57daeda72f56621fd52",
         "type": "git",
         "url": "ssh://git@github.com/OnixResearch/onix-artifact.git"
       }
@@ -1906,17 +1906,17 @@
     "mantle-wasm-verifier-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1793220020,
-        "narHash": "sha256-ndCf6O6dFV7DXUC5OKXzXSiFIBsWp5JYa8lcg1ueE9o=",
+        "lastModified": 1793258783,
+        "narHash": "sha256-r8+7Je1MVAug312B2mrgLkjOXgd3dApvFImpJMgesrw=",
         "owner": "OnixResearch",
         "repo": "mantle",
-        "rev": "e1827a8cc1cacf2810aa2314dc8971177832a8f0",
+        "rev": "dd2bebab894688d07e7a29c75c1437f4ecc120df",
         "type": "github"
       },
       "original": {
         "owner": "OnixResearch",
         "repo": "mantle",
-        "rev": "e1827a8cc1cacf2810aa2314dc8971177832a8f0",
+        "rev": "dd2bebab894688d07e7a29c75c1437f4ecc120df",
         "type": "github"
       }
     },
@@ -3788,17 +3788,17 @@
     "valence-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1784063340,
-        "narHash": "sha256-ASWqHCXtUIDerN5vG57TbciTs2q2kHx/dyJI6q0veDk=",
+        "lastModified": 1793235842,
+        "narHash": "sha256-Ruxx4JYnVIb0uJna6I//h/aW4oD/NoLB22BX/2MBMj8=",
         "owner": "OnixResearch",
         "repo": "valence",
-        "rev": "5f1c2ba5072c6f9622fa59b1af20502985f569fd",
+        "rev": "9201074343cd9da0ffaf6ec9db690af5b445d663",
         "type": "github"
       },
       "original": {
         "owner": "OnixResearch",
         "repo": "valence",
-        "rev": "5f1c2ba5072c6f9622fa59b1af20502985f569fd",
+        "rev": "9201074343cd9da0ffaf6ec9db690af5b445d663",
         "type": "github"
       }
     },

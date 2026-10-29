@@ -1,0 +1,42 @@
+{
+  "scope": "Scoped consumers of the unified Artifact prerequisite",
+  "date": "2026-10-29",
+  "executable_extent": {
+    "command": ["nix", "build", "--builders", "", "--option", "substituters", "https://cache.nixos.org", ".#checks.x86_64-linux.executable-extent-octet-deny-all", "--no-link", "--print-out-paths"],
+    "exit": 0,
+    "output": "/nix/store/crjwdnkdfyj5gl85l57fdh6machg9v98-octet-consumer-check",
+    "note": "Run independently after the combined invocation cancelled its other builder when world-distribution failed."
+  },
+  "world_distribution": {
+    "attribute": "checks.x86_64-linux.world-distribution-octet-deny-all",
+    "derivation": "/nix/store/69dqr9cvc9ssyqwv98515c3d4nhdpq1m-octet-consumer-check.drv",
+    "invocation_exit": 1,
+    "builder_exit": 2,
+    "octet_status": "integration-failure",
+    "findings": 35,
+    "warnings": 0,
+    "errors": 35,
+    "lint_counts": {
+      "path_segment_repetition": 19,
+      "non_trait_imports": 6,
+      "unbounded_collection_growth": 4,
+      "fallible_int_fallback": 2,
+      "module_file_count": 2,
+      "sentinel_fallback": 2
+    },
+    "reported_source_paths": [
+      "crates/molten-core/src/content_replication/action.rs",
+      "crates/molten-core/src/content_replication/eligibility.rs",
+      "crates/molten-core/src/content_replication/repair/mod.rs",
+      "crates/molten-core/src/content_replication/tests/closure.rs"
+    ],
+    "attribution": {
+      "command": ["git", "diff", "--name-only", "FETCH_HEAD", "--", "crates/molten-core/src/content_replication"],
+      "exit": 0,
+      "stdout": "",
+      "observation": "The fetched origin/molten checkpoint and this worktree have no content-replication source differences. The gate failed with the genuine unified Artifact source; it was not rerun to reconfirm the failure."
+    },
+    "disposition": "Retain the failure. Do not suppress lints, weaken policy, or silently add a content-replication public-API migration to the hosted-effects work."
+  },
+  "non_claim": "The focused passing source/profile checks and configured clean workspace/library producers do not make the full Nix rail green or establish full shared-runtime adoption or release eligibility."
+}

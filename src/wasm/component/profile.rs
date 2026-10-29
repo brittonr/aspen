@@ -1,3 +1,6 @@
+mod effects;
+pub use effects::hosted;
+
 pub const COMPONENT_PROFILE_SCHEMA: &str = "molten.wasm-component-profile.v1";
 pub const COMPONENT_PROFILE_SCHEMA_VERSION: u32 = 1;
 pub const COMPONENT_PROFILE_SOURCE_LANGUAGE: &str = "nickel";
@@ -103,7 +106,8 @@ pub fn validate_runtime(profile: &super::model::RuntimeProfile) -> super::model:
     let mut blockers = Vec::new();
     let is_base_profile = profile.profile_id == COMPONENT_PROFILE_ID;
     let is_time_sliced_profile = profile.profile_id == TIME_SLICED_PROFILE_ID;
-    if !is_base_profile && !is_time_sliced_profile {
+    let is_effect_profile = profile.profile_id == super::effect::HOST_PROFILE_ID;
+    if !is_base_profile && !is_time_sliced_profile && !is_effect_profile {
         blockers.push(format!("component profile id {} is not admitted", profile.profile_id));
     }
     validate_slicing(profile, is_time_sliced_profile, &mut blockers);
@@ -116,8 +120,13 @@ pub fn validate_runtime(profile: &super::model::RuntimeProfile) -> super::model:
     validate_features(profile, &mut blockers);
     validate_determinism(profile, &mut blockers);
     validate_resources(profile, &mut blockers);
-    if !profile.allowed_imports.is_empty() || !profile.allowed_wasi_interfaces.is_empty() {
-        blockers.push("initial component cohort must deny every host and WASI import".to_string());
+    let is_imports_admitted = if is_effect_profile {
+        profile.allowed_imports == [super::effect::HOST_REQUEST_IMPORT]
+    } else {
+        profile.allowed_imports.is_empty()
+    };
+    if !is_imports_admitted || !profile.allowed_wasi_interfaces.is_empty() {
+        blockers.push("component cohort differs from its closed no-WASI import set".to_string());
     }
     let expected_non_claims = COMPONENT_NON_CLAIMS.iter().map(|value| (*value).to_string()).collect::<Vec<_>>();
     if profile.non_claims != expected_non_claims {
@@ -191,9 +200,14 @@ fn validate_toolchain(profile: &super::model::RuntimeProfile, blockers: &mut imp
 }
 
 fn validate_wit(profile: &super::model::RuntimeProfile, blockers: &mut impl crate::bounded::VecSink<String>) {
-    require_equal(blockers, "WIT package", &profile.wit.package, COMPONENT_WIT_PACKAGE);
-    require_equal(blockers, "WIT world", &profile.wit.world, COMPONENT_WIT_WORLD);
-    require_equal(blockers, "WIT source ref", &profile.wit.source_ref, COMPONENT_WIT_SOURCE_REF);
+    let (package, world, reference) = if profile.profile_id == super::effect::HOST_PROFILE_ID {
+        (super::effect::HOST_WIT_PACKAGE, super::effect::HOST_WIT_WORLD, super::effect::HOST_WIT_SOURCE_REF)
+    } else {
+        (COMPONENT_WIT_PACKAGE, COMPONENT_WIT_WORLD, COMPONENT_WIT_SOURCE_REF)
+    };
+    require_equal(blockers, "WIT package", &profile.wit.package, package);
+    require_equal(blockers, "WIT world", &profile.wit.world, world);
+    require_equal(blockers, "WIT source ref", &profile.wit.source_ref, reference);
 }
 
 fn validate_features(profile: &super::model::RuntimeProfile, blockers: &mut impl crate::bounded::VecSink<String>) {

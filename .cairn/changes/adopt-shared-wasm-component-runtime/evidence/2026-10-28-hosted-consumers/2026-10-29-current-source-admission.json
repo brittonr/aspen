@@ -1,0 +1,250 @@
+{
+  "scope": "Final checked guest and immutable dd2bebab Mantle consumer pin",
+  "commands": [
+    {
+      "name": "format",
+      "command": [
+        "nix",
+        "develop",
+        "--builders",
+        "",
+        "-c",
+        "cargo",
+        "fmt",
+        "--all",
+        "--check"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-source-gate/format.log"
+    },
+    {
+      "name": "workspace",
+      "command": [
+        "nix",
+        "develop",
+        "--builders",
+        "",
+        "-c",
+        "cargo",
+        "octet",
+        "check",
+        "--artifact-dir",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-source-gate/workspace"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-source-gate/workspace.log"
+    },
+    {
+      "name": "library",
+      "command": [
+        "nix",
+        "develop",
+        "--builders",
+        "",
+        "-c",
+        "cargo",
+        "octet",
+        "check",
+        "-p",
+        "molten",
+        "--artifact-dir",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-source-gate/library",
+        "--",
+        "--lib"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-source-gate/library.log"
+    },
+    {
+      "name": "object-corpus",
+      "command": [
+        "nix",
+        "develop",
+        "--builders",
+        "",
+        "-c",
+        "cargo",
+        "octet",
+        "object",
+        "corpus",
+        "receipt",
+        "--output",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-source-gate/workspace/object-corpus-receipt.json",
+        "src",
+        "src/job/dag.rs",
+        "src/main.rs",
+        "src/node/daemon.rs",
+        "src/node/runtime.rs",
+        "src/octet/gate.rs",
+        "src/upgrades/mod.rs",
+        "examples/component-extension/src/codec.rs",
+        "examples/component-extension/src/identity.rs",
+        "examples/component-extension/src/invocation.rs",
+        "examples/component-extension/src/allocator.rs",
+        "examples/component-extension/src/packed.rs"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-canonical-verification/object-corpus.log"
+    },
+    {
+      "name": "artifact-import",
+      "command": [
+        "nix",
+        "develop",
+        "--builders",
+        "",
+        "-c",
+        "cargo",
+        "run",
+        "--locked",
+        "--",
+        "test",
+        "octet",
+        "artifacts",
+        "import",
+        "--artifacts",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-source-gate/workspace",
+        "--ledger",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-canonical-verification/ledger",
+        "--receipt-out",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-canonical-verification/artifact-ledger-receipt.preserves"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-canonical-verification/artifact-import.log"
+    },
+    {
+      "name": "strict-gate",
+      "command": [
+        "nix",
+        "develop",
+        "--builders",
+        "",
+        "-c",
+        "cargo",
+        "run",
+        "--locked",
+        "--",
+        "test",
+        "octet",
+        "gate",
+        "--artifacts",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-source-gate/workspace",
+        "--profile",
+        "strict-ci",
+        "--receipt-out",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-canonical-verification/gate-receipt.preserves"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-canonical-verification/strict-gate.log"
+    },
+    {
+      "name": "remediation-plan",
+      "command": [
+        "nix",
+        "develop",
+        "--builders",
+        "",
+        "-c",
+        "cargo",
+        "run",
+        "--locked",
+        "--",
+        "test",
+        "octet",
+        "remediation",
+        "plan",
+        "--artifacts",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-source-gate/workspace",
+        "--lib-artifacts",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-source-gate/library",
+        "--focused-object-corpus",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-source-gate/workspace/object-corpus-receipt.json",
+        "--receipt-out",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-canonical-verification/remediation-plan.preserves"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-canonical-verification/remediation-plan.log"
+    },
+    {
+      "name": "workspace-library-tests",
+      "command": [
+        "nix",
+        "develop",
+        "--builders",
+        "",
+        "-c",
+        "cargo",
+        "test",
+        "--locked",
+        "--workspace",
+        "--lib"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-canonical-verification/workspace-library-tests.log"
+    },
+    {
+      "name": "strict-clippy",
+      "command": [
+        "nix",
+        "develop",
+        "--builders",
+        "",
+        "-c",
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-canonical-verification/strict-clippy.log"
+    },
+    {
+      "name": "strict-cairn",
+      "command": [
+        "nix",
+        "run",
+        "path:/home/brittonr/git/OnixResearch/cairn#cairn",
+        "--",
+        "validate",
+        "--root",
+        ".",
+        "--policy",
+        "/home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json",
+        "--strict"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/guest-wide-canonical-verification/strict-cairn.log"
+    }
+  ],
+  "workspace_octet_findings": 0,
+  "library_octet_findings": 0,
+  "strict_ci_receipt_ref": "blake3:48a773705bb1620805a5141c37201cc739e04b2623bf5d75367329ac900f46f8",
+  "workspace_library_results": {
+    "molten": 1795,
+    "molten-core": 630,
+    "total_passed": 2425,
+    "failed": 0
+  },
+  "clippy": "cargo clippy --locked --workspace --all-targets -- -D warnings exited 0",
+  "cairn": "Provider policy strict validation exited0 valid:true",
+  "archive": {
+    "file": "2026-10-29-current-source-admission.zip",
+    "bytes": 109063,
+    "blake3": "8c8c6c419ecb174701230ab500be740cbecd048893f71557f175628d8fbe6297"
+  },
+  "boundary": "Canonical source admission and exercised workspace library checks only; operated consumer evidence is separate; existing broad world-distribution Nix source-policy failure remains retained and not rerun."
+}

@@ -1,5 +1,5 @@
 pub const MANIFEST_SCHEMA: &str = "molten.wasm-import-manifest.v1";
-const DECLARED_WORLD_IMPORTS: &[&str] = &[];
+const EFFECT_WORLD_IMPORTS: &[&str] = &[super::super::effect::HOST_REQUEST_IMPORT];
 const DECLARED_WORLD_EXPORTS: &[&str] = &[super::super::admission::COMPONENT_INVOKE_EXPORT];
 const MAX_MANIFEST_SURFACE_ENTRIES: usize = 128;
 
@@ -65,12 +65,17 @@ pub struct DeclaredVerdict {
 
 /// Build the declared world surface pinned by the supported profile.
 pub fn declared_world(profile: &super::super::model::RuntimeProfile) -> DeclaredWorld {
+    let imports = if profile.profile_id == super::super::effect::HOST_PROFILE_ID {
+        EFFECT_WORLD_IMPORTS
+    } else {
+        &[]
+    };
     DeclaredWorld {
         profile_id: profile.profile_id.clone(),
         wit_package: profile.wit.package.clone(),
         world: profile.wit.world.clone(),
         wit_ref: profile.wit.source_ref.clone(),
-        imports: DECLARED_WORLD_IMPORTS.iter().map(|value| (*value).to_string()).collect(),
+        imports: imports.iter().map(|value| (*value).to_string()).collect(),
         exports: DECLARED_WORLD_EXPORTS.iter().map(|value| (*value).to_string()).collect(),
     }
 }

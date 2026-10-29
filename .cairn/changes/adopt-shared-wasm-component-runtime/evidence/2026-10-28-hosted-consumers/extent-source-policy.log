@@ -1,0 +1,110 @@
+got build log for '/nix/store/ccazzrkbgjh5k39i1hw4a8z973p11z8x-octet-consumer-check.drv' from 'daemon'
+[1m[92m   Compiling[0m shlex v2.0.1
+[1m[92m   Compiling[0m find-msvc-tools v0.1.11
+[1m[92m   Compiling[0m rustix v1.1.4
+[1m[92m   Compiling[0m proc-macro2 v1.0.107
+[1m[92m   Compiling[0m unicode-ident v1.0.24
+[1m[92m    Checking[0m arrayref v0.3.9
+[1m[92m    Checking[0m cfg-if v1.0.4
+[1m[92m    Checking[0m constant_time_eq v0.4.2
+[1m[92m    Checking[0m linux-raw-sys v0.12.1
+[1m[92m    Checking[0m arrayvec v0.7.8
+[1m[92m    Checking[0m bitflags v2.13.1
+[1m[92m    Checking[0m cpufeatures v0.3.1
+[1m[92m   Compiling[0m quote v1.0.47
+[1m[92m   Compiling[0m io-lifetimes v2.0.4
+[1m[92m   Compiling[0m serde_core v1.0.229
+[1m[92m   Compiling[0m io-extras v0.18.4
+[1m[92m   Compiling[0m cap-primitives v3.4.6
+[1m[92m    Checking[0m once_cell v1.21.4
+[1m[92m   Compiling[0m serde v1.0.229
+[1m[92m   Compiling[0m zmij v1.0.23
+[1m[92m   Compiling[0m cap-std v3.4.5
+[1m[92m    Checking[0m ambient-authority v0.0.2
+[1m[92m    Checking[0m ipnet v2.12.1
+[1m[92m    Checking[0m maybe-owned v0.3.4
+[1m[92m   Compiling[0m serde_json v1.0.151
+[1m[92m    Checking[0m memchr v2.8.3
+[1m[92m    Checking[0m itoa v1.0.18
+[1m[92m    Checking[0m data-encoding v2.11.0
+[1m[92m    Checking[0m artifact-binding-core v0.1.0 (/nix/store/vm2k5g4jm1zfa97ivv4c71wkz06llr1y-source/crates/artifact-binding-core)
+   Compiling cfg_if v1.0.4
+   Compiling cpufeatures v0.3.1
+   Compiling arrayref v0.3.9
+   Compiling ambient_authority v0.0.2
+   Compiling unicode_ident v1.0.24
+   Compiling constant_time_eq v0.4.2
+   Compiling bitflags v2.13.1
+   Compiling shlex v2.0.1
+   Compiling arrayvec v0.7.8
+[1m[92m   Compiling[0m cc v1.4.4
+   Compiling itoa v1.0.18
+   Compiling once_cell v1.21.4
+   Compiling maybe_owned v0.3.4
+   Compiling find_msvc_tools v0.1.11
+   Compiling build-script-build v1.0.151
+   Compiling build-script-build v2.0.4
+   Compiling build-script-build v1.0.47
+   Compiling build-script-build v1.0.107
+   Compiling build-script-build v1.0.23
+   Compiling build-script-build v0.18.4
+   Compiling build-script-build v1.0.229
+   Compiling build-script-build v3.4.5
+   Compiling build-script-build v1.0.229
+   Compiling io_lifetimes v2.0.4
+   Compiling data_encoding v2.11.0
+   Compiling ipnet v2.12.1
+   Compiling build-script-build v3.4.6
+   Compiling linux_raw_sys v0.12.1
+   Compiling build-script-build v1.1.4
+   Compiling artifact_binding_core v0.1.0
+   Compiling io_extras v0.18.4
+   Compiling zmij v1.0.23
+   Compiling memchr v2.8.3
+   Compiling proc_macro2 v1.0.107
+[1m[92m   Compiling[0m syn v3.0.4
+   Compiling quote v1.0.47
+   Compiling cc v1.4.4
+[1m[92m   Compiling[0m blake3 v1.8.5
+   Compiling build-script-build v1.8.5
+   Compiling blake3 v1.8.5
+[1m[92m    Checking[0m executable-extent-core v0.1.0 (/nix/store/ybppdxhcj6dfw9zwagxf32yf4wpxrj97-source/crates/executable-extent-core)
+   Compiling serde_core v1.0.229
+   Compiling executable_extent_core v0.1.0
+[1m[92m    Checking[0m molten-core v0.1.0 (/build/source/product/molten-core)
+[1m[92m    Checking[0m executable-extent-conformance v0.1.0 (/nix/store/ybppdxhcj6dfw9zwagxf32yf4wpxrj97-source/crates/executable-extent-conformance)
+   Compiling executable_extent_conformance v0.1.0
+   Compiling molten_core v0.1.0
+   Compiling syn v3.0.4
+[1m[92m   Compiling[0m serde_derive v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling rustix v1.1.4
+[1m[92m    Checking[0m rustix-linux-procfs v0.1.1
+[1m[92m    Checking[0m fs-set-times v0.20.3
+[1m[92m    Checking[0m executable-extent-linux v0.1.0 (/nix/store/ybppdxhcj6dfw9zwagxf32yf4wpxrj97-source/crates/executable-extent-linux)
+   Compiling fs_set_times v0.20.3
+   Compiling rustix_linux_procfs v0.1.1
+   Compiling executable_extent_linux v0.1.0
+   Compiling cap_primitives v3.4.6
+   Compiling cap_std v3.4.5
+   Compiling serde_derive v1.0.229
+   Compiling serde v1.0.229
+[1m[92m    Checking[0m artifact-auth-core v0.1.0 (/nix/store/vm2k5g4jm1zfa97ivv4c71wkz06llr1y-source/crates/artifact-auth-core)
+   Compiling artifact_auth_core v0.1.0
+[1m[92m    Checking[0m molten-executable-extent-octet v0.1.0 (/build/source)
+   Compiling molten_executable_extent_octet v0.1.0
+   Compiling molten_executable_extent_octet v0.1.0
+    Finished checking
+[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 2.66s
+--- octet summary ---
+Status: clean
+Findings: 0
+Warnings: 0
+Errors: 0
+Autofixable: 0
+Tool: cargo-octet 0.1.0
+Toolchain: nightly-2026-03-21-x86_64-unknown-linux-gnu
+Profile: workspace-metadata
+Config hash: b3:3f5cef2ad263456db1be993e6a0441d2c59ab526981c636b8c8672d83d419bd8
+Profile hash: b3:26dd7bcb47fde66afec24ff49d50e482b9926db0f496eff4e82eaf40014e20f8
+---

@@ -1,6 +1,8 @@
 use super::super::*;
 
 mod fixtures;
+mod guest;
+mod guestarena;
 mod initialization;
 mod rejection;
 mod resources;
@@ -15,10 +17,22 @@ fn runtime(fixture: &super::support::Fixture) -> super::super::runtime::shared::
 fn compare(local: &ExecutionOutcome, shared: &ExecutionOutcome) {
     assert_eq!(local.decision, shared.decision);
     assert_eq!(local.output, shared.output);
-    // Includes whole typed inputs, canonical payload, hash, stage parent and fuel.
-    // Human diagnostics are intentionally outside canonical receipt authority.
-    assert_eq!(local.receipts, shared.receipts);
-    assert!(replay_receipts_match(&local.receipts, &shared.receipts));
+    // Source/backend identity is intentionally different. Rebuild that reviewed
+    // mapping and its parent hashes; every other canonical field must match.
+    validate_chain(&local.receipts).expect("valid local chain");
+    validate_chain(&shared.receipts).expect("valid shared chain");
+    assert_eq!(local.receipts.len(), shared.receipts.len());
+    let mut mapped = Vec::with_capacity(shared.receipts.len());
+    for (local_record, shared_record) in local.receipts.iter().zip(&shared.receipts) {
+        assert_ne!(local_record.input.runtime_configuration_ref, shared_record.input.runtime_configuration_ref);
+        let mut input = shared_record.input.clone();
+        input.runtime_configuration_ref = local_record.input.runtime_configuration_ref.clone();
+        input.parent_refs =
+            mapped.last().map(|record: &ExecutionRecord| vec![record.receipt_ref.clone()]).unwrap_or_default();
+        mapped.push(build(input).expect("source-mapped canonical receipt"));
+    }
+    assert_eq!(local.receipts, mapped);
+    assert!(replay_receipts_match(&local.receipts, &mapped));
 }
 
 fn compare_synchronous(fixture: &super::support::Fixture) -> (ExecutionOutcome, ExecutionOutcome) {

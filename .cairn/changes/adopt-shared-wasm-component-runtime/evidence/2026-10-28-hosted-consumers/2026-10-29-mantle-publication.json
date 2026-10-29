@@ -1,0 +1,13 @@
+{
+  "schema": "molten-upstream-hosted-effects-completion-v1",
+  "repository": "ssh://git@github.com/OnixResearch/mantle.git",
+  "consumed_immutable_revision": "dd2bebab894688d07e7a29c75c1437f4ecc120df",
+  "evidence_completion_revision": "9b733fb1b72ff6193edf830515d233b17bb87d9c",
+  "archive_revision": "8d8d240385de7dc1f5190594d96d00df5bb9b380",
+  "archive_path": ".cairn/archive/2026-10-29-materialize-consumer-hosted-effect-components",
+  "published_owner_receipts": "https://github.com/OnixResearch/mantle/blob/8d8d240385de7dc1f5190594d96d00df5bb9b380/.cairn/archive/2026-10-29-materialize-consumer-hosted-effect-components/evidence/2026-10-29-operated-consumers.zip",
+  "owner_zip_blake3": "10df497f5fe223675d601dfa840e9216fc0cc69eb7f9bf8e1e080589d563bec0",
+  "push_exit": 0,
+  "postarchive_strict_validation_exit": 0,
+  "boundary": "Later upstream commits preserve separately owned actual consumer evidence and native lifecycle closure only. Product pins remain on the exact dd2bebab revision actually operated; no default-backend adoption or release claim."
+}

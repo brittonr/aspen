@@ -1,0 +1,58 @@
+{
+  "scope": "Current Molten hosted-effects source admission; not operated consumer completion",
+  "date": "2026-10-29",
+  "maintenance_owner": "Molten component-runtime and source-admission maintainers",
+  "working_directory": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+  "immediate_outcome": "Both exact source producers and the canonical strict-ci gate accept the corrected source cohort; workspace library tests, strict all-target Clippy and strict Cairn validation pass.",
+  "durable_capability": "Existing canonical source-admission commands cover the complete source directory plus required functionless facade inputs; producer success is checked from status.json, not exit status alone.",
+  "source_producers": [
+    {
+      "command": "cargo octet check --artifact-dir SOURCE/workspace",
+      "status": "clean",
+      "exit": 0,
+      "findings": 0,
+      "profile_hash": "b3:646486531a22a32ada51acec369168dc5361975b7b9af58e9a8c20d25f1bb3e4",
+      "config_hash": "b3:df812b6d63c98230ae35d600e062c2db46ebec47b8bbb4a92abfc51b569cd493"
+    },
+    {
+      "command": "cargo octet check -p molten --artifact-dir SOURCE/library -- --lib",
+      "status": "clean",
+      "exit": 0,
+      "findings": 0,
+      "profile_hash": "b3:cf4f88ffda0eb6eb93328bdaa5f96734752786374982cdf77f6148abff6b3752",
+      "config_hash": "b3:10854126d3547fd7a3d434edfd5a3def12857b5f8cf2e156802a68feb0e7e6fb"
+    }
+  ],
+  "producer_toolchain": "nightly-2026-03-21-x86_64-unknown-linux-gnu",
+  "source_admission_sequence": [
+    {"operation": "format", "exit": 0},
+    {"operation": "scripts/git-source-hashes.sh --check", "exit": 0},
+    {"operation": "object corpus receipt", "exit": 0},
+    {"operation": "canonical artifact import", "exit": 0},
+    {"operation": "canonical strict-ci gate", "exit": 0, "decision": "pass"},
+    {"operation": "canonical workspace/library remediation plan", "exit": 0},
+    {"operation": "cargo test --locked --workspace --lib", "exit": 0, "molten_passed": 1788, "molten_core_passed": 630, "total_passed": 2418, "failed": 0},
+    {"operation": "cargo clippy --locked --workspace --all-targets -- -D warnings", "exit": 0},
+    {"operation": "strict Cairn validation against sibling provider policy", "exit": 0}
+  ],
+  "object_corpus_inputs": ["src", "src/job/dag.rs", "src/main.rs", "src/node/daemon.rs", "src/node/runtime.rs", "src/octet/gate.rs", "src/upgrades/mod.rs"],
+  "canonical_gate_binding": {
+    "policy": "blake3:d44818d91cf2e1d912eea58ed37ab35e1d5bc47b98d3a5464c1b29e1fea7c290",
+    "object_corpus": "blake3:57e32bb25ce5f76224eaaf7882c6d1fd36901f8d01cb0c55041f22d1e052e897",
+    "fingerprint": "blake3:68ef753906854e8be5a0fa8e6f0c6c91ad2323ef5b3fb236bfe6fa154dd91464"
+  },
+  "original_run_records": {
+    "producer_commands": "/home/brittonr/.cache/aspen-hosted-effects-20261028/compiler-policy-source-gate/commands.json",
+    "canonical_commands": "/home/brittonr/.cache/aspen-hosted-effects-20261028/compiler-policy-canonical-verification/commands.json",
+    "source_directory": "/home/brittonr/.cache/aspen-hosted-effects-20261028/compiler-policy-source-gate",
+    "canonical_directory": "/home/brittonr/.cache/aspen-hosted-effects-20261028/compiler-policy-canonical-verification",
+    "retention_limit": "These absolute paths locate original local run logs; they are not portable product inputs or durable availability claims. The tracked canonical gate receipt retains exact artifact and source-fingerprint bindings."
+  },
+  "non_claims": [
+    "Source checks and unit tests do not prove ordinary actor or system-extension operation through genuine published Mantle bundles.",
+    "The original operated actor probe was denied by the old published Mantle verifier; no successful rerun is claimed here.",
+    "The scoped world-distribution Nix source-policy failure remains retained separately and is not converted to a pass by these configured source producers.",
+    "No full Nix rail, complete runtime adoption, deployment or release eligibility is established.",
+    "No unpublished Mantle revision, rewritten producer bundle, weakened admission policy or runtime default cutover is admitted."
+  ]
+}

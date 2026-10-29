@@ -18,8 +18,8 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
-artifact-auth-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
-artifact-binding-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "c932138d880ddf4c2967f4c024b489b5c0022bf1", version = "0.1.0" }
+artifact-auth-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52", version = "0.1.0" }
+artifact-binding-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52", version = "0.1.0" }
 blake3 = "=1.8.5"
 cap-std = "=3.4.5"
 data-encoding = "=2.11.0"

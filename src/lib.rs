@@ -1,6 +1,9 @@
 #![feature(register_tool)]
 #![register_tool(tigerstyle)]
 
+#[cfg(test)]
+extern crate alloc;
+
 mod bounded;
 
 pub mod addressable_actor;

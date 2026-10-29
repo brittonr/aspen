@@ -1,0 +1,186 @@
+{
+  "scope": "Local link target existence in three changed governing/task documents; not external-link or prose-correctness proof",
+  "checked": [
+    {
+      "source": "docs/architecture.md",
+      "link": "distributed-system-fabric.md"
+    },
+    {
+      "source": "docs/architecture.md",
+      "link": "fabric-execution.md"
+    },
+    {
+      "source": "docs/architecture.md",
+      "link": "standalone-batch-orchestration.md"
+    },
+    {
+      "source": "docs/architecture.md",
+      "link": "system-extension-runtime.md"
+    },
+    {
+      "source": "docs/architecture.md",
+      "link": "content-replication.md"
+    },
+    {
+      "source": "docs/architecture.md",
+      "link": "../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-28-hosted-consumers/2026-10-29-operated-consumers.json"
+    },
+    {
+      "source": "docs/architecture.md",
+      "link": "wasm-component-runtime.md#contract-only-effect-request-world"
+    },
+    {
+      "source": "docs/architecture.md",
+      "link": "wasm-component-runtime.md#inactive-effect-host-adapter"
+    },
+    {
+      "source": "docs/architecture.md",
+      "link": "wasm-component-runtime.md#shared-runtime-adoption-status"
+    },
+    {
+      "source": "docs/architecture.md",
+      "link": "fabric-time-scheduler-runtime.md"
+    },
+    {
+      "source": "docs/architecture.md",
+      "link": "handbook/node-workflows/node-artifact-and-state-root-reference.md"
+    },
+    {
+      "source": "docs/architecture.md",
+      "link": "handbook/node-workflows/diagnosing-restart-and-lock-inconsistency.md"
+    },
+    {
+      "source": "docs/architecture.md",
+      "link": "../.cairn/archive/1970-01-01-fix-node-shutdown-admission/evidence/2026-10-16-acceptance.json"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "wasm-component-runtime/profile.ncl"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "wasm-component-runtime/contracts.ncl"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "wasm-component-runtime/generated/profile.json"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-boundary-parity.md"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-26-runtime-adoption-parity.md"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-producer-handoff.md"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-source-tree-intake.md#distinct-supported-world-prerequisite"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-28-supported-world-intake.md"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "wasm-component-runtime/effect-profile.ncl"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-28-hosted-consumers/2026-10-29-operated-consumers.json"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "wasm-component-runtime/effect-contract.ncl"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "wasm-component-runtime/effect-contracts.ncl"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "wasm-component-runtime/generated/effect-contract.json"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "../wit/molten-component-effects/runtime.wit"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-host-adapter.md"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-source-tree-intake.md#immutable-publication-and-executed-pinned-intake"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-28-supported-world-intake.md"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "../pilots/hwr-consumer/"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "../.cairn/archive/1970-01-01-pilot-hwr-consumer/verification.md"
+    },
+    {
+      "source": "docs/wasm-component-runtime.md",
+      "link": "../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-26-compatibility-preflight.md"
+    },
+    {
+      "source": ".cairn/changes/adopt-shared-wasm-component-runtime/tasks.md",
+      "link": "evidence/2026-10-26-compatibility-preflight.md#executed-local-product-baseline"
+    },
+    {
+      "source": ".cairn/changes/adopt-shared-wasm-component-runtime/tasks.md",
+      "link": "evidence/2026-10-28-supported-world-intake.md"
+    },
+    {
+      "source": ".cairn/changes/adopt-shared-wasm-component-runtime/tasks.md",
+      "link": "evidence/2026-10-26-runtime-adoption-parity.md"
+    },
+    {
+      "source": ".cairn/changes/adopt-shared-wasm-component-runtime/tasks.md",
+      "link": "evidence/2026-10-27-boundary-parity.md"
+    },
+    {
+      "source": ".cairn/changes/adopt-shared-wasm-component-runtime/tasks.md",
+      "link": "evidence/2026-10-27-boundary-parity.md#contract-only-effect-world-continuation"
+    },
+    {
+      "source": ".cairn/changes/adopt-shared-wasm-component-runtime/tasks.md",
+      "link": "evidence/2026-10-27-host-adapter.md"
+    },
+    {
+      "source": ".cairn/changes/adopt-shared-wasm-component-runtime/tasks.md",
+      "link": "evidence/2026-10-27-producer-handoff.md"
+    },
+    {
+      "source": ".cairn/changes/adopt-shared-wasm-component-runtime/tasks.md",
+      "link": "evidence/2026-10-27-source-tree-intake.md#immutable-publication-and-executed-pinned-intake"
+    },
+    {
+      "source": ".cairn/changes/adopt-shared-wasm-component-runtime/tasks.md",
+      "link": "evidence/2026-10-28-supported-world-intake.md"
+    },
+    {
+      "source": ".cairn/changes/adopt-shared-wasm-component-runtime/tasks.md",
+      "link": "evidence/2026-10-28-hosted-consumers/2026-10-29-operated-consumers.json"
+    },
+    {
+      "source": ".cairn/changes/adopt-shared-wasm-component-runtime/tasks.md",
+      "link": "evidence/2026-10-28-hosted-consumers/current-source-admission.json"
+    },
+    {
+      "source": ".cairn/changes/adopt-shared-wasm-component-runtime/tasks.md",
+      "link": "evidence/2026-10-28-hosted-consumers/current-source-gate.preserves"
+    }
+  ],
+  "count": 45
+}

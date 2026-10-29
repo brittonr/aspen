@@ -43,11 +43,11 @@
       flake = false;
     };
     mantle-wasm-verifier-src = {
-      url = "github:OnixResearch/mantle/e1827a8cc1cacf2810aa2314dc8971177832a8f0";
+      url = "github:OnixResearch/mantle/dd2bebab894688d07e7a29c75c1437f4ecc120df";
       flake = false;
     };
     artifact-src = {
-      url = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1";
+      url = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52";
       flake = false;
     };
     choregraph-src = {
@@ -94,7 +94,7 @@
     # The frozen verifier pilot replays its original cohort, not the current lint provider.
     verified-node-replication-octet.url = "github:OnixResearch/octet?rev=fc38f59330b626961d166febfdf1a5aa6575460f";
     valence-src = {
-      url = "github:OnixResearch/valence/5f1c2ba5072c6f9622fa59b1af20502985f569fd";
+      url = "github:OnixResearch/valence/9201074343cd9da0ffaf6ec9db690af5b445d663";
       flake = false;
     };
     schema-migration-core-src = {
@@ -185,7 +185,7 @@
         # cleanSourceWith; callers can pass real local paths with --override-input.
         maybeCleanLocalGitSource =
           src: if pkgs.lib.hasInfix "/../" (toString src) then null else cleanLocalGitSource src;
-        artifactRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1";
+        artifactRevision = "5f3962d7471d1547e044f57daeda72f56621fd52";
         artifactRepository = "ssh://git@github.com/OnixResearch/onix-artifact.git";
         rootCargoManifest = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         artifactRootDependencies = rootCargoManifest.dependencies;
@@ -228,7 +228,7 @@
             &&
               builtins.sort builtins.lessThan artifactWorkspace.workspace.members
               == builtins.sort builtins.lessThan artifactSourceExpectedMembers
-            && artifactWorkspace.workspace.package.license == "MIT OR Apache-2.0"
+            && artifactWorkspace.workspace.package.license == "AGPL-3.0-or-later"
           ) "Molten Artifact Cargo/Nix source identity, package set, workspace, or license drifted";
           artifact-src;
         boundedExecRevision = "29dac88ecded94457572db3fdfaaaab95fa91525";
@@ -319,7 +319,7 @@
             )
             "Molten hardened Wasmtime Cargo/Nix source identity, package set, license, or completed publication drifted";
           hardened-wasmtime-src;
-        mantleWasmVerifierRevision = "e1827a8cc1cacf2810aa2314dc8971177832a8f0";
+        mantleWasmVerifierRevision = "dd2bebab894688d07e7a29c75c1437f4ecc120df";
         mantleWasmVerifierRepository = "ssh://git@github.com/OnixResearch/mantle.git";
         mantleWasmVerifierDependency = artifactRootDependencies.mantle-wasm-consumer-verifier;
         mantleWasmVerifierExpectedLockSource = "git+${mantleWasmVerifierRepository}?rev=${mantleWasmVerifierRevision}#${mantleWasmVerifierRevision}";
@@ -583,7 +583,7 @@
             maybeCleanLocalGitSource basalt-src;
           "ssh://git@github.com/OnixResearch/cairn.git#3b4c280b893f2709aebea21fc51a4f9eeba3fe3b" =
             maybeCleanLocalGitSource cairn-src;
-          "ssh://git@github.com/OnixResearch/valence.git#5f1c2ba5072c6f9622fa59b1af20502985f569fd" =
+          "ssh://git@github.com/OnixResearch/valence.git#9201074343cd9da0ffaf6ec9db690af5b445d663" =
             maybeCleanLocalGitSource valence-src;
           "https://github.com/hegeldev/hegel-rust#ed949b8084595cb467e983747f1089e214965ac6" =
             maybeCleanLocalGitSource hegel-src;
@@ -1378,6 +1378,13 @@
                   time_sliced_generated=docs/wasm-component-runtime/generated/time-sliced-profile.json
                   nickel export "$time_sliced_profile" --format json > "$TMPDIR/time-sliced-profile.json"
                   diff -u "$time_sliced_generated" "$TMPDIR/time-sliced-profile.json"
+                  effect_profile=docs/wasm-component-runtime/effect-profile.ncl
+                  effect_profile_generated=docs/wasm-component-runtime/generated/effect-profile.json
+                  nickel export "$effect_profile" --format json > "$TMPDIR/effect-profile.json"
+                  diff -u "$effect_profile_generated" "$TMPDIR/effect-profile.json"
+                  nickel export --stdin-format json --format json < "$TMPDIR/effect-profile.json" \
+                    > "$TMPDIR/effect-profile-readback.json"
+                  diff -u "$effect_profile_generated" "$TMPDIR/effect-profile-readback.json"
                   effect_contract=docs/wasm-component-runtime/effect-contract.ncl
                   effect_generated=docs/wasm-component-runtime/generated/effect-contract.json
                   nickel export "$effect_contract" --format json > "$TMPDIR/effect-contract.json"
@@ -1406,6 +1413,8 @@
                     docs/wasm-component-runtime/fixtures/negative/effect-contract-extra-operation.ncl \
                     docs/wasm-component-runtime/fixtures/negative/effect-contract-execution-admitted.ncl \
                     docs/wasm-component-runtime/fixtures/negative/effect-contract-max-depth.ncl \
+                    docs/wasm-component-runtime/fixtures/negative/effect-profile-wrong-world.ncl \
+                    docs/wasm-component-runtime/fixtures/negative/effect-profile-missing-import.ncl \
                     docs/wasm-component-runtime/fixtures/negative/effect-contract-max-nodes.ncl
                   do
                     if nickel export "$fixture" --format json > "$TMPDIR/negative.json" 2> "$TMPDIR/negative.err"; then
@@ -3241,8 +3250,8 @@
                   test "$migration_hash" = "$expected_migration_hash"
 
                   source_url='ssh://git@github.com/OnixResearch/onix-artifact.git'
-                  source_rev='c932138d880ddf4c2967f4c024b489b5c0022bf1'
-                  source_nar_hash='sha256-XGQLG60DNeY9FUYcOmn6cfYnhCIJzyqf+VW9yofDYFU='
+                  source_rev='5f3962d7471d1547e044f57daeda72f56621fd52'
+                  source_nar_hash='sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY='
                   jq -e \
                     --arg url "$source_url" \
                     --arg rev "$source_rev" \

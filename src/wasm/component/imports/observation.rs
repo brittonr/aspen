@@ -1,4 +1,4 @@
-const MAX_OBSERVED_SURFACE_ENTRIES: usize = 128;
+pub(super) const MAX_OBSERVED_SURFACE_ENTRIES: usize = 128;
 
 /// Result of recording one declared-surface admission without instantiation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,21 +24,45 @@ pub fn observe_artifact_surface(
     component_ref: &str,
     bytes: &[u8],
 ) -> super::super::model::Result<super::surface::DeclaredObservation> {
+    wasmparser::Validator::new().validate_all(bytes).map_err(parse_denial)?;
+    let mut types = super::bookkeeping::RootTypes::new();
+    let mut depth = 0u32;
     let mut imports = Vec::with_capacity(MAX_OBSERVED_SURFACE_ENTRIES);
     let mut exports = Vec::with_capacity(MAX_OBSERVED_SURFACE_ENTRIES);
     for payload in wasmparser::Parser::new(0).parse_all(bytes) {
         match payload.map_err(parse_denial)? {
-            wasmparser::Payload::ComponentImportSection(section) => {
-                imports.extend(declared_names(section)?);
+            wasmparser::Payload::Version { .. } => {
+                depth = depth
+                    .checked_add(1)
+                    .ok_or_else(|| super::super::model::Denial::new("component nesting overflowed"))?;
             }
-            wasmparser::Payload::ComponentExportSection(section) => {
-                exports.extend(exported_names(section)?);
+            wasmparser::Payload::End(_) => {
+                depth = depth
+                    .checked_sub(1)
+                    .ok_or_else(|| super::super::model::Denial::new("component nesting is invalid"))?;
+            }
+            wasmparser::Payload::ComponentTypeSection(section) if depth == 1 => types.observe(section)?,
+            wasmparser::Payload::ComponentAliasSection(section) if depth == 1 => types.aliases(section)?,
+            wasmparser::Payload::ComponentImportSection(section) if depth == 1 => {
+                for import in section {
+                    let import = import.map_err(parse_denial)?;
+                    if types.import(world, &import)? {
+                        push_name(&mut imports, import.name.0)?;
+                    }
+                }
+            }
+            wasmparser::Payload::ComponentExportSection(section) if depth == 1 => {
+                for export in section {
+                    let export = export.map_err(parse_denial)?;
+                    if export.kind != wasmparser::ComponentExternalKind::Func {
+                        return Err(super::super::model::Denial::new("component exports a non-function root item"));
+                    }
+                    push_name(&mut exports, export.name.0)?;
+                }
             }
             _ => {}
         }
     }
-    validate_observed_bounds(&imports, "import")?;
-    validate_observed_bounds(&exports, "export")?;
     Ok(super::surface::DeclaredObservation {
         extraction_tool: super::expected_extraction_tool(),
         verifier: super::ADMISSION_VERIFIER.to_string(),
@@ -91,32 +115,15 @@ pub fn record_surface_admission(
     })
 }
 
-fn declared_names(section: wasmparser::ComponentImportSectionReader<'_>) -> super::super::model::Result<Vec<String>> {
-    let mut names = Vec::with_capacity(MAX_OBSERVED_SURFACE_ENTRIES);
-    for import in section {
-        names.push(import.map_err(parse_denial)?.name.0.to_string());
+fn push_name(names: &mut impl crate::bounded::VecSink<String>, name: &str) -> super::super::model::Result<()> {
+    if names.item_count() >= MAX_OBSERVED_SURFACE_ENTRIES {
+        return Err(super::super::model::Denial::new("component external surface exceeds its bound"));
     }
-    Ok(names)
-}
-
-fn exported_names(section: wasmparser::ComponentExportSectionReader<'_>) -> super::super::model::Result<Vec<String>> {
-    let mut names = Vec::with_capacity(MAX_OBSERVED_SURFACE_ENTRIES);
-    for export in section {
-        names.push(export.map_err(parse_denial)?.name.0.to_string());
-    }
-    Ok(names)
-}
-
-fn validate_observed_bounds(entries: &[String], label: &str) -> super::super::model::Result<()> {
-    if entries.len() > MAX_OBSERVED_SURFACE_ENTRIES {
-        return Err(super::super::model::Denial::new(format!(
-            "observed component {label} surface exceeds the declared bound"
-        )));
-    }
+    names.push_item(name.to_string());
     Ok(())
 }
 
-fn parse_denial(error: wasmparser::BinaryReaderError) -> super::super::model::Denial {
+pub(super) fn parse_denial(error: wasmparser::BinaryReaderError) -> super::super::model::Denial {
     super::super::model::Denial::classified(
         super::super::model::DenialClass::ComponentAdmissionDenial,
         format!("component surface extraction failed: {error}"),

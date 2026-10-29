@@ -1,0 +1,22 @@
+[
+  {
+    "operation": "retain-existing-builder-log-without-rerunning-check",
+    "command": [
+      "nix",
+      "log",
+      "/nix/store/69dqr9cvc9ssyqwv98515c3d4nhdpq1m-octet-consumer-check.drv"
+    ],
+    "exit": 0,
+    "log": "world-distribution-source-policy.log"
+  },
+  {
+    "operation": "retain-existing-builder-log-without-rerunning-check",
+    "command": [
+      "nix",
+      "log",
+      "/nix/store/ccazzrkbgjh5k39i1hw4a8z973p11z8x-octet-consumer-check.drv"
+    ],
+    "exit": 0,
+    "log": "extent-source-policy.log"
+  }
+]

@@ -44,8 +44,8 @@ pub fn start_sliced_execution<'a>(
         );
         return Err(super::denial::denied_outcome(request, denial));
     }
-    let admitted =
-        super::shell::admit_request(request).map_err(|denial| super::denial::denied_outcome(request, denial))?;
+    let admitted = super::shell::admit_request(request, super::provenance::Backend::Local)
+        .map_err(|denial| super::denial::denied_outcome(request, denial))?;
     let receipt = |stage, parent_refs| {
         super::shell::plan_receipt(request, super::shell::PlanReceiptInput {
             plan: &admitted.plan,

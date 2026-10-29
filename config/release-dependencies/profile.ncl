@@ -1,5 +1,5 @@
 let Contracts = import "contracts.ncl" in
-let ArtifactRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1" in
+let ArtifactRevision = "5f3962d7471d1547e044f57daeda72f56621fd52" in
 let BoundedExecRevision = "29dac88ecded94457572db3fdfaaaab95fa91525" in
 let BoundedExecSource = "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git" in
 let DurableFilePublicationRevision = "8e05e74e24b45f752d77145c4455385daaf6d6ab" in
@@ -13,7 +13,7 @@ let VmCohortSource = "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3" in
 let ExecutableExtentRevision = "025d9636f0161777710dac37b3c210ca0ad9483f" in
 let ExecutableExtentSource = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB" in
 let KamaciteRevision = "d76fe4abe543724d8fc0ac4b362187caf2e27622" in
-let ValenceRevision = "5f1c2ba5072c6f9622fa59b1af20502985f569fd" in
+let ValenceRevision = "9201074343cd9da0ffaf6ec9db690af5b445d663" in
 let SchemaIdentityRevision = "2562c8aa38a034061f9af9f3e17280494a5b8de2" in
 let SchemaMigrationRevision = "4fe90e130f2871cf69a6febcdc70785adca98aea" in
 let SchemaMigrationSource = "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git" in
@@ -22,7 +22,7 @@ let TransactionalReconciliationRevision = "eb2bd3441753af97bfcb247cef7cc22d72675
 let TransactionalReconciliationSource = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git" in
 let HardenedWasmtimeRevision = "cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c" in
 let HardenedWasmtimeSource = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx" in
-let MantleWasmVerifierRevision = "e1827a8cc1cacf2810aa2314dc8971177832a8f0" in
+let MantleWasmVerifierRevision = "dd2bebab894688d07e7a29c75c1437f4ecc120df" in
 let MantleWasmVerifierSource = "ssh://git@github.com/OnixResearch/mantle.git" in
 let CratesIoIndex = "registry+https://github.com/rust-lang/crates.io-index" in
 let ArchiveNonClaims = [
@@ -365,7 +365,7 @@ in
         },
         {
           relative_path = "crates/mantle-wasm-consumer-verifier/README.md",
-          blake3 = "6b93726ac997f97acafcafe5db080373bf0c31bf421e098de1fd1a127260a4fa",
+          blake3 = "3a613c1977ffd6a1e2dd6fc3f73aea9f961b7badb9aa97ad133eba65642c73fb",
         },
         {
           relative_path = ".cairn/archive/1970-01-01-verify-wasm-source-closure-trees/evidence/2026-10-27-verification.md",
@@ -393,6 +393,14 @@ in
         {
           relative_path = "cairn/archive/2026-07-12-harden-preserves-integrity-boundaries/tasks.md",
           blake3 = "3abda77b5931c5ef6dcdde504f71dfce06f95d1d6c43f087cd35f8816147f7e2",
+        },
+        {
+          relative_path = ".cairn/archive/1970-01-01-admit-octet-policy-check-provenance/tasks.md",
+          blake3 = "2af098dd7a17c36dc47d051b7fafbd9a08224b1ead21f647fac012ce7f70be39",
+        },
+        {
+          relative_path = ".cairn/archive/1970-01-01-admit-octet-policy-check-provenance/evidence/2026-10-28-verification.md",
+          blake3 = "edab55eb078f6296d1e363836a04622c974dd7770c7718e635356e5f774a3c62",
         }
       ],
       non_claims = ArchiveNonClaims,

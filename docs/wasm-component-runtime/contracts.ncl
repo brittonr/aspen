@@ -7,6 +7,7 @@ let SchemaVersion = 1 in
 let SourceLanguage = "nickel" in
 let ProfileId = "molten.wasm.component.v1" in
 let TimeSlicedProfileId = "molten.wasm.component.time-sliced.v1" in
+let EffectContract = (import "effect-contracts.ncl").default in
 let EvidenceScope = "production" in
 let RuntimeStrategy = "portable-component" in
 let WasmtimeVersion = "45.0.0" in
@@ -136,20 +137,25 @@ let slicing_of = fun value => std.record.get_or "slicing" null value in
 
 let valid_profile = fun value =>
   std.is_record value
-  && (exact ProfileId value.profile_id || exact TimeSlicedProfileId value.profile_id)
-  && (if exact ProfileId value.profile_id
-      then slicing_of value == null
-      else valid_slicing (slicing_of value))
+  && (exact ProfileId value.profile_id || exact TimeSlicedProfileId value.profile_id
+      || exact EffectContract.profile_id value.profile_id)
+  && (if exact TimeSlicedProfileId value.profile_id
+      then valid_slicing (slicing_of value)
+      else slicing_of value == null)
   && exact EvidenceScope value.evidence_scope
   && exact RuntimeStrategy value.runtime_strategy
   && valid_toolchain value.toolchain
-  && valid_wit value.wit
+  && (if exact EffectContract.profile_id value.profile_id
+      then value.wit == EffectContract.wit
+      else valid_wit value.wit)
   && valid_features value.features
   && valid_determinism value.determinism
   && valid_resources value.resources
   && string_array value.allowed_imports
   && distinct value.allowed_imports
-  && std.array.length value.allowed_imports == 0
+  && (if exact EffectContract.profile_id value.profile_id
+      then value.allowed_imports == EffectContract.allowed_imports
+      else std.array.length value.allowed_imports == 0)
   && string_array value.allowed_wasi_interfaces
   && distinct value.allowed_wasi_interfaces
   && std.array.length value.allowed_wasi_interfaces == 0

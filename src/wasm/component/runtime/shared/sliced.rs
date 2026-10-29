@@ -15,14 +15,14 @@ impl super::EngineAdapter {
         continuation: super::super::super::slicing::ContinuationKey,
         deadline_ticks: u64,
     ) -> Result<PendingInvocation<'a>, super::super::shell::ExecutionOutcome> {
-        let early_denial = |denial| super::super::denial::denied_outcome(request, denial);
+        let early_denial = |denial| super::denied_outcome(request, denial);
         if !request.requested_profile.requests_time_slicing() {
             return Err(early_denial(super::super::super::model::Denial::classified(
                 super::super::super::model::DenialClass::ProfileDenial,
                 "a sliced execution needs a time-sliced execution request",
             )));
         }
-        let mut admitted = super::super::shell::admit_request(request).map_err(early_denial)?;
+        let mut admitted = super::admit(request).map_err(early_denial)?;
         let slicing = request
             .profile
             .slicing
@@ -111,7 +111,7 @@ impl PendingInvocation<'_> {
 
     pub(crate) fn run_slice(&mut self) -> super::super::slicedshell::SliceProgress {
         let Some(invocation) = self.invocation.as_mut() else {
-            return super::super::slicedshell::SliceProgress::Completed(super::super::denial::denied_outcome(
+            return super::super::slicedshell::SliceProgress::Completed(super::denied_outcome(
                 self.request,
                 super::super::super::model::Denial::new("the sliced execution already completed"),
             ));
@@ -147,7 +147,7 @@ impl PendingInvocation<'_> {
                 }
                 let outcome =
                     super::finish(self.request, &self.admitted, std::mem::take(&mut self.receipts), observation)
-                        .unwrap_or_else(|denial| super::super::denial::denied_outcome(self.request, denial));
+                        .unwrap_or_else(|denial| super::denied_outcome(self.request, denial));
                 super::super::slicedshell::SliceProgress::Completed(outcome)
             }
             Ok(
@@ -160,7 +160,7 @@ impl PendingInvocation<'_> {
     fn fail(&mut self, denial: super::super::super::model::Denial) -> super::super::slicedshell::SliceProgress {
         self.invocation = None;
         let outcome = super::denied(self.request, &self.admitted, denial, std::mem::take(&mut self.receipts))
-            .unwrap_or_else(|failure| super::super::denial::denied_outcome(self.request, failure));
+            .unwrap_or_else(|failure| super::denied_outcome(self.request, failure));
         super::super::slicedshell::SliceProgress::Completed(outcome)
     }
 }

@@ -31,7 +31,7 @@ pub fn execute(request: &ExecutionRequest<'_>) -> ExecutionOutcome {
 }
 
 fn execute_inner(request: &ExecutionRequest<'_>) -> super::super::model::Result<ExecutionOutcome> {
-    let admitted = admit_request(request)?;
+    let admitted = admit_request(request, super::provenance::Backend::Local)?;
     execute_admitted(request, &admitted.plan, &admitted.input_bytes, admitted.input_ref)
 }
 
@@ -44,7 +44,10 @@ pub(super) struct AdmittedRequest {
 
 /// Admit a request: profile, requested profile, migration, materialization,
 /// artifact facts, import surface, plan, and canonical bounded input.
-pub(super) fn admit_request(request: &ExecutionRequest<'_>) -> super::super::model::Result<AdmittedRequest> {
+pub(super) fn admit_request(
+    request: &ExecutionRequest<'_>,
+    backend: super::provenance::Backend,
+) -> super::super::model::Result<AdmittedRequest> {
     super::super::profile::validate_runtime(request.profile)?;
     super::super::slicing::admit_requested_profile(request.profile, request.requested_profile)?;
     super::super::migration::classify_for_profile(request.requested_profile, request.source.component_bytes())?;
@@ -52,13 +55,15 @@ pub(super) fn admit_request(request: &ExecutionRequest<'_>) -> super::super::mod
         super::super::evidence::materialization::verify(request.profile, request.evidence_scope, request.source)?;
     super::super::admission::inspection::verify_artifact_facts(request.source.component_bytes(), request.facts)?;
     admit_observed_import_surface(request, &materialization)?;
-    let plan = super::super::admission::plan_execution(
+    let mut plan = super::super::admission::plan_execution(
         request.profile,
         materialization,
         request.import_manifest,
         request.facts,
         request.import_grants,
     )?;
+    plan.runtime_configuration_ref =
+        super::provenance::bind_configuration_ref(&plan.runtime_configuration_ref, backend)?;
     let input_bytes = crate::preserves_rail::canonical_bytes(request.input).map_err(|error| {
         super::super::model::Denial::classified(
             super::super::model::DenialClass::InvalidPreservesPayload,

@@ -1,11 +1,12 @@
-mod admission;
+pub(crate) mod admission;
+pub mod consumer;
 mod effect;
 mod evidence;
 mod imports;
 mod migration;
 mod model;
 mod profile;
-mod runtime;
+pub(crate) mod runtime;
 #[path = "parts/slicing/p000/body.rs"]
 mod slicing;
 
@@ -107,15 +108,19 @@ pub use profile::COMPONENT_WIT_PACKAGE;
 pub use profile::COMPONENT_WIT_SOURCE_REF;
 pub use profile::COMPONENT_WIT_WORLD;
 pub use profile::TIME_SLICED_PROFILE_ID;
+pub use profile::hosted;
 pub use profile::r#ref;
 pub use profile::supported;
 pub use profile::time_sliced;
 pub use profile::validate_runtime;
+pub use runtime::EffectRequestHost;
+pub use runtime::Engine;
 pub use runtime::ExecutionOutcome;
 pub use runtime::ExecutionRequest;
 pub use runtime::SliceProgress;
 pub use runtime::SlicedExecution;
 pub use runtime::execute;
+pub use runtime::source_cohort;
 pub use runtime::start_sliced_execution;
 pub use slicing::ContinuationKey;
 pub use slicing::PendingTurn;

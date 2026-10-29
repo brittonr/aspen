@@ -1,0 +1,22 @@
+{
+  "command": [
+    "nix",
+    "build",
+    "--builders",
+    "",
+    "--no-link",
+    "--print-out-paths",
+    ".#checks.x86_64-linux.wasm-component-profile",
+    ".#checks.x86_64-linux.release-dependency-profile",
+    ".#checks.x86_64-linux.git-source-hash-binding"
+  ],
+  "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+  "exit": 0,
+  "outputs": [
+    "/nix/store/l9sa9r9l88fj6b9cwlqlz48cglfb8apf-molten-wasm-component-profile",
+    "/nix/store/q6wgwvfyplzi1fqqak8xa7bcpnm8aiij-molten-release-dependency-profile",
+    "/nix/store/zhc8sclzkx479mmb6wcf1ikph541gz01-molten-git-source-hash-binding"
+  ],
+  "observation": "Configured remote cache endpoints timed out; all three derivations subsequently built locally successfully. Earlier broad world-distribution source-policy failure is retained, not rerun or promoted to a pass.",
+  "claim_boundary": "Focused Nickel profile and dependency/source identity checks only; not full Nix acceptance or runtime authority."
+}

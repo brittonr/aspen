@@ -1,4 +1,3 @@
-
 impl<E: SystemExtensionExecutor> Dispatcher<E> {
     // r[impl molten.system_extension.execution_profiles]
     pub fn new(admitted: super::AdmittedManifest, executor: E) -> crate::error::Result<Self> {
@@ -47,9 +46,7 @@ impl<E: SystemExtensionExecutor> Dispatcher<E> {
         let actual = executor.execution_profile();
         let expected = admitted.manifest().execution_profile;
         if actual != expected {
-            return Err(crate::error::Failure::invalid_harness(
-                "recovered system-extension executor profile mismatch",
-            ));
+            return Err(crate::error::Failure::invalid_harness("recovered system-extension executor profile mismatch"));
         }
         if state.generation < admitted.manifest().initial_generation || state.phase == super::LifecyclePhase::Absent {
             return Err(crate::error::Failure::invalid_harness(
@@ -182,7 +179,7 @@ impl<E: SystemExtensionExecutor> Dispatcher<E> {
                 decision: super::CallbackExecutionDecision::ExecutorFailed,
                 diagnostic: EXECUTOR_ERROR_DIAGNOSTIC,
                 outcome: None,
-                failure_class: super::FailureClass::Retryable,
+                failure_class: self.executor.failure_class(),
             }),
             Ok(outcome) => {
                 let outcome_issues = super::validate_callback_outcome(
@@ -227,7 +224,7 @@ impl<E: SystemExtensionExecutor> Dispatcher<E> {
                         decision: super::CallbackExecutionDecision::ExecutorFailed,
                         diagnostic: EXECUTOR_ERROR_DIAGNOSTIC,
                         outcome: Some(&outcome),
-                        failure_class: super::FailureClass::Retryable,
+                        failure_class: self.executor.failure_class(),
                     });
                 }
                 self.usage = super::release_callback_resources(reserved, event.accounted_bytes, outcome.effects.len())

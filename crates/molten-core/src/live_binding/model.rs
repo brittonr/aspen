@@ -16,7 +16,7 @@ use kamacite_core::CompatibilityContext;
 use kamacite_core::Identity;
 use kamacite_core::SemanticOperationCompatibility;
 
-pub const ARTIFACT_BINDING_REVISION: &str = "c932138d880ddf4c2967f4c024b489b5c0022bf1";
+pub const ARTIFACT_BINDING_REVISION: &str = "5f3962d7471d1547e044f57daeda72f56621fd52";
 pub const KAMACITE_SEMANTIC_REVISION: &str = "d76fe4abe543724d8fc0ac4b362187caf2e27622";
 pub const ARTIFACT_BINDING_SOURCE: &str = "ssh://git@github.com/OnixResearch/onix-artifact.git";
 pub const KAMACITE_SEMANTIC_SOURCE: &str = "ssh://git@github.com/OnixResearch/kamacite.git";

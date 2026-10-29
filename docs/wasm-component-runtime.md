@@ -44,12 +44,14 @@ ambient WASI is never inherited from the process.
 
 The root dependency cohort pins `hwr.shell.v4` at
 `cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c` and the published Mantle consumer
-verifier at `e1827a8cc1cacf2810aa2314dc8971177832a8f0`. The source gate binds
+verifier at `dd2bebab894688d07e7a29c75c1437f4ecc120df`. The source gate binds
 their completed native archives and exact evidence digests, including Mantle's
 closed Octet profile selection. These pins are prerequisites, not authorization
 to change the execution backend.
 
-The adapter under `runtime/shared/` remains test-only. Its bounded initialization
+The import-free adapter under `runtime/shared/` remains a parity candidate rather
+than the default backend. Separate non-test hosted consumer roots are described
+below. The parity adapter's bounded initialization
 driver consumes typed Instantiation yields through the successful checkpoint
 before exposing callback polls, preserving the existing callback ledger without
 resetting fuel or restarting the guest. The checked memory translation retains
@@ -60,13 +62,13 @@ identity or WIT bytes are widened or changed.
 The original start-work and two-129-page-memory cases now agree on complete
 canonical receipts and callback ledgers, with paired actual memory-size/count
 denials. See the [immutable v4 continuation evidence](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-boundary-parity.md).
-Public component execution still uses the complete local runtime. The existing
+Default component execution still uses the complete local runtime. The existing
 actor harness and sandboxed extension fixture execute legacy core modules; they
 are not shared Component Model consumer installations. The [earlier frozen mapping and counterexamples](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-26-runtime-adoption-parity.md)
-remain historical evidence; they are not current v4 failures. Operated product
-deadlines, effect-world linker activation, matching production materializations,
-real shared actor/extension installation and coupled cutover/rollback remain
-acceptance gates.
+remain historical evidence; they are not current v4 failures. The explicit hosted
+roots now have operated deadline, effect and actor/extension evidence below.
+Complete local/shared parity and coupled default-backend cutover/rollback remain
+separate acceptance gates.
 
 The [original directory-missing handoff](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-producer-handoff.md)
 and [original supported-world artifact denial](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-source-tree-intake.md#distinct-supported-world-prerequisite)
@@ -76,19 +78,91 @@ The [immutable supported-world continuation](../.cairn/changes/adopt-shared-wasm
 now accepts a genuine producer bundle under the unchanged supported Molten
 profile/WIT, retains exact component/WIT bytes, requires complete Structural+Bytes
 agreement, and denies empty-directory source drift with private-lease cleanup.
-This resolves import-free supported-world materialization, not execution or
-actor/extension installation. The normalized effect-world probe is separately
-denied by the selected artifact profile. Consumer-installation tasks remain
-unchecked; no bundle rewrite, fabricated Bytes report, profile weakening,
-runtime activation or completed shared adoption is admitted.
+That record resolves import-free supported-world materialization, not execution
+or actor/extension installation. Its separately denied effect-world probe remains
+historical evidence; the later published effects cohort and operated consumers
+below resolve that prerequisite without rewriting bundles or weakening profiles.
 
-The effect-request world remains an unadmitted execution candidate. The inactive
-host adapter below is independently exercised, but no production linker,
-shared-runtime actor/extension installation or production rollback is claimed.
+The contract-only effect-request definition remains unadmitted; its
+`execution_admitted=false` does not authorize installation. The separate explicit
+hosted profile and non-test roots have bounded operated consumer evidence, not
+default-backend adoption or production rollback evidence.
 Cutover must move the immutable dependency,
 adapter, profile/WIT, actor, extension, materialization and receipt cohorts
 together after complete parity and product-consumer evidence. Rollback restores
 that entire previous cohort, never one consumer or receipt producer alone.
+
+## Explicit hosted consumer candidate
+
+The current source exposes `wasm_component::consumer::Actor` for ordinary bounded
+Component Model actor turns and `system_extension::component::Executor` for the
+existing extension callback dispatcher. This is separate from addressable-actor
+sleep/wake and the legacy core-module harness. Each installation requires a
+verified retained Mantle snapshot, its separate production admission envelope,
+measured artifact facts, declared imports and current grants. Extension admission
+also binds the installed implementation, policy references, finite resources and
+port bindings. There is no loose-byte installation or synthetic positive bundle.
+
+The explicit [`effect-profile.ncl`](wasm-component-runtime/effect-profile.ncl)
+selects the versioned effect world without replacing the import-free default.
+The product-owned engine operates the exact shared engine's epoch service and
+stops that service on drop. Epoch deadlines bound guest execution, not a blocked
+synchronous host call. Live effect dispatch retains current host admission and
+request/response publication; replay has recorded inputs and no live fallback.
+
+Molten's component-runtime maintainers own these roots. The durable contribution
+is repeatable non-test composition, current authority admission, canonical replay
+and installed callback lifecycle execution. The [operated consumer record](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-28-hosted-consumers/2026-10-29-operated-consumers.json)
+retains exact immutable pins, commands, complete genuine bundles, checker/Valence
+evidence, canonical receipts and the disposable consumer source closure.
+
+Both ordinary actor and installed extension passed through the pinned verifier.
+The actor exercised actual guest trap, malformed output, fuel exhaustion, exact
+offline replay, corrupted replay rejection and an operated epoch deadline after
+a completed synchronous host call. The extension exercised initialization/start,
+admitted/denied requests, stale authority and replay denials, publication certainty
+boundaries, checkpoint, failure/restart/recovery, refreshed authority and shutdown.
+Publication failures preserve the state established by initialization; they do
+not require that state to be empty. This bounded success does not make the full
+Nix rail green or close full parity, default cutover and rollback gates.
+
+### Installed callback guest
+
+`examples/component-extension/` supplies the candidate no-WASI callback guest;
+the Mantle source-closure member must include its complete recursive tree.
+`invocation::decode` projects the selected payload or state from an envelope
+already admitted by the product executor. It checks the schema/framing and
+decodes the selected byte sequence once, rather than rescanning every embedded
+value. The executor still owns canonical input admission, byte bounds, BLAKE3
+identity and requested-reference agreement before guest invocation. Guest
+projection is not an independent untrusted-input admission boundary.
+
+The guest's fixed 256-KiB allocator reclaims individual allocations using a
+16-byte-block bitmap. Run scans and bitmap-word updates avoid per-block work;
+allocation exhaustion returns null without growing memory. Shrinking an
+allocation releases its tail blocks without copying; growth reuses adjacent
+free blocks or preserves the old allocation if replacement fails. Output value
+identity uses unkeyed BLAKE3-256 with scalar state and fixed round schedules;
+identical output and state reuse one encoded value. Native interoperability
+covers canonical integer/hash boundaries and distinct output/state identities;
+arena coverage
+checks aligned cross-word allocations, live-byte preservation, exhaustion and
+complete reclamation. Molten component-runtime maintainers own these sources
+and the unchanged product admission boundary.
+
+`packed` shares bounded canonical byte-sequence encoding and decoding. ASCII
+groups use nonoverlapping word loads and complete marker, sign and nonzero checks;
+all other integers use the scalar canonical decoder. Output groups use bounded
+word stores, and complete BLAKE3 blocks avoid padding and per-word reconstruction.
+Partial blocks remain zero-padded. Native interoperability checks malformed groups,
+integer/hash boundaries and distinct output/state identities against product codecs.
+
+The final genuine guest completed the full installed lifecycle under the unchanged
+100,000-fuel budget, fixed memory, WIT and policy. Earlier fuel failures, including
+post-restart exhaustion, remain counterexamples rather than successful integration.
+Each artifact still requires fresh source-closure, Structural+Bytes, checker and
+operated-consumer evidence. No higher-budget diagnostic grants product admission.
+
 
 ## Contract-only effect-request world
 

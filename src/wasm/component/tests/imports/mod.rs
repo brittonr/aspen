@@ -28,6 +28,44 @@ fn exact_manifest_world_and_import_set_admit_without_instantiation() {
 }
 
 #[test]
+fn effect_world_requires_exact_host_import_without_widening_the_base_world() {
+    // r[verify molten.wasm_component_adoption.hostcalls]
+    let profile = hosted().expect("effect profile");
+    let world = declared_world(&profile);
+    let manifest = build_manifest(ManifestInput {
+        profile_id: profile.profile_id.clone(),
+        wit_package: profile.wit.package.clone(),
+        world: profile.wit.world.clone(),
+        imports: vec![HOST_REQUEST_IMPORT.to_string()],
+        exports: vec![COMPONENT_INVOKE_EXPORT.to_string()],
+    })
+    .expect("effect manifest");
+    let observation = DeclaredObservation {
+        extraction_tool: expected_extraction_tool(),
+        verifier: ADMISSION_VERIFIER.to_string(),
+        component_ref: super::super::model::content_ref(b"effect surface"),
+        world: profile.wit.world.clone(),
+        imports: vec![HOST_REQUEST_IMPORT.to_string()],
+        exports: vec![COMPONENT_INVOKE_EXPORT.to_string()],
+    };
+    assert!(admit_declared(&manifest, &world, &observation).expect("effect admission").is_admitted);
+    for imports in [Vec::new(), vec![
+        HOST_REQUEST_IMPORT.to_string(),
+        "unexpected".to_string(),
+    ]] {
+        let mut changed = observation.clone();
+        changed.imports = imports;
+        assert!(!admit_declared(&manifest, &world, &changed).expect("changed surface").is_admitted);
+    }
+    let base = super::support::Fixture::new(Consumer::Actor);
+    assert!(
+        !admit_declared(&manifest, &declared_world(&base.profile), &observation)
+            .expect("base world denial")
+            .is_admitted
+    );
+}
+
+#[test]
 fn identical_surface_admissions_replay_to_identical_receipts() {
     // r[verify aspen.wasm_import_admission.admission]
     // r[verify aspen.wasm_import_admission.evidence]

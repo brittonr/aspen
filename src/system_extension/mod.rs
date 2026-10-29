@@ -6,6 +6,7 @@
 //! from the ordinary receipt-first plugin host.
 
 mod canonical;
+pub mod component;
 mod executionfabric;
 mod fixture;
 mod host;
@@ -15,6 +16,12 @@ mod native_host;
 mod tests;
 
 pub use canonical::*;
+pub use component::Binding;
+pub use component::ComponentCallbackHostFactory;
+pub use component::Executor;
+pub use component::HostedObservation;
+pub use component::Installation;
+pub use component::PublicationObservation;
 pub use executionfabric::*;
 pub use fixture::*;
 pub use host::*;

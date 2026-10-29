@@ -16,6 +16,22 @@ Adoption starts only after `hardened-wasmtime-runtime` archives its extraction c
 
 Missing, mutable, stale, or sibling-only prerequisites block cutover. A candidate revision may support parity experiments, but it cannot become the default product path.
 
+The hosted consumer's published Valence `9201074343cd9da0ffaf6ec9db690af5b445d663`
+requires Artifact `5f3962d7471d1547e044f57daeda72f56621fd52`. The release validator
+correctly rejects mixing that identity with Molten's earlier `c932138` cohort.
+Align every active authentication/binding manifest, lock, source pin, plan and
+consumer identity to `5f3962d`; retain the duplicate-source denial. The selected
+auth-core, auth-ed25519 and binding-core directories have identical existing
+files in both source snapshots; the newer snapshot adds package license files.
+Its workspace prospectively declares AGPL-3.0-or-later, compatible with Molten's
+existing project choice; preserve notices and prior permissive grants. This is
+a source-identity prerequisite, not a mechanism or authority-policy change.
+Historical migration receipts remain unchanged and identify only their original
+cohort. New cohort evidence must separately bind current checks and rollback.
+The [current cohort observation](evidence/2026-10-28-hosted-consumers/cohort-alignment.json)
+binds the canonical source, selected features, four exercised Nix checks and
+coupled rollback; its sibling BLAKE3 sidecar identifies those evidence bytes.
+
 ### Preserve Molten profile and receipt authority
 
 Molten keeps `molten.wasm.component.v1`, WIT package and world identities, canonical Preserves schemas, materialization policy, Basalt/UCAN admission, resource policy, actor and extension lifecycle, replay, and receipts.

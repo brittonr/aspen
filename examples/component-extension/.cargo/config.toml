@@ -1,0 +1,7 @@
+# Match the admitted closed feature and fixed-memory cohorts at compilation time.
+[target.wasm32-wasip2]
+rustflags = [
+  "-C", "target-feature=-sign-ext",
+  "-C", "link-arg=--initial-memory=2097152",
+  "-C", "link-arg=--max-memory=2097152",
+]

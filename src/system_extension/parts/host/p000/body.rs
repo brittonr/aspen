@@ -11,6 +11,12 @@ const REPLACEMENT_EVIDENCE_ITEMS: usize = 7;
 pub trait SystemExtensionExecutor {
     fn execution_profile(&self) -> super::ExecutionProfile;
 
+    /// Classification of the latest executor error. An accepted, unresolved
+    /// effect must return a non-retryable class rather than request a restart.
+    fn failure_class(&self) -> super::FailureClass {
+        super::FailureClass::Retryable
+    }
+
     /// Invoke admitted code. The host passes only canonical callback context;
     /// execution profiles own any stronger isolation or process boundary.
     fn invoke(&mut self, invocation: &super::CallbackInvocation)
@@ -36,6 +42,10 @@ pub trait FabricEffectPort {
 impl<T: SystemExtensionExecutor + ?Sized> SystemExtensionExecutor for Box<T> {
     fn execution_profile(&self) -> super::ExecutionProfile {
         (**self).execution_profile()
+    }
+
+    fn failure_class(&self) -> super::FailureClass {
+        (**self).failure_class()
     }
 
     fn invoke(

@@ -16,8 +16,8 @@
     "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/crates/molten-node-host#0.1.0",
     "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "04a0283add8fe96a8b766dfeb448a454bc7660c74451a0e158ffeafbf51a3491",
-  "inputsHash": "5b39af566f0d818f92b96e12b88517b519413cf7e65dde638cca5df855953323",
+  "cargoLockHash": "9d3e49ba82678bfffa9aaba256caf61731581a32fbd91593729673c927c8c0c4",
+  "inputsHash": "4ce4071b4238662e9224c70b19d9af45d3fafeff6e7702ce622bfb599f16c06f",
   "crates": {
     "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec-core@0.1.0": {
       "crateName": "bounded-exec-core",
@@ -1222,7 +1222,7 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/OnixResearch/kamacite"
     },
-    "git+ssh://git@github.com/OnixResearch/mantle.git?rev=e1827a8cc1cacf2810aa2314dc8971177832a8f0#crunch-wasm-component-core@0.1.0": {
+    "git+ssh://git@github.com/OnixResearch/mantle.git?rev=dd2bebab894688d07e7a29c75c1437f4ecc120df#crunch-wasm-component-core@0.1.0": {
       "crateName": "crunch-wasm-component-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -1230,9 +1230,9 @@
       "source": {
         "type": "git",
         "url": "ssh://git@github.com/OnixResearch/mantle.git",
-        "rev": "e1827a8cc1cacf2810aa2314dc8971177832a8f0",
+        "rev": "dd2bebab894688d07e7a29c75c1437f4ecc120df",
         "subDir": "crates/crunch-wasm-component-core",
-        "sha256": "sha256-ndCf6O6dFV7DXUC5OKXzXSiFIBsWp5JYa8lcg1ueE9o="
+        "sha256": "sha256-r8+7Je1MVAug312B2mrgLkjOXgd3dApvFImpJMgesrw="
       },
       "features": [],
       "dependencies": [
@@ -1261,7 +1261,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "git+ssh://git@github.com/OnixResearch/mantle.git?rev=e1827a8cc1cacf2810aa2314dc8971177832a8f0#mantle-wasm-consumer-verifier@0.1.0": {
+    "git+ssh://git@github.com/OnixResearch/mantle.git?rev=dd2bebab894688d07e7a29c75c1437f4ecc120df#mantle-wasm-consumer-verifier@0.1.0": {
       "crateName": "mantle-wasm-consumer-verifier",
       "version": "0.1.0",
       "edition": "2024",
@@ -1269,9 +1269,9 @@
       "source": {
         "type": "git",
         "url": "ssh://git@github.com/OnixResearch/mantle.git",
-        "rev": "e1827a8cc1cacf2810aa2314dc8971177832a8f0",
+        "rev": "dd2bebab894688d07e7a29c75c1437f4ecc120df",
         "subDir": "crates/mantle-wasm-consumer-verifier",
-        "sha256": "sha256-ndCf6O6dFV7DXUC5OKXzXSiFIBsWp5JYa8lcg1ueE9o="
+        "sha256": "sha256-r8+7Je1MVAug312B2mrgLkjOXgd3dApvFImpJMgesrw="
       },
       "features": [
         "default",
@@ -1299,7 +1299,7 @@
           "externCrateName": "cap_std"
         },
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/mantle.git?rev=e1827a8cc1cacf2810aa2314dc8971177832a8f0#crunch-wasm-component-core@0.1.0",
+          "packageId": "git+ssh://git@github.com/OnixResearch/mantle.git?rev=dd2bebab894688d07e7a29c75c1437f4ecc120df#crunch-wasm-component-core@0.1.0",
           "externCrateName": "crunch_wasm_component_core"
         },
         {
@@ -1324,7 +1324,7 @@
       "description": "Published consumer contract for verifying Mantle WebAssembly component materialization bundles",
       "license": "AGPL-3.0-or-later"
     },
-    "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#artifact-auth-core@0.1.0": {
+    "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-core@0.1.0": {
       "crateName": "artifact-auth-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -1332,9 +1332,9 @@
       "source": {
         "type": "git",
         "url": "ssh://git@github.com/OnixResearch/onix-artifact.git",
-        "rev": "c932138d880ddf4c2967f4c024b489b5c0022bf1",
+        "rev": "5f3962d7471d1547e044f57daeda72f56621fd52",
         "subDir": "crates/artifact-auth-core",
-        "sha256": "sha256-XGQLG60DNeY9FUYcOmn6cfYnhCIJzyqf+VW9yofDYFU="
+        "sha256": "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY="
       },
       "features": [
         "default",
@@ -1360,10 +1360,10 @@
       ],
       "crateBin": [],
       "links": null,
-      "license": "MIT OR Apache-2.0",
+      "license": "AGPL-3.0-or-later",
       "repository": "https://github.com/OnixResearch/onix-artifact"
     },
-    "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#artifact-auth-ed25519@0.1.0": {
+    "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-ed25519@0.1.0": {
       "crateName": "artifact-auth-ed25519",
       "version": "0.1.0",
       "edition": "2024",
@@ -1371,9 +1371,9 @@
       "source": {
         "type": "git",
         "url": "ssh://git@github.com/OnixResearch/onix-artifact.git",
-        "rev": "c932138d880ddf4c2967f4c024b489b5c0022bf1",
+        "rev": "5f3962d7471d1547e044f57daeda72f56621fd52",
         "subDir": "crates/artifact-auth-ed25519",
-        "sha256": "sha256-XGQLG60DNeY9FUYcOmn6cfYnhCIJzyqf+VW9yofDYFU="
+        "sha256": "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY="
       },
       "features": [
         "default",
@@ -1381,7 +1381,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#artifact-auth-core@0.1.0",
+          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-core@0.1.0",
           "externCrateName": "artifact_auth_core"
         },
         {
@@ -1403,10 +1403,10 @@
       ],
       "crateBin": [],
       "links": null,
-      "license": "MIT OR Apache-2.0",
+      "license": "AGPL-3.0-or-later",
       "repository": "https://github.com/OnixResearch/onix-artifact"
     },
-    "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#artifact-binding-core@0.1.0": {
+    "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-binding-core@0.1.0": {
       "crateName": "artifact-binding-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -1414,9 +1414,9 @@
       "source": {
         "type": "git",
         "url": "ssh://git@github.com/OnixResearch/onix-artifact.git",
-        "rev": "c932138d880ddf4c2967f4c024b489b5c0022bf1",
+        "rev": "5f3962d7471d1547e044f57daeda72f56621fd52",
         "subDir": "crates/artifact-binding-core",
-        "sha256": "sha256-XGQLG60DNeY9FUYcOmn6cfYnhCIJzyqf+VW9yofDYFU="
+        "sha256": "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY="
       },
       "features": [],
       "dependencies": [],
@@ -1431,10 +1431,10 @@
       "crateBin": [],
       "links": null,
       "description": "Pure versioned binding, resolution, reachability, and retirement mechanics",
-      "license": "MIT OR Apache-2.0",
+      "license": "AGPL-3.0-or-later",
       "repository": "https://github.com/OnixResearch/onix-artifact"
     },
-    "git+ssh://git@github.com/OnixResearch/valence.git?rev=5f1c2ba5072c6f9622fa59b1af20502985f569fd#valence-core@0.1.0": {
+    "git+ssh://git@github.com/OnixResearch/valence.git?rev=9201074343cd9da0ffaf6ec9db690af5b445d663#valence-core@0.1.0": {
       "crateName": "valence-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -1442,12 +1442,20 @@
       "source": {
         "type": "git",
         "url": "ssh://git@github.com/OnixResearch/valence.git",
-        "rev": "5f1c2ba5072c6f9622fa59b1af20502985f569fd",
+        "rev": "9201074343cd9da0ffaf6ec9db690af5b445d663",
         "subDir": "crates/valence-core",
-        "sha256": "sha256-ASWqHCXtUIDerN5vG57TbciTs2q2kHx/dyJI6q0veDk="
+        "sha256": "sha256-Ruxx4JYnVIb0uJna6I//h/aW4oD/NoLB22BX/2MBMj8="
       },
       "features": [],
       "dependencies": [
+        {
+          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-core@0.1.0",
+          "externCrateName": "artifact_auth_core"
+        },
+        {
+          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-ed25519@0.1.0",
+          "externCrateName": "artifact_auth_ed25519"
+        },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
           "externCrateName": "blake3"
@@ -1492,15 +1500,15 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#artifact-auth-core@0.1.0",
+          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-core@0.1.0",
           "externCrateName": "artifact_auth_core"
         },
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#artifact-auth-ed25519@0.1.0",
+          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-ed25519@0.1.0",
           "externCrateName": "artifact_auth_ed25519"
         },
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#artifact-binding-core@0.1.0",
+          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-binding-core@0.1.0",
           "externCrateName": "artifact_binding_core"
         },
         {
@@ -1576,7 +1584,7 @@
           "externCrateName": "kamacite_core"
         },
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/mantle.git?rev=e1827a8cc1cacf2810aa2314dc8971177832a8f0#mantle-wasm-consumer-verifier@0.1.0",
+          "packageId": "git+ssh://git@github.com/OnixResearch/mantle.git?rev=dd2bebab894688d07e7a29c75c1437f4ecc120df#mantle-wasm-consumer-verifier@0.1.0",
           "externCrateName": "mantle_wasm_consumer_verifier"
         },
         {
@@ -1660,7 +1668,7 @@
           "externCrateName": "transactional_reconciliation_core"
         },
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/valence.git?rev=5f1c2ba5072c6f9622fa59b1af20502985f569fd#valence-core@0.1.0",
+          "packageId": "git+ssh://git@github.com/OnixResearch/valence.git?rev=9201074343cd9da0ffaf6ec9db690af5b445d663#valence-core@0.1.0",
           "externCrateName": "valence"
         },
         {
@@ -1749,11 +1757,11 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#artifact-auth-core@0.1.0",
+          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-core@0.1.0",
           "externCrateName": "artifact_auth_core"
         },
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#artifact-binding-core@0.1.0",
+          "packageId": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-binding-core@0.1.0",
           "externCrateName": "artifact_binding_core"
         },
         {
@@ -7881,12 +7889,12 @@
           "externCrateName": "block_buffer"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crypto-common@0.1.7",
-          "externCrateName": "crypto_common"
-        },
-        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#const-oid@0.9.6",
           "externCrateName": "const_oid"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crypto-common@0.1.7",
+          "externCrateName": "crypto_common"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#subtle@2.6.1",
@@ -10778,16 +10786,16 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.2.0",
-          "externCrateName": "foldhash"
-        },
-        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#allocator-api2@0.2.21",
           "externCrateName": "allocator_api2"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#equivalent@1.0.2",
           "externCrateName": "equivalent"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.2.0",
+          "externCrateName": "foldhash"
         }
       ],
       "buildDependencies": [],
@@ -18405,10 +18413,6 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.8.1",
-          "externCrateName": "memchr"
-        },
-        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#crc32fast@1.5.0",
           "externCrateName": "crc32fast"
         },
@@ -18419,6 +18423,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",
           "externCrateName": "indexmap"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.8.1",
+          "externCrateName": "memchr"
         }
       ],
       "buildDependencies": [],
@@ -23261,6 +23269,10 @@
       ],
       "dependencies": [
         {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",
+          "externCrateName": "indexmap"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#itoa@1.0.18",
           "externCrateName": "itoa"
         },
@@ -23275,10 +23287,6 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.21",
           "externCrateName": "zmij"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",
-          "externCrateName": "indexmap"
         }
       ],
       "buildDependencies": [],
@@ -29604,6 +29612,10 @@
       ],
       "dependencies": [
         {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
+          "externCrateName": "anyhow"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.17.1",
           "externCrateName": "hashbrown"
         },
@@ -29614,10 +29626,6 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
-          "externCrateName": "anyhow"
         }
       ],
       "buildDependencies": [],

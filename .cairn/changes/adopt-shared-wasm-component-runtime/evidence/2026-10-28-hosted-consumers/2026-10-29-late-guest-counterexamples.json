@@ -1,0 +1,7 @@
+{
+  "archive": "2026-10-29-late-guest-counterexamples.zip",
+  "bytes": 544702,
+  "blake3": "5c17fae014836806a90fa5470ea3c7e854e4743926781350ce76960669bfbeb5",
+  "members": 289,
+  "boundary": "Failed actual product runs and failed source-policy gate only; no completion claim. Original failed publication assertion assumed absent state after initialization; corrected smoke compares both state references with the captured post-activation state. Subsequent group-checked and direct-block runs passed that invariant and failed specifically at refreshed-post-restart fuel exhaustion. No higher-budget diagnostic or phase-marker component is included."
+}

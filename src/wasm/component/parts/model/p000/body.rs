@@ -5,6 +5,7 @@ pub const CONTENT_REF_LENGTH: usize = BLAKE3_REF_PREFIX.len() + BLAKE3_HEX_LENGT
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DenialClass {
     FuelExhausted,
+    DeadlineExceeded,
     InvalidPreservesPayload,
     ComponentCompilationDenied,
     ComponentInstantiationDenied,
@@ -21,6 +22,7 @@ impl DenialClass {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::FuelExhausted => "fuel-exhausted",
+            Self::DeadlineExceeded => "deadline-exceeded",
             Self::InvalidPreservesPayload => "invalid-preserves-payload",
             Self::ComponentCompilationDenied => "component-compilation-denied",
             Self::ComponentInstantiationDenied => "component-instantiation-denied",
@@ -37,6 +39,7 @@ impl DenialClass {
     pub fn parse(value: &str) -> Option<Self> {
         match value {
             "fuel-exhausted" => Some(Self::FuelExhausted),
+            "deadline-exceeded" => Some(Self::DeadlineExceeded),
             "invalid-preserves-payload" => Some(Self::InvalidPreservesPayload),
             "component-compilation-denied" => Some(Self::ComponentCompilationDenied),
             "component-instantiation-denied" => Some(Self::ComponentInstantiationDenied),
