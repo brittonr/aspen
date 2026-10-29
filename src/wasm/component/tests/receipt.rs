@@ -74,7 +74,7 @@ fn every_stage_emits_a_canonical_profile_bound() {
 }
 
 #[test]
-fn a_receipt_chain_never_mixes_runtime_configuration_cohorts() {
+fn a_chain_never_mixes_runtime_configuration_cohorts() {
     // r[verify molten.wasm_component_adoption.rollback]
     // r[verify molten.wasm_component.receipts]
     let fixture = super::support::Fixture::new(Consumer::Actor);
