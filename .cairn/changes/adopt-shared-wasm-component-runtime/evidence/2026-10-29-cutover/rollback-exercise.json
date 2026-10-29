@@ -1,0 +1,23 @@
+{
+  "schema": "molten-coupled-rollback-exercise-v1",
+  "date": "2026-10-29",
+  "cutover_revision": "f7283e35a34b48cf9aa6f9aa3755e22d067c2d2a",
+  "pre_cutover_revision": "e5fa4549fcf2acf8329eaef8b5b21d1256d1ad13",
+  "procedure": "git worktree add --detach <scratch> <cutover>; git revert --no-commit <cutover>",
+  "revert_applied_cleanly": true,
+  "tree_identical_to_pre_cutover": true,
+  "verification": "git diff --cached --quiet <pre_cutover> after the revert exited 0 (empty difference).",
+  "tests": [
+    {
+      "command": "cargo test --locked -p molten --lib -- wasm_component system_extension::component",
+      "result": "ok. 95 passed; 0 failed"
+    },
+    {
+      "command": "cargo test --locked -p molten --lib -- wasm_component::tests::parity",
+      "result": "ok. 21 passed; 0 failed",
+      "note": "The pre-cutover tree carries the 21-test paired local/shared corpus. The archived 25-test baseline additionally contains the post-return cleanup, hidden-import and receipt-overclaim cases added with the cutover."
+    }
+  ],
+  "coupling": "One revert restored the local runtime, generated bindings, local sliced shell, local receipt identity, paired parity corpus, documents and both consumer classes together. Dependency pins were unchanged, so no lock or plan regeneration was needed.",
+  "boundary": "Exercised on a scratch worktree only; no deployment, receipt migration, or production rollback is claimed."
+}

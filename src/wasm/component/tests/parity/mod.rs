@@ -5,7 +5,6 @@
 
 use super::super::*;
 
-mod cleanup;
 mod fixtures;
 mod guest;
 mod guestarena;

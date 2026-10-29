@@ -1,0 +1,275 @@
+{
+  "schema": "molten-cutover-final-validation-v1",
+  "date": "2026-10-29",
+  "base_commit": "f7283e35a34b48cf9aa6f9aa3755e22d067c2d2a",
+  "note": "Run on the working tree containing the cutover commit plus the Octet-warning repair and this evidence.",
+  "commands": [
+    {
+      "name": "format",
+      "command": [
+        "nix",
+        "develop",
+        "--builders",
+        "",
+        "-c",
+        "cargo",
+        "fmt",
+        "--all",
+        "--check"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-cutover-20261029",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-source-gate/format.log"
+    },
+    {
+      "name": "workspace",
+      "command": [
+        "nix",
+        "develop",
+        "--builders",
+        "",
+        "-c",
+        "cargo",
+        "octet",
+        "check",
+        "--artifact-dir",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-source-gate/workspace"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-cutover-20261029",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-source-gate/workspace.log"
+    },
+    {
+      "name": "library",
+      "command": [
+        "nix",
+        "develop",
+        "--builders",
+        "",
+        "-c",
+        "cargo",
+        "octet",
+        "check",
+        "-p",
+        "molten",
+        "--artifact-dir",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-source-gate/library",
+        "--",
+        "--lib"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-cutover-20261029",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-source-gate/library.log"
+    },
+    {
+      "name": "object-corpus",
+      "command": [
+        "nix",
+        "develop",
+        "--builders",
+        "",
+        "-c",
+        "cargo",
+        "octet",
+        "object",
+        "corpus",
+        "receipt",
+        "--output",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-source-gate/workspace/object-corpus-receipt.json",
+        "src",
+        "src/job/dag.rs",
+        "src/main.rs",
+        "src/node/daemon.rs",
+        "src/node/runtime.rs",
+        "src/octet/gate.rs",
+        "src/upgrades/mod.rs",
+        "examples/component-extension/src/codec.rs",
+        "examples/component-extension/src/identity.rs",
+        "examples/component-extension/src/invocation.rs",
+        "examples/component-extension/src/allocator.rs",
+        "examples/component-extension/src/packed.rs"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-cutover-20261029",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-canonical-verification/object-corpus.log"
+    },
+    {
+      "name": "artifact-import",
+      "command": [
+        "nix",
+        "develop",
+        "--builders",
+        "",
+        "-c",
+        "cargo",
+        "run",
+        "--locked",
+        "--",
+        "test",
+        "octet",
+        "artifacts",
+        "import",
+        "--artifacts",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-source-gate/workspace",
+        "--ledger",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-canonical-verification/ledger",
+        "--receipt-out",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-canonical-verification/artifact-ledger-receipt.preserves"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-cutover-20261029",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-canonical-verification/artifact-import.log"
+    },
+    {
+      "name": "strict-gate",
+      "command": [
+        "nix",
+        "develop",
+        "--builders",
+        "",
+        "-c",
+        "cargo",
+        "run",
+        "--locked",
+        "--",
+        "test",
+        "octet",
+        "gate",
+        "--artifacts",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-source-gate/workspace",
+        "--profile",
+        "strict-ci",
+        "--receipt-out",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-canonical-verification/gate-receipt.preserves"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-cutover-20261029",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-canonical-verification/strict-gate.log"
+    },
+    {
+      "name": "remediation-plan",
+      "command": [
+        "nix",
+        "develop",
+        "--builders",
+        "",
+        "-c",
+        "cargo",
+        "run",
+        "--locked",
+        "--",
+        "test",
+        "octet",
+        "remediation",
+        "plan",
+        "--artifacts",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-source-gate/workspace",
+        "--lib-artifacts",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-source-gate/library",
+        "--focused-object-corpus",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-source-gate/workspace/object-corpus-receipt.json",
+        "--receipt-out",
+        "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-canonical-verification/remediation-plan.preserves"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-cutover-20261029",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-canonical-verification/remediation-plan.log"
+    },
+    {
+      "name": "workspace-library-tests",
+      "command": [
+        "nix",
+        "develop",
+        "--builders",
+        "",
+        "-c",
+        "cargo",
+        "test",
+        "--locked",
+        "--workspace",
+        "--lib"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-cutover-20261029",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-canonical-verification/workspace-library-tests.log"
+    },
+    {
+      "name": "strict-clippy",
+      "command": [
+        "nix",
+        "develop",
+        "--builders",
+        "",
+        "-c",
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-cutover-20261029",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-canonical-verification/strict-clippy.log"
+    },
+    {
+      "name": "strict-cairn",
+      "command": [
+        "nix",
+        "run",
+        "path:/home/brittonr/git/OnixResearch/cairn#cairn",
+        "--",
+        "validate",
+        "--root",
+        ".",
+        "--policy",
+        "/home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json",
+        "--strict"
+      ],
+      "cwd": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-cutover-20261029",
+      "exit": 0,
+      "log": "/home/brittonr/.cache/aspen-hosted-effects-20261028/cutover-canonical-verification/strict-cairn.log"
+    }
+  ],
+  "workspace_octet": {
+    "status": "clean",
+    "findings": 0
+  },
+  "library_octet": {
+    "status": "clean",
+    "findings": 0
+  },
+  "strict_ci_receipt_ref": "blake3:fe8d0752794878ec8b0548c7e65e1188dd385e489badadc73f6d75a8959e0a1c",
+  "workspace_library_tests": {
+    "molten": 1799,
+    "molten-core": 630,
+    "failed": 0
+  },
+  "focused_component_tests": "cargo test --locked -p molten --lib -- wasm_component system_extension::component: ok. 99 passed; 0 failed",
+  "clippy": "cargo clippy --locked --workspace --all-targets -- -D warnings exited 0",
+  "cairn": "Provider-policy strict validation exited 0",
+  "tracey": "inherited-debt guard: requirements=2966 referenced=1032 uncovered=1934 dangling=0 verdict=pass (baseline unchanged)",
+  "nix": {
+    "command": "nix build --builders \"\" --no-link .#checks.x86_64-linux.{wasm-component-profile,release-dependency-profile,git-source-hash-binding,world-distribution-octet-deny-all,executable-extent-octet-deny-all}",
+    "exit": 0,
+    "outputs": [
+      "/nix/store/ffhsavpayag9f6pfncf0yi3g3pjlgm1x-molten-wasm-component-profile",
+      "/nix/store/9n0nfg1f4m7zlcld8dw8mw19cab97zxy-molten-release-dependency-profile",
+      "/nix/store/jmyypch8xmcjfa5m0chsyi7qv4lkf4jx-molten-git-source-hash-binding",
+      "/nix/store/kc34kwmn8pi18d8dq3b962m97ii34fwb-octet-consumer-check",
+      "/nix/store/crjwdnkdfyj5gl85l57fdh6machg9v98-octet-consumer-check"
+    ],
+    "note": "The previously retained world-distribution-octet-deny-all failure (35 findings) is resolved by refactoring content_replication; no lint was suppressed. Configured remote cache endpoints timed out and builds ran locally."
+  },
+  "archive": {
+    "file": "final-validation-logs.zip",
+    "bytes": 109078,
+    "blake3": "f47ec1180a596334a1aac264998642dec0f10e7cbb963b38be5c1c08a48a3320"
+  },
+  "non_claims": [
+    "Not full `nix flake check`, VM, soak or release eligibility.",
+    "No Wasmtime, component, effect, actor, extension or whole-system correctness claim."
+  ]
+}

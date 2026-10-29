@@ -1,5 +1,4 @@
 use super::super::*;
-use super::support::execute;
 
 #[test]
 fn mantle_materialized_executes_through_generated_wit_bindings() {
@@ -10,7 +9,7 @@ fn mantle_materialized_executes_through_generated_wit_bindings() {
     for consumer in [Consumer::Actor, Consumer::SystemExtension] {
         let fixture = super::support::Fixture::new(consumer);
         let input = super::support::input_value();
-        let outcome = execute(&fixture.request(&input));
+        let outcome = super::support::execute(&fixture.request(&input));
         assert!(outcome.is_pass(), "{:?}", outcome.diagnostics);
         assert_eq!(outcome.output.as_ref(), Some(&input));
         assert_eq!(outcome.receipts.len(), 3);
@@ -27,8 +26,8 @@ fn identical_execution_replays_to_identical_canonical_evidence() {
     // r[verify molten.wasm_component.receipts]
     let fixture = super::support::Fixture::new(Consumer::Actor);
     let input = super::support::input_value();
-    let left = execute(&fixture.request(&input));
-    let right = execute(&fixture.request(&input));
+    let left = super::support::execute(&fixture.request(&input));
+    let right = super::support::execute(&fixture.request(&input));
     assert!(left.is_pass(), "{:?}", left.diagnostics);
     assert!(right.is_pass(), "{:?}", right.diagnostics);
     assert_eq!(left.output, right.output);
@@ -42,20 +41,20 @@ fn denies_malformed_wrong_world_and_over_resource_requests_with_receipts() {
     let mut malformed = super::support::Fixture::new(Consumer::Actor);
     malformed.replace_component_bytes(b"not-a-component".to_vec());
     let input = super::support::input_value();
-    let malformed_outcome = execute(&malformed.request(&input));
+    let malformed_outcome = super::support::execute(&malformed.request(&input));
     assert!(!malformed_outcome.is_pass());
     assert_eq!(malformed_outcome.receipts.len(), 1);
     assert_eq!(malformed_outcome.receipts[0].input.stage, Stage::Denial);
 
     let mut wrong_world = super::support::Fixture::new(Consumer::Actor);
     wrong_world.facts.declared_world = "wrong-world".to_string();
-    let wrong_world_outcome = execute(&wrong_world.request(&input));
+    let wrong_world_outcome = super::support::execute(&wrong_world.request(&input));
     assert!(!wrong_world_outcome.is_pass());
     assert_eq!(wrong_world_outcome.receipts.len(), 1);
 
     let mut exhausted = super::support::Fixture::new(Consumer::Actor);
     exhausted.facts.instances = exhausted.profile.resources.max_instances + 1;
-    let exhausted_outcome = execute(&exhausted.request(&input));
+    let exhausted_outcome = super::support::execute(&exhausted.request(&input));
     assert!(!exhausted_outcome.is_pass());
     assert_eq!(exhausted_outcome.receipts.len(), 1);
 }
@@ -79,13 +78,13 @@ fn production_loose_bytes_and_core_module_requests_never_fall_back() {
         import_grants: &[],
         input: &input,
     };
-    let loose = execute(&loose_request);
+    let loose = super::support::execute(&loose_request);
     assert!(!loose.is_pass());
     assert_eq!(loose.receipts.len(), 1);
 
     let mut core = super::support::Fixture::new(Consumer::Actor);
     core.replace_component_bytes(wat::parse_str("(module)").expect("core module"));
-    let denied = execute(&core.request(&input));
+    let denied = super::support::execute(&core.request(&input));
     assert!(!denied.is_pass());
     assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic.contains("fallback is forbidden")));
 }
@@ -99,7 +98,7 @@ fn denies_invalid_preserves_output_and_fuel_exhaustion() {
 
     let mut invalid_output = super::support::Fixture::new(Consumer::Actor);
     invalid_output.replace_component_bytes(super::support::invalid_output_bytes());
-    let invalid = execute(&invalid_output.request(&input));
+    let invalid = super::support::execute(&invalid_output.request(&input));
     assert!(!invalid.is_pass());
     assert!(invalid.diagnostics.iter().any(|diagnostic| diagnostic.contains("canonical Preserves")));
     assert_eq!(invalid.receipts.len(), 3);
@@ -110,7 +109,7 @@ fn denies_invalid_preserves_output_and_fuel_exhaustion() {
 
     let mut fuel_exhaustion = super::support::Fixture::new(Consumer::Actor);
     fuel_exhaustion.replace_component_bytes(super::support::fuel_exhaustion_bytes());
-    let exhausted = execute(&fuel_exhaustion.request(&input));
+    let exhausted = super::support::execute(&fuel_exhaustion.request(&input));
     assert!(!exhausted.is_pass());
     assert!(exhausted.diagnostics.iter().any(|diagnostic| diagnostic.contains("fuel")));
     assert_eq!(exhausted.receipts.len(), 3);
@@ -127,13 +126,13 @@ fn reinspects_resource_facts_and_rejects_actual_growth() {
     let mut forged = super::support::Fixture::new(Consumer::Actor);
     forged.facts.memory.initial = 0;
     forged.facts.memory.maximum = Some(0);
-    let forged_outcome = execute(&forged.request(&input));
+    let forged_outcome = super::support::execute(&forged.request(&input));
     assert!(!forged_outcome.is_pass());
     assert!(forged_outcome.diagnostics.iter().any(|diagnostic| diagnostic.contains("differs")));
 
     let mut growing = super::support::Fixture::new(Consumer::Actor);
     growing.replace_component_bytes(super::support::dynamic_growth_bytes());
-    let growing_outcome = execute(&growing.request(&input));
+    let growing_outcome = super::support::execute(&growing.request(&input));
     assert!(!growing_outcome.is_pass());
     assert!(growing_outcome.diagnostics.iter().any(|diagnostic| diagnostic.contains("nondeterministic growth")));
 
@@ -142,7 +141,7 @@ fn reinspects_resource_facts_and_rejects_actual_growth() {
     over_limit.replace_component_bytes(over_limit_bytes);
     over_limit.facts.memory.initial = declared_bytes;
     over_limit.facts.memory.maximum = Some(declared_bytes);
-    let over_limit_outcome = execute(&over_limit.request(&input));
+    let over_limit_outcome = super::support::execute(&over_limit.request(&input));
     assert!(!over_limit_outcome.is_pass());
     assert!(over_limit_outcome.diagnostics.iter().any(|diagnostic| diagnostic.contains("resource bound")));
 }

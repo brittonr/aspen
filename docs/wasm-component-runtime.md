@@ -72,8 +72,10 @@ fallback to a second backend remains. Receipt `runtime_configuration_ref` binds
 only the shared source cohort. Receipts minted before the cutover carry the
 previous local identity; they are never mixed with shared receipts.
 
-**Parity.** The original paired local/shared corpus passed 25 tests at
-`e5fa4549fcf2acf8329eaef8b5b21d1256d1ad13`. The local oracle source and that
+**Parity.** The paired local/shared corpus passed 25 tests on the pre-cutover tree
+`e5fa4549fcf2acf8329eaef8b5b21d1256d1ad13` plus the cases added with the cutover
+(post-return cleanup, hidden ambient imports and receipt overclaim); the committed
+tree alone carries 21. The local oracle source and that
 baseline are archived under
 [`evidence/2026-10-29-cutover/`](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-29-cutover/pre-cutover-parity-baseline.json).
 The frozen corpus in `src/wasm/component/tests/parity/` now asserts the exact
@@ -99,7 +101,7 @@ It cannot leave shared receipts beside local execution, or one consumer class on
 each backend. The dependency pins did not change in the cutover, so rollback needs
 no lock or plan regeneration. The
 [executed rollback record](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-29-cutover/rollback-exercise.json)
-shows the revert applying cleanly and the archived 25-test baseline passing again.
+shows the revert applying cleanly, restoring the pre-cutover tree exactly, and its 21-test paired corpus and consumer suites passing again.
 
 The [original directory-missing handoff](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-producer-handoff.md)
 and [original supported-world artifact denial](../.cairn/changes/adopt-shared-wasm-component-runtime/evidence/2026-10-27-source-tree-intake.md#distinct-supported-world-prerequisite)

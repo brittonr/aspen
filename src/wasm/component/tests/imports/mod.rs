@@ -1,5 +1,4 @@
 use super::super::*;
-use super::support::execute;
 
 fn fixture_record(fixture: &super::support::Fixture) -> AdmissionRecord {
     let component_ref = fixture.bundle.component.content_ref.clone();
@@ -200,7 +199,7 @@ fn drifted_manifest_denies_execution_before_instantiation() {
     let mut fixture = super::support::Fixture::new(Consumer::Actor);
     fixture.import_manifest.world = "drifting-world".to_string();
     let input = super::support::input_value();
-    let outcome = execute(&fixture.request(&input));
+    let outcome = super::support::execute(&fixture.request(&input));
     assert!(!outcome.is_pass());
     assert_eq!(outcome.receipts.len(), 1);
     assert_eq!(outcome.receipts[0].input.stage, Stage::Denial);
