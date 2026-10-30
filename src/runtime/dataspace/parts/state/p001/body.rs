@@ -24,6 +24,11 @@ impl RuntimeState {
         }
     }
 
+    /// Inspect committed live assertions without cloning unrelated runtime state.
+    pub fn live_assertions(&self) -> &OrderedSet<Assertion> {
+        &self.assertions
+    }
+
     pub fn apply_step(&mut self, step: &Step) -> Vec<Event> {
         match self.apply_step_with_predicate_receipt(step) {
             Ok((events, _receipt)) => events,

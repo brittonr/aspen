@@ -35,7 +35,7 @@ fn current_run_shutdown_observation_binds_completion_and_restart_lineage() {
         node_id: "node:lineage",
     })
     .expect("initialize");
-    run_local(&RunInput { state_root: &workspace }).expect("first run");
+    run_local_fixture_for_tests(&RunInput { state_root: &workspace }).expect("first run");
     let root = crate::node_state::DirectoryRoot::open_existing(&workspace).expect("node capability");
     let first = current_node_run_binding(&root).expect("first binding");
     let stopped = stop_local_with_root(&root).expect("current shutdown");
@@ -49,7 +49,7 @@ fn current_run_shutdown_observation_binds_completion_and_restart_lineage() {
         observations.classify("shutdown", Some(&control), true).lifecycle,
         crate::node_runtime::NodeRunLifecycle::Stopped
     );
-    run_local_with_root(&root).expect("restart with completed evidence");
+    run_local_with_root_fixture_for_tests(&root).expect("restart with completed evidence");
     let second = current_node_run_binding(&root).expect("second binding");
     assert_eq!(second.previous_run_ref.as_deref(), Some(first.run_ref.as_str()));
     assert_ne!(second.run_ref, first.run_ref);
@@ -75,7 +75,7 @@ fn current_run_observation_rejection_precedes_shutdown_effects() {
             node_id: "node:observation-rejection",
         })
         .expect("initialize");
-        run_local(&RunInput { state_root: &workspace }).expect("run node");
+        run_local_fixture_for_tests(&RunInput { state_root: &workspace }).expect("run node");
         let root = crate::node_state::DirectoryRoot::open_existing(&workspace).expect("node capability");
         let binding = current_node_run_binding(&root).expect("current binding");
         match damage {
@@ -132,7 +132,7 @@ fn legacy_completion_without_run_binding_cannot_report_stopped_or_restart() {
             node_id: "node:historical",
         })
         .expect("initialize");
-        run_local(&RunInput { state_root: &workspace }).expect("run node");
+        run_local_fixture_for_tests(&RunInput { state_root: &workspace }).expect("run node");
         let stopped = stop_local(&StopInput { state_root: &workspace }).expect("complete original run");
         std::fs::remove_file(workspace.join(missing)).expect("remove current-run observation");
         let before = current_run_protected_state(&workspace);
@@ -150,7 +150,7 @@ fn legacy_completion_without_run_binding_cannot_report_stopped_or_restart() {
         );
         status_local(&StatusInput { state_root: &workspace })
             .expect_err("legacy receipt alone cannot prove current stopped");
-        run_local(&RunInput { state_root: &workspace }).expect_err("missing run lineage cannot reset the run identity");
+        run_local_fixture_for_tests(&RunInput { state_root: &workspace }).expect_err("missing run lineage cannot reset the run identity");
         assert_eq!(current_run_protected_state(&workspace), before);
         assert!(!workspace.join(CONTROL_LOCK_FILE).exists());
     }
@@ -167,7 +167,7 @@ fn denied_repeat_stop_preserves_completed_run_status_and_restart() {
         node_id: "node:repeat-stop",
     })
     .expect("initialize");
-    run_local(&RunInput { state_root: &workspace }).expect("run node");
+    run_local_fixture_for_tests(&RunInput { state_root: &workspace }).expect("run node");
     let stopped = stop_local(&StopInput { state_root: &workspace }).expect("complete current run");
     stop_local(&StopInput { state_root: &workspace }).expect_err("repeat stop remains denied");
     assert_eq!(status_local(&StatusInput { state_root: &workspace }).expect("completed status").status, "stopped");
@@ -181,7 +181,7 @@ fn denied_repeat_stop_preserves_completed_run_status_and_restart() {
             .receipt_ref,
         stopped.control_receipt_ref
     );
-    run_local_with_root(&root).expect("restart retains successful completion despite later denial");
+    run_local_with_root_fixture_for_tests(&root).expect("restart retains successful completion despite later denial");
     assert_eq!(status_local_with_root(&root).expect("restarted status").status, "running");
 }
 
@@ -197,11 +197,11 @@ fn service_propagates_unresolved_historical_shutdown_without_stopping_current_ru
         node_id: "node:service-historical",
     })
     .expect("initialize");
-    run_local(&RunInput { state_root: &workspace }).expect("first run");
+    run_local_fixture_for_tests(&RunInput { state_root: &workspace }).expect("first run");
     let request = shutdown_request().expect("shutdown request");
     submit_and_dispatch(&workspace, &request.value);
     let old_completion = std::fs::read(workspace.join(CURRENT_RUN_SHUTDOWN_FILE)).expect("first completion");
-    run_local(&RunInput { state_root: &workspace }).expect("restart");
+    run_local_fixture_for_tests(&RunInput { state_root: &workspace }).expect("restart");
     std::fs::write(workspace.join(CURRENT_RUN_SHUTDOWN_FILE), old_completion).expect("restore historical observation");
     let active_lock = std::fs::read(workspace.join(CONTROL_LOCK_FILE)).expect("current active lock");
     submit_control_request(&ControlSubmitInput {
@@ -234,7 +234,7 @@ fn service_preserves_completed_shutdown_when_pending_work_denies_the_loop() {
         node_id: "node:completed-with-pending",
     })
     .expect("initialize");
-    run_local(&RunInput { state_root: &workspace }).expect("run node");
+    run_local_fixture_for_tests(&RunInput { state_root: &workspace }).expect("run node");
     let policies = [local_ref("node-control-policy", "shutdown").expect("policy")];
     let resources = [local_ref("node-control-resource", "shutdown").expect("resource")];
     for suffix in ["first-pending", "second-pending"] {

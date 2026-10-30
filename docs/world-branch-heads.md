@@ -13,6 +13,13 @@ Choregraph supplies immutable event graphs and pure generation-fenced branch pla
 
 Artifact Auth verifies exact signer statements under supplied observations. It does not authorize a branch mutation.
 
+The independent witness provider is the canonical `OnixResearch/release-channel`
+contract. Its exact reviewed source revision, contract identity, and license pin
+remain pending the governed parent dependency selection. No unpinned checkout,
+synthetic revision, or development override establishes production provenance.
+Molten consumes normalized observations; it does not own the provider wire format,
+operate its log, or choose global trust roots.
+
 ## Claim structure
 
 A `molten.world-head-claim.v1` claim binds these values:
@@ -44,7 +51,52 @@ Each accepted mutation advances the durable generation by one. Old, repeated, sk
 
 This check protects against stale claims while the observed durable store remains intact. It does not detect rollback of both head and generation state.
 
-A stronger rollback claim needs an independent witness. The local protocol does not supply that witness.
+A stronger rollback claim requires the explicit `independent-witness-v1` profile.
+The `local-generation-v1` profile remains scoped to intact local durable state and
+cannot satisfy a policy requiring independent witnessing.
+
+## Independent currentness and finalization
+
+Durably stage the exact authenticated claim before contacting the provider. Check
+the operation, provider contract, branch, claim identity, generation, signed
+checkpoint, inclusion, consistency predecessor, quorum, and authenticated current
+head observation against the consumer's retained highest state. Inclusion alone
+is not an authoritative current-head read.
+
+The provider reservation precedes the local transaction. The transaction rechecks
+head, generation, policy, authority, staged claim, and retained witness state, then
+publishes the local head and highest witness state together. A local commit while
+the provider is reserved is recorded as `reserved`, not externally committed.
+Only the confirmed external commit permits the final `admitted` currentness role.
+An orphan witnessed claim or lost local compare-and-swap does not move the head.
+
+The durable highest-state codec uses canonical packed Preserves and retains the
+provider and checkpoint identities, checkpoint revision, signature observation,
+observation time, branch, claim, generation, consistency predecessor, and sorted
+quorum members. Parsing does not rerun signature verification or grant admission.
+Missing or rolled-back retained state blocks strong admission; recovery must not
+silently reset it. Provider forks halt admission for explicit operator handling;
+provider unavailability may block strong-profile movement rather than downgrade it.
+
+An uncertain append, external commit, or local commit remains uncertain.
+Reconciliation reads the exact operation in both systems and classifies finalize,
+already-complete, superseded, conflict, retryable, denied, or manual-review outcomes.
+
+## Detached witness receipts
+
+Receipts separately name statement authentication, branch authorization, witness
+currentness, local persistence, and reconciliation. They bind the actual claim,
+authentication-decision, and authority-observation identities; those roles cannot
+be populated with one synthetic shared reference. Receipt identity is BLAKE3 over
+canonical packed Preserves, never serde serialization or debug output.
+
+Receipt validation rejects witness-as-authority claims, local-profile independent
+claims, mismatched claim/highest-state bindings, and committed local mutations
+without independent authentication and authorization admission. A reserved provider
+state remains distinguishable from confirmed external currentness even after local
+persistence. Receipts carry explicit non-claims: no branch authority from witnessing,
+world semantic truth, provider honesty, global consensus, release eligibility,
+external effect completion, or future mutation authority.
 
 ## Authentication and authority
 
@@ -63,6 +115,23 @@ The adapter reads the current head inside the transaction. It then reruns authen
 The transaction records the successor state and receipt together. A stale observation leaves the prior head unchanged.
 
 An uncertain commit result enters reconciliation. It does not produce a confirmed success claim.
+
+The operator trust root independently installs the canonical witness-policy
+identity, including the exact provider key/source/license contract, required
+profile, allowed quorum, quorum threshold, and observation age. Initial admission
+and the final transaction re-read that installed identity. A mutation credential
+or a provider response cannot install a weaker policy. A durable strongest-profile
+marker fences the legacy local path even if its highest-state row disappears.
+
+`world_witness::recovery::recover` reads the exact durable stage, actual
+Transactional Reconciliation Core attempt/publication binding, local operation
+receipt, and fresh authenticated provider state. `reconcile_and_resume` can finish
+only that observed reservation; it never creates a new Reserve after a lost
+response. Local-after/external-reserved remains retryable, not already complete.
+Completed recovery uses the actual persisted authentication/authorization receipt
+to recognize the old transaction, not a fabricated before-state or a new grant.
+Forks, missing strongest state, and unresolved conflicting operations remain
+denied or manual-review outcomes; there is no automatic reset or fork repair.
 
 ## Conflicts
 
@@ -85,11 +154,49 @@ An operator must select a policy action or create an explicit merge. Conflict st
 
 Planning and signing do not mutate a branch. Signing does not authorize the signed transition.
 
+## Private same-host witness consumer pilot
+
+`cargo run --bin world-witness-consumer-pilot -- run NEW_ROOT ACTUAL_PROVIDER_REV`
+provisions a private same-host fixture and runs each consumer operation in a new
+process. Supply the actual reviewed full provider source revision; the pilot does
+not invent a pin. `NEW_ROOT` must not exist. The fixture retains its artifacts
+under that explicitly supplied root for inspection.
+
+Provisioning creates actual Artifact Auth signatures, issuer-signed UCAN grants,
+holder-signed claim invocations, and a current installed operator policy. Admission
+uses the actual Basalt/UCAN adapter and separately durable replay and revocation
+stores. Provisioning launches an `index-initialize` provider child. Every challenged
+request uses the actual process transport and a separate `index-serve` provider
+child, which opens the retained external index, verifies the writer signature,
+and signs its exact reply. Fixed private fixture keys are deliberately nonproduction;
+successful fixture execution never establishes production trust or release eligibility.
+
+The pilot exercises authenticated planning, durable staging, external reservation,
+the fenced local transaction, external commit, and repeated independent current
+reads. It then restores the entire consumer root to its generation-one snapshot,
+while the independent index and operator authority stores remain at their newer
+state. A new consumer process must reject the old local head using the real public
+currentness-read path and report a freshly authenticated external generation two.
+An arbitrary child error does not satisfy the rollback outcome.
+
+The pilot head-policy identity is BLAKE3 over its exact canonical packed Preserves
+policy projection, excluding only the self-reference. The independent operator
+trust separately binds its installed Basalt policy and canonical witness policy.
+Commit references identify materialized canonical opaque fixture payloads with
+explicit predecessor links, not fabricated world-capture identities. The exact
+policy, opaque commit, and crypto configuration payloads are retained under the
+consumer root. These opaque payloads are not captured WorldCommit objects and do
+not demonstrate world semantic validity, closure, restorability, or admission.
+
+This is a same-host process-isolation fixture, not independent-host durability,
+provider-honesty evidence, global consensus, or an executed result merely because
+the source exists. Report the command's actual outcome separately.
+
 ## Non-claims
 
 World-head evidence does not prove these properties:
 
-- whole-store rollback detection
+- whole-store rollback detection from the local-generation profile alone
 - distributed consensus or remote convergence
 - remote publication or availability
 - application merge correctness

@@ -157,12 +157,30 @@ fn adapter_start(
     Ok(AdapterStart { values, receipts })
 }
 
+/// Explicit receipt-only composition for pure/domain tests; not normal daemon admission.
 pub fn start_node_runtime(input: &NodeRuntimeStartInput) -> Result<NodeRuntimeStart> {
+    start_node_runtime_with_gate(input, None)
+}
+
+pub fn start_node_runtime_with_source_gate(
+    input: &NodeRuntimeStartInput,
+    gate: &ValidatedNodeSourceGate,
+) -> Result<NodeRuntimeStart> {
+    start_node_runtime_with_gate(input, Some(gate))
+}
+
+fn start_node_runtime_with_gate(
+    input: &NodeRuntimeStartInput,
+    admitted: Option<&ValidatedNodeSourceGate>,
+) -> Result<NodeRuntimeStart> {
     let config = parse_node_config(&input.config_value)?;
     validate_start_input(&config, input)?;
     let ordered = deterministic_adapter_bindings(&config.adapters);
     let mut diagnostics = startup_diagnostics(&config, input)?;
-    let gate_scan = scan_gates(&config.config_ref, input)?;
+    let gate_scan = match admitted {
+        Some(gate) => admitted_gate_scan(input, gate)?,
+        None => scan_gates(&config.config_ref, input)?,
+    };
     for diagnostic in gate_scan.diagnostics {
         push_bounded(&mut diagnostics, diagnostic, MAX_NODE_DIAGNOSTICS, "node runtime startup diagnostics")?;
     }

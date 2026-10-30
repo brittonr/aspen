@@ -1,0 +1,15 @@
+diff --git a/src/node/servicehosting/groups.rs b/src/node/servicehosting/groups.rs
+--- a/src/node/servicehosting/groups.rs
++++ b/src/node/servicehosting/groups.rs
+@@ -4,7 +4,10 @@
+ impl<A: super::AuthorityPort, R: super::RuntimePort> super::Host<A, R> {
+     pub fn open(root: &crate::node_state::DirectoryRoot, authority: A, runtime: R) -> crate::error::Result<Self> {
+         let store = super::store::Database::open(root)?;
+-        let state = store.load()?;
++        let mut state = store.load()?;
++        for group in state.groups.values_mut() {
++            group.history.clear();
++        }
+         Ok(Self {
+             store,
+             authority,

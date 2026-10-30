@@ -849,6 +849,23 @@
         "type": "github"
       }
     },
+    "durable-authority-state-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1786995951,
+        "narHash": "sha256-++GX+wiKkcBDeXtMJnMgpByEEcuAYRgO20Pzb8TJ6pA=",
+        "ref": "refs/heads/main",
+        "rev": "a0de79303f3f45c18a34fff535b690a85cb3cf59",
+        "revCount": 6,
+        "type": "git",
+        "url": "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git"
+      },
+      "original": {
+        "rev": "a0de79303f3f45c18a34fff535b690a85cb3cf59",
+        "type": "git",
+        "url": "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git"
+      }
+    },
     "durable-file-publication-src": {
       "flake": false,
       "locked": {
@@ -2567,6 +2584,23 @@
         "type": "github"
       }
     },
+    "release-channel-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793361071,
+        "narHash": "sha256-lEvpPJVCTFyUpavvAPJh6tVfg0dJx0eeq3MGIGAEOuA=",
+        "ref": "refs/heads/main",
+        "rev": "fa389e19d5c9bd84cd75df914cc5418c70d92bfb",
+        "revCount": 1,
+        "type": "git",
+        "url": "ssh://git@github.com/OnixResearch/release-channel.git"
+      },
+      "original": {
+        "rev": "fa389e19d5c9bd84cd75df914cc5418c70d92bfb",
+        "type": "git",
+        "url": "ssh://git@github.com/OnixResearch/release-channel.git"
+      }
+    },
     "root": {
       "inputs": {
         "artifact-src": "artifact-src",
@@ -2576,6 +2610,7 @@
         "chaoscontrol-src": "chaoscontrol-src",
         "choregraph-src": "choregraph-src",
         "doltlite-src": "doltlite-src",
+        "durable-authority-state-src": "durable-authority-state-src",
         "durable-file-publication-src": "durable-file-publication-src",
         "executable-extent-octet": "executable-extent-octet",
         "executable-extent-src": "executable-extent-src",
@@ -2591,14 +2626,17 @@
         "octet-cutover-src": "octet-cutover-src",
         "octet-toolchain": "octet-toolchain",
         "onixpkgs": "onixpkgs",
+        "release-channel-src": "release-channel-src",
         "rust-overlay": "rust-overlay_18",
         "schema-identity-src": "schema-identity-src",
         "schema-migration-core-src": "schema-migration-core-src",
+        "spacewasm-src": "spacewasm-src",
         "transactional-reconciliation-src": "transactional-reconciliation-src",
         "unit2nix": "unit2nix",
         "valence-src": "valence-src",
         "verified-node-replication-octet": "verified-node-replication-octet",
-        "vm-cohort-src": "vm-cohort-src"
+        "vm-cohort-src": "vm-cohort-src",
+        "wrpc-src": "wrpc-src"
       }
     },
     "rust-overlay": {
@@ -3351,6 +3389,23 @@
         "type": "github"
       }
     },
+    "spacewasm-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1783961353,
+        "narHash": "sha256-14SWYERoXP+M6lmfTXdPzB30E0eI+FL/81xnM89PlIE=",
+        "owner": "nasa",
+        "repo": "spacewasm",
+        "rev": "e24cf09355a90497148eb5029fdb8e3400bd63e3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nasa",
+        "repo": "spacewasm",
+        "rev": "e24cf09355a90497148eb5029fdb8e3400bd63e3",
+        "type": "github"
+      }
+    },
     "systems": {
       "locked": {
         "lastModified": 1681028828,
@@ -3884,6 +3939,23 @@
       "original": {
         "owner": "brittonr",
         "repo": "wrappers",
+        "type": "github"
+      }
+    },
+    "wrpc-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1748029537,
+        "narHash": "sha256-atDMHeLJ72NRyglNDhaqB7cD+KyBbI0QDbRGGgEkxjg=",
+        "owner": "bytecodealliance",
+        "repo": "wrpc",
+        "rev": "aa01409ed38bf7a978570ff567c4475376925df6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "bytecodealliance",
+        "repo": "wrpc",
+        "rev": "aa01409ed38bf7a978570ff567c4475376925df6",
         "type": "github"
       }
     }

@@ -16,7 +16,7 @@
             evidence_refs: Vec::new(),
         })
         .expect("envelope");
-        let published = publish_local_gossip_with_root(&root, &envelope, "peer:a").expect("publish");
+        let published = publish_local_gossip_with_root(&root, &envelope, "peer:a", None).expect("publish");
         assert_eq!(published.envelope_ref, envelope.envelope_ref);
         let delivered =
             deliver_local_gossip_with_root(&root, "services", &envelope.envelope_ref, "peer:b").expect("deliver");
@@ -46,7 +46,7 @@
             evidence_refs: Vec::new(),
         })
         .expect("envelope");
-        publish_local_gossip(&root, &envelope, "peer:a").expect("publish");
+        publish_local_gossip(&root, &envelope, "peer:a", None).expect("publish");
         let delivered = deliver_local_gossip(&root, "services", &envelope.envelope_ref, "peer:b").expect("deliver");
         let events = apply_delivered_envelope(&mut peer_b, &delivered.envelope).expect("apply delivered envelope");
         assert!(events.iter().any(|event| matches!(event, RuntimeEvent::AssertionCommitted { actor, value }
@@ -69,9 +69,9 @@
             content_refs: vec![content_ref.clone()],
             capability_refs: Vec::new(),
             evidence_refs: Vec::new(),
-        })
+        }, None)
         .expect("envelope");
-        publish_local_gossip(&root, &envelope, "peer:a").expect("publish with valid content");
+        publish_local_gossip(&root, &envelope, "peer:a", None).expect("publish with valid content");
         std::fs::write(blob_path(&root, &content_ref).expect("blob path"), b"tampered").expect("tamper blob");
         let error = deliver_local_gossip(&root, "services", &envelope.envelope_ref, "peer:b")
             .expect_err("tampered content rejects delivery");
@@ -104,7 +104,7 @@
             evidence_refs: Vec::new(),
         })
         .expect("envelope");
-        publish_local_gossip(&root, &envelope, "peer:a").expect("publish");
+        publish_local_gossip(&root, &envelope, "peer:a", None).expect("publish");
         let delivery = deliver_local_gossip(&root, "services", &envelope.envelope_ref, "peer:b").expect("deliver");
         let evidence = evidence_fixture();
         let mut state = RuntimeState::new(1);
@@ -137,7 +137,7 @@
             evidence_refs: Vec::new(),
         })
         .expect("envelope");
-        publish_local_gossip(&root, &envelope, "peer:a").expect("publish");
+        publish_local_gossip(&root, &envelope, "peer:a", None).expect("publish");
         let delivery = deliver_local_gossip(&root, "services", &envelope.envelope_ref, "peer:b").expect("deliver");
         let evidence = evidence_fixture();
         let mut state = RuntimeState::new(1);
@@ -183,7 +183,7 @@
             evidence_refs: Vec::new(),
         })
         .expect("changed envelope");
-        publish_local_gossip(root, &changed, "peer:a").expect("publish changed");
+        publish_local_gossip(root, &changed, "peer:a", None).expect("publish changed");
         let changed_delivery =
             deliver_local_gossip(root, "services", &changed.envelope_ref, "peer:b").expect("deliver changed");
         let conflict = admit_and_apply_delivered_envelope_idempotent(
@@ -218,7 +218,7 @@
             evidence_refs: Vec::new(),
         })
         .expect("envelope");
-        publish_local_gossip(&root, &envelope, "peer:a").expect("publish");
+        publish_local_gossip(&root, &envelope, "peer:a", None).expect("publish");
         let delivery = deliver_local_gossip(&root, "services", &envelope.envelope_ref, "peer:b").expect("deliver");
         let log = delivery_log(std::slice::from_ref(&delivery), true).expect("delivery log");
         assert_eq!(crate::ledger::artifact_kind(&log.value), "remote-dataspace-delivery-log");

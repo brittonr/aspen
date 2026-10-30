@@ -108,7 +108,7 @@
             node_id: "node:live-listener",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local_fixture_for_tests(&RunInput { state_root: &root }).expect("run node");
         let policy_refs = vec![local_ref("node-control-policy", "live-listener").expect("policy ref")];
         let authority_refs =
             test_live_authority_refs(&root, "peer:listener", "node:live-listener", "status", &policy_refs)

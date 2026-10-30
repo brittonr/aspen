@@ -72,7 +72,10 @@ pub fn parse_job_worker_request_value(value: &IoValue) -> Result<JobWorkerReques
     })
 }
 
-pub fn job_worker_envelope(input: JobWorkerEnvelopeInput<'_>) -> Result<crate::remote_dataspace::Envelope> {
+pub fn job_worker_envelope_with_evidence(
+    input: JobWorkerEnvelopeInput<'_>,
+    session: Option<&crate::remote_dataspace::SenderSessionView<'_>>,
+) -> Result<crate::remote_dataspace::EnvelopeBuild> {
     let request = parse_job_worker_request_value(input.request_value)?;
     if input.to_peer != request.target_peer {
         return Err(MoltenError::invalid_harness(format!(
@@ -80,7 +83,7 @@ pub fn job_worker_envelope(input: JobWorkerEnvelopeInput<'_>) -> Result<crate::r
             input.to_peer, request.target_peer
         )));
     }
-    crate::remote_dataspace::build_envelope(crate::remote_dataspace::EnvelopeInput {
+    crate::remote_dataspace::build_envelope_with_evidence(crate::remote_dataspace::EnvelopeInput {
         from_peer: input.from_peer.to_string(),
         from_actor: input.from_actor.to_string(),
         to_peer: input.to_peer.to_string(),
@@ -90,7 +93,7 @@ pub fn job_worker_envelope(input: JobWorkerEnvelopeInput<'_>) -> Result<crate::r
         content_refs: Vec::new(),
         capability_refs: request.authority_refs.clone(),
         evidence_refs: sorted_unique(&request.evidence_refs),
-    })
+    }, session)
 }
 
 pub fn execute_worker_delivery(input: JobWorkerExecuteInput<'_>) -> Result<JobWorkerExecution> {

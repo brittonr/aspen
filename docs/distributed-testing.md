@@ -18,6 +18,40 @@ Simulation receipts are regression and review evidence only. They do not grant a
 
 Named direct fixtures cover benign `delay`, `drop`, `reorder`, `rejoin`, `crash`, `restart`, and `duplicate` suppression paths, plus deny-before-side-effects coverage for `stale-evidence`, `corrupted-receipt`, `resource-pressure`, `unauthorized-transport`, `ambient-state-drift`, and `partition` quorum faults. Generated-case fixtures bind seed, topology, scheduler, command sequence, fault plan, invariant name, run ref, replay ref, event refs, final-state ref, and diagnostics in `generated-distributed-repro-v1`; these artifacts are diagnostic-only unless a separate pass/deny gate accepts the claim. The curated composite regression suite binds named cases for duplicate-after-restart, partition-with-stale-evidence, reorder-with-reconcile, crash-during-dispatch, and resource-pressure-during-quorum in `composite-fault-suite-v1`. Generated failures require promotion metadata with stable refs, profile eligibility, traceability, retry policy, variance declarations, and cost budget before becoming release-review claims. The focused command is `cargo test --lib distributed`.
 
+Federated-pull replay (`src/federation/simulation.rs`) consumes immutable records already accepted by the real
+cryptographic boundary, explicit logical ticks, receiver-request flags, session events, and checkpoint-resume inputs.
+It calls the production `molten_core::federation` planner and transition laws and emits
+`federation-deterministic-trace-v1` with canonical input observations, decisions, and metadata-only session states.
+Signature rejection remains evidence from the cryptographic boundary; replay cannot mint a verified record or turn
+a simulated rejection into signature-verification evidence. The replay trace is regression evidence, not proof of
+live networking, remote correctness, or import authority.
+`planner_campaign` checks named no-fault, unsolicited push, stale inventory, malicious peer, partition, retained-rate,
+resource-exhaustion, and conflict outcomes against exact production planner decisions. Its recovery case runs the
+actual checkpoint codec after fetching starts and checks retry-count preservation, stale-generation fencing,
+deadline denial, and unadmitted-commit rejection without state mutation. `compare_live_plan` requires full equality
+with the actual service session and binds the canonical status projection; it is not content-completion evidence.
+`RecordedRun` and `compare_recorded_run` compare the complete no-fault transition trace through terminal commit.
+Callers derive typed events independently from the actual DAG receipt, seven canonical local gate observations,
+and actual import receipt, not from the expected final session. Comparison requires every replay event to be
+accepted, full terminal-session equality, and canonical status equality. Repeating the actual commit event must
+deny as terminal without mutating session or resource reservations. The resulting canonical comparison embeds the
+trace; independent real effect receipts remain necessary evidence for the recorded inputs.
+
+The service starts from a caller-owned current admitted Dispatcher, restoring bounded active-session metadata and
+the status-ring sequence from its capability-rooted checkpoint. Periodic turns use an admitted timer profile and
+persist the next poll before requesting inventory, including failed/partitioned attempts. Query-rate records,
+session attempt counts, freshness windows, deadlines, and generation fences survive recovery. Terminal diagnostics
+use a closed vocabulary and bounded slots without adapter error text, payload bytes, or secret material.
+Content-keyed resource reservations are independent of peer and session identity. The planner consumes explicit
+retained history and admits per-head query intervals, retry counts, and cumulative reserved bytes/nodes/chunks
+within logical `session_ticks` windows. The service persists initial reservations before transfer, and fetch retries
+reserve again before dispatch. One capability-rooted history record is capped at 4096 heads and 4 MiB; full live
+history denies new work rather than silently evicting accounting. Expired entries are removed only through the
+pure admission function using its explicit logical tick, never wall-clock pruning or unbounded per-head files.
+Replay resumes the same canonical resource codec and the campaign checks that a fresh session with no peer-rate
+history still cannot bypass an existing content reservation.
+
+
 ## Declarative multinode scenario fixtures
 
 Multinode scenarios are declared with typed Nickel fixtures under `docs/multinode-scenario-fixtures/` and the shared contract in `docs/multinode-scenario-contracts.ncl`. The contract requires explicit topology/profile ids, command surface, artifact kinds, topology/seed/fault-plan refs, receipt refs, variance refs, diagnostic-log refs, unavailable policy, and evidence-only caveats before execution. Valid VM fixture coverage includes smoke, live-control, service/job, restart, fault, three-node quorum, and aggregate scenario surfaces.

@@ -1,0 +1,211 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: enforce-introduction-before-reference",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-enforce-introduction-before-reference"
+    }
+  ],
+  "blocked": false,
+  "change": "enforce-introduction-before-reference",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "fab0d681b016fc6b7750029b157ab83360bb834a59a30816941cd42e5c28fbb7",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "701ec1b3030e6e489f210f2da5ae3caae5d2ed7d6fcc74a6d7b6a7719863e526",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-enforce-introduction-before-reference/design.md"
+        },
+        {
+          "content_hash": "4964125da6354ab28e78a93e14ee62a53cfbb1c6deea8c65c48ebacfd781306d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-enforce-introduction-before-reference/evidence/2026-10-21-verification.md"
+        },
+        {
+          "content_hash": "0fdd7e2f10f46da76db15dcfb7c9c66c66fb7ef0f997f7aa497c389eab9bc99b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-enforce-introduction-before-reference/evidence/2026-10-30-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "4947d7d0d2ec07638f3c32229c3d7ea4a7720461a54222b12488c4382818ab49",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-enforce-introduction-before-reference/evidence/2026-10-30-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "e79c69f0caa17569fb636a500152cf61ecfccc31dedc8e15241c14b358c3d2fa",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-enforce-introduction-before-reference/evidence/2026-10-30-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "19b8692787df5b7a322018c5587c054099d84f280e219e031c37e068d411e7b9",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-enforce-introduction-before-reference/evidence/2026-10-30-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "40367d2cd40f978bc9b5bbc0dd3cd25181738697dacf4610bff25956853168a9",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-enforce-introduction-before-reference/evidence/2026-10-30-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "6d13cdee4ec49dc188da98bb19aca89d5d8b18a369571c5672df67f3333e022c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-enforce-introduction-before-reference/evidence/2026-10-30-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "47c1068602842cbbf16b05c4bfefb988e8770d0f6d6e54c9057cae92302f3356",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-enforce-introduction-before-reference/evidence/2026-10-30-sender-refusal.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-enforce-introduction-before-reference/metadata.json"
+        },
+        {
+          "content_hash": "0b11d04805c47579b43f26c1a80011234e0bef33e141b0136da90cecbc6a133f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-enforce-introduction-before-reference/proposal.md"
+        },
+        {
+          "content_hash": "2de009502fb450bc71cf03891936c53ac05d79f7e4579fdccdea9bc8bedd43f1",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-enforce-introduction-before-reference/review.md"
+        },
+        {
+          "content_hash": "0b74d29b967c764749db6f223a9f255961a7ac029e65b69e24a495d7cb6c37d7",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-enforce-introduction-before-reference/specs/runtime-spine/spec.md"
+        },
+        {
+          "content_hash": "93abbf9f04b8e9983efddbd5d42909e01833f0d7e6ce74d8ab7c6064699a6d20",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-enforce-introduction-before-reference/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/enforce-introduction-before-reference"
+        }
+      ],
+      "manifest_hash": "3fb4d62e6a59801242f05bb74a6c5f7d89cae7eb888dc7d2ae93803ff0c918f8"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "701ec1b3030e6e489f210f2da5ae3caae5d2ed7d6fcc74a6d7b6a7719863e526",
+          "exists": true,
+          "path": "./.cairn/changes/enforce-introduction-before-reference/design.md"
+        },
+        {
+          "content_hash": "4964125da6354ab28e78a93e14ee62a53cfbb1c6deea8c65c48ebacfd781306d",
+          "exists": true,
+          "path": "./.cairn/changes/enforce-introduction-before-reference/evidence/2026-10-21-verification.md"
+        },
+        {
+          "content_hash": "0fdd7e2f10f46da76db15dcfb7c9c66c66fb7ef0f997f7aa497c389eab9bc99b",
+          "exists": true,
+          "path": "./.cairn/changes/enforce-introduction-before-reference/evidence/2026-10-30-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "4947d7d0d2ec07638f3c32229c3d7ea4a7720461a54222b12488c4382818ab49",
+          "exists": true,
+          "path": "./.cairn/changes/enforce-introduction-before-reference/evidence/2026-10-30-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "e79c69f0caa17569fb636a500152cf61ecfccc31dedc8e15241c14b358c3d2fa",
+          "exists": true,
+          "path": "./.cairn/changes/enforce-introduction-before-reference/evidence/2026-10-30-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "19b8692787df5b7a322018c5587c054099d84f280e219e031c37e068d411e7b9",
+          "exists": true,
+          "path": "./.cairn/changes/enforce-introduction-before-reference/evidence/2026-10-30-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "40367d2cd40f978bc9b5bbc0dd3cd25181738697dacf4610bff25956853168a9",
+          "exists": true,
+          "path": "./.cairn/changes/enforce-introduction-before-reference/evidence/2026-10-30-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "6d13cdee4ec49dc188da98bb19aca89d5d8b18a369571c5672df67f3333e022c",
+          "exists": true,
+          "path": "./.cairn/changes/enforce-introduction-before-reference/evidence/2026-10-30-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "47c1068602842cbbf16b05c4bfefb988e8770d0f6d6e54c9057cae92302f3356",
+          "exists": true,
+          "path": "./.cairn/changes/enforce-introduction-before-reference/evidence/2026-10-30-sender-refusal.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/enforce-introduction-before-reference/metadata.json"
+        },
+        {
+          "content_hash": "0b11d04805c47579b43f26c1a80011234e0bef33e141b0136da90cecbc6a133f",
+          "exists": true,
+          "path": "./.cairn/changes/enforce-introduction-before-reference/proposal.md"
+        },
+        {
+          "content_hash": "2de009502fb450bc71cf03891936c53ac05d79f7e4579fdccdea9bc8bedd43f1",
+          "exists": true,
+          "path": "./.cairn/changes/enforce-introduction-before-reference/review.md"
+        },
+        {
+          "content_hash": "0b74d29b967c764749db6f223a9f255961a7ac029e65b69e24a495d7cb6c37d7",
+          "exists": true,
+          "path": "./.cairn/changes/enforce-introduction-before-reference/specs/runtime-spine/spec.md"
+        },
+        {
+          "content_hash": "93abbf9f04b8e9983efddbd5d42909e01833f0d7e6ce74d8ab7c6064699a6d20",
+          "exists": true,
+          "path": "./.cairn/changes/enforce-introduction-before-reference/tasks.md"
+        }
+      ],
+      "manifest_hash": "70538f655dbfd1403e0e0106538f1fabb1db3653999b2253d029b8780c38bdc8"
+    },
+    "kind": "archive",
+    "manifest_hash": "faa565e5e72f8b0bfc8ba79681a89c9fa83b4ed0ea1c813ae64cca2eb1ef1039"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "e5738dd5d017e9455a7ddca8961f32ee1c2554cfe5a413e282e6dddf7a5d6411",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "bf33c57d046bcc65baa8388cc9fdd0e6c2c97a492d60aea428929ccda4300a95",
+  "reasons": [],
+  "receipt_hash": "97f39d2d75bd8914385b8ef14d807335a27e001745a43090a6307c012867a8d8",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

@@ -140,7 +140,7 @@
             node_id: "node:direct-denied",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local_fixture_for_tests(&RunInput { state_root: &root }).expect("run node");
         let stopped = stop_local(&StopInput { state_root: &root }).expect("first stop");
         let shutdown_bytes = std::fs::read(root.join(SHUTDOWN_FILE)).expect("shutdown bytes");
 
@@ -171,7 +171,7 @@
             node_id: "node:effect-error",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local_fixture_for_tests(&RunInput { state_root: &root }).expect("run node");
         std::fs::create_dir_all(root.join(SHUTDOWN_FILE)).expect("block shutdown receipt path");
         let failed = stop_local(&StopInput { state_root: &root }).expect_err("effect error fails stop");
         assert!(!failed.to_string().contains("pass"));
@@ -188,7 +188,7 @@
             node_id: "node:adapter-order",
         })
         .expect("init node");
-        let run = run_local(&RunInput { state_root: &root }).expect("run node");
+        let run = run_local_fixture_for_tests(&RunInput { state_root: &root }).expect("run node");
         let startup = crate::node_runtime::parse_node_startup_receipt(&run.startup_value).expect("startup");
         let request = shutdown_request().expect("shutdown request");
         let dispatch = submit_and_dispatch(&root, &request.value);

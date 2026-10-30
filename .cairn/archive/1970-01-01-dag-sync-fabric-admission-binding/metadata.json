@@ -1,0 +1,1 @@
+{"depends_on":["dag-sync-system-extension","fabric-cross-process-transport-shell","system-extension-service-runtime"],"groups":["current"]}

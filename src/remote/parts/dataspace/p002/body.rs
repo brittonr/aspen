@@ -251,7 +251,7 @@ pub fn two_peer_service_ready_harness(root: &Path, evidence: DeliveryEvidence) -
         capability_refs: Vec::new(),
         evidence_refs: Vec::new(),
     })?;
-    publish_local_gossip(root, &envelope, "peer:a")?;
+    publish_local_gossip(root, &envelope, "peer:a", None)?;
     let delivery = deliver_local_gossip(root, "services", &envelope.envelope_ref, "peer:b")?;
     let applied = admit_and_apply_delivered_envelope(&mut peer_b, &delivery, &evidence)?;
     let delivery_log = delivery_log(std::slice::from_ref(&delivery), true)?;

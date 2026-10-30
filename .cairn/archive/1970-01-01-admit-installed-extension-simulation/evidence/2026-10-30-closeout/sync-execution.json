@@ -1,0 +1,150 @@
+{
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/admit-installed-extension-simulation/specs/installed-extension-simulation/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/admit-installed-extension-simulation/specs/installed-extension-simulation/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "admit-installed-extension-simulation",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/admit-installed-extension-simulation/specs/installed-extension-simulation/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "0542411a662097394d12ac678fca7039aadd1b6fdf0ede65ad3ba7272b90b330",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": false,
+        "accepted_before_hash": "df9ee34f6d4ee3f733770390da8d765cc3d9900dd7af9d4515ae5871ecd35c27",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "464a4da0a7ae4f33cdd0254d9dd857cccc87ba720362cda0c1a2aaf1b4221f1b",
+        "destination": ".cairn/specs/installed-extension-simulation/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "4f82cd54d1a0f6f21ab841354f6802ab752cfd383469f9a8e431e4b6cc5e98e0",
+        "operations": [
+          {
+            "block_hash": "e54c7e659fd15a6162837df39e565aad8f89ae0a538df1bb49cec775465c81cd",
+            "heading": "### Requirement: Admission is an explicit separate profile",
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.installed_extension_admission"
+          },
+          {
+            "block_hash": "f0406a9d8c63e15790851ba33c6ed4137d816c3ee1e0f7ccedc1c90037ab6287",
+            "heading": "### Requirement: Invariant handlers are exact",
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.installed_extension_invariant_bindings"
+          },
+          {
+            "block_hash": "6fac10d93155234b439b6caf1a9cfc8ffe126d7b49ab209a8a9373a26ac5ef97",
+            "heading": "### Requirement: Same core remains explicit",
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.installed_extension_same_core"
+          },
+          {
+            "block_hash": "67de7a70f32901399ec5fa09ef8d2a4309c3a7932b9b51eb8992c06e509fa94f",
+            "heading": "### Requirement: Installed execution remains bounded",
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.installed_extension_bounded_execution"
+          },
+          {
+            "block_hash": "819e61eba7e6aef7e14b1d6eed0fd72bea621f9bcd8320b32bd0552e736cab65",
+            "heading": "### Requirement: Reference semantics are preserved",
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.installed_extension_reference_preservation"
+          },
+          {
+            "block_hash": "8cdd4c9d1e3728277793f0ebb496bfa395d1949393cfe8bc290e359d205648ed",
+            "heading": "### Requirement: Acceptance includes actual consumers and mutants",
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.installed_extension_validation"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.installed_extension_admission",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.installed_extension_invariant_bindings",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.installed_extension_same_core",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.installed_extension_bounded_execution",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.installed_extension_reference_preservation",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.fabric_simulation.installed_extension_validation",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/admit-installed-extension-simulation/specs/installed-extension-simulation/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "4f82cd54d1a0f6f21ab841354f6802ab752cfd383469f9a8e431e4b6cc5e98e0",
+          "exists": true,
+          "path": "./.cairn/specs/installed-extension-simulation/spec.md"
+        }
+      ],
+      "manifest_hash": "b527a555cc3c3278bbc756fe324b5b7b1bbf4cdd92a4ae14e9ba62fb9da96c7f"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/specs/installed-extension-simulation/spec.md"
+        }
+      ],
+      "manifest_hash": "abb7e250164f2ef29df9d1fb84fc6eafc72808d8f99a1be61a284547eb6febcd"
+    },
+    "kind": "sync",
+    "manifest_hash": "ed6bcf0fcc19ee9c82f82f27b6546264c5581d460eeddb1c3d2ca78e00e1aab4"
+  },
+  "plan_hash": "32cb3d11b6711916186d271ae4bcf8467205c6468ddf424fa9354b776f3b0347",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "reasons": [],
+  "receipt_hash": "e80b9d7c44107be6870fec2783cd9479f063e572f889455ee0c1eb2b6aba8c58"
+}

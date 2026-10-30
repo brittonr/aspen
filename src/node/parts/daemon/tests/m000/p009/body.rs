@@ -145,7 +145,7 @@
             node_id: "node:live-authority",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local_fixture_for_tests(&RunInput { state_root: &root }).expect("run node");
         let refs = denied_case_refs(&root, case);
         let request_value =
             crate::node_runtime::control_request_value(&crate::node_runtime::ControlRequestValueInput {
@@ -203,7 +203,7 @@
             node_id: "node:transport-proof",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local_fixture_for_tests(&RunInput { state_root: &root }).expect("run node");
         let policy_refs = vec![local_ref("node-control-policy", "transport-proof").expect("policy ref")];
         let resource_refs = vec![local_ref("node-control-resource", "transport-proof").expect("resource ref")];
         let valid_authority_refs =

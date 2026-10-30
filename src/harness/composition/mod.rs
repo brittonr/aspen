@@ -3,3 +3,5 @@ include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/harness/composition/parts/p00
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/harness/composition/parts/p002/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/harness/composition/parts/p003/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/harness/composition/parts/p004/body.rs"));
+#[path = "upgrade.rs"]
+mod upgrade;

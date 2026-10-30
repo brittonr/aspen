@@ -1,10 +1,8 @@
 # Component RPC Pilot Specification
 
-## Purpose
-
 Evaluate a pinned wRPC adapter for WIT-native remote component calls without replacing Molten's Iroh transport, Preserves envelopes, authority gates, delivery semantics, or canonical evidence.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Component RPC is an explicit pilot profile
 

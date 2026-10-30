@@ -24,6 +24,12 @@ let HardenedWasmtimeRevision = "cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c" in
 let HardenedWasmtimeSource = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx" in
 let MantleWasmVerifierRevision = "dd2bebab894688d07e7a29c75c1437f4ecc120df" in
 let MantleWasmVerifierSource = "ssh://git@github.com/OnixResearch/mantle.git" in
+let DurableAuthorityRevision = "a0de79303f3f45c18a34fff535b690a85cb3cf59" in
+let DurableAuthoritySource = "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git" in
+let ReleaseChannelRevision = "fa389e19d5c9bd84cd75df914cc5418c70d92bfb" in
+let ReleaseChannelSource = "ssh://git@github.com/OnixResearch/release-channel.git" in
+let SpaceWasmRevision = "e24cf09355a90497148eb5029fdb8e3400bd63e3" in
+let WrpcRevision = "aa01409ed38bf7a978570ff567c4475376925df6" in
 let CratesIoIndex = "registry+https://github.com/rust-lang/crates.io-index" in
 let ArchiveNonClaims = [
   "dependency satisfaction proves presented receipt linkage only",
@@ -34,6 +40,94 @@ in
 {
   schema = "molten.release-dependency-profile.v2",
   dependencies = [
+    {
+      manifest_dependency = "durable-authority-state-redb",
+      package_name = "durable-authority-state-redb",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = DurableAuthoritySource,
+      immutable_revision = DurableAuthorityRevision,
+      nix_input = "durable-authority-state-src",
+      transport_policy = "https",
+      disposition = "runtime",
+    },
+    {
+      manifest_dependency = "replay-ledger-core",
+      package_name = "replay-ledger-core",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = DurableAuthoritySource,
+      immutable_revision = DurableAuthorityRevision,
+      nix_input = "durable-authority-state-src",
+      transport_policy = "https",
+      disposition = "runtime",
+    },
+    {
+      manifest_dependency = "revocation-view-core",
+      package_name = "revocation-view-core",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = DurableAuthoritySource,
+      immutable_revision = DurableAuthorityRevision,
+      nix_input = "durable-authority-state-src",
+      transport_policy = "https",
+      disposition = "runtime",
+    },
+    {
+      manifest_dependency = "release-channel-index",
+      package_name = "release-channel-index",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = ReleaseChannelSource,
+      immutable_revision = ReleaseChannelRevision,
+      nix_input = "release-channel-src",
+      transport_policy = "ssh-pinned-nix-archive",
+      disposition = "runtime",
+    },
+    {
+      manifest_dependency = "release-channel-witness",
+      package_name = "release-channel-witness",
+      package_version = "0.1.0",
+      source_kind = "git",
+      source_coordinate = ReleaseChannelSource,
+      immutable_revision = ReleaseChannelRevision,
+      nix_input = "release-channel-src",
+      transport_policy = "ssh-pinned-nix-archive",
+      disposition = "runtime",
+    },
+    {
+      manifest_dependency = "spacewasm",
+      package_name = "spacewasm",
+      package_version = "0.0.0",
+      source_kind = "git",
+      source_coordinate = "https://github.com/nasa/spacewasm",
+      immutable_revision = SpaceWasmRevision,
+      nix_input = "spacewasm-src",
+      transport_policy = "https",
+      disposition = "optional-runtime",
+    },
+    {
+      manifest_dependency = "wrpc-transport",
+      package_name = "wrpc-transport",
+      package_version = "0.28.4",
+      source_kind = "git",
+      source_coordinate = "https://github.com/bytecodealliance/wrpc",
+      immutable_revision = WrpcRevision,
+      nix_input = "wrpc-src",
+      transport_policy = "https",
+      disposition = "optional-runtime",
+    },
+    {
+      manifest_dependency = "wrpc-runtime-wasmtime",
+      package_name = "wrpc-runtime-wasmtime",
+      package_version = "0.29.0",
+      source_kind = "git",
+      source_coordinate = "https://github.com/bytecodealliance/wrpc",
+      immutable_revision = WrpcRevision,
+      nix_input = "wrpc-src",
+      transport_policy = "https",
+      disposition = "optional-runtime",
+    },
     {
       manifest_dependency = "hardened-wasmtime-runtime",
       package_name = "hardened-wasmtime-runtime",
@@ -318,6 +412,28 @@ in
       source_kind = "crates-io",
       source_coordinate = CratesIoIndex,
       checksum = "c00d04008994fed635a52323bbe1dd8c0947292183585ddf8f1090615fafc3c6",
+      transport_policy = "crates.io",
+      plane = "implementation",
+      disposition = "optional-runtime",
+    },
+    {
+      manifest_dependency = "wasmtime-rpc",
+      package_name = "wasmtime",
+      package_version = "33.0.0",
+      source_kind = "crates-io",
+      source_coordinate = CratesIoIndex,
+      checksum = "15396de4fce22e431aa913a9d17325665e72a39aaa7972c8aeae7507eff6144f",
+      transport_policy = "crates.io",
+      plane = "implementation",
+      disposition = "optional-runtime",
+    },
+    {
+      manifest_dependency = "wasmtime-wasi-rpc",
+      package_name = "wasmtime-wasi",
+      package_version = "33.0.0",
+      source_kind = "crates-io",
+      source_coordinate = CratesIoIndex,
+      checksum = "1d357e5699ed32103d0dab897c3965fd66f1ba29a37072d441199e7febe6324e",
       transport_policy = "crates.io",
       plane = "implementation",
       disposition = "optional-runtime",

@@ -25,11 +25,23 @@
             content_refs,
             capability_refs: Vec::new(),
             evidence_refs: Vec::new(),
-        })
+        }, None)
         .expect("introduction envelope");
-        publish_local_gossip(root, &envelope, "peer:a").expect("publish introduction envelope");
+        publish_local_gossip(root, &envelope, "peer:a", None).expect("publish introduction envelope");
         deliver_local_gossip(root, session_fixture_topic(), &envelope.envelope_ref, session_fixture_peer())
             .expect("deliver introduction envelope")
+    }
+
+    fn incoming_introduction_message(root: &Path, reference: &str) -> Delivery {
+        let envelope = incoming_envelope_fixture(EnvelopeInput {
+            from_peer: "peer:a".to_owned(), from_actor: "producer".to_owned(),
+            to_peer: session_fixture_peer().to_owned(), topic: session_fixture_topic().to_owned(),
+            operation: Operation::Message, payload: record("service-note", vec![string(reference)]),
+            content_refs: Vec::new(), capability_refs: Vec::new(), evidence_refs: Vec::new(),
+        }).expect("incoming untrusted message wire");
+        incoming_publish_fixture(root, &envelope, "peer:a").expect("publish incoming fixture");
+        deliver_local_gossip(root, session_fixture_topic(), &envelope.envelope_ref, session_fixture_peer())
+            .expect("receive incoming fixture")
     }
 
     fn introduction_session(
@@ -60,7 +72,7 @@
         let introduced = IntroducedReferences::derive(&state, &session.owner, &session.bootstrap_references);
         assert!(introduced.contains(&reference), "the assertion introduces the reference");
 
-        let carrying = introduction_envelope(&root, record("service-note", vec![]), vec![reference.clone()]);
+        let carrying = incoming_introduction_message(&root, &reference);
         let applied = session_admit(&mut state, &sessions, &session.session_ref, &carrying);
         assert_eq!(applied.session_ref, session.session_ref);
     }
@@ -70,7 +82,7 @@
         // r[verify molten.runtime_spine.reference_introduction_rule]
         let root = temp_dir("remote-dataspace-unknown-reference");
         let reference = unknown_ref(&root);
-        let delivery = introduction_envelope(&root, record("service-note", vec![]), vec![reference.clone()]);
+        let delivery = incoming_introduction_message(&root, &reference);
         let mut sessions = RemoteSessionRegistry::new();
         let session = introduction_session(&mut sessions, Vec::new());
         let mut state = RuntimeState::new(1);
@@ -114,33 +126,20 @@
         let introduced = IntroducedReferences::derive(&state, &session.owner, &session.bootstrap_references);
         assert!(introduced.contains(&reference));
 
-        let retraction = introduction_envelope(&root, introduction_payload(&reference), Vec::new());
         state.apply_step(&RuntimeStep::Retract {
             actor: session.owner.clone(),
             value: RuntimeValue::new(introduction_payload(&reference)).expect("runtime value"),
         });
-        let _ = retraction;
         let introduced = IntroducedReferences::derive(&state, &session.owner, &session.bootstrap_references);
         assert!(!introduced.contains(&reference), "the withdrawn assertion no longer introduces");
+        let carrying = incoming_introduction_message(&root, &reference);
+        let before = state.snapshot();
+        assert!(matches!(admit_and_apply_delivered_envelope_for_session(
+            &mut state, &sessions, &session.session_ref, &carrying, &evidence_fixture(),
+        ).expect("message admission"), SessionAdmission::Denied(_)));
+        assert_eq!(state.snapshot(), before);
     }
 
-    #[test]
-    fn the_sender_side_refusal_names_the_unintroduced_reference() {
-        // r[verify molten.runtime_spine.reference_introduction_rule]
-        let root = temp_dir("remote-dataspace-sender-refusal");
-        let reference = introduction_ref(&root);
-        let delivery = introduction_envelope(&root, introduction_payload(&reference), Vec::new());
-        let mut sessions = RemoteSessionRegistry::new();
-        let session = introduction_session(&mut sessions, Vec::new());
-        let mut state = RuntimeState::new(1);
-        session_admit(&mut state, &sessions, &session.session_ref, &delivery);
-        let introduced = IntroducedReferences::derive(&state, &session.owner, &session.bootstrap_references);
-
-        assert!(refuse_unintroduced_references(std::slice::from_ref(&reference), &introduced).is_ok());
-        let refusal = refuse_unintroduced_references(&[unknown_ref(&root)], &introduced)
-            .expect_err("an unintroduced reference is refused");
-        assert_eq!(refusal.len(), 1);
-    }
 
     #[test]
     fn the_bootstrap_references_are_introduced_and_a_closed_session_keeps_no_facts() {
@@ -166,4 +165,16 @@
                 .any(|assertion| assertion.actor == session.owner),
             "the closed session keeps no facts"
         );
+    }
+
+    #[test]
+    fn reference_scanning_handles_unicode_before_and_inside_candidates() {
+        // r[verify molten.runtime_spine.reference_introduction_rule]
+        let reference = crate::preserves_rail::content_ref_from_bytes(b"unicode reference");
+        let text = format!("état 🦀 {reference} 漢字 {reference}");
+        assert_eq!(references_in_text(&text), vec![reference.clone()]);
+
+        let malformed = format!("blake3:{}é {}", "a".repeat(63), reference);
+        assert_eq!(references_in_text(&malformed), vec![reference]);
+        assert!(references_in_text(&format!("漢字 blake3:{}", "a".repeat(63))).is_empty());
     }

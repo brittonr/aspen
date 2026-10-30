@@ -1,6 +1,6 @@
 ## Phase 1: Profile and pure core
 
-- [ ] [depends:onixos.realize-linux-bpf-pack-adapter] Add exact positive and negative read-only endpoint handoff fixtures binding machine, generation, BPF Pack/program, kernel/BTF, schema, scope, and loss accounting. r[linux_ebpf_observability.admission] r[linux_ebpf_observability.boundary]
+- [ ] [depends:onixos.add-generation-bound-observation-endpoint] Add exact positive and negative read-only endpoint handoff fixtures binding machine, generation, BPF Pack/program, kernel/BTF, schema, scope, and loss accounting. r[linux_ebpf_observability.admission] r[linux_ebpf_observability.boundary]
 - [ ] [serial] Extend the typed fabric observability Nickel contracts with Linux eBPF signal mappings, windows, freshness, event detail, queue/record/byte/cardinality bounds, loss policy, required status, redaction, and non-claims. r[linux_ebpf_observability.profile]
 - [ ] [serial] Define bounded endpoint metadata, raw record, accounting, epoch, and projection DTOs in `molten-core`. r[linux_ebpf_observability.profile] r[linux_ebpf_observability.projection]
 - [ ] [serial] Implement pure endpoint/cohort/scope admission, record validation, descriptor mapping, window aggregation, partial-order handling, loss reconciliation, epoch completion, and canonical projection. r[linux_ebpf_observability.admission] r[linux_ebpf_observability.projection] r[linux_ebpf_observability.ordering] r[linux_ebpf_observability.failure]

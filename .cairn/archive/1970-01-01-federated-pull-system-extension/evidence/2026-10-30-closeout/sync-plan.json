@@ -1,0 +1,149 @@
+{
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/federated-pull-system-extension/specs/federated-pull-sync/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/federated-pull-system-extension/specs/federated-pull-sync/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "federated-pull-system-extension",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/federated-pull-system-extension/specs/federated-pull-sync/spec.md"
+  ],
+  "dry_run": true,
+  "input_hash": "32f882f0273d48bfe6939e21bb180a6f135cebcd190f09693128d38dc277a146",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "975e154a39592c253fdb41232faf75dcb39c273afb318b21125ba951deda9d5f",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "438ab88c2c99ad2e9f07ea84eb74fb6e0d87abd1c4a6c9c988bb28e49010df0c",
+        "destination": ".cairn/specs/federated-pull-sync/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "f9cfb9780b308f573fdd389d3c8d06e33260187e9b4bdf98583c3f2efa332411",
+        "operations": [
+          {
+            "block_hash": "44dce27baf76247668d8d49483fc67ebbaf3e68d73e2ca9161fbb46c89f6b3e7",
+            "heading": "### Requirement: Federated pull runs as an optional system extension",
+            "kind": "added",
+            "requirement_id": "molten.federated_pull_runtime.manifest"
+          },
+          {
+            "block_hash": "3523762aa23d3a4e709ceb64774cc0209bd14e6f094420272db759f65bd62927",
+            "heading": "### Requirement: Federation uses production cryptographic adapters",
+            "kind": "added",
+            "requirement_id": "molten.federated_pull_runtime.crypto"
+          },
+          {
+            "block_hash": "4d33e73c709761e52a63da3df2697e060e917a74193117142695f1bb6dde2832",
+            "heading": "### Requirement: Discovery evidence remains hint-only",
+            "kind": "added",
+            "requirement_id": "molten.federated_pull_runtime.discovery_hints"
+          },
+          {
+            "block_hash": "88649de7442f5afe117541e676de7abbaae29db9b07ad525aa5ab253361719d8",
+            "heading": "### Requirement: Pull planning is receiver-owned",
+            "kind": "added",
+            "requirement_id": "molten.federated_pull_runtime.receiver_pull"
+          },
+          {
+            "block_hash": "b324a8bfaf7e55ec9e06e0c7a3eea9ce9faa54b1edd208f68f4aa17b2b1d2e88",
+            "heading": "### Requirement: Federation sessions are bounded and fresh",
+            "kind": "added",
+            "requirement_id": "molten.federated_pull_runtime.bounds_freshness"
+          },
+          {
+            "block_hash": "83cb4f80cae31048d454e14beb5815acc46cc46d74805d54d4b871da85d0b3f0",
+            "heading": "### Requirement: Conflict and merge policy is domain-owned",
+            "kind": "added",
+            "requirement_id": "molten.federated_pull_runtime.conflict_boundary"
+          },
+          {
+            "block_hash": "3f1933415b1f01a7233bd696ee0c152790bb418bfcf0be456ccc38eaf28de2f3",
+            "heading": "### Requirement: Federation exposes local bounded status",
+            "kind": "added",
+            "requirement_id": "molten.federated_pull_runtime.status_evidence"
+          },
+          {
+            "block_hash": "96558e213d565b75111166191d5efa41f10cb6559f11fa161bf70ce3a43b4bfe",
+            "heading": "### Requirement: Federation uses the same core in live and simulation profiles",
+            "kind": "added",
+            "requirement_id": "molten.federated_pull_runtime.final_validation"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.federated_pull_runtime.manifest",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.federated_pull_runtime.crypto",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.federated_pull_runtime.discovery_hints",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.federated_pull_runtime.receiver_pull",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.federated_pull_runtime.bounds_freshness",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.federated_pull_runtime.conflict_boundary",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.federated_pull_runtime.status_evidence",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.federated_pull_runtime.final_validation",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/federated-pull-system-extension/specs/federated-pull-sync/spec.md"
+      }
+    ]
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "plan_hash": "969d557ba5ccd8f1e4204e58325d4324cd70a11395bfbda74cc6b643a0e9720f",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "reasons": [],
+  "receipt_hash": "0d7d55ee44499713e8bd72b5ce79030e465c2b6c83d8636a480d45f193764650"
+}

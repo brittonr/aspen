@@ -240,7 +240,7 @@ pub fn plan_lifecycle_transition(
             health: HealthState::Healthy,
             ..state.clone()
         },
-        (LifecyclePhase::Running, LifecycleEventKind::BeginCheckpoint) => {
+        (LifecyclePhase::Running | LifecyclePhase::Drained, LifecycleEventKind::BeginCheckpoint) => {
             with_phase(state, LifecyclePhase::Checkpointing)
         }
         (LifecyclePhase::Checkpointing, LifecycleEventKind::CheckpointSucceeded) => LifecycleState {

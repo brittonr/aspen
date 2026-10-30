@@ -49,13 +49,14 @@ pub(crate) fn empty_observation() -> ObservedHistory {
 /// Run one declared scenario: validate, execute, tear down, and judge.
 pub(crate) fn run_scenario(
     declaration: &ScenarioDeclaration,
+    source_trust: Option<&std::ffi::OsStr>,
     body: impl FnOnce(&mut Harness) -> StepResult<ObservedHistory>,
 ) -> ScenarioResult {
     if !validate_scenario(declaration).is_empty() {
         let unexecuted = ScenarioExecution::Completed(empty_observation());
         return judge_scenario(declaration, &unexecuted, TeardownStatus::Complete);
     }
-    let mut harness = match Harness::new(declaration) {
+    let mut harness = match Harness::new(declaration, source_trust) {
         Ok(harness) => harness,
         Err(stop) => return judge_scenario(declaration, &stop.into_execution(), TeardownStatus::Complete),
     };
@@ -177,35 +178,52 @@ fn lost_response_body(harness: &mut Harness) -> StepResult<ObservedHistory> {
 // r[verify molten.outside_in.real_stack]
 // r[verify molten.outside_in.observation]
 #[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn live_outside_in_no_fault_baseline_agrees() {
-    let result = run_scenario(&declaration(FaultProfile::NoFault, 0, &["request-1"]), baseline_body);
+    let trust = std::env::var_os(super::shell::SOURCE_TRUST_ENV);
+    let result = run_scenario(&declaration(FaultProfile::NoFault, 0, &["request-1"]), trust.as_deref(), baseline_body);
     assert_eq!(result.outcome, ScenarioOutcome::Agreement, "{result:?}");
     assert!(result.is_pass());
 }
 
 // r[verify molten.outside_in.fault_profiles]
 #[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn live_outside_in_kill_restart_keeps_the_committed_request_and_identity() {
-    let result =
-        run_scenario(&declaration(FaultProfile::KillRestart, 0, &["request-1", "request-2"]), kill_restart_body);
+    let trust = std::env::var_os(super::shell::SOURCE_TRUST_ENV);
+    let result = run_scenario(
+        &declaration(FaultProfile::KillRestart, 0, &["request-1", "request-2"]),
+        trust.as_deref(),
+        kill_restart_body,
+    );
     assert_eq!(result.outcome, ScenarioOutcome::Agreement, "{result:?}");
     assert!(result.is_pass());
 }
 
 // r[verify molten.outside_in.fault_profiles]
 #[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn live_outside_in_pause_resume_delivers_once_after_resume() {
-    let result =
-        run_scenario(&declaration(FaultProfile::PauseResume, FAULT_HOLD_MS, &["request-1"]), pause_resume_body);
+    let trust = std::env::var_os(super::shell::SOURCE_TRUST_ENV);
+    let result = run_scenario(
+        &declaration(FaultProfile::PauseResume, FAULT_HOLD_MS, &["request-1"]),
+        trust.as_deref(),
+        pause_resume_body,
+    );
     assert_eq!(result.outcome, ScenarioOutcome::Agreement, "{result:?}");
     assert!(result.is_pass());
 }
 
 // r[verify molten.outside_in.fault_profiles]
 #[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn live_outside_in_partition_heal_fails_during_the_partition_and_delivers_once_after_heal() {
-    let result =
-        run_scenario(&declaration(FaultProfile::PartitionHeal, PARTITION_HOLD_MS, &["request-1"]), partition_heal_body);
+    let trust = std::env::var_os(super::shell::SOURCE_TRUST_ENV);
+    let result = run_scenario(
+        &declaration(FaultProfile::PartitionHeal, PARTITION_HOLD_MS, &["request-1"]),
+        trust.as_deref(),
+        partition_heal_body,
+    );
     assert_eq!(
         result.outcome,
         ScenarioOutcome::PermittedDivergence(vec![DivergenceReason::RetriedAfterFault]),
@@ -216,8 +234,11 @@ fn live_outside_in_partition_heal_fails_during_the_partition_and_delivers_once_a
 
 // r[verify molten.outside_in.fault_profiles]
 #[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn live_outside_in_lost_response_stays_unresolved_and_the_retry_is_suppressed() {
-    let result = run_scenario(&declaration(FaultProfile::LostResponse, 0, &["request-1"]), lost_response_body);
+    let trust = std::env::var_os(super::shell::SOURCE_TRUST_ENV);
+    let result =
+        run_scenario(&declaration(FaultProfile::LostResponse, 0, &["request-1"]), trust.as_deref(), lost_response_body);
     assert_eq!(
         result.outcome,
         ScenarioOutcome::PermittedDivergence(vec![

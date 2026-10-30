@@ -222,29 +222,3 @@ struct AdmissionReceiptInput<'a> {
     turn_context_refs: &'a [String],
     diagnostics: Vec<String>,
 }
-
-pub fn build_envelope(input: EnvelopeInput) -> Result<Envelope> {
-    validate_name(&input.from_peer, "from peer")?;
-    validate_name(&input.from_actor, "from actor")?;
-    validate_name(&input.to_peer, "to peer")?;
-    validate_name(&input.topic, "topic")?;
-    validate_refs(&input.content_refs, "content ref")?;
-    validate_refs(&input.capability_refs, "capability ref")?;
-    validate_refs(&input.evidence_refs, "evidence ref")?;
-    let value = envelope_value(&input)?;
-    parse_envelope(&value)
-}
-
-pub fn assert_envelope(input: AssertEnvelopeInput<'_>) -> Result<Envelope> {
-    build_envelope(EnvelopeInput {
-        from_peer: input.from_peer.to_owned(),
-        from_actor: input.from_actor.to_owned(),
-        to_peer: input.to_peer.to_owned(),
-        topic: input.topic.to_owned(),
-        operation: Operation::Assert,
-        payload: input.payload,
-        content_refs: Vec::new(),
-        capability_refs: input.capability_refs,
-        evidence_refs: input.evidence_refs,
-    })
-}

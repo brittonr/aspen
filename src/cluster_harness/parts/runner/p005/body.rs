@@ -82,3 +82,29 @@ fn is_regular_file_without_symlink(path: &std::path::Path) -> bool {
     std::fs::symlink_metadata(path)
         .is_ok_and(|metadata| metadata.file_type().is_file() && !metadata.file_type().is_symlink())
 }
+
+/// Upper bound on the operator-selected startup source trust record.
+const MAX_SOURCE_TRUST_BYTES: u64 = 16_384;
+
+/// Installs the operator-selected startup source trust in every initialized node root. Startup
+/// admission, not the harness, authenticates the selection; without it every start is denied.
+fn provision_source_trust(input: &ExecutionInput, plan: &crate::cluster::Plan) -> crate::error::Result<()> {
+    let Some(path) = &input.source_trust else { return Ok(()) };
+    if !is_regular_file_without_symlink(path) {
+        return Err(crate::error::Failure::invalid_harness("source trust must be a regular non-symlink file"));
+    }
+    let mut bytes = Vec::new();
+    std::io::Read::read_to_end(
+        &mut std::io::Read::take(std::fs::File::open(path).map_err(crate::error::Failure::from)?, MAX_SOURCE_TRUST_BYTES + 1),
+        &mut bytes,
+    )
+    .map_err(crate::error::Failure::from)?;
+    if bytes.len() as u64 > MAX_SOURCE_TRUST_BYTES {
+        return Err(crate::error::Failure::invalid_harness("source trust exceeds its byte bound"));
+    }
+    let trust_path = crate::node_state::RelativePath::parse("source-gate-trust.json")?;
+    for node in &plan.nodes {
+        crate::node_state::DirectoryRoot::open_existing(&node.state_root)?.write_new(&trust_path, &bytes)?;
+    }
+    Ok(())
+}

@@ -1,0 +1,133 @@
+wire_struct!(
+    crate::fabric_execution::ExecutionProfileDescriptor,
+    "host-execution-profile-v1",
+    schema,
+    profile_id,
+    profile_ref,
+    kind,
+    platform,
+    supported_termination_scopes,
+    max_timeout_ms,
+    max_stdin_bytes,
+    max_stdout_bytes,
+    max_stderr_bytes,
+    max_poll_interval_ms,
+    max_teardown_timeout_ms,
+    max_arguments,
+    max_argument_bytes,
+    max_environment_entries,
+    max_environment_name_bytes,
+    max_environment_value_bytes,
+    max_concurrency_units,
+    max_queue_units,
+    component_repository,
+    component_revision,
+    component_license,
+    component_package,
+    conformance_refs,
+    fabric_non_claims,
+    non_claims
+);
+wire_struct!(
+    crate::fabric_execution::ExecutionRequest,
+    "host-execution-request-v1",
+    schema,
+    operation_ref,
+    idempotency_ref,
+    extension_id,
+    service_id,
+    callback_ref,
+    effect_ref,
+    generation,
+    profile_ref,
+    executable_artifact_ref,
+    executable_identity_ref,
+    arguments,
+    environment,
+    environment_mode,
+    invocation_mode,
+    executable_resolution,
+    workspace_ref,
+    workspace_mode,
+    stdin_ref,
+    limits,
+    termination_scope,
+    accepted_exit_codes,
+    reject_stdout_truncation,
+    reject_stderr_truncation,
+    authority_ref,
+    resource_grant_ref
+);
+wire_struct!(
+    crate::fabric_execution::ExecutionAuthorityFacts,
+    "host-execution-facts-v1",
+    authority_ref,
+    executable_authority_ref,
+    provenance_ref,
+    effect_admission_ref,
+    workspace_authority_ref,
+    process_authority_ref,
+    resource_grant_ref,
+    policy_ref,
+    executable_artifact_ref,
+    executable_identity_ref,
+    workspace_ref,
+    operation_ref,
+    extension_id,
+    service_id,
+    generation,
+    profile_ref
+);
+wire_struct!(
+    crate::fabric_execution::ExecutionResourceGrant,
+    "host-execution-resources-v1",
+    memory_bytes,
+    storage_bytes,
+    diagnostic_bytes,
+    logical_deadline_ticks,
+    concurrency_units,
+    queue_units
+);
+wire_struct!(
+    crate::fabric_execution::ExecutionRequestLimits,
+    "host-execution-limits-v1",
+    timeout_ms,
+    stdin_max_bytes,
+    stdout_max_bytes,
+    stderr_max_bytes,
+    poll_interval_ms,
+    teardown_timeout_ms,
+    concurrency_units,
+    queue_units
+);
+wire_struct!(crate::fabric_execution::EnvironmentEntry, "host-environment-entry-v1", name, value, value_class);
+wire_struct!(
+    crate::fabric_execution::ResolvedContext,
+    "host-resolved-context-v1",
+    executable_path,
+    executable_artifact_ref,
+    executable_identity_ref,
+    workspace_path,
+    workspace_ref,
+    stdin_ref,
+    stdin_bytes
+);
+wire_enum!(crate::fabric_execution::ExecutionProfileKind, LiveBoundedProcess, DeterministicSimulation);
+wire_enum!(crate::fabric_execution::ExecutionPlatform, UnixProcessGroup, DirectChildOnly);
+wire_enum!(crate::fabric_execution::ExecutionTerminationScope, DirectChild, ProcessGroup);
+wire_enum!(crate::fabric_execution::ExecutionEnvironmentMode, Clear, InheritRequested);
+wire_enum!(crate::fabric_execution::ExecutionInvocationMode, Direct, ShellExpansion);
+wire_enum!(crate::fabric_execution::ExecutableResolutionMode, ExactArtifact, PathSearch);
+wire_enum!(crate::fabric_execution::WorkspaceMode, CapabilityRoot, ImplicitCurrentDirectory);
+wire_enum!(crate::fabric_execution::EnvironmentValueClass, Public, Secret);
+wire_enum!(
+    crate::fabric_execution::ExecutionNonClaim,
+    Sandboxing,
+    Hermeticity,
+    ExecutableTrust,
+    ChildCorrectness,
+    NetworkIsolation,
+    PlatformEquivalence,
+    ApplicationSuccess,
+    ReleaseReadiness
+);

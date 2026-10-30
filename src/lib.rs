@@ -32,6 +32,11 @@ pub mod cluster_harness;
 #[doc(hidden)]
 #[path = "preserves/rail.rs"]
 pub mod codec;
+#[path = "collaborationscope/mod.rs"]
+pub mod collaboration_scope;
+#[cfg(feature = "component-rpc")]
+#[path = "componentrpc/mod.rs"]
+pub mod component_rpc;
 #[doc(hidden)]
 #[path = "project/config/portability.rs"]
 pub mod config_portability_core;
@@ -122,6 +127,8 @@ pub mod lineage;
 pub mod lineage_meta;
 #[path = "live/binding/adoption.rs"]
 pub mod live_binding_adoption;
+#[path = "reliability/mod.rs"]
+pub mod live_reliability;
 pub mod local_store;
 #[doc(hidden)]
 #[path = "nixos/vm.rs"]
@@ -157,6 +164,10 @@ pub mod node_profile_config_core;
 #[doc(hidden)]
 #[path = "node/service/fsm.rs"]
 pub mod node_service_fsm_core;
+#[path = "node/servicehost/mod.rs"]
+pub mod node_service_host;
+#[path = "node/servicehosting/mod.rs"]
+pub mod node_service_hosting;
 #[path = "node/state.rs"]
 pub mod node_state;
 #[doc(hidden)]
@@ -214,6 +225,9 @@ pub mod remediator;
 pub mod sans_io_protocol_core;
 #[path = "schema/identity/core/pilot.rs"]
 pub mod schema_identity_core_pilot;
+#[cfg(feature = "spacewasm-pilot")]
+#[path = "spacewasm/mod.rs"]
+pub mod spacewasm;
 #[doc(hidden)]
 #[path = "resources/mod.rs"]
 pub mod supplies;
@@ -260,6 +274,8 @@ pub mod world_replay;
 pub mod world_snapshot;
 #[cfg(feature = "doltlite-oracle")]
 pub mod world_state_oracle;
+#[path = "world_witness/mod.rs"]
+pub mod world_witness;
 
 #[cfg(test)]
 #[path = "test/support.rs"]

@@ -1,23 +1,27 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026",
+  "workspaceRoot": "/home/brittonr/.cargo-target/aspen-open-cairns-20261029",
   "roots": [
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026#molten@0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/crates/molten-core#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/crates/molten-node-host#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/crates/molten-release-policy#0.1.0",
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/crates/molten-release-policy#0.1.0"
+    "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029#molten@0.1.0",
+    "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029#molten@0.1.0",
+    "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029#molten@0.1.0",
+    "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029#molten@0.1.0",
+    "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029#molten@0.1.0",
+    "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029#molten@0.1.0",
+    "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029#molten@0.1.0",
+    "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-core#0.1.0",
+    "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-node-host#0.1.0",
+    "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-release-policy#0.1.0",
+    "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026#molten@0.1.0",
-    "molten-core": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/crates/molten-core#0.1.0",
-    "molten-node-host": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/crates/molten-node-host#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/crates/molten-release-policy#0.1.0"
+    "molten": "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029#molten@0.1.0",
+    "molten-core": "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-core#0.1.0",
+    "molten-node-host": "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-node-host#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "9d3e49ba82678bfffa9aaba256caf61731581a32fbd91593729673c927c8c0c4",
-  "inputsHash": "4ce4071b4238662e9224c70b19d9af45d3fafeff6e7702ce622bfb599f16c06f",
+  "cargoLockHash": "b06eb7f052a815f6c30e6e084a2fc324992132816a22028a4080220c31efc08d",
+  "inputsHash": "500c34f007158b525b18e95ae472a346ad08c7cb0ac87ec7f9f2d6913e3dee55",
   "crates": {
     "git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec-core@0.1.0": {
       "crateName": "bounded-exec-core",
@@ -312,6 +316,51 @@
       "description": "Product-neutral bounded schema migration planning core",
       "license": "MIT",
       "repository": "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git"
+    },
+    "git+https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#durable-authority-state-redb@0.1.0": {
+      "crateName": "durable-authority-state-redb",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git",
+        "rev": "a0de79303f3f45c18a34fff535b690a85cb3cf59",
+        "subDir": "crates/durable-authority-state-redb",
+        "sha256": "sha256-++GX+wiKkcBDeXtMJnMgpByEEcuAYRgO20Pzb8TJ6pA="
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#postcard@1.1.3",
+          "externCrateName": "postcard"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redb@3.1.3",
+          "externCrateName": "redb"
+        },
+        {
+          "packageId": "git+https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#replay-ledger-core@0.1.0",
+          "externCrateName": "replay_ledger_core"
+        },
+        {
+          "packageId": "git+https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#revocation-view-core@0.1.0",
+          "externCrateName": "revocation_view_core"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Redb persistence adapters for replay ledgers and revocation views",
+      "license": "MIT",
+      "repository": "https://github.com/OnixResearch/durable-authority-state"
     },
     "git+https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#replay-ledger-core@0.1.0": {
       "crateName": "replay-ledger-core",
@@ -1434,6 +1483,104 @@
       "license": "AGPL-3.0-or-later",
       "repository": "https://github.com/OnixResearch/onix-artifact"
     },
+    "git+ssh://git@github.com/OnixResearch/release-channel.git?rev=fa389e19d5c9bd84cd75df914cc5418c70d92bfb#release-channel-index@0.1.0": {
+      "crateName": "release-channel-index",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "ssh://git@github.com/OnixResearch/release-channel.git",
+        "rev": "fa389e19d5c9bd84cd75df914cc5418c70d92bfb",
+        "subDir": "crates/index",
+        "sha256": "sha256-lEvpPJVCTFyUpavvAPJh6tVfg0dJx0eeq3MGIGAEOuA="
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",
+          "externCrateName": "ed25519_dalek"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#fs2@0.4.3",
+          "externCrateName": "fs2"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186",
+          "externCrateName": "libc"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
+          "externCrateName": "serde_json"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#sha2@0.10.9",
+          "externCrateName": "sha2"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "license": "MIT"
+    },
+    "git+ssh://git@github.com/OnixResearch/release-channel.git?rev=fa389e19d5c9bd84cd75df914cc5418c70d92bfb#release-channel-witness@0.1.0": {
+      "crateName": "release-channel-witness",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "ssh://git@github.com/OnixResearch/release-channel.git",
+        "rev": "fa389e19d5c9bd84cd75df914cc5418c70d92bfb",
+        "subDir": "crates/witness",
+        "sha256": "sha256-lEvpPJVCTFyUpavvAPJh6tVfg0dJx0eeq3MGIGAEOuA="
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#fs2@0.4.3",
+          "externCrateName": "fs2"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186",
+          "externCrateName": "libc"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
+          "externCrateName": "serde_json"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tempfile@3.27.0",
+          "externCrateName": "tempfile"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "license": "MIT"
+    },
     "git+ssh://git@github.com/OnixResearch/valence.git?rev=9201074343cd9da0ffaf6ec9db690af5b445d663#valence-core@0.1.0": {
       "crateName": "valence-core",
       "version": "0.1.0",
@@ -1488,7 +1635,7 @@
       "license": "MPL-2.0",
       "repository": "https://github.com/OnixResearch/valence"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026#molten@0.1.0": {
+    "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029#molten@0.1.0": {
       "crateName": "molten",
       "version": "0.1.0",
       "edition": "2024",
@@ -1552,8 +1699,20 @@
           "externCrateName": "clap"
         },
         {
+          "packageId": "git+https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#durable-authority-state-redb@0.1.0",
+          "externCrateName": "durable_authority_state_redb"
+        },
+        {
           "packageId": "git+https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=8e05e74e24b45f752d77145c4455385daaf6d6ab#durable-file-publication@0.1.0",
           "externCrateName": "durable_file_publication"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",
+          "externCrateName": "ed25519_dalek"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.3.4",
+          "externCrateName": "getrandom"
         },
         {
           "packageId": "git+rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx?rev=cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c#hardened-wasmtime-runtime@0.1.0",
@@ -1588,11 +1747,11 @@
           "externCrateName": "mantle_wasm_consumer_verifier"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/crates/molten-node-host#0.1.0",
+          "packageId": "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-node-host#0.1.0",
           "externCrateName": "molten_node_host"
         },
         {
@@ -1614,6 +1773,26 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#redb@4.1.0",
           "externCrateName": "redb"
+        },
+        {
+          "packageId": "git+ssh://git@github.com/OnixResearch/release-channel.git?rev=fa389e19d5c9bd84cd75df914cc5418c70d92bfb#release-channel-index@0.1.0",
+          "externCrateName": "release_channel_index"
+        },
+        {
+          "packageId": "git+ssh://git@github.com/OnixResearch/release-channel.git?rev=fa389e19d5c9bd84cd75df914cc5418c70d92bfb#release-channel-witness@0.1.0",
+          "externCrateName": "release_channel_witness"
+        },
+        {
+          "packageId": "git+https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#replay-ledger-core@0.1.0",
+          "externCrateName": "replay_ledger_core"
+        },
+        {
+          "packageId": "git+https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#revocation-view-core@0.1.0",
+          "externCrateName": "revocation_view_core"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustix@1.1.4",
+          "externCrateName": "rustix"
         },
         {
           "packageId": "git+https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#schema-identity-core@0.1.0",
@@ -1728,8 +1907,24 @@
           "path": "src/main.rs"
         },
         {
+          "name": "molten-collaboration-scope",
+          "path": "src/bin/molten-collaboration-scope.rs"
+        },
+        {
           "name": "molten-native-extension-fixture",
           "path": "src/bin/molten-native-extension-fixture.rs"
+        },
+        {
+          "name": "molten-service-host-cohort",
+          "path": "src/bin/molten-service-host-cohort.rs"
+        },
+        {
+          "name": "world-witness-consumer-pilot",
+          "path": "src/bin/world-witness-consumer-pilot.rs"
+        },
+        {
+          "name": "world-witness-provider-pilot",
+          "path": "src/bin/world-witness-provider-pilot.rs"
         }
       ],
       "crateTests": [
@@ -1745,7 +1940,7 @@
       "description": "Molten Rust project",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -1809,7 +2004,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/crates/molten-node-host#0.1.0": {
+    "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-node-host#0.1.0": {
       "crateName": "molten-node-host",
       "version": "0.1.0",
       "edition": "2024",
@@ -1829,7 +2024,7 @@
           "externCrateName": "cap_std"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         }
       ],
@@ -1856,7 +2051,7 @@
       "description": "Capability-rooted node host boundary for Molten",
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -1872,7 +2067,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/git/OnixResearch/.worktrees/aspen-runtime-adoption-20261026/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
@@ -5200,7 +5395,7 @@
           "externCrateName": "termcolor"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#unicode-width@0.1.14",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#unicode-width@0.2.2",
           "externCrateName": "unicode_width"
         }
       ],
@@ -7082,7 +7277,7 @@
           "externCrateName": "data_encoding"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@1.0.109",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117",
           "externCrateName": "syn"
         }
       ],
@@ -7889,12 +8084,12 @@
           "externCrateName": "block_buffer"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#const-oid@0.9.6",
-          "externCrateName": "const_oid"
-        },
-        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#crypto-common@0.1.7",
           "externCrateName": "crypto_common"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#const-oid@0.9.6",
+          "externCrateName": "const_oid"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#subtle@2.6.1",
@@ -9347,6 +9542,38 @@
       "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
       "repository": "https://github.com/bytecodealliance/fs-set-times"
     },
+    "registry+https://github.com/rust-lang/crates.io-index#fs2@0.4.3": {
+      "crateName": "fs2",
+      "version": "0.4.3",
+      "edition": "2015",
+      "sha256": "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186",
+          "externCrateName": "libc"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Dan Burkert <dan@danburkert.com>"
+      ],
+      "description": "Cross-platform file locks and file duplication.",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/danburkert/fs2-rs"
+    },
     "registry+https://github.com/rust-lang/crates.io-index#futures-buffered@0.2.13": {
       "crateName": "futures-buffered",
       "version": "0.2.13",
@@ -10786,16 +11013,16 @@
       ],
       "dependencies": [
         {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.2.0",
+          "externCrateName": "foldhash"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#allocator-api2@0.2.21",
           "externCrateName": "allocator_api2"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#equivalent@1.0.2",
           "externCrateName": "equivalent"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#foldhash@0.2.0",
-          "externCrateName": "foldhash"
         }
       ],
       "buildDependencies": [],
@@ -18413,6 +18640,10 @@
       ],
       "dependencies": [
         {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.8.1",
+          "externCrateName": "memchr"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#crc32fast@1.5.0",
           "externCrateName": "crc32fast"
         },
@@ -18423,10 +18654,6 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",
           "externCrateName": "indexmap"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.8.1",
-          "externCrateName": "memchr"
         }
       ],
       "buildDependencies": [],
@@ -23269,10 +23496,6 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",
-          "externCrateName": "indexmap"
-        },
-        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#itoa@1.0.18",
           "externCrateName": "itoa"
         },
@@ -23287,6 +23510,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.21",
           "externCrateName": "zmij"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.14.0",
+          "externCrateName": "indexmap"
         }
       ],
       "buildDependencies": [],
@@ -24190,7 +24417,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.4.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.5.0",
           "externCrateName": "heck"
         },
         {
@@ -29612,10 +29839,6 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
-          "externCrateName": "anyhow"
-        },
-        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.17.1",
           "externCrateName": "hashbrown"
         },
@@ -29626,6 +29849,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
+          "externCrateName": "anyhow"
         }
       ],
       "buildDependencies": [],

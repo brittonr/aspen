@@ -92,4 +92,23 @@ impl RedbDurableStateAdapter {
         }
         Ok(reopened)
     }
+
+    /// Explicitly reconcile a store that a local repair reopened, by its own
+    /// consistency, so a restarting owner can read it again. A store that opened
+    /// without a repair is returned unchanged; the repair stays recorded in
+    /// `is_repair_observed`. Reconciliation that does not end serving denies.
+    // r[impl molten.fabric_durability.adapter_quarantine]
+    pub fn reconcile_repaired_on_open(self) -> crate::error::Result<Self> {
+        if self.health != AdapterHealth::Quarantined(QuarantineReason::RepairedOnOpen) {
+            return Ok(self);
+        }
+        let adapter = self.reopen_and_reconcile(ReconciliationReference::SelfConsistent).map_err(|failure| failure.error)?;
+        if adapter.health != AdapterHealth::Serving {
+            return Err(crate::error::Failure::invalid_harness(format!(
+                "repaired durable storage did not reconcile: {:?}",
+                adapter.health
+            )));
+        }
+        Ok(adapter)
+    }
 }

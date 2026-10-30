@@ -1,0 +1,35 @@
+id: ebpf-observation-mutation-boundary
+language: Rust
+severity: error
+message: Observation consumers may only use supplied read capabilities; BPF loaders, raw syscalls, mutation handles, privilege acquisition and ambient discovery belong to OnixOS.
+metadata:
+  posture: blocking
+  surface: linux-ebpf-observation
+  non_claim: structural-boundary-only-not-host-privilege-proof
+files:
+  - src/fabric_observability/kernel/*.rs
+  - crates/molten-core/src/fabric_observability/ebpf/*.rs
+ignores:
+  - "**/*tests.rs"
+  - "**/readiness.rs"
+rule:
+  any:
+    - all:
+        - kind: identifier
+        - regex: '^(aya|libbpf_rs|libbpf_sys|bcc|EbpfLoader|BpfLoader|MapMut|ProgramFd|LinkFd)$'
+    - pattern: libc::syscall($$$ARGS)
+    - pattern: nix::unistd::setuid($$$ARGS)
+    - pattern: nix::unistd::seteuid($$$ARGS)
+    - pattern: libc::setuid($$$ARGS)
+    - pattern: libc::seteuid($$$ARGS)
+    - pattern: caps::set($$$ARGS)
+    - pattern: std::process::Command::new($$$ARGS)
+    - pattern: std::fs::read_dir($$$ARGS)
+    - pattern: std::fs::File::open($$$ARGS)
+    - pattern: cap_std::fs::Dir::open_ambient_dir($$$ARGS)
+    - pattern: unsafe { $$$BODY }
+    - pattern: $ROOT.write($$$ARGS)
+    - pattern: $ROOT.remove_file($$$ARGS)
+    - pattern: $ROOT.create_dir_all($$$ARGS)
+    - pattern: $ROOT.rename($$$ARGS)
+    - pattern: $ROOT.set_permissions($$$ARGS)

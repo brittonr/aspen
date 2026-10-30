@@ -1,0 +1,15 @@
+id: molten-bpf-loader-library
+language: Rust
+severity: error
+message: Molten consumes read-only observation capabilities; BPF loader libraries belong to the OnixOS producer, not any Molten module or extension API.
+metadata:
+  posture: blocking
+  surface: molten-bpf-loader-imports
+  non_claim: structural-source-import-guard-not-host-privilege-proof
+files:
+  - src/**/*.rs
+  - crates/**/*.rs
+rule:
+  all:
+    - kind: identifier
+    - regex: '^(aya|libbpf_rs|libbpf_sys|bcc)$'

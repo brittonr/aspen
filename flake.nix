@@ -109,6 +109,22 @@
       url = "git+https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=eb2bd3441753af97bfcb247cef7cc22d72675b62";
       flake = false;
     };
+    durable-authority-state-src = {
+      url = "git+https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59";
+      flake = false;
+    };
+    release-channel-src = {
+      url = "git+ssh://git@github.com/OnixResearch/release-channel.git?rev=fa389e19d5c9bd84cd75df914cc5418c70d92bfb";
+      flake = false;
+    };
+    spacewasm-src = {
+      url = "github:nasa/spacewasm/e24cf09355a90497148eb5029fdb8e3400bd63e3";
+      flake = false;
+    };
+    wrpc-src = {
+      url = "github:bytecodealliance/wrpc/aa01409ed38bf7a978570ff567c4475376925df6";
+      flake = false;
+    };
     flake-utils.url = "github:numtide/flake-utils/11707dc2f618dd54ca8739b309ec4fc024de578b";
   };
 
@@ -708,12 +724,12 @@
             enableKache ? false,
             cacheDir ? kacheCacheDir,
             keySalt ? kacheKeySalt,
-            resolvedJson ? ./build-plan.json,
+            src ? ./.,
+            resolvedJson ? "${src}/build-plan.json",
           }:
           unit2nix.lib.${system}.buildFromUnitGraph {
             pkgs = unit2nixPkgs;
-            inherit rustToolchain;
-            src = ./.;
+            inherit rustToolchain src;
             # Keep unit graphs checked in so package evaluation does not
             # depend on unit2nix IFD.
             inherit resolvedJson;
@@ -827,6 +843,25 @@
             in
             !(base == "target" || base == ".direnv" || base == ".git");
         };
+        startupGatePkgs = import octet-toolchain.inputs.nixpkgs {
+          inherit system;
+          overlays = [ (import octet-toolchain.inputs.rust-overlay) ];
+        };
+        startupGateCompiler = startupGatePkgs.rust-bin.fromRustupToolchainFile "${octet-toolchain}/rust-toolchain.toml";
+        startupSourceBinding = import ./nix/startup-source-binding.nix {
+          inherit pkgs rustToolchain;
+          source = sourceForConfigChecks;
+          gateCompiler = startupGateCompiler;
+          buildCandidate = src: (mkUnit2nixWorkspace { inherit src; }).workspaceMembers."molten".build;
+          buildGate = source: import ./nix/startup-octet-cohort.nix {
+            inherit pkgs system source;
+            octet = octet-toolchain;
+            gateCompiler = startupGateCompiler;
+          };
+        };
+        moltenReadinessVerifier = pkgs.writeShellScriptBin "onixos-molten-readiness-verifier" ''
+          exec ${startupSourceBinding}/bin/molten reliability verify-readiness "$@"
+        '';
         executableExtentOctetWorkspace = pkgs.runCommand "molten-executable-extent-octet-workspace" { } ''
           mkdir -p \
             "$out/src" \
@@ -1158,6 +1193,8 @@
         packages = {
           default = moltenPkg;
           molten = moltenPkg;
+          molten-startup-source-binding = startupSourceBinding;
+          onixos-molten-readiness-verifier = moltenReadinessVerifier;
           molten-node-host = moltenNodeHostPkg;
           molten-release-policy = releasePolicyPkg;
           doltlite-oracle = doltliteOracle;

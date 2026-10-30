@@ -1,0 +1,187 @@
+{
+  "actions": [
+    {
+      "description": "move active change to archive: admit-installed-extension-simulation",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-admit-installed-extension-simulation"
+    }
+  ],
+  "blocked": false,
+  "change": "admit-installed-extension-simulation",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "13ba50487a6642184485eb75ea7c98281ec2f4c437e10c57f74320b2980ab514",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "34942258388d2fae91a60cd72e63227be711ad9114267dde208f6c414a1f5e67",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-installed-extension-simulation/design.md"
+        },
+        {
+          "content_hash": "aa7ac1c41db6a8bd6a7af00e06cdecd997216c12b366c7794e89c3e849ca7d0d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-installed-extension-simulation/evidence/2026-10-30-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "b1335a1cb6763739a7a88ae274b620c851b9f032fdc55341bf3e59b5f642ce41",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-installed-extension-simulation/evidence/2026-10-30-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "9458ebef0c7b0de3ea1066cf478da3cd1e696559abc1d59f38a97feb8f0fa31e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-installed-extension-simulation/evidence/2026-10-30-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "4a07f6e03ad201488c84304c89c029340e4d506e99bcd89fdfe8137bebebe86d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-installed-extension-simulation/evidence/2026-10-30-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "1361cdb12633ea59756b5286663c5d2edf964f8915b230145ff17b1a71870e2c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-installed-extension-simulation/evidence/2026-10-30-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "e6525ef45ea084ce93599b4fbc045dc207d990cbecc8574fb5fe5f530db228a1",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-installed-extension-simulation/evidence/2026-10-30-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "1863fba5d0c6cf992b95156ddef936ae75400b3cf7c8c27b2077ca4f2f0f765f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-installed-extension-simulation/evidence/2026-10-30-verification.md"
+        },
+        {
+          "content_hash": "04bbcfeec904581fe8f5bd2787e3638d2cdccdb3bc8c48c0f509b437c316c2e5",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-installed-extension-simulation/metadata.json"
+        },
+        {
+          "content_hash": "36cc353e9b5c6778e184535428a05b2e4bab8d5996d97291063c0dda188fabce",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-installed-extension-simulation/proposal.md"
+        },
+        {
+          "content_hash": "6bc4c061fd92f40669ea16acca8efd9d35a30f450f56a4c818cd368be5b66b4b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-installed-extension-simulation/review.md"
+        },
+        {
+          "content_hash": "464a4da0a7ae4f33cdd0254d9dd857cccc87ba720362cda0c1a2aaf1b4221f1b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-installed-extension-simulation/specs/installed-extension-simulation/spec.md"
+        },
+        {
+          "content_hash": "3db0697008e00070da00a4a28a503dbd16f44a0069838e7720032f05c159fd30",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-installed-extension-simulation/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/admit-installed-extension-simulation"
+        }
+      ],
+      "manifest_hash": "8ef916bd5b35f0933e9d97fea6e3e5ced3a00b662240345c1451ff4d9a6ef130"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "34942258388d2fae91a60cd72e63227be711ad9114267dde208f6c414a1f5e67",
+          "exists": true,
+          "path": "./.cairn/changes/admit-installed-extension-simulation/design.md"
+        },
+        {
+          "content_hash": "aa7ac1c41db6a8bd6a7af00e06cdecd997216c12b366c7794e89c3e849ca7d0d",
+          "exists": true,
+          "path": "./.cairn/changes/admit-installed-extension-simulation/evidence/2026-10-30-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "b1335a1cb6763739a7a88ae274b620c851b9f032fdc55341bf3e59b5f642ce41",
+          "exists": true,
+          "path": "./.cairn/changes/admit-installed-extension-simulation/evidence/2026-10-30-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "9458ebef0c7b0de3ea1066cf478da3cd1e696559abc1d59f38a97feb8f0fa31e",
+          "exists": true,
+          "path": "./.cairn/changes/admit-installed-extension-simulation/evidence/2026-10-30-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "4a07f6e03ad201488c84304c89c029340e4d506e99bcd89fdfe8137bebebe86d",
+          "exists": true,
+          "path": "./.cairn/changes/admit-installed-extension-simulation/evidence/2026-10-30-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "1361cdb12633ea59756b5286663c5d2edf964f8915b230145ff17b1a71870e2c",
+          "exists": true,
+          "path": "./.cairn/changes/admit-installed-extension-simulation/evidence/2026-10-30-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "e6525ef45ea084ce93599b4fbc045dc207d990cbecc8574fb5fe5f530db228a1",
+          "exists": true,
+          "path": "./.cairn/changes/admit-installed-extension-simulation/evidence/2026-10-30-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "1863fba5d0c6cf992b95156ddef936ae75400b3cf7c8c27b2077ca4f2f0f765f",
+          "exists": true,
+          "path": "./.cairn/changes/admit-installed-extension-simulation/evidence/2026-10-30-verification.md"
+        },
+        {
+          "content_hash": "04bbcfeec904581fe8f5bd2787e3638d2cdccdb3bc8c48c0f509b437c316c2e5",
+          "exists": true,
+          "path": "./.cairn/changes/admit-installed-extension-simulation/metadata.json"
+        },
+        {
+          "content_hash": "36cc353e9b5c6778e184535428a05b2e4bab8d5996d97291063c0dda188fabce",
+          "exists": true,
+          "path": "./.cairn/changes/admit-installed-extension-simulation/proposal.md"
+        },
+        {
+          "content_hash": "6bc4c061fd92f40669ea16acca8efd9d35a30f450f56a4c818cd368be5b66b4b",
+          "exists": true,
+          "path": "./.cairn/changes/admit-installed-extension-simulation/review.md"
+        },
+        {
+          "content_hash": "464a4da0a7ae4f33cdd0254d9dd857cccc87ba720362cda0c1a2aaf1b4221f1b",
+          "exists": true,
+          "path": "./.cairn/changes/admit-installed-extension-simulation/specs/installed-extension-simulation/spec.md"
+        },
+        {
+          "content_hash": "3db0697008e00070da00a4a28a503dbd16f44a0069838e7720032f05c159fd30",
+          "exists": true,
+          "path": "./.cairn/changes/admit-installed-extension-simulation/tasks.md"
+        }
+      ],
+      "manifest_hash": "cc1575338f83fb938f264d4f6b7c92483f3776c8eff3cf178aeee9b2de8bb9a7"
+    },
+    "kind": "archive",
+    "manifest_hash": "193a31705bc834d1de677ff737404ed66e90fb43f97c5670ff00931d3f231695"
+  },
+  "plan_hash": "4a10c204922e62ff0a0cf8cafbfcff50ef159450014587793eacd0d3ea86b3d8",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "reasons": [],
+  "receipt_hash": "b725d999af97b0a8b472ec1804c0cb13b3b92c99203a77f2bb0230f29240751a"
+}

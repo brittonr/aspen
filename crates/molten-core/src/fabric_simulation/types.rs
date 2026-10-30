@@ -379,6 +379,13 @@ pub struct SimulatedWorldManifest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdmittedSimulatedWorld {
     pub manifest: SimulatedWorldManifest,
+    pub(crate) installed: Option<super::AdmittedInstalledWorld>,
+}
+
+impl AdmittedSimulatedWorld {
+    pub fn installed(&self) -> Option<&super::AdmittedInstalledWorld> {
+        self.installed.as_ref()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

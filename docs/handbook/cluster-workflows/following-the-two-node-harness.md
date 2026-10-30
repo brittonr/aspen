@@ -21,10 +21,12 @@ cargo run -- cluster harness-run \
   --fixture tests/fixtures/cluster-harness/two-node.cluster \
   --state-root target/cluster-walkthrough-state \
   --run-dir target/cluster-walkthrough-run \
+  --node-binary "$SIGNED_OUTPUT/bin/molten" \
+  --source-trust "$SOURCE_TRUST" \
   --child-timeout-ms 30000
 ```
 
-The default child binary is the currently executing binary. No separate daemon installation is implied. The timeout is per child, admitted from 1 through 300000 milliseconds, not a promise about total workflow duration. Do not treat an unavailable build environment as a denied cluster experiment: if execution never starts, child evidence has not been produced.
+The default child binary is the currently executing binary. No separate daemon installation is implied. Node startup admits only a signed producer output, so `node run` children deny an unsigned development build. Supply `--node-binary` from the independently signed output and `--source-trust` with its `source-gate-trust.json` record (see `docs/node-state-filesystem-authority.md`). The harness installs that record unchanged in every node root after `init` succeeds; startup admission, not the harness, authenticates it. The timeout is per child, admitted from 1 through 300000 milliseconds, not a promise about total workflow duration. Do not treat an unavailable build environment as a denied cluster experiment: if execution never starts, child evidence has not been produced.
 
 ## 3. Follow planning into child phases
 

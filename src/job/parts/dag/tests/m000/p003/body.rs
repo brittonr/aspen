@@ -244,7 +244,7 @@
     }
 
     fn assert_target_mismatch(fixture: &WorkerFixture) {
-        let envelope = crate::remote_dataspace::build_envelope(crate::remote_dataspace::EnvelopeInput {
+        let envelope = crate::remote_dataspace::incoming_envelope_fixture(crate::remote_dataspace::EnvelopeInput {
             from_peer: "peer:a".to_string(),
             from_actor: "source-worker".to_string(),
             to_peer: "peer:c".to_string(),
@@ -256,7 +256,7 @@
             evidence_refs: fixture.evidence_refs.clone(),
         })
         .expect("target mismatch envelope");
-        crate::remote_dataspace::publish_local_gossip(
+        crate::remote_dataspace::incoming_publish_fixture(
             &fixture.root.join("target-mismatch-transport"),
             &envelope,
             "peer:a",

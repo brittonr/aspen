@@ -39,8 +39,13 @@ fn deliver_envelope(
     Ok(())
 }
 
-fn run_once(root: &std::path::Path, receipt: &std::path::Path, label: &str) -> CliResult<std::process::Output> {
-    let output = molten_cmd()
+fn run_once(
+    source_trust: Option<&std::ffi::OsStr>,
+    root: &std::path::Path,
+    receipt: &std::path::Path,
+    label: &str,
+) -> CliResult<std::process::Output> {
+    let output = source_gated_node_command(source_trust, root)?
         .args(["test", "node", "run-loop", "--state-root"])
         .arg(root)
         .args(["--max-requests", "1", "--receipt-out"])

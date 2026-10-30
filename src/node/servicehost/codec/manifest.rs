@@ -1,0 +1,181 @@
+wire_struct!(
+    crate::system_extension::SystemExtensionManifestInput,
+    "host-manifest-input-v1",
+    schema,
+    extension_id,
+    service_id,
+    implementation_ref,
+    callback_groups,
+    required_ports,
+    optional_ports,
+    capability_refs,
+    policy_refs,
+    provenance_refs,
+    resources,
+    recovery_group,
+    execution_profile,
+    state_schema,
+    compatible_state_schemas,
+    evidence_profile_ref,
+    initial_generation,
+    non_claims
+);
+wire_struct!(
+    crate::system_extension::ResourceEnvelope,
+    "host-resource-envelope-v1",
+    max_concurrent_callbacks,
+    max_queued_events,
+    max_inflight_bytes,
+    max_open_streams,
+    max_timers,
+    max_effect_requests,
+    callback_deadline_ticks,
+    shutdown_grace_ticks,
+    max_restart_attempts,
+    overload_policy
+);
+wire_struct!(
+    crate::system_extension::RecoveryGroupDeclaration,
+    "host-recovery-group-v1",
+    group_id,
+    members,
+    window_ticks,
+    backoff_ticks,
+    max_restarts_per_member,
+    max_restarts_per_group,
+    elapsed_source_ref
+);
+wire_struct!(
+    crate::system_extension::RecoveryGroupMember,
+    "host-recovery-member-v1",
+    member_id,
+    restart_class,
+    after
+);
+wire_struct!(
+    crate::fabric::ExtensionTierRequest,
+    "host-tier-request-v1",
+    tier,
+    requested_authorities,
+    admission_evidence
+);
+wire_struct!(
+    crate::fabric::FabricPortDescriptor,
+    "host-port-descriptor-v1",
+    schema,
+    port_id,
+    version,
+    class,
+    operation_classes,
+    input_schema_refs,
+    output_schema_refs,
+    authority_requirements,
+    resource_requirements,
+    determinism,
+    replay,
+    implementation_profile,
+    conformance_refs,
+    non_claims,
+    enabled
+);
+wire_struct!(
+    crate::fabric::FabricPortRequirement,
+    "host-port-requirement-v1",
+    port_id,
+    version,
+    class,
+    operation_classes,
+    input_schema_refs,
+    output_schema_refs,
+    allowed_authorities,
+    available_resources,
+    expected_determinism,
+    expected_replay,
+    expected_profile
+);
+
+wire_enum!(crate::system_extension::ExecutionProfile, InProcessNative, NativeProcess, SandboxedComponent);
+wire_enum!(
+    crate::system_extension::SystemExtensionNonClaim,
+    InstallationIsNotActivation,
+    ArtifactIsNotAuthority,
+    CallbackSuccessIsNotConsensus,
+    CallbackSuccessIsNotDurability,
+    CallbackSuccessIsNotProtocolCompatibility,
+    CallbackSuccessIsNotSemanticCorrectness
+);
+wire_enum!(crate::system_extension::OverloadPolicy, Reject, Delay, UpstreamBackpressure);
+wire_enum!(crate::system_extension::RestartClass, Permanent, Transient, Temporary);
+wire_enum!(crate::fabric::ExtensionTier, SandboxedPlugin, SystemExtension, ApplicationWorkload);
+wire_enum!(
+    crate::fabric::FabricAuthority,
+    PluginHostcall,
+    ApplicationServiceUse,
+    ProtocolOwnership,
+    Transport,
+    DurableState,
+    Execution,
+    Time,
+    Scheduling,
+    Membership,
+    Placement,
+    Consistency,
+    Supervision,
+    Policy,
+    Resources,
+    Simulation,
+    Evidence
+);
+wire_enum!(
+    crate::fabric::TierAdmissionEvidence,
+    SystemExtensionManifest,
+    PolicyPass,
+    ProvenancePass,
+    ExplicitPortBindings,
+    ResourceGrants,
+    LifecycleAdmission
+);
+wire_enum!(
+    crate::fabric::FabricPortClass,
+    Authority,
+    Transport,
+    DurableState,
+    Execution,
+    Time,
+    Scheduling,
+    Membership,
+    Placement,
+    Consistency,
+    Supervision,
+    Policy,
+    Resources,
+    Simulation,
+    Evidence
+);
+wire_enum!(
+    crate::fabric::FabricResource,
+    Memory,
+    StorageBytes,
+    NetworkBytes,
+    ExecutionMillis,
+    InputBytes,
+    OutputBytes,
+    Concurrency,
+    QueueDepth,
+    LogicalTime,
+    Diagnostics
+);
+wire_enum!(crate::fabric::DeterminismClass, Pure, DeterministicWithRecordedInputs, ExternalEffect);
+wire_enum!(crate::fabric::ReplayClass, Recompute, RecordedEffectRequired, EvidenceOnly, NotReplayable);
+wire_enum!(
+    crate::fabric::FabricNonClaim,
+    DatabaseCorrectness,
+    GlobalOrdering,
+    GlobalConsensus,
+    TransportDelivery,
+    DurablePersistence,
+    ByzantineTolerance,
+    ProtocolCompatibility,
+    ProductionReadiness,
+    ExtensionSemanticCorrectness
+);

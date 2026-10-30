@@ -12,6 +12,95 @@ The normative split is:
 
 Plugin manifests, plugin permission receipts, artifact possession, service names, and implementation refs cannot substitute for a system-extension manifest or system-tier admission.
 
+## Public node service-host admission
+
+`molten node service-host {install,status,supervise,submit,readmit,deliver,upgrade,reconcile}`
+requires `--state-root`, `--admission`, `--logical-tick`, and `--input` on every
+operation. Admission and input names are relative paths below the existing,
+explicitly selected state-root capability. They contain canonical packed
+Preserves, not JSON or rendered text. `--preview` projects the exact operation
+request for an independent signing producer; it does not authorize or execute
+that operation. Loading still requires its own current authorization.
+
+`--preview-load` is the read-only bootstrap: it validates the actual source gate
+and canonical bundle, then emits the exact load signing request before opening
+hosting journals, value stores or replay reservations. It conflicts with
+`--preview`. The independent producer signs load, runs operation preview, then
+refreshes the load nonce and signs the projected exact operation before invoking
+the actual command. A request projection is never an admission receipt.
+
+`node_service_host::codec::{Bundle,ExtensionInput,ReplacementInput}` is the producer
+interface. `encode`, `reference`, and `decode` bind all bytes, with at most 64
+services, 64 exact replacements and 16 MiB per bundle. Each service supplies the
+actual system-tier request, manifest, port descriptors, native host profile,
+executable evidence, bounded execution profile/request/grants, materialized
+executable locator, callback template, durability profile/namespace and owned
+ledger value/journal namespaces. The loader invokes the owning admission APIs;
+decoding alone grants no authority. Executable bytes are measured through the
+selected root and callbacks use a retained file-descriptor path, not a later
+ambient lookup of the bundle's executable path. Existing journals reconstruct
+`Supervisor::from_recovered`; a stored replacement generation requires its exact
+admission material to remain in the bundle.
+
+Before journal/value-store effects, the public boundary validates the actual
+executing ELF through the startup source-gate loader, then verifies an exact
+`load` request: subject and input ref are the bundle ref, state ref is the opaque
+source validation ref, and logical tick is explicit. Independent operator-owned
+`service-host-trust` pins UCAN issuer/holder keys and Basalt policy. Exact
+holder-signed credentials are selected by `authority::credential_path`; their
+operation binding covers the bundle and every request field. Current validity,
+revocation and durable no-replace nonce admission are checked on every request.
+Neither bundle references nor source-gate evidence grant operation authority.
+Host separately admits the exact operation before its durable intent/callback.
+
+Operation producers use `node-service-host-{operation}-v1` records. Status has no
+fields; install/reconcile select a declared group; upgrade selects a member and
+exact replacement ref. Submit retains the complete work presentation and actual
+payload bytes. Readmit accepts either a retained work ref or an explicit
+`node-service-host-migrated-work-v1` containing work ref, migration ref and new
+payload. The latter is accepted only against actual verified stored native
+migration evidence. Delivery must reproduce retained work, payload and the
+current claim. Canonical status/receipts omit tokens, keys and payload bytes.
+This is an experimental local-live materialized-values path, not a sandbox,
+distributed availability guarantee or production promotion.
+
+Durable node hosting requires admitted `checkpoint` and `recover` callbacks in
+every base/replacement manifest. Bundle admission rejects their absence before
+loader effects. Initial activation checkpoints each started member so a later
+real invocation can recover its Running native record without resetting state.
+Admission also enforces each native profile's aggregate `max_instances` across
+distinct service members, including every reachable replacement profile. Multiple
+admissions for the same member/profile consume one slot; the global 64-service
+codec limit never raises an admitted profile's smaller instance bound. One
+profile reference cannot describe conflicting profile values.
+
+### Retained daemon owner
+
+A hosting node must retain in its actual long-lived node loop
+`node_service_host::installed::Owner`, constructed with
+`open_after_source_admission(root, &validated_source_gate)`. The optional fixed
+`service-host-startup` selector is the packed record
+`<node-service-host-startup-v1 "relative-bundle-locator" logical-tick>`.
+Absence means hosting was not selected, not successful hosting. Construction
+requires separate exact current load and status credentials, reconstructs real
+native supervisors and owns their journal locks and measured execution handles
+until shutdown. `ready()` exposes the canonical authorized hosting observation;
+it must not be published before construction succeeds. This constructor does
+not activate callbacks or replace operation authority. Retaining it inside a
+one-shot startup function would not host services for the daemon lifetime.
+
+The public `node run-loop` and both `node serve` modes own this session across
+their actual control-loop/listener call. Live-Iroh serve validates source and
+host admission before binding; it publishes the canonical hosting-ready record
+to the current process's stdout only after the live endpoint is bound, then
+retains the host through `bound.serve().await`. Output is flushed so a real
+crash campaign can wait for that child's actual hosting observation before
+terminating that same process. No persistent ready marker can be reused as
+proof that a later or already-killed process owns the services. An absent
+selector produces no hosting-ready observation. Normal completion releases
+only that session's journal and measured-file capabilities; process loss leaves
+the owning durable recovery/uncertainty laws intact.
+
 ## Functional core and executable shell
 
 `molten-core::system_extension` is the pure deterministic core. It owns:

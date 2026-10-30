@@ -30,7 +30,7 @@ mod cluster_port;
 mod cli_cluster {
     pub(crate) use super::cluster_port::*;
 }
-#[path = "cli/workflow/coordination.rs"]
+#[path = "cli/workflow/coordination/mod.rs"]
 mod orchestrate_port;
 mod cli_coordination {
     pub(crate) use super::orchestrate_port::*;
@@ -125,6 +125,7 @@ mod voucher_port;
 mod cli_receipts {
     pub(crate) use super::voucher_port::*;
 }
+include!("cliports.rs");
 #[path = "cli/workflow/remote.rs"]
 mod mesh_port;
 mod cli_remote {

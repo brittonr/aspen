@@ -28,6 +28,27 @@ A partial run retains verified object references. A compatible restart omits tho
 
 Peer reassignment requires a new traversal epoch. Old progress cannot move to the new peer set.
 
+## Cross-extension admission
+
+The DAG owner exports `dag_sync_port_descriptor` for
+`molten.extension.dag-sync@v1`, with the single `sync` operation and canonical
+request/receipt schema references. The admitting composition supplies bounded
+reviewed profile and conformance references; the descriptor contains no fixture
+authority identities. Consumers resolve it through the normal fabric registry
+and system-extension admission, not by copying a binding reference.
+
+Federation routes a generation/incarnation-fenced host-owned callback through
+this binding into `run_dag_sync`. The binding does not replace the shell's
+authority/resource/content checks and grants no registry import, installation,
+execution, publication or merge authority.
+
+The historical live-loopback conformance adapter transmits request metadata.
+It is not a remote content-fetch mechanism or a production admission witness.
+Federation's network adapter instead correlates signed requests and responses,
+verifies actual fetched bytes through the content adapter in quarantine, and
+performs independent local admission before registry mutation. An archive entry
+or descriptor alone is not evidence that this composed live path was exercised.
+
 ## Conformance profiles
 
 The deterministic profile uses `DeterministicAdapter`. The live profile uses the existing Iroh loopback adapter through the fabric transport port.

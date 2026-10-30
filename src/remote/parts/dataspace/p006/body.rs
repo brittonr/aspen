@@ -191,7 +191,11 @@ pub fn admit_and_apply_delivered_envelope_for_session(
     })?;
     let owner = session.owner.clone();
     let introduced = IntroducedReferences::derive(state, &owner, &session.bootstrap_references);
-    let unintroduced = introduced.unknown(&delivery.envelope.content_refs);
+    let unintroduced = if delivery.envelope.operation == Operation::Message {
+        introduced.unknown(&message_references(&delivery.envelope.payload, &delivery.envelope.content_refs)?)
+    } else {
+        Vec::new()
+    };
     if !unintroduced.is_empty() {
         let diagnostics: Vec<String> = unintroduced
             .iter()

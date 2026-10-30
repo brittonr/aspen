@@ -6,13 +6,15 @@ The receipt-first cluster harness runs a checked cluster manifest through isolat
 cargo run -- cluster harness-run \
   --fixture tests/fixtures/cluster-harness/two-node.cluster \
   --state-root target/cluster-harness-state \
-  --run-dir target/cluster-harness-run
+  --run-dir target/cluster-harness-run \
+  --node-binary "$SIGNED_OUTPUT/bin/molten" \
+  --source-trust "$SOURCE_TRUST"
 
 cargo run -- cluster harness-verify \
   --run-dir target/cluster-harness-run
 ```
 
-`--child-timeout-ms` is explicit and bounded. Existing state or run directories are denied unless `--force` is supplied. Each node receives an isolated state root and logical local-process transport handle. This tier exercises real child-process startup, bounded workflow, status, reverse-order shutdown, and cleanup; it is not VM, live-network, consensus, or production evidence.
+Node startup admits only an independently signed producer output. `--node-binary` selects that output's `bin/molten`; `--source-trust` names its bounded `source-gate-trust.json` record, which the harness installs unchanged in each node root after `init` passes. Without both, every `start` child is denied by startup admission and the run fails closed. `--child-timeout-ms` is explicit and bounded. Existing state or run directories are denied unless `--force` is supplied. Each node receives an isolated state root and logical local-process transport handle. This tier exercises real child-process startup, bounded workflow, status, reverse-order shutdown, and cleanup; it is not VM, live-network, consensus, or production evidence.
 
 ## Run directory
 

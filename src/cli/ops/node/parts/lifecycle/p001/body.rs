@@ -14,6 +14,7 @@ fn serve_live(
         receipt_out,
         ..
     } = input;
+    let hosted = hosting::Session::open(&state_root)?;
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -34,8 +35,10 @@ fn serve_live(
             super::core::write_file_replace(path, &molten::preserves_rail::to_text(bound.live_ticket_value())?)?;
         }
         println!("node serve live-iroh bound endpoint={}", bound.bound_endpoint_id());
+        hosted.publish_ready()?;
         bound.serve().await
     })?;
+    hosted.close();
     if let Some(path) = service_receipt_out.as_ref() {
         super::core::write_file(path, &molten::preserves_rail::to_text(&served.service.service_receipt_value)?)?;
     }

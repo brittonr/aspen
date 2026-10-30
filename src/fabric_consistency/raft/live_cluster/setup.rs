@@ -4,6 +4,11 @@ use super::*;
 /// committed entry: 2 proposals + 2 reads + 2 committed entries = 6 in the bounded
 /// live-cluster/live-process workflows, which never drain.
 const LIVE_CONTROL_OBSERVATION_CAPACITY: usize = 32;
+/// The live Raft port never compacts its durable log, and the executor brackets every durable
+/// transition with recovery-intent hard-state records, so one node's store holds every record of
+/// a whole fresh-plus-recovery run (the three-process collaboration leader fills 32 records in
+/// its fresh phase alone).
+const LIVE_DURABLE_LOG_RECORDS: u64 = 128;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NodeStartupMode {
@@ -62,7 +67,7 @@ async fn build_node_with_root(
         .map(|index| super::super::tests::test_ref(&format!("live-cluster-fabric-binding-{index}")))
         .collect::<Vec<_>>();
     let mut state = super::super::tests::started_state(group, node_id);
-    bind_state_profile(
+    super::plan::bind_state_profile(
         &mut state,
         &protocol_ref,
         &durable_log_ref,
@@ -71,8 +76,8 @@ async fn build_node_with_root(
         &entropy_profile_ref,
         &supervision_ref,
     );
-    let identity = runtime_identity(group, &state, fabric_binding_refs.clone());
-    let mut plan = start_plan(group, state, fabric_binding_refs);
+    let identity = super::plan::runtime_identity(group, &state, fabric_binding_refs.clone());
+    let mut plan = super::plan::startup(group, state, fabric_binding_refs);
     let (transport, session_ref) = transport_for(node_id, endpoints, protocol_ref)?;
     let mut durability = durability_for_root(node_id, durable_log_ref, snapshot_store_ref, durability_root)?;
     let recovery_ref = if startup_mode == NodeStartupMode::Recover {
@@ -84,7 +89,7 @@ async fn build_node_with_root(
         None
     };
     let (time, inbox) = time_for(group, node_id, timer, entropy_profile_ref)?;
-    let application = application_for(group)?;
+    let application = application_for(group, durability_root, startup_mode)?;
     let (control, control_receiver) = control_for(group, supervision_ref)?;
     let adapters = ReplicaAdapterSet {
         durability,
@@ -103,70 +108,6 @@ async fn build_node_with_root(
         _workspace: workspace,
         _control_receiver: control_receiver,
     })
-}
-
-fn bind_state_profile(
-    state: &mut ReplicaState,
-    protocol_ref: &str,
-    durable_log_ref: &str,
-    snapshot_store_ref: &str,
-    timer_profile_ref: &str,
-    entropy_profile_ref: &str,
-    supervision_ref: &str,
-) {
-    state.profile.protocol_ref = protocol_ref.to_string();
-    state.profile.durable_log_ref = durable_log_ref.to_string();
-    state.profile.snapshot_store_ref = snapshot_store_ref.to_string();
-    state.profile.timer_profile_ref = timer_profile_ref.to_string();
-    state.profile.entropy_profile_ref = entropy_profile_ref.to_string();
-    state.profile.supervision_ref = supervision_ref.to_string();
-}
-
-fn runtime_identity(
-    group: &crate::fabric_consistency::Group,
-    state: &ReplicaState,
-    fabric_binding_refs: Vec<String>,
-) -> ReplicaRuntimePortIdentity {
-    ReplicaRuntimePortIdentity {
-        service_id: group.service_id.clone(),
-        service_generation: state.profile.service_generation,
-        group_binding_ref: state.profile.group_binding_ref.clone(),
-        application_manifest_ref: group.application_manifest_ref.clone(),
-        protocol_ref: state.profile.protocol_ref.clone(),
-        durable_log_ref: state.profile.durable_log_ref.clone(),
-        snapshot_store_ref: state.profile.snapshot_store_ref.clone(),
-        timer_profile_ref: state.profile.timer_profile_ref.clone(),
-        entropy_profile_ref: state.profile.entropy_profile_ref.clone(),
-        membership_ref: state.membership.membership_ref.clone(),
-        placement_ref: state.profile.placement_ref.clone(),
-        fencing_ref: state.profile.fencing_ref.clone(),
-        supervision_ref: state.profile.supervision_ref.clone(),
-        resource_profile_ref: state.profile.resource_profile_ref.clone(),
-        fabric_binding_refs,
-    }
-}
-
-fn start_plan(
-    group: &crate::fabric_consistency::Group,
-    state: ReplicaState,
-    port_binding_refs: Vec<String>,
-) -> ReplicaStartPlan {
-    let timer_ref = state.active_election_timer_ref.clone();
-    ReplicaStartPlan {
-        state,
-        service_id: group.service_id.clone(),
-        application_manifest_ref: group.application_manifest_ref.clone(),
-        initial_effects: vec![
-            ReplicaEffect::PersistHardState {
-                term: INITIAL_TERM,
-                voted_for: None,
-                is_recovery_required: false,
-            },
-            ReplicaEffect::ArmElectionTimer { timer_ref },
-        ],
-        port_binding_refs,
-        production_admitted: false,
-    }
 }
 
 fn transport_for(
@@ -195,16 +136,16 @@ fn durability_for_root(
     snapshot_store_ref: String,
     root: &std::path::Path,
 ) -> crate::error::Result<RedbReplicaPort> {
+    let mut profile =
+        crate::fabric_durability::tests::profile(crate::fabric_durability::DurableAdapterKind::LiveRedb).profile;
+    profile.max_log_records = LIVE_DURABLE_LOG_RECORDS;
+    let profile = crate::fabric_durability::durable_profile(&profile)?;
     let mut namespace = crate::fabric_durability::tests::descriptor();
     namespace.adapter_id = format!("live-cluster-{node_id}-adapter");
     namespace.namespace_id = format!("live-cluster-{node_id}-namespace");
     namespace.atomicity_domain.adapter_id.clone_from(&namespace.adapter_id);
     namespace.atomicity_domain.namespace_id.clone_from(&namespace.namespace_id);
-    let adapter = crate::fabric_durability::RedbDurableStateAdapter::open(
-        root,
-        crate::fabric_durability::tests::profile(crate::fabric_durability::DurableAdapterKind::LiveRedb),
-        namespace,
-    )?;
+    let adapter = crate::fabric_durability::RedbDurableStateAdapter::open(root, profile, namespace)?;
     RedbReplicaPort::new(adapter, durable_log_ref, snapshot_store_ref)
 }
 
@@ -243,18 +184,37 @@ fn time_for(
 
 fn application_for(
     group: &crate::fabric_consistency::Group,
+    durability_root: &std::path::Path,
+    startup_mode: NodeStartupMode,
 ) -> crate::error::Result<AdmittedReplicaPort<ApplicationHandler>> {
+    let mut handler = ApplicationHandler::default();
+    let schema = if group.extension_id == crate::collaboration_scope::EXTENSION_ID {
+        let values_root = durability_root
+            .parent()
+            .ok_or_else(|| crate::error::Failure::invalid_harness("collaboration fixture values root missing"))?
+            .join("collaboration-values");
+        let store_root = durability_root.join("collaboration");
+        handler.collaboration = Some(match startup_mode {
+            NodeStartupMode::Fresh => {
+                crate::collaboration_scope::fixtures::open_application(&store_root, &values_root)?
+            }
+            NodeStartupMode::Recover => {
+                crate::collaboration_scope::fixtures::recover_application(&store_root, &values_root)?
+            }
+        });
+        crate::collaboration_scope::command_schema_ref()?
+    } else {
+        super::super::tests::test_ref("live-cluster-command-schema")
+    };
     AdmittedReplicaPort::new(
         ServiceReplicaConfig {
             group_binding_ref: group.binding_ref.clone(),
             application_manifest_ref: group.application_manifest_ref.clone(),
             handler_ref: super::super::tests::test_ref("live-cluster-application-handler"),
-            command_schema_refs: std::collections::BTreeSet::from([super::super::tests::test_ref(
-                "live-cluster-command-schema",
-            )]),
+            command_schema_refs: std::collections::BTreeSet::from([schema]),
             initial_applied_index: INITIAL_COMMIT_INDEX,
         },
-        ApplicationHandler::default(),
+        handler,
     )
 }
 

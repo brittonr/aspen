@@ -126,18 +126,53 @@ pub fn store_content_blob_with_root(root: &CapabilityDataspaceRoot, bytes: &[u8]
     Ok(content_ref)
 }
 
-pub fn publish_local_gossip(root: &Path, envelope: &Envelope, node: &str) -> Result<Exchange> {
+pub enum EnvelopePublication {
+    Published(Exchange),
+    Denied { receipt_value: IoValue },
+}
+
+fn require_publication(outcome: EnvelopePublication) -> Result<Exchange> {
+    match outcome {
+        EnvelopePublication::Published(exchange) => Ok(exchange),
+        EnvelopePublication::Denied { receipt_value } => Err(MoltenError::invalid_harness(format!(
+            "remote envelope publication denied: {}", crate::preserves_rail::to_text(&receipt_value)?
+        ))),
+    }
+}
+
+pub fn publish_local_gossip(root: &Path, envelope: &Envelope, node: &str, session: Option<&SenderSessionView<'_>>) -> Result<Exchange> {
+    require_publication(publish_local_gossip_with_evidence(root, envelope, node, session)?)
+}
+
+pub fn publish_local_gossip_with_evidence(root: &Path, envelope: &Envelope, node: &str, session: Option<&SenderSessionView<'_>>) -> Result<EnvelopePublication> {
+    validate_name(node, "publisher node")?;
+    if let Some(receipt_value) = outbound_envelope_denial(envelope, session)? {
+        return Ok(EnvelopePublication::Denied { receipt_value });
+    }
     let root = open_capability_dataspace_root(root)?;
-    publish_local_gossip_with_root(&root, envelope, node)
+    Ok(EnvelopePublication::Published(publish_local_gossip_admitted(&root, envelope, node)?))
 }
 
 pub fn publish_local_gossip_with_root(
     root: &CapabilityDataspaceRoot,
     envelope: &Envelope,
     node: &str,
+    session: Option<&SenderSessionView<'_>>,
 ) -> Result<Exchange> {
+    require_publication(publish_local_gossip_with_root_and_evidence(root, envelope, node, session)?)
+}
+
+pub fn publish_local_gossip_with_root_and_evidence(
+    root: &CapabilityDataspaceRoot, envelope: &Envelope, node: &str, session: Option<&SenderSessionView<'_>>,
+) -> Result<EnvelopePublication> {
     validate_name(node, "publisher node")?;
-    validate_envelope_identity(envelope)?;
+    if let Some(receipt_value) = outbound_envelope_denial(envelope, session)? {
+        return Ok(EnvelopePublication::Denied { receipt_value });
+    }
+    Ok(EnvelopePublication::Published(publish_local_gossip_admitted(root, envelope, node)?))
+}
+
+fn publish_local_gossip_admitted(root: &CapabilityDataspaceRoot, envelope: &Envelope, node: &str) -> Result<Exchange> {
     validate_content_refs_available_with_root(root, &envelope.content_refs)?;
     root.root().write(
         &envelope_store_path(&envelope.topic, &envelope.envelope_ref)?,
@@ -161,121 +196,13 @@ pub fn publish_local_gossip_with_root(
     })
 }
 
-pub async fn publish_live_gossip(
-    sender: &iroh_gossip::api::GossipSender,
-    envelope: &Envelope,
-    node: &str,
-) -> Result<Exchange> {
-    validate_name(node, "publisher node")?;
+/// Untrusted incoming wire transport fixture, not sender admission evidence.
+#[cfg(test)]
+pub(crate) fn incoming_publish_fixture(root: &Path, envelope: &Envelope, node: &str) -> Result<Exchange> {
+    validate_name(node, "fixture publisher node")?;
     validate_envelope_identity(envelope)?;
-    sender
-        .broadcast(canonical_bytes(&envelope.value)?.into())
-        .await
-        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh gossip publish failed: {error}")))?;
-    Ok(Exchange {
-        envelope_ref: envelope.envelope_ref.clone(),
-        receipt_value: transport_receipt_value_for_transport(TransportReceiptInput {
-            transport: LIVE_GOSSIP_TRANSPORT,
-            operation: "publish",
-            decision: "pass",
-            node,
-            envelope,
-            diagnostics: Vec::new(),
-            checks: vec![
-                ("canonical-envelope-ref".to_owned(), "pass".to_owned()),
-                ("live-iroh-gossip".to_owned(), "pass".to_owned()),
-                ("transport-is-not-authority".to_owned(), "pass".to_owned()),
-            ],
-        }),
-    })
-}
-
-pub fn deliver_live_gossip_event(
-    root: &Path,
-    event: &iroh_gossip::api::Event,
-    topic: &str,
-    receiver_peer: &str,
-) -> Result<Option<Delivery>> {
     let root = open_capability_dataspace_root(root)?;
-    deliver_live_gossip_event_with_root(&root, event, topic, receiver_peer)
-}
-
-pub fn deliver_live_gossip_event_with_root(
-    root: &CapabilityDataspaceRoot,
-    event: &iroh_gossip::api::Event,
-    topic: &str,
-    receiver_peer: &str,
-) -> Result<Option<Delivery>> {
-    match event {
-        iroh_gossip::api::Event::Received(message) => deliver_live_gossip_bytes_with_root(
-            root,
-            message.content.as_ref(),
-            topic,
-            receiver_peer,
-            &message.delivered_from.to_string(),
-        )
-        .map(Some),
-        iroh_gossip::api::Event::NeighborUp(_)
-        | iroh_gossip::api::Event::NeighborDown(_)
-        | iroh_gossip::api::Event::Lagged => Ok(None),
-    }
-}
-
-pub fn deliver_live_gossip_bytes(
-    root: &Path,
-    bytes: &[u8],
-    topic: &str,
-    receiver_peer: &str,
-    delivered_from: &str,
-) -> Result<Delivery> {
-    let root = open_capability_dataspace_root(root)?;
-    deliver_live_gossip_bytes_with_root(&root, bytes, topic, receiver_peer, delivered_from)
-}
-
-pub fn deliver_live_gossip_bytes_with_root(
-    root: &CapabilityDataspaceRoot,
-    bytes: &[u8],
-    topic: &str,
-    receiver_peer: &str,
-    delivered_from: &str,
-) -> Result<Delivery> {
-    validate_name(topic, "topic")?;
-    validate_name(receiver_peer, "receiver peer")?;
-    validate_name(delivered_from, "delivered from")?;
-    let value = parse_canonical_bytes(bytes)?;
-    let envelope = parse_envelope(&value)?;
-    if envelope.topic != topic {
-        return Err(MoltenError::invalid_harness(format!(
-            "live Iroh envelope topic {} does not match subscribed topic {topic}",
-            envelope.topic
-        )));
-    }
-    if envelope.to_peer != receiver_peer && envelope.to_peer != "*" {
-        return Err(MoltenError::invalid_harness(format!(
-            "live Iroh envelope target {} does not match receiver {receiver_peer}",
-            envelope.to_peer
-        )));
-    }
-    validate_content_refs_available_with_root(root, &envelope.content_refs)?;
-    let receipt_value = transport_receipt_value_for_transport(TransportReceiptInput {
-        transport: LIVE_GOSSIP_TRANSPORT,
-        operation: "deliver",
-        decision: "pass",
-        node: receiver_peer,
-        envelope: &envelope,
-        diagnostics: Vec::new(),
-        checks: vec![
-            ("canonical-envelope-ref".to_owned(), "pass".to_owned()),
-            ("topic-peer-binding".to_owned(), "pass".to_owned()),
-            ("content-refs-verified".to_owned(), "pass".to_owned()),
-            ("live-iroh-gossip".to_owned(), "pass".to_owned()),
-            ("transport-is-not-authority".to_owned(), "pass".to_owned()),
-        ],
-    });
-    Ok(Delivery {
-        envelope,
-        receipt_value,
-    })
+    publish_local_gossip_admitted(&root, envelope, node)
 }
 
 pub fn deliver_local_gossip(root: &Path, topic: &str, envelope_ref: &str, receiver_peer: &str) -> Result<Delivery> {

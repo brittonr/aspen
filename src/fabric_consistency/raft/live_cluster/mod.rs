@@ -1,5 +1,6 @@
 use super::*;
 
+mod plan;
 pub(in crate::fabric_consistency::raft) mod setup;
 mod workflow;
 
@@ -14,19 +15,28 @@ const LIVE_ELECTION_MAX_TICKS: u64 = 3;
 const LIVE_FABRIC_BINDING_COUNT: usize = 7;
 const LIVE_TERM: u64 = 1;
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub(super) struct ApplicationHandler {
     pub(super) applied_request_refs: Vec<String>,
     pub(super) restored_application_state_ref: Option<String>,
+    pub(super) collaboration: Option<crate::collaboration_scope::Application>,
 }
 
 impl CommittedBatchHandler for ApplicationHandler {
     fn restore_snapshot(&mut self, snapshot: &SnapshotRestore) -> crate::error::Result<String> {
         self.restored_application_state_ref = Some(snapshot.application_state_ref.clone());
+        if let Some(application) = &mut self.collaboration {
+            return application.restore_snapshot(snapshot);
+        }
         Ok(super::tests::test_ref("live-cluster-snapshot-restore"))
     }
 
     fn apply_batch(&mut self, commands: &[Command]) -> crate::error::Result<String> {
+        if let Some(application) = &mut self.collaboration {
+            let receipt = application.apply_batch(commands)?;
+            self.applied_request_refs.extend(commands.iter().map(|command| command.request_ref.clone()));
+            return Ok(receipt);
+        }
         self.applied_request_refs.extend(commands.iter().map(|command| command.request_ref.clone()));
         Ok(super::tests::test_ref("live-cluster-application"))
     }
@@ -41,7 +51,7 @@ pub(super) struct Node {
     pub(super) session_ref: String,
     pub(super) recovery_ref: Option<String>,
     _workspace: Option<crate::test_support::ProcessWorkspace>,
-    _control_receiver: tokio::sync::mpsc::Receiver<ReplicaObservation>,
+    pub(super) _control_receiver: tokio::sync::mpsc::Receiver<ReplicaObservation>,
 }
 
 // r[verify molten.fabric_consistency.live_raft]

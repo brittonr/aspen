@@ -5,6 +5,7 @@
 
 use molten_core::outside_in::*;
 
+mod owned;
 mod partition;
 mod process;
 
@@ -15,6 +16,35 @@ type SupervisionDeadline = molten::fabric_time::SupervisionDeadline;
 
 const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(10);
 const SIGNAL_TOOL: &str = "kill";
+/// The variable naming the independently provisioned startup source trust; each test captures it.
+pub(crate) const SOURCE_TRUST_ENV: &str = "MOLTEN_TEST_SOURCE_TRUST";
+const MAX_SOURCE_TRUST_BYTES: usize = 16_384;
+
+/// The signed producer output and its trust record, selected independently of this suite.
+struct SignedSource {
+    binary: std::path::PathBuf,
+    trust: Vec<u8>,
+}
+
+impl SignedSource {
+    /// The selection the test captured, if any; an unreadable selection is unsupported.
+    fn selected(path: Option<&std::ffi::OsStr>) -> StepResult<Option<Self>> {
+        let unsupported = || ScenarioStop::Unsupported("source-trust".to_string());
+        let Some(path) = path else {
+            return Ok(None);
+        };
+        let trust = std::fs::read(path).map_err(|_| unsupported())?;
+        if trust.len() > MAX_SOURCE_TRUST_BYTES {
+            return Err(unsupported());
+        }
+        let selection: serde_json::Value = serde_json::from_slice(&trust).map_err(|_| unsupported())?;
+        let output = selection.get("output").and_then(serde_json::Value::as_str).ok_or_else(unsupported)?;
+        Ok(Some(Self {
+            binary: std::path::Path::new(output).join("bin/molten"),
+            trust,
+        }))
+    }
+}
 
 fn clock_stop(_: molten::error::Failure) -> ScenarioStop {
     ScenarioStop::Unsupported("supervision-clock".to_string())
@@ -34,14 +64,16 @@ pub(crate) struct Harness {
     deadline: SupervisionDeadline,
     max_processes: usize,
     max_output_bytes: usize,
-    processes: Vec<OwnedChild>,
+    processes: Vec<LabeledChild>,
     scratch: Vec<(String, std::path::PathBuf)>,
     workspace: crate::test_support::ProcessWorkspace,
     signal_tool: String,
+    /// Absent, processes run the unsigned test build and node startup admission denies them.
+    source: Option<SignedSource>,
 }
 
 impl Harness {
-    pub(crate) fn new(declaration: &ScenarioDeclaration) -> StepResult<Self> {
+    pub(crate) fn new(declaration: &ScenarioDeclaration, source_trust: Option<&std::ffi::OsStr>) -> StepResult<Self> {
         let budgets = declaration.budgets;
         let workspace = crate::test_support::process_workspace(&declaration.scenario_id)
             .map_err(|_| ScenarioStop::Unsupported("process-workspace".to_string()))?;
@@ -56,12 +88,20 @@ impl Harness {
             scratch: Vec::new(),
             workspace,
             signal_tool: SIGNAL_TOOL.to_string(),
+            source: SignedSource::selected(source_trust)?,
         })
     }
 
     /// Replace the signal tool, to record the unsupported-host outcome.
     pub(crate) fn set_signal_tool(&mut self, tool: &str) {
         self.signal_tool = tool.to_string();
+    }
+
+    /// Install the selected startup source trust in an initialized node root.
+    pub(crate) fn install_source_trust(&self, state_root: &std::path::Path) -> StepResult<()> {
+        let source = self.source.as_ref().ok_or_else(|| ScenarioStop::Unsupported("source-trust".to_string()))?;
+        std::fs::write(state_root.join("source-gate-trust.json"), &source.trust)
+            .map_err(|_| ScenarioStop::Unsupported("source-trust-install".to_string()))
     }
 
     /// Create an owned scratch directory inside the workspace.
@@ -96,13 +136,17 @@ impl Harness {
     /// Start an owned `molten` process from the repository root.
     pub(crate) fn start(&mut self, label: &str, arguments: &[std::ffi::OsString]) -> StepResult<ProcessHandle> {
         self.check_clock()?;
-        let live = self.processes.iter_mut().map(OwnedChild::poll).filter(Option::is_none).count();
+        let live = self.processes.iter_mut().map(LabeledChild::poll).filter(Option::is_none).count();
         if live >= self.max_processes {
             return Err(ScenarioStop::Budget(BudgetKind::Processes));
         }
-        let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_molten"));
+        let binary = self
+            .source
+            .as_ref()
+            .map_or_else(|| std::path::Path::new(env!("CARGO_BIN_EXE_molten")), |source| source.binary.as_path());
+        let mut command = std::process::Command::new(binary);
         command.current_dir(env!("CARGO_MANIFEST_DIR")).args(arguments);
-        self.processes.push(OwnedChild::spawn(label, command, self.max_output_bytes)?);
+        self.processes.push(LabeledChild::spawn(label, command, self.max_output_bytes)?);
         Ok(ProcessHandle(self.processes.len() - 1))
     }
 

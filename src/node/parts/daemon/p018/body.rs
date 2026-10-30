@@ -1,44 +1,73 @@
 pub fn run_local(input: &RunInput<'_>) -> Result<Run> {
     validate_state_root(input.state_root)?;
-    let root = crate::node_state::DirectoryRoot::open(input.state_root)?;
+    let root = crate::node_state::DirectoryRoot::open_existing(input.state_root)?;
     run_local_with_root(&root)
 }
 
 pub fn run_local_with_root(root: &crate::node_state::DirectoryRoot) -> Result<Run> {
-    ensure_state_layout(root)?;
-    verify_restart_state(root)?;
+    let source = source_binding::load(root)?;
+    run_local_with_source(root, source)
+}
+
+/// Performs source admission without preparing, writing or activating node state.
+pub fn admit_startup_source_gate_with_root(
+    root: &crate::node_state::DirectoryRoot,
+) -> Result<crate::node_runtime::ValidatedNodeSourceGate> {
+    let source = source_binding::load(root)?;
+    Ok(crate::kernel::ValidatedNodeSourceGate {
+        binding_ref: source.binding_ref, gate_ref: source.gate_ref, validation_ref: source.validation_ref,
+    })
+}
+
+#[cfg(test)]
+pub(crate) fn run_local_fixture_for_tests(input: &RunInput<'_>) -> Result<Run> {
+    let root = crate::node_state::DirectoryRoot::open_existing(input.state_root)?;
+    run_local_with_root_fixture_for_tests(&root)
+}
+
+#[cfg(test)]
+pub(crate) fn run_local_with_root_fixture_for_tests(root: &crate::node_state::DirectoryRoot) -> Result<Run> {
+    run_local_with_source(root, source_binding::fixture()?)
+}
+
+fn run_local_with_source(root: &crate::node_state::DirectoryRoot, source: source_binding::Accepted) -> Result<Run> {
     let config_value = read_preserves(root, &fixed_node_path(CONFIG_FILE)?)?;
     let identity_receipt = read_preserves(root, &fixed_node_path(IDENTITY_RECEIPT_FILE)?)?;
     let identity_receipt_ref = crate::preserves_rail::canonical_hash(&identity_receipt)?;
     let index_receipt_refs = index_receipt_refs(root)?;
     let resource_receipt_refs = resource_receipt_refs(root)?;
     let capability_receipt_refs = capability_receipt_refs(root)?;
-    let version_refs = vec![local_ref("molten-binary-version", env!("CARGO_PKG_VERSION"))?];
+    let version_refs = vec![source.binding_ref.clone()];
     let profile_metadata_refs = profile_metadata_refs(root)?;
-    let source_gate_value = crate::octet_gate::synthetic_clean_octet_gate_receipt_for_tests()?;
-    let source_gate_ref = crate::preserves_rail::canonical_hash(&source_gate_value)?;
-    let run = crate::node_runtime::start_node_runtime(&crate::node_runtime::NodeRuntimeStartInput {
+    let admitted_gate = crate::kernel::ValidatedNodeSourceGate {
+        binding_ref: source.binding_ref.clone(),
+        gate_ref: source.gate_ref.clone(), validation_ref: source.validation_ref.clone(),
+    };
+    let run = crate::node_runtime::start_node_runtime_with_source_gate(&crate::node_runtime::NodeRuntimeStartInput {
         config_value,
         identity_receipt_ref,
         index_receipt_refs,
-        source_gate_receipt_refs: vec![source_gate_ref],
-        source_gate_receipt_values: vec![source_gate_value],
+        source_gate_receipt_refs: vec![source.gate_ref],
+        source_gate_receipt_values: vec![source.gate_value],
         profile_metadata_refs,
         capability_receipt_refs,
         resource_receipt_refs,
         version_refs,
-    })?;
-    for (adapter, value) in run.adapter_receipts.iter().zip(run.adapter_receipt_values.iter()) {
-        let path = node_leaf_path("receipts", &format!("adapter-start-{}.preserves", adapter.name))?;
-        write_preserves(root, &path, value)?;
-    }
-    write_preserves(root, &fixed_node_path(STARTUP_FILE)?, &run.startup_receipt.value)?;
+    }, &admitted_gate)?;
     if run.decision != "pass" {
         return Err(MoltenError::invalid_harness(format!(
             "node daemon startup denied receipt={}",
             run.startup_receipt.receipt_ref
         )));
     }
+    ensure_state_layout(root)?;
+    verify_restart_state(root)?;
+    write_preserves(root, &fixed_node_path("source-binding-validation.preserves")?, &source.validation_value)?;
+    for (adapter, value) in run.adapter_receipts.iter().zip(run.adapter_receipt_values.iter()) {
+        let path = node_leaf_path("receipts", &format!("adapter-start-{}.preserves", adapter.name))?;
+        write_preserves(root, &path, value)?;
+    }
+    write_preserves(root, &fixed_node_path(STARTUP_FILE)?, &run.startup_receipt.value)?;
     let startup_ref = run.startup_receipt.receipt_ref.clone();
     write_active_lock(root, &startup_ref)?;
     import_artifact(root, &run.startup_receipt.value)?;

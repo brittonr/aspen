@@ -1,0 +1,16 @@
+molten DAG owner conformance execution transcript v1
+scope: explicitly experimental integration-owner review; not independent DAG owner approval; not production admission
+repository: brittonr/aspen worktree cairn/finish-open-changes-20261029 based on d7e435e711f7f58167900ce7419121390b0842d3 with uncommitted integration
+command: cargo test -p molten --lib dag_sync:: -- --test-threads=1 (nix develop, nightly-2026-05-26)
+executed: 2026-10-30
+test dag_sync::tests::cancellation_corruption_and_authority_denial_fail_before_false_completion ... ok
+test dag_sync::tests::canonical_records_are_stable_and_domain_separated ... ok
+test dag_sync::tests::dag_conformance_uses_fabric_ports_without_backend_imports ... ok
+test dag_sync::tests::deferral_and_corruption_never_publish_false_completion ... ok
+test dag_sync::tests::job_and_artifact_projections_preserve_domain_boundaries ... ok
+test dag_sync::tests::partitioned_progress_resumes_after_restart_without_repeating_verified_refs ... ok
+test dag_sync::tests::peer_reassignment_requires_a_new_epoch_and_discards_old_progress ... ok
+test dag_sync::tests::receipt_requires_complete_non_claims ... ok
+test dag_sync::tests::receiver_driven_shell_persists_each_verified_object_and_receipt_last ... ok
+test dag_sync::tests::same_core_simulation_and_live_iroh_loopback_agree_on_canonical_outcome ... ok
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 1955 filtered out; finished in 0.37s

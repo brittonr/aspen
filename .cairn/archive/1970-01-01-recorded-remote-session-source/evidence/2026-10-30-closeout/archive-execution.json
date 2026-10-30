@@ -1,0 +1,201 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: recorded-remote-session-source",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-recorded-remote-session-source"
+    }
+  ],
+  "blocked": false,
+  "change": "recorded-remote-session-source",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "14f8057e5ad3c8d6de712f2878fa1fbe08917dc034d281c44acc1d086bdcf6b7",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "e127601f7b3e825cbd0df4d06f1c44c30346ff76d10be7afee871bedc5484e55",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recorded-remote-session-source/design.md"
+        },
+        {
+          "content_hash": "0a02d88e88f6fe3a64cf6d904a1bee13521921548ef320dc1ca2be349f2aa6cb",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recorded-remote-session-source/evidence/2026-10-30-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "1c3c3b54f1b30f399bb7eac18f0d45460db61eae06da6414f71162c25594c3dd",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recorded-remote-session-source/evidence/2026-10-30-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "a3de1002228e7bc292a0f95d23ee1b62b419df413757d8c6cd8bc9ee8a6c5f05",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recorded-remote-session-source/evidence/2026-10-30-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "790c80000d0eeaa1cd12b911710e41e115c9c948bb507f4264909ed67db7cd3e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recorded-remote-session-source/evidence/2026-10-30-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "3b3d1e11578a985fd59441e19ea3f982bfcd5b8e36a1ac5b466617e863b0e426",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recorded-remote-session-source/evidence/2026-10-30-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "f3b3efc442c06749b6f5d3f143751a15eb979ca7461fdd65a716d02c1efca165",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recorded-remote-session-source/evidence/2026-10-30-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "56219ff29931a67fc492f76c91cfa08f838471be9300d06b694bdcec0bba473a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recorded-remote-session-source/evidence/2026-10-30-verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recorded-remote-session-source/metadata.json"
+        },
+        {
+          "content_hash": "160f23c241e57b2f61da2aadfe06d04c52969debe5b1eec2247fd654668cd9d8",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recorded-remote-session-source/proposal.md"
+        },
+        {
+          "content_hash": "93dc4f7db0131f8c8841d39f1dc159409c11b50a99893c929a5428136e80657f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recorded-remote-session-source/review.md"
+        },
+        {
+          "content_hash": "7012256b52945e6c9c714ed4f9ff3e8475f91a1669c4d0974f747b77c92b29ef",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recorded-remote-session-source/specs/remote-dataspace/spec.md"
+        },
+        {
+          "content_hash": "ae2b2a8024d2110efbacdfb75f42e8d54d7e6eefdd3d091737248b5ea1ce02ad",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recorded-remote-session-source/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/recorded-remote-session-source"
+        }
+      ],
+      "manifest_hash": "5792c6ca350e4494807a011d299b379639adcaf663ac1552d461feba0e044521"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "e127601f7b3e825cbd0df4d06f1c44c30346ff76d10be7afee871bedc5484e55",
+          "exists": true,
+          "path": "./.cairn/changes/recorded-remote-session-source/design.md"
+        },
+        {
+          "content_hash": "0a02d88e88f6fe3a64cf6d904a1bee13521921548ef320dc1ca2be349f2aa6cb",
+          "exists": true,
+          "path": "./.cairn/changes/recorded-remote-session-source/evidence/2026-10-30-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "1c3c3b54f1b30f399bb7eac18f0d45460db61eae06da6414f71162c25594c3dd",
+          "exists": true,
+          "path": "./.cairn/changes/recorded-remote-session-source/evidence/2026-10-30-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "a3de1002228e7bc292a0f95d23ee1b62b419df413757d8c6cd8bc9ee8a6c5f05",
+          "exists": true,
+          "path": "./.cairn/changes/recorded-remote-session-source/evidence/2026-10-30-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "790c80000d0eeaa1cd12b911710e41e115c9c948bb507f4264909ed67db7cd3e",
+          "exists": true,
+          "path": "./.cairn/changes/recorded-remote-session-source/evidence/2026-10-30-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "3b3d1e11578a985fd59441e19ea3f982bfcd5b8e36a1ac5b466617e863b0e426",
+          "exists": true,
+          "path": "./.cairn/changes/recorded-remote-session-source/evidence/2026-10-30-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "f3b3efc442c06749b6f5d3f143751a15eb979ca7461fdd65a716d02c1efca165",
+          "exists": true,
+          "path": "./.cairn/changes/recorded-remote-session-source/evidence/2026-10-30-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "56219ff29931a67fc492f76c91cfa08f838471be9300d06b694bdcec0bba473a",
+          "exists": true,
+          "path": "./.cairn/changes/recorded-remote-session-source/evidence/2026-10-30-verification.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/recorded-remote-session-source/metadata.json"
+        },
+        {
+          "content_hash": "160f23c241e57b2f61da2aadfe06d04c52969debe5b1eec2247fd654668cd9d8",
+          "exists": true,
+          "path": "./.cairn/changes/recorded-remote-session-source/proposal.md"
+        },
+        {
+          "content_hash": "93dc4f7db0131f8c8841d39f1dc159409c11b50a99893c929a5428136e80657f",
+          "exists": true,
+          "path": "./.cairn/changes/recorded-remote-session-source/review.md"
+        },
+        {
+          "content_hash": "7012256b52945e6c9c714ed4f9ff3e8475f91a1669c4d0974f747b77c92b29ef",
+          "exists": true,
+          "path": "./.cairn/changes/recorded-remote-session-source/specs/remote-dataspace/spec.md"
+        },
+        {
+          "content_hash": "ae2b2a8024d2110efbacdfb75f42e8d54d7e6eefdd3d091737248b5ea1ce02ad",
+          "exists": true,
+          "path": "./.cairn/changes/recorded-remote-session-source/tasks.md"
+        }
+      ],
+      "manifest_hash": "275febb76a720274d0d9048880df2980a566e3e9ad56bd05ceaaf9480a710432"
+    },
+    "kind": "archive",
+    "manifest_hash": "ddce69f020d76c0bc704d98fa333b96d673e9283efe053c3af5c9126648315ab"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "8e94aa4013b9850b206ff48467889f79b43a9c340a681b8452a8567cef6f4f85",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "209968cb60068ba02a3e9a5be010c757787d44f384e1e22858aa96ba23c6a7f7",
+  "reasons": [],
+  "receipt_hash": "7ce2a2a6475150bca6bead53bf649f69b2f8c820380be773a14852e48bbe563f",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

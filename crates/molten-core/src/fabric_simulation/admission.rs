@@ -87,14 +87,11 @@ pub fn admit_simulated_world(manifest: &SimulatedWorldManifest) -> Result<Admitt
         return Err(issues);
     }
 
-    let mut normalized = manifest.clone();
-    normalized.nodes.sort_by(|left, right| left.node_id.cmp(&right.node_id));
-    normalized.port_profiles.sort_by_key(|profile| profile.class);
-    normalized.workload.sort_by_key(|step| step.sequence);
-    normalized.faults.sort_by(|left, right| left.fault_id.cmp(&right.fault_id));
-    normalized.invariants.sort_by_key(invariant_order);
-    normalized.non_claims.sort();
-    Ok(AdmittedSimulatedWorld { manifest: normalized })
+    let normalized = normalize_mechanisms(manifest);
+    Ok(AdmittedSimulatedWorld {
+        manifest: normalized,
+        installed: None,
+    })
 }
 
 fn validate_world_identity(manifest: &SimulatedWorldManifest, issues: &mut Vec<WorldIssue>) {
@@ -349,11 +346,7 @@ fn validate_invariants(manifest: &SimulatedWorldManifest, issues: &mut Vec<World
             validate_identifier("extension-invariant-id", invariant_id, issues);
         }
     }
-    for required in REQUIRED_UNIVERSAL_INVARIANTS {
-        if !manifest.invariants.contains(&SimulationInvariant::Universal(required)) {
-            issues.push(WorldIssue::MissingUniversalInvariant(required));
-        }
-    }
+    validate_universal_invariants(manifest, issues);
     for service in [
         ReferenceSystemKind::TransactionalKeyValue,
         ReferenceSystemKind::ReplicatedLog,
@@ -584,4 +577,42 @@ fn require_optional_ref(value: &Option<String>, label: &'static str, missing: &m
     if value.as_deref().is_none_or(|reference| !valid_ref(reference)) {
         missing.push(label);
     }
+}
+
+pub(super) fn validate_universal_invariants(manifest: &SimulatedWorldManifest, issues: &mut Vec<WorldIssue>) {
+    for required in REQUIRED_UNIVERSAL_INVARIANTS {
+        if !manifest.invariants.contains(&SimulationInvariant::Universal(required)) {
+            issues.push(WorldIssue::MissingUniversalInvariant(required));
+        }
+    }
+}
+
+pub(super) fn validate_installed_mechanisms(manifest: &SimulatedWorldManifest) -> Vec<WorldIssue> {
+    let mut issues = Vec::new();
+    validate_world_identity(manifest, &mut issues);
+    validate_bounds(manifest, &mut issues);
+    validate_nodes(manifest, &mut issues);
+    validate_ports(manifest, &mut issues);
+    validate_faults(manifest, &mut issues);
+    validate_claims(manifest, &mut issues);
+    validate_universal_invariants(manifest, &mut issues);
+    let mut seen = BTreeSet::new();
+    for invariant in &manifest.invariants {
+        if !seen.insert(invariant_order(invariant)) {
+            issues.push(WorldIssue::DuplicateInvariant);
+        }
+    }
+    issues
+}
+
+// r[impl molten.fabric_simulation.installed_extension_reference_preservation]
+pub(super) fn normalize_mechanisms(manifest: &SimulatedWorldManifest) -> SimulatedWorldManifest {
+    let mut normalized = manifest.clone();
+    normalized.nodes.sort_by(|left, right| left.node_id.cmp(&right.node_id));
+    normalized.port_profiles.sort_by_key(|profile| profile.class);
+    normalized.workload.sort_by_key(|step| step.sequence);
+    normalized.faults.sort_by(|left, right| left.fault_id.cmp(&right.fault_id));
+    normalized.invariants.sort_by_key(invariant_order);
+    normalized.non_claims.sort();
+    normalized
 }

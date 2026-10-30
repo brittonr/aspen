@@ -15,8 +15,13 @@ fn expect_running(root: &std::path::Path, health: &std::path::Path, receipt: &st
     Ok(())
 }
 
-fn expect_stop_loop(root: &std::path::Path, shutdown: &std::path::Path, receipt: &std::path::Path) -> CliResult<()> {
-    let output = molten_cmd()
+fn expect_stop_loop(
+    source_trust: Option<&std::ffi::OsStr>,
+    root: &std::path::Path,
+    shutdown: &std::path::Path,
+    receipt: &std::path::Path,
+) -> CliResult<()> {
+    let output = source_gated_node_command(source_trust, root)?
         .args(["node", "run-loop", "--state-root"])
         .arg(root)
         .args(["--max-requests", "4", "--receipt-out"])
@@ -28,7 +33,13 @@ fn expect_stop_loop(root: &std::path::Path, shutdown: &std::path::Path, receipt:
     Ok(())
 }
 
-fn start_state(root: &std::path::Path, node_id: &str, init_label: &str, run_label: &str) -> CliResult<()> {
+fn start_state(
+    source_trust: Option<&std::ffi::OsStr>,
+    root: &std::path::Path,
+    node_id: &str,
+    init_label: &str,
+    run_label: &str,
+) -> CliResult<()> {
     assert_success(
         &molten_cmd()
             .args(["test", "node", "init", "--state-root"])
@@ -37,6 +48,10 @@ fn start_state(root: &std::path::Path, node_id: &str, init_label: &str, run_labe
             .output()?,
         init_label,
     );
-    assert_success(&molten_cmd().args(["test", "node", "run", "--state-root"]).arg(root).output()?, run_label);
+    let run = source_gated_node_command(source_trust, root)?
+        .args(["test", "node", "run", "--state-root"])
+        .arg(root)
+        .output()?;
+    assert_success(&run, run_label);
     Ok(())
 }

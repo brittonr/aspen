@@ -123,7 +123,7 @@
             node_id: "node:reproducible-provenance",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local_fixture_for_tests(&RunInput { state_root: &root }).expect("run node");
 
         let case = build_case(&root);
         assert_install_passes(&root, &case);

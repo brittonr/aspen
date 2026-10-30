@@ -1,0 +1,64 @@
+wire_struct!(
+    crate::fabric_durability::DurableStateProfile,
+    "host-durability-profile-v1",
+    schema,
+    profile_id,
+    profile_ref,
+    adapter_kind,
+    supported_levels,
+    max_namespaces,
+    max_log_records,
+    max_ordered_entries,
+    max_operation_bytes,
+    max_namespace_bytes,
+    max_batch_operations,
+    max_snapshots,
+    max_effect_transactions,
+    non_claims
+);
+wire_struct!(
+    crate::fabric_durability::DurableNamespaceDescriptor,
+    "host-durable-namespace-v1",
+    schema,
+    profile_ref,
+    adapter_id,
+    namespace_id,
+    generation,
+    value_schema_ref,
+    atomicity_domain,
+    retention_authority_ref,
+    quota_bytes
+);
+wire_struct!(
+    crate::fabric_durability::AtomicityDomain,
+    "host-atomicity-domain-v1",
+    domain_id,
+    adapter_id,
+    namespace_id,
+    generation,
+    object_classes,
+    max_operations,
+    max_bytes,
+    supported_levels
+);
+wire_enum!(
+    crate::fabric_durability::DurabilityNonClaim,
+    NoReplication,
+    NoConsensus,
+    NoDistributedTransaction,
+    NoLinearizability,
+    NoRemotePersistence,
+    NoExtensionCorrectness,
+    NoRecoveryCorrectness,
+    NoDeletionAuthority
+);
+wire_enum!(crate::fabric_durability::DurableAdapterKind, LiveRedb, DeterministicSimulation);
+wire_enum!(crate::fabric_durability::DurabilityLevel, Buffered, ProcessLoss, MachineLoss);
+wire_enum!(
+    crate::fabric_durability::DurableObjectClass,
+    LogRecord,
+    OrderedValue,
+    Snapshot,
+    Checkpoint,
+    EffectTransaction
+);

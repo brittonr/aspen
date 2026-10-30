@@ -1,0 +1,227 @@
+{
+  "actions": [
+    {
+      "description": "move active change to archive: pilot-marble-object-store",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-pilot-marble-object-store"
+    }
+  ],
+  "blocked": false,
+  "change": "pilot-marble-object-store",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "268bca5bb9be44a4004192fab8fbff2ad20967882ac01a716722468e3e0ac2f8",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "26e52b7a00fd63f4cc3f4dee55642994f21d670b7035e7be2e3d6f20ad021422",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-pilot-marble-object-store/design.md"
+        },
+        {
+          "content_hash": "94032c4dec2e59069de1fa07ac1ead2390bd36aec475fa6222a88a6bd7da33ad",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-pilot-marble-object-store/evidence/2026-10-22-marble-spike.md"
+        },
+        {
+          "content_hash": "e2972b39537283796c52d5f9511ebc1c0abca16dc85439c09d485fb675ed9f5e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-pilot-marble-object-store/evidence/2026-10-29-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "48e2cbd3cc2a910511b8e58b0228c4f221aed81c682cf0e4b960bc32f22348a9",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-pilot-marble-object-store/evidence/2026-10-29-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "55be7a114548c4053cd1a3b6b9c260351b3b6b03a77dafaa9cf18139f9f325c0",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-pilot-marble-object-store/evidence/2026-10-29-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "eee1e78cf151933587c18791c2ffd881ce63861304faaf9299542b532293d876",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-pilot-marble-object-store/evidence/2026-10-29-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "eca3e0d8615ddd917b98ad87dbd70a72d27e6eab4c655a949d9e98c9293cf747",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-pilot-marble-object-store/evidence/2026-10-29-closeout/strict-validation-after-dag-marker-fix.json"
+        },
+        {
+          "content_hash": "d0e202d9636be2f475909076eb8a0c782e6cb46cf62d2e121e286e0c960c1811",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-pilot-marble-object-store/evidence/2026-10-29-closeout/strict-validation-after-prerequisite-linkage-fixes.json"
+        },
+        {
+          "content_hash": "f9deec3d36e26119564d18fe9df0357761c38786590fc04906543bde1d1c6bbd",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-pilot-marble-object-store/evidence/2026-10-29-closeout/strict-validation-current.json"
+        },
+        {
+          "content_hash": "f818f529a54b220219e440c4fd81877122a0740936e439b346f333d8aa310272",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-pilot-marble-object-store/evidence/2026-10-29-closeout/strict-validation.json"
+        },
+        {
+          "content_hash": "e087cb2a3a6e2c0f20bf436edb4b2e812231140eb3a300105dc1df17e7e90120",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-pilot-marble-object-store/evidence/2026-10-29-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "fcbc8aae76555fb81554e4769a8685c167e4ba7b745f8a30a2c800d3036f9eaa",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-pilot-marble-object-store/evidence/2026-10-29-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "be6ec2310c34f0e1774319f4b910852bdccfdf7495c1c20dbefc022e67be86ee",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-pilot-marble-object-store/evidence/2026-10-29-rejected-spike-exemption.md"
+        },
+        {
+          "content_hash": "11fc4308137fee4479b053521ed037122947cfb977184b3c301e9a31518cb76e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-pilot-marble-object-store/proposal.md"
+        },
+        {
+          "content_hash": "75e186df1d01920c2754a7b2091c1dd89f87c6399bc503b02031030e2a8378c9",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-pilot-marble-object-store/review.md"
+        },
+        {
+          "content_hash": "7b42341ceb352238f937dba6932e485fd2967217dd14eade43bd7fb6f3c025b1",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-pilot-marble-object-store/specs/marble-object-store/spec.md"
+        },
+        {
+          "content_hash": "a09b6a676f6c7f828bbaab5fa9d97d1d71cbd0fa33e5490fc5a1ea18e11606db",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-pilot-marble-object-store/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/pilot-marble-object-store"
+        }
+      ],
+      "manifest_hash": "c900986a5f8620a344792d917d1d17e110c7266756eddb04e06b89d68f69d1fe"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "26e52b7a00fd63f4cc3f4dee55642994f21d670b7035e7be2e3d6f20ad021422",
+          "exists": true,
+          "path": "./.cairn/changes/pilot-marble-object-store/design.md"
+        },
+        {
+          "content_hash": "94032c4dec2e59069de1fa07ac1ead2390bd36aec475fa6222a88a6bd7da33ad",
+          "exists": true,
+          "path": "./.cairn/changes/pilot-marble-object-store/evidence/2026-10-22-marble-spike.md"
+        },
+        {
+          "content_hash": "e2972b39537283796c52d5f9511ebc1c0abca16dc85439c09d485fb675ed9f5e",
+          "exists": true,
+          "path": "./.cairn/changes/pilot-marble-object-store/evidence/2026-10-29-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "48e2cbd3cc2a910511b8e58b0228c4f221aed81c682cf0e4b960bc32f22348a9",
+          "exists": true,
+          "path": "./.cairn/changes/pilot-marble-object-store/evidence/2026-10-29-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "55be7a114548c4053cd1a3b6b9c260351b3b6b03a77dafaa9cf18139f9f325c0",
+          "exists": true,
+          "path": "./.cairn/changes/pilot-marble-object-store/evidence/2026-10-29-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "eee1e78cf151933587c18791c2ffd881ce63861304faaf9299542b532293d876",
+          "exists": true,
+          "path": "./.cairn/changes/pilot-marble-object-store/evidence/2026-10-29-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "eca3e0d8615ddd917b98ad87dbd70a72d27e6eab4c655a949d9e98c9293cf747",
+          "exists": true,
+          "path": "./.cairn/changes/pilot-marble-object-store/evidence/2026-10-29-closeout/strict-validation-after-dag-marker-fix.json"
+        },
+        {
+          "content_hash": "d0e202d9636be2f475909076eb8a0c782e6cb46cf62d2e121e286e0c960c1811",
+          "exists": true,
+          "path": "./.cairn/changes/pilot-marble-object-store/evidence/2026-10-29-closeout/strict-validation-after-prerequisite-linkage-fixes.json"
+        },
+        {
+          "content_hash": "f9deec3d36e26119564d18fe9df0357761c38786590fc04906543bde1d1c6bbd",
+          "exists": true,
+          "path": "./.cairn/changes/pilot-marble-object-store/evidence/2026-10-29-closeout/strict-validation-current.json"
+        },
+        {
+          "content_hash": "f818f529a54b220219e440c4fd81877122a0740936e439b346f333d8aa310272",
+          "exists": true,
+          "path": "./.cairn/changes/pilot-marble-object-store/evidence/2026-10-29-closeout/strict-validation.json"
+        },
+        {
+          "content_hash": "e087cb2a3a6e2c0f20bf436edb4b2e812231140eb3a300105dc1df17e7e90120",
+          "exists": true,
+          "path": "./.cairn/changes/pilot-marble-object-store/evidence/2026-10-29-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "fcbc8aae76555fb81554e4769a8685c167e4ba7b745f8a30a2c800d3036f9eaa",
+          "exists": true,
+          "path": "./.cairn/changes/pilot-marble-object-store/evidence/2026-10-29-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "be6ec2310c34f0e1774319f4b910852bdccfdf7495c1c20dbefc022e67be86ee",
+          "exists": true,
+          "path": "./.cairn/changes/pilot-marble-object-store/evidence/2026-10-29-rejected-spike-exemption.md"
+        },
+        {
+          "content_hash": "11fc4308137fee4479b053521ed037122947cfb977184b3c301e9a31518cb76e",
+          "exists": true,
+          "path": "./.cairn/changes/pilot-marble-object-store/proposal.md"
+        },
+        {
+          "content_hash": "75e186df1d01920c2754a7b2091c1dd89f87c6399bc503b02031030e2a8378c9",
+          "exists": true,
+          "path": "./.cairn/changes/pilot-marble-object-store/review.md"
+        },
+        {
+          "content_hash": "7b42341ceb352238f937dba6932e485fd2967217dd14eade43bd7fb6f3c025b1",
+          "exists": true,
+          "path": "./.cairn/changes/pilot-marble-object-store/specs/marble-object-store/spec.md"
+        },
+        {
+          "content_hash": "a09b6a676f6c7f828bbaab5fa9d97d1d71cbd0fa33e5490fc5a1ea18e11606db",
+          "exists": true,
+          "path": "./.cairn/changes/pilot-marble-object-store/tasks.md"
+        }
+      ],
+      "manifest_hash": "c8e583fd44078a016934dd624d1eb9ab98202e485bd5d8861d94b67e5ae7c62e"
+    },
+    "kind": "archive",
+    "manifest_hash": "4b4b0a2b157f8ef4ee17f0cdc7aaacc7a04fed9756ce08bf89d34afee29bc49b"
+  },
+  "plan_hash": "ca3aed4997c9cb9d1c6e8523a1ea8d59aae98fc32f8eda45368a35367c9926c0",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "reasons": [],
+  "receipt_hash": "ba5dee2693c92b6197e9e71fc32f535a7b39343bc4bc851a4b6293568a3d44b1"
+}

@@ -31,31 +31,54 @@ The [exchange definitions](../../../src/iroh/parts/exchange/p000/body.rs) also b
 
 The operation enum accepts `message`, `assert`, `retract`, and `observe`. Transport labels distinguish `iroh-local-gossip` from `iroh-gossip`. The general replay-event bound is 4,096; the session module separately declares 4,096 session retractions. Do not infer an exactly-once delivery guarantee from an operation reference or replay receipt.
 
-## Federation resource and policy fields
+## Federation admission and receiver planning
 
-| Structure | Fields | Interpretation |
+The production surface is the optional manifest-installed federation service,
+not the former local-root copying helper. The old include-based implementation
+is confined to `cfg(test)` simulation fixtures and cannot satisfy live admission.
+
+| Record or API | Meaning | Authority boundary |
 |---|---|---|
-| `Resource` | `resource_type`, `resource_ref`, `schema`, `transport`, `source_peer` | Announcement metadata; nonempty strings are not proof of adapter support. |
-| `Inventory` | peer, resources, delegates, signer, trust root, canonical value/ref | Describes supplied resource inventory and its signature context. |
-| `Delegate` | resource ref, capability, signer, trust root, canonical value/ref | Binds a resource-specific delegation claim checked against the receiver's expected context. |
-| `PullPolicy` | allowed types, optional required delegate capability, delegate trust root/key, resource/import limits | Receiver-selected filters and bounds. |
-| `Pull` | peer, imported refs, skipped refs, denied refs, receipt | Result partitions resources; failure may coexist with completed imports. |
+| `ManifestInput` / `admit_manifest` | Exact admitted extension, generation, static peers, DAG binding, finite bounds and reviewed profile refs | Required bindings must resolve through normal system-tier/fabric admission; referenced policies are bound by the admitted extension. |
+| `SignedRecord` | Canonical announcement, inventory, delegate, request or response domain, public signer, key generation and freshness | Uses opaque production Ed25519 adapters; a verified signature is not local import authority. |
+| `PeerHint` / `observe_locator` | Static, endpoint, gossip, tracker, DHT, pkarr, probe or catalog candidate observation | All locators remain hint-only. Optional hints cannot substitute for configured peer admission. |
+| `PullPlan` | Receiver missing refs, explicit conflicts, byte/node/chunk budgets, deadline and generation | Divergent names do not choose winners and are excluded from automatic import. |
+| `Service` / `execute_pull` | Supervised receiver session and host-owned typed DAG effect | The existing DAG shell still obtains current authority/resources and verifies content. |
+| `PolicyPort` / `import::commit_verified` | Local schema, policy, capability, provenance, resource, retention and import gates | All gates bind the exact local session, generation and head before trusted ledger mutation. |
 
-[Resource constants](../../../src/federation/parts/mod/p000/body.rs) include artifact, chunk-manifest, chunk, doc-metadata, catalog-metadata, receipt, provenance, transcript, protocol, and schema. The struct validator is not a closed enumeration validator. Ledger pulls additionally compare the artifact's actual kind and canonical hash with the advertised resource.
+## Transfer, quarantine and commit order
 
-An empty allowed-type list means no type restriction in this helper, not deny-all. `PullPolicy::allow_all()` also leaves delegation optional and uses unbounded policy counters; the implementation still has separate inventory limits. These API defaults are not deployment recommendations.
+`NetworkDagPort` sends an admitted signed request through actual cross-process
+Iroh transport and accepts only a signed response correlated to that request and
+object. `quarantine::VerificationPort` verifies canonical identity and invokes the
+admitted content adapter in a capability-rooted quarantine store. Quarantine is
+not the trusted artifact registry and grants no installation, execution or merge
+authority.
 
-## Worked result interpretation
+After complete correlated DAG verification, the receiver parses canonical
+artifact bytes, invokes every local admission gate, previews the commit
+transition, persists intent, and imports through the capability-rooted ledger.
+A post-effect persistence error is uncertainty requiring readback, not a policy
+denial or a reason for blind retry. A partial DAG run does not start registry
+import; domain conflicts never acquire federation merge authority.
 
-Suppose a policy-admitted inventory contains two locally readable resources and one disallowed type. The [pull loop](../../../src/federation/parts/mod/p002/body.rs) can import the first two, deny the third, and return a receipt whose overall decision is `fail`. This means partial effects occurred; it does not mean rollback. An already present resource is considered for skipping only after type and required-delegate checks.
+## Bounds and evidence interpretation
 
-If source reading or identity/kind verification fails for a resource, it is denied. A destination import error can instead propagate from the helper. Preserve destination evidence and distinguish a returned mixed result from an error with uncertain earlier effects before planning another attempt.
+Inventory entries/bytes, query intervals, concurrent sessions, cumulative
+network bytes, DAG nodes, chunks, retries, session ticks, freshness and retained
+status are explicit bounds. Local status contains refs and finite diagnostics,
+not raw payloads, key material or credentials. Successful completion is scoped
+to one receiver plan and observation window; it does not prove permanent
+convergence or remote correctness.
 
-## Limits on authority and closure
+The DAG package's historical live-loopback conformance adapter transmits
+request metadata and uses fixture admission refs. It is not a production content
+fetch adapter. Neither prerequisite archive status, filesystem copying nor
+signature verification alone establishes live signed pull/import evidence.
 
-The inspected [federation signature helper](../../../src/federation/parts/mod/p003/body.rs) hashes canonical payload bytes with signer, purpose, trust-root, and key material. Do not describe it as public-key verification, remote membership, or proof of a production trust service.
-
-Locator evidence is hint-only until fetched identity, verification, local admission, authority, policy, and resource evidence are supplied. Even its admission helper checks reference presence and shape, not every referenced artifact's substantive truth. General DAG completion remains relative to receiver roots, strategy, epoch, generation, and policy under the governing contract; an inventory pull is not that closure proof.
+The source descriptions above are not an execution report. Live-loopback,
+distinct-process, offline-verifier and adversarial simulation receipts must be
+produced by the corresponding runnable fixtures before making those claims.
 
 ## Sources
 
@@ -65,6 +88,9 @@ Locator evidence is hint-only until fetched identity, verification, local admiss
 - [Bounded DAG closure companion](../../technical/replication/bounded-dag-closure-exchange.md)
 - [Exchange types and reproduction-bundle path](../../../src/iroh/parts/exchange/p000/body.rs)
 - [Dataspace envelope and evidence types](../../../src/remote/parts/dataspace/p000/body.rs)
-- [Federation structures and policy defaults](../../../src/federation/parts/mod/p000/body.rs)
-- [Federation pull decisions](../../../src/federation/parts/mod/p002/body.rs)
-- [Locator admission evidence](../../../src/federation/parts/mod/p004/body.rs)
+- [Receiver decision core](../../../crates/molten-core/src/federation/planner.rs)
+- [Production signed network records](../../../src/federation/envelope/network.rs)
+- [Supervised pull execution](../../../src/federation/transfer/execution.rs)
+- [Local import policy](../../../src/federation/admission/rules.rs)
+- [Owner-defined DAG binding](../../../src/dag_sync/binding.rs)
+- [Historical simulation-only federation fixtures](../../../src/federation/parts/mod/p000/body.rs)

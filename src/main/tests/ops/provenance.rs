@@ -80,6 +80,8 @@ fn build_remote_envelope(dir: &Path) -> PathBuf {
             capability_refs: vec![cli_synthetic_ref("remote-capability").expect("remote capability ref")],
             evidence_refs: vec![cli_synthetic_ref("remote-evidence").expect("remote evidence ref")],
             out: envelope_out.clone(),
+            source: Default::default(),
+            receipt_out: None,
         },
     })
     .expect("build remote envelope");
@@ -99,6 +101,7 @@ fn publish_and_deliver_remote_envelope(dir: &Path, envelope_out: &Path, envelope
         envelope: envelope_out.to_path_buf(),
         node: "peer:a".to_owned(),
         receipt_out: Some(dir.join("publish.preserves")),
+        source: Default::default(),
     })
     .expect("publish remote envelope");
     run_remote_command(RemoteCommand::DeliverLocal {

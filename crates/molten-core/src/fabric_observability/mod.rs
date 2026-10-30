@@ -6,6 +6,7 @@
 
 mod adapter;
 mod aggregation;
+mod ebpf;
 mod health;
 mod integrity;
 mod model;
@@ -13,6 +14,7 @@ mod validation;
 
 pub use adapter::*;
 pub use aggregation::*;
+pub use ebpf::*;
 pub use health::*;
 pub use integrity::*;
 pub use model::*;

@@ -107,8 +107,10 @@ fn cli_cluster_lifecycle_commands_fail_closed_for_bad_manifests() -> CliResult<(
 }
 
 #[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn cli_cluster_two_node_lifecycle_roundtrip_writes_canonical_receipts() -> CliResult<()> {
     let root = temp_dir("cli-cluster-lifecycle")?;
+    let trust = std::env::var_os(SOURCE_TRUST_ENV);
     let init = molten_cmd()
         .args(["cluster", "init", "--state-root"])
         .arg(&root)
@@ -125,14 +127,22 @@ fn cli_cluster_two_node_lifecycle_roundtrip_writes_canonical_receipts() -> CliRe
     assert_cluster_file_is_canonical(&root, CLUSTER_TEST_NODE_B, CLUSTER_CONFIG_FILE)?;
     assert_cluster_file_is_canonical(&root, CLUSTER_TEST_NODE_B, CLUSTER_IDENTITY_RECEIPT_FILE)?;
 
-    let start = molten_cmd().args(["cluster", "start", "--state-root"]).arg(&root).output()?;
+    let nodes = [root.join(CLUSTER_TEST_NODE), root.join(CLUSTER_TEST_NODE_B)];
+    let node_roots = [nodes[0].as_path(), nodes[1].as_path()];
+    let start = signed_molten_command(trust.as_deref(), &node_roots)?
+        .args(["cluster", "start", "--state-root"])
+        .arg(&root)
+        .output()?;
     assert_success(&start, "cluster start roundtrip");
     assert_cluster_file_is_canonical(&root, CLUSTER_TEST_NODE, CLUSTER_STARTUP_FILE)?;
     assert_cluster_file_is_canonical(&root, CLUSTER_TEST_NODE_B, CLUSTER_STARTUP_FILE)?;
     let node_a_startup = std::fs::read(root.join(CLUSTER_TEST_NODE).join(CLUSTER_STARTUP_FILE))?;
     let node_b_startup = std::fs::read(root.join(CLUSTER_TEST_NODE_B).join(CLUSTER_STARTUP_FILE))?;
 
-    let already_running = molten_cmd().args(["cluster", "start", "--state-root"]).arg(&root).output()?;
+    let already_running = signed_molten_command(trust.as_deref(), &node_roots)?
+        .args(["cluster", "start", "--state-root"])
+        .arg(&root)
+        .output()?;
     assert_success(&already_running, "cluster start already running");
     assert_eq!(node_a_startup, std::fs::read(root.join(CLUSTER_TEST_NODE).join(CLUSTER_STARTUP_FILE))?);
     assert_eq!(node_b_startup, std::fs::read(root.join(CLUSTER_TEST_NODE_B).join(CLUSTER_STARTUP_FILE))?);

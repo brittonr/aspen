@@ -1,6 +1,6 @@
 ## Implementation tasks
 
-Checked tasks record the executed baseline and producer review only. Implementation and completion remain blocked on an authoritative exact-candidate producer contract.
+Checked tasks record executed baseline and producer review only. The user-authorized `produce-exact-node-startup-binding` prerequisite now defines the producer contract and implementation is in progress; acceptance remains blocked until actual producer execution, independent signing, real normal-startup positive/negative controls and final gates are recorded. Authored code/tests do not check off unexecuted evidence.
 
 - [x] [serial] Run existing node lifecycle and runtime source-gate tests before core edits. Record baseline outcomes. r[molten.audit_f02.validation]
 - [ ] [serial] Add the F02 normal-startup reproduction to repository tests, alongside a valid real-artifact control. r[molten.audit_f02.real_evidence] r[molten.audit_f02.validation]
@@ -19,4 +19,4 @@ Checked tasks record the executed baseline and producer review only. Implementat
 
 ## 2026-10-21 prerequisite review
 
-The [executed baseline and producer review](evidence/2026-10-21-prerequisite-review.md) identifies the missing source-to-binary binding. Normal startup remains unchanged; no fixture, configuration hash, or caller-supplied matching reference is promoted into real candidate evidence.
+The historical [executed baseline and producer review](evidence/2026-10-21-prerequisite-review.md) identified the missing source-to-binary binding; normal startup was unchanged at that review. The [2026-10-29 producer cutover](evidence/2026-10-29-producer-cutover.md) records the authorized implementation and distinguishes it from pending actual acceptance evidence. No fixture, configuration hash or unsigned matching reference is promoted into authoritative candidate evidence.

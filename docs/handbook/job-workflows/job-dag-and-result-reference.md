@@ -40,11 +40,18 @@ The spelling is source-checked against [root routing](../../../src/main/root/par
 | Under `molten test job` | Role | Evidence owner |
 | --- | --- | --- |
 | `worker-request` | Build a request from admission and execution files | Request builder |
-| `worker-run-local` | Record local-gossip delivery and invoke target execution | Worker shell |
-| `worker-schedule-local` | Wrap the worker in local queue/lease observations | Scheduling shell |
+| `worker-run-local` | Check the admitted receiver session, record local-gossip delivery, and invoke target execution | Worker shell |
+| `worker-schedule-local` | Wrap the source-checked worker in local queue/lease observations | Scheduling shell |
 | `ref-submit` / `ref-execute` | Construct / process a content-ref-only submission | Ref worker shell |
 | `status` | Read job status evidence from a ledger | Ref CLI reader |
 | `receipt-show` | Read a ledger receipt by reference | Ref CLI reader |
+
+Referenced worker operands require the all-or-none `--sender-state-root`, `--receiver-state-root`, and
+`--session-generation` arguments. They select a genuine receiver-owned local recording, not a caller-carried snapshot
+or metadata whitelist. The receiver must already hold a live assertion introducing the job and execution-request
+operands. Protocol/schema, admission, sync, authority, resource, bootstrap, identity, and evidence metadata neither
+introduce those operands nor become transferred capabilities. See [recorded exchange preparation](preparing-a-recorded-worker-exchange.md).
+
 
 ## On-disk output inventory
 

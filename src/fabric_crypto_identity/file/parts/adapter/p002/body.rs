@@ -68,7 +68,6 @@ impl<'a> IrohEd25519<'a> {
         })
     }
 
-    #[cfg(test)]
     pub(crate) fn load_transport_secret(&self, handle: &OpaqueKeyHandle) -> crate::error::Result<iroh::SecretKey> {
         if handle.purpose != KeyPurpose::TransportEndpoint {
             return Err(crate::error::Failure::invalid_harness(

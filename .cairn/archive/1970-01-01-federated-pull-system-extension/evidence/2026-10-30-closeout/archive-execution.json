@@ -1,0 +1,197 @@
+{
+  "actions": [
+    {
+      "description": "move active change to archive: federated-pull-system-extension",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-federated-pull-system-extension"
+    }
+  ],
+  "blocked": false,
+  "change": "federated-pull-system-extension",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "3dfcda8b3009eaf9352216c5da9fba34993ea009d58e9fa45b7148e6492afb33",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "807164a145481d5389413505e7ffbf81b9e0ca5e11e15ac2f6a361838827939e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-federated-pull-system-extension/design.md"
+        },
+        {
+          "content_hash": "a4338af391af41ff5b8754f295399148ad6def8d5bb95e33f6d32ec5c80b3152",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-federated-pull-system-extension/evidence/2026-10-30-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "e0ef52826cff2b77f61ac75b3426ea695b0f850d08a8cdbf887dafe63622de25",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-federated-pull-system-extension/evidence/2026-10-30-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "c8f6a802ddcab261a9d5c57a32a5b13cf8c0bcbc6b2da6b8fd283af962a63f4c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-federated-pull-system-extension/evidence/2026-10-30-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "0855b5a420cfccbdf0c3b83516eee15a9a22a36fdecdae25d7b361fdf3ec6e2d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-federated-pull-system-extension/evidence/2026-10-30-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "3cb1daa55209255f92846260e7c54d5a242b334386ff698acc833596ca516204",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-federated-pull-system-extension/evidence/2026-10-30-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "2006af06c0d3377e2eb17fee6188703af4c433ce3a8c123d22447a8c710f890c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-federated-pull-system-extension/evidence/2026-10-30-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "7ba99e61e9739506fcb2b30b88b9168fa205fa2d97b6d1e88e6237a9c5614b13",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-federated-pull-system-extension/evidence/2026-10-30-live-rails.md"
+        },
+        {
+          "content_hash": "c87d5e28c26f543b18834fd7213f2e5eab7e765ca7985efd17f9657cfc305c27",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-federated-pull-system-extension/evidence/2026-10-30-verification.md"
+        },
+        {
+          "content_hash": "fc6cd995fb8f8cf52b978b7cd4f7453c72f0d0417be0cb3a41d2acb435de3180",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-federated-pull-system-extension/metadata.json"
+        },
+        {
+          "content_hash": "6b4479d6e1a0cdebd4c52b4b3e3a6d3adc79ec206830a6ccda0381f6d4e865e5",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-federated-pull-system-extension/proposal.md"
+        },
+        {
+          "content_hash": "f48b9e2a9fc5e9c6f007d7d8411ea115aa9413b0cbfedf114aae08525cdb7fc8",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-federated-pull-system-extension/review.md"
+        },
+        {
+          "content_hash": "438ab88c2c99ad2e9f07ea84eb74fb6e0d87abd1c4a6c9c988bb28e49010df0c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-federated-pull-system-extension/specs/federated-pull-sync/spec.md"
+        },
+        {
+          "content_hash": "e9d9ca24a359d9681aeb32f44e2f55582c80952dfa59f6dbe4c07593a09a540f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-federated-pull-system-extension/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/federated-pull-system-extension"
+        }
+      ],
+      "manifest_hash": "8f33d993d3cd34b8b98a6dc30a81f07d216b8c7fe7aadf20b111d246d599797a"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "807164a145481d5389413505e7ffbf81b9e0ca5e11e15ac2f6a361838827939e",
+          "exists": true,
+          "path": "./.cairn/changes/federated-pull-system-extension/design.md"
+        },
+        {
+          "content_hash": "a4338af391af41ff5b8754f295399148ad6def8d5bb95e33f6d32ec5c80b3152",
+          "exists": true,
+          "path": "./.cairn/changes/federated-pull-system-extension/evidence/2026-10-30-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "e0ef52826cff2b77f61ac75b3426ea695b0f850d08a8cdbf887dafe63622de25",
+          "exists": true,
+          "path": "./.cairn/changes/federated-pull-system-extension/evidence/2026-10-30-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "c8f6a802ddcab261a9d5c57a32a5b13cf8c0bcbc6b2da6b8fd283af962a63f4c",
+          "exists": true,
+          "path": "./.cairn/changes/federated-pull-system-extension/evidence/2026-10-30-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "0855b5a420cfccbdf0c3b83516eee15a9a22a36fdecdae25d7b361fdf3ec6e2d",
+          "exists": true,
+          "path": "./.cairn/changes/federated-pull-system-extension/evidence/2026-10-30-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "3cb1daa55209255f92846260e7c54d5a242b334386ff698acc833596ca516204",
+          "exists": true,
+          "path": "./.cairn/changes/federated-pull-system-extension/evidence/2026-10-30-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "2006af06c0d3377e2eb17fee6188703af4c433ce3a8c123d22447a8c710f890c",
+          "exists": true,
+          "path": "./.cairn/changes/federated-pull-system-extension/evidence/2026-10-30-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "7ba99e61e9739506fcb2b30b88b9168fa205fa2d97b6d1e88e6237a9c5614b13",
+          "exists": true,
+          "path": "./.cairn/changes/federated-pull-system-extension/evidence/2026-10-30-live-rails.md"
+        },
+        {
+          "content_hash": "c87d5e28c26f543b18834fd7213f2e5eab7e765ca7985efd17f9657cfc305c27",
+          "exists": true,
+          "path": "./.cairn/changes/federated-pull-system-extension/evidence/2026-10-30-verification.md"
+        },
+        {
+          "content_hash": "fc6cd995fb8f8cf52b978b7cd4f7453c72f0d0417be0cb3a41d2acb435de3180",
+          "exists": true,
+          "path": "./.cairn/changes/federated-pull-system-extension/metadata.json"
+        },
+        {
+          "content_hash": "6b4479d6e1a0cdebd4c52b4b3e3a6d3adc79ec206830a6ccda0381f6d4e865e5",
+          "exists": true,
+          "path": "./.cairn/changes/federated-pull-system-extension/proposal.md"
+        },
+        {
+          "content_hash": "f48b9e2a9fc5e9c6f007d7d8411ea115aa9413b0cbfedf114aae08525cdb7fc8",
+          "exists": true,
+          "path": "./.cairn/changes/federated-pull-system-extension/review.md"
+        },
+        {
+          "content_hash": "438ab88c2c99ad2e9f07ea84eb74fb6e0d87abd1c4a6c9c988bb28e49010df0c",
+          "exists": true,
+          "path": "./.cairn/changes/federated-pull-system-extension/specs/federated-pull-sync/spec.md"
+        },
+        {
+          "content_hash": "e9d9ca24a359d9681aeb32f44e2f55582c80952dfa59f6dbe4c07593a09a540f",
+          "exists": true,
+          "path": "./.cairn/changes/federated-pull-system-extension/tasks.md"
+        }
+      ],
+      "manifest_hash": "954db34e451c16d211776c9d9167db7d4cd24b34571e26d40d10f7d0ac3924c3"
+    },
+    "kind": "archive",
+    "manifest_hash": "7bf68c1d074a565233e1d2f477efe089f71c38a3807c134f5459a342201ea748"
+  },
+  "plan_hash": "fb4743230db5315ca9ef05cba00fd218d8a9f443fcad7f81ba58639ffd0e8ef7",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "reasons": [],
+  "receipt_hash": "b76996071985feda065593697d60295430567e2911c572e14d49fd143da78a91"
+}

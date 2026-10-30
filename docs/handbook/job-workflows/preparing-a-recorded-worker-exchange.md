@@ -6,7 +6,7 @@ Mode: How-to
 
 Prepare a local-gossip job DAG exchange whose request, delivery log, target execution, and result can be reviewed together. This is the recorded local CLI path, not deployment of a live Iroh worker service. The procedure is source-checked and was not executed for this documentation batch. See the [Handbook](../README.md) and [deterministic playback companion](../../technical/foundations/deterministic-playback-contract.md) for context.
 
-You need an installed target-side job closure, a canonical target admission receipt, its matching execution request, genuine peer-bootstrap and node-identity evidence references, and isolated writable storage, cache, transport, and output locations. Have the existing sync evidence and authority/resource evidence available for review. Missing prerequisites are a stop condition: a sender's source registry or invented digest is not a substitute.
+You need an installed target-side job closure, a canonical target admission receipt, its matching execution request, genuine peer-bootstrap and node-identity evidence references, and isolated writable storage, cache, transport, and output locations. You also need capabilities to the already initialized sender and receiver node roots and a receiver-committed local session generation. Have the existing sync evidence and authority/resource evidence available for review. Missing prerequisites are a stop condition: a sender's source registry or invented digest is not a substitute.
 
 The [receiver contract](../../unison-reference-execution.md) keeps fetch selection and admission at the receiver. This how-to deliberately begins after those stages; it does not manufacture their evidence.
 
@@ -36,7 +36,40 @@ molten test job worker-request \
 
 Review the resulting value before continuing. Its evidence list includes sync, admission, execution-request, bootstrap, and identity references. Those bindings explain what the request names; they are not an authority grant.
 
-## 3. Choose direct recorded execution or coordination review
+## 3. Establish receiver knowledge and choose execution scope
+
+The [reference introduction boundary](../../syndicate-reference-harness.md) requires more than a request that carries
+bootstrap or authority metadata. `SENDER_STATE` and `RECEIVER_STATE` identify the actual initialized node roots for
+this exchange; their node IDs must match `SOURCE_PEER` and `TARGET_PEER`. Review identity bindings against the existing
+bootstrap inventory, not only display labels. Do not create a different identity with the same name to make a mismatch
+disappear. This recorded profile authenticates local root possession, not a network receiver acknowledgment.
+
+```sh
+molten test remote session admit \
+  --sender-state-root "${SENDER_STATE:?Actual initialized sender root}" \
+  --receiver-state-root "${RECEIVER_STATE:?Actual initialized receiver root}" \
+  --topic molten.job.worker --receipt-out "${SESSION_ADMISSION_OUT:?Fresh source admission output}"
+```
+
+Read the generation from that canonical commit receipt and set `SESSION_GENERATION` to it. Copy `JOB_REF` and
+`EXECUTION_REQUEST_REF` from the corresponding workload operand fields of the reviewed worker request, not from
+rendered-file hashes or proof metadata. Then commit an actual introducing assertion at the receiver:
+
+```sh
+printf '<job-worker-operands-v1 "%s" "%s">\n' \
+  "${JOB_REF:?Actual job operand}" "${EXECUTION_REQUEST_REF:?Actual execution request operand}" \
+  > "${WORKER_INTRODUCTION_OUT:?Fresh introducing assertion file}"
+molten test remote session commit \
+  --sender-state-root "$SENDER_STATE" --receiver-state-root "$RECEIVER_STATE" \
+  --topic molten.job.worker --generation "${SESSION_GENERATION:?Actual admitted generation}" \
+  --operation assert --payload "$WORKER_INTRODUCTION_OUT" \
+  --receipt-out "${INTRODUCTION_RECEIPT_OUT:?Fresh receiver commit output}"
+```
+
+Merely constructing the assertion or carrying these refs in evidence/authority lists does not introduce them.
+Retraction, close, identity replacement, or a changed generation invalidates the old sender view. These local source
+receipts do not replace the existing job authority/resource/admission artifacts.
+
 
 Use direct local execution when your question concerns request delivery and target execution. Choose the separate `worker-schedule-local` surface only when queue/lease evidence is part of the question. Do not run both merely to improve confidence: both paths can reach execution.
 
@@ -57,12 +90,21 @@ molten test job worker-run-local "${WORKER_REQUEST_OUT:?Set the reviewed request
   --admission-receipt "${ADMISSION_RECEIPT:?Set the same admission file}" \
   --execution-request "${EXECUTION_REQUEST:?Set the same execution request}" \
   --transport-root "${WORKER_TRANSPORT:?Set isolated transport state}" \
+  --from-peer "${SOURCE_PEER:?Actual initialized sender node ID}" --topic molten.job.worker \
+  --sender-state-root "$SENDER_STATE" --receiver-state-root "$RECEIVER_STATE" \
+  --session-generation "$SESSION_GENERATION" \
   --out "${WORKER_OUT:?Set a fresh output directory}"
 ```
 
 ## 5. Preserve and interpret the exchange
 
 Review `request.preserves`, `envelope.preserves`, publish/delivery receipts, `delivery-log.preserves`, assignment, statuses, result, and worker receipt together. Execution receipt and output appear only when their corresponding stages produced them. A nonzero exit may still leave useful denial evidence; an earlier error may leave only partial artifacts.
+
+Retain the source admission and introduction receipts with those artifacts. A reference/currentness refusal before
+transport is recorded in `sender-denial.preserves`; its canonical denial names unknown workload refs. Do not substitute
+stdout or edit a source receipt to make a stale generation appear current. The actual source is reread on build and
+publication, and receiver observation remains separate from workload execution authority.
+
 
 For a worked failure, suppose the request names peer B while the execution request names peer A. Request construction does not compare those target fields; the worker's target-state check does. Stop at that mismatch and reconstruct the intended request from authoritative inputs. Do not edit the receipt to make identities agree or retry the effect path blindly.
 
@@ -75,3 +117,5 @@ For a worked failure, suppose the request names peer B while the execution reque
 - [Worker request and artifact-writing shell](../../../src/cli/workflow/job/worker.rs)
 - [Target and authority binding checks](../../../src/job/parts/dag/p016/body.rs)
 - [Local scheduling sequence](../../../src/cli/workflow/job/schedule/run.rs)
+- [Recorded session source owner](../../../src/remote/parts/dataspace/p010/recorded.rs)
+- [Reference lifetime and verification boundary](../../syndicate-reference-harness.md)

@@ -23,11 +23,11 @@
             node_id: "peer-node",
         })
         .expect("init peer node");
-        crate::node_daemon::run_local(&crate::node_daemon::RunInput {
+        crate::node_daemon::run_local_fixture_for_tests(&crate::node_daemon::RunInput {
             state_root: &roots.requester_node,
         })
         .expect("run requester node");
-        crate::node_daemon::run_local(&crate::node_daemon::RunInput {
+        crate::node_daemon::run_local_fixture_for_tests(&crate::node_daemon::RunInput {
             state_root: &roots.peer_node,
         })
         .expect("run peer node");

@@ -1,0 +1,4 @@
+{
+  "depends_on": ["fabric-whole-system-simulation"],
+  "groups": ["current"]
+}

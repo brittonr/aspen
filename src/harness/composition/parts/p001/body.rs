@@ -42,6 +42,8 @@ pub enum ScenarioVariant {
     /// A saturating callback's yields are ignored, so it runs to its end
     /// before the scheduler selects anything else.
     SlicingDisabled,
+    /// The replacement activates without materializing the admitted state transformation.
+    MigrationSkipped,
 }
 
 impl ScenarioVariant {
@@ -51,6 +53,7 @@ impl ScenarioVariant {
             Self::FencingRemoved => "fencing-removed",
             Self::GroupBudgetReset => "group-budget-reset",
             Self::SlicingDisabled => "slicing-disabled",
+            Self::MigrationSkipped => "migration-skipped",
         }
     }
 }
@@ -66,6 +69,7 @@ pub struct ScenarioFacts {
     pub overload_denied: bool,
     pub storm_terminated: bool,
     pub stale_generation_acted: bool,
+    pub upgrade_completed: bool,
     pub dependent_restarted_after_dependency: bool,
     pub restarted_member_incarnation_advanced: bool,
     /// A saturating callback ended within its execution budget.
@@ -85,6 +89,7 @@ impl ScenarioFacts {
             overload_denied: false,
             storm_terminated: false,
             stale_generation_acted: false,
+            upgrade_completed: false,
             dependent_restarted_after_dependency: false,
             restarted_member_incarnation_advanced: false,
             saturating_work_bounded: false,

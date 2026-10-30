@@ -1,0 +1,14 @@
+id: extension-bpf-mutation-handles
+language: Rust
+severity: error
+message: Extension APIs must not import BPF loaders or expose writable BPF map/link/program handles.
+metadata:
+  posture: blocking
+  surface: system-extension-bpf-boundary
+  non_claim: structural-api-boundary-only
+files:
+  - src/system_extension/**/*.rs
+rule:
+  all:
+    - kind: identifier
+    - regex: '^(aya|libbpf_rs|libbpf_sys|bcc|EbpfLoader|BpfLoader|MapMut|ProgramFd|LinkFd)$'

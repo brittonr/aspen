@@ -1,5 +1,6 @@
 mod adapters;
 mod admission;
+mod installed;
 mod live_differential;
 mod protocol;
 mod protocolrules;
@@ -10,6 +11,7 @@ mod types;
 
 pub use adapters::*;
 pub use admission::*;
+pub use installed::*;
 pub use live_differential::*;
 pub use protocol::*;
 pub use protocolrules::*;

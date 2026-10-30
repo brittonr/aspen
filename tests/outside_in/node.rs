@@ -61,6 +61,7 @@ pub(crate) fn prepare_receiver(harness: &mut Harness) -> StepResult<Receiver> {
             &RECEIVER_NODE,
         ]),
     )?;
+    harness.install_source_trust(&state_root)?;
     harness.run("run", &arguments(&[&"node", &"run", &"--state-root", &state_root]))?;
     let export = artifacts.join("ticket-export.preserves");
     harness.run(

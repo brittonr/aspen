@@ -225,8 +225,10 @@ fn cli_octet_remediation_plan_writes_baseline_receipt() -> CliResult<()> {
 }
 
 #[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn cli_node_init_run_status_and_stop_write_receipts() -> CliResult<()> {
     let dir = temp_dir("cli-node-daemon")?;
+    let trust = std::env::var_os(SOURCE_TRUST_ENV);
     let state_root = dir.join("state");
     let config = dir.join("node-config.preserves");
     let startup = dir.join("node-startup.preserves");
@@ -241,6 +243,7 @@ fn cli_node_init_run_status_and_stop_write_receipts() -> CliResult<()> {
     let loop_receipt = dir.join("node-control-loop.preserves");
 
     start_case(StartArgs {
+        source_trust: trust.as_deref(),
         root: &state_root,
         config: &config,
         startup: &startup,
@@ -271,7 +274,7 @@ fn cli_node_init_run_status_and_stop_write_receipts() -> CliResult<()> {
         label: "node socket shutdown request",
     })?;
     submit_op(&state_root, &shutdown_request, &shutdown_queue, "node socket shutdown submit")?;
-    expect_stop_loop(&state_root, &shutdown, &loop_receipt)?;
+    expect_stop_loop(trust.as_deref(), &state_root, &shutdown, &loop_receipt)?;
 
     let stopped = molten_cmd().args(["node", "status", "--state-root"]).arg(&state_root).output()?;
     assert_success(&stopped, "node stopped status");

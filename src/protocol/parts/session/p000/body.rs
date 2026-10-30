@@ -3,7 +3,6 @@ type IoValue = preserves::IOValue;
 type Value<T> = preserves::Value<T>;
 type MoltenError = crate::error::Failure;
 type Result<T> = crate::error::Result<T>;
-type Envelope = crate::remote_dataspace::Envelope;
 type EnvelopeInput = crate::remote_dataspace::EnvelopeInput;
 type Operation = crate::remote_dataspace::Operation;
 
@@ -44,9 +43,6 @@ fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
     crate::preserves_rail::value_to_iovalue(value)
 }
 
-fn build_remote_envelope(input: EnvelopeInput) -> Result<Envelope> {
-    crate::remote_dataspace::build_envelope(input)
-}
 
 const MAX_PROTOCOL_ITEMS: usize = 1024;
 const MAX_PROTOCOL_STEPS: usize = 256;

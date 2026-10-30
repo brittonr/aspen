@@ -49,8 +49,10 @@ fn import_ticket_and_grant(case: &LiveImportCase<'_>) -> CliResult<()> {
 }
 
 #[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn cli_node_live_send_denies_offline_ticket_without_addresses() -> CliResult<()> {
     let dir = temp_dir("cli-node-live-send")?;
+    let trust = std::env::var_os(SOURCE_TRUST_ENV);
     let state_root = dir.join("node-state");
     let request = dir.join("status.preserves");
     let ticket = dir.join("live-ticket.preserves");
@@ -65,7 +67,7 @@ fn cli_node_live_send_denies_offline_ticket_without_addresses() -> CliResult<()>
     let resource_ref = test_ref("live-send-resource")?;
     let wrong_operation_ref = test_ref("wrong-live-send-operation")?;
 
-    start_state(&state_root, "node:cli-live-send", "node live send init", "node live send run")?;
+    start_state(trust.as_deref(), &state_root, "node:cli-live-send", "node live send init", "node live send run")?;
     let authority_ref = grant_fixture(GrantArgs {
         root: &state_root,
         grant: &authority_grant,
@@ -97,7 +99,7 @@ fn cli_node_live_send_denies_offline_ticket_without_addresses() -> CliResult<()>
     expect_no_address(&send_args, &transport_receipt, &send_receipt)?;
     expect_mismatch(&send_args, &wrong_operation_ref, &operation_mismatch_receipt)?;
     assert_success(
-        &molten_cmd()
+        &source_gated_node_command(trust.as_deref(), &state_root)?
             .args(["test", "node", "serve", "--state-root"])
             .arg(&state_root)
             .args(["--max-ticks", "1", "--receipt-out"])
@@ -118,25 +120,16 @@ fn cli_node_live_send_denies_offline_ticket_without_addresses() -> CliResult<()>
 }
 
 #[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn cli_node_serve_live_iroh_empty_listener_receipt() -> CliResult<()> {
     let dir = temp_dir("cli-node-serve-live")?;
+    let trust = std::env::var_os(SOURCE_TRUST_ENV);
     let state_root = dir.join("node-state");
     let listener_receipt = dir.join("listener.preserves");
     let service_receipt = dir.join("service.preserves");
     let live_ticket = dir.join("live-ticket.preserves");
-    assert_success(
-        &molten_cmd()
-            .args(["test", "node", "init", "--state-root"])
-            .arg(&state_root)
-            .args(["--node-id", "node:cli-serve-live"])
-            .output()?,
-        "node serve live init",
-    );
-    assert_success(
-        &molten_cmd().args(["test", "node", "run", "--state-root"]).arg(&state_root).output()?,
-        "node serve live run",
-    );
-    let served = molten_cmd()
+    start_state(trust.as_deref(), &state_root, "node:cli-serve-live", "node serve live init", "node serve live run")?;
+    let served = source_gated_node_command(trust.as_deref(), &state_root)?
         .args(["test", "node", "serve", "--state-root"])
         .arg(&state_root)
         .args(["--live-iroh", "--live-max-events", "0", "--service-receipt-out"])
@@ -161,25 +154,16 @@ fn cli_node_serve_live_iroh_empty_listener_receipt() -> CliResult<()> {
 }
 
 #[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn cli_node_supervisor_policy_fixture_and_serve_receipt() -> CliResult<()> {
     let dir = temp_dir("cli-node-supervisor-policy")?;
+    let trust = std::env::var_os(SOURCE_TRUST_ENV);
     let state_root = dir.join("node-state");
     let policy = dir.join("supervisor-policy.preserves");
     let service_receipt = dir.join("service.preserves");
     let policy_ref = test_ref("supervisor-policy")?;
 
-    assert_success(
-        &molten_cmd()
-            .args(["test", "node", "init", "--state-root"])
-            .arg(&state_root)
-            .args(["--node-id", "node:cli-supervisor"])
-            .output()?,
-        "node supervisor init",
-    );
-    assert_success(
-        &molten_cmd().args(["test", "node", "run", "--state-root"]).arg(&state_root).output()?,
-        "node supervisor run",
-    );
+    start_state(trust.as_deref(), &state_root, "node:cli-supervisor", "node supervisor init", "node supervisor run")?;
     assert_success(
         &molten_cmd()
             .args(["test", "node", "supervisor-policy-fixture", "--state-root"])
@@ -203,7 +187,7 @@ fn cli_node_supervisor_policy_fixture_and_serve_receipt() -> CliResult<()> {
         "node supervisor policy fixture",
     );
     assert_eq!(molten::ledger::artifact_kind(&read_preserves(&policy)?), "node-control-supervisor-policy");
-    let served = molten_cmd()
+    let served = source_gated_node_command(trust.as_deref(), &state_root)?
         .args(["test", "node", "serve", "--state-root"])
         .arg(&state_root)
         .args(["--max-ticks", "1", "--supervisor-policy"])
@@ -221,8 +205,10 @@ fn cli_node_supervisor_policy_fixture_and_serve_receipt() -> CliResult<()> {
 }
 
 #[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn cli_node_serve_drains_shutdown_request() -> CliResult<()> {
     let dir = temp_dir("cli-node-serve")?;
+    let trust = std::env::var_os(SOURCE_TRUST_ENV);
     let state_root = dir.join("node-state");
     let request = dir.join("shutdown.preserves");
     let queue_receipt = dir.join("queue.preserves");
@@ -231,18 +217,7 @@ fn cli_node_serve_drains_shutdown_request() -> CliResult<()> {
     let policy_ref = test_ref("serve-policy")?;
     let resource_ref = test_ref("serve-resource")?;
 
-    assert_success(
-        &molten_cmd()
-            .args(["test", "node", "init", "--state-root"])
-            .arg(&state_root)
-            .args(["--node-id", "node:cli-serve"])
-            .output()?,
-        "node serve init",
-    );
-    assert_success(
-        &molten_cmd().args(["test", "node", "run", "--state-root"]).arg(&state_root).output()?,
-        "node serve run",
-    );
+    start_state(trust.as_deref(), &state_root, "node:cli-serve", "node serve init", "node serve run")?;
     assert_success(
         &molten_cmd()
             .args([
@@ -273,7 +248,7 @@ fn cli_node_serve_drains_shutdown_request() -> CliResult<()> {
             .output()?,
         "node serve submit",
     );
-    let served = molten_cmd()
+    let served = source_gated_node_command(trust.as_deref(), &state_root)?
         .args(["test", "node", "serve", "--state-root"])
         .arg(&state_root)
         .args(["--max-ticks", "2", "--max-requests-per-tick", "1", "--receipt-out"])

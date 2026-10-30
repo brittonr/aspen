@@ -210,7 +210,7 @@ cargo run -- cluster stop --state-root target/cluster
 For CI and operator review, the receipt-first wrapper runs a checked cluster fixture through independent node processes and writes one content-addressed run directory with child receipts, a canonical parent receipt, drift/cleanup evidence, and an offline verification receipt. Diagnostic logs remain adjuncts and cannot replace canonical evidence. See [`docs/receipt-first-cluster-harness.md`](docs/receipt-first-cluster-harness.md).
 
 ```sh
-cargo run -- cluster harness-run --fixture tests/fixtures/cluster-harness/two-node.cluster --state-root target/cluster-harness-state --run-dir target/cluster-harness-run
+cargo run -- cluster harness-run --fixture tests/fixtures/cluster-harness/two-node.cluster --state-root target/cluster-harness-state --run-dir target/cluster-harness-run --node-binary "$SIGNED_OUTPUT/bin/molten" --source-trust "$SOURCE_TRUST"
 cargo run -- cluster harness-verify --run-dir target/cluster-harness-run
 ```
 
@@ -592,20 +592,40 @@ molten test job status --ledger target/ledger --job job:echo
 
 ## Job DAG Iroh worker UX
 
-Recorded local-gossip worker execution is exposed after sync, target admission, and execution request construction:
+Recorded local-gossip worker execution requires sync, target admission, an execution request, and a generation-bound local receiver recording. Use already initialized sender/receiver node roots whose actual node IDs match `SOURCE_PEER`/`TARGET_PEER`; see [preparing a recorded exchange](docs/handbook/job-workflows/preparing-a-recorded-worker-exchange.md). All reference variables below come from reviewed canonical artifacts, not invented digests. Choose either worker execution variant: running both can execute the workload twice.
 
 ```sh
 molten test job worker-request \
   --admission-receipt target/job-admission.receipt.preserves \
   --execution-request target/job-execution.request.preserves \
-  --authority-ref blake3:authority --resource-ref blake3:resource \
-  --peer-bootstrap-ref blake3:peer-bootstrap --node-identity-ref blake3:node \
+  --target-peer "${TARGET_PEER:?Actual receiver node ID}" \
+  --authority-ref "${AUTHORITY_REF:?Actual authority evidence}" \
+  --resource-ref "${RESOURCE_REF:?Actual resource evidence}" \
+  --peer-bootstrap-ref "${PEER_BOOTSTRAP_REF:?Actual bootstrap evidence}" \
+  --node-identity-ref "${NODE_IDENTITY_REF:?Actual identity evidence}" \
   --out target/job-worker.request.preserves
+molten test remote session admit \
+  --sender-state-root "${SENDER_STATE:?Initialized sender root}" \
+  --receiver-state-root "${RECEIVER_STATE:?Initialized receiver root}" \
+  --topic molten.job.worker --receipt-out target/job-session-admit.preserves
+# Review that canonical admission receipt and set SESSION_GENERATION from it.
+# JOB_REF and EXECUTION_REQUEST_REF are the operands in the reviewed worker request.
+printf '<job-worker-operands-v1 "%s" "%s">\n' \
+  "${JOB_REF:?Actual admitted job ref}" "${EXECUTION_REQUEST_REF:?Actual execution request ref}" \
+  > target/job-worker-introduction.preserves
+molten test remote session commit \
+  --sender-state-root "$SENDER_STATE" --receiver-state-root "$RECEIVER_STATE" \
+  --topic molten.job.worker --generation "${SESSION_GENERATION:?Actual admitted generation}" \
+  --operation assert --payload target/job-worker-introduction.preserves \
+  --receipt-out target/job-worker-introduction.receipt.preserves
 molten test job worker-run-local target/job-worker.request.preserves \
   --target-registry target/job-target-registry \
   --storage target/job-worker-storage --cache target/job-worker-cache \
   --admission-receipt target/job-admission.receipt.preserves \
   --execution-request target/job-execution.request.preserves \
+  --from-peer "${SOURCE_PEER:?Actual sender node ID}" \
+  --sender-state-root "$SENDER_STATE" --receiver-state-root "$RECEIVER_STATE" \
+  --session-generation "$SESSION_GENERATION" \
   --transport-root target/job-worker-transport --ledger target/ledger \
   --out target/job-worker-run
 molten test job worker-schedule-local target/job-worker.request.preserves \
@@ -613,14 +633,19 @@ molten test job worker-schedule-local target/job-worker.request.preserves \
   --storage target/job-scheduled-storage --cache target/job-scheduled-cache \
   --admission-receipt target/job-admission.receipt.preserves \
   --execution-request target/job-execution.request.preserves \
+  --from-peer "$SOURCE_PEER" \
+  --sender-state-root "$SENDER_STATE" --receiver-state-root "$RECEIVER_STATE" \
+  --session-generation "$SESSION_GENERATION" \
   --transport-root target/job-scheduled-transport \
-  --coordination-authority-ref blake3:authority \
-  --coordination-resource-ref blake3:resource \
-  --coordination-policy-ref blake3:policy \
+  --coordination-authority-ref "$AUTHORITY_REF" \
+  --coordination-resource-ref "$RESOURCE_REF" \
+  --coordination-policy-ref "${COORDINATION_POLICY_REF:?Actual scheduling policy evidence}" \
   --ledger target/ledger --out target/job-worker-scheduled
 ```
 
 `worker-run-local` writes the worker request, remote dataspace envelope, publish/delivery receipts, replayable delivery log, assignment, status records, result, worker receipt, execution receipt, and output evidence. `worker-schedule-local` wraps that path with a coordination queue enqueue/dequeue, duplicate enqueue operation replay, lock/fencing-token lease acquisition, stale-token denial before worker execution, release, and a `job-worker-schedule-receipt-v1`. Worker transport, queue claims, lease tokens, and CLI receipts are evidence only; peer identity or message delivery does not grant authority, policy, resource, provenance, source-gate, or execution trust.
+
+Source admission establishes only local identity/session bootstrap. The receiver must actually commit the introducing assertion; carrying the same refs in authority, evidence, or identity metadata does not introduce workload operands. Retraction, close, changed identities, or a stale generation refuse the next referenced build/publication. A local recording is not a live-network receiver acknowledgment and never grants job execution authority.
 
 ## Coordination control-plane UX
 

@@ -97,14 +97,18 @@ impl RedbDurableStateAdapter {
         source: DatabaseSource,
         publication: PublicationSource,
     ) -> crate::error::Result<Self> {
-        if profile.profile.adapter_kind != DurableAdapterKind::LiveRedb {
-            return Err(crate::error::Failure::invalid_harness(
-                "Redb durability adapter requires a live Redb profile",
-            ));
-        }
-        validate_namespace_descriptor(&profile.profile, &descriptor)
-            .map_err(|issues| adapter_validation_error("namespace", &issues))?;
+        validate_live_descriptor(&profile, &descriptor)?;
         let root = crate::local_store::DurableStoreRoot::open(root_path)?;
+        Self::open_root_with(root, profile, descriptor, source, publication)
+    }
+
+    fn open_root_with(
+        root: crate::local_store::DurableStoreRoot,
+        profile: DurableProfile,
+        descriptor: DurableNamespaceDescriptor,
+        source: DatabaseSource,
+        publication: PublicationSource,
+    ) -> crate::error::Result<Self> {
         let is_repaired = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let database = open_database(&root, &source, &is_repaired)?;
         initialize_tables(&database)?;

@@ -7,6 +7,8 @@ mod command {
 mod io;
 #[path = "remote/ops.rs"]
 mod ops;
+#[path = "remote/session.rs"]
+pub(crate) mod session;
 
 pub(crate) type RemoteCommand = command::Command;
 pub(crate) type RemoteEnvelopeCommand = command::EnvelopeCommand;

@@ -545,6 +545,7 @@ fn scheduler_world() -> AdmittedSimulatedWorld {
             non_claims: Vec::new(),
             ambient_inputs: Vec::new(),
         },
+        installed: None,
     }
 }
 

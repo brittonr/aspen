@@ -279,3 +279,4 @@ pub fn node_config_value(input: &ConfigValueInput<'_>) -> Result<IoValue> {
         ]),
     ]))
 }
+

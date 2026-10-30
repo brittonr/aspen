@@ -23,6 +23,15 @@ path = "src/lib.rs"
 
 [features]
 doltlite-oracle = []
+component-rpc = [
+  "dep:anyhow",
+  "dep:bytes",
+  "dep:wasmtime-rpc",
+  "dep:wasmtime-wasi-rpc",
+  "dep:wrpc-runtime-wasmtime",
+  "dep:wrpc-transport",
+]
+component-rpc-telemetry = ["component-rpc"]
 executable-extents = [
   "dep:data-encoding",
   "dep:executable-extent-conformance",
@@ -35,6 +44,7 @@ profiler = ["dep:flux-profiler"]
 profiler-alloc = ["profiler", "flux-profiler/alloc-profile"]
 profiler-disabled = ["dep:flux-profiler", "flux-profiler/disable-profiling"]
 profiler-perf = ["profiler", "flux-profiler/perf"]
+spacewasm-pilot = ["dep:spacewasm"]
 world-snapshot-vm-cohort = ["dep:vm-cohort-core"]
 
 [[bin]]
@@ -67,6 +77,7 @@ name = "molten-native-extension-fixture"
 path = "src/bin/molten-native-extension-fixture.rs"
 
 [dependencies]
+anyhow = { version = "1", optional = true }
 art = { version = "=1.0.0", optional = true }
 artifact-auth-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52", version = "0.1.0" }
 artifact-auth-ed25519 = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52", version = "0.1.0" }
@@ -75,15 +86,19 @@ bao-tree = "0.16.0"
 basalt = { git = "ssh://git@github.com/OnixResearch/basalt.git", rev = "89675cd4f585f837323c049e4a25f7b94c903038", version = "0.1.0" }
 blake3 = "1"
 bounded-exec = { git = "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git", rev = "29dac88ecded94457572db3fdfaaaab95fa91525", version = "0.1.0" }
+bytes = { version = "1", optional = true }
 durable-file-publication = { git = "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git", rev = "8e05e74e24b45f752d77145c4455385daaf6d6ab", version = "0.1.0" }
 choregraph-history = { git = "https://seed.radicle.garden/zL2ncTUeASVYwcoGkEXv9JKgGbAF.git", rev = "b3e08e19750f53bdbcae970cdf58a47a791ed20b", version = "0.1.0" }
 chaoscontrol-snapshot-descriptor = { git = "https://github.com/brittonr/chaoscontrol.git", rev = "b8c440ea3b19df796542e58e8ee36200e1c3db85", version = "0.1.0" }
 cap-fs-ext = "3"
 cap-std = "3"
 data-encoding = { version = "2", optional = true }
+durable-authority-state-redb = { git = "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git", rev = "a0de79303f3f45c18a34fff535b690a85cb3cf59", version = "0.1.0" }
+ed25519-dalek = "2.2"
 executable-extent-conformance = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
 executable-extent-core = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
 executable-extent-linux = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
+getrandom = "0.3"
 hardened-wasmtime-runtime = { git = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx", rev = "cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c", version = "0.1.0" }
 hardened-wasmtime-shell = { git = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx", rev = "cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c", version = "0.1.0" }
 marble = { version = "=16.0.2", optional = true }
@@ -103,12 +118,18 @@ valence = { git = "ssh://git@github.com/OnixResearch/valence.git", rev = "920107
 preserves = "5.0.0-rc.7"
 preserves-schema = "6.0.0-rc.6"
 redb = "4.1.0"
+replay-ledger-core = { git = "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git", rev = "a0de79303f3f45c18a34fff535b690a85cb3cf59", version = "0.1.0" }
+revocation-view-core = { git = "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git", rev = "a0de79303f3f45c18a34fff535b690a85cb3cf59", version = "0.1.0" }
+release-channel-index = { git = "ssh://git@github.com/OnixResearch/release-channel.git", rev = "fa389e19d5c9bd84cd75df914cc5418c70d92bfb", version = "0.1.0" }
+release-channel-witness = { git = "ssh://git@github.com/OnixResearch/release-channel.git", rev = "fa389e19d5c9bd84cd75df914cc5418c70d92bfb", version = "0.1.0" }
+rustix = { version = "1", features = ["time"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 schema-identity-core = { git = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git", rev = "2562c8aa38a034061f9af9f3e17280494a5b8de2" }
 schema-migration-core = { git = "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git", rev = "4fe90e130f2871cf69a6febcdc70785adca98aea", version = "0.1.0" }
 transactional-reconciliation-core = { git = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git", rev = "eb2bd3441753af97bfcb247cef7cc22d72675b62", version = "0.1.0" }
 snafu = "0.8"
+spacewasm = { git = "https://github.com/nasa/spacewasm", rev = "e24cf09355a90497148eb5029fdb8e3400bd63e3", default-features = false, optional = true }
 steel-core = "0.8.2"
 tar = "0.4"
 
@@ -122,7 +143,11 @@ vm-cohort-core = { git = "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3", rev = "31f1696ba
 wasmparser = "0.240"
 wasmtime = "45.0.0"
 wasmtime-wasi = "45"
+wasmtime-rpc = { package = "wasmtime", version = "=33.0.0", default-features = false, features = ["async", "component-model", "cranelift", "runtime", "std"], optional = true }
+wasmtime-wasi-rpc = { package = "wasmtime-wasi", version = "=33.0.0", default-features = false, optional = true }
 wit-bindgen = "0.46"
+wrpc-runtime-wasmtime = { git = "https://github.com/bytecodealliance/wrpc", rev = "aa01409ed38bf7a978570ff567c4475376925df6", default-features = false, optional = true }
+wrpc-transport = { git = "https://github.com/bytecodealliance/wrpc", rev = "aa01409ed38bf7a978570ff567c4475376925df6", default-features = false, optional = true }
 zstd = "0.13"
 
 [dev-dependencies]

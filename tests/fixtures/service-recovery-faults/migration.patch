@@ -1,0 +1,28 @@
+diff --git a/src/bin/molten-native-extension-fixture.rs b/src/bin/molten-native-extension-fixture.rs
+--- a/src/bin/molten-native-extension-fixture.rs
++++ b/src/bin/molten-native-extension-fixture.rs
+@@ -51,13 +51,17 @@
+         .map_or_else(|| envelope.invocation.event_ref.as_bytes().to_vec(), |value| value.bytes.clone());
+     let output = value(output_bytes);
+     let prior_state = envelope.inputs.state.as_ref().map_or(&[][..], |value| value.bytes.as_slice());
+-    let state_bytes = [
+-        envelope.context.instance_id.as_bytes(),
+-        &envelope.invocation.generation.to_le_bytes(),
+-        &envelope.invocation.sequence.to_le_bytes(),
+-        prior_state,
+-    ]
+-    .concat();
++    let state_bytes = if envelope.invocation.callback == molten::system_extension::CallbackKind::Recover {
++        prior_state.to_vec()
++    } else {
++        [
++            envelope.context.instance_id.as_bytes(),
++            &envelope.invocation.generation.to_le_bytes(),
++            &envelope.invocation.sequence.to_le_bytes(),
++            prior_state,
++        ]
++        .concat()
++    };
+     let state = value(state_bytes);
+     let checkpoint =
+         (envelope.invocation.callback == molten::system_extension::CallbackKind::Checkpoint).then(|| state.clone());

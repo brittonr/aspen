@@ -7,12 +7,14 @@ type Outcome<T> = molten::error::Result<T>;
 pub(super) fn run(command: Command) -> Outcome<()> {
     match command {
         Command::Envelope { command } => run_remote_envelope_command(command),
+        Command::Session { command } => super::session::run(command),
         Command::PublishLocal {
             transport_root,
             envelope,
             node,
             receipt_out,
-        } => publish_local(transport_root, envelope, node, receipt_out),
+            source,
+        } => publish_local(transport_root, envelope, node, receipt_out, source),
         command @ Command::DeliverLocal { .. } => deliver_local(command),
         Command::RunTwoPeer { transport_root, out } => run_two_peer(transport_root, out),
         Command::Gate {
@@ -29,10 +31,24 @@ fn publish_local(
     envelope: FilePath,
     node: String,
     receipt_out: Option<FilePath>,
+    source: super::session::SourceArgs,
 ) -> Outcome<()> {
     let envelope_value = super::io::read_preserves_file(&envelope)?;
     let envelope = molten::remote_dataspace::parse_envelope(&envelope_value)?;
-    let published = molten::remote_dataspace::publish_local_gossip(&transport_root, &envelope, &node)?;
+    let source = super::session::source(&source)?;
+    let view = source.as_ref().map(|source| source.view(&envelope.topic)).transpose()?;
+    let published = match molten::remote_dataspace::publish_local_gossip_with_evidence(
+        &transport_root,
+        &envelope,
+        &node,
+        view.as_ref(),
+    )? {
+        molten::remote_dataspace::EnvelopePublication::Published(published) => published,
+        molten::remote_dataspace::EnvelopePublication::Denied { receipt_value } => {
+            super::io::emit_named_receipt(receipt_out.as_ref(), "remote sender denial", &receipt_value)?;
+            return Err(molten::error::Failure::invalid_harness("remote sender introduction denied"));
+        }
+    };
     super::io::emit_named_receipt(receipt_out.as_ref(), "remote dataspace publish receipt", &published.receipt_value)?;
     println!("remote publish-local ok envelope={} root={}", published.envelope_ref, transport_root.display());
     Ok(())
@@ -147,20 +163,37 @@ fn run_remote_envelope_command(command: EnvelopeCommand) -> Outcome<()> {
             capability_refs,
             evidence_refs,
             out,
+            source,
+            receipt_out,
         } => {
             let payload = super::io::read_preserves_file(&payload)?;
             let operation = parse_remote_operation(&operation)?;
-            let envelope = molten::remote_dataspace::build_envelope(molten::remote_dataspace::EnvelopeInput {
-                from_peer,
-                from_actor,
-                to_peer,
-                topic,
-                operation,
-                payload,
-                content_refs,
-                capability_refs,
-                evidence_refs,
-            })?;
+            let source = super::session::source(&source)?;
+            let view = source.as_ref().map(|source| source.view(&topic)).transpose()?;
+            let built = molten::remote_dataspace::build_envelope_with_evidence(
+                molten::remote_dataspace::EnvelopeInput {
+                    from_peer,
+                    from_actor,
+                    to_peer,
+                    topic,
+                    operation,
+                    payload,
+                    content_refs,
+                    capability_refs,
+                    evidence_refs,
+                },
+                view.as_ref(),
+            )?;
+            let envelope = match built {
+                molten::remote_dataspace::EnvelopeBuild::Built(envelope) => *envelope,
+                molten::remote_dataspace::EnvelopeBuild::Denied {
+                    receipt_value,
+                    diagnostics,
+                } => {
+                    super::io::emit_named_receipt(receipt_out.as_ref(), "remote sender denial", &receipt_value)?;
+                    return Err(molten::error::Failure::invalid_harness(diagnostics.join("; ")));
+                }
+            };
             super::io::write_file(&out, &molten::preserves_rail::to_text(&envelope.value)?)?;
             println!("remote envelope {} written to {}", envelope.envelope_ref, out.display());
             Ok(())
@@ -168,7 +201,7 @@ fn run_remote_envelope_command(command: EnvelopeCommand) -> Outcome<()> {
     }
 }
 
-fn parse_remote_operation(operation: &str) -> Outcome<molten::remote_dataspace::Operation> {
+pub(super) fn parse_remote_operation(operation: &str) -> Outcome<molten::remote_dataspace::Operation> {
     match operation {
         "message" => Ok(molten::remote_dataspace::Operation::Message),
         "assert" => Ok(molten::remote_dataspace::Operation::Assert),

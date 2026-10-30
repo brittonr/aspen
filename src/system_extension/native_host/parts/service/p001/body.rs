@@ -160,7 +160,7 @@ where
 
     // r[impl molten.system_extension.native_host.effects]
     // r[impl molten.system_extension.native_host.intent]
-    pub fn route_effects<E: FabricEffectPort>(
+    pub fn route_effects<E: FabricEffectPort + ?Sized>(
         &mut self,
         callback: &CallbackReceipt,
         delegate: &mut E,
@@ -222,8 +222,9 @@ where
         &mut self,
         logical_tick: u64,
     ) -> std::result::Result<LifecycleReceipt, Failure> {
+        let was_accepting_ingress = self.instance()?.is_accepting_ingress;
         let receipt = self.host.checkpoint(logical_tick)?;
-        self.sync_instance(true)?;
+        self.sync_instance(was_accepting_ingress)?;
         Ok(receipt)
     }
 
@@ -237,12 +238,13 @@ where
 
     // r[impl molten.system_extension.native_host.recovery]
     pub fn restart(&mut self, logical_tick: u64) -> std::result::Result<LifecycleReceipt, Failure> {
-        if self.host.state().phase == LifecyclePhase::Running {
-            self.host.observe_host_loss()?;
+        if self.host.state().phase != LifecyclePhase::Failed {
+            self.observe_process_loss()?;
         }
-        let receipt = self.host.restart(logical_tick)?;
-        self.sync_instance(true)?;
-        Ok(receipt)
+        self.prepare_restart()?;
+        let result = self.host.restart(logical_tick);
+        self.sync_instance(result.is_ok())?;
+        result.map_err(Failure::from)
     }
 
     // r[impl molten.system_extension.native_host.operator]

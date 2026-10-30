@@ -1,3 +1,42 @@
+    struct JobSenderSource {
+        sender: PathBuf,
+        receiver: PathBuf,
+        generation: u64,
+    }
+
+    impl JobSenderSource {
+        fn new(setup: &JobSetup, request_path: &Path) -> Self {
+            let sender = setup.dir.join("worker-sender-state");
+            let receiver = setup.dir.join("worker-receiver-state");
+            for (root, node_id) in [(&sender, "peer:source"), (&receiver, "peer:loopback")] {
+                molten::node_daemon::init_local(&molten::node_daemon::InitInput { state_root: root, node_id })
+                    .expect("initialize genuine worker node root");
+            }
+            let sender_root = molten::node_state::DirectoryRoot::open_existing(&sender).expect("sender capability");
+            let receiver_root = molten::node_state::DirectoryRoot::open_existing(&receiver).expect("receiver capability");
+            let owner = molten::remote_dataspace::RecordedSessionStore::open(&receiver_root).expect("receiver source owner");
+            let admitted = owner.admit_local(&sender_root, "molten.job.worker").expect("admit actual local session");
+            let request = molten::job_dag::parse_job_worker_request_value(
+                &read_preserves_file(request_path).expect("actual worker request"),
+            ).expect("parse worker request");
+            // Introduce actual workload operands, not caller-carried proof or authority metadata.
+            let introduction = molten::preserves_rail::record("job-worker-operands-v1", vec![
+                molten::preserves_rail::string(&request.job_ref),
+                molten::preserves_rail::string(&request.execution_request_ref),
+            ]);
+            owner.commit("peer:source", "molten.job.worker", admitted.generation,
+                molten::remote_dataspace::Operation::Assert, &introduction).expect("receiver commits workload introduction");
+            Self { sender, receiver, generation: admitted.generation }
+        }
+
+        fn args(&self) -> crate::cli_remote::session::SourceArgs {
+            crate::cli_remote::session::SourceArgs {
+                sender_state_root: Some(self.sender.clone()), receiver_state_root: Some(self.receiver.clone()),
+                session_generation: Some(self.generation),
+            }
+        }
+    }
+
     fn exercise_job_worker(setup: &JobSetup, sync: &JobSync, admission: &JobAdmission) {
         let worker_request = setup.dir.join("job-worker-request.preserves");
         let peer_bootstrap_ref = cli_synthetic_ref("job-worker-peer-bootstrap").expect("peer bootstrap");
@@ -16,6 +55,7 @@
             out: Some(worker_request.clone()),
         }))
         .expect("job worker request");
+        let source = JobSenderSource::new(setup, &worker_request);
         let worker_out = setup.dir.join("job-worker-local");
         run_job_command(JobCommand::WorkerRunLocal(cli_job::command::worker::RunLocal {
             request: worker_request.clone(),
@@ -29,6 +69,7 @@
             from_peer: "peer:source".to_string(),
             from_actor: "source-worker".to_string(),
             topic: "molten.job.worker".to_string(),
+            source: source.args(),
             ledger: Some(setup.ledger_root.clone()),
             out: worker_out.clone(),
         }))
@@ -42,7 +83,7 @@
             ledger: setup.ledger_root.clone(),
         }))
         .expect("job worker receipt show");
-        exercise_job_worker_schedule(setup, sync, admission, worker_request);
+        exercise_job_worker_schedule(setup, sync, admission, worker_request, &source);
     }
 
     fn exercise_job_worker_schedule(
@@ -50,6 +91,7 @@
         sync: &JobSync,
         admission: &JobAdmission,
         worker_request: PathBuf,
+        source: &JobSenderSource,
     ) {
         let schedule_out = setup.dir.join("job-worker-scheduled");
         run_job_command(JobCommand::WorkerScheduleLocal(cli_job::command::worker::ScheduleLocal {
@@ -69,6 +111,7 @@
             from_peer: "peer:source".to_string(),
             from_actor: "source-worker".to_string(),
             topic: "molten.job.worker".to_string(),
+            source: source.args(),
             coordination_authority_refs: vec![sync.context_ref.clone()],
             coordination_resource_refs: sync.worker_resource_refs.clone(),
             coordination_policy_refs: vec![cli_synthetic_ref("job-worker-schedule-policy").expect("schedule policy")],
@@ -101,5 +144,5 @@
             ledger: setup.ledger_root.clone(),
         }))
         .expect("job worker schedule receipt show");
-        exercise_stale_job_worker_schedule(setup, sync, admission, worker_request);
+        exercise_stale_job_worker_schedule(setup, sync, admission, worker_request, source);
     }

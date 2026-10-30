@@ -28,6 +28,24 @@ pub(super) enum Top {
         #[command(subcommand)]
         command: crate::cli_node::Command,
     },
+    Reliability {
+        #[command(subcommand)]
+        command: crate::cli_reliability::Command,
+    },
+    Federation {
+        #[command(subcommand)]
+        command: crate::cli_federation::Command,
+    },
+    #[cfg(feature = "spacewasm-pilot")]
+    Spacewasm {
+        #[command(subcommand)]
+        command: crate::cli_pilots::spacewasm::Command,
+    },
+    #[cfg(feature = "component-rpc")]
+    ComponentRpc {
+        #[command(subcommand)]
+        command: crate::cli_pilots::componentrpc::Command,
+    },
     Peer {
         #[command(subcommand)]
         command: crate::cli_peer::Command,

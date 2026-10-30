@@ -97,11 +97,18 @@ impl<P: BoundLiveReplicaEffectPorts> ScopedLiveReplica<P> {
         if timeout.is_zero() {
             return Err(crate::error::Failure::invalid_harness("live Raft inbox timeout must be positive"));
         }
-        let event = tokio::time::timeout(timeout, self.inbox.recv())
+        let event = tokio::time::timeout(timeout, self.receive_event())
             .await
-            .map_err(|_| crate::error::Failure::invalid_harness("live Raft inbox receive timed out"))?
-            .ok_or_else(|| crate::error::Failure::invalid_harness("live Raft inbox closed"))?;
+            .map_err(|_| crate::error::Failure::invalid_harness("live Raft inbox receive timed out"))??;
         Ok(self.handle_event(event).await)
+    }
+
+    /// Receiving is cancel-safe; once selected, callers must finish handling it.
+    pub async fn receive_event(&mut self) -> crate::error::Result<ReplicaEvent> {
+        self.inbox
+            .recv()
+            .await
+            .ok_or_else(|| crate::error::Failure::invalid_harness("live Raft inbox closed"))
     }
 
     pub async fn accept_one(

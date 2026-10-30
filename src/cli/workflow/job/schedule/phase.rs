@@ -156,6 +156,7 @@ fn worker_execution(input: &LocalInput<'_>) -> molten::error::Result<molten::job
         from_peer: input.from_peer,
         from_actor: input.from_actor,
         topic: input.topic,
+        source: input.source,
         ledger_root: input.ledger_root,
         out: &worker_out,
     })

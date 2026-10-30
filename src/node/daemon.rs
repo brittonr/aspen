@@ -1,5 +1,12 @@
 #[path = "ingress/mod.rs"]
 mod ingress;
+#[path = "source-binding/mod.rs"]
+mod source_binding;
+pub use source_binding::GateValidation;
+pub use source_binding::SelectedNodeOutputValidation;
+pub use source_binding::gate_validation_with_root;
+pub use source_binding::start_runtime_with_root;
+pub use source_binding::verify_selected_node_output_with_root;
 
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/daemon/p000/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/node/parts/daemon/p039/body.rs"));

@@ -173,6 +173,23 @@ impl DirectoryRoot {
         })
     }
 
+    /// Observe an optional supplied namespace without creating directories.
+    pub fn existing_namespace(&self, kind: NamespaceKind) -> crate::error::Result<Option<super::namespace::Scope>> {
+        let path = super::locator::RelativePath::parse(kind.as_str())?;
+        match self.entry_kind(&path)? {
+            None => return Ok(None),
+            Some(EntryKind::Directory) => {}
+            Some(_) => return Err(super::invalid("supplied namespace must be an owned directory")),
+        }
+        let dir = super::filesystem::open_dir_components(&self.inner.dir, path.as_path())?;
+        Ok(Some(super::namespace::Scope {
+            root: std::sync::Arc::clone(&self.inner),
+            kind,
+            scope: path.into_path_buf(),
+            dir,
+        }))
+    }
+
     pub fn identity(&self) -> crate::error::Result<super::namespace::Scope> {
         self.namespace(NamespaceKind::Identity)
     }

@@ -64,28 +64,13 @@ impl RedbReplicaPort {
     /// recorded, and `storage_admission` keeps reporting the store as suspect.
     // r[impl molten.fabric_durability.adapter_quarantine]
     pub fn reconcile_repaired_storage(self) -> crate::error::Result<Self> {
-        let repaired = crate::fabric_durability::AdapterHealth::Quarantined(
-            crate::fabric_durability::QuarantineReason::RepairedOnOpen,
-        );
-        if self.adapter.health() != repaired {
-            return Ok(self);
-        }
         let Self {
             adapter,
             durable_log_ref,
             snapshot_store_ref,
         } = self;
-        let adapter = adapter
-            .reopen_and_reconcile(crate::fabric_durability::ReconciliationReference::SelfConsistent)
-            .map_err(|failure| failure.error)?;
-        if adapter.health() != crate::fabric_durability::AdapterHealth::Serving {
-            return Err(crate::error::Failure::invalid_harness(format!(
-                "repaired replica storage did not reconcile: {:?}",
-                adapter.health()
-            )));
-        }
         Ok(Self {
-            adapter,
+            adapter: adapter.reconcile_repaired_on_open()?,
             durable_log_ref,
             snapshot_store_ref,
         })

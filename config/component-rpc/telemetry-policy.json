@@ -1,0 +1,12 @@
+{
+  "schema_version": "ucan-nickel-contracts.policy.v1",
+  "backends": {},
+  "contracts": {
+    "component-rpc-telemetry-export-v1": {
+      "id": "component-rpc-telemetry-export-v1",
+      "description": "Independently admitted diagnostic-only WASI OTel export; no application authority.",
+      "abilities": ["component-rpc/diagnostics-export"],
+      "resource_prefixes": ["urn:molten:component-rpc:diagnostics:"]
+    }
+  }
+}

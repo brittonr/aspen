@@ -8,6 +8,8 @@ mod filesystem;
 mod locator;
 #[path = "state/namespace.rs"]
 mod namespace;
+#[path = "state/process.rs"]
+mod process;
 #[path = "state/publication.rs"]
 mod publication;
 
@@ -19,6 +21,9 @@ pub use authority::NamespaceKind;
 pub use locator::RelativePath;
 pub use namespace::Entry;
 pub use namespace::Scope;
+pub use process::Executable;
+pub use process::MAX_EXECUTABLE_BYTES;
+pub use process::Workspace;
 
 const MAX_NODE_STATE_ENTRIES: usize = 100_000;
 pub const MAX_NODE_STATE_FILE_BYTES: u64 = 16 * 1_024 * 1_024;

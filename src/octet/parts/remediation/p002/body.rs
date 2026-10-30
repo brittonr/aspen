@@ -141,7 +141,7 @@ const SURFACES: &[SurfaceDefinition] = &[
             "src/cli/core/chunk/command.rs",
             "src/cli/core/chunk/io.rs",
             "src/cli/core/chunk/ops.rs",
-            "src/cli/workflow/coordination.rs",
+            "src/cli/workflow/coordination/mod.rs",
             "src/cli/workflow/coordination/bounded.rs",
             "src/cli/workflow/coordination/command.rs",
             "src/cli/workflow/coordination/io.rs",

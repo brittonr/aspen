@@ -109,14 +109,6 @@ pub const ANNOUNCEMENT_PURPOSE: &str = "federation-announcement";
 pub const INVENTORY_PURPOSE: &str = "federation-inventory";
 pub const RESOURCE_ARTIFACT: &str = "artifact";
 pub const RESOURCE_CHUNK_MANIFEST: &str = "chunk-manifest";
-pub const RESOURCE_CHUNK: &str = "chunk";
-pub const RESOURCE_DOC_METADATA: &str = "doc-metadata";
-pub const RESOURCE_CATALOG_METADATA: &str = "catalog-metadata";
-pub const RESOURCE_RECEIPT: &str = "receipt";
-pub const RESOURCE_PROVENANCE: &str = "provenance";
-pub const RESOURCE_TRANSCRIPT: &str = "transcript";
-pub const RESOURCE_PROTOCOL: &str = "protocol";
-pub const RESOURCE_SCHEMA: &str = "schema";
 
 const MAX_RESOURCES: usize = 4096;
 const MAX_ASSERTIONS: usize = 8192;

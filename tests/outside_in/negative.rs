@@ -17,9 +17,10 @@ fn no_fault() -> ScenarioDeclaration {
 // r[verify molten.outside_in.validation]
 #[test]
 fn live_outside_in_consensus_scenarios_never_start_a_process() {
+    let trust = std::env::var_os(super::shell::SOURCE_TRUST_ENV);
     let mut consensus = no_fault();
     consensus.path = ScenarioPath::Consensus;
-    let result = run_scenario(&consensus, |_| panic!("a consensus-path scenario must not execute"));
+    let result = run_scenario(&consensus, trust.as_deref(), |_| panic!("a consensus-path scenario must not execute"));
     assert_eq!(result.outcome, ScenarioOutcome::DeclarationRejected(vec![ScenarioIssue::ConsensusPathExcluded]));
     assert!(!result.is_pass());
 }
@@ -27,7 +28,8 @@ fn live_outside_in_consensus_scenarios_never_start_a_process() {
 // r[verify molten.outside_in.validation]
 #[test]
 fn live_outside_in_a_listener_on_an_uninitialized_root_is_a_startup_failure() {
-    let result = run_scenario(&no_fault(), |harness| {
+    let trust = std::env::var_os(super::shell::SOURCE_TRUST_ENV);
+    let result = run_scenario(&no_fault(), trust.as_deref(), |harness| {
         let state_root = harness.scratch_dir("uninitialized-state")?;
         start_listener_at(harness, &state_root, state_root.join("ticket.preserves"))?;
         Ok(empty_observation())
@@ -38,7 +40,9 @@ fn live_outside_in_a_listener_on_an_uninitialized_root_is_a_startup_failure() {
 
 // r[verify molten.outside_in.real_stack]
 #[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn live_outside_in_each_exhausted_budget_stops_the_scenario_with_its_kind() {
+    let trust = std::env::var_os(super::shell::SOURCE_TRUST_ENV);
     let mut wall_clock = no_fault();
     wall_clock.budgets.wall_clock_ms = TINY_WALL_CLOCK_MS;
     wall_clock.stabilization_ms = 0;
@@ -51,7 +55,7 @@ fn live_outside_in_each_exhausted_budget_stops_the_scenario_with_its_kind() {
         (output, BudgetKind::RetainedOutput),
         (processes, BudgetKind::Processes),
     ] {
-        let result = run_scenario(&declared, baseline_body);
+        let result = run_scenario(&declared, trust.as_deref(), baseline_body);
         assert_eq!(result.outcome, ScenarioOutcome::BudgetExhausted(kind), "{result:?}");
         assert_eq!(result.teardown, TeardownStatus::Complete, "{}", kind.as_str());
         assert!(!result.is_pass());
@@ -60,9 +64,11 @@ fn live_outside_in_each_exhausted_budget_stops_the_scenario_with_its_kind() {
 
 // r[verify molten.outside_in.validation]
 #[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn live_outside_in_a_fault_the_host_cannot_apply_is_recorded_as_unsupported() {
+    let trust = std::env::var_os(super::shell::SOURCE_TRUST_ENV);
     let declared = declaration(FaultProfile::PauseResume, 500, &["request-1"]);
-    let result = run_scenario(&declared, |harness| {
+    let result = run_scenario(&declared, trust.as_deref(), |harness| {
         harness.set_signal_tool(MISSING_SIGNAL_TOOL);
         pause_resume_body(harness)
     });
@@ -72,8 +78,10 @@ fn live_outside_in_a_fault_the_host_cannot_apply_is_recorded_as_unsupported() {
 
 // r[verify molten.outside_in.observation]
 #[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn live_outside_in_an_unreadable_history_is_incomplete_not_agreement() {
-    let result = run_scenario(&no_fault(), |harness| {
+    let trust = std::env::var_os(super::shell::SOURCE_TRUST_ENV);
+    let result = run_scenario(&no_fault(), trust.as_deref(), |harness| {
         let mut receiver = prepare_receiver(harness)?;
         let request = build_request(harness, &mut receiver, 1)?;
         let listener = start_listener(harness, &mut receiver)?;
@@ -91,8 +99,10 @@ fn live_outside_in_an_unreadable_history_is_incomplete_not_agreement() {
 
 // r[verify molten.outside_in.real_stack]
 #[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn live_outside_in_a_retained_scratch_path_fails_the_scenario_despite_agreement() {
-    let result = run_scenario(&no_fault(), |harness| {
+    let trust = std::env::var_os(super::shell::SOURCE_TRUST_ENV);
+    let result = run_scenario(&no_fault(), trust.as_deref(), |harness| {
         let observed = baseline_body(harness)?;
         let substituted = harness.scratch_dir("substituted")?;
         std::fs::remove_dir(&substituted).expect("remove owned scratch directory");

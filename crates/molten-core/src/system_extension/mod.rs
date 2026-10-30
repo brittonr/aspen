@@ -15,6 +15,8 @@ mod recoveryplan;
 mod supervision;
 
 #[cfg(test)]
+mod hostingtests;
+#[cfg(test)]
 mod incarnationtests;
 #[cfg(test)]
 mod recoverytests;

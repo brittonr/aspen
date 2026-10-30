@@ -1,0 +1,109 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/enforce-introduction-before-reference/specs/runtime-spine/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/enforce-introduction-before-reference/specs/runtime-spine/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "enforce-introduction-before-reference",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/enforce-introduction-before-reference/specs/runtime-spine/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "6028910e72952b777504a4dad588f4fb8eef6c48297e115d88ffde19aa57dab3",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "0ff464af733a8c1665f2e8ccc0267b06b82fc0ab496ab91b51e945c4de692886",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "0b74d29b967c764749db6f223a9f255961a7ac029e65b69e24a495d7cb6c37d7",
+        "destination": ".cairn/specs/runtime-spine/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "6426d0045dccd183ab58ceecc379cfca175253f959ef8bd8881579520fb837b6",
+        "operations": [
+          {
+            "block_hash": "1eef55a35bbaee8f384116ba3b98ab99a5ea7f4d75842f5ad2b0027efe4e9ffa",
+            "heading": "### Requirement: Messages cannot introduce references",
+            "kind": "added",
+            "requirement_id": "molten.runtime_spine.reference_introduction_rule"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.runtime_spine.reference_introduction_rule",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/enforce-introduction-before-reference/specs/runtime-spine/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "6426d0045dccd183ab58ceecc379cfca175253f959ef8bd8881579520fb837b6",
+          "exists": true,
+          "path": "./.cairn/specs/runtime-spine/spec.md"
+        }
+      ],
+      "manifest_hash": "85a7eb28793dc471f663871b5d62df5597f324c15cb810ad097ce5510864529b"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "0ff464af733a8c1665f2e8ccc0267b06b82fc0ab496ab91b51e945c4de692886",
+          "exists": true,
+          "path": "./.cairn/specs/runtime-spine/spec.md"
+        }
+      ],
+      "manifest_hash": "ed75b35bafbe659e1367eba9254c0a26f2e046943c6d6539fc1e6a9cba0fccbc"
+    },
+    "kind": "sync",
+    "manifest_hash": "3a3eb86534c1c9adda2bcdbfc5df47f8f3bfadc9b3c50db37de3137c6b3c6384"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "3da988234b29b1bf7a13480a13d4d971b1f32914be47c8e522291eb645e69e2f",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "bf33c57d046bcc65baa8388cc9fdd0e6c2c97a492d60aea428929ccda4300a95",
+  "reasons": [],
+  "receipt_hash": "96ae7e3ea470db3c616425922797100cebf92855ad1bf440ce30e21d2198ea6c",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

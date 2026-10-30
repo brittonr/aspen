@@ -1,0 +1,12 @@
+diff --git a/src/node/servicehosting/work.rs b/src/node/servicehosting/work.rs
+--- a/src/node/servicehosting/work.rs
++++ b/src/node/servicehosting/work.rs
+@@ -67,8 +67,6 @@
+         {
+             return Err(super::invalid("delivery differs from retained work/current claim or member is fenced"));
+         }
+-        crate::system_extension::admit_work_delivery(&instance.lifecycle, &input.presentation, work.claim.as_ref())
+-            .map_err(|issues| super::invalid(format!("work delivery denied: {issues:?}")))?;
+         let input_ref = ingress_ref(input)?;
+         self.admit("deliver", &input.member, &input_ref, input.logical_tick)?;
+         let mut next = self.state.clone();

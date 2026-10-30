@@ -35,6 +35,9 @@ pub use transition::*;
 #[path = "canonical/tests.rs"]
 mod canonical_tests;
 #[cfg(test)]
+#[path = "../../collaborationscope/process.rs"]
+mod collaboration_process;
+#[cfg(test)]
 #[path = "durability/tests.rs"]
 mod durability_tests;
 #[cfg(test)]

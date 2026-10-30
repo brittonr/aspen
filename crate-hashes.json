@@ -2,10 +2,12 @@
   "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525#bounded-exec@0.1.0": "sha256-BVmqyUYyoNpY6LfOABxwPO3DY88ZtXeKNg3TPoGCcL0=",
   "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=8e05e74e24b45f752d77145c4455385daaf6d6ab#durable-file-publication@0.1.0": "sha256-kd74vui4byAC32OnH7Wn1sw9IW4PWjSw/VThvdnd380=",
   "https://github.com/brittonr/chaoscontrol.git?rev=b8c440ea3b19df796542e58e8ee36200e1c3db85#chaoscontrol-snapshot-descriptor@0.1.0": "sha256-rFuxBDZY7Z9v1/KDT/C4jZJqXSOxa4XI5AQoC0pgrEU=",
+  "https://github.com/bytecodealliance/wrpc?rev=aa01409ed38bf7a978570ff567c4475376925df6#wrpc-introspect@0.7.0": "sha256-OtWXmMwjfzB95FFZ2volg6GNJf8UbTsCAO0cs9Yqb7U=",
   "https://github.com/gattaca-com/flux?rev=2a1916465ae6649aebef3758233cfea98e5d33db#flux-communication@0.1.3": "sha256-1ZBLORVsTtOXmOWdcfkQZJ/k3Ss+KJY3BMFBJwiSQDE=",
   "https://github.com/hegeldev/hegel-rust?rev=ed949b8084595cb467e983747f1089e214965ac6#hegeltest@0.14.12": "sha256-WG4R0ahvNcPQ/uOlGnAJf9QFcZ6SYPsfI+Y9rBzorrI=",
+  "https://github.com/nasa/spacewasm?rev=e24cf09355a90497148eb5029fdb8e3400bd63e3#spacewasm@0.0.0": "sha256-14SWYERoXP+M6lmfTXdPzB30E0eI+FL/81xnM89PlIE=",
   "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#schema-migration-core@0.1.0": "sha256-AnWxKYQTgvQwzLPMyiGmUroVNVuLos6ThjP0cGRiCcs=",
-  "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#replay-ledger-core@0.1.0": "sha256-++GX+wiKkcBDeXtMJnMgpByEEcuAYRgO20Pzb8TJ6pA=",
+  "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#durable-authority-state-redb@0.1.0": "sha256-++GX+wiKkcBDeXtMJnMgpByEEcuAYRgO20Pzb8TJ6pA=",
   "https://seed.radicle.garden/z4ARxEt93T6gJTrTZpUyKHMAemPiv.git?rev=5abc2b93e0f288aba251a0750ce2d716eb9757fc#bounded-http@0.1.0": "sha256-FlNyGeN9Bo6/Dv/YqisN+5XSNerpUHM2+6jqHvxYlsA=",
   "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=eb2bd3441753af97bfcb247cef7cc22d72675b62#transactional-reconciliation-core@0.1.0": "sha256-xkZ79TBbTHfjj8jM1b4+F3k2MdtkQ9TUGBinmNOpdKY=",
   "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git?rev=2562c8aa38a034061f9af9f3e17280494a5b8de2#schema-identity-conformance@0.1.0": "sha256-gRrLAZUz+NE17zrRLSkxKMlwOwltF4yvCK0W++V63u0=",
@@ -20,5 +22,6 @@
   "ssh://git@github.com/OnixResearch/kamacite.git?rev=d76fe4abe543724d8fc0ac4b362187caf2e27622#kamacite-core@0.1.0": "sha256-Z6+dLkP2cziybjrAiRznP1cHUASyekhOwGl5ErWzZJc=",
   "ssh://git@github.com/OnixResearch/mantle.git?rev=dd2bebab894688d07e7a29c75c1437f4ecc120df#crunch-wasm-component-core@0.1.0": "sha256-r8+7Je1MVAug312B2mrgLkjOXgd3dApvFImpJMgesrw=",
   "ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#artifact-auth-core@0.1.0": "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY=",
+  "ssh://git@github.com/OnixResearch/release-channel.git?rev=fa389e19d5c9bd84cd75df914cc5418c70d92bfb#release-channel-index@0.1.0": "sha256-lEvpPJVCTFyUpavvAPJh6tVfg0dJx0eeq3MGIGAEOuA=",
   "ssh://git@github.com/OnixResearch/valence.git?rev=9201074343cd9da0ffaf6ec9db690af5b445d663#valence-core@0.1.0": "sha256-Ruxx4JYnVIb0uJna6I//h/aW4oD/NoLB22BX/2MBMj8="
 }

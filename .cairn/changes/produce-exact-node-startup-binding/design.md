@@ -1,0 +1,9 @@
+## Design
+
+Molten owns this candidate profile. Nix owns realization and output authentication; Octet owns source checks, not compiler correctness. The producer consumes one immutable source tree, the actual compiled package, a complete build dependency-closure export, compiler toolchain, policy/profile bytes and retained real Octet artifacts. It measures all bytes and emits a detached versioned binding after compilation, avoiding executable selfhash circularity.
+
+The containing NAR must carry a valid signature by an independently selected full public key authorized for this producer profile. Never accept a key carried by evidence, unsigned caller refs, local-build ultimately-trusted flags, content-addressed status or an automatically trusted local signer. `nix store verify --sigs-needed 1` must explicitly override public keys and verify content, without repair or network substitution. Production trust approval is external. A separately provisioned experimental authority can exercise real producer execution without implying operator approval.
+
+Pure bounded admission compares the selected binding/policy/profile identities against authenticated producer observations, actual executing ELF bytes and the complete remeasured gate cohort. It has no I/O or clock effects. The shell performs admission before restart preparation, lifecycle writes or activation. All normal wrappers converge; explicit fixture constructors remain distinct. Historical startup receipts remain readable as historical evidence and never gain fresh authenticity during replay. An incompatible producer/cohort contract requires a new version.
+
+Validation requires a genuine real-producer normal-startup positive plus missing/read-error, stale, tamper, wrong-candidate, unsigned/self-trusted, synthetic and unsupported-version negatives; rejection preserves lock and lifecycle evidence. Unrun checks remain unchecked. No production admission or compiler-correctness claim is introduced.

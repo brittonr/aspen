@@ -11,6 +11,8 @@ pub mod addressable_actor;
 #[path = "cluster/harness.rs"]
 pub mod cluster_harness;
 pub mod codec;
+#[path = "collaborationscope/mod.rs"]
+pub mod collaboration_scope;
 pub mod committed_stream;
 pub mod consensus_recovery;
 pub mod content_replication;
@@ -29,6 +31,7 @@ pub mod fabric_observability;
 pub mod fabric_simulation;
 pub mod fabric_time;
 pub mod fabric_transport;
+pub mod federation;
 pub mod live_binding;
 pub mod marble_store;
 pub mod node_ingress;
@@ -41,6 +44,7 @@ pub mod prolly_map;
 pub mod protocol_oracle;
 pub mod release_dependency;
 pub mod stack;
+pub mod startup_binding;
 pub mod system_extension;
 pub mod world_benchmark;
 pub mod world_branch_authority;
@@ -55,6 +59,7 @@ pub mod world_promotion;
 pub mod world_replay;
 pub mod world_snapshot;
 pub mod world_state_oracle;
+pub mod world_witness;
 
 pub mod prelude {
     pub use crate::codec::CodecIssue;

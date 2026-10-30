@@ -6,6 +6,10 @@ pub(crate) enum Command {
         #[command(subcommand)]
         command: EnvelopeCommand,
     },
+    Session {
+        #[command(subcommand)]
+        command: super::session::Command,
+    },
     PublishLocal {
         #[arg(long)]
         transport_root: FilePath,
@@ -15,6 +19,8 @@ pub(crate) enum Command {
         node: String,
         #[arg(long)]
         receipt_out: Option<FilePath>,
+        #[command(flatten)]
+        source: super::session::SourceArgs,
     },
     DeliverLocal {
         #[arg(long)]
@@ -71,5 +77,10 @@ pub(crate) enum EnvelopeCommand {
         evidence_refs: Vec<String>,
         #[arg(long)]
         out: FilePath,
+        #[command(flatten)]
+        source: super::session::SourceArgs,
+        /// Write the canonical denial receipt when introduction admission fails.
+        #[arg(long)]
+        receipt_out: Option<FilePath>,
     },
 }

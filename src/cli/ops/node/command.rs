@@ -21,6 +21,10 @@ pub(crate) enum Top {
     Run(base::Run),
     RunLoop(base::RunLoop),
     Serve(base::Serve),
+    ServiceHost {
+        #[command(subcommand)]
+        command: molten::node_service_host::command::Subcommand,
+    },
     Status(base::Status),
     ControlHistory(base::History),
     Stop(base::Stop),

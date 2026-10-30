@@ -1,0 +1,86 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/recorded-remote-session-source/specs/remote-dataspace/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/recorded-remote-session-source/specs/remote-dataspace/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "recorded-remote-session-source",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/recorded-remote-session-source/specs/remote-dataspace/spec.md"
+  ],
+  "dry_run": true,
+  "input_hash": "9f6d395673ec5b6c4b4e98783715b6ad025de4ef09b46b214e97046d34e2485c",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": false,
+        "accepted_before_hash": "474b05826471fc89ee5e2a24a17bb168c68611f85bcede1f166fa179a65c23d2",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "7012256b52945e6c9c714ed4f9ff3e8475f91a1669c4d0974f747b77c92b29ef",
+        "destination": ".cairn/specs/remote-dataspace/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "ed0f0f393a9594c009205e6aac4ba69c987d5f8bafcd7c20931d41a2c860259e",
+        "operations": [
+          {
+            "block_hash": "9acdf53bd7725290df7fe4a7fa0050244e064a02fe78df883051b90f986a65e9",
+            "heading": "### Requirement: Capability-authenticated local source",
+            "kind": "added",
+            "requirement_id": "molten.remote_dataspace.recorded_session_source"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.remote_dataspace.recorded_session_source",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/recorded-remote-session-source/specs/remote-dataspace/spec.md"
+      }
+    ]
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "6d3a2ebf5a65ddf10b0909504c2815f195ee69c8596c9edc749c66a6ee4ffc1c",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "209968cb60068ba02a3e9a5be010c757787d44f384e1e22858aa96ba23c6a7f7",
+  "reasons": [],
+  "receipt_hash": "8ebea7e4e204f39f02301a5922d9145ab981997b7929c7ff69c12998f62d76e2",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

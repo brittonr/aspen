@@ -40,6 +40,8 @@ pub struct ExecutionInput {
     pub state_root: std::path::PathBuf,
     pub output_directory: std::path::PathBuf,
     pub node_binary: std::path::PathBuf,
+    /// Operator-selected startup source trust installed in every initialized node root.
+    pub source_trust: Option<std::path::PathBuf>,
     pub child_timeout_ms: u64,
     pub force: bool,
 }
@@ -187,6 +189,9 @@ fn run_lifecycle_phases(
     let mut child_executions = Vec::new();
     let mut diagnostics = Vec::new();
     let is_init_passed = execute_phase_for_nodes(step("init"), &mut child_executions, artifacts, init_node_args)?;
+    if is_init_passed {
+        provision_source_trust(input, plan)?;
+    }
     let is_start_passed = if is_init_passed {
         execute_phase_for_nodes(step("start"), &mut child_executions, artifacts, start_node_args)?
     } else {

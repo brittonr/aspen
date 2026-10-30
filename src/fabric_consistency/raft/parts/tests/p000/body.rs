@@ -25,13 +25,17 @@ pub(super) fn test_ref(label: &str) -> String {
 }
 
 pub(super) fn active_group() -> crate::fabric_consistency::Group {
+    active_group_for("extension-live-raft", &test_ref("application-manifest"))
+}
+
+pub(super) fn active_group_for(extension_id: &str, manifest_ref: &str) -> crate::fabric_consistency::Group {
     let declared = crate::fabric_consistency::canonical_group(
         crate::fabric_consistency::GroupInput {
             group_id: "group:live-raft".to_string(),
-            extension_id: "extension-live-raft".to_string(),
+            extension_id: extension_id.to_string(),
             service_id: "service-live-raft".to_string(),
             service_generation: SERVICE_GENERATION,
-            application_manifest_ref: test_ref("application-manifest"),
+            application_manifest_ref: manifest_ref.to_string(),
             engine_algorithm_profile: LIVE_RAFT_ALGORITHM_PROFILE.to_string(),
             engine_implementation_profile: LIVE_RAFT_IMPLEMENTATION_PROFILE.to_string(),
             membership_ref: test_ref("membership"),

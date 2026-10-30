@@ -18,7 +18,7 @@ pub fn run_scenario(
         FailureScenario::UncertainEffectSurfacing => uncertain_effect(),
         FailureScenario::QueueOverload => queue_overload(),
         FailureScenario::RestartStormToEscalation => restart_storm(definitions, variant),
-        FailureScenario::GenerationUpgradeWithStaleWorkRejection => generation_upgrade(),
+        FailureScenario::GenerationUpgradeWithStaleWorkRejection => upgrade::run(variant),
         FailureScenario::CpuSaturationUnderTimeSlicing => cpu_saturation(variant),
     }
 }
@@ -212,29 +212,3 @@ fn restart_storm(
     Ok(facts)
 }
 
-fn generation_upgrade() -> Result<ScenarioFacts, crate::error::Failure> {
-    let stateful = running_state()?;
-    let upgraded = plan_lifecycle_transition(
-        &stateful,
-        &LifecycleEvent {
-            kind: LifecycleEventKind::BeginUpgrade,
-            generation: stateful.generation,
-            incarnation: stateful.incarnation,
-            next_generation: Some(stateful.generation + 1),
-            checkpoint_ref: None,
-            failure_class: None,
-        },
-        idle_usage(),
-        MAX_RESTART_ATTEMPTS,
-    )
-    .map_err(|issues| crate::error::Failure::invalid_harness(format!("the upgrade denied: {issues:?}")))?;
-    let stale = plan_lifecycle_transition(
-        &upgraded,
-        &failure_event(&stateful),
-        idle_usage(),
-        MAX_RESTART_ATTEMPTS,
-    );
-    let mut facts = ScenarioFacts::empty();
-    facts.stale_generation_acted = stale.is_ok();
-    Ok(facts)
-}

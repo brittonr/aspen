@@ -9,3 +9,7 @@
 - [ ] [parallel] Add optional redacted OpenTelemetry-WASI export with bounded queues, diagnostic-only roles, canonical receipt links, and payload exclusion tests. r[molten.component_rpc.telemetry]
 - [ ] [parallel] Add positive Mantle-materialized unary loopback/replay fixtures and negative incomplete/mismatched bundle, local guest build, wrong-world, malformed mapping, unauthorized peer/function, over-budget call, duplicate/reordered transcript, stream/future use, telemetry leak, and live-timing replay fixtures. r[molten.component_rpc.materialization] r[molten.component_rpc.validation]
 - [ ] [depends:component-rpc-validation] Record pilot graduation/retirement criteria and run focused adapter, transport-session, replay, authority, telemetry, Octet, Cairn validation, and lifecycle gates. r[molten.component_rpc.nonclaims] r[molten.component_rpc.validation]
+
+## Source handoff note (2026-10-30)
+
+Source implementation: `src/componentrpc/`, `config/component-rpc/`, `tests/componentrpc.rs`, and `docs/component-rpc-pilot.md`. Real wRPC and the separately selected optional WASI OTel host paths are authored against the exact Mantle contracts. Task boxes intentionally remain unchecked: no prohibited build/test/lint/formatter/lifecycle gate or producer realization was run by the delegated consumer worker. Root dependency/mount/command integration and actual bundle-backed positive/negative execution must be reviewed and recorded by the integration owner before claiming completion.

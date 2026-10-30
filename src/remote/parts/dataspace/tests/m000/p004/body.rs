@@ -38,7 +38,7 @@
             evidence_refs: Vec::new(),
         })
         .expect("envelope");
-        publish_local_gossip(&root, &envelope, "peer:a").expect("publish");
+        publish_local_gossip(&root, &envelope, "peer:a", None).expect("publish");
         let delivered = deliver_local_gossip(&root, "services", &envelope.envelope_ref, "peer:b").expect("deliver");
         let applied = admit_and_apply_delivered_envelope(&mut peer_b, &delivered, &evidence_fixture())
             .expect("apply delivered envelope");
@@ -64,7 +64,7 @@
             evidence_refs: Vec::new(),
         })
         .expect("envelope");
-        publish_local_gossip(&root, &envelope, "peer:a").expect("publish");
+        publish_local_gossip(&root, &envelope, "peer:a", None).expect("publish");
         let wrong_topic = deliver_local_gossip(&root, "other", &envelope.envelope_ref, "peer:b")
             .expect_err("wrong topic has no stored envelope");
         assert!(wrong_topic.to_string().contains("does not exist"), "{wrong_topic}");

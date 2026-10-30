@@ -1,0 +1,197 @@
+{
+  "actions": [
+    {
+      "description": "move active change to archive: dag-sync-fabric-admission-binding",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-dag-sync-fabric-admission-binding"
+    }
+  ],
+  "blocked": false,
+  "change": "dag-sync-fabric-admission-binding",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "830c0eb6d34f17238640e552d4ecd20c5af012155ba6fb489e22005fd3ed0561",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "b3c6e90c9df2f76a8d1d376b609e7b3b9465cf663e85aadad04608548c29e2a8",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-dag-sync-fabric-admission-binding/design.md"
+        },
+        {
+          "content_hash": "9d911f3a3d2326645d6e0bbf9ece50f4c3db38ad1f6a38577c752c824b82f8b1",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-dag-sync-fabric-admission-binding/evidence/2026-10-30-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "29bdcd0d0828076c00f0d269a2b2b0924cb58582f13ccd8e4bfafcc6c2c2253f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-dag-sync-fabric-admission-binding/evidence/2026-10-30-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "6d913a395dca301a4e1b2a97fed7a955545016ec0f71ba21da40f97ef873205b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-dag-sync-fabric-admission-binding/evidence/2026-10-30-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "7a7078c9863f1fc35de50a7e9e6123cc992ab565c064069d460b5403ba2f6812",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-dag-sync-fabric-admission-binding/evidence/2026-10-30-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "3f314620bcf2cb8d80a3a80625fe07904517afbd4e8ad3d3a11b79b1f83909ec",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-dag-sync-fabric-admission-binding/evidence/2026-10-30-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "ff1a70d7b8fc1c3feaa7030292df9b4fbf4b9b059b98a9ce78237467efdc1adc",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-dag-sync-fabric-admission-binding/evidence/2026-10-30-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "56234be682d161db5f7c35d66ac420a419562a56428efa3fc472794c0ebc4249",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-dag-sync-fabric-admission-binding/evidence/2026-10-30-dag-owner-conformance-run.txt"
+        },
+        {
+          "content_hash": "39ec5a2159ca5885e84382f9a4883d0f325a1c30d0d7960c0a8b1949c66eda4b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-dag-sync-fabric-admission-binding/evidence/2026-10-30-verification.md"
+        },
+        {
+          "content_hash": "15acc4caf9cbc99ae6b516652ee8ee7cea65bb95c085982bf12e4da5d2b788c1",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-dag-sync-fabric-admission-binding/metadata.json"
+        },
+        {
+          "content_hash": "f9238e5d103730b84a9ebd19bb17fac0e0944c86fe2adc7b2074598090cd39fc",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-dag-sync-fabric-admission-binding/proposal.md"
+        },
+        {
+          "content_hash": "6e929f538f443d17034aa3a79173b05777a67d196cec33d543ddcaa3d452d6cf",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-dag-sync-fabric-admission-binding/review.md"
+        },
+        {
+          "content_hash": "cc78ac7f72c0cb477aeb3709ac39cac4c7a433c7e1cbbe0da93ac6e8e50a01d9",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-dag-sync-fabric-admission-binding/specs/dag-sync/spec.md"
+        },
+        {
+          "content_hash": "21cf4ab7748d3c4d2d8854e068fecf2b47c4394dbf84196dcb00bff5377bd312",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-dag-sync-fabric-admission-binding/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/dag-sync-fabric-admission-binding"
+        }
+      ],
+      "manifest_hash": "cc811c959909031028dfda66f2fab2193f2f8a19be2269ba1e2436b04d3c6792"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "b3c6e90c9df2f76a8d1d376b609e7b3b9465cf663e85aadad04608548c29e2a8",
+          "exists": true,
+          "path": "./.cairn/changes/dag-sync-fabric-admission-binding/design.md"
+        },
+        {
+          "content_hash": "9d911f3a3d2326645d6e0bbf9ece50f4c3db38ad1f6a38577c752c824b82f8b1",
+          "exists": true,
+          "path": "./.cairn/changes/dag-sync-fabric-admission-binding/evidence/2026-10-30-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "29bdcd0d0828076c00f0d269a2b2b0924cb58582f13ccd8e4bfafcc6c2c2253f",
+          "exists": true,
+          "path": "./.cairn/changes/dag-sync-fabric-admission-binding/evidence/2026-10-30-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "6d913a395dca301a4e1b2a97fed7a955545016ec0f71ba21da40f97ef873205b",
+          "exists": true,
+          "path": "./.cairn/changes/dag-sync-fabric-admission-binding/evidence/2026-10-30-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "7a7078c9863f1fc35de50a7e9e6123cc992ab565c064069d460b5403ba2f6812",
+          "exists": true,
+          "path": "./.cairn/changes/dag-sync-fabric-admission-binding/evidence/2026-10-30-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "3f314620bcf2cb8d80a3a80625fe07904517afbd4e8ad3d3a11b79b1f83909ec",
+          "exists": true,
+          "path": "./.cairn/changes/dag-sync-fabric-admission-binding/evidence/2026-10-30-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "ff1a70d7b8fc1c3feaa7030292df9b4fbf4b9b059b98a9ce78237467efdc1adc",
+          "exists": true,
+          "path": "./.cairn/changes/dag-sync-fabric-admission-binding/evidence/2026-10-30-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "56234be682d161db5f7c35d66ac420a419562a56428efa3fc472794c0ebc4249",
+          "exists": true,
+          "path": "./.cairn/changes/dag-sync-fabric-admission-binding/evidence/2026-10-30-dag-owner-conformance-run.txt"
+        },
+        {
+          "content_hash": "39ec5a2159ca5885e84382f9a4883d0f325a1c30d0d7960c0a8b1949c66eda4b",
+          "exists": true,
+          "path": "./.cairn/changes/dag-sync-fabric-admission-binding/evidence/2026-10-30-verification.md"
+        },
+        {
+          "content_hash": "15acc4caf9cbc99ae6b516652ee8ee7cea65bb95c085982bf12e4da5d2b788c1",
+          "exists": true,
+          "path": "./.cairn/changes/dag-sync-fabric-admission-binding/metadata.json"
+        },
+        {
+          "content_hash": "f9238e5d103730b84a9ebd19bb17fac0e0944c86fe2adc7b2074598090cd39fc",
+          "exists": true,
+          "path": "./.cairn/changes/dag-sync-fabric-admission-binding/proposal.md"
+        },
+        {
+          "content_hash": "6e929f538f443d17034aa3a79173b05777a67d196cec33d543ddcaa3d452d6cf",
+          "exists": true,
+          "path": "./.cairn/changes/dag-sync-fabric-admission-binding/review.md"
+        },
+        {
+          "content_hash": "cc78ac7f72c0cb477aeb3709ac39cac4c7a433c7e1cbbe0da93ac6e8e50a01d9",
+          "exists": true,
+          "path": "./.cairn/changes/dag-sync-fabric-admission-binding/specs/dag-sync/spec.md"
+        },
+        {
+          "content_hash": "21cf4ab7748d3c4d2d8854e068fecf2b47c4394dbf84196dcb00bff5377bd312",
+          "exists": true,
+          "path": "./.cairn/changes/dag-sync-fabric-admission-binding/tasks.md"
+        }
+      ],
+      "manifest_hash": "78b2052e7517627b49ea1db6d8c4763dd1b7a521d998eabfcdbd1fe94d5be456"
+    },
+    "kind": "archive",
+    "manifest_hash": "6dd333a608423d8daeb04edca376cb93565d5447ea7a77221e8812b7c64cb27f"
+  },
+  "plan_hash": "48b37c2509329015eb40d4c4d58860f7895254701eea4713bc530ab24f5b2306",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "reasons": [],
+  "receipt_hash": "ebecdeda54741ed21ed1c80a98d989ab55f3d1259cf661edeb79c0f29395f5bc"
+}

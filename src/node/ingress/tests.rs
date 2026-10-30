@@ -58,9 +58,8 @@ impl Case {
     }
 
     fn start_fixture(&self) {
-        // The repository's explicit local fixture uses synthetic source-gate evidence.
-        // It is not release/startup-policy evidence for F03.
-        run_local_with_root(&self.reopen()).expect("synthetic local startup fixture");
+        // Explicit cfg(test) fixture source; not release/startup-policy evidence for F03.
+        run_local_with_root_fixture_for_tests(&self.reopen()).expect("synthetic local startup fixture");
     }
 
     fn dedup(&self) -> crate::delivery_idempotency::Decision {

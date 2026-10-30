@@ -1,0 +1,150 @@
+{
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/pilot-marble-object-store/specs/marble-object-store/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/pilot-marble-object-store/specs/marble-object-store/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "pilot-marble-object-store",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/pilot-marble-object-store/specs/marble-object-store/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "3ad083b1214a6936069d963f7a193cc7935f28ab96e1fc9c20291542cbe18dd4",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "c0fd6d85e92b47eab41fc199027dcb1f41c44427632f73b169ff8f222b16a3ab",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "7b42341ceb352238f937dba6932e485fd2967217dd14eade43bd7fb6f3c025b1",
+        "destination": ".cairn/specs/marble-object-store/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "c699f98dcd2389ed3fdfdd961638f8fb31b730476111102dbbb6dac4e146196c",
+        "operations": [
+          {
+            "block_hash": "1dba73ec032d48efeac88beeeac52339a537e5bad3abf12f0cc7c896950ec3ab",
+            "heading": "### Requirement: The backend stays seam-bound and reversible",
+            "kind": "added",
+            "requirement_id": "aspen.marble_store.spike"
+          },
+          {
+            "block_hash": "90aa1785d8cb4af7755f6fadf9b01beafc13ad839a290be98ebbb6f3f5ea9337",
+            "heading": "### Requirement: BLAKE3 stays the only content identity",
+            "kind": "added",
+            "requirement_id": "aspen.marble_store.identity"
+          },
+          {
+            "block_hash": "104ad7d135aec4abd1367a2545d6b6ccd7f3e527cf24c18f8276a545092229c0",
+            "heading": "### Requirement: The art index covers fixed-length digests",
+            "kind": "added",
+            "requirement_id": "aspen.marble_store.art_index"
+          },
+          {
+            "block_hash": "c47017d947151e27b89e5e82a7d2c70bd39d2a0e6200048148ee24dc74aefe18",
+            "heading": "### Requirement: Revisions are pinned",
+            "kind": "added",
+            "requirement_id": "aspen.marble_store.pinning"
+          },
+          {
+            "block_hash": "25bdd99599357b8dc62eb71b8490ab76246013812478d3476acd0a561076a5a3",
+            "heading": "### Requirement: Claims stay bounded",
+            "kind": "added",
+            "requirement_id": "aspen.marble_store.boundary"
+          },
+          {
+            "block_hash": "e2d978d265cb59771495e5a5963319663b7fbfcefe92f9c53435e516f9052ecb",
+            "heading": "### Requirement: The spike is verified",
+            "kind": "modified",
+            "requirement_id": "aspen.marble_store.verification"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "aspen.marble_store.spike",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "aspen.marble_store.identity",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "aspen.marble_store.art_index",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "aspen.marble_store.pinning",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "aspen.marble_store.boundary",
+            "state": "already_applied"
+          },
+          {
+            "kind": "modified",
+            "requirement_id": "aspen.marble_store.verification",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/pilot-marble-object-store/specs/marble-object-store/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "c699f98dcd2389ed3fdfdd961638f8fb31b730476111102dbbb6dac4e146196c",
+          "exists": true,
+          "path": "./.cairn/specs/marble-object-store/spec.md"
+        }
+      ],
+      "manifest_hash": "4cd70e182872017a8ce56d1a41918f8f62be05fdd101e148670d0a03a5bbc223"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "c0fd6d85e92b47eab41fc199027dcb1f41c44427632f73b169ff8f222b16a3ab",
+          "exists": true,
+          "path": "./.cairn/specs/marble-object-store/spec.md"
+        }
+      ],
+      "manifest_hash": "30b381ca778b11d93ad067fcc493df8c8c75a3217629520cb087fc92ffa37a4f"
+    },
+    "kind": "sync",
+    "manifest_hash": "2382bab63063ec27e898f383746cfd8451ce54c056d4903f966475e800991f19"
+  },
+  "plan_hash": "1bdbf0db637e9ec64e48ce8391b1cc6dbd90ba5aa473ab02022f2bff29bbd498",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "reasons": [],
+  "receipt_hash": "c80cd9a627ee11bd9c39ac9c2a0270455956f8d170f94240c039bdf0c4b6ed10"
+}

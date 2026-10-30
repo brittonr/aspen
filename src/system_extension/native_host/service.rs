@@ -7,3 +7,4 @@ use super::super::*;
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/system_extension/native_host/parts/service/p000/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/system_extension/native_host/parts/service/p001/body.rs"));
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/system_extension/native_host/parts/service/p002/body.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/system_extension/native_host/material.rs"));

@@ -16,31 +16,24 @@ pub struct IrohExperimentAdoptionFixture {
 pub fn iroh_experiment_adoption_fixture() -> Result<IrohExperimentAdoptionFixture> {
     let subject_ref = adoption_fixture_ref("subject");
     let evidence_ref = adoption_fixture_ref("evidence");
-    let locator = crate::federation::locator_announcement(&crate::federation::LocatorAnnouncementInput {
-        peer_ref: "peer:iroh-adoption",
-        signer: "peer:iroh-adoption",
-        subject_ref: &subject_ref,
-        availability: "complete",
-        freshness: "fresh",
+    let peer = molten_core::federation::PeerHint {
+        peer_ref: adoption_fixture_ref("peer"), signer_ref: adoption_fixture_ref("signer"),
+        source: molten_core::federation::LocatorSource::Endpoint,
+        observed_at: 1, expires_at: 10, available: true,
+    };
+    let locator = crate::federation::hints::observe_locator(crate::federation::hints::LocatorInput {
+        peer: &peer, subject_ref: &subject_ref, now: 2,
         evidence_refs: std::slice::from_ref(&evidence_ref),
     })?;
-    let locator_denial = crate::federation::admit_locator_import(&crate::federation::LocatorAdmissionInput {
-        locator_refs: std::slice::from_ref(&locator.evidence_ref),
-        fetched_ref: None,
-        verification_refs: &[],
-        admission_refs: &[],
-        authority_refs: &[],
-        policy_refs: &[],
-        resource_refs: &[],
-    })?;
+    let locator_denial = crate::federation::hints::reject_locator_import(&locator)?;
     let traversal = adoption_traversal(&subject_ref, &evidence_ref)?;
     let digest = adoption_digest(std::slice::from_ref(&evidence_ref))?;
     let traversal_receipt_ref = crate::preserves_rail::canonical_hash(&traversal.receipt_value)?;
     let digest_receipt_ref = crate::preserves_rail::canonical_hash(&digest.receipt_value)?;
     let locator_denial_ref = crate::preserves_rail::canonical_hash(&locator_denial.value)?;
     let mut diagnostics = Vec::new();
-    if locator.decision != PASS_DECISION {
-        diagnostics.push("locator fixture did not pass".to_string());
+    if locator.decision != "hint-only" {
+        diagnostics.push("locator fixture did not remain hint-only".to_string());
     }
     if locator_denial.decision != DENY_DECISION {
         diagnostics.push("locator-only denial fixture did not deny".to_string());

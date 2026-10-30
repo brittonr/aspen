@@ -40,6 +40,14 @@ Node-runtime maintainers own startup composition. Octet integration maintainers 
 
 F01 owns shutdown admission. F14 owns current-run observations and can share startup identity facts after this evidence contract is clear. F03 owns ingress publication. Review shared fixture changes first without circular package dependencies.
 
+## Authorized prerequisite and exact producer boundary
+
+The user authorized prerequisite implementation on 2026-10-29. The governed prerequisite is `produce-exact-node-startup-binding`: Molten owns the candidate profile and admission; Nix owns build realization and signed NAR authentication; Octet owns source-check evidence only. Candidate and gate builders receive one immutable source. The detached binding measures actual compiled ELF bytes, complete candidate derivation input closure, source/toolchain NAR bytes, policy/profile and full retained primary/library cohorts. A reviewed real strict gate must pass before producer output exists.
+
+The operator independently selects one full public key authorized for that producer profile and the exact binding/policy/profile identities in protected node-root `source-gate-trust.json`. Neither evidence-carried keys, unsigned matching refs, local-build trust nor content-addressed trust can authorize fresh startup. The shell invokes an explicitly approved verifier, verifies actual output content and signature, remeasures `/proc/self/exe` and retained artifact bytes, and calls the pure bounded admission core before any destructive restart preparation or lifecycle write. The source token grants no hosting or activation authority.
+
+Normal compatibility paths share this loader. Only cfg(test) explicit fixture constructors can emit synthetic source composition, using a distinct fixture-validation schema. Version-1 real-binding validation refs and exact binding refs are retained in startup receipts; historical startup receipts remain readable without promotion during replay. See the [cutover evidence boundary](evidence/2026-10-29-producer-cutover.md) and [operator refresh procedure](../../../docs/node-state-filesystem-authority.md#startup-source-evidence-and-operator-refresh). Real producer execution, independent signing and the normal positive control remain required acceptance evidence; authored code or tests are not that evidence.
+
 ## Nonclaims
 
 Passing Octet evidence is not production readiness, runtime authority, complete binary correctness, or proof of live adapter behavior. This document records a plan, not execution or implementation approval.

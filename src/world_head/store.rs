@@ -76,6 +76,7 @@ impl WorldHeadStatePort for LocalWorldHeadStore {
         F: FnOnce(Option<&WorldHeadState>) -> std::result::Result<WorldHeadFreshAdmission, WorldHeadPortError>,
     {
         let write = self.database.begin_write().map_err(port_store_error)?;
+        require_local_profile(&write, plan.after.branch_id.as_str())?;
         let observed = {
             let table = write.open_table(WORLD_HEADS_TABLE).map_err(port_store_error)?;
             table
@@ -192,6 +193,8 @@ fn initialize_tables(database: &redb::Database) -> Result<()> {
         write.open_table(WORLD_HEAD_TRANSITIONS_TABLE).map_err(store_error)?;
         write.open_table(WORLD_HEAD_CONFLICTS_TABLE).map_err(store_error)?;
         write.open_table(WORLD_HEAD_UNCERTAIN_TABLE).map_err(store_error)?;
+        write.open_table(crate::world_witness::store::HIGHEST).map_err(store_error)?;
+        write.open_table(crate::world_witness::store::REQUIRED).map_err(store_error)?;
     }
     write.commit().map_err(store_error)
 }
@@ -227,4 +230,18 @@ fn port_store_error(error: impl std::fmt::Display) -> WorldHeadPortError {
 
 fn port_molten_error(error: Failure) -> WorldHeadPortError {
     WorldHeadPortError::new("world-head-codec", error.to_string())
+}
+
+fn require_local_profile(write: &redb::WriteTransaction, branch: &str) -> std::result::Result<(), WorldHeadPortError> {
+    let highest = write.open_table(crate::world_witness::store::HIGHEST).map_err(port_store_error)?;
+    let required = write.open_table(crate::world_witness::store::REQUIRED).map_err(port_store_error)?;
+    if highest.get(branch).map_err(port_store_error)?.is_some()
+        || required.get(branch).map_err(port_store_error)?.is_some()
+    {
+        return Err(WorldHeadPortError::new(
+            "witness-profile-downgrade",
+            "retained independent witness state requires witnessed finalization",
+        ));
+    }
+    Ok(())
 }

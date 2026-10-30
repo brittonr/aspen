@@ -3,6 +3,7 @@
         sync: &JobSync,
         admission: &JobAdmission,
         worker_request: PathBuf,
+        source: &JobSenderSource,
     ) {
         let stale_schedule_out = setup.dir.join("job-worker-stale-schedule");
         run_job_command(JobCommand::WorkerScheduleLocal(cli_job::command::worker::ScheduleLocal {
@@ -22,6 +23,7 @@
             from_peer: "peer:source".to_string(),
             from_actor: "source-worker".to_string(),
             topic: "molten.job.worker".to_string(),
+            source: source.args(),
             coordination_authority_refs: vec![sync.context_ref.clone()],
             coordination_resource_refs: sync.worker_resource_refs.clone(),
             coordination_policy_refs: vec![cli_synthetic_ref("job-worker-stale-policy").expect("stale policy")],

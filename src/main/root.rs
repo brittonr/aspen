@@ -61,6 +61,12 @@ pub(crate) fn run() -> molten::error::Result<()> {
         Some(command::Top::Dogfood { command }) => crate::cli_dogfood::run_dogfood_command(command),
         Some(command::Top::Receipts { command }) => crate::cli_receipts::run_receipts_command(command),
         Some(command::Top::Node { command }) => crate::cli_node::run(command),
+        Some(command::Top::Reliability { command }) => crate::cli_reliability::run(command),
+        Some(command::Top::Federation { command }) => crate::cli_federation::run(command),
+        #[cfg(feature = "spacewasm-pilot")]
+        Some(command::Top::Spacewasm { command }) => crate::cli_pilots::spacewasm::run(command),
+        #[cfg(feature = "component-rpc")]
+        Some(command::Top::ComponentRpc { command }) => crate::cli_pilots::componentrpc::run(command),
         Some(command::Top::Peer { command }) => crate::cli_peer::run(command),
         Some(command::Top::Runtime { command }) => run_runtime_command(command),
         Some(command::Top::FabricTime { command }) => crate::cli_fabric_time::run_command(command),

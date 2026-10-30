@@ -1,0 +1,12 @@
+{
+  "schema_version": "ucan-nickel-contracts.policy.v1",
+  "backends": {},
+  "contracts": {
+    "component-rpc-unary-v1": {
+      "id": "component-rpc-unary-v1",
+      "description": "Experimental bounded hello invocation; no production or protocol replacement authority.",
+      "abilities": ["component-rpc/invoke"],
+      "resource_prefixes": ["urn:molten:component-rpc:"]
+    }
+  }
+}

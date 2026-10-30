@@ -112,6 +112,23 @@ impl Scope {
         })
     }
 
+    /// Narrow to an existing optional child without preparing its filesystem.
+    pub fn existing_subdir(&self, path: &super::locator::RelativePath) -> crate::error::Result<Option<Self>> {
+        match super::filesystem::entry_kind_optional(&self.dir, path.as_path())? {
+            None => return Ok(None),
+            Some(super::authority::EntryKind::Directory) => {}
+            Some(_) => return Err(super::invalid("supplied child namespace must be an owned directory")),
+        }
+        let scope = super::locator::join_scope(&self.scope, path)?;
+        let dir = super::filesystem::open_dir_components(&self.dir, path.as_path())?;
+        Ok(Some(Self {
+            root: std::sync::Arc::clone(&self.root),
+            kind: self.kind,
+            scope,
+            dir,
+        }))
+    }
+
     pub fn read_entry(&self, entry: &Entry, max_bytes: u64) -> crate::error::Result<Vec<u8>> {
         self.validate_entry(entry)?;
         if entry.kind != super::authority::EntryKind::RegularFile {

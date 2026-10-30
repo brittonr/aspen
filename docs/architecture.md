@@ -33,6 +33,10 @@ Long-running protocol and distributed-service implementations run through the se
 
 The pure core plans generation-fenced lifecycle transitions, callback admission, deadlines/cancellation, overload behavior, typed effects, restart/quarantine, and state migration. The shell invokes admitted native or sandboxed code, validates its output before releasing typed port requests, accounts resources, and emits canonical lifecycle/callback/status evidence. Upgrade and rollback create new generations so delayed work from an old implementation cannot mutate current state. Native execution is trusted and is not a sandbox; the no-WASI Wasmtime fixture proves bounded callback invocation only, not production isolation or semantic correctness.
 
+The public `node service-host` boundary loads bounded canonical native admission bundles through `node_service_host`, validates the opaque startup source gate before effects, verifies a current holder-signed UCAN/Basalt load request against independently provisioned operator trust, and reconstructs durable native supervisors before host orchestration. Measured executable/workspace handles stay alive across callbacks. Exact operation authority remains separate from source/bundle admission; public status does not project credential or payload material. See [public service-host admission](system-extension-runtime.md#public-node-service-host-admission).
+
+Installed native collaboration effects use the separately governed [admitted native effect runtime](native-effect-runtime.md): explicit exact service/port/group/generation/policy/resource configuration, independent current install/route grants, a retained real scope replica/application, native intent recording, actual committed-state observation and materialized completion callbacks. Queue acceptance and callback success are not commits. Missing configuration and any post-effect uncertainty remain fail-closed/unresolved without implicit retries; source trust never grants effect authority.
+
 Recovery-group supervision is admitted per system extension: an ordered member set with restart classes, an elapsed-time window and source ref, backoff, and member/group budgets. The pure planner returns an ordered stop/restart/quarantine/escalate plan over supplied bounded history. Permanent members restart within budget, transient members stop on success and restart only abnormal retryable exits, and temporary members stop on success. Supplied history keeps windowed budgets across supervisor replacement; planning is advisory and does not prove restart success.
 
 The optional [content-replication extension](content-replication.md) derives current availability from admitted inventory and retains per-content deficits independently of executable actions. Historical transfer success cannot hide same-epoch loss: a fresh bounded repair needs fresh verification, while exact-operation replay retains only its original outcome. Cleanup preserves replica and fault-domain minima in the cumulative remainder; the shell separately admits deletion and cannot publish completion for unresolved demand or cleanup.
@@ -598,6 +602,37 @@ Persistence must preserve authority graphs. Object snapshots should not be able 
 | Capability enforcement | Basalt / UCAN |
 | Receipts and audit evidence | Cairn + Octet/Valence |
 | Tamper-evident evidence continuity | Scoped chain hashing + Trellis predicates |
+
+## Startup source binding, hosting, and pilot adapters
+
+Normal node startup (`node run`, `run-loop`, `serve`) admits the current executable before
+layout, restart or lifecycle effects. The loader reads an independently provisioned
+`source-gate-trust.json`, authenticates the signed Nix producer output with the selected key
+through an environment-cleared daemon-store verifier, rehashes every store root in the six
+measured closure graphs (candidate and Octet gate build, compiler and runtime) in bounded
+batches, re-measures the retained Octet cohorts, policy and profile, and requires
+`/proc/self/exe` to equal the bound ELF. Only that path yields the opaque
+`ValidatedNodeSourceGate`; `verify_selected_node_output_with_root` checks a selected output
+for authoring without granting current-process admission. Source admission grants no group,
+port, observer or effect authority. See `docs/node-state-filesystem-authority.md`.
+
+`node service-host` loads an operator-signed native bundle into `node_service_host` and
+retains the installed host across the actual long-lived node loop. `node_service_hosting`
+owns capability-rooted group, member, work and claim state, ordered intent-before-effect
+lifecycle, fenced restart and explicit cross-generation migration. Effects returned by
+native callbacks are routed only through an explicitly configured effect runtime.
+
+`test remote session` exposes the receiver-owned recorded session source. Envelope build,
+local publication and job workers consult one generation-bound view of initialized sender
+and receiver roots; refusals are emitted as canonical denial receipts. A local recording is
+not evidence of a remote peer's knowledge.
+
+`reliability` hosts the bounded live register client, checker import, experimental operator
+provisioning and the readiness verifier used by OnixOS. `federation` exposes the actual
+two-process pull fixture and offline detached verification. `world_witness` binds world-head
+finalization to a fresh signed external highest-state query from the separately published
+release-channel index provider. `spacewasm` and `component-rpc` are optional features with
+their own runtime cohorts; neither is default or production-admitted.
 
 ## Roadmap Cairn changes
 

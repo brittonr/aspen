@@ -1,3 +1,6 @@
+#[path = "worker/introduction.rs"]
+mod introduction;
+
 type RequestCommand = super::command::worker::Request;
 type RunLocalCommand = super::command::worker::RunLocal;
 type ScheduleLocalCommand = super::command::worker::ScheduleLocal;
@@ -31,6 +34,7 @@ pub(super) struct RunInput<'a> {
     pub(super) from_peer: &'a str,
     pub(super) from_actor: &'a str,
     pub(super) topic: &'a str,
+    pub(super) source: &'a crate::cli_remote::session::SourceArgs,
     pub(super) ledger_root: Option<&'a FsPath>,
     pub(super) out: &'a FsPath,
 }
@@ -79,6 +83,7 @@ pub(crate) fn run_local(args: RunLocalCommand) -> Result<(), CliError> {
         from_peer: &args.from_peer,
         from_actor: &args.from_actor,
         topic: &args.topic,
+        source: &args.source,
         ledger_root: args.ledger.as_deref(),
         out: &args.out,
     })?;
@@ -167,20 +172,44 @@ fn evidence_refs(
 
 pub(super) fn run_local_execution(input: RunInput<'_>) -> Result<JobWorkerExecution, CliError> {
     let request = molten::job_dag::parse_job_worker_request_value(input.request_value)?;
-    let envelope = molten::job_dag::job_worker_envelope(molten::job_dag::JobWorkerEnvelopeInput {
-        from_peer: input.from_peer,
-        from_actor: input.from_actor,
-        to_peer: &request.target_peer,
-        topic: input.topic,
-        request_value: input.request_value,
-    })?;
-    let published = molten::remote_dataspace::publish_local_gossip(input.transport_root, &envelope, input.from_peer)?;
+    let source = crate::cli_remote::session::source(input.source)?;
+    let view = source.as_ref().map(|source| source.view(input.topic)).transpose()?;
+    let built = molten::job_dag::job_worker_envelope_with_evidence(
+        molten::job_dag::JobWorkerEnvelopeInput {
+            from_peer: input.from_peer,
+            from_actor: input.from_actor,
+            to_peer: &request.target_peer,
+            topic: input.topic,
+            request_value: input.request_value,
+        },
+        view.as_ref(),
+    )?;
+    let envelope = match built {
+        molten::remote_dataspace::EnvelopeBuild::Built(envelope) => *envelope,
+        molten::remote_dataspace::EnvelopeBuild::Denied { receipt_value, .. } => {
+            return introduction::refuse_sender(input.out, &receipt_value);
+        }
+    };
+    let published = match molten::remote_dataspace::publish_local_gossip_with_evidence(
+        input.transport_root,
+        &envelope,
+        input.from_peer,
+        view.as_ref(),
+    )? {
+        molten::remote_dataspace::EnvelopePublication::Published(published) => published,
+        molten::remote_dataspace::EnvelopePublication::Denied { receipt_value } => {
+            return introduction::refuse_sender(input.out, &receipt_value);
+        }
+    };
     let delivery = molten::remote_dataspace::deliver_local_gossip(
         input.transport_root,
         input.topic,
         &envelope.envelope_ref,
         &request.target_peer,
     )?;
+    if let Some(source) = source.as_ref() {
+        introduction::receive(input.out, source, &delivery.envelope)?;
+    }
     let delivery_log = molten::remote_dataspace::delivery_log(std::slice::from_ref(&delivery), true)?;
     let executed = molten::job_dag::execute_worker_delivery(molten::job_dag::JobWorkerExecuteInput {
         target_registry: input.target_registry,

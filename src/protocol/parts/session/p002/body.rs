@@ -230,9 +230,12 @@ pub fn offer_protocol_branch(input: ProtocolBranchOperationInput) -> Result<Prot
     pass_operation("offer", &state, None, &next_state, gates)
 }
 
-pub fn protocol_message_remote_envelope(input: ProtocolRemoteEnvelopeInput) -> Result<Envelope> {
+pub fn protocol_message_remote_envelope_with_evidence(
+    input: ProtocolRemoteEnvelopeInput,
+    session: Option<&crate::remote_dataspace::SenderSessionView<'_>>,
+) -> Result<crate::remote_dataspace::EnvelopeBuild> {
     let message = parse_protocol_message(&input.message)?;
-    build_remote_envelope(EnvelopeInput {
+    crate::remote_dataspace::build_envelope_with_evidence(EnvelopeInput {
         from_peer: input.from_peer,
         from_actor: input.from_actor,
         to_peer: input.to_peer,
@@ -242,7 +245,7 @@ pub fn protocol_message_remote_envelope(input: ProtocolRemoteEnvelopeInput) -> R
         content_refs: Vec::new(),
         capability_refs: input.capability_refs,
         evidence_refs: input.evidence_refs,
-    })
+    }, session)
 }
 
 pub fn parse_protocol_install_receipt(value: &IoValue) -> Result<ProtocolInstallReceipt> {

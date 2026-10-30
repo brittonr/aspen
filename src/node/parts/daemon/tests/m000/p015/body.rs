@@ -28,7 +28,7 @@
             node_id: "node:loop",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local_fixture_for_tests(&RunInput { state_root: &root }).expect("run node");
         let status_request = status_request().expect("status request");
         submit_control_request(&ControlSubmitInput {
             state_root: &root,
@@ -100,7 +100,7 @@
             node_id: "node:shutdown-current-run",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("start first run");
+        run_local_fixture_for_tests(&RunInput { state_root: &root }).expect("start first run");
         let request = shutdown_request().expect("shutdown request");
         submit_control_request(&ControlSubmitInput {
             state_root: &root,
@@ -121,7 +121,7 @@
             .iter()
             .map(|path| std::fs::read(path).expect("first shutdown adapter receipt"))
             .collect::<Vec<_>>();
-        run_local(&RunInput { state_root: &root }).expect("start second run");
+        run_local_fixture_for_tests(&RunInput { state_root: &root }).expect("start second run");
         let active_lock = std::fs::read(root.join(CONTROL_LOCK_FILE)).expect("second run lock");
         submit_control_request(&ControlSubmitInput {
             state_root: &root,
@@ -152,7 +152,7 @@
             node_id: "node:duplicate",
         })
         .expect("init node");
-        run_local(&RunInput { state_root: &root }).expect("run node");
+        run_local_fixture_for_tests(&RunInput { state_root: &root }).expect("run node");
         let status_request = status_request().expect("status request");
         let submitted = submit_control_request(&ControlSubmitInput {
             state_root: &root,

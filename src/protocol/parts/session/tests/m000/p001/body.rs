@@ -1,40 +1,4 @@
 
-    #[test]
-    fn protocol_message_semantics_are_transport_neutral() {
-        let lifecycle = request_response_lifecycle().expect("lifecycle");
-        let server = lifecycle.initial_states[1].clone();
-        let request = lifecycle.operations[0].message.as_ref().expect("request").clone();
-        let local = receive_protocol_message(ProtocolReceiveInput {
-            state: server.value.clone(),
-            message: request.value.clone(),
-            authority_refs: auth(),
-            resource_refs: resources(),
-            carrier_refs: Vec::new(),
-        })
-        .expect("local receive");
-        let envelope = protocol_message_remote_envelope(ProtocolRemoteEnvelopeInput {
-            from_peer: "peer:a".to_string(),
-            from_actor: "client".to_string(),
-            to_peer: "peer:b".to_string(),
-            topic: "protocols".to_string(),
-            message: request.value,
-            capability_refs: vec![test_ref("capability")],
-            evidence_refs: vec![test_ref("carrier-evidence")],
-        })
-        .expect("remote envelope");
-        let remote = receive_protocol_message(ProtocolReceiveInput {
-            state: server.value,
-            message: envelope.payload,
-            authority_refs: auth(),
-            resource_refs: resources(),
-            carrier_refs: vec![envelope.envelope_ref],
-        })
-        .expect("remote receive");
-        assert_eq!(
-            local.next_state.expect("local next").local_state,
-            remote.next_state.expect("remote next").local_state
-        );
-    }
 
     #[test]
     fn ledger_catalog_and_mcp_classify_protocol_records() {

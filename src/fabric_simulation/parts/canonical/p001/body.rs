@@ -181,7 +181,7 @@ pub fn parse_run_readback(value: &preserves::IOValue) -> crate::error::Result<Ru
     })
 }
 
-fn world_value(world: &SimulatedWorldManifest) -> preserves::IOValue {
+pub(super) fn world_value(world: &SimulatedWorldManifest) -> preserves::IOValue {
     crate::preserves_rail::record("fabric-simulation-world-v1", vec![
         crate::preserves_rail::string(FABRIC_SIMULATION_WORLD_SCHEMA),
         field("runtime-ref", crate::preserves_rail::string(&world.runtime_ref)),

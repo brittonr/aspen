@@ -1,10 +1,8 @@
 # SpaceWasm Core Runtime Pilot Specification
 
-## Purpose
-
 Evaluate one exact SpaceWasm cohort as a non-default Molten core-module runtime for the existing canonical Preserves ABI and deterministic segmented actor turns without implying component support, portable state, or production readiness.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: SpaceWasm execution uses an explicit pilot profile
 

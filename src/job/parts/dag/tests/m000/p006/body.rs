@@ -129,15 +129,21 @@
         target_peer: &str,
         replayable: bool,
     ) -> (crate::remote_dataspace::Delivery, crate::remote_dataspace::DeliveryLog) {
-        let envelope = job_worker_envelope(JobWorkerEnvelopeInput {
-            from_peer: "peer:a",
-            from_actor: "source-worker",
-            to_peer: target_peer,
-            topic: "molten.job.worker",
-            request_value,
+        // These are incoming receiver fixtures, not sender admission evidence.
+        let request = parse_job_worker_request_value(request_value).expect("worker request");
+        let envelope = crate::remote_dataspace::incoming_envelope_fixture(crate::remote_dataspace::EnvelopeInput {
+            from_peer: "peer:a".to_owned(),
+            from_actor: "source-worker".to_owned(),
+            to_peer: target_peer.to_owned(),
+            topic: "molten.job.worker".to_owned(),
+            operation: crate::remote_dataspace::Operation::Message,
+            payload: request_value.clone(),
+            content_refs: Vec::new(),
+            capability_refs: request.authority_refs,
+            evidence_refs: request.evidence_refs,
         })
         .expect("worker envelope");
-        crate::remote_dataspace::publish_local_gossip(transport_root, &envelope, "peer:a")
+        crate::remote_dataspace::incoming_publish_fixture(transport_root, &envelope, "peer:a")
             .expect("publish worker request");
         let delivery = crate::remote_dataspace::deliver_local_gossip(
             transport_root,

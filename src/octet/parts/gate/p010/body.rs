@@ -1,3 +1,30 @@
+fn octet_source_gate_requirement_value(
+    consumer: &str,
+    subject_ref: &str,
+    source_scope: &[String],
+    expected: Option<&ExpectedMetadata>,
+    checks: &[Check],
+) -> IoValue {
+    record("octet-source-gate-requirement-v1", vec![
+        string(crate::preserves_rail::OCTET_SOURCE_GATE_REQUIREMENT_SCHEMA),
+        record("consumer", vec![string(consumer)]),
+        record("subject", vec![string(subject_ref)]),
+        record("required-profile", vec![string(STRICT_PROFILE)]),
+        record("source-scope", vec![sequence(source_scope.iter().map(string).collect())]),
+        record("current-config", vec![optional_ref(expected.map(|metadata| metadata.config_hash.as_str()))]),
+        record("current-profile", vec![optional_ref(expected.map(|metadata| metadata.profile_hash.as_str()))]),
+        record("required-evidence", vec![sequence(vec![
+            string("status"),
+            string("summary"),
+            string("structured-findings"),
+            string("object-corpus"),
+            string("fingerprint"),
+        ])]),
+        record("freshness", vec![string("same-workspace-metadata")]),
+        checks_value(checks),
+    ])
+}
+
 fn source_scope_in_configured_inventory(source_scope: &[String]) -> bool {
     source_scope.iter().all(|required| {
         SOURCE_GATE_SOURCE_SCOPE_PATHS

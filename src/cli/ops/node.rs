@@ -24,6 +24,7 @@ pub(crate) fn run(command: Command) -> molten::error::Result<()> {
         command::Top::Run(input) => lifecycle::run(input),
         command::Top::RunLoop(input) => lifecycle::run_loop(input),
         command::Top::Serve(input) => lifecycle::serve(input),
+        command::Top::ServiceHost { command } => molten::node_service_host::command::run(command),
         command::Top::Status(input) => lifecycle::status(input),
         command::Top::ControlHistory(input) => lifecycle::control_history(input),
         command::Top::Stop(input) => lifecycle::stop(input),

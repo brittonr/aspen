@@ -86,7 +86,7 @@ where
 
 struct IntentRecordingEffectPort<'a, E, J>
 where
-    E: FabricEffectPort,
+    E: FabricEffectPort + ?Sized,
     J: NativeHostJournal,
 {
     profile: &'a AdmittedNativeHostProfile,
@@ -97,7 +97,7 @@ where
 
 impl<E, J> FabricEffectPort for IntentRecordingEffectPort<'_, E, J>
 where
-    E: FabricEffectPort,
+    E: FabricEffectPort + ?Sized,
     J: NativeHostJournal,
 {
     fn route(

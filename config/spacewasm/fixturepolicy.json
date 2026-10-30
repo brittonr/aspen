@@ -1,0 +1,12 @@
+{
+  "schema_version": "ucan-nickel-contracts.policy.v1",
+  "backends": {},
+  "contracts": {
+    "spacewasm-core-mvp-pilot": {
+      "id": "spacewasm-core-mvp-pilot",
+      "description": "Isolated real-signature pilot fixture authority; never normal actor authority.",
+      "abilities": ["assert", "send"],
+      "resource_prefixes": ["molten://spacewasm/fixture/"]
+    }
+  }
+}

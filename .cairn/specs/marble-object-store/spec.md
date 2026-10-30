@@ -70,10 +70,16 @@ r[aspen.marble_store.boundary] Documentation MUST state that the spike changes n
 
 ### Requirement: The spike is verified
 
-r[aspen.marble_store.verification] Positive and negative fixtures MUST cover round-trips, absent digests, interrupted batches, and exhaustion, with ChaosControl campaign references recorded.
+r[aspen.marble_store.verification] Positive and negative fixtures MUST cover round-trips, absent digests, interrupted batches, and exhaustion. ChaosControl campaign references MUST be recorded unless the spike retains the current backend and an explicit owner-approved rejected-spike exemption records the missing campaign, rationale, maintenance owner, revisit trigger, and non-claims. An exemption MUST NOT be used as campaign, hardware-durability, default-promotion, or production-admission evidence.
 
 #### Scenario: Complete matrix passes
 
-- GIVEN backend fixtures and recorded campaign references
+- GIVEN backend fixtures and required campaign references or an explicit rejected-spike exemption
 - WHEN package, workspace, Clippy, Cairn, and Nix checks run
 - THEN round-trips MUST hold and failure cases MUST classify as declared
+
+#### Scenario: A rejected spike closes without fabricated campaign evidence
+
+- GIVEN the measured decision retains the current backend and the owner explicitly approves a rejected-spike exemption
+- WHEN the exemption records the absent campaign, rationale, owner, revisit trigger, and bounded claim
+- THEN the spike MAY close without claiming a campaign ran, and any later default or production promotion MUST obtain its own required evidence

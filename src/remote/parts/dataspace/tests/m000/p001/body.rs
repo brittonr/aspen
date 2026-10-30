@@ -14,9 +14,9 @@
             content_refs: Vec::new(),
             capability_refs: vec![capability_ref.clone()],
             evidence_refs: vec![bootstrap_ref.clone()],
-        })
+        }, None)
         .expect("envelope");
-        publish_local_gossip(&root, &envelope, "peer:a").expect("publish");
+        publish_local_gossip(&root, &envelope, "peer:a", None).expect("publish");
         let delivery = deliver_local_gossip(&root, "services", &envelope.envelope_ref, "peer:b").expect("deliver");
         let mut stale_bootstrap = evidence_fixture();
         stale_bootstrap.capability_refs = vec![capability_ref.clone()];

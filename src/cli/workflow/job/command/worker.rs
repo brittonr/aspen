@@ -47,6 +47,8 @@ pub(crate) struct RunLocal {
     pub(crate) from_actor: String,
     #[arg(long, default_value = "molten.job.worker")]
     pub(crate) topic: String,
+    #[command(flatten)]
+    pub(crate) source: crate::cli_remote::session::SourceArgs,
     #[arg(long)]
     pub(crate) ledger: Option<std::path::PathBuf>,
     #[arg(long)]
@@ -86,6 +88,8 @@ pub(crate) struct ScheduleLocal {
     pub(crate) from_actor: String,
     #[arg(long, default_value = "molten.job.worker")]
     pub(crate) topic: String,
+    #[command(flatten)]
+    pub(crate) source: crate::cli_remote::session::SourceArgs,
     #[arg(long = "coordination-authority-ref")]
     pub(crate) coordination_authority_refs: Vec<String>,
     #[arg(long = "coordination-resource-ref")]

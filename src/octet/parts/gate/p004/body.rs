@@ -1,4 +1,17 @@
 
+/// Validates receipt content only. The caller must separately authenticate its exact producer binding.
+/// Unlike workspace validation, this does not inspect the startup machine's current directory.
+pub fn validate_produced_octet_gate_receipt(value: &IoValue) -> Result<String> {
+    let parsed = parse_octet_gate_receipt(value)?;
+    let mut checks = Vec::new();
+    let mut diagnostics = Vec::new();
+    check_receipt_basics(&parsed, &mut checks, &mut diagnostics);
+    if checks.iter().any(|check| check.status != "pass") {
+        return Err(MoltenError::invalid_harness(format!("produced Octet gate denied: {}", diagnostics.join("; "))));
+    }
+    Ok(parsed.receipt_ref)
+}
+
 pub fn validate_octet_source_gate(input: &OctetSourceGateValidationInput) -> Result<OctetSourceGateValidation> {
     let mut checks = Vec::new();
     let mut diagnostics = Vec::new();
@@ -260,31 +273,4 @@ fn push_missing_receipt_checks(checks: &mut impl crate::bounded::VecSink<Check>)
     push_check(checks, "current-profile-ref", false);
     push_check(checks, "scope-fingerprint-coverage", false);
     push_check(checks, "toolchain-bound", false);
-}
-
-fn octet_source_gate_requirement_value(
-    consumer: &str,
-    subject_ref: &str,
-    source_scope: &[String],
-    expected: Option<&ExpectedMetadata>,
-    checks: &[Check],
-) -> IoValue {
-    record("octet-source-gate-requirement-v1", vec![
-        string(crate::preserves_rail::OCTET_SOURCE_GATE_REQUIREMENT_SCHEMA),
-        record("consumer", vec![string(consumer)]),
-        record("subject", vec![string(subject_ref)]),
-        record("required-profile", vec![string(STRICT_PROFILE)]),
-        record("source-scope", vec![sequence(source_scope.iter().map(string).collect())]),
-        record("current-config", vec![optional_ref(expected.map(|metadata| metadata.config_hash.as_str()))]),
-        record("current-profile", vec![optional_ref(expected.map(|metadata| metadata.profile_hash.as_str()))]),
-        record("required-evidence", vec![sequence(vec![
-            string("status"),
-            string("summary"),
-            string("structured-findings"),
-            string("object-corpus"),
-            string("fingerprint"),
-        ])]),
-        record("freshness", vec![string("same-workspace-metadata")]),
-        checks_value(checks),
-    ])
 }

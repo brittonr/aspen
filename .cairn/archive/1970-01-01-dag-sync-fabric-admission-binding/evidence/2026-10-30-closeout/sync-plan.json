@@ -1,0 +1,72 @@
+{
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/dag-sync-fabric-admission-binding/specs/dag-sync/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/dag-sync-fabric-admission-binding/specs/dag-sync/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "dag-sync-fabric-admission-binding",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/dag-sync-fabric-admission-binding/specs/dag-sync/spec.md"
+  ],
+  "dry_run": true,
+  "input_hash": "b5cf0bb401417891d4358bed8262f227a043dcaa0fd9da0a72204a64bf3665a4",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "bf4e97c10d6862cf44279b1e8090904b9e874add905d57b029da27dfb53b3b04",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "cc78ac7f72c0cb477aeb3709ac39cac4c7a433c7e1cbbe0da93ac6e8e50a01d9",
+        "destination": ".cairn/specs/dag-sync/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "dffd1dce13144f05fd3af28260be0e73eda5f5adbf47c5fb7f87efa9d361a1e0",
+        "operations": [
+          {
+            "block_hash": "822780bb0263f7a59b590573635babb9bfde35b3478d6c22428cbfbb0cee7cf1",
+            "heading": "### Requirement: DAG synchronization exposes owner-defined fabric admission",
+            "kind": "added",
+            "requirement_id": "molten.dag_sync.fabric_admission"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.dag_sync.fabric_admission",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/dag-sync-fabric-admission-binding/specs/dag-sync/spec.md"
+      }
+    ]
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "plan_hash": "bffcc1fcea4074bed44cb6c478554e82a22ec4c878dd2e62b3846176a9c8ff3c",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "reasons": [],
+  "receipt_hash": "d542deb12d7eb57f218db023b332de0aca3bd578d91294cb1cf3c655491949ee"
+}

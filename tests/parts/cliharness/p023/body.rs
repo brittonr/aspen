@@ -1,7 +1,9 @@
 
 #[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn cli_node_profile_backed_init_binds_startup_metadata() -> CliResult<()> {
     let dir = temp_dir("cli-node-profile-backed")?;
+    let trust = std::env::var_os(SOURCE_TRUST_ENV);
     let state_root = dir.join("state");
     let config = dir.join("node-config.preserves");
     let startup = dir.join("node-startup.preserves");
@@ -36,7 +38,7 @@ fn cli_node_profile_backed_init_binds_startup_metadata() -> CliResult<()> {
     let resolution_ref = molten::preserves_rail::canonical_hash(&resolution_value)?;
     assert!(molten::preserves_rail::to_text(&resolution_value)?.contains("node-profile-config-resolution-v1"));
 
-    let run = molten_cmd()
+    let run = source_gated_node_command(trust.as_deref(), &state_root)?
         .args(["node", "run", "--state-root"])
         .arg(&state_root)
         .args(["--startup-out"])

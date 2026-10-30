@@ -39,9 +39,13 @@ pub(super) fn create_dir_components(dir: &cap_std::fs::Dir, path: &std::path::Pa
                     )));
                 }
             }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                current.create_dir(segment).map_err(crate::error::Failure::from)?;
-            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => match current.create_dir(segment) {
+                // A concurrent opener created the component first; the nofollow
+                // open below still admits only a real directory.
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(crate::error::Failure::from(error)),
+            },
             Err(error) => return Err(crate::error::Failure::from(error)),
         }
         current = current.open_dir_nofollow(segment).map_err(crate::error::Failure::from)?;

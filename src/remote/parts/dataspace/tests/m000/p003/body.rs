@@ -18,7 +18,7 @@
             evidence_refs: Vec::new(),
         })
         .expect("session envelope");
-        publish_local_gossip(root, &envelope, "peer:a").expect("publish session envelope");
+        publish_local_gossip(root, &envelope, "peer:a", None).expect("publish session envelope");
         deliver_local_gossip(root, session_fixture_topic(), &envelope.envelope_ref, session_fixture_peer())
             .expect("deliver session envelope")
     }

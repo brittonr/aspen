@@ -42,6 +42,9 @@ pub(crate) struct HarnessRun {
     run_dir: std::path::PathBuf,
     #[arg(long)]
     node_binary: Option<std::path::PathBuf>,
+    /// Independently provisioned startup source trust installed in every node root after init.
+    #[arg(long)]
+    source_trust: Option<std::path::PathBuf>,
     #[arg(long, default_value_t = molten::cluster_harness::DEFAULT_CLUSTER_CHILD_TIMEOUT_MS)]
     child_timeout_ms: u64,
     #[arg(long)]
@@ -106,6 +109,7 @@ fn harness_run(input: HarnessRun) -> molten::error::Result<()> {
             state_root: input.state_root,
             output_directory: input.run_dir,
             node_binary,
+            source_trust: input.source_trust,
             child_timeout_ms: input.child_timeout_ms,
             force: input.force,
         })?;

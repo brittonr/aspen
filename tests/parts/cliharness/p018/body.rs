@@ -2,7 +2,9 @@ const CLUSTER_HARNESS_FIXTURE: &str = "tests/fixtures/cluster-harness/two-node.c
 const CLUSTER_HARNESS_TEST_TIMEOUT_MS: &str = "30000";
 
 #[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn cli_cluster_harness_executes_checked_fixture_and_verifies_offline() -> CliResult<()> {
+    let trust = std::env::var_os(SOURCE_TRUST_ENV);
     // r[verify molten.testing.receipt_first_cluster_harness.cli_receipt_surface]
     // r[verify molten.testing.receipt_first_cluster_harness.run_artifact_directory]
     // r[verify molten.testing.receipt_first_cluster_harness.fixture_executable_runner]
@@ -20,6 +22,7 @@ fn cli_cluster_harness_executes_checked_fixture_and_verifies_offline() -> CliRes
         .arg(&state_root)
         .args(["--run-dir"])
         .arg(&run_dir)
+        .args(signed_harness_args(trust.as_deref())?)
         .args(["--child-timeout-ms", CLUSTER_HARNESS_TEST_TIMEOUT_MS])
         .output()?;
     assert_success(&run, "cluster harness checked fixture run");
@@ -60,12 +63,20 @@ fn cli_cluster_harness_executes_checked_fixture_and_verifies_offline() -> CliRes
     Ok(())
 }
 
-#[test]
-fn cli_cluster_harness_preflights_fixture_bytes_before_staging_or_children() -> CliResult<()> {
-    let root = temp_dir("cli-cluster-harness-fixture-byte-bound")?;
+/// A fixture of exactly `extra` bytes beyond the one-megabyte manifest bound.
+fn bounded_fixture(extra: usize) -> String {
     let prefix = "molten.cluster.nodes.v1\nnode:fixture-a\n";
     let mut source = prefix.to_string();
-    source.push_str(&"\n".repeat(molten::cluster::MAX_CLUSTER_MANIFEST_BYTES - prefix.len()));
+    source.push_str(&"\n".repeat(molten::cluster::MAX_CLUSTER_MANIFEST_BYTES - prefix.len() + extra));
+    source
+}
+
+#[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
+fn cli_cluster_harness_admits_exact_bound_fixture_with_actual_child() -> CliResult<()> {
+    let trust = std::env::var_os(SOURCE_TRUST_ENV);
+    let root = temp_dir("cli-cluster-harness-fixture-exact-bound")?;
+    let source = bounded_fixture(0);
     assert_eq!(source.len(), molten::cluster::MAX_CLUSTER_MANIFEST_BYTES);
     let exact_fixture = root.join("exact.cluster");
     std::fs::write(&exact_fixture, &source)?;
@@ -78,12 +89,18 @@ fn cli_cluster_harness_preflights_fixture_bytes_before_staging_or_children() -> 
         .arg(&exact_state)
         .args(["--run-dir"])
         .arg(&exact_run)
+        .args(signed_harness_args(trust.as_deref())?)
         .args(["--child-timeout-ms", CLUSTER_HARNESS_TEST_TIMEOUT_MS])
         .output()?;
     assert_success(&exact, "exact one-megabyte harness fixture with actual child");
     assert!(exact_run.join("children/receipts/fixture-a/startup-receipt.preserves").exists());
+    Ok(())
+}
 
-    source.push('\n');
+#[test]
+fn cli_cluster_harness_preflights_fixture_bytes_before_staging_or_children() -> CliResult<()> {
+    let root = temp_dir("cli-cluster-harness-fixture-byte-bound")?;
+    let source = bounded_fixture(1);
     let excess_fixture = root.join("excess.cluster");
     std::fs::write(&excess_fixture, source)?;
     let excess_state = root.join("excess-state");
@@ -145,7 +162,9 @@ fn cli_cluster_harness_exports_sealed_bundle_when_children_cannot_spawn() -> Cli
 }
 
 #[test]
+#[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
 fn cli_cluster_harness_offline_verifier_denies_tampered_artifact() -> CliResult<()> {
+    let trust = std::env::var_os(SOURCE_TRUST_ENV);
     // r[verify molten.testing.receipt_first_cluster_harness.run_artifact_directory]
     // r[verify molten.testing.receipt_first_cluster_harness.failure_triage]
     // r[verify molten.testing.local_multiprocess_cluster_tier.cleanup_negatives]
@@ -160,6 +179,7 @@ fn cli_cluster_harness_offline_verifier_denies_tampered_artifact() -> CliResult<
         .arg(&state_root)
         .args(["--run-dir"])
         .arg(&run_dir)
+        .args(signed_harness_args(trust.as_deref())?)
         .args(["--child-timeout-ms", CLUSTER_HARNESS_TEST_TIMEOUT_MS])
         .output()?;
     assert_success(&run, "cluster harness run before tamper");
@@ -192,4 +212,20 @@ fn cli_cluster_harness_offline_verifier_denies_tampered_artifact() -> CliResult<
         assert!(stderr(&symlink_verify).contains("unreadable-artifact"));
     }
     Ok(())
+}
+
+/// `--node-binary` and `--source-trust` for the signed producer output the independent trust selects.
+fn signed_harness_args(trust: Option<&std::ffi::OsStr>) -> CliResult<Vec<std::ffi::OsString>> {
+    let trust = trust.ok_or_else(|| {
+        std::io::Error::other("real cluster harness tests require independently provisioned MOLTEN_TEST_SOURCE_TRUST")
+    })?;
+    let selection: serde_json::Value = serde_json::from_slice(&std::fs::read(trust)?)?;
+    let output = selection.get("output").and_then(serde_json::Value::as_str)
+        .ok_or_else(|| std::io::Error::other("real source trust has no producer output"))?;
+    Ok(vec![
+        "--node-binary".into(),
+        std::path::Path::new(output).join("bin/molten").into_os_string(),
+        "--source-trust".into(),
+        trust.to_os_string(),
+    ])
 }
