@@ -22,10 +22,13 @@ impl<P: BoundLiveReplicaEffectPorts> ScopedLiveReplica<P> {
         inbox: tokio::sync::mpsc::Receiver<ReplicaEvent>,
     ) -> crate::error::Result<Self> {
         ports.validate_start(&plan)?;
-        let evidence = ReplicaLedger::new(&plan)?;
+        let mut evidence = ReplicaLedger::new(&plan)?;
         let startup = execute_scoped_replica_start(&plan, &mut ports).await;
         let (state, startup_observations) = match startup {
-            ReplicaExecutionOutcome::Applied(executed) => (executed.next, executed.observations),
+            ReplicaExecutionOutcome::Applied(executed) => {
+                evidence.observe_transport(&executed.next, &executed.observations, &executed.transport_failures)?;
+                (executed.next, executed.observations)
+            }
             ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
                 return Err(crate::error::Failure::invalid_harness(format!("live Raft startup denied: {diagnostic}")));
             }
@@ -79,8 +82,10 @@ impl<P: BoundLiveReplicaEffectPorts> ScopedLiveReplica<P> {
         let before = self.state.clone();
         let evidence_event = event.clone();
         let outcome = execute_replica_event(&self.state, event, &mut self.ports).await;
-        if let ReplicaExecutionOutcome::Applied(executed) = &outcome {
-            self.state.clone_from(&executed.next);
+        match &outcome {
+            ReplicaExecutionOutcome::Applied(executed) => self.state.clone_from(&executed.next),
+            ReplicaExecutionOutcome::Failed(failed) => self.state.clone_from(&failed.retained),
+            ReplicaExecutionOutcome::Denied { .. } => {}
         }
         if let Err(error) = self.evidence.observe(&before, &evidence_event, &outcome) {
             self.evidence.note_internal_error(error.to_string());

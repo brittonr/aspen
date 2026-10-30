@@ -19,6 +19,7 @@ fn initial_state(
         membership,
         role: super::ReplicaRole::Follower,
         lifecycle: super::ReplicaLifecycle::Running,
+        rejoin: super::ReplicaRejoin::Voter,
         current_term: super::INITIAL_TERM,
         election_timer_sequence: super::INITIAL_ELECTION_TIMER_SEQUENCE,
         active_election_timer_ref,

@@ -3,6 +3,8 @@ mod election;
 mod message;
 #[path = "transition/message/read.rs"]
 mod read;
+#[path = "transition/rejoin/mod.rs"]
+mod rejoin;
 #[path = "transition/message/replication.rs"]
 mod replication;
 #[path = "transition/message/snapshot.rs"]
@@ -52,6 +54,19 @@ fn handle_message(state: &ReplicaState, envelope: ReplicaMessageEnvelope) -> cra
         persist_hard_state: false,
     };
     observe_higher_term(&mut transition, message.term());
+    if let ReplicaRejoin::VoteFenced { through_term } = transition.next.rejoin
+        && transition.next.current_term > through_term
+    {
+        transition.next.rejoin = ReplicaRejoin::Voter;
+    }
+    if !matches!(transition.next.rejoin, ReplicaRejoin::Voter)
+        && !matches!(
+            message,
+            Message::RecoveryQuery { .. } | Message::RecoveryReport { .. } | Message::RequestVote { .. }
+        )
+    {
+        return finish_message(transition);
+    }
     message::dispatch(&mut transition, envelope.from, message)?;
     finish_message(transition)
 }
@@ -69,6 +84,12 @@ fn observe_higher_term(transition: &mut MessagePlan, term: u64) {
     transition.next.match_index.clear();
     transition.next.pending_reads.clear();
     transition.next.quorum_confirmed_term = None;
+    if let ReplicaRejoin::Recovering(round) = &mut transition.next.rejoin
+        && round.fence_term.is_some()
+    {
+        round.fence_term = None;
+        round.peers.clear();
+    }
     transition.persist_hard_state = true;
 }
 
@@ -88,6 +109,7 @@ fn finish_message(mut transition: MessagePlan) -> crate::error::Result<ReplicaTr
         transition.effects.insert(0, ReplicaEffect::PersistHardState {
             term: transition.next.current_term,
             voted_for: transition.next.voted_for.clone(),
+            is_recovery_required: matches!(transition.next.rejoin, ReplicaRejoin::Recovering(_)),
         });
     }
     finish(transition.next, transition.effects)

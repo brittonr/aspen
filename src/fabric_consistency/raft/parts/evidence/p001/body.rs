@@ -21,6 +21,7 @@ impl ReplicaLedger {
             suppressed_heartbeat_count: 0,
             saturated: false,
             diagnostic: None,
+            transport_diagnostic: None,
         };
         ledger.record(
             ReplicaKind::GroupAdmission,
@@ -76,11 +77,15 @@ impl ReplicaLedger {
     ) -> crate::error::Result<()> {
         let records_before = self.records.len();
         match outcome {
-            ReplicaExecutionOutcome::Applied(executed) => self.observe_applied(before, event, executed)?,
+            ReplicaExecutionOutcome::Applied(executed) => {
+                self.observe_transport(&executed.next, &executed.observations, &executed.transport_failures)?;
+                self.observe_applied(before, event, executed)?;
+            }
             ReplicaExecutionOutcome::Denied { diagnostic, .. } => {
                 self.record_failure(before, "denied", diagnostic)?;
             }
             ReplicaExecutionOutcome::Failed(failed) => {
+                self.observe_transport(before, &failed.completed, &failed.transport_failures)?;
                 self.record_failure(before, failed.failed_kind.as_str(), &failed.diagnostic)?;
             }
         }
@@ -102,6 +107,24 @@ impl ReplicaLedger {
         production_admitted: bool,
     ) -> crate::error::Result<ReplicaAggregateHealth> {
         health::aggregate(self, state, production_admitted)
+    }
+
+    pub(super) fn observe_transport(
+        &mut self,
+        state: &ReplicaState,
+        completed: &[ReplicaEffectObservation],
+        failures: &[ReplicaSendFailureObservation],
+    ) -> crate::error::Result<()> {
+        if let Some(failure) = failures.first() {
+            self.transport_diagnostic = Some(failure.diagnostic.clone());
+        } else if completed.iter().any(|observation| observation.kind == ReplicaEffectKind::Send) {
+            // Local-only events cannot establish that an unavailable peer recovered.
+            self.transport_diagnostic = None;
+        }
+        for failure in failures {
+            self.record_failure(state, &format!("send:{}", failure.sequence), &failure.diagnostic)?;
+        }
+        Ok(())
     }
 
     fn observe_applied(

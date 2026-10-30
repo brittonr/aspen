@@ -1,0 +1,87 @@
+{
+  "change": "recover-from-storage-faults",
+  "evidence_summary": {
+    "docs_only": 0,
+    "fixture": 0,
+    "formal": 0,
+    "mode": "advisory",
+    "model": 0,
+    "probe": 0,
+    "property": 0
+  },
+  "input_hash": "0058e3d60e0a61432b62cc00303693f4e6d72116cca33962736e16fae63372be",
+  "issues": [],
+  "layout": "cairn",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "policy_selection": {
+    "blake3": "7a67802377005c18ebded42899e7f564f5d87087b6c14ca70464b35886f340a9",
+    "installation_receipt": false,
+    "locator": "/home/brittonr/git/OnixResearch/cairn/cairn-policy/generated/cairn-policy.json",
+    "source": "explicit"
+  },
+  "probe_evidence": null,
+  "receipt_hash": "9ede98c1df9d32cf3175b5e1042e0fa86a30cb45da30d4c1d4f755a99474c33e",
+  "stage": "design",
+  "substance": [
+    {
+      "checkbox_tasks": 0,
+      "kind": "design",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/recover-from-storage-faults/design.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 30,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "proposal",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/recover-from-storage-faults/proposal.md",
+      "requirement_blocks": 0,
+      "scenario_blocks": 0,
+      "substantive_lines": 28,
+      "substantive_requirement_blocks": 0,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/recover-from-storage-faults/specs/consensus/spec.md",
+      "requirement_blocks": 5,
+      "scenario_blocks": 11,
+      "substantive_lines": 38,
+      "substantive_requirement_blocks": 5,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    },
+    {
+      "checkbox_tasks": 0,
+      "kind": "delta_spec",
+      "malformed_dependency_markers": 0,
+      "path": "./.cairn/changes/recover-from-storage-faults/specs/durable-state-ports/spec.md",
+      "requirement_blocks": 4,
+      "scenario_blocks": 7,
+      "substantive_lines": 25,
+      "substantive_requirement_blocks": 4,
+      "substantive_tasks": 0,
+      "task_done": 0,
+      "task_in_progress": 0,
+      "task_todo": 0
+    }
+  ],
+  "task_ordering": null,
+  "valid": true,
+  "verdict": "PASS"
+}

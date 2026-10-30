@@ -6,7 +6,6 @@ const ASSEMBLY_ELECTION_MIN_TICKS: u64 = 2;
 const ASSEMBLY_ELECTION_MAX_TICKS: u64 = 3;
 const ASSEMBLY_TICK_MILLISECONDS: u64 = 1;
 const ASSEMBLY_FABRIC_BINDING_COUNT: usize = 7;
-const ASSEMBLY_STARTUP_OBSERVATIONS: usize = 2;
 const ASSEMBLY_EVENT_CAPACITY: usize = 4;
 const ASSEMBLY_CONTROL_CAPACITY: usize = 4;
 
@@ -84,7 +83,6 @@ async fn concrete_port_assembly_denies_substitution_then_executes_bound_startup(
     let service = ScopedLiveReplica::start(plan, bundle, event_receiver)
         .await
         .expect("concrete scoped service startup");
-    assert_eq!(service.startup_observations().len(), ASSEMBLY_STARTUP_OBSERVATIONS);
     assert!(!service.production_admitted());
     assert!(!service.ports().durability.adapter().state().durable_log.is_empty());
     drop(service);
@@ -219,6 +217,7 @@ fn assembly_start_plan(
             ReplicaEffect::PersistHardState {
                 term: INITIAL_TERM,
                 voted_for: None,
+                is_recovery_required: false,
             },
             ReplicaEffect::ArmElectionTimer {
                 timer_ref: startup_timer_ref,

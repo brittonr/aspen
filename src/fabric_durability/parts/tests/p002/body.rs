@@ -24,7 +24,7 @@ impl FaultDisk {
         self.0.lock().expect("medium lock")
     }
 
-    fn fail_syncs(&self, is_failing: bool) {
+    pub(crate) fn fail_syncs(&self, is_failing: bool) {
         self.medium().is_sync_failing = is_failing;
     }
 

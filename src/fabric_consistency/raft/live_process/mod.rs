@@ -29,7 +29,6 @@ const REQUEST_LABEL: &str = "distinct-process-request";
 const APPLICATION_STATE_LABEL: &str = "distinct-process-application-state";
 const QUORUM_LOSS_REQUEST_LABEL: &str = "distinct-process-quorum-loss-request";
 const STALE_LEADER_TERM: u64 = 1;
-const RECOVERED_LEADER_TERM: u64 = 2;
 const EVENT_LOOP_LIMIT: usize = 1_200;
 const INGRESS_EVENT_CAPACITY: usize = 32;
 const INGRESS_DELIVERY_LIMIT: u64 = 1_024;

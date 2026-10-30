@@ -2,6 +2,9 @@ use super::*;
 
 pub(super) fn dispatch(transition: &mut MessagePlan, from: String, message: Message) -> crate::error::Result<()> {
     match message {
+        message @ (Message::RecoveryQuery { .. } | Message::RecoveryReport { .. }) => {
+            rejoin::dispatch(transition, from, message)
+        }
         message @ (Message::RequestVote { .. } | Message::VoteResponse { .. }) => {
             dispatch_election(transition, from, message)
         }
@@ -44,6 +47,8 @@ fn dispatch_election(transition: &mut MessagePlan, from: String, message: Messag
             is_granted: granted,
         }),
         Message::AppendEntries { .. }
+        | Message::RecoveryQuery { .. }
+        | Message::RecoveryReport { .. }
         | Message::AppendResponse { .. }
         | Message::ReadProbe { .. }
         | Message::ReadAcknowledgement { .. }
@@ -91,6 +96,8 @@ fn dispatch_replication(transition: &mut MessagePlan, from: String, message: Mes
             conflict_index,
         }),
         Message::RequestVote { .. }
+        | Message::RecoveryQuery { .. }
+        | Message::RecoveryReport { .. }
         | Message::VoteResponse { .. }
         | Message::ReadProbe { .. }
         | Message::ReadAcknowledgement { .. }
@@ -128,6 +135,8 @@ fn dispatch_snapshot(transition: &mut MessagePlan, from: String, message: Messag
             is_accepted: accepted,
         }),
         Message::RequestVote { .. }
+        | Message::RecoveryQuery { .. }
+        | Message::RecoveryReport { .. }
         | Message::VoteResponse { .. }
         | Message::AppendEntries { .. }
         | Message::AppendResponse { .. }
@@ -165,6 +174,8 @@ fn dispatch_read(transition: &mut MessagePlan, from: String, message: Message) -
             request_ref,
         }),
         Message::RequestVote { .. }
+        | Message::RecoveryQuery { .. }
+        | Message::RecoveryReport { .. }
         | Message::VoteResponse { .. }
         | Message::AppendEntries { .. }
         | Message::AppendResponse { .. }

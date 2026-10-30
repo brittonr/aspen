@@ -10,6 +10,9 @@ pub(super) fn handle_proposal(
     validation::validate_content_ref(&request_ref, "Raft proposal request ref")?;
     validation::validate_content_ref(&command_ref, "Raft proposal command ref")?;
     validation::validate_content_ref(&command_schema_ref, "Raft proposal command schema ref")?;
+    if !matches!(state.rejoin, ReplicaRejoin::Voter) {
+        return proposal_outcome(state, request_ref, ProposalDisposition::Denied, None);
+    }
     if let Some(committed_index) = state.completed_requests.get(&request_ref).copied() {
         return proposal_outcome(state, request_ref, ProposalDisposition::Committed, Some(committed_index));
     }
@@ -32,6 +35,9 @@ pub(super) fn handle_read(
 ) -> crate::error::Result<ReplicaTransition> {
     validation::ensure_running(state)?;
     validation::validate_content_ref(&request_ref, "Raft read request ref")?;
+    if !matches!(state.rejoin, ReplicaRejoin::Voter) {
+        return read_outcome(state, request_ref, mode, ReadDisposition::Denied);
+    }
     match mode {
         crate::fabric_consistency::ReadMode::LocalStale => {
             read_outcome(state, request_ref, mode, ReadDisposition::Local)
@@ -96,6 +102,9 @@ pub(super) fn handle_create_snapshot(
 ) -> crate::error::Result<ReplicaTransition> {
     validation::ensure_running(state)?;
     validation::validate_content_ref(&application_state_ref, "Raft snapshot application state ref")?;
+    if !matches!(state.rejoin, ReplicaRejoin::Voter) {
+        return Err(crate::error::Failure::invalid_harness("unreconciled Raft participant cannot publish snapshots"));
+    }
     if state.last_applied == INITIAL_COMMIT_INDEX {
         return Err(crate::error::Failure::invalid_harness("Raft snapshot requires a committed application boundary"));
     }
@@ -116,7 +125,10 @@ pub(super) fn handle_create_snapshot(
     let mut next = state.clone();
     next.log.retain(|entry| entry.index > snapshot.last_included_index);
     next.snapshot = Some(snapshot.clone());
-    finish(next, vec![ReplicaEffect::PersistSnapshot { snapshot }])
+    finish(next, vec![ReplicaEffect::PersistSnapshot {
+        snapshot,
+        is_suffix_retained: true,
+    }])
 }
 
 pub(super) fn handle_begin_drain(state: &ReplicaState) -> crate::error::Result<ReplicaTransition> {

@@ -7,7 +7,15 @@ pub(super) fn aggregate(
 ) -> crate::error::Result<ReplicaAggregateHealth> {
     let status = if state.lifecycle == ReplicaLifecycle::Stopped {
         "stopped"
-    } else if ledger.saturated || ledger.diagnostic.is_some() || !state.pending_reads.is_empty() {
+    } else if matches!(state.rejoin, ReplicaRejoin::Recovering(_)) {
+        "recovering"
+    } else if matches!(state.rejoin, ReplicaRejoin::VoteFenced { .. }) {
+        "vote-fenced"
+    } else if ledger.saturated
+        || ledger.diagnostic.is_some()
+        || ledger.transport_diagnostic.is_some()
+        || !state.pending_reads.is_empty()
+    {
         "degraded"
     } else {
         "healthy"
@@ -15,10 +23,9 @@ pub(super) fn aggregate(
     let selected_refs = crate::preserves_rail::sequence(
         ledger.records.iter().map(|record| crate::preserves_rail::string(&record.evidence_ref)).collect(),
     );
-    let diagnostic_ref = ledger
-        .diagnostic
-        .as_ref()
-        .map(|diagnostic| crate::preserves_rail::content_ref_from_bytes(diagnostic.as_bytes()));
+    let diagnostic = ledger.diagnostic.as_ref().or(ledger.transport_diagnostic.as_ref());
+    let diagnostic_ref =
+        diagnostic.map(|diagnostic| crate::preserves_rail::content_ref_from_bytes(diagnostic.as_bytes()));
     let diagnostic_value = diagnostic_ref.as_deref().map_or_else(
         || crate::preserves_rail::record("none", Vec::new()),
         |reference| crate::preserves_rail::record("some", vec![crate::preserves_rail::string(reference)]),
@@ -49,7 +56,7 @@ pub(super) fn aggregate(
         selected_record_count: ledger.records.len(),
         suppressed_heartbeat_count: ledger.suppressed_heartbeat_count,
         saturated: ledger.saturated,
-        diagnostic: ledger.diagnostic.clone(),
+        diagnostic: diagnostic.cloned(),
         evidence_ref,
         production_admitted,
     })

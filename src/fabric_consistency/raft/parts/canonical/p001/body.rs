@@ -102,7 +102,8 @@ fn validate_envelope_shape(envelope: &ReplicaMessageEnvelope) -> crate::error::R
         return Err(crate::error::Failure::invalid_harness("Raft wire sender and recipient must differ"));
     }
     if envelope.service_generation == 0
-        || envelope.message.term() == 0
+        || (envelope.message.term() == 0
+            && !matches!(envelope.message, Message::RecoveryQuery { .. } | Message::RecoveryReport { .. }))
         || envelope.message.config_epoch() == 0
         || envelope.message.fencing_epoch() == 0
     {
@@ -111,6 +112,7 @@ fn validate_envelope_shape(envelope: &ReplicaMessageEnvelope) -> crate::error::R
         ));
     }
     validate_embedded_sender(envelope)?;
+    validate_recovery_envelope(envelope)?;
     validate_message_entries(&envelope.message)
 }
 
@@ -124,6 +126,8 @@ fn validate_embedded_sender(envelope: &ReplicaMessageEnvelope) -> crate::error::
         Message::AppendResponse { follower_id, .. }
         | Message::ReadAcknowledgement { follower_id, .. }
         | Message::SnapshotResponse { follower_id, .. } => follower_id,
+        Message::RecoveryQuery { requester_id, .. } => requester_id,
+        Message::RecoveryReport { peer_id, .. } => peer_id,
     };
     if embedded != &envelope.from {
         return Err(crate::error::Failure::invalid_harness("Raft wire sender does not match the embedded sender"));
@@ -240,3 +244,4 @@ fn validate_identifier(value: &str, label: &str) -> crate::error::Result<()> {
     }
     Ok(())
 }
+

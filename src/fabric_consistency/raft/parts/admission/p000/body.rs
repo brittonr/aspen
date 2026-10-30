@@ -261,6 +261,7 @@ fn initial_effects(state: &super::ReplicaState) -> crate::error::Result<Vec<supe
         super::ReplicaEffect::PersistHardState {
             term: super::INITIAL_TERM,
             voted_for: None,
+            is_recovery_required: false,
         },
         super::ReplicaEffect::ArmElectionTimer {
             timer_ref: state.active_election_timer_ref.clone(),

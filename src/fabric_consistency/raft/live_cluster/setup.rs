@@ -160,6 +160,7 @@ fn start_plan(
             ReplicaEffect::PersistHardState {
                 term: INITIAL_TERM,
                 voted_for: None,
+                is_recovery_required: false,
             },
             ReplicaEffect::ArmElectionTimer { timer_ref },
         ],

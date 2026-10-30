@@ -210,8 +210,13 @@ where
 }
 
 impl<D: ReplicaDurabilityEffects, N, T, A, C> ReplicaDurabilityEffects for ReplicaPortBundle<D, N, T, A, C> {
-    fn persist_hard_state(&mut self, term: u64, voted_for: Option<&str>) -> crate::error::Result<String> {
-        self.durability.persist_hard_state(term, voted_for)
+    fn persist_hard_state(
+        &mut self,
+        term: u64,
+        voted_for: Option<&str>,
+        is_recovery_required: bool,
+    ) -> crate::error::Result<String> {
+        self.durability.persist_hard_state(term, voted_for, is_recovery_required)
     }
 
     fn persist_entries(
@@ -230,8 +235,12 @@ impl<D: ReplicaDurabilityEffects, N, T, A, C> ReplicaDurabilityEffects for Repli
         self.durability.persist_commit(through_index)
     }
 
-    fn persist_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> crate::error::Result<String> {
-        self.durability.persist_snapshot(snapshot)
+    fn persist_snapshot(
+        &mut self,
+        snapshot: &ReplicaSnapshot,
+        is_suffix_retained: bool,
+    ) -> crate::error::Result<String> {
+        self.durability.persist_snapshot(snapshot, is_suffix_retained)
     }
 }
 

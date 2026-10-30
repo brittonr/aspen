@@ -1,3 +1,12 @@
+pub const INITIAL_ELECTION_TIMER_SEQUENCE: u64 = 1;
+pub const NEXT_ELECTION_TIMER_SEQUENCE_STEP: u64 = 1;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReadDisposition {
+    Current,
+    Local,
+    Retryable,
+    Denied,
+}
 
 impl ReadDisposition {
     pub const fn as_str(self) -> &'static str {
@@ -15,6 +24,8 @@ pub enum ReplicaEffect {
     PersistHardState {
         term: u64,
         voted_for: Option<String>,
+        /// Persisted atomically with term and vote; cleared only by peer admission.
+        is_recovery_required: bool,
     },
     PersistEntries {
         truncate_from: Option<u64>,
@@ -28,6 +39,7 @@ pub enum ReplicaEffect {
     },
     PersistSnapshot {
         snapshot: ReplicaSnapshot,
+        is_suffix_retained: bool,
     },
     Send {
         envelope: ReplicaMessageEnvelope,
@@ -59,12 +71,38 @@ pub enum ReplicaEffect {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReplicaRejoin {
+    Voter,
+    Recovering(RecoveryRound),
+    VoteFenced { through_term: u64 },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecoveryRound {
+    pub round_ref: String,
+    pub fence_term: Option<u64>,
+    pub peers: std::collections::BTreeMap<String, RecoveryObservation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecoveryObservation {
+    pub observation_ref: String,
+    pub current_term: u64,
+    pub commit_index: u64,
+    pub last_log_index: u64,
+    pub entries: Vec<ReplicatedEntry>,
+    pub snapshot: Option<Box<ReplicaSnapshot>>,
+    pub is_complete: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplicaState {
     pub profile: ReplicaProfile,
     pub node_id: String,
     pub membership: StaticMembership,
     pub role: ReplicaRole,
     pub lifecycle: ReplicaLifecycle,
+    pub rejoin: ReplicaRejoin,
     pub current_term: u64,
     pub election_timer_sequence: u64,
     pub active_election_timer_ref: String,

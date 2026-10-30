@@ -18,7 +18,7 @@
 - [x] [serial] Add pure present, missing, faulty, committed, uncommitted, and unknown repair decisions keyed by term and index. r[molten.consensus.storage_fault_recovery]
 - [x] [serial] Add peer-query and snapshot-repair effect plans while retaining networking, persistence, and time in the shell. r[molten.consensus.storage_fault_recovery]
 - [x] [serial] Add participant-scoped recovery progress for local sufficiency, peer-available repair, complete global absence, incomplete observation, and finite virtual horizons. r[molten.consensus.storage_fault_recovery_progress]
-- [ ] [serial] Remove voting readiness after repair or persistent-state uncertainty and require full recovery admission before rejoin. r[molten.consensus.repair_admission] Deferred by user decision: `RedbReplicaPort::storage_admission` reads the admission back; startup recovery is not gated until peer-query recovery executes the repair plans (evidence/2026-10-22-storage-fault-verification.md).
+- [x] [serial] Remove voting readiness after repair or persistent-state uncertainty and require full recovery admission before rejoin. r[molten.consensus.repair_admission] Completed by live peer-query repair, negotiated term fencing, durable recovery intent, and restart-safe admission; see [verification](evidence/2026-10-29-peer-recovery-verification.md).
 - [x] [parallel] Add positive local-only and peer repair plus negative unnecessary peer repair, missed available item, incomplete observation, committed truncation, conflicting history, unknown quorum, term loss, vote loss, and bad snapshot tests. r[molten.consensus.storage_fault_recovery_progress] r[molten.consensus.storage_fault_validation]
 
 ## Evidence and closeout

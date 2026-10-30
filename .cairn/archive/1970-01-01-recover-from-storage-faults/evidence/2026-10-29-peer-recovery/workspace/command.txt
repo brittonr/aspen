@@ -1,0 +1,1 @@
+cargo octet check --artifact-dir /home/brittonr/.cargo-target/aspen-peer-recovery-20261029/octet-final8

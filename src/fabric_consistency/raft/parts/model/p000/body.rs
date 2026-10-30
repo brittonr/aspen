@@ -9,8 +9,6 @@ pub const INITIAL_TERM: u64 = 0;
 pub const INITIAL_COMMIT_INDEX: u64 = 0;
 pub const NEXT_TERM_STEP: u64 = 1;
 pub const NEXT_LOG_INDEX_STEP: u64 = 1;
-pub const INITIAL_ELECTION_TIMER_SEQUENCE: u64 = 1;
-pub const NEXT_ELECTION_TIMER_SEQUENCE_STEP: u64 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReplicaRole {
@@ -100,6 +98,28 @@ pub struct ReplicaSnapshot {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Message {
+    RecoveryQuery {
+        term: u64,
+        requester_id: String,
+        round_ref: String,
+        from_index: u64,
+        is_barrier: bool,
+        config_epoch: u64,
+        fencing_epoch: u64,
+    },
+    RecoveryReport {
+        term: u64,
+        peer_id: String,
+        round_ref: String,
+        observation_ref: String,
+        from_index: u64,
+        last_log_index: u64,
+        commit_index: u64,
+        entries: Vec<ReplicatedEntry>,
+        snapshot: Option<Box<ReplicaSnapshot>>,
+        config_epoch: u64,
+        fencing_epoch: u64,
+    },
     RequestVote {
         term: u64,
         candidate_id: String,
@@ -171,6 +191,8 @@ impl Message {
     pub const fn term(&self) -> u64 {
         match self {
             Self::RequestVote { term, .. }
+            | Self::RecoveryQuery { term, .. }
+            | Self::RecoveryReport { term, .. }
             | Self::VoteResponse { term, .. }
             | Self::AppendEntries { term, .. }
             | Self::AppendResponse { term, .. }
@@ -184,6 +206,8 @@ impl Message {
     pub const fn config_epoch(&self) -> u64 {
         match self {
             Self::RequestVote { config_epoch, .. }
+            | Self::RecoveryQuery { config_epoch, .. }
+            | Self::RecoveryReport { config_epoch, .. }
             | Self::VoteResponse { config_epoch, .. }
             | Self::AppendEntries { config_epoch, .. }
             | Self::AppendResponse { config_epoch, .. }
@@ -197,6 +221,8 @@ impl Message {
     pub const fn fencing_epoch(&self) -> u64 {
         match self {
             Self::RequestVote { fencing_epoch, .. }
+            | Self::RecoveryQuery { fencing_epoch, .. }
+            | Self::RecoveryReport { fencing_epoch, .. }
             | Self::VoteResponse { fencing_epoch, .. }
             | Self::AppendEntries { fencing_epoch, .. }
             | Self::AppendResponse { fencing_epoch, .. }
@@ -271,10 +297,3 @@ impl ProposalDisposition {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ReadDisposition {
-    Current,
-    Local,
-    Retryable,
-    Denied,
-}

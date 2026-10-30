@@ -26,12 +26,18 @@ pub(super) fn handle_timeout(state: &ReplicaState, timer_ref: String) -> crate::
     if state.role == ReplicaRole::Leader {
         return Err(crate::error::Failure::invalid_harness("leader cannot process a follower election timeout"));
     }
+    if matches!(state.rejoin, ReplicaRejoin::Recovering(_)) {
+        return rejoin::retry(state);
+    }
     let next_term = state
         .current_term
         .checked_add(NEXT_TERM_STEP)
         .ok_or_else(|| crate::error::Failure::invalid_harness("Raft term overflow"))?;
     let mut next = state.clone();
     next.current_term = next_term;
+    if matches!(next.rejoin, ReplicaRejoin::VoteFenced { .. }) {
+        next.rejoin = ReplicaRejoin::Voter;
+    }
     next.role = ReplicaRole::Candidate;
     next.voted_for = Some(next.node_id.clone());
     next.leader_id = None;
@@ -46,6 +52,7 @@ pub(super) fn handle_timeout(state: &ReplicaState, timer_ref: String) -> crate::
     effects.push(ReplicaEffect::PersistHardState {
         term: next.current_term,
         voted_for: next.voted_for.clone(),
+        is_recovery_required: false,
     });
     for voter in support::peers(&next) {
         effects.push(support::send_effect(&next, voter, Message::RequestVote {
@@ -84,7 +91,7 @@ pub(super) fn handle_request_vote(transition: &mut MessagePlan, input: VoteReque
     let can_vote = transition.next.voted_for.as_deref().is_none_or(|voted_for| voted_for == input.candidate_id);
     let is_up_to_date =
         support::candidate_log_is_up_to_date(&transition.next, input.last_log_index, input.last_log_term);
-    let is_granted = can_vote && is_up_to_date;
+    let is_granted = matches!(transition.next.rejoin, ReplicaRejoin::Voter) && can_vote && is_up_to_date;
     if is_granted {
         if transition.next.voted_for.as_deref() != Some(input.candidate_id.as_str()) {
             transition.next.voted_for = Some(input.candidate_id);

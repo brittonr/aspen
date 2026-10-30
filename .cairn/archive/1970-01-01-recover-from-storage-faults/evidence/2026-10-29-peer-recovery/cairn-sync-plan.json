@@ -1,0 +1,181 @@
+{
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/recover-from-storage-faults/specs/consensus/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/recover-from-storage-faults/specs/consensus/spec.md"
+    },
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/recover-from-storage-faults/specs/durable-state-ports/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/recover-from-storage-faults/specs/durable-state-ports/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "recover-from-storage-faults",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/recover-from-storage-faults/specs/consensus/spec.md",
+    "./.cairn/changes/recover-from-storage-faults/specs/durable-state-ports/spec.md"
+  ],
+  "dry_run": true,
+  "input_hash": "9732104bb3f083868ebcb3cce9c6820f8ada23f8afce5ca32c8dc40774843798",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "7dc7078ffb542a709c2a1c67fc8d714b1eeb949b60b89df5ee08e9209b6a7c09",
+        "blocked": false,
+        "changed": false,
+        "delta_hash": "ea6900726715fb6d7e7c92f9f52a99ab389510e7beead40a4572b7c0334f76d9",
+        "destination": ".cairn/specs/consensus/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "7dc7078ffb542a709c2a1c67fc8d714b1eeb949b60b89df5ee08e9209b6a7c09",
+        "operations": [
+          {
+            "block_hash": "cda5e820fc6eedfd97dc67844722b041406883da3e7d282f120a46404984f1b2",
+            "heading": "### Requirement: Protocol-aware storage recovery",
+            "kind": "added",
+            "requirement_id": "molten.consensus.storage_fault_recovery"
+          },
+          {
+            "block_hash": "46cb57bffdfb84aed211e76d72e2b1127e7c19cb2494d7507ef6f30fe249a300",
+            "heading": "### Requirement: Storage recovery progress is participant-scoped",
+            "kind": "added",
+            "requirement_id": "molten.consensus.storage_fault_recovery_progress"
+          },
+          {
+            "block_hash": "8311fad91a7f4149b1740c033e9138f89aafdb9c604696412d5409529e290010",
+            "heading": "### Requirement: Repair admission before voting",
+            "kind": "added",
+            "requirement_id": "molten.consensus.repair_admission"
+          },
+          {
+            "block_hash": "834626fa80ca8c85006953bb18293963d366f6f16b7c007d5d1ca28f2d7770af",
+            "heading": "### Requirement: Storage-fault claim boundary",
+            "kind": "added",
+            "requirement_id": "molten.consensus.storage_fault_claim_boundary"
+          },
+          {
+            "block_hash": "5326418a526ec115adad0d65addff66a7df5717ebac9d1c0f69496adbac62195",
+            "heading": "### Requirement: Consensus storage-fault validation",
+            "kind": "added",
+            "requirement_id": "molten.consensus.storage_fault_validation"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.consensus.storage_fault_recovery",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.consensus.storage_fault_recovery_progress",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.consensus.repair_admission",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.consensus.storage_fault_claim_boundary",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.consensus.storage_fault_validation",
+            "state": "already_applied"
+          }
+        ],
+        "source": ".cairn/changes/recover-from-storage-faults/specs/consensus/spec.md"
+      },
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "ff56435f613c55f0766b0a01f4825d547fa4d5cb4db54c0e72541c8e7e636f05",
+        "blocked": false,
+        "changed": false,
+        "delta_hash": "0a3ddb5da8380ad0260e75986556adc179b5d9dd218819b20b70c11fbf9382f8",
+        "destination": ".cairn/specs/durable-state-ports/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "ff56435f613c55f0766b0a01f4825d547fa4d5cb4db54c0e72541c8e7e636f05",
+        "operations": [
+          {
+            "block_hash": "dee6cc2acf5eabcd54ace09dc4fcb93d6197946c957916049ea7a2102be5ae73",
+            "heading": "### Requirement: Explicit storage-fault outcomes",
+            "kind": "added",
+            "requirement_id": "molten.fabric_durability.storage_fault_outcomes"
+          },
+          {
+            "block_hash": "702a3aa9c051133587eeeeae6680c0854d96f21cfb527659fea635c922520771",
+            "heading": "### Requirement: Adapter quarantine after storage faults",
+            "kind": "added",
+            "requirement_id": "molten.fabric_durability.adapter_quarantine"
+          },
+          {
+            "block_hash": "d81fa19e7a633e30d5fa78bc51c1a2480ecf977a04648e4d9edda7b6d8610907",
+            "heading": "### Requirement: Durable snapshot publication",
+            "kind": "added",
+            "requirement_id": "molten.fabric_durability.snapshot_publication"
+          },
+          {
+            "block_hash": "d32c6714483f727e2c70108b92a836fe89aee1d2f31d30a0a075fd1b9005357a",
+            "heading": "### Requirement: Storage-fault validation",
+            "kind": "added",
+            "requirement_id": "molten.fabric_durability.storage_fault_validation"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.fabric_durability.storage_fault_outcomes",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.fabric_durability.adapter_quarantine",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.fabric_durability.snapshot_publication",
+            "state": "already_applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.fabric_durability.storage_fault_validation",
+            "state": "already_applied"
+          }
+        ],
+        "source": ".cairn/changes/recover-from-storage-faults/specs/durable-state-ports/spec.md"
+      }
+    ]
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "plan_hash": "a4be440699e80ef70d6a002402aa6ed80820c468a427bffd9d461aac25369b3e",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "reasons": [],
+  "receipt_hash": "432d9bbabcb139f0f3addf07e737a940e16b8740ebcd6b24b7f60f9b6c8ce6b0"
+}

@@ -57,6 +57,9 @@ mod live_process;
 #[path = "ports/tests.rs"]
 mod port_tests;
 #[cfg(test)]
+#[path = "rejoin/tests.rs"]
+mod rejoin_tests;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 #[path = "time/tests.rs"]

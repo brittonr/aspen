@@ -3,6 +3,7 @@ use std::collections::BTreeSet;
 use super::*;
 
 mod progress;
+mod reconcile;
 mod repair;
 
 const INDEX: u64 = 7;

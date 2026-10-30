@@ -61,13 +61,19 @@ fn install(transition: &mut MessagePlan, snapshot: ReplicaSnapshot) -> crate::er
     if snapshot.last_included_index == INITIAL_COMMIT_INDEX || snapshot.last_included_term == INITIAL_TERM {
         return Err(crate::error::Failure::invalid_harness("Raft installed snapshot boundary must be positive"));
     }
-    transition.next.log.clear();
+    let has_matching_boundary =
+        support::term_at(&transition.next, snapshot.last_included_index) == Some(snapshot.last_included_term);
+    transition
+        .next
+        .log
+        .retain(|entry| has_matching_boundary && entry.index > snapshot.last_included_index);
     transition.next.commit_index = snapshot.last_included_index;
     transition.next.last_applied = snapshot.last_included_index;
     transition.next.completed_requests.clone_from(&snapshot.completed_requests);
     transition.next.snapshot = Some(snapshot.clone());
     transition.effects.push(ReplicaEffect::PersistSnapshot {
         snapshot: snapshot.clone(),
+        is_suffix_retained: has_matching_boundary,
     });
     transition.effects.push(ReplicaEffect::RestoreApplicationSnapshot { snapshot });
     Ok(())

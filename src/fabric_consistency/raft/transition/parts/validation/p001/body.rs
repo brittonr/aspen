@@ -2,9 +2,10 @@
 fn validate_state_entry<'a>(
     entry: &'a ReplicatedEntry,
     expected_index: u64,
+    previous_term: u64,
     request_refs: &mut std::collections::BTreeSet<&'a str>,
 ) -> crate::error::Result<()> {
-    if entry.index != expected_index || entry.term == 0 {
+    if entry.index != expected_index || entry.term == 0 || entry.term < previous_term {
         return Err(crate::error::Failure::invalid_harness("Raft log indices or terms are invalid"));
     }
     validate_content_ref(&entry.request_ref, "Raft state request ref")?;

@@ -1,0 +1,337 @@
+{
+  "actions": [
+    {
+      "description": "move active change to archive: recover-from-storage-faults",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults"
+    }
+  ],
+  "blocked": false,
+  "change": "recover-from-storage-faults",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "7f3a53be30779efc52db730d34ca043f49d2ddc20332df2dad85236357ab2867",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "37e09b8c1744d4e77b417f8273b45070c96abe87e80c5951210670bc18221a7c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/design.md"
+        },
+        {
+          "content_hash": "b447b545cdbcc873e50940b681f9157c31dd42611ce67d9f6a1cbc3ad7d8cabe",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-22-storage-fault-verification.md"
+        },
+        {
+          "content_hash": "c62a898259103dfeefeb77109ce9b2f14c5c2ca72a730cdaeb2f772d8bb7dadc",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-28-chaoscontrol-campaign-coverage.md"
+        },
+        {
+          "content_hash": "6d2fd92681d6d7fb9a44d6a1353e6d58b61762e172fe7bc11b4ee9635fc5cc62",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery/cairn-archive-plan.json"
+        },
+        {
+          "content_hash": "ea255a17d17cf50ba19d28ba682872b7e33622990c5fafc81d8e49f3489b74bb",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery/cairn-gate-design.json"
+        },
+        {
+          "content_hash": "5302ded862866f16abf7e7515cb2275240a2817095fbe6e2557b05094fcb409b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery/cairn-gate-proposal.json"
+        },
+        {
+          "content_hash": "1488dafc6fd003af2e128de2ec943df7ff0e6e95d4e18b71a23fed9eb0ae8122",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery/cairn-gate-tasks.json"
+        },
+        {
+          "content_hash": "a058322087cb17246ae7e49649880cce77fda8e1f9f09e94cf9556ccdfd1620f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery/cairn-sync-execution.json"
+        },
+        {
+          "content_hash": "54711ef7e03227f372c733dc9d594707314f3797b28f388bf2d0e6feb76c6264",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery/cairn-sync-plan.json"
+        },
+        {
+          "content_hash": "199e50020349d6abd448e26ed948252b2a1287931f1a075bbc1fea457f7806b2",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery/cairn-validation-before-archive.json"
+        },
+        {
+          "content_hash": "427d528cc6b0763a7ec2fd402f6988666289eb75eb8015d690ea5eb86d9dfb4d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery/library/command.txt"
+        },
+        {
+          "content_hash": "9bccb07f6a76c89d9ac627f08e4c3cb9c5b473aa711696205044c3fcc7aabee7",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery/library/provenance.jsonl"
+        },
+        {
+          "content_hash": "19ac3a9a73fe10bfb0f2d2cc5fbd7d6eb29bba39fb171ac59393da9f8e833f48",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery/library/status.json"
+        },
+        {
+          "content_hash": "75f0d08525c73b3e8502ed7f71eb5b4a0e2df03903f887e105147e990827eb27",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery/library/summary.txt"
+        },
+        {
+          "content_hash": "0a412e1d7b7ff38e1f4d6dcf45bad69a3f4e6fd80b875e30a7a8d65b3dd444dc",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery/workspace/artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "789aa68496b8a15f9c3a158b71597b67944e740988f592595380c717273fd27d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery/workspace/command.txt"
+        },
+        {
+          "content_hash": "09e3df6489cee5f940500f75ee4386a5c66a04bdc2d1e430bf367ade71c87a48",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery/workspace/gate-receipt.preserves"
+        },
+        {
+          "content_hash": "c1d65209cfab9063d13a416bcdc62e0da4c99d9aa404ab3904203468f6f6fb7e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery/workspace/object-corpus-receipt.json"
+        },
+        {
+          "content_hash": "2ee1ef4b2277e7c35ca37d2bfdac9420947293ecb020f0046094363410aa8010",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery/workspace/provenance.jsonl"
+        },
+        {
+          "content_hash": "b6f186656ed0ac2cef70fce45937845ee20a4b65d2ead529cab448923055956d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery/workspace/remediation-plan.preserves"
+        },
+        {
+          "content_hash": "297d5be322af408d932faa557e6c2d2701488c404ccf291bf215eb0a6dde3280",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery/workspace/status.json"
+        },
+        {
+          "content_hash": "f1f815c04bd9be254a0560ebae832c9a98549e106f24e1893057a7fc8ad596d0",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery/workspace/summary.txt"
+        },
+        {
+          "content_hash": "002de83ff85bfd4f19dca0bd74e3a0cf2b0bea59cfbfe54abc8a728e4e53fab0",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/evidence/2026-10-29-peer-recovery-verification.md"
+        },
+        {
+          "content_hash": "d447112e9361c81a010cde90f87bfa6b764f436a5d362b8843e118bbbcc05641",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/proposal.md"
+        },
+        {
+          "content_hash": "8bf5484965f5e370434de4fb92fa56d7dddd562548d6f98e96109345d88699ff",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/review.md"
+        },
+        {
+          "content_hash": "ea6900726715fb6d7e7c92f9f52a99ab389510e7beead40a4572b7c0334f76d9",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/specs/consensus/spec.md"
+        },
+        {
+          "content_hash": "0a3ddb5da8380ad0260e75986556adc179b5d9dd218819b20b70c11fbf9382f8",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/specs/durable-state-ports/spec.md"
+        },
+        {
+          "content_hash": "66bc52bff684ae4f031aa00d883bf5331fa749e5b486efd8119a0250b61dd602",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-recover-from-storage-faults/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/recover-from-storage-faults"
+        }
+      ],
+      "manifest_hash": "6d1522ffee71b82befa55d87cf3986cfdedef46822cff471ed3aef2b7f3bb8fb"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "37e09b8c1744d4e77b417f8273b45070c96abe87e80c5951210670bc18221a7c",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/design.md"
+        },
+        {
+          "content_hash": "b447b545cdbcc873e50940b681f9157c31dd42611ce67d9f6a1cbc3ad7d8cabe",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-22-storage-fault-verification.md"
+        },
+        {
+          "content_hash": "c62a898259103dfeefeb77109ce9b2f14c5c2ca72a730cdaeb2f772d8bb7dadc",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-28-chaoscontrol-campaign-coverage.md"
+        },
+        {
+          "content_hash": "6d2fd92681d6d7fb9a44d6a1353e6d58b61762e172fe7bc11b4ee9635fc5cc62",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery/cairn-archive-plan.json"
+        },
+        {
+          "content_hash": "ea255a17d17cf50ba19d28ba682872b7e33622990c5fafc81d8e49f3489b74bb",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery/cairn-gate-design.json"
+        },
+        {
+          "content_hash": "5302ded862866f16abf7e7515cb2275240a2817095fbe6e2557b05094fcb409b",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery/cairn-gate-proposal.json"
+        },
+        {
+          "content_hash": "1488dafc6fd003af2e128de2ec943df7ff0e6e95d4e18b71a23fed9eb0ae8122",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery/cairn-gate-tasks.json"
+        },
+        {
+          "content_hash": "a058322087cb17246ae7e49649880cce77fda8e1f9f09e94cf9556ccdfd1620f",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery/cairn-sync-execution.json"
+        },
+        {
+          "content_hash": "54711ef7e03227f372c733dc9d594707314f3797b28f388bf2d0e6feb76c6264",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery/cairn-sync-plan.json"
+        },
+        {
+          "content_hash": "199e50020349d6abd448e26ed948252b2a1287931f1a075bbc1fea457f7806b2",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery/cairn-validation-before-archive.json"
+        },
+        {
+          "content_hash": "427d528cc6b0763a7ec2fd402f6988666289eb75eb8015d690ea5eb86d9dfb4d",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery/library/command.txt"
+        },
+        {
+          "content_hash": "9bccb07f6a76c89d9ac627f08e4c3cb9c5b473aa711696205044c3fcc7aabee7",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery/library/provenance.jsonl"
+        },
+        {
+          "content_hash": "19ac3a9a73fe10bfb0f2d2cc5fbd7d6eb29bba39fb171ac59393da9f8e833f48",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery/library/status.json"
+        },
+        {
+          "content_hash": "75f0d08525c73b3e8502ed7f71eb5b4a0e2df03903f887e105147e990827eb27",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery/library/summary.txt"
+        },
+        {
+          "content_hash": "0a412e1d7b7ff38e1f4d6dcf45bad69a3f4e6fd80b875e30a7a8d65b3dd444dc",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery/workspace/artifact-ledger-receipt.preserves"
+        },
+        {
+          "content_hash": "789aa68496b8a15f9c3a158b71597b67944e740988f592595380c717273fd27d",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery/workspace/command.txt"
+        },
+        {
+          "content_hash": "09e3df6489cee5f940500f75ee4386a5c66a04bdc2d1e430bf367ade71c87a48",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery/workspace/gate-receipt.preserves"
+        },
+        {
+          "content_hash": "c1d65209cfab9063d13a416bcdc62e0da4c99d9aa404ab3904203468f6f6fb7e",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery/workspace/object-corpus-receipt.json"
+        },
+        {
+          "content_hash": "2ee1ef4b2277e7c35ca37d2bfdac9420947293ecb020f0046094363410aa8010",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery/workspace/provenance.jsonl"
+        },
+        {
+          "content_hash": "b6f186656ed0ac2cef70fce45937845ee20a4b65d2ead529cab448923055956d",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery/workspace/remediation-plan.preserves"
+        },
+        {
+          "content_hash": "297d5be322af408d932faa557e6c2d2701488c404ccf291bf215eb0a6dde3280",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery/workspace/status.json"
+        },
+        {
+          "content_hash": "f1f815c04bd9be254a0560ebae832c9a98549e106f24e1893057a7fc8ad596d0",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery/workspace/summary.txt"
+        },
+        {
+          "content_hash": "002de83ff85bfd4f19dca0bd74e3a0cf2b0bea59cfbfe54abc8a728e4e53fab0",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/evidence/2026-10-29-peer-recovery-verification.md"
+        },
+        {
+          "content_hash": "d447112e9361c81a010cde90f87bfa6b764f436a5d362b8843e118bbbcc05641",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/proposal.md"
+        },
+        {
+          "content_hash": "8bf5484965f5e370434de4fb92fa56d7dddd562548d6f98e96109345d88699ff",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/review.md"
+        },
+        {
+          "content_hash": "ea6900726715fb6d7e7c92f9f52a99ab389510e7beead40a4572b7c0334f76d9",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/specs/consensus/spec.md"
+        },
+        {
+          "content_hash": "0a3ddb5da8380ad0260e75986556adc179b5d9dd218819b20b70c11fbf9382f8",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/specs/durable-state-ports/spec.md"
+        },
+        {
+          "content_hash": "66bc52bff684ae4f031aa00d883bf5331fa749e5b486efd8119a0250b61dd602",
+          "exists": true,
+          "path": "./.cairn/changes/recover-from-storage-faults/tasks.md"
+        }
+      ],
+      "manifest_hash": "9b701bf63d130736dd9c8d0f05a6335c5a1b7114ea9aded1f819b929a12e9c3d"
+    },
+    "kind": "archive",
+    "manifest_hash": "8dbc6e3fa889b843d9535104cbc6fc2d9cf168b9c4e589e9606b4a44943bb2f4"
+  },
+  "plan_hash": "8c67ce1f10f59255ed035aec9d3d993dba4eca94b74cacf19e41c3aa0f288fcf",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "reasons": [],
+  "receipt_hash": "c9763ec90a308c183dcaa183f80cf176a5c6e755dbd1cfa9097c6dd9b373ec91"
+}

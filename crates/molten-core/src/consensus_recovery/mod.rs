@@ -17,11 +17,13 @@
 mod admission;
 mod progress;
 mod receipt;
+mod reconcile;
 mod repair;
 
 pub use admission::*;
 pub use progress::*;
 pub use receipt::*;
+pub use reconcile::*;
 pub use repair::*;
 
 #[cfg(test)]

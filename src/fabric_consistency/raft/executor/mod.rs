@@ -2,6 +2,10 @@ use std::future::Future;
 
 use super::*;
 
+mod effects;
+#[cfg(test)]
+mod intent;
+
 pub type ReplicaTransportFuture<'a> = std::pin::Pin<Box<dyn Future<Output = crate::error::Result<String>> + Send + 'a>>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,10 +52,18 @@ pub struct ReplicaEffectObservation {
     pub evidence_ref: String,
 }
 
+/// A transport attempt failed; unlike effect observations, this carries no success evidence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplicaSendFailureObservation {
+    pub sequence: u32,
+    pub diagnostic: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutedReplicaTransition {
     pub next: ReplicaState,
     pub observations: Vec<ReplicaEffectObservation>,
+    pub transport_failures: Vec<ReplicaSendFailureObservation>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,6 +71,7 @@ pub struct FailedReplicaTransition {
     pub retained: ReplicaState,
     pub planned: ReplicaState,
     pub completed: Vec<ReplicaEffectObservation>,
+    pub transport_failures: Vec<ReplicaSendFailureObservation>,
     pub failed_kind: ReplicaEffectKind,
     pub diagnostic: String,
 }
@@ -71,7 +84,12 @@ pub enum ReplicaExecutionOutcome {
 }
 
 pub trait ReplicaDurabilityEffects {
-    fn persist_hard_state(&mut self, term: u64, voted_for: Option<&str>) -> crate::error::Result<String>;
+    fn persist_hard_state(
+        &mut self,
+        term: u64,
+        voted_for: Option<&str>,
+        is_recovery_required: bool,
+    ) -> crate::error::Result<String>;
 
     fn persist_entries(
         &mut self,
@@ -83,7 +101,11 @@ pub trait ReplicaDurabilityEffects {
 
     fn persist_commit(&mut self, through_index: u64) -> crate::error::Result<String>;
 
-    fn persist_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> crate::error::Result<String>;
+    fn persist_snapshot(
+        &mut self,
+        snapshot: &ReplicaSnapshot,
+        is_suffix_retained: bool,
+    ) -> crate::error::Result<String>;
 }
 
 pub trait ReplicaTransportEffects {
@@ -172,21 +194,80 @@ pub async fn execute_replica_event<P: LiveReplicaEffectPorts>(
     execute_planned_transition(state, planned, ports).await
 }
 
+struct IntentAdmission {
+    is_guarded: bool,
+    has_prepend: bool,
+    effect_count: usize,
+}
+
 async fn execute_planned_transition<P: LiveReplicaEffectPorts>(
     retained: &ReplicaState,
     planned: ReplicaTransition,
     ports: &mut P,
 ) -> ReplicaExecutionOutcome {
-    let mut completed = Vec::with_capacity(planned.effects.len());
-    for (index, effect) in planned.effects.iter().enumerate() {
-        let kind = effect_kind(effect);
-        let evidence_ref = match execute_effect(ports, effect).await {
+    // Borrow the planned payloads: fencing must not duplicate commands or entries.
+    let is_guarded = planned.effects.iter().any(effects::requires_durable_intent);
+    let has_prepend = is_guarded && !matches!(planned.effects.first(), Some(ReplicaEffect::PersistHardState { .. }));
+    let has_clear = is_guarded && !matches!(planned.next.rejoin, ReplicaRejoin::Recovering(_));
+    let effect_count = planned
+        .effects
+        .len()
+        .saturating_add(usize::from(has_prepend))
+        .saturating_add(usize::from(has_clear));
+    if effect_count > retained.profile.max_effects_per_step || u32::try_from(effect_count).is_err() {
+        return ReplicaExecutionOutcome::Denied {
+            retained: retained.clone(),
+            diagnostic: "live Raft durable intent exceeds the admitted effect bound".to_string(),
+        };
+    }
+    execute_intent_batch(retained, planned, ports, IntentAdmission {
+        is_guarded,
+        has_prepend,
+        effect_count,
+    })
+    .await
+}
+
+async fn execute_intent_batch<P: LiveReplicaEffectPorts>(
+    retained: &ReplicaState,
+    planned: ReplicaTransition,
+    ports: &mut P,
+    admission: IntentAdmission,
+) -> ReplicaExecutionOutcome {
+    let mut completed = Vec::with_capacity(admission.effect_count);
+    let mut transport_failures = Vec::with_capacity(admission.effect_count);
+    for index in 0..admission.effect_count {
+        let effect =
+            index.checked_sub(usize::from(admission.has_prepend)).and_then(|offset| planned.effects.get(offset));
+        let kind = effect.map_or(ReplicaEffectKind::PersistHardState, effects::effect_kind);
+        // Admission checked the entire fenced batch fits the sequence domain.
+        let sequence = index as u32;
+        let result = match effect {
+            Some(effect) => effects::execute_effect(ports, effect, admission.is_guarded).await,
+            None if admission.has_prepend && index == 0 => {
+                ports.persist_hard_state(retained.current_term, retained.voted_for.as_deref(), true)
+            }
+            None => ports.persist_hard_state(planned.next.current_term, planned.next.voted_for.as_deref(), false),
+        };
+        let evidence_ref = match result {
             Ok(reference) => reference,
+            Err(error) if kind == ReplicaEffectKind::Send => {
+                // Raft tolerates message loss. Keep the planned authority and run later
+                // effects, especially timers, without claiming successful delivery.
+                if transport_failures.len() < admission.effect_count {
+                    transport_failures.push(ReplicaSendFailureObservation {
+                        sequence,
+                        diagnostic: effects::bounded_transport_diagnostic(&error),
+                    });
+                }
+                continue;
+            }
             Err(error) => {
                 return ReplicaExecutionOutcome::Failed(Box::new(FailedReplicaTransition {
-                    retained: retained.clone(),
+                    retained: effects::quarantine(retained),
                     planned: planned.next,
                     completed,
+                    transport_failures,
                     failed_kind: kind,
                     diagnostic: error.to_string(),
                 }));
@@ -194,25 +275,14 @@ async fn execute_planned_transition<P: LiveReplicaEffectPorts>(
         };
         if let Err(error) = crate::preserves_rail::validate_content_ref(&evidence_ref) {
             return ReplicaExecutionOutcome::Failed(Box::new(FailedReplicaTransition {
-                retained: retained.clone(),
+                retained: effects::quarantine(retained),
                 planned: planned.next,
                 completed,
+                transport_failures,
                 failed_kind: kind,
                 diagnostic: format!("live Raft effect returned invalid evidence ref: {error}"),
             }));
         }
-        let sequence = match u32::try_from(index) {
-            Ok(sequence) => sequence,
-            Err(_) => {
-                return ReplicaExecutionOutcome::Failed(Box::new(FailedReplicaTransition {
-                    retained: retained.clone(),
-                    planned: planned.next,
-                    completed,
-                    failed_kind: kind,
-                    diagnostic: "live Raft effect sequence exceeds u32".to_string(),
-                }));
-            }
-        };
         completed.push(ReplicaEffectObservation {
             sequence,
             kind,
@@ -222,53 +292,6 @@ async fn execute_planned_transition<P: LiveReplicaEffectPorts>(
     ReplicaExecutionOutcome::Applied(ExecutedReplicaTransition {
         next: planned.next,
         observations: completed,
+        transport_failures,
     })
-}
-
-async fn execute_effect<P: LiveReplicaEffectPorts>(
-    ports: &mut P,
-    effect: &ReplicaEffect,
-) -> crate::error::Result<String> {
-    match effect {
-        ReplicaEffect::PersistHardState { term, voted_for } => ports.persist_hard_state(*term, voted_for.as_deref()),
-        ReplicaEffect::PersistEntries { truncate_from, entries } => ports.persist_entries(*truncate_from, entries),
-        ReplicaEffect::FlushLog { through_index } => ports.flush_log(*through_index),
-        ReplicaEffect::PersistCommit { through_index } => ports.persist_commit(*through_index),
-        ReplicaEffect::PersistSnapshot { snapshot } => ports.persist_snapshot(snapshot),
-        ReplicaEffect::Send { envelope } => ports.send(envelope).await,
-        ReplicaEffect::ArmElectionTimer { timer_ref } => ports.arm_election_timer(timer_ref),
-        ReplicaEffect::ArmHeartbeatTimer => ports.arm_heartbeat_timer(),
-        ReplicaEffect::RestoreApplicationSnapshot { snapshot } => ports.restore_snapshot(snapshot),
-        ReplicaEffect::ApplyCommitted { entries } => ports.apply_committed(entries),
-        ReplicaEffect::ProposalOutcome {
-            request_ref,
-            disposition,
-            committed_index,
-        } => ports.proposal_outcome(request_ref, *disposition, *committed_index),
-        ReplicaEffect::ReadOutcome {
-            request_ref,
-            mode,
-            disposition,
-            observed_index,
-        } => ports.read_outcome(request_ref, *mode, *disposition, *observed_index),
-        ReplicaEffect::LifecycleChanged { lifecycle } => ports.lifecycle_changed(*lifecycle),
-    }
-}
-
-fn effect_kind(effect: &ReplicaEffect) -> ReplicaEffectKind {
-    match effect {
-        ReplicaEffect::PersistHardState { .. } => ReplicaEffectKind::PersistHardState,
-        ReplicaEffect::PersistEntries { .. } => ReplicaEffectKind::PersistEntries,
-        ReplicaEffect::FlushLog { .. } => ReplicaEffectKind::FlushLog,
-        ReplicaEffect::PersistCommit { .. } => ReplicaEffectKind::PersistCommit,
-        ReplicaEffect::PersistSnapshot { .. } => ReplicaEffectKind::PersistSnapshot,
-        ReplicaEffect::Send { .. } => ReplicaEffectKind::Send,
-        ReplicaEffect::ArmElectionTimer { .. } => ReplicaEffectKind::ArmElectionTimer,
-        ReplicaEffect::ArmHeartbeatTimer => ReplicaEffectKind::ArmHeartbeatTimer,
-        ReplicaEffect::RestoreApplicationSnapshot { .. } => ReplicaEffectKind::RestoreApplicationSnapshot,
-        ReplicaEffect::ApplyCommitted { .. } => ReplicaEffectKind::ApplyCommitted,
-        ReplicaEffect::ProposalOutcome { .. } => ReplicaEffectKind::ProposalOutcome,
-        ReplicaEffect::ReadOutcome { .. } => ReplicaEffectKind::ReadOutcome,
-        ReplicaEffect::LifecycleChanged { .. } => ReplicaEffectKind::LifecycleChanged,
-    }
 }

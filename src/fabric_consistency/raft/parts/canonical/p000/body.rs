@@ -75,6 +75,9 @@ fn message_value(message: &Message) -> crate::error::Result<preserves::IOValue> 
         message @ (Message::InstallSnapshot { .. } | Message::SnapshotResponse { .. }) => {
             snapshot_message_value(message)
         }
+        message @ (Message::RecoveryQuery { .. } | Message::RecoveryReport { .. }) => {
+            recovery_message_value(message)
+        }
     }
 }
 
@@ -228,7 +231,7 @@ fn snapshot_message_value(message: &Message) -> crate::error::Result<preserves::
     })
 }
 
-fn entry_value(entry: &ReplicatedEntry) -> preserves::IOValue {
+pub(super) fn entry_value(entry: &ReplicatedEntry) -> preserves::IOValue {
     crate::preserves_rail::record("raft-replicated-entry-v1", vec![
         crate::preserves_rail::string(RAFT_REPLICATED_ENTRY_SCHEMA),
         crate::preserves_rail::u64_value(entry.index),
@@ -240,6 +243,9 @@ fn entry_value(entry: &ReplicatedEntry) -> preserves::IOValue {
 }
 
 fn parse_message(value: &preserves::Value<preserves::IOValue>) -> crate::error::Result<Message> {
+    if let Some(message) = parse_recovery_message(value)? {
+        return Ok(message);
+    }
     if let Some(fields) = value.collect_simple_record("request-vote", Some(REQUEST_VOTE_ARITY)) {
         return Ok(Message::RequestVote {
             term: required_u64(&fields[0], "Raft vote term")?,

@@ -41,7 +41,9 @@ pub(super) fn validate_message_envelope(
     if !state.membership.voters.contains(&envelope.from) || !state.membership.voters.contains(&envelope.to) {
         return Err(crate::error::Failure::invalid_harness("Raft message endpoint is outside admitted membership"));
     }
-    if envelope.message.term() == 0 {
+    if envelope.message.term() == 0
+        && !matches!(envelope.message, Message::RecoveryQuery { .. } | Message::RecoveryReport { .. })
+    {
         return Err(crate::error::Failure::invalid_harness("Raft protocol message cannot use term zero"));
     }
     if envelope.message.config_epoch() != state.membership.config_epoch
@@ -56,6 +58,9 @@ pub(super) fn validate_message_envelope(
 }
 
 pub(super) fn validate_replica_state(state: &ReplicaState) -> crate::error::Result<()> {
+    if !matches!(state.rejoin, ReplicaRejoin::Voter) && state.role != ReplicaRole::Follower {
+        return Err(crate::error::Failure::invalid_harness("recovering Raft participant cannot campaign or lead"));
+    }
     if state.membership.voters.len() != STATIC_VOTER_COUNT || !state.membership.voters.contains(&state.node_id) {
         return Err(crate::error::Failure::invalid_harness("Raft state has invalid static membership"));
     }
@@ -231,6 +236,8 @@ fn validate_incoming_entry<'a>(
 
 fn validate_message_sender(envelope: &ReplicaMessageEnvelope) -> crate::error::Result<()> {
     let embedded_sender = match &envelope.message {
+        Message::RecoveryQuery { requester_id, .. } => requester_id,
+        Message::RecoveryReport { peer_id, .. } => peer_id,
         Message::RequestVote { candidate_id, .. } => candidate_id,
         Message::VoteResponse { voter_id, .. } => voter_id,
         Message::AppendEntries { leader_id, .. }
@@ -269,8 +276,10 @@ fn validate_log(state: &ReplicaState) -> crate::error::Result<()> {
         None => INITIAL_LOG_INDEX,
     };
     let mut request_refs = std::collections::BTreeSet::new();
+    let mut previous_term = state.snapshot.as_ref().map_or(INITIAL_TERM, |snapshot| snapshot.last_included_term);
     for entry in &state.log {
-        validate_state_entry(entry, expected, &mut request_refs)?;
+        validate_state_entry(entry, expected, previous_term, &mut request_refs)?;
+        previous_term = entry.term;
         expected = expected
             .checked_add(NEXT_LOG_INDEX_STEP)
             .ok_or_else(|| crate::error::Failure::invalid_harness("Raft log index overflow"))?;

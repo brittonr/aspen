@@ -1,3 +1,5 @@
+mod recovery;
+
 use super::*;
 
 #[derive(Debug)]
@@ -39,9 +41,8 @@ impl RedbReplicaPort {
     /// Storage that serves admits the replica as a voter. Storage that is
     /// quarantined, repaired, or uncertain admits nothing on local facts alone:
     /// it needs protocol reconciliation, log or snapshot validation, current
-    /// membership, and a resolved term and vote first. Startup recovery does
-    /// not consult this yet: the peer-query recovery path it needs is open
-    /// work in `recover-from-storage-faults`.
+    /// membership, and a resolved term and vote first. Startup carries this
+    /// admission into the live peer-query protocol before enabling voting.
     // r[impl molten.consensus.repair_admission]
     pub fn storage_admission(&self) -> molten_core::consensus_recovery::RepairAdmission {
         let is_serving = self.adapter.health() == crate::fabric_durability::AdapterHealth::Serving;
@@ -91,29 +92,50 @@ impl RedbReplicaPort {
     }
 
     pub fn plan_recovery(&self, start_plan: ReplicaStartPlan) -> crate::error::Result<ReplicaPlan> {
+        if self.adapter.health() != crate::fabric_durability::AdapterHealth::Serving {
+            return Err(crate::error::Failure::invalid_harness("live Raft recovery requires reopened serving storage"));
+        }
         if !self.adapter.state().buffered_log.is_empty() {
             return Err(crate::error::Failure::invalid_harness(
                 "live Raft recovery denies while buffered durability records remain",
             ));
         }
-        let latest_snapshot_ref = self
-            .adapter
-            .state()
-            .snapshots
-            .values()
-            .max_by(|left, right| {
-                (left.covered_log_sequence, &left.snapshot_ref).cmp(&(right.covered_log_sequence, &right.snapshot_ref))
-            })
-            .map(|snapshot| snapshot.snapshot_ref.clone());
-        let snapshot_bytes = latest_snapshot_ref
-            .as_deref()
-            .map(|snapshot_ref| {
-                self.adapter
-                    .load_snapshot_bytes(snapshot_ref, self.adapter.state().descriptor.generation)
-                    .map(|(_restore, bytes)| bytes)
-            })
-            .transpose()?;
-        plan_replica(start_plan, &self.adapter.state().durable_log, snapshot_bytes.as_deref())
+        let snapshot = self.recovery_snapshot()?;
+        let mut recovery = plan_replica(
+            start_plan,
+            &self.adapter.state().durable_log,
+            snapshot.as_ref().map(|(bytes, _)| bytes.as_slice()),
+            snapshot.as_ref().and_then(|(_, coverage)| *coverage),
+        )?;
+        if self.storage_admission().role != Some(molten_core::consensus_recovery::RejoinRole::Voter) {
+            let state = &mut recovery.start_plan.state;
+            state.rejoin = ReplicaRejoin::Recovering(RecoveryRound {
+                round_ref: state.active_election_timer_ref.clone(),
+                fence_term: None,
+                peers: std::collections::BTreeMap::new(),
+            });
+            if !matches!(
+                recovery.start_plan.initial_effects.first(),
+                Some(ReplicaEffect::PersistHardState {
+                    is_recovery_required: true,
+                    ..
+                })
+            ) {
+                recovery.start_plan.initial_effects.insert(0, ReplicaEffect::PersistHardState {
+                    term: state.current_term,
+                    voted_for: state.voted_for.clone(),
+                    is_recovery_required: true,
+                });
+            }
+            recovery.recovery_ref = crate::preserves_rail::canonical_hash(&crate::preserves_rail::record(
+                "raft-peer-recovery-required-v1",
+                vec![
+                    crate::preserves_rail::string(&recovery.recovery_ref),
+                    crate::preserves_rail::string(&state.active_election_timer_ref),
+                ],
+            ))?;
+        }
+        Ok(recovery)
     }
 
     fn append_value(
@@ -141,13 +163,22 @@ impl RedbReplicaPort {
 }
 
 impl ReplicaDurabilityEffects for RedbReplicaPort {
-    fn persist_hard_state(&mut self, term: u64, voted_for: Option<&str>) -> crate::error::Result<String> {
+    fn persist_hard_state(
+        &mut self,
+        term: u64,
+        voted_for: Option<&str>,
+        is_recovery_required: bool,
+    ) -> crate::error::Result<String> {
         let vote = voted_for.map_or_else(
             || crate::preserves_rail::record("none", Vec::new()),
             |voter| crate::preserves_rail::record("some", vec![crate::preserves_rail::string(voter)]),
         );
         self.append_value(
-            crate::preserves_rail::record("raft-hard-state-v1", vec![crate::preserves_rail::u64_value(term), vote]),
+            crate::preserves_rail::record("raft-hard-state-v2", vec![
+                crate::preserves_rail::u64_value(term),
+                vote,
+                crate::preserves_rail::bool_value(is_recovery_required),
+            ]),
             crate::fabric_durability::DurabilityLevel::MachineLoss,
         )
     }
@@ -164,7 +195,7 @@ impl ReplicaDurabilityEffects for RedbReplicaPort {
         self.append_value(
             crate::preserves_rail::record("raft-log-mutation-v1", vec![
                 truncate,
-                crate::preserves_rail::sequence(entries.iter().map(entry_value).collect()),
+                crate::preserves_rail::sequence(entries.iter().map(super::canonical::entry_value).collect()),
             ]),
             crate::fabric_durability::DurabilityLevel::Buffered,
         )
@@ -194,7 +225,11 @@ impl ReplicaDurabilityEffects for RedbReplicaPort {
         )
     }
 
-    fn persist_snapshot(&mut self, snapshot: &ReplicaSnapshot) -> crate::error::Result<String> {
+    fn persist_snapshot(
+        &mut self,
+        snapshot: &ReplicaSnapshot,
+        is_suffix_retained: bool,
+    ) -> crate::error::Result<String> {
         if snapshot.snapshot_ref != snapshot_ref(snapshot)? {
             return Err(crate::error::Failure::invalid_harness(
                 "live Raft snapshot identity mismatch before persistence",
@@ -203,6 +238,13 @@ impl ReplicaDurabilityEffects for RedbReplicaPort {
         let value = snapshot_value(snapshot);
         let bytes = crate::preserves_rail::canonical_bytes(&value)?;
         let content_ref = crate::preserves_rail::content_ref_from_bytes(&bytes);
+        self.append_value(
+            crate::preserves_rail::record("raft-snapshot-suffix-v1", vec![
+                crate::preserves_rail::string(&snapshot.snapshot_ref),
+                crate::preserves_rail::bool_value(is_suffix_retained),
+            ]),
+            crate::fabric_durability::DurabilityLevel::MachineLoss,
+        )?;
         let generation = self.adapter.state().descriptor.generation;
         let covered_log_sequence = self.adapter.state().durable_log.last().map(|record| record.sequence);
         let request = crate::fabric_durability::SnapshotRequest {
@@ -216,17 +258,6 @@ impl ReplicaDurabilityEffects for RedbReplicaPort {
         };
         Ok(self.adapter.create_snapshot(&request, &bytes)?.transition_ref)
     }
-}
-
-fn entry_value(entry: &ReplicatedEntry) -> preserves::IOValue {
-    crate::preserves_rail::record("raft-replicated-entry-v1", vec![
-        crate::preserves_rail::string(RAFT_REPLICATED_ENTRY_SCHEMA),
-        crate::preserves_rail::u64_value(entry.index),
-        crate::preserves_rail::u64_value(entry.term),
-        crate::preserves_rail::string(&entry.request_ref),
-        crate::preserves_rail::string(&entry.command_ref),
-        crate::preserves_rail::string(&entry.command_schema_ref),
-    ])
 }
 
 pub(super) fn snapshot_value(snapshot: &ReplicaSnapshot) -> preserves::IOValue {

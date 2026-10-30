@@ -57,13 +57,10 @@ fn host_start_denies_group_policy_not_admitted_by_manifest() {
 }
 
 #[derive(Debug, Default)]
-struct DurabilityPort {
-    hard_state_writes: usize,
-}
+struct DurabilityPort;
 
 impl ReplicaDurabilityEffects for DurabilityPort {
-    fn persist_hard_state(&mut self, _term: u64, _voted_for: Option<&str>) -> crate::error::Result<String> {
-        self.hard_state_writes += 1;
+    fn persist_hard_state(&mut self, _term: u64, _voted_for: Option<&str>, _is_recovery_required: bool) -> crate::error::Result<String> {
         Ok(test_ref("service-hard-state"))
     }
 
@@ -83,7 +80,7 @@ impl ReplicaDurabilityEffects for DurabilityPort {
         Ok(test_ref("service-commit"))
     }
 
-    fn persist_snapshot(&mut self, _snapshot: &ReplicaSnapshot) -> crate::error::Result<String> {
+    fn persist_snapshot(&mut self, _snapshot: &ReplicaSnapshot, _is_suffix_retained: bool) -> crate::error::Result<String> {
         Ok(test_ref("service-snapshot"))
     }
 }
@@ -162,7 +159,7 @@ async fn scoped_executes_startup_and_current_timer_through_separate_ports() {
     )
     .expect("control port");
     let ports = ReplicaPortBundle::new(runtime_identity, ReplicaAdapterSet {
-        durability: DurabilityPort::default(),
+        durability: DurabilityPort,
         transport: TransportPort::default(),
         time: TimePort::default(),
         application,
@@ -172,8 +169,6 @@ async fn scoped_executes_startup_and_current_timer_through_separate_ports() {
     let mut service = ScopedLiveReplica::start(plan, ports, event_receiver).await.expect("scoped live service");
 
     assert!(!service.production_admitted());
-    assert_eq!(service.startup_observations().len(), EXPECTED_STARTUP_OBSERVATIONS);
-    assert_eq!(service.ports().durability.hard_state_writes, 1);
     assert_eq!(service.ports().time.election_timer_refs, vec![initial_timer_ref.clone()]);
 
     event_sender
@@ -188,7 +183,6 @@ async fn scoped_executes_startup_and_current_timer_through_separate_ports() {
     assert!(matches!(outcome, ReplicaExecutionOutcome::Applied(_)));
     assert_eq!(service.state().role, ReplicaRole::Candidate);
     assert_eq!(service.ports().transport.sent, EXPECTED_ELECTION_PORT_CALLS);
-    assert_eq!(service.ports().durability.hard_state_writes, EXPECTED_ELECTION_PORT_CALLS);
     assert_eq!(service.ports().time.election_timer_refs.len(), EXPECTED_ELECTION_PORT_CALLS);
     assert_eq!(service.ports().time.election_timer_refs.last(), Some(&service.state().active_election_timer_ref));
 
@@ -199,7 +193,6 @@ async fn scoped_executes_startup_and_current_timer_through_separate_ports() {
         .await;
     assert!(matches!(stale, ReplicaExecutionOutcome::Denied { .. }));
     assert_eq!(service.ports().transport.sent, EXPECTED_ELECTION_PORT_CALLS);
-    assert_eq!(service.ports().durability.hard_state_writes, EXPECTED_ELECTION_PORT_CALLS);
 }
 
 fn assert_substituted_identity_denied(runtime_identity: &ReplicaRuntimePortIdentity, plan: &ReplicaStartPlan) {

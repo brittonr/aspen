@@ -20,6 +20,7 @@ fn selected_records_milestones_and_suppresses_heartbeat_receipts() {
             &ReplicaExecutionOutcome::Applied(ExecutedReplicaTransition {
                 next: state.clone(),
                 observations: Vec::new(),
+                transport_failures: Vec::new(),
             }),
         )
         .expect("suppressed heartbeat");
@@ -42,6 +43,7 @@ fn selected_records_milestones_and_suppresses_heartbeat_receipts() {
             &ReplicaExecutionOutcome::Applied(ExecutedReplicaTransition {
                 next: committed.clone(),
                 observations: vec![observation(ReplicaEffectKind::PersistCommit, "selected-commit")],
+                transport_failures: Vec::new(),
             }),
         )
         .expect("selected commit evidence");
@@ -62,6 +64,7 @@ fn selected_records_milestones_and_suppresses_heartbeat_receipts() {
             &ReplicaExecutionOutcome::Applied(ExecutedReplicaTransition {
                 next: committed.clone(),
                 observations: vec![observation(ReplicaEffectKind::ReadOutcome, "selected-read")],
+                transport_failures: Vec::new(),
             }),
         )
         .expect("selected read evidence");
@@ -236,4 +239,52 @@ fn quorum(acknowledgement_members: Vec<String>) -> ReplicaQuorum {
         acknowledgement_members,
         source_ref: super::tests::test_ref("quorum-source"),
     }
+}
+
+#[test]
+fn transport_loss_degrades_health_until_a_successful_transport_round() {
+    let (plan, state) = start_plan();
+    let mut ledger = ReplicaLedger::new(&plan).expect("ledger");
+    let outcome = ReplicaExecutionOutcome::Applied(ExecutedReplicaTransition {
+        next: state.clone(),
+        observations: vec![observation(
+            ReplicaEffectKind::ArmElectionTimer,
+            "timer-after-send-loss",
+        )],
+        transport_failures: vec![ReplicaSendFailureObservation {
+            sequence: 0,
+            diagnostic: "peer unavailable".to_string(),
+        }],
+    });
+    ledger
+        .observe(&state, &ReplicaEvent::HeartbeatTimeout, &outcome)
+        .expect("transport failure evidence");
+    let failure = ledger.records().last().expect("failure record");
+    assert_eq!(failure.kind, ReplicaKind::Failure);
+    assert!(failure.quorum_evidence_ref.is_none());
+    assert!(failure.quorum_members.is_empty());
+    let degraded = ledger.aggregate_health(&state, false).expect("degraded health");
+    assert_eq!(degraded.status, "degraded");
+    assert_eq!(degraded.diagnostic.as_deref(), Some("peer unavailable"));
+    assert_eq!(ledger.suppressed_heartbeat_count(), 0);
+
+    let local_only = ReplicaExecutionOutcome::Applied(ExecutedReplicaTransition {
+        next: state.clone(),
+        observations: vec![observation(ReplicaEffectKind::ArmElectionTimer, "local-only-timer")],
+        transport_failures: Vec::new(),
+    });
+    ledger.observe(&state, &ReplicaEvent::HeartbeatTimeout, &local_only).expect("local event");
+    assert_eq!(ledger.aggregate_health(&state, false).expect("still degraded").status, "degraded");
+
+    let delivered = ReplicaExecutionOutcome::Applied(ExecutedReplicaTransition {
+        next: state.clone(),
+        observations: vec![observation(ReplicaEffectKind::Send, "recovered-send")],
+        transport_failures: Vec::new(),
+    });
+    ledger.observe(&state, &ReplicaEvent::HeartbeatTimeout, &delivered).expect("transport recovery");
+    let healthy = ledger.aggregate_health(&state, false).expect("recovered health");
+    assert_eq!(healthy.status, "healthy");
+    assert!(healthy.diagnostic.is_none());
+    assert_ne!(healthy.evidence_ref, degraded.evidence_ref);
+    assert_eq!(ledger.records().last().expect("retained failure history").kind, ReplicaKind::Failure);
 }

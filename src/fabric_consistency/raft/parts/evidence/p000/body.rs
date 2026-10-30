@@ -188,4 +188,5 @@ pub struct ReplicaLedger {
     suppressed_heartbeat_count: u64,
     saturated: bool,
     diagnostic: Option<String>,
+    transport_diagnostic: Option<String>,
 }

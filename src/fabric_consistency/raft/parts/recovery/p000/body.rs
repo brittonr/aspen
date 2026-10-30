@@ -21,14 +21,16 @@ pub fn plan_replica(
     mut start_plan: ReplicaStartPlan,
     durable_records: &[crate::fabric_durability::LogRecord],
     snapshot_bytes: Option<&[u8]>,
+    snapshot_covered_sequence: Option<u64>,
 ) -> crate::error::Result<ReplicaPlan> {
     let mut state = reset_state(&start_plan.state)?;
-    let (mut durable_commit_index, durable_record_refs) = replay_durable_records(&mut state, durable_records)?;
     let snapshot = snapshot_bytes.map(parse_snapshot).transpose()?;
-    if let Some(snapshot) = &snapshot {
-        durable_commit_index = durable_commit_index.max(snapshot.last_included_index);
+    if snapshot.is_none() && snapshot_covered_sequence.is_some() {
+        return Err(crate::error::Failure::invalid_harness("snapshot coverage requires a snapshot"));
     }
-    install_snapshot(&mut state, durable_commit_index, snapshot)?;
+    let (durable_commit_index, durable_record_refs) = replay_durable_records(
+        &mut state, durable_records, snapshot, snapshot_covered_sequence,
+    )?;
     if durable_commit_index > support_last_log_index(&state) {
         return Err(crate::error::Failure::invalid_harness(
             "live Raft recovery commit boundary exceeds durable log",
@@ -45,34 +47,8 @@ pub fn plan_replica(
     for entry in state.log.iter().filter(|entry| entry.index <= durable_commit_index) {
         state.completed_requests.insert(entry.request_ref.clone(), entry.index);
     }
-    state.last_applied = durable_commit_index;
-    state.election_timer_sequence = INITIAL_ELECTION_TIMER_SEQUENCE;
-    state.active_election_timer_ref = election_timer_ref(
-        &state.profile.group_binding_ref,
-        &state.node_id,
-        state.profile.service_generation,
-        state.current_term,
-        state.election_timer_sequence,
-    )?;
-    validate_recovered_replica_state(&state)?;
-
-    let mut effects = Vec::new();
-    if let Some(snapshot) = &state.snapshot {
-        effects.push(ReplicaEffect::RestoreApplicationSnapshot {
-            snapshot: snapshot.clone(),
-        });
-    }
-    if !replay_entries.is_empty() {
-        effects.push(ReplicaEffect::ApplyCommitted {
-            entries: replay_entries.clone(),
-        });
-    }
-    effects.push(ReplicaEffect::ArmElectionTimer {
-        timer_ref: state.active_election_timer_ref.clone(),
-    });
-    if effects.len() > state.profile.max_effects_per_step {
-        return Err(crate::error::Failure::invalid_harness("live Raft recovery exceeds the admitted effect bound"));
-    }
+    finish_recovered_state(&mut state, durable_commit_index)?;
+    let effects = initial_effects(&state, &replay_entries)?;
     let recovery_ref = r#ref(&state, &durable_record_refs, snapshot_bytes)?;
     start_plan.state = state;
     start_plan.initial_effects = effects;
@@ -90,10 +66,17 @@ pub fn plan_replica(
 fn replay_durable_records(
     state: &mut ReplicaState,
     durable_records: &[crate::fabric_durability::LogRecord],
+    snapshot: Option<ReplicaSnapshot>,
+    snapshot_covered_sequence: Option<u64>,
 ) -> crate::error::Result<(u64, Vec<String>)> {
     let mut expected_sequence = 0_u64;
     let mut durable_commit_index = INITIAL_COMMIT_INDEX;
     let mut durable_record_refs = Vec::with_capacity(durable_records.len());
+    let snapshot_boundary = snapshot.as_ref().map(|snapshot| (snapshot.last_included_index, snapshot.last_included_term));
+    replay_snapshot(state, &mut durable_commit_index, snapshot)?;
+    let mut boundary_term = None;
+    let mut is_suffix_retained = None;
+    let mut is_coverage_seen = snapshot_covered_sequence.is_none();
     for record in durable_records {
         if record.sequence != expected_sequence {
             return Err(crate::error::Failure::invalid_harness("live Raft recovery durable sequence has a gap"));
@@ -102,12 +85,27 @@ fn replay_durable_records(
             crate::error::Failure::invalid_harness("live Raft recovery durable sequence overflow")
         })?;
         if crate::preserves_rail::content_ref_from_bytes(&record.value) != record.value_ref {
-            return Err(crate::error::Failure::invalid_harness(
-                "live Raft recovery durable record content ref mismatch",
-            ));
+            return Err(crate::error::Failure::invalid_harness("live Raft recovery durable record content ref mismatch"));
         }
-        replay_record(state, &mut durable_commit_index, &record.value)?;
+        if snapshot_covered_sequence.is_some_and(|covered| record.sequence <= covered) {
+            replay_snapshot_prefix(state, &mut durable_commit_index, &record.value,
+                &mut boundary_term, &mut is_suffix_retained)?;
+        } else {
+            replay_record(state, &mut durable_commit_index, &record.value)?;
+        }
+        if Some(record.sequence) == snapshot_covered_sequence {
+            is_coverage_seen = true;
+            if snapshot_boundary.is_some_and(|(_, term)| !is_suffix_retained.unwrap_or(Some(term) == boundary_term)) {
+                if snapshot_boundary.is_some_and(|(index, _)| durable_commit_index > index) {
+                    return Err(crate::error::Failure::invalid_harness("snapshot conflicts with a committed suffix"));
+                }
+                state.log.clear();
+            }
+        }
         durable_record_refs.push(record.value_ref.clone());
+    }
+    if !is_coverage_seen {
+        return Err(crate::error::Failure::invalid_harness("snapshot coverage exceeds durable records"));
     }
     Ok((durable_commit_index, durable_record_refs))
 }
@@ -117,6 +115,7 @@ fn reset_state(initial: &ReplicaState) -> crate::error::Result<ReplicaState> {
     let mut state = initial.clone();
     state.role = ReplicaRole::Follower;
     state.lifecycle = ReplicaLifecycle::Running;
+    state.rejoin = ReplicaRejoin::Voter;
     state.current_term = INITIAL_TERM;
     state.voted_for = None;
     state.leader_id = None;
@@ -133,49 +132,6 @@ fn reset_state(initial: &ReplicaState) -> crate::error::Result<ReplicaState> {
     Ok(state)
 }
 
-fn replay_record(state: &mut ReplicaState, durable_commit_index: &mut u64, bytes: &[u8]) -> crate::error::Result<()> {
-    let decoded = crate::preserves_rail::strict_canonical_decode(bytes)?;
-    let value = &decoded.value;
-    if let Some(fields) = value.collect_simple_record("raft-hard-state-v1", Some(HARD_STATE_ARITY)) {
-        let fields = fields.iter().collect::<Vec<_>>();
-        let term = canonical::required_u64(&fields[0], "recovered hard-state term")?;
-        if term < state.current_term {
-            return Err(crate::error::Failure::invalid_harness("live Raft recovery hard-state term regressed"));
-        }
-        state.current_term = term;
-        state.voted_for = optional_string(&fields[1])?;
-        return Ok(());
-    }
-    if let Some(fields) = value.collect_simple_record("raft-log-mutation-v1", Some(LOG_MUTATION_ARITY)) {
-        let fields = fields.iter().collect::<Vec<_>>();
-        let truncate_from = optional_u64(&fields[0])?;
-        let entries = parse_entries(&fields[1])?;
-        apply_log_mutation(state, *durable_commit_index, truncate_from, entries)?;
-        return Ok(());
-    }
-    if let Some(fields) = value.collect_simple_record("raft-log-flush-v1", Some(SINGLE_INDEX_ARITY)) {
-        let fields = fields.iter().collect::<Vec<_>>();
-        let through_index = canonical::required_u64(&fields[0], "recovered flush boundary")?;
-        if through_index > support_last_log_index(state) {
-            return Err(crate::error::Failure::invalid_harness(
-                "live Raft recovery flush boundary exceeds durable log",
-            ));
-        }
-        return Ok(());
-    }
-    if let Some(fields) = value.collect_simple_record("raft-commit-boundary-v1", Some(SINGLE_INDEX_ARITY)) {
-        let fields = fields.iter().collect::<Vec<_>>();
-        let through_index = canonical::required_u64(&fields[0], "recovered commit boundary")?;
-        if through_index <= *durable_commit_index || through_index > support_last_log_index(state) {
-            return Err(crate::error::Failure::invalid_harness(
-                "live Raft recovery commit boundary is stale or beyond the log",
-            ));
-        }
-        *durable_commit_index = through_index;
-        return Ok(());
-    }
-    Err(crate::error::Failure::invalid_harness("live Raft recovery found an unsupported durable record"))
-}
 
 fn apply_log_mutation(
     state: &mut ReplicaState,

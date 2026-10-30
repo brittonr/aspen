@@ -24,7 +24,7 @@ fn redb_replica_port_makes_hard_state_and_flushed_entries_durable() {
     )
     .expect("Redb replica durability port");
 
-    let hard_state = port.persist_hard_state(TERM, Some("node-a")).expect("hard state");
+    let hard_state = port.persist_hard_state(TERM, Some("node-a"), false).expect("hard state");
     assert!(hard_state.starts_with("blake3:"));
     assert!(port.adapter().state().buffered_log.is_empty());
     assert_eq!(port.adapter().state().durable_log.len(), 1);
@@ -49,7 +49,7 @@ fn redb_replica_port_makes_hard_state_and_flushed_entries_durable() {
         completed_requests: Default::default(),
     };
     snapshot.snapshot_ref = snapshot_ref(&snapshot).expect("snapshot identity");
-    let snapshot_evidence = port.persist_snapshot(&snapshot).expect("durable snapshot");
+    let snapshot_evidence = port.persist_snapshot(&snapshot, true).expect("durable snapshot");
     assert!(snapshot_evidence.starts_with("blake3:"));
     assert!(port.adapter().state().snapshots.contains_key(&snapshot.snapshot_ref));
 }
@@ -70,7 +70,7 @@ fn durable_installed_snapshot_establishes_its_recovery_commit_boundary() {
     .expect("Redb adapter");
     let mut port = RedbReplicaPort::new(adapter, durable_log_ref.clone(), snapshot_store_ref.clone())
         .expect("Redb replica durability port");
-    port.persist_hard_state(TERM, None).expect("snapshot hard state");
+    port.persist_hard_state(TERM, None, false).expect("snapshot hard state");
     let mut snapshot = ReplicaSnapshot {
         snapshot_ref: String::new(),
         group_binding_ref: initial.profile.group_binding_ref.clone(),
@@ -83,7 +83,7 @@ fn durable_installed_snapshot_establishes_its_recovery_commit_boundary() {
         completed_requests: Default::default(),
     };
     snapshot.snapshot_ref = snapshot_ref(&snapshot).expect("installed snapshot identity");
-    port.persist_snapshot(&snapshot).expect("machine-loss snapshot");
+    port.persist_snapshot(&snapshot, true).expect("machine-loss snapshot");
     drop(port);
 
     let reopened = crate::fabric_durability::RedbDurableStateAdapter::open(
@@ -118,7 +118,7 @@ fn redb_recovery_restores_snapshot_and_replays_only_committed_suffix() {
     .expect("Redb adapter");
     let mut port = RedbReplicaPort::new(adapter, durable_log_ref.clone(), snapshot_store_ref.clone())
         .expect("Redb replica durability port");
-    port.persist_hard_state(TERM, Some(super::tests::NODE_A)).expect("hard state");
+    port.persist_hard_state(TERM, Some(super::tests::NODE_A), false).expect("hard state");
     let entries = vec![
         entry(ENTRY_INDEX, "recovery-first"),
         entry(SECOND_ENTRY_INDEX, "recovery-second"),
@@ -138,7 +138,7 @@ fn redb_recovery_restores_snapshot_and_replays_only_committed_suffix() {
         completed_requests: std::collections::BTreeMap::from([(entries[0].request_ref.clone(), ENTRY_INDEX)]),
     };
     snapshot.snapshot_ref = snapshot_ref(&snapshot).expect("recovery snapshot identity");
-    port.persist_snapshot(&snapshot).expect("recovery snapshot");
+    port.persist_snapshot(&snapshot, true).expect("recovery snapshot");
     drop(port);
 
     let reopened = crate::fabric_durability::RedbDurableStateAdapter::open(
@@ -186,7 +186,7 @@ fn redb_recovery_denies_commit_boundary_beyond_durable_log() {
         super::tests::test_ref("invalid-recovery-snapshot-store"),
     )
     .expect("Redb replica durability port");
-    port.persist_hard_state(TERM, Some(super::tests::NODE_A)).expect("hard state");
+    port.persist_hard_state(TERM, Some(super::tests::NODE_A), false).expect("hard state");
     port.persist_entries(None, &[entry(ENTRY_INDEX, "invalid-recovery")])
         .expect("single recovery entry");
     port.flush_log(ENTRY_INDEX).expect("single recovery flush");
@@ -248,52 +248,7 @@ fn entry(index: u64, label: &str) -> ReplicatedEntry {
     }
 }
 
-// r[verify molten.consensus.repair_admission]
-// r[verify molten.consensus.storage_fault_validation]
-#[test]
-fn a_locally_repaired_replica_store_reports_no_rejoin_role() {
-    let root = crate::test_support::process_workspace("live-raft-repaired-store").expect("workspace");
-    let disk = crate::fabric_durability::tests::FaultDisk::default();
-    let open = |disk: &crate::fabric_durability::tests::FaultDisk| {
-        crate::fabric_durability::RedbDurableStateAdapter::open_with(
-            &root,
-            crate::fabric_durability::tests::profile(crate::fabric_durability::DurableAdapterKind::LiveRedb),
-            crate::fabric_durability::tests::descriptor(),
-            disk.source(),
-            crate::fabric_durability::PublicationSource::Linux,
-        )
-        .expect("Redb adapter over the simulated medium")
-    };
-    let mut port = RedbReplicaPort::new(
-        open(&disk),
-        super::tests::test_ref("repaired-durable-log"),
-        super::tests::test_ref("repaired-snapshot-store"),
-    )
-    .expect("replica durability port");
-    port.persist_hard_state(TERM, Some("node-a")).expect("durable vote");
-    assert_eq!(port.storage_admission().role, Some(molten_core::consensus_recovery::RejoinRole::Voter));
-
-    let repaired = RedbReplicaPort::new(
-        open(&disk.power_loss_image()),
-        super::tests::test_ref("repaired-durable-log"),
-        super::tests::test_ref("repaired-snapshot-store"),
-    )
-    .expect("replica durability port over the repaired store");
-    let admission = repaired.storage_admission();
-    assert_eq!(admission.role, None, "local repair alone admits no role");
-    assert!(admission.blockers.contains(&molten_core::consensus_recovery::AdmissionBlocker::StorageNotServing));
-    assert!(
-        admission
-            .blockers
-            .contains(&molten_core::consensus_recovery::AdmissionBlocker::ProtocolNotReconciled)
-    );
-
-    let reconciled = repaired.reconcile_repaired_storage().expect("explicit storage reconciliation");
-    assert_eq!(reconciled.adapter().health(), crate::fabric_durability::AdapterHealth::Serving);
-    assert!(reconciled.adapter().is_repair_observed(), "the repair stays recorded");
-    assert_eq!(
-        reconciled.storage_admission().role,
-        None,
-        "storage reconciliation is not protocol recovery: the store stays suspect for voting"
-    );
-}
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_consistency/raft/durability/admission.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_consistency/raft/durability/snapshots.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_consistency/raft/durability/uncertainty.rs"));
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/fabric_consistency/raft/durability/suffix.rs"));

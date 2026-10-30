@@ -1,0 +1,39 @@
+{
+  "actions": [
+    {
+      "description": "move active change to archive: recover-from-storage-faults",
+      "kind": "archive_change",
+      "path": "./.cairn/changes/recover-from-storage-faults"
+    }
+  ],
+  "blocked": false,
+  "change": "recover-from-storage-faults",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": true,
+  "input_hash": "7f3a53be30779efc52db730d34ca043f49d2ddc20332df2dad85236357ab2867",
+  "layout": "cairn",
+  "mutated": false,
+  "mutation_manifest": null,
+  "plan_hash": "f6335444871dce37e4a3a817d1547b9b7a62dcf1e8c0911745ae959fe1bf3499",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "reasons": [],
+  "receipt_hash": "5fc1c81c15e72d0b78e7a41b1ae111f4905ee8360fc5c928f025afd232521fb0"
+}

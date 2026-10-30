@@ -1,0 +1,1 @@
+cargo octet check -p molten --artifact-dir /home/brittonr/.cargo-target/aspen-peer-recovery-20261029/octet-lib-final8 -- --lib
