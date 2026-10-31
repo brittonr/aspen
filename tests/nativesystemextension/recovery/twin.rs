@@ -88,11 +88,12 @@ impl Live {
         input: preserves::IOValue,
         tick: u64,
     ) -> TestResult<preserves::IOValue> {
-        let (success, result) = self.execute(name, input, tick)?;
+        self.authorize(name, &input, tick)?;
+        let (success, output) = self.invoke(name, tick, None)?;
         if !success {
-            return Err(format!("actual public node {name} denied").into());
+            return Err(format!("actual public node {name} denied: {output}").into());
         }
-        result.or_fail("actual canonical operation receipt")
+        value(&output, "node-service-host-receipt-v1")
     }
 
     pub(super) fn authorize(&mut self, name: &str, input: &preserves::IOValue, tick: u64) -> TestResult<()> {

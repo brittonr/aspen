@@ -109,7 +109,11 @@ impl<E: SystemExtensionExecutor> Dispatcher<E> {
     // r[impl molten.system_extension.callbacks]
     pub fn activate(&mut self, logical_tick: u64) -> crate::error::Result<ActivationArtifacts> {
         let evidence_start = self.evidence.len();
-        self.apply_simple_transition(super::LifecycleEventKind::Install)?;
+        // A host recovered from a journal that already records installation resumes at admission;
+        // every other phase still takes the install transition and is refused if it is illegal.
+        if self.state.phase != super::LifecyclePhase::Installed {
+            self.apply_simple_transition(super::LifecycleEventKind::Install)?;
+        }
         self.apply_simple_transition(super::LifecycleEventKind::Admit)?;
         self.apply_simple_transition(super::LifecycleEventKind::BeginInitialize)?;
         self.invoke_lifecycle_callback(super::CallbackKind::Initialize, None, logical_tick)?

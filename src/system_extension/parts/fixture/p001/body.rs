@@ -208,4 +208,43 @@ mod tests {
         assert_eq!(host.state(), &before_state);
         assert_eq!(host.evidence().len(), before_evidence_count);
     }
+
+    fn recovered(generation: u64, phase: super::super::LifecyclePhase) -> super::super::RecoveredState {
+        super::super::RecoveredState {
+            state: super::super::LifecycleState {
+                generation,
+                incarnation: 0,
+                phase,
+                restart_attempts: 0,
+                health: super::super::HealthState::Unknown,
+                checkpoint_ref: None,
+            },
+            usage: super::super::ResourceUsage::zero(),
+            // A journal written at installation has issued no callback or event sequence yet.
+            invocation_sequence: 0,
+            event_sequence: 0,
+            semantic_state_ref: None,
+            last_lifecycle_ref: None,
+        }
+    }
+
+    // r[verify molten.system_extension.native_host.recovery]
+    #[test]
+    fn recovered_installed_host_activates_from_admission_and_running_host_cannot_reactivate() {
+        let profile = super::super::ExecutionProfile::InProcessNative;
+        let [admitted, _, _] = fixture_manifests(profile).expect("fixture manifests");
+        let generation = admitted.manifest().initial_generation;
+        let installed = recovered(generation, super::super::LifecyclePhase::Installed);
+        let executor = EchoExecutor::new(profile).expect("executor");
+        let mut host = super::super::Dispatcher::from_recovered_state(admitted.clone(), executor, installed)
+            .expect("journaled installation");
+        host.activate(START_TICK).expect("a journaled installation resumes at admission");
+        assert_eq!(host.state().phase, super::super::LifecyclePhase::Running);
+        let running = recovered(generation, super::super::LifecyclePhase::Running);
+        let executor = EchoExecutor::new(profile).expect("executor");
+        let mut host = super::super::Dispatcher::from_recovered_state(admitted, executor, running)
+            .expect("journaled running host");
+        let error = host.activate(START_TICK).expect_err("a running host is not activated again");
+        assert!(error.to_string().contains("IllegalTransition"), "{error}");
+    }
 }
