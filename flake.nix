@@ -160,6 +160,7 @@
       schema-identity-src,
       schema-migration-core-src,
       transactional-reconciliation-src,
+      release-channel-src,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -601,6 +602,8 @@
             maybeCleanLocalGitSource cairn-src;
           "ssh://git@github.com/OnixResearch/valence.git#9201074343cd9da0ffaf6ec9db690af5b445d663" =
             maybeCleanLocalGitSource valence-src;
+          "ssh://git@github.com/OnixResearch/release-channel.git#fa389e19d5c9bd84cd75df914cc5418c70d92bfb" =
+            maybeCleanLocalGitSource release-channel-src;
           "https://github.com/hegeldev/hegel-rust#ed949b8084595cb467e983747f1089e214965ac6" =
             maybeCleanLocalGitSource hegel-src;
           "${schemaIdentityRepository}#${schemaIdentityRevision}" =
