@@ -6,7 +6,8 @@ use super::client::*;
 use super::node::*;
 use super::shell::*;
 
-const WALL_CLOCK_MS: u64 = 60_000;
+/// The admitted scenario ceiling: every node start authenticates the full signed producer output.
+const WALL_CLOCK_MS: u64 = molten_core::outside_in::MAX_SCENARIO_WALL_CLOCK_MS;
 const FAULT_HOLD_MS: u64 = 500;
 const STABILIZATION_MS: u64 = 200;
 const SEND_JOIN_TIMEOUT_MS: u64 = 10_000;

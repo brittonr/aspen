@@ -1,5 +1,9 @@
 use crate::support::*;
 
+/// Supervision only, never a property judgment: every actual node command first authenticates the
+/// full signed producer output, which takes minutes on a loaded host.
+const COMMAND_BUDGET: std::time::Duration = std::time::Duration::from_secs(600);
+
 pub(super) struct Child {
     owned: super::owned::Child,
 }
@@ -13,7 +17,7 @@ impl Child {
     }
 
     pub(super) fn await_record(&mut self, tag: &str) -> TestResult<preserves::IOValue> {
-        let mut deadline = molten::fabric_time::SupervisionDeadline::after(std::time::Duration::from_secs(120))?;
+        let mut deadline = molten::fabric_time::SupervisionDeadline::after(COMMAND_BUDGET)?;
         loop {
             let output = self.owned.output();
             if let Ok(value) = super::twin::value(&output, tag) {
@@ -48,7 +52,7 @@ impl Drop for Child {
 
 pub(super) fn run(command: std::process::Command) -> TestResult<(bool, String)> {
     let mut child = Child::spawn(command)?;
-    let mut deadline = molten::fabric_time::SupervisionDeadline::after(std::time::Duration::from_secs(120))?;
+    let mut deadline = molten::fabric_time::SupervisionDeadline::after(COMMAND_BUDGET)?;
     loop {
         if let Some(status) = child.owned.poll() {
             child.owned.drain();

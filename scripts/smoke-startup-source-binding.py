@@ -13,6 +13,10 @@ import shutil
 import subprocess
 import tempfile
 
+# Normal startup authenticates the full producer output and hashes its retained closures before
+# admission; on a loaded host that takes minutes, so each command gets a generous fixed bound.
+COMMAND_TIMEOUT_SECONDS = 900
+
 
 def measured(path):
     result = subprocess.run(["b3sum", "--no-names", str(path)], check=True, capture_output=True, text=True)
@@ -21,7 +25,7 @@ def measured(path):
 
 def command(binary, operation, state, expected=0):
     result = subprocess.run([str(binary), "node", operation, "--state-root", str(state)],
-                            capture_output=True, text=True, timeout=180)
+                            capture_output=True, text=True, timeout=COMMAND_TIMEOUT_SECONDS)
     if (result.returncode == 0) != (expected == 0):
         raise RuntimeError(f"node {operation} unexpected exit={result.returncode}\n{result.stdout}\n{result.stderr}")
     return result
@@ -45,7 +49,7 @@ def run(args):
         root = Path(scratch)
         state = root / "state"
         init = subprocess.run([str(executable), "node", "init", "--state-root", str(state),
-                               "--node-id", "node:source-binding-smoke"], capture_output=True, text=True, timeout=180)
+                               "--node-id", "node:source-binding-smoke"], capture_output=True, text=True, timeout=COMMAND_TIMEOUT_SECONDS)
         if init.returncode != 0:
             raise RuntimeError(f"real node init failed: {init.stdout}\n{init.stderr}")
         trust_path = state / "source-gate-trust.json"
@@ -72,6 +76,7 @@ def run(args):
             elif case == "wrong-candidate":
                 runner = root / "wrong-molten"
                 shutil.copy2(executable, runner)
+                runner.chmod(0o700)  # store copies keep their read-only mode
                 with runner.open("ab") as altered:
                     altered.write(b"\x00wrong-executing-candidate")
             select(selected)

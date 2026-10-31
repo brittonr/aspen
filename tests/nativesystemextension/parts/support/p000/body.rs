@@ -10,8 +10,14 @@ pub const HASH_F: &str = "blake3:fffffffffffffffffffffffffffffffffffffffffffffff
 pub const EFFECT_PORT_ID: &str = "molten.fixture.native.effect";
 pub const EFFECT_PORT_VERSION: &str = "v1";
 pub const EFFECT_OPERATION: &str = "fixture-effect";
-pub const EFFECT_INPUT_SCHEMA: &str = "molten.fixture.native.effect-input.v1";
-pub const EFFECT_OUTPUT_SCHEMA: &str = "molten.fixture.native.effect-output.v1";
+/// The fixture's effect schema identities: BLAKE3 content refs of its schema labels.
+pub fn effect_input_schema() -> String {
+    molten::preserves_rail::content_ref_from_bytes(b"molten.fixture.native.effect-input.v1")
+}
+
+pub fn effect_output_schema() -> String {
+    molten::preserves_rail::content_ref_from_bytes(b"molten.fixture.native.effect-output.v1")
+}
 pub const EFFECT_OUTPUT_BYTES: &[u8] = b"fixture-native-effect-output-v2";
 pub const GENERATION: u64 = 1;
 pub const MAX_VALUE_BYTES: u64 = 262_144;
@@ -109,7 +115,7 @@ impl FabricEffectPort for EffectPort {
             .ok_or_else(|| FabricPortError::malformed("fixture effect count overflow"))?;
         let output_ref = molten::preserves_rail::content_ref_from_bytes(EFFECT_OUTPUT_BYTES);
         Ok(PortEffectOutput {
-            output_schema_ref: EFFECT_OUTPUT_SCHEMA.to_string(),
+            output_schema_ref: effect_output_schema(),
             output_ref: output_ref.clone(),
             materialized_output: Some(NativeCallbackValue {
                 value_ref: output_ref,

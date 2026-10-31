@@ -1,5 +1,7 @@
 const CLUSTER_HARNESS_FIXTURE: &str = "tests/fixtures/cluster-harness/two-node.cluster";
-const CLUSTER_HARNESS_TEST_TIMEOUT_MS: &str = "30000";
+/// Signed children authenticate the full producer output before startup admission, which takes
+/// minutes on a loaded host; use the harness's admitted per-child ceiling.
+const CLUSTER_HARNESS_TEST_TIMEOUT_MS: &str = "300000";
 
 #[test]
 #[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]

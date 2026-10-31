@@ -25,7 +25,7 @@ impl FabricEffectPort for InvalidEffectPort {
             }
         };
         Ok(PortEffectOutput {
-            output_schema_ref: EFFECT_OUTPUT_SCHEMA.to_string(),
+            output_schema_ref: effect_output_schema(),
             output_ref,
             materialized_output,
         })

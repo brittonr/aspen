@@ -190,6 +190,19 @@ impl super::ExtensionInput {
 #[cfg(test)]
 mod capacity_tests {
     #[test]
+    fn reference_count_bounds_encode_as_numbers() {
+        // `max_policy_refs` bounds a reference collection; the count itself is not a reference.
+        let profile = profile();
+        let encoded = <crate::system_extension::NativeHostProfile as super::super::wire::Wire>::encode(&profile)
+            .expect("numeric reference bounds encode");
+        let decoded = <crate::system_extension::NativeHostProfile as super::super::wire::Wire>::decode(&encoded)
+            .expect("numeric reference bounds decode");
+        assert_eq!(decoded.max_policy_refs, profile.max_policy_refs);
+        assert!(super::super::wire::field(&crate::preserves_rail::u64_value(16), "max_policy_refs").is_ok());
+        assert!(super::super::wire::field(&crate::preserves_rail::u64_value(16), "policy_refs").is_err());
+    }
+
+    #[test]
     fn replacement_alternatives_share_member_slot_but_not_another_members_instances() {
         let profile = profile();
         assert!(super::profile_capacity([(&profile, "member-a"), (&profile, "member-a")].into_iter()).is_ok());

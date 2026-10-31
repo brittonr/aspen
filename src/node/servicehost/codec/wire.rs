@@ -168,7 +168,8 @@ impl Wire for std::path::PathBuf {
 }
 
 pub(super) fn field(value: &preserves::IOValue, name: &str) -> crate::error::Result<()> {
-    if name.ends_with("_ref") || name.ends_with("_refs") {
+    // `max_*` fields are numeric bounds on reference collections, not references themselves.
+    if (name.ends_with("_ref") || name.ends_with("_refs")) && !name.starts_with("max_") {
         reference_value(value)?;
     }
     Ok(())

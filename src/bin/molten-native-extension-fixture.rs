@@ -8,8 +8,9 @@ const READ_LIMIT_BYTES: u64 = MAX_CALLBACK_BYTES + 1;
 const EFFECT_PORT_ID: &str = "molten.fixture.native.effect";
 const EFFECT_PORT_VERSION: &str = "v1";
 const EFFECT_OPERATION: &str = "fixture-effect";
-const EFFECT_INPUT_SCHEMA: &str = "molten.fixture.native.effect-input.v1";
-const EFFECT_OUTPUT_SCHEMA: &str = "molten.fixture.native.effect-output.v1";
+/// Fixture schema labels; manifests and effect requests carry their BLAKE3 content identities.
+const EFFECT_INPUT_SCHEMA_LABEL: &[u8] = b"molten.fixture.native.effect-input.v1";
+const EFFECT_OUTPUT_SCHEMA_LABEL: &[u8] = b"molten.fixture.native.effect-output.v1";
 
 fn main() {
     // Capture the child's actual environment through the argument/environment admission
@@ -94,8 +95,8 @@ fn effect_request(
                 version: EFFECT_PORT_VERSION.to_string(),
             }),
             operation: EFFECT_OPERATION.to_string(),
-            input_schema_ref: EFFECT_INPUT_SCHEMA.to_string(),
-            output_schema_ref: EFFECT_OUTPUT_SCHEMA.to_string(),
+            input_schema_ref: molten::preserves_rail::content_ref_from_bytes(EFFECT_INPUT_SCHEMA_LABEL),
+            output_schema_ref: molten::preserves_rail::content_ref_from_bytes(EFFECT_OUTPUT_SCHEMA_LABEL),
             request_ref: request.value_ref.clone(),
             generation: envelope.invocation.generation,
             incarnation: envelope.invocation.incarnation,

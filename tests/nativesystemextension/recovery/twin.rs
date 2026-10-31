@@ -28,7 +28,7 @@ impl Live {
         let bundle_ref = molten::preserves_rail::content_ref_from_bytes(&admission);
         let bundle = molten::node_service_host::codec::decode(&admission, &bundle_ref)?;
         root.write(&molten::node_state::RelativePath::parse("admission.preserves")?, &admission)?;
-        copy_artifacts(&cohort, &root, &bundle)?;
+        copy_artifacts(std::path::Path::new(cohort_path), &root, &bundle)?;
         let definitions = molten::harness::composition::group_definitions()?;
         let declared = bundle
             .services
@@ -191,12 +191,14 @@ impl Live {
     }
 }
 
+/// The authoring bound for one callback ELF; node-state reads cap far lower, so artifacts stream.
+const MAX_ARTIFACT_BYTES: u64 = 536_870_912;
+
 fn copy_artifacts(
-    source: &molten::node_state::DirectoryRoot,
+    source: &std::path::Path,
     target: &molten::node_state::DirectoryRoot,
     bundle: &molten::node_service_host::codec::Bundle,
 ) -> TestResult<()> {
-    use std::io::Write;
     use std::os::unix::fs::PermissionsExt;
     let mut paths = std::collections::BTreeSet::new();
     for service in bundle.services.iter().chain(bundle.replacements.iter().map(|replacement| &replacement.service)) {
@@ -209,17 +211,38 @@ fn copy_artifacts(
                 parent.to_str().or_fail("artifact parent UTF-8")?,
             )?)?;
         }
-        let bytes = source.read(&path, 536_870_912)?;
-        if molten::preserves_rail::content_ref_from_bytes(&bytes) != service.executable.executable_bytes_ref {
-            return Err("external cohort native ELF differs from its actual admitted identity".into());
-        }
+        let mut input = std::fs::File::open(source.join(path.as_path()))?;
         let mut file = target.open_database_file(&path)?;
         file.set_len(0)?;
-        file.write_all(&bytes)?;
+        if stream_hashed(&mut input, &mut file)? != service.executable.executable_bytes_ref {
+            return Err("external cohort native ELF differs from its actual admitted identity".into());
+        }
         file.set_permissions(std::fs::Permissions::from_mode(0o500))?;
         file.sync_all()?;
     }
     Ok(())
+}
+
+/// Copies at most `MAX_ARTIFACT_BYTES`, returning the canonical BLAKE3 content ref of what was
+/// copied.
+fn stream_hashed(input: &mut std::fs::File, output: &mut std::fs::File) -> TestResult<String> {
+    use std::io::Read;
+    use std::io::Write;
+    let mut hasher = blake3::Hasher::new();
+    let mut buffer = vec![0_u8; 65_536];
+    let mut total = 0_u64;
+    loop {
+        let count = input.read(&mut buffer)?;
+        if count == 0 {
+            return Ok(molten::preserves_rail::content_ref_from_blake3_hash(hasher.finalize()));
+        }
+        total = total.checked_add(u64::try_from(count)?).or_fail("artifact size overflow")?;
+        if total > MAX_ARTIFACT_BYTES {
+            return Err("external cohort native ELF exceeds its authoring bound".into());
+        }
+        hasher.update(&buffer[..count]);
+        output.write_all(&buffer[..count])?;
+    }
 }
 
 pub(super) fn value(output: &str, tag: &str) -> TestResult<preserves::IOValue> {

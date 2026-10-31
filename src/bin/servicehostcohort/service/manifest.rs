@@ -18,8 +18,13 @@ pub(super) fn descriptor(source_ref: &str) -> molten::fabric::FabricPortDescript
         version: "v1".to_string(),
         class: molten::fabric::FabricPortClass::Evidence,
         operation_classes: vec!["fixture-effect".to_string()],
-        input_schema_refs: vec!["molten.fixture.native.effect-input.v1".to_string()],
-        output_schema_refs: vec!["molten.fixture.native.effect-output.v1".to_string()],
+        // The fixture's schema labels travel as BLAKE3 content identities on the service-host wire.
+        input_schema_refs: vec![molten::preserves_rail::content_ref_from_bytes(
+            b"molten.fixture.native.effect-input.v1",
+        )],
+        output_schema_refs: vec![molten::preserves_rail::content_ref_from_bytes(
+            b"molten.fixture.native.effect-output.v1",
+        )],
         authority_requirements: vec![molten::fabric::FabricAuthority::Evidence],
         resource_requirements: vec![molten::fabric::FabricResource::Diagnostics],
         determinism: molten::fabric::DeterminismClass::ExternalEffect,

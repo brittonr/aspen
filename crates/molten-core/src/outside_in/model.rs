@@ -1,7 +1,9 @@
 /// The most processes one scenario may own at once.
 pub const MAX_SCENARIO_PROCESSES: u32 = 8;
-/// The longest wall-clock budget one scenario may declare.
-pub const MAX_SCENARIO_WALL_CLOCK_MS: u64 = 300_000;
+/// The longest wall-clock budget one scenario may declare. Every signed `run` and `serve` start
+/// authenticates the full producer output and re-measures its retained build closures, which can
+/// take minutes per process on a loaded host, so the ceiling admits several such starts.
+pub const MAX_SCENARIO_WALL_CLOCK_MS: u64 = 1_800_000;
 /// The most output bytes the harness may retain for one process.
 pub const MAX_RETAINED_OUTPUT_BYTES: u64 = 1 << 20;
 /// The most client operations one scenario may issue.
