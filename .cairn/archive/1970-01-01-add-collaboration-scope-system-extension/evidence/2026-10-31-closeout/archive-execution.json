@@ -1,0 +1,237 @@
+{
+  "actions": [
+    {
+      "description": "move active change to archive: add-collaboration-scope-system-extension",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-add-collaboration-scope-system-extension"
+    }
+  ],
+  "blocked": false,
+  "change": "add-collaboration-scope-system-extension",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "f26a1a14d51acd5e9adf6611f454d5959e1b31bb9dca5f4f557a53fc1a6f7c94",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "ed14871020535dce64691a4e75b15dea87daee5c3e735fa800f29a499f61b3b3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-collaboration-scope-system-extension/design.md"
+        },
+        {
+          "content_hash": "d3c8ad3293087b091701ed4baf73d86baa3a81a522fe0b7dd429a3f2b8bcab7d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-collaboration-scope-system-extension/evidence/2026-10-31-baseline-and-dependencies.md"
+        },
+        {
+          "content_hash": "a0112557d88703a81e392a272af67dc47b0859961596699b25276468e4abe9e1",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-collaboration-scope-system-extension/evidence/2026-10-31-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "e162c9585bc23d231ff6e6af4bbea8b8925ad0ab0392de0c641c8c88be42ae8f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-collaboration-scope-system-extension/evidence/2026-10-31-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "9b2e08f52e3d1edd7081bdd64747ad00209e9c56a501785f47d3b1e756732505",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-collaboration-scope-system-extension/evidence/2026-10-31-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "3eb3dfde0519074f20cfbd29b0d16e8ca8fbb7cb339dbf59cf307c63e191fc14",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-collaboration-scope-system-extension/evidence/2026-10-31-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "87d7a4a8af7f50a3de0f67524a1576f4571b8057aa502b4538d8143505fe4ead",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-collaboration-scope-system-extension/evidence/2026-10-31-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "281b582b9a16782a8c1b40a035188d14e9e2f1b153b29b034a9ae91f1f38b9c5",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-collaboration-scope-system-extension/evidence/2026-10-31-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "63b54a1ea3d437b3f0ac5d9686f2376ea54844761c6b169a7c25e69db57572b4",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-collaboration-scope-system-extension/evidence/2026-10-31-molten-core-collaboration.log"
+        },
+        {
+          "content_hash": "e2a88d8a97fe8da5cf7aa5f4777db7e3ef75e8d09bc7aea2265bfab47c0b659b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-collaboration-scope-system-extension/evidence/2026-10-31-molten-lib-collaboration.log"
+        },
+        {
+          "content_hash": "6151a5ea2693c937c9818795be1d32ed418432e0f8715130b6a5e0110119d211",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-collaboration-scope-system-extension/evidence/2026-10-31-three-process-run-1.log"
+        },
+        {
+          "content_hash": "0046f4308aa028866a2ec2b5e161ed42401dc59866f642276597d08e3db78a39",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-collaboration-scope-system-extension/evidence/2026-10-31-three-process-run-2.log"
+        },
+        {
+          "content_hash": "5b661cfb777856c31cba9c5b04a22a45a1ddb602a3566be440cf3a8c89d04a81",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-collaboration-scope-system-extension/evidence/2026-10-31-verification.md"
+        },
+        {
+          "content_hash": "3ce8af1e26c2dea852609e77c352ab38c39b5071c7c6b5471c77578c200c2445",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-collaboration-scope-system-extension/metadata.json"
+        },
+        {
+          "content_hash": "f5b1fcb31d8c332319efa5d9fa4482523a0684f704d385ca41b5cee5d773bc1e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-collaboration-scope-system-extension/proposal.md"
+        },
+        {
+          "content_hash": "a42518188ac935a62f7cafdad999b95a0f05355f5beae9494e575a4bab4adb80",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-collaboration-scope-system-extension/review.md"
+        },
+        {
+          "content_hash": "a94da53efb566f3ea8c20245fac3fc42030c72998cae60c233500a306fe08d7b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-collaboration-scope-system-extension/specs/collaboration-scope/spec.md"
+        },
+        {
+          "content_hash": "732ad303cfd9ef1e5daf3a44c2680e8b794472b20c41134e219c986c9d809d79",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-collaboration-scope-system-extension/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/add-collaboration-scope-system-extension"
+        }
+      ],
+      "manifest_hash": "84313ff750afa06686ed8a5f6ab7e49a58f6817e1e858773ba468268911c2fb9"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "ed14871020535dce64691a4e75b15dea87daee5c3e735fa800f29a499f61b3b3",
+          "exists": true,
+          "path": "./.cairn/changes/add-collaboration-scope-system-extension/design.md"
+        },
+        {
+          "content_hash": "d3c8ad3293087b091701ed4baf73d86baa3a81a522fe0b7dd429a3f2b8bcab7d",
+          "exists": true,
+          "path": "./.cairn/changes/add-collaboration-scope-system-extension/evidence/2026-10-31-baseline-and-dependencies.md"
+        },
+        {
+          "content_hash": "a0112557d88703a81e392a272af67dc47b0859961596699b25276468e4abe9e1",
+          "exists": true,
+          "path": "./.cairn/changes/add-collaboration-scope-system-extension/evidence/2026-10-31-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "e162c9585bc23d231ff6e6af4bbea8b8925ad0ab0392de0c641c8c88be42ae8f",
+          "exists": true,
+          "path": "./.cairn/changes/add-collaboration-scope-system-extension/evidence/2026-10-31-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "9b2e08f52e3d1edd7081bdd64747ad00209e9c56a501785f47d3b1e756732505",
+          "exists": true,
+          "path": "./.cairn/changes/add-collaboration-scope-system-extension/evidence/2026-10-31-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "3eb3dfde0519074f20cfbd29b0d16e8ca8fbb7cb339dbf59cf307c63e191fc14",
+          "exists": true,
+          "path": "./.cairn/changes/add-collaboration-scope-system-extension/evidence/2026-10-31-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "87d7a4a8af7f50a3de0f67524a1576f4571b8057aa502b4538d8143505fe4ead",
+          "exists": true,
+          "path": "./.cairn/changes/add-collaboration-scope-system-extension/evidence/2026-10-31-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "281b582b9a16782a8c1b40a035188d14e9e2f1b153b29b034a9ae91f1f38b9c5",
+          "exists": true,
+          "path": "./.cairn/changes/add-collaboration-scope-system-extension/evidence/2026-10-31-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "63b54a1ea3d437b3f0ac5d9686f2376ea54844761c6b169a7c25e69db57572b4",
+          "exists": true,
+          "path": "./.cairn/changes/add-collaboration-scope-system-extension/evidence/2026-10-31-molten-core-collaboration.log"
+        },
+        {
+          "content_hash": "e2a88d8a97fe8da5cf7aa5f4777db7e3ef75e8d09bc7aea2265bfab47c0b659b",
+          "exists": true,
+          "path": "./.cairn/changes/add-collaboration-scope-system-extension/evidence/2026-10-31-molten-lib-collaboration.log"
+        },
+        {
+          "content_hash": "6151a5ea2693c937c9818795be1d32ed418432e0f8715130b6a5e0110119d211",
+          "exists": true,
+          "path": "./.cairn/changes/add-collaboration-scope-system-extension/evidence/2026-10-31-three-process-run-1.log"
+        },
+        {
+          "content_hash": "0046f4308aa028866a2ec2b5e161ed42401dc59866f642276597d08e3db78a39",
+          "exists": true,
+          "path": "./.cairn/changes/add-collaboration-scope-system-extension/evidence/2026-10-31-three-process-run-2.log"
+        },
+        {
+          "content_hash": "5b661cfb777856c31cba9c5b04a22a45a1ddb602a3566be440cf3a8c89d04a81",
+          "exists": true,
+          "path": "./.cairn/changes/add-collaboration-scope-system-extension/evidence/2026-10-31-verification.md"
+        },
+        {
+          "content_hash": "3ce8af1e26c2dea852609e77c352ab38c39b5071c7c6b5471c77578c200c2445",
+          "exists": true,
+          "path": "./.cairn/changes/add-collaboration-scope-system-extension/metadata.json"
+        },
+        {
+          "content_hash": "f5b1fcb31d8c332319efa5d9fa4482523a0684f704d385ca41b5cee5d773bc1e",
+          "exists": true,
+          "path": "./.cairn/changes/add-collaboration-scope-system-extension/proposal.md"
+        },
+        {
+          "content_hash": "a42518188ac935a62f7cafdad999b95a0f05355f5beae9494e575a4bab4adb80",
+          "exists": true,
+          "path": "./.cairn/changes/add-collaboration-scope-system-extension/review.md"
+        },
+        {
+          "content_hash": "a94da53efb566f3ea8c20245fac3fc42030c72998cae60c233500a306fe08d7b",
+          "exists": true,
+          "path": "./.cairn/changes/add-collaboration-scope-system-extension/specs/collaboration-scope/spec.md"
+        },
+        {
+          "content_hash": "732ad303cfd9ef1e5daf3a44c2680e8b794472b20c41134e219c986c9d809d79",
+          "exists": true,
+          "path": "./.cairn/changes/add-collaboration-scope-system-extension/tasks.md"
+        }
+      ],
+      "manifest_hash": "f5bcd3e3e7e1e4826af66d57efaed20e6cc853bacad49290a284b89c87245a6c"
+    },
+    "kind": "archive",
+    "manifest_hash": "71f758d5d494fbf44934894e0684f2f41aadbfd94d16af527c9eae850d616fdb"
+  },
+  "plan_hash": "90ff264753bcc7bd96824941fc3104fdfb5f2dbc10c01b0fe4a4ee1d3d60748e",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "reasons": [],
+  "receipt_hash": "3333b477978f50a33bd829e8dac3774dacc99e23e766a49de2c7917f42dba9b6"
+}

@@ -107,6 +107,9 @@ fn fixture(kind: ScopeKind) -> (State, AudienceRequest, Vec<AuthorityDecision>) 
 }
 
 // r[verify molten.collaboration_scope.validation]
+// r[verify molten.collaboration_scope.effective_audience.allowed]
+// r[verify molten.collaboration_scope.authority_snapshot.current]
+// r[verify molten.collaboration_scope.membership_currentness.current]
 #[test]
 fn every_kind_admits_exact_current_audience_and_rejects_future_use() {
     for kind in [
@@ -124,6 +127,8 @@ fn every_kind_admits_exact_current_audience_and_rejects_future_use() {
 }
 
 // r[verify molten.collaboration_scope.validation]
+// r[verify molten.collaboration_scope.effective_audience.floor]
+// r[verify molten.collaboration_scope.effective_audience.partial-denial]
 #[test]
 fn floor_denial_wrong_bindings_expiry_revocation_and_ability_preserve_state() {
     let (state, request, decisions) = fixture(ScopeKind::Group);
@@ -133,7 +138,7 @@ fn floor_denial_wrong_bindings_expiry_revocation_and_ability_preserve_state() {
         denied_facts[index].is_allowed = false;
         assert_eq!(admit_audience(&state, &state_ref(), &request, &denied_facts), Err(Denial::Authority));
     }
-    for case in 0..7 {
+    for case in 0..9 {
         let mut candidate = request.clone();
         match case {
             0 => candidate.membership_epoch += 1,
@@ -145,6 +150,8 @@ fn floor_denial_wrong_bindings_expiry_revocation_and_ability_preserve_state() {
                 candidate.currentness.revocation =
                     crate::nominal::RevocationRef::new(reference("new-revocation")).expect("revocation")
             }
+            6 => candidate.scope = ScopeRef::new(reference("wrong-scope")).expect("scope"),
+            7 => candidate.resource = crate::nominal::ResourceRef::new(reference("wrong-resource")).expect("resource"),
             _ => {
                 candidate.audience.insert(subject("not-a-member"));
             }
@@ -180,7 +187,27 @@ fn missing_and_duplicate_policy_facts_never_satisfy_the_intersection() {
     assert_eq!(admit_audience(&state, &state_ref(), &request, &duplicates), Err(Denial::Authority));
 }
 
+// r[verify molten.collaboration_scope.versioned_extension.fabric-denied]
+#[test]
+fn fabric_node_identity_without_collaboration_membership_is_denied() {
+    let (state, mut request, decisions) = fixture(ScopeKind::Group);
+    // A fabric node's identity, even in canonical reference form, is not a collaboration member.
+    let node = subject("node:fixture-a");
+    request.audience = [node.clone()].into_iter().collect();
+    let facts: Vec<_> = decisions
+        .into_iter()
+        .map(|mut fact| {
+            fact.subject = node.clone();
+            fact
+        })
+        .collect();
+    assert_eq!(admit_audience(&state, &state_ref(), &request, &facts), Err(Denial::Membership));
+    assert!(SubjectRef::new("node:fixture-a").is_err(), "a raw node id is not a subject reference");
+}
+
 // r[verify molten.collaboration_scope.validation]
+// r[verify molten.collaboration_scope.nontransitive_sharing.reader-denied]
+// r[verify molten.collaboration_scope.resource_binding.implicit-copy]
 #[test]
 fn reader_cannot_share_or_implicitly_copy_a_binding() {
     let (state, request, mut facts) = fixture(ScopeKind::Group);

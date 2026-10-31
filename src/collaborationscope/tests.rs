@@ -134,6 +134,7 @@ fn real_verifier_denies_invalid_signature_expiry_revocation_and_wrong_ability_be
 }
 
 // r[verify molten.collaboration_scope.validation]
+// r[verify molten.collaboration_scope.authority_snapshot.replay]
 #[test]
 fn actual_allowed_audience_is_not_replayable_and_membership_commit_invalidates_its_snapshot() {
     let workspace = crate::test_support::process_workspace("collaboration-safe-snapshot").expect("workspace");

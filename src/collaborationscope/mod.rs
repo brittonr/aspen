@@ -31,6 +31,17 @@ mod store;
 #[cfg(test)]
 pub(crate) mod fixtures;
 #[cfg(test)]
+#[path = "admission/installationtests.rs"]
+mod installationtests;
+#[cfg(test)]
+#[path = "admission/manifesttests.rs"]
+mod manifesttests;
+#[cfg(test)]
+#[path = "codec/projectiontests.rs"]
+mod projectiontests;
+#[cfg(test)]
+mod properties;
+#[cfg(test)]
 mod simulation;
 #[cfg(test)]
 mod tests;

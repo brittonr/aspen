@@ -1,0 +1,183 @@
+{
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/add-collaboration-scope-system-extension/specs/collaboration-scope/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/add-collaboration-scope-system-extension/specs/collaboration-scope/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "add-collaboration-scope-system-extension",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/add-collaboration-scope-system-extension/specs/collaboration-scope/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "79bad924e4b84de2cd633c7e2a1260b13b45a84e3f237b8f93ef34b64b3e47e3",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": false,
+        "accepted_before_hash": "dd59170837761f9c1d82df94eb09541c1f4cebd32a540fc3b3a0c6cedf7c316a",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "a94da53efb566f3ea8c20245fac3fc42030c72998cae60c233500a306fe08d7b",
+        "destination": ".cairn/specs/collaboration-scope/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "f406f0921798e0c38271d4456db33f7d80a9f7065e403d3932f3fa413d02833f",
+        "operations": [
+          {
+            "block_hash": "52f8ddafef8a5bfeb5c80e722fb88217b4d325d73273358a4a9da5507c3941ad",
+            "heading": "### Requirement: Collaboration scope is a versioned system extension",
+            "kind": "added",
+            "requirement_id": "molten.collaboration_scope.versioned_extension"
+          },
+          {
+            "block_hash": "870c0a054943f3c3696411ef56ea75e264c6266e3ba1ca6f1b0ef31e69c83b07",
+            "heading": "### Requirement: Collaboration records use nominal bounded identities",
+            "kind": "added",
+            "requirement_id": "molten.collaboration_scope.nominal_model"
+          },
+          {
+            "block_hash": "75233ecf4b35cbf965d7b684c417d5a02f9ad67fd06c4d982c28e5cfd5fa3e97",
+            "heading": "### Requirement: Membership currentness is explicit",
+            "kind": "added",
+            "requirement_id": "molten.collaboration_scope.membership_currentness"
+          },
+          {
+            "block_hash": "e60d19a3aa4fb51cff57d8a4199086eeb787a031918885c2f0af350997723e26",
+            "heading": "### Requirement: Each resource has one current owner scope",
+            "kind": "added",
+            "requirement_id": "molten.collaboration_scope.resource_binding"
+          },
+          {
+            "block_hash": "c84d9b59e7f991437da98cf27d50de7d6f0dc681c341984eab375c025379bd7d",
+            "heading": "### Requirement: Effective audience is an authority intersection",
+            "kind": "added",
+            "requirement_id": "molten.collaboration_scope.effective_audience"
+          },
+          {
+            "block_hash": "372ad0f626e97b973d237f1565a25805f926b2b77b93ff1be8db610a6c109a29",
+            "heading": "### Requirement: Sharing authority is non-transitive",
+            "kind": "added",
+            "requirement_id": "molten.collaboration_scope.nontransitive_sharing"
+          },
+          {
+            "block_hash": "a9510a5b8d9475db1d5caa8587081e989fc18dbb718a7e04cb4510c386d15508",
+            "heading": "### Requirement: Scope snapshots bind current authority facts",
+            "kind": "added",
+            "requirement_id": "molten.collaboration_scope.authority_snapshot"
+          },
+          {
+            "block_hash": "6a9ade819572b81d7f2ada4b1a447e3623da1ee947684b6241e3cde8328344bf",
+            "heading": "### Requirement: Scope projections are bounded and content free",
+            "kind": "added",
+            "requirement_id": "molten.collaboration_scope.safe_projection"
+          },
+          {
+            "block_hash": "51ba00b7973f0ba85bc4feb53332b55823ba22227ed455d2248b03d46f510d05",
+            "heading": "### Requirement: Collaboration scope validation includes failures",
+            "kind": "added",
+            "requirement_id": "molten.collaboration_scope.validation"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.collaboration_scope.versioned_extension",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.collaboration_scope.nominal_model",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.collaboration_scope.membership_currentness",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.collaboration_scope.resource_binding",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.collaboration_scope.effective_audience",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.collaboration_scope.nontransitive_sharing",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.collaboration_scope.authority_snapshot",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.collaboration_scope.safe_projection",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.collaboration_scope.validation",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/add-collaboration-scope-system-extension/specs/collaboration-scope/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "f406f0921798e0c38271d4456db33f7d80a9f7065e403d3932f3fa413d02833f",
+          "exists": true,
+          "path": "./.cairn/specs/collaboration-scope/spec.md"
+        }
+      ],
+      "manifest_hash": "abfa44443ba053b25516bf291f31417c3a9079cae841ab908a7a65d5ce95d2fc"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/specs/collaboration-scope/spec.md"
+        }
+      ],
+      "manifest_hash": "323535436cff1bdfd13f8c9fd231b2f6949e1615b15a0f702f47443083b96ebf"
+    },
+    "kind": "sync",
+    "manifest_hash": "0df12047294857bd33fb7a5a6dc4f006d985e787dba53c8e49dc7f7981c2375a"
+  },
+  "plan_hash": "c15b38981994ee2f5d5ec1b183f05762a289dada2994bc086c8dfd6ad669336a",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "reasons": [],
+  "receipt_hash": "d3debbabfd5364cd0fe81d7b090da2a05dfc124ce2578182a115cecfd63c236d"
+}

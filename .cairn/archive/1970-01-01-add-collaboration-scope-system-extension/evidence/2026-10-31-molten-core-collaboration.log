@@ -1,0 +1,12 @@
+test collaboration_scope::tests::floor_denial_wrong_bindings_expiry_revocation_and_ability_preserve_state ... ok
+test collaboration_scope::tests::reader_cannot_share_or_implicitly_copy_a_binding ... ok
+test collaboration_scope::tests::missing_and_duplicate_policy_facts_never_satisfy_the_intersection ... ok
+test collaboration_scope::tests::fabric_node_identity_without_collaboration_membership_is_denied ... ok
+test collaboration_scope::tests::transitions::sharing_requires_exact_ability_and_both_scope_policy_intersections ... ok
+test collaboration_scope::tests::every_kind_admits_exact_current_audience_and_rejects_future_use ... ok
+test collaboration_scope::tests::transitions::exact_bind_and_explicit_move_keep_one_owner_and_floor_denials_preserve_binding ... ok
+test collaboration_scope::tests::transitions::role_changes_removal_expiry_and_duplicate_conflicts_are_epoch_fenced ... ok
+test collaboration_scope::tests::transitions::all_scope_kinds_create_and_personal_scope_cannot_gain_foreign_members ... ok
+test collaboration_scope::tests::transitions::membership_capacity_and_stale_generation_deny_without_partial_growth ... ok
+test collaboration_scope::tests::bounded_membership_sequences_are_monotone_replayable_and_denial_preserving ... ok
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 721 filtered out; finished in 0.01s

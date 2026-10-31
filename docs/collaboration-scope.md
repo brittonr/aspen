@@ -32,15 +32,14 @@ The QM requirements reference is commit `7f2c916360f1797a8ff2a77ce2ce40c5fabab08
 
 The named prerequisite owners exist in the archive: fabric consistency (2026-07-24), durable-state ports (2026-07-12), whole-system simulation (2026-08-01), system-extension runtime (2026-07-11), and nominal authority/artifact references (2026-08-24). Their archive presence does not admit a new consumer or transfer execution claims. Current actual source, profiles and ports must still pass admission.
 
-Core behavior, actual cryptographic/durable shell tests, an installed-profile deterministic simulation and a genuine three-process Iroh/Redb collaboration scenario are authored. The simulation uses the maintained `Application`, real verifier, simulated durable-state/transport adapters, shared scheduler, typed exact installed-workload selection and independent domain invariants. It explicitly replays recorded committed-log delivery; it is not live consensus or disk evidence. The distinct-process rail separately exercises actual election, concurrency, partition, snapshot catch-up and recovery. The generic installed-world prerequisite preserves reference-world admission and its original semantic-oracle requirements; canonical profile-body admission and node/generation/request/invariant substitution mutants are authored.
+Core behavior, actual cryptographic/durable shell tests, manifest admission and installation binding, metadata-only status and consumer projections, Hegel properties, an installed-profile deterministic simulation and a genuine three-process Iroh/Redb collaboration scenario are maintained tests. The simulation uses the maintained `Application`, real verifier, simulated durable-state/transport adapters, shared scheduler, typed exact installed-workload selection and independent domain invariants. It explicitly replays recorded committed-log delivery; it is not live consensus or disk evidence. The distinct-process rail separately exercises actual election, concurrency, partition, snapshot catch-up and recovery. The generic installed-world prerequisite preserves reference-world admission and its original semantic-oracle requirements; canonical profile-body admission and node/generation/request/invariant substitution mutants are tested.
 
-No build, test, formatter, linter or execution rail has been run for this source cohort. Genuine installed-host acceptance must execute the source-gated retained public host with independently signed operator and scope credentials and a parent-produced immutable native executable. Authored adapters, fixtures and test names are not runtime evidence. Lifecycle tasks remain unmarked until the parent runs the actual rails and records their output; experimental production-admission flags remain false.
+The executed checks and their results are recorded with the archived `add-collaboration-scope-system-extension` change (`evidence/2026-10-31-verification.md`). Passing them proves only the selected scope-model, transition, binding, currentness and evidence facts under the declared test inputs. Acceptance of the installed native executable through the source-gated retained public host, with independently signed operator and scope credentials, belongs to `route-installed-native-effects`; these tests are not that evidence. Experimental production-admission flags remain false.
 
-Targeted parent-owned execution commands are:
+Focused commands:
 
 ```sh
-cargo test -p molten-core --lib collaboration_scope::tests
-cargo test -p molten --lib collaboration_scope::tests
-cargo test -p molten --lib collaboration_scope::simulation
+cargo test -p molten-core --lib collaboration_scope
+cargo test -p molten --lib collaboration_scope::
 cargo test -p molten --lib fabric_consistency::raft::collaboration_process::three_participant_conflict_partition_restart_snapshot_and_currentness_recovery
 ```

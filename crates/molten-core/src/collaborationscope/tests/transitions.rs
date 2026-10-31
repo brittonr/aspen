@@ -82,10 +82,12 @@ fn all_scope_kinds_create_and_personal_scope_cannot_gain_foreign_members() {
     }
 }
 // r[verify molten.collaboration_scope.validation]
+// r[verify molten.collaboration_scope.membership_currentness.removed]
 #[test]
 fn role_changes_removal_expiry_and_duplicate_conflicts_are_epoch_fenced() {
-    let (state, audience, _) = fixture(ScopeKind::Group);
-    let scope = audience.scope;
+    let (state, audience, decisions) = fixture(ScopeKind::Group);
+    admit_audience(&state, &state_ref(), &audience, &decisions).expect("current audience before membership changes");
+    let scope = audience.scope.clone();
     let add = request(
         &state,
         Mutation::PutMember {
@@ -130,6 +132,7 @@ fn role_changes_removal_expiry_and_duplicate_conflicts_are_epoch_fenced() {
     );
     assert_eq!(removed.scopes[&scope].membership_epoch, 4);
     assert!(!removed.scopes[&scope].members.contains_key(&subject("participant")));
+    assert_eq!(admit_audience(&removed, &state_ref(), &audience, &decisions), Err(Denial::Stale), "earlier epoch");
     let mut expired = added.clone();
     expired.currentness.logical_now = 11;
     let expiry = request(
@@ -152,6 +155,7 @@ fn role_changes_removal_expiry_and_duplicate_conflicts_are_epoch_fenced() {
     assert_eq!(preview_mutation(&added, &state_ref(), &premature, &facts(&added, &premature)), Err(Denial::Expired));
 }
 // r[verify molten.collaboration_scope.validation]
+// r[verify molten.collaboration_scope.resource_binding.move]
 #[test]
 fn exact_bind_and_explicit_move_keep_one_owner_and_floor_denials_preserve_binding() {
     let (mut state, _, _) = fixture(ScopeKind::Group);
@@ -193,6 +197,7 @@ fn exact_bind_and_explicit_move_keep_one_owner_and_floor_denials_preserve_bindin
     assert_eq!(preview_mutation(&state, &state_ref(), &copy, &facts(&state, &copy)), Err(Denial::Owner));
 }
 // r[verify molten.collaboration_scope.validation]
+// r[verify molten.collaboration_scope.nontransitive_sharing.allowed]
 #[test]
 fn sharing_requires_exact_ability_and_both_scope_policy_intersections() {
     let (mut state, mut request, _) = fixture(ScopeKind::Group);
