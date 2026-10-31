@@ -1,18 +1,22 @@
 impl<T: super::Transport, P: super::Ports> super::Index<T, P> {
-    /// Observe an uncertain append without dispatching a new mutation.
+    /// Observe an uncertain append without dispatching a new mutation. The recovered
+    /// reservation keeps the provider-signed external ordinal planned before dispatch.
     pub fn recover_reservation(
         &mut self,
-        claim: &release_channel_index::model::Claim,
+        candidate: &super::ordinal::Candidate,
         minimum_revision: u64,
     ) -> Result<Option<super::types::Reservation>, super::types::Error> {
         let observation = self.query(minimum_revision)?;
         if let Some(pending) = &observation.snapshot.pending {
-            if pending.claim == *claim && pending.status == release_channel_index::model::PendingStatus::Reserved {
-                return Ok(Some(self.reservation(claim.clone(), pending.reservation, observation.snapshot.revision)));
+            if candidate.matches(&pending.claim)
+                && pending.status == release_channel_index::model::PendingStatus::Reserved
+            {
+                let claim = pending.claim.clone();
+                return Ok(Some(self.reservation(claim, pending.reservation, observation.snapshot.revision)));
             }
             return Err(super::types::Error::invalid("uncertain append has conflicting or orphan pending state"));
         }
-        if observation.snapshot.highest.as_ref() == Some(claim) {
+        if observation.snapshot.highest.as_ref().is_some_and(|highest| highest.digest == candidate.digest) {
             return Err(super::types::Error::invalid(
                 "matching highest exists without recoverable pending reservation",
             ));

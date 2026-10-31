@@ -1,4 +1,6 @@
 const SIGNATURE_THRESHOLD: usize = 1;
+/// Committed fixture generations; the abandoned competitor never becomes a head.
+pub const GENERATIONS: u64 = 3;
 const ALLOW_RECOVERY: bool = false;
 const REQUIRE_INDEPENDENT_RECOVERY: bool = true;
 
@@ -69,6 +71,21 @@ fn commit_step(
     Ok((reference, bytes))
 }
 
+/// Opaque competing successor payload whose external reservation is explicitly orphaned.
+pub fn abandoned(generation: u64) -> super::Result<(molten_core::world_commit::WorldCommitRef, Vec<u8>)> {
+    let parent = commit(generation.checked_sub(1).ok_or("abandoned competitor needs a predecessor")?)?.0;
+    let bytes = packed(&molten::preserves_rail::record("molten-private-witness-opaque-commit-v1", vec![
+        molten::preserves_rail::string("opaque-abandoned-competitor-never-staged-or-published"),
+        molten::preserves_rail::u64_value(generation),
+        molten::preserves_rail::sequence(vec![molten::preserves_rail::string(parent.as_str())]),
+        molten::preserves_rail::record("fixture-state", vec![molten::preserves_rail::string("abandoned")]),
+    ]))?;
+    let reference =
+        molten_core::world_commit::WorldCommitRef::new(molten::preserves_rail::content_ref_from_bytes(&bytes))
+            .map_err(|error| format!("canonical opaque fixture digest: {error:?}"))?;
+    Ok((reference, bytes))
+}
+
 pub fn crypto_config(kind: &str) -> super::Result<(String, Vec<u8>)> {
     let bytes = packed(&molten::preserves_rail::record("molten-private-witness-crypto-config-v1", vec![
         molten::preserves_rail::string(kind),
@@ -80,10 +97,12 @@ pub fn crypto_config(kind: &str) -> super::Result<(String, Vec<u8>)> {
 
 pub fn materialize(root: &molten::node_state::DirectoryRoot) -> super::Result<()> {
     root.write_new(&molten::node_state::RelativePath::parse("pilot-head-policy.preserves")?, &policy()?.1)?;
-    for generation in 1..=2 {
+    for generation in 1..=GENERATIONS {
         let path = molten::node_state::RelativePath::parse(&format!("pilot-opaque-commit-{generation}.preserves"))?;
         root.write_new(&path, &commit(generation)?.1)?;
     }
+    let path = molten::node_state::RelativePath::parse(&format!("pilot-abandoned-commit-{GENERATIONS}.preserves"))?;
+    root.write_new(&path, &abandoned(GENERATIONS)?.1)?;
     for kind in [
         "private-pilot-ed25519",
         "private-pilot-entropy",

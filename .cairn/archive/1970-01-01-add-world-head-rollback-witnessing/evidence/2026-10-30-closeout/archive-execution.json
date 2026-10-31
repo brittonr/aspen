@@ -1,0 +1,261 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: add-world-head-rollback-witnessing",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing"
+    }
+  ],
+  "blocked": false,
+  "change": "add-world-head-rollback-witnessing",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "09c4f3ee63d7e7cca44fd5872b64476be97efa730510ad6919def574dc36829c",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "5e2839859e540b7de63ba318ec1f086206a7684553a48e55c036289a8ce36bcb",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing/design.md"
+        },
+        {
+          "content_hash": "ab82d30f59d456d6341459b2405b11e4b89cb31f29bf6f9f3db0b1a1e155ffcf",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing/evidence/2026-10-30-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "ec1d8319b55313d8ffae7c152b77c4450af0c34d3569cf897cb20ea655483caf",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing/evidence/2026-10-30-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "aac04c62156c7a6ea00153ef697af5b5acf5d9f94b2066518f657ed90ab160a2",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing/evidence/2026-10-30-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "87c666c82c4ba02502371c89cf4464af8d46fabebe6d49ac0fbadf5e5ea8465e",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing/evidence/2026-10-30-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "3e55b0cf29729559bf323f5f99d2e89ca0d232cb013f0e97f6f5be4e2a557515",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing/evidence/2026-10-30-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "5ce8caad92b493487773eb234492562ff9b85bec3468a728d16d482e3017cec0",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing/evidence/2026-10-30-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "bee42d379e2da62a5a56fa50b9d045671abc03e040a7679ef8c0e5d892ade09a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing/evidence/2026-10-30-molten-core-world.log"
+        },
+        {
+          "content_hash": "187ebc8d28b5d4230cb5e0d55ca32858fca5c22b3bb2cde3a2cdb3623115fc5a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing/evidence/2026-10-30-molten-lib-world-witness.log"
+        },
+        {
+          "content_hash": "b64762417546f57b1e2cfb1b6a38e111a10a716049cb4a5deb495cc9236f0fe1",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing/evidence/2026-10-30-pilot-builtin-provider.log"
+        },
+        {
+          "content_hash": "d3823a81af3f941612fb3865f1094d1827a2f2258a2f439666935a0ec027f47b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing/evidence/2026-10-30-pilot-external-provider-final-state.json"
+        },
+        {
+          "content_hash": "fdb999b16af0f459dbd6f1bf135f927f463318191c790c98536ff4eeda9e6b8c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing/evidence/2026-10-30-pilot-external-provider.log"
+        },
+        {
+          "content_hash": "6b4bd9620afb4bab8233e9f75676baaabc360d35b4ebb59fed7b7ef122105d3a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing/evidence/2026-10-30-provider-decision.md"
+        },
+        {
+          "content_hash": "c47608143a4e5b187758679c393a473fc6b3b1e84bcef5d0071d5dc2d6be34fa",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing/evidence/2026-10-30-verification.md"
+        },
+        {
+          "content_hash": "7253dbde17452c6b2f3cc3b781d68e82cce66918bbde056d34cc931ffbe9e7bd",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing/metadata.json"
+        },
+        {
+          "content_hash": "6c3ad12ab2b8ebf2ef6a81bf157584795d4a89701ba3019f68697d0224f03e8d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing/proposal.md"
+        },
+        {
+          "content_hash": "af3a25c94dd645533dc6a5ffb17bf729d6b51728384da0b511ce228ab95cdb56",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing/review.md"
+        },
+        {
+          "content_hash": "5ee8daf5f5ce5fd7295efa81fb132884aaf433eb87fe0761318ff06574edeef3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing/specs/world-commit/spec.md"
+        },
+        {
+          "content_hash": "e81c1c18689332523abe4c653fc85f9ffcc605d5b218e675e93faa20697dff65",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-add-world-head-rollback-witnessing/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing"
+        }
+      ],
+      "manifest_hash": "231907cb17c3484b52fd777b1988d7be95f29bb9dacb89089aac595e8f82df5a"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "5e2839859e540b7de63ba318ec1f086206a7684553a48e55c036289a8ce36bcb",
+          "exists": true,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing/design.md"
+        },
+        {
+          "content_hash": "ab82d30f59d456d6341459b2405b11e4b89cb31f29bf6f9f3db0b1a1e155ffcf",
+          "exists": true,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing/evidence/2026-10-30-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "ec1d8319b55313d8ffae7c152b77c4450af0c34d3569cf897cb20ea655483caf",
+          "exists": true,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing/evidence/2026-10-30-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "aac04c62156c7a6ea00153ef697af5b5acf5d9f94b2066518f657ed90ab160a2",
+          "exists": true,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing/evidence/2026-10-30-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "87c666c82c4ba02502371c89cf4464af8d46fabebe6d49ac0fbadf5e5ea8465e",
+          "exists": true,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing/evidence/2026-10-30-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "3e55b0cf29729559bf323f5f99d2e89ca0d232cb013f0e97f6f5be4e2a557515",
+          "exists": true,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing/evidence/2026-10-30-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "5ce8caad92b493487773eb234492562ff9b85bec3468a728d16d482e3017cec0",
+          "exists": true,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing/evidence/2026-10-30-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "bee42d379e2da62a5a56fa50b9d045671abc03e040a7679ef8c0e5d892ade09a",
+          "exists": true,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing/evidence/2026-10-30-molten-core-world.log"
+        },
+        {
+          "content_hash": "187ebc8d28b5d4230cb5e0d55ca32858fca5c22b3bb2cde3a2cdb3623115fc5a",
+          "exists": true,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing/evidence/2026-10-30-molten-lib-world-witness.log"
+        },
+        {
+          "content_hash": "b64762417546f57b1e2cfb1b6a38e111a10a716049cb4a5deb495cc9236f0fe1",
+          "exists": true,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing/evidence/2026-10-30-pilot-builtin-provider.log"
+        },
+        {
+          "content_hash": "d3823a81af3f941612fb3865f1094d1827a2f2258a2f439666935a0ec027f47b",
+          "exists": true,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing/evidence/2026-10-30-pilot-external-provider-final-state.json"
+        },
+        {
+          "content_hash": "fdb999b16af0f459dbd6f1bf135f927f463318191c790c98536ff4eeda9e6b8c",
+          "exists": true,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing/evidence/2026-10-30-pilot-external-provider.log"
+        },
+        {
+          "content_hash": "6b4bd9620afb4bab8233e9f75676baaabc360d35b4ebb59fed7b7ef122105d3a",
+          "exists": true,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing/evidence/2026-10-30-provider-decision.md"
+        },
+        {
+          "content_hash": "c47608143a4e5b187758679c393a473fc6b3b1e84bcef5d0071d5dc2d6be34fa",
+          "exists": true,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing/evidence/2026-10-30-verification.md"
+        },
+        {
+          "content_hash": "7253dbde17452c6b2f3cc3b781d68e82cce66918bbde056d34cc931ffbe9e7bd",
+          "exists": true,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing/metadata.json"
+        },
+        {
+          "content_hash": "6c3ad12ab2b8ebf2ef6a81bf157584795d4a89701ba3019f68697d0224f03e8d",
+          "exists": true,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing/proposal.md"
+        },
+        {
+          "content_hash": "af3a25c94dd645533dc6a5ffb17bf729d6b51728384da0b511ce228ab95cdb56",
+          "exists": true,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing/review.md"
+        },
+        {
+          "content_hash": "5ee8daf5f5ce5fd7295efa81fb132884aaf433eb87fe0761318ff06574edeef3",
+          "exists": true,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing/specs/world-commit/spec.md"
+        },
+        {
+          "content_hash": "e81c1c18689332523abe4c653fc85f9ffcc605d5b218e675e93faa20697dff65",
+          "exists": true,
+          "path": "./.cairn/changes/add-world-head-rollback-witnessing/tasks.md"
+        }
+      ],
+      "manifest_hash": "32f04daaf39128c296b3992168e89ac777ab1a11a31e285d5224d4e7df319561"
+    },
+    "kind": "archive",
+    "manifest_hash": "6bdfbf23953c169cf3a4a99dd00051e2202ad7d4a0c86ff720964b7caba257a1"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "8d0ec12e086adaef6bbfb6dac2d328e5969f8ceafc3cd959c73dc77d97ff4f21",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "76f5bf7d2dd48f4855526453a0ab889ea81579b53b3b3f54c6aaac7bdb2011be",
+  "reasons": [],
+  "receipt_hash": "9f87106d55bbf386a6cea4ab28a993b933eee79c815134d618253fe863880a5e",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

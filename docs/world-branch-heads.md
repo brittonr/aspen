@@ -14,11 +14,18 @@ Choregraph supplies immutable event graphs and pure generation-fenced branch pla
 Artifact Auth verifies exact signer statements under supplied observations. It does not authorize a branch mutation.
 
 The independent witness provider is the canonical `OnixResearch/release-channel`
-contract. Its exact reviewed source revision, contract identity, and license pin
-remain pending the governed parent dependency selection. No unpinned checkout,
-synthetic revision, or development override establishes production provenance.
-Molten consumes normalized observations; it does not own the provider wire format,
-operate its log, or choose global trust roots.
+repository, selected by the user on 2026-10-29 as the dedicated governed owner of
+the shared witness/high-water contract. Molten pins the published immutable
+revision `fa389e19d5c9bd84cd75df914cc5418c70d92bfb` of `release-channel-index`
+and `release-channel-witness` (MIT) in `Cargo.toml`, `Cargo.lock`, `flake.nix`
+and `crate-hashes.json`. The compiled reviewed contract is
+`world_witness::provider::contract` (`release-channel-index-v1`, `MIT`, that
+revision); an operator pin naming any other revision is rejected. A later owner
+revision supersedes this pin only through explicit integration review. Molten
+does not consume `release-channel-transports`, so that crate's Bounded HTTP pin is
+outside this consumer contract. Molten consumes normalized observations; it does
+not own the provider wire format, operate its log, choose global trust roots, or
+claim provider honesty, administrative or physical independence.
 
 ## Claim structure
 
@@ -81,6 +88,28 @@ provider unavailability may block strong-profile movement rather than downgrade 
 An uncertain append, external commit, or local commit remains uncertain.
 Reconciliation reads the exact operation in both systems and classifies finalize,
 already-complete, superseded, conflict, retryable, denied, or manual-review outcomes.
+
+## Orphans and external ordinals
+
+The external index ordinal is the provider namespace position, not the Molten head
+generation. The head generation stays inside the canonical claim digest and still
+advances by exactly one per accepted local mutation. `provider::ordinal::plan`
+derives the external claim from a fresh nonce-bound signed query: it recovers an
+exact pending reservation unchanged, otherwise reserves the retained external
+high-water plus one with the retained committed claim as predecessor. A durable
+reservation records the ordinal actually used, so lost-response recovery and later
+current reads match the provider-signed claim rather than recomputing it.
+
+An orphan keeps its reserved ordinal as the provider high-water. While it is
+unresolved, every strong advance and every strong current read fails closed. Only
+an explicit operator `resolve-orphan` lets the next successor proceed, and then
+only above the abandoned high-water and from the exact committed predecessor; this
+authenticated resolved-orphan high-water is the only admitted ordinal gap. The
+abandoned claim digest can never be reserved again. A planner that ignored the gap
+would ask for an ordinal the provider must reject; a planner that accepted another
+gap would admit an unproven skip. Neither happens: forged gaps fail snapshot
+validation and a stale (rolled-back) predecessor fails the committed-claim check.
+Resolving an orphan grants no branch authority and does not repair forks.
 
 ## Detached witness receipts
 
@@ -156,28 +185,39 @@ Planning and signing do not mutate a branch. Signing does not authorize the sign
 
 ## Private same-host witness consumer pilot
 
-`cargo run --bin world-witness-consumer-pilot -- run NEW_ROOT ACTUAL_PROVIDER_REV`
-provisions a private same-host fixture and runs each consumer operation in a new
-process. Supply the actual reviewed full provider source revision; the pilot does
-not invent a pin. `NEW_ROOT` must not exist. The fixture retains its artifacts
-under that explicitly supplied root for inspection.
+`cargo run --bin world-witness-consumer-pilot -- run NEW_ROOT ACTUAL_PROVIDER_REV
+[--provider-program PROVIDER]` provisions a private same-host fixture and runs each
+consumer operation in a new process. Supply the actual reviewed full provider
+source revision; the pilot does not invent a pin. `NEW_ROOT` must not exist. The
+fixture retains its artifacts under that explicitly supplied root for inspection.
 
 Provisioning creates actual Artifact Auth signatures, issuer-signed UCAN grants,
 holder-signed claim invocations, and a current installed operator policy. Admission
 uses the actual Basalt/UCAN adapter and separately durable replay and revocation
-stores. Provisioning launches an `index-initialize` provider child. Every challenged
-request uses the actual process transport and a separate `index-serve` provider
-child, which opens the retained external index, verifies the writer signature,
-and signs its exact reply. Fixed private fixture keys are deliberately nonproduction;
-successful fixture execution never establishes production trust or release eligibility.
+stores. With `--provider-program`, the pilot uses a separately built release-channel
+`provider` executable (`provider init`, then `provider serve INDEX CONFIG` for every
+request, including the admin-signed writer enrollment); the caller is responsible
+for building it from the pinned revision. Without it, the pilot links the same
+pinned `release-channel-index` library into separate `index-initialize` and
+`index-serve` children. Either provider child opens the retained external index,
+verifies the writer signature, and signs its exact reply. Fixed private fixture
+keys are deliberately nonproduction; successful fixture execution never
+establishes production trust or release eligibility.
 
 The pilot exercises authenticated planning, durable staging, external reservation,
 the fenced local transaction, external commit, and repeated independent current
-reads. It then restores the entire consumer root to its generation-one snapshot,
-while the independent index and operator authority stores remain at their newer
-state. A new consumer process must reject the old local head using the real public
-currentness-read path and report a freshly authenticated external generation two.
-An arbitrary child error does not satisfy the rollback outcome.
+reads. Each step must report its exact expected outcome; an exit status alone never
+satisfies a step. Negative steps are part of the run: provisioning with another
+real release-channel revision is rejected before any state is created; an abandoned
+competing generation-three reservation that is orphaned blocks both the strong
+advance and the strong current read; after explicit `resolve-orphan`, generation
+three commits at external ordinal four, above the abandoned high-water; and with the
+provider index unavailable the current read fails as `Unavailable` rather than
+downgrading. Finally it restores the entire consumer root to its generation-one
+snapshot, while the independent index and operator authority stores remain at
+their newer state. A new consumer process must reject the old local head using the
+real public currentness-read path and report a freshly authenticated, strictly
+newer external claim. An arbitrary child error does not satisfy the rollback outcome.
 
 The pilot head-policy identity is BLAKE3 over its exact canonical packed Preserves
 policy projection, excluding only the self-reference. The independent operator

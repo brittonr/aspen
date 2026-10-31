@@ -235,8 +235,11 @@ Molten publication and not proof that a consumer transaction occurred.
 
 Reservations and orphans block committed currentness. Resolving an orphan clears
 only pending status; it retains highest, so the old head remains inadmissible.
-Recovery must reserve and commit a strictly higher generation binding the exact
-externally committed predecessor. No reset or checkpoint erasure is safe recovery.
+Recovery must reserve and commit a strictly higher external ordinal binding the
+exact externally committed predecessor. Molten's `provider::ordinal::plan` derives
+that ordinal from a fresh signed query (the resolved-orphan high-water plus one);
+the Molten head generation still advances by exactly one inside the claim digest.
+No reset or checkpoint erasure is safe recovery.
 
 Complementary Sigsum inclusion is verified through `provider::inclusion`; its
 evidence never supplies external latest-head currentness or branch authority.

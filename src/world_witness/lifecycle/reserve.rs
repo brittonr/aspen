@@ -10,8 +10,11 @@ pub(crate) fn acquire<T: crate::world_witness::provider::Transport, P: crate::wo
         molten_core::world_witness::RetainedWitnessState::Present(highest) => highest.checkpoint.revision,
         _ => 0,
     };
+    // The fresh signed query, not the head generation, selects the external ordinal.
     let observation = provider.query(minimum).map_err(crate::world_witness::store::failure)?;
-    let result = provider.reserve(observation.snapshot.revision, claim(stage)?);
+    let claim = crate::world_witness::provider::ordinal::plan(&observation.snapshot, &candidate(stage)?)
+        .map_err(crate::world_witness::store::failure)?;
+    let result = provider.reserve(observation.snapshot.revision, claim);
     let reservation = match result {
         Ok(reservation) => reservation,
         Err(error) => {
@@ -36,7 +39,9 @@ pub(crate) fn acquire<T: crate::world_witness::provider::Transport, P: crate::wo
     Ok(Some(reservation))
 }
 
-fn claim(stage: &super::durable::Stage) -> crate::error::Result<release_channel_index::model::Claim> {
+pub(crate) fn candidate(
+    stage: &super::durable::Stage,
+) -> crate::error::Result<crate::world_witness::provider::ordinal::Candidate> {
     let predecessor = match &stage.staged.retained {
         molten_core::world_witness::RetainedWitnessState::Present(highest) => Some(
             crate::world_witness::provider::normalize::claim_digest(&highest.subject.claim_ref)
@@ -44,8 +49,7 @@ fn claim(stage: &super::durable::Stage) -> crate::error::Result<release_channel_
         ),
         _ => None,
     };
-    Ok(release_channel_index::model::Claim {
-        generation: stage.staged.transition.after.generation,
+    Ok(crate::world_witness::provider::ordinal::Candidate {
         digest: crate::world_witness::provider::normalize::claim_digest(&stage.staged.transition.claim_ref)
             .map_err(crate::world_witness::store::failure)?,
         predecessor,

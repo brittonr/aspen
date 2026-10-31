@@ -1,3 +1,5 @@
+mod supersession;
+
 struct Fake {
     snapshot: release_channel_index::model::Snapshot,
     server: ed25519_dalek::SigningKey,
@@ -103,7 +105,11 @@ fn lost_append_retains_exact_operation_and_fresh_query_recovers_without_duplicat
     let error = provider.reserve(1, candidate.clone()).expect_err("lost response");
     assert_eq!(error.kind, super::ErrorKind::Uncertain);
     let original = error.reservation.expect("reservation retained before dispatch");
-    let recovered = provider.recover_reservation(&candidate, 1).expect("fresh observation").expect("recover pending");
+    let binding = super::ordinal::Candidate {
+        digest: candidate.digest,
+        predecessor: None,
+    };
+    let recovered = provider.recover_reservation(&binding, 1).expect("fresh observation").expect("recover pending");
     assert_eq!(recovered.id, original.id);
     assert_eq!(recovered.revision, 2);
     let committed = provider.commit(&recovered).expect("finish original operation");

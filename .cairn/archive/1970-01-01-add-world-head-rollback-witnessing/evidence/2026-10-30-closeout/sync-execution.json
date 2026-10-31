@@ -1,0 +1,175 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/add-world-head-rollback-witnessing/specs/world-commit/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/add-world-head-rollback-witnessing/specs/world-commit/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "add-world-head-rollback-witnessing",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/add-world-head-rollback-witnessing/specs/world-commit/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "8c95e7cd459bc0fb251aab4aa05491f73202db55f83eab1b61b9580781eb338c",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "634c82022607935772c9a9d945ae6ed9f2d81898f40273aa95e0c21680ee5336",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "5ee8daf5f5ce5fd7295efa81fb132884aaf433eb87fe0761318ff06574edeef3",
+        "destination": ".cairn/specs/world-commit/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "1b7f3ed50d401ae508dfced52633b8f60c1ca8c29091bdcdb3f5570742da255d",
+        "operations": [
+          {
+            "block_hash": "76e2b8f38824ea8084a2d4871cd11feda3fd2a0418f11b4a3942aab86e074364",
+            "heading": "### Requirement: Head currentness profiles state their assurance boundary",
+            "kind": "added",
+            "requirement_id": "molten.world_witness.profiles"
+          },
+          {
+            "block_hash": "fbc6f000764fe083e9cde178c5e99b140f2b051e433ae9b0041fd7e0f78d0036",
+            "heading": "### Requirement: Witness observations bind exact provider and head facts",
+            "kind": "added",
+            "requirement_id": "molten.world_witness.currentness"
+          },
+          {
+            "block_hash": "4167ac5e5aef4036d6ae4ef45bdda52c9a0dfc2f42ec8a0e2895af72d929a6e2",
+            "heading": "### Requirement: Strong head publication is witness-first and locally fenced",
+            "kind": "added",
+            "requirement_id": "molten.world_witness.finalization"
+          },
+          {
+            "block_hash": "51d0102b2d9e38e64b9e82ef19c22a6898aa8c4aa5fa9c3609b8b2d12840161b",
+            "heading": "### Requirement: Witness uncertainty remains explicit",
+            "kind": "added",
+            "requirement_id": "molten.world_witness.reconciliation"
+          },
+          {
+            "block_hash": "70a35a5ac783d5ab207f7c640d93c29cfd20d6e69e57434c81247491aab6eb18",
+            "heading": "### Requirement: Witness evidence does not grant authority or truth",
+            "kind": "added",
+            "requirement_id": "molten.world_witness.provider_boundary"
+          },
+          {
+            "block_hash": "94cdfe3040d8253507bfef119b6f903eeef6e2737caf231692879358d6777a0d",
+            "heading": "### Requirement: Witness verification covers rollback and provider failure",
+            "kind": "added",
+            "requirement_id": "molten.world_witness.verification"
+          },
+          {
+            "block_hash": "1680df35d18a9d2591d7f03723163436da549499cd2eb9bc6d6f93267850511c",
+            "heading": "### Requirement: Witness receipts preserve separate decision roles",
+            "kind": "added",
+            "requirement_id": "molten.world_witness.receipts"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.world_witness.profiles",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.world_witness.currentness",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.world_witness.finalization",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.world_witness.reconciliation",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.world_witness.provider_boundary",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.world_witness.verification",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.world_witness.receipts",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/add-world-head-rollback-witnessing/specs/world-commit/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "1b7f3ed50d401ae508dfced52633b8f60c1ca8c29091bdcdb3f5570742da255d",
+          "exists": true,
+          "path": "./.cairn/specs/world-commit/spec.md"
+        }
+      ],
+      "manifest_hash": "69cde365c5ce5d812e704c67aa4b0bd0591e8e7c6dc4d94c7402d44b4873f03b"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "634c82022607935772c9a9d945ae6ed9f2d81898f40273aa95e0c21680ee5336",
+          "exists": true,
+          "path": "./.cairn/specs/world-commit/spec.md"
+        }
+      ],
+      "manifest_hash": "d6023215a92db0eb52baed98e25a3509dd2c486b746db9c420d04d5eaffb7684"
+    },
+    "kind": "sync",
+    "manifest_hash": "8cf06ad4a8b21742432a0307911af84ac4b3c2df4af959a4f15f83ca17d34604"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "35ee0a94d6bf7ab89b38a46e364d0a5875b7a786cdb5da2f3a0ee6f2fa09d44b",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "76f5bf7d2dd48f4855526453a0ab889ea81579b53b3b3f54c6aaac7bdb2011be",
+  "reasons": [],
+  "receipt_hash": "fe1d528e229a54c26cf23f674e96a4a29210636d7d014df1f8d11104ae8ff1c0",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

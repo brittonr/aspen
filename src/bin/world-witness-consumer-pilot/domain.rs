@@ -15,8 +15,20 @@ pub fn commit(generation: u64) -> super::Result<molten_core::world_commit::World
 }
 
 pub fn claim(generation: u64) -> super::Result<molten_core::world_head::WorldHeadClaim> {
-    if !(1..=2).contains(&generation) {
-        return Err("pilot supports exactly generations 1 and 2".into());
+    successor(generation, commit(generation)?)
+}
+
+/// A competing successor reserved externally by a writer whose local CAS never ran.
+pub fn abandoned_claim(generation: u64) -> super::Result<molten_core::world_head::WorldHeadClaim> {
+    successor(generation, super::payload::abandoned(generation)?.0)
+}
+
+fn successor(
+    generation: u64,
+    successor_head: molten_core::world_commit::WorldCommitRef,
+) -> super::Result<molten_core::world_head::WorldHeadClaim> {
+    if !(1..=super::payload::GENERATIONS).contains(&generation) {
+        return Err("pilot supports exactly generations 1 through 3".into());
     }
     Ok(molten_core::world_head::WorldHeadClaim {
         branch_id: branch()?,
@@ -26,7 +38,7 @@ pub fn claim(generation: u64) -> super::Result<molten_core::world_head::WorldHea
         } else {
             None
         },
-        successor_head: commit(generation)?,
+        successor_head,
         expected_generation: generation - 1,
         successor_generation: generation,
         purpose: if generation == 1 {
@@ -44,16 +56,19 @@ pub fn policy() -> super::Result<molten_core::world_head::WorldHeadPolicy> {
 }
 
 pub fn history() -> super::Result<Vec<molten_core::world_head::WorldCommitHistoryNode>> {
-    Ok(vec![
-        molten_core::world_head::WorldCommitHistoryNode {
-            commit: commit(1)?,
-            parents: Vec::new(),
-        },
-        molten_core::world_head::WorldCommitHistoryNode {
-            commit: commit(2)?,
-            parents: vec![commit(1)?],
-        },
-    ])
+    (1..=super::payload::GENERATIONS)
+        .map(|generation| {
+            let parents = if generation > 1 {
+                vec![commit(generation - 1)?]
+            } else {
+                Vec::new()
+            };
+            Ok(molten_core::world_head::WorldCommitHistoryNode {
+                commit: commit(generation)?,
+                parents,
+            })
+        })
+        .collect()
 }
 
 /// Shell wall-clock read through the admitted fabric-time live clock.

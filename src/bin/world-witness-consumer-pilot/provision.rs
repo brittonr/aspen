@@ -1,4 +1,4 @@
-pub fn run(root: &std::path::Path, revision: &str) -> super::Result<()> {
+pub fn run(root: &std::path::Path, revision: &str, program: Option<&std::path::Path>) -> super::Result<()> {
     if revision.len() != 40 || !revision.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err("provider revision must be the actual reviewed full 40-hex source pin".into());
     }
@@ -36,7 +36,7 @@ pub fn run(root: &std::path::Path, revision: &str) -> super::Result<()> {
         basalt::ucan::TokenTimeBounds::new(now, expires)?,
     )?;
     let mut trust = None;
-    for generation in 1..=2 {
+    for generation in 1..=super::payload::GENERATIONS {
         let (claim, carrier, _) = molten::world_head::sign_world_head_claim(
             &mut signer,
             &super::domain::claim(generation)?,
@@ -60,7 +60,7 @@ pub fn run(root: &std::path::Path, revision: &str) -> super::Result<()> {
     let trust = trust.ok_or("missing pilot trust")?;
     molten::world_witness::authority::wire::install_trust(&operator, &trust)?;
     super::authority::initialize(&root.join("operator"), &trust)?;
-    super::index::provision(root)?;
+    super::index::provision(root, program)?;
     std::fs::write(root.join("provider-revision"), revision)?;
     println!("private same-host nonproduction trust provisioned; fixed fixture issuer is not production authority");
     Ok(())

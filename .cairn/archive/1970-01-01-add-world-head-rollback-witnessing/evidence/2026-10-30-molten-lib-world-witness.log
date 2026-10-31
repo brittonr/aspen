@@ -1,0 +1,17 @@
+test world_witness::records::tests::currentness_cannot_replace_authorization_or_claim_identity ... ok
+test world_witness::records::tests::durable_codec_rejects_trailing_data ... ok
+test world_witness::records::tests::highest_preserves_signed_observations_and_full_width_counters ... ok
+test world_witness::records::tests::reserved_local_commit_does_not_become_external_admission ... ok
+test world_witness::records::tests::strong_receipt_cannot_forget_highest_or_nonclaims ... ok
+test world_witness::provider::tests::cached_signed_reply_cannot_satisfy_a_new_query_challenge ... ok
+test world_witness::provider::tests::lost_append_retains_exact_operation_and_fresh_query_recovers_without_duplicate ... ok
+test world_witness::provider::tests::namespace_and_minimum_revision_are_fenced ... ok
+test world_witness::provider::tests::checkpoint_identity_ignores_query_nonce_but_binds_exact_state ... ok
+test world_witness::tests::missing_consumer_highest_is_not_reenrollment_when_head_survives ... ok
+test world_witness::provider::tests::supersession::rolled_back_predecessor_and_forged_gaps_cannot_plan_a_successor ... ok
+test world_witness::provider::tests::staged_claim_is_not_current_and_whole_consumer_rollback_is_rejected ... ok
+test world_witness::provider::tests::orphan_resolution_preserves_highwater_and_requires_strict_supersession ... ok
+test world_witness::provider::tests::supersession::lost_reserve_across_gap_recovers_the_signed_external_position ... ok
+test world_witness::provider::tests::supersession::resolved_orphan_high_water_is_the_only_admitted_external_gap ... ok
+test world_witness::tests::whole_consumer_database_rollback_is_detected_by_fresh_authenticated_query ... ok
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 1956 filtered out; finished in 0.36s

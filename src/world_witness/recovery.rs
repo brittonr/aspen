@@ -80,23 +80,12 @@ pub(crate) fn reservation<T: super::provider::Transport, P: super::provider::Por
     if let Some(bytes) = store.reservation(&request.stage.operation_ref)? {
         return serde_json::from_slice(&bytes).map(Some).map_err(super::store::failure);
     }
-    let predecessor = match &request.stage.staged.retained {
-        molten_core::world_witness::RetainedWitnessState::Present(highest) => {
-            Some(super::provider::normalize::claim_digest(&highest.subject.claim_ref).map_err(super::store::failure)?)
-        }
-        _ => None,
-    };
-    let claim = release_channel_index::model::Claim {
-        digest: super::provider::normalize::claim_digest(&request.stage.staged.transition.claim_ref)
-            .map_err(super::store::failure)?,
-        generation: request.stage.staged.transition.after.generation,
-        predecessor,
-    };
+    let candidate = super::lifecycle::reserve::candidate(request.stage)?;
     let minimum = match &request.stage.staged.retained {
         molten_core::world_witness::RetainedWitnessState::Present(highest) => highest.checkpoint.revision,
         _ => 0,
     };
-    let recovered = provider.recover_reservation(&claim, minimum).map_err(super::store::failure)?;
+    let recovered = provider.recover_reservation(&candidate, minimum).map_err(super::store::failure)?;
     if let Some(reservation) = &recovered {
         store.save_reservation(
             &request.stage.operation_ref,

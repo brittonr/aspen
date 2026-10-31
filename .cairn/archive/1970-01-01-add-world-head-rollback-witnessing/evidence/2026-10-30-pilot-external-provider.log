@@ -1,0 +1,32 @@
+step: provision /home/brittonr/.cargo-target/aspen-witness-tmp-20261030/pilot-external-final-1793416059 3577429a05acfb442a177582c151dc5557db9ff6
+operator provider source pin differs from compiled reviewed contract
+step: provision /home/brittonr/.cargo-target/aspen-witness-tmp-20261030/pilot-external-final-1793416059 fa389e19d5c9bd84cd75df914cc5418c70d92bfb --provider-program /home/brittonr/.cargo-target/aspen-witness-target-20261030/release-channel-fa389e1/debug/provider
+private same-host nonproduction trust provisioned; fixed fixture issuer is not production authority
+step: advance /home/brittonr/.cargo-target/aspen-witness-tmp-20261030/pilot-external-final-1793416059 1
+committed generation=1 external_ordinal=1 receipt=blake3:ebfb550088811eed7a854288a4dc1074828fef90410e93dedab64bb6f672964a
+step: check /home/brittonr/.cargo-target/aspen-witness-tmp-20261030/pilot-external-final-1793416059
+current generation=1 external_ordinal=1 external_revision=3
+step: check /home/brittonr/.cargo-target/aspen-witness-tmp-20261030/pilot-external-final-1793416059
+current generation=1 external_ordinal=1 external_revision=3
+step: advance /home/brittonr/.cargo-target/aspen-witness-tmp-20261030/pilot-external-final-1793416059 2
+committed generation=2 external_ordinal=2 receipt=blake3:98feac4f9d67283ead47da49a09798f3a7bbcd1637d4b453fe816956f74ff32d
+step: check /home/brittonr/.cargo-target/aspen-witness-tmp-20261030/pilot-external-final-1793416059
+current generation=2 external_ordinal=2 external_revision=5
+step: abandon /home/brittonr/.cargo-target/aspen-witness-tmp-20261030/pilot-external-final-1793416059
+abandoned-orphan head_generation=3 external_ordinal=3 external_revision=7
+step: advance /home/brittonr/.cargo-target/aspen-witness-tmp-20261030/pilot-external-final-1793416059 3
+invalid harness artifact: world witness store: Invalid: unresolved external reservation or orphan blocks advance
+step: check /home/brittonr/.cargo-target/aspen-witness-tmp-20261030/pilot-external-final-1793416059
+invalid harness artifact: world witness store: Invalid: external high-water rejects stale, staged or orphan claim
+step: resolve-orphan /home/brittonr/.cargo-target/aspen-witness-tmp-20261030/pilot-external-final-1793416059
+resolved-orphan external_high_water=3 external_committed=2 external_revision=8
+step: advance /home/brittonr/.cargo-target/aspen-witness-tmp-20261030/pilot-external-final-1793416059 3
+committed generation=3 external_ordinal=4 receipt=blake3:cdbd10fa7a343947759b656a0c8e4b676cbb1ae0551da67bac0cc1ea52095cf7
+step: check /home/brittonr/.cargo-target/aspen-witness-tmp-20261030/pilot-external-final-1793416059
+current generation=3 external_ordinal=4 external_revision=10
+step: check /home/brittonr/.cargo-target/aspen-witness-tmp-20261030/pilot-external-final-1793416059
+Unavailable: capability process failed
+step: check /home/brittonr/.cargo-target/aspen-witness-tmp-20261030/pilot-external-final-1793416059
+rollback-detected local_generation=1 local_external_ordinal=1 external_ordinal=4 denial=invalid harness artifact: world witness store: Invalid: external high-water rejects stale, staged or orphan claim
+pilot-confirmed: real signed authority, reserve/local-CAS/commit, repeated read, unresolved-orphan denial, authenticated resolved-orphan supersession, unavailable-provider denial, complete consumer-root rollback denial
+nonclaims: private same-host nonproduction trust; no global consensus, provider honesty, or release eligibility

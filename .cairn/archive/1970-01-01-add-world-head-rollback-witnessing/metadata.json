@@ -3,7 +3,7 @@
     "add-world-branch-head-protocol"
   ],
   "groups": ["current"],
-  "status": "blocked",
+  "status": "current",
   "workflow_profile": {
     "id": "spec-driven",
     "source": "change_create",
