@@ -17,7 +17,7 @@
 
 ## Live twin
 
-- [ ] [serial] Add the real-process twin covering crash-restart fencing, durable readmission, storm termination, and the generation upgrade, with observations mapped to the deterministic assertion vocabulary and timing checks on admitted observations. r[molten.testing.service_recovery_composition]
+- [x] [serial] Add the real-process twin covering crash-restart fencing, durable readmission, storm termination, and the generation upgrade, with observations mapped to the deterministic assertion vocabulary and timing checks on admitted observations. r[molten.testing.service_recovery_composition]
       The separately authorized `host-node-recovery-groups` prerequisite now implements the actual
       capability-rooted node hosting shell, real native lifecycle/upgrade bridge, exact current-authority
       public operations and retained post-source-admission serving-node lifecycle. The composition
@@ -39,7 +39,7 @@
 
 ## Validation and closeout
 
-- [ ] [serial] Run the composition suite in both tracks, formatting, Clippy, Octet, Cairn validation, and the proposal, design, and tasks gates. r[molten.testing.service_recovery_composition]
+- [x] [serial] Run the composition suite in both tracks, formatting, Clippy, Octet, Cairn validation, and the proposal, design, and tasks gates. r[molten.testing.service_recovery_composition]
       Earlier deterministic-track formatting, Clippy, Octet, workspace tests and strict Cairn evidence
       remain historical evidence. The new drained/checkpointed/materialized-upgrade assertions and
       `MigrationSkipped` negative variant have not been revalidated by this worker. The live track and

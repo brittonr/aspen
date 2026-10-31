@@ -1,0 +1,109 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/host-node-recovery-groups/specs/system-extension/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/host-node-recovery-groups/specs/system-extension/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "host-node-recovery-groups",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/host-node-recovery-groups/specs/system-extension/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "e81810c5cf711dc178aec14e730cebbd9696043763fad1044be96022429475d5",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": false,
+        "accepted_before_hash": "dc85922dc506dc2359864b80021e401edeb8e5ab475a66081b697215e1830545",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "b8c3723a5ffdd4dc4c763a5ed6da2b56c67a47c1c8c2f37047b08c9373c7ccc1",
+        "destination": ".cairn/specs/system-extension/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "0410d3af821d93a076fa748e31e7f04966c9c55aa5aaf8157ad5e24e4d4dfe65",
+        "operations": [
+          {
+            "block_hash": "957557ee243a474b07899aaf7fd6756f7f6fb85b649b3c5783bb01dc76a55a0b",
+            "heading": "### Requirement: Public node hosts admitted recovery groups durably",
+            "kind": "added",
+            "requirement_id": "molten.system_extension.node_hosting"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.system_extension.node_hosting",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/host-node-recovery-groups/specs/system-extension/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "0410d3af821d93a076fa748e31e7f04966c9c55aa5aaf8157ad5e24e4d4dfe65",
+          "exists": true,
+          "path": "./.cairn/specs/system-extension/spec.md"
+        }
+      ],
+      "manifest_hash": "b380cda225efbf97b171855ecaef7c34616b0a6f8f82e840c80c61aeb11041fa"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/specs/system-extension/spec.md"
+        }
+      ],
+      "manifest_hash": "6c5a93be2e087b8d2201478517d42b781fcc281c7791604d62cbb5a783259903"
+    },
+    "kind": "sync",
+    "manifest_hash": "673cdcf8c8b9da9bdcf6671d83e9610afe1a30055da9310431edb07cb6defb4c"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "5b6e1e8965dc804ffec8302aeba2d33081bbb4d0e3f718e02fad3ed8de58e5a1",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "cc9ce867411cf41b914512a8f7c40aeb8a34e45354b8fc58f1f47531fdce6bb4",
+  "reasons": [],
+  "receipt_hash": "aee9655b597b86073d861eb5298a4b20a49df59d4b2ec2ffcd43fafa21a2f8c7",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

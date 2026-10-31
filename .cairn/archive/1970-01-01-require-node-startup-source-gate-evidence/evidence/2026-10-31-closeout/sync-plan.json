@@ -1,0 +1,119 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/require-node-startup-source-gate-evidence/specs/node-runtime/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/require-node-startup-source-gate-evidence/specs/node-runtime/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "require-node-startup-source-gate-evidence",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/require-node-startup-source-gate-evidence/specs/node-runtime/spec.md"
+  ],
+  "dry_run": true,
+  "input_hash": "ffc0e13a11a0736ab4cfdd13d0d1ec151a5b746e7d729c9441b29900d4732120",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "90bb95412ef742fccf7e4af05093bae10b64f5df8f5c42d4677e56f663f66fec",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "9b736448b181a5953ccd7c137339ebc2b90f932927104bf639d4edf661b47c59",
+        "destination": ".cairn/specs/node-runtime/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "c38970decb3a0d40bd01649a4ef876a2c471e8c004face08d8f3cb9ce6600a15",
+        "operations": [
+          {
+            "block_hash": "07ff34be48b10350e517332263599261bfd1ebde28acd2f58b26adb09ce688f4",
+            "heading": "### Requirement: Normal startup consumes real gate evidence",
+            "kind": "added",
+            "requirement_id": "molten.audit_f02.real_evidence"
+          },
+          {
+            "block_hash": "8430bfae8303c286010cad47d243297302101dfda92f284aa4f08ee431e20b6b",
+            "heading": "### Requirement: Gate evidence binds the candidate",
+            "kind": "added",
+            "requirement_id": "molten.audit_f02.candidate_binding"
+          },
+          {
+            "block_hash": "6b7bfbc07be2f55919b257c6ed848686a77cc07d1f1e1dc296bcffbcf233c8be",
+            "heading": "### Requirement: Fixture composition stays test-only",
+            "kind": "added",
+            "requirement_id": "molten.audit_f02.fixture_isolation"
+          },
+          {
+            "block_hash": "75da912e1ec582da5dfde7e6fb9de35d6f90473021261a085a141bab68dfaffd",
+            "heading": "### Requirement: Startup evidence checks have bounded claims",
+            "kind": "added",
+            "requirement_id": "molten.audit_f02.validation"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.audit_f02.real_evidence",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.audit_f02.candidate_binding",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.audit_f02.fixture_isolation",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.audit_f02.validation",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/require-node-startup-source-gate-evidence/specs/node-runtime/spec.md"
+      }
+    ]
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "3b0b8ec780d228126089425266077fba3694ca7d4cbbe8a0cacd1a08ab7536d3",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "18508c07857bdbf911fff2a4a3ae375a3da9270d68f77de43c0b9f48c330eaad",
+  "reasons": [],
+  "receipt_hash": "4dcf76ff7d7fb8a24bc4cfa2422d9d89abd78055456b190b967be0978cf38dd4",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

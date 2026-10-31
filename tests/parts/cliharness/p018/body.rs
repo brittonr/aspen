@@ -1,7 +1,9 @@
 const CLUSTER_HARNESS_FIXTURE: &str = "tests/fixtures/cluster-harness/two-node.cluster";
 /// Signed children authenticate the full producer output before startup admission, which takes
 /// minutes on a loaded host; use the harness's admitted per-child ceiling.
-const CLUSTER_HARNESS_TEST_TIMEOUT_MS: &str = "300000";
+fn cluster_harness_test_timeout_ms() -> String {
+    molten::cluster_harness::MAX_CLUSTER_CHILD_TIMEOUT_MS.to_string()
+}
 
 #[test]
 #[ignore = "requires independently provisioned MOLTEN_TEST_SOURCE_TRUST signed producer output"]
@@ -25,7 +27,7 @@ fn cli_cluster_harness_executes_checked_fixture_and_verifies_offline() -> CliRes
         .args(["--run-dir"])
         .arg(&run_dir)
         .args(signed_harness_args(trust.as_deref())?)
-        .args(["--child-timeout-ms", CLUSTER_HARNESS_TEST_TIMEOUT_MS])
+        .args(["--child-timeout-ms", &cluster_harness_test_timeout_ms()])
         .output()?;
     assert_success(&run, "cluster harness checked fixture run");
     assert!(stdout(&run).contains("decision=pass"));
@@ -92,7 +94,7 @@ fn cli_cluster_harness_admits_exact_bound_fixture_with_actual_child() -> CliResu
         .args(["--run-dir"])
         .arg(&exact_run)
         .args(signed_harness_args(trust.as_deref())?)
-        .args(["--child-timeout-ms", CLUSTER_HARNESS_TEST_TIMEOUT_MS])
+        .args(["--child-timeout-ms", &cluster_harness_test_timeout_ms()])
         .output()?;
     assert_success(&exact, "exact one-megabyte harness fixture with actual child");
     assert!(exact_run.join("children/receipts/fixture-a/startup-receipt.preserves").exists());
@@ -120,7 +122,7 @@ fn cli_cluster_harness_preflights_fixture_bytes_before_staging_or_children() -> 
         .arg(&excess_state)
         .args(["--run-dir"])
         .arg(&excess_run)
-        .args(["--force", "--child-timeout-ms", CLUSTER_HARNESS_TEST_TIMEOUT_MS])
+        .args(["--force", "--child-timeout-ms", &cluster_harness_test_timeout_ms()])
         .output()?;
     assert_failure(&excess, "oversized fixture must deny before staging");
     assert!(stderr(&excess).contains("cluster manifest exceeds byte bound 1048576"));
@@ -151,7 +153,7 @@ fn cli_cluster_harness_exports_sealed_bundle_when_children_cannot_spawn() -> Cli
         .arg(&run_dir)
         .args(["--node-binary"])
         .arg(&missing_binary)
-        .args(["--child-timeout-ms", CLUSTER_HARNESS_TEST_TIMEOUT_MS])
+        .args(["--child-timeout-ms", &cluster_harness_test_timeout_ms()])
         .output()?;
     assert_failure(&run, "cluster harness spawn failure");
     let bundle = read_preserves(&run_dir.join("failure-repro-bundle.preserves"))?;
@@ -182,7 +184,7 @@ fn cli_cluster_harness_offline_verifier_denies_tampered_artifact() -> CliResult<
         .args(["--run-dir"])
         .arg(&run_dir)
         .args(signed_harness_args(trust.as_deref())?)
-        .args(["--child-timeout-ms", CLUSTER_HARNESS_TEST_TIMEOUT_MS])
+        .args(["--child-timeout-ms", &cluster_harness_test_timeout_ms()])
         .output()?;
     assert_success(&run, "cluster harness run before tamper");
 

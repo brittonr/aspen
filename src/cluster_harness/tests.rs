@@ -153,3 +153,31 @@ fn run_index_byte_size_is_bounded() {
     let error = super::runner::parse_run_index(&index).expect_err("oversized index denied");
     assert!(error.to_string().contains("cluster run index exceeds 4194304 bytes"));
 }
+
+#[test]
+fn child_timeout_ceiling_admits_signed_startup_and_still_bounds_a_child() {
+    // r[verify molten.testing.receipt_first_cluster_harness.fixture_executable_runner]
+    let mut input = ExecutionInput {
+        fixture_path: std::path::PathBuf::from("missing-fixture.cluster"),
+        state_root: std::path::PathBuf::from("missing-state"),
+        output_directory: std::path::PathBuf::from("missing-run"),
+        node_binary: std::path::PathBuf::from("missing-node"),
+        source_trust: None,
+        child_timeout_ms: MAX_CLUSTER_CHILD_TIMEOUT_MS,
+        force: false,
+    };
+    let admitted = execute(&input).expect_err("a missing fixture still fails planning");
+    assert!(
+        !admitted.to_string().contains("child timeout must be between"),
+        "the admitted ceiling must pass timeout validation: {admitted}"
+    );
+    input.child_timeout_ms = MAX_CLUSTER_CHILD_TIMEOUT_MS + 1;
+    let denied = execute(&input).expect_err("one millisecond past the ceiling is denied");
+    assert!(
+        denied.to_string().contains(&format!(
+            "cluster child timeout must be between 1 and {MAX_CLUSTER_CHILD_TIMEOUT_MS} milliseconds"
+        )),
+        "{denied}"
+    );
+    assert_eq!(MAX_CLUSTER_CHILD_TIMEOUT_MS, 1_800_000, "signed startup needs minutes, not seconds");
+}

@@ -1,0 +1,4 @@
+this derivation will be built:
+unsigned=/nix/store/yh0afqrf63ff66z8grbbzm21arcbdby9-molten-node-source-binding-unsigned-copy signatures=britton-desktop-1:Jf8PlpeUMzrXF/t5/xpF4Om4rb8MjToYyqe3IesZ5gHIfLQXd76T6g3boaitOuOQuKeutXtTJP7ErKJPQoITAQ==
+real-normal-startup negative=unsigned denied exit=1 lifecycle=unchanged reason=error: invalid harness artifact: source output has no signature by the independently selected key 
+real-normal-startup negative=wrong-key denied exit=1 lifecycle=unchanged reason=error: invalid harness artifact: source output has no signature by the independently selected key 

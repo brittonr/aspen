@@ -1,4 +1,6 @@
 //! Capability-rooted normal-startup evidence. The trust file is operator authority, not evidence.
+// r[impl molten.audit_f02.real_evidence]
+// r[impl molten.startup_binding.refresh]
 
 mod closure;
 mod measure;

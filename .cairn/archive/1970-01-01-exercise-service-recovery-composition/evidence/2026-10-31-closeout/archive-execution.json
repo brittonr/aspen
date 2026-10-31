@@ -1,0 +1,231 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: exercise-service-recovery-composition",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-exercise-service-recovery-composition"
+    }
+  ],
+  "blocked": false,
+  "change": "exercise-service-recovery-composition",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "ea02275518069f391bc1d96c7febd86344b9f7b79773c82e0a852a6b61bd7aa2",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "25b989d43530b6cb0c0d0743185db33667fdb023ed187b43c2e569215a74e2d5",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-exercise-service-recovery-composition/design.md"
+        },
+        {
+          "content_hash": "1e6834df03846fc81435ddaa81f1e8a10eed221b2c48c93a5390f1f4871bbc6d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-exercise-service-recovery-composition/evidence/2026-10-21-verification.md"
+        },
+        {
+          "content_hash": "6d8302ae6a9c12abfdf75a1d981eda83aece9102f138a6d33ed17cae090c409a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-exercise-service-recovery-composition/evidence/2026-10-25-saturation.md"
+        },
+        {
+          "content_hash": "e107b5d88ac5169d895cf46f7c341a4f0884bc7facc8e7933049c93c49df6106",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-exercise-service-recovery-composition/evidence/2026-10-31-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "5b9a910e66957f11a7079ab26e05053e4cd18ed6ffea9de9763437f7316ba031",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-exercise-service-recovery-composition/evidence/2026-10-31-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "a91ea25dec5476b18b1325a89cfd986205f3ee6b2fea879e3044034ba77dc1b5",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-exercise-service-recovery-composition/evidence/2026-10-31-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "6ce3cbe5c49996f262908a29e1bd0fa320aec529574d70ac5b9c440d8c321838",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-exercise-service-recovery-composition/evidence/2026-10-31-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "98d0765302d51d7fa903c3955380ace64fef23af96a13b12aab67744d3b535a1",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-exercise-service-recovery-composition/evidence/2026-10-31-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "a79358ad1f7ece907bf9d57faa0c2cc388cb1bce6945289852f1b8aa0040c787",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-exercise-service-recovery-composition/evidence/2026-10-31-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "f6232eec8a49c6e9b9c179cea506cd602ef31fb07bfc8bad20015405d334d0cb",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-exercise-service-recovery-composition/evidence/2026-10-31-closeout/validate.json"
+        },
+        {
+          "content_hash": "7eb75aa29923a777a74ee253f89c37c356d99de7ac2d6e1c1fa60d5f7555bdd9",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-exercise-service-recovery-composition/evidence/2026-10-31-live-recovery-twin.log"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-exercise-service-recovery-composition/metadata.json"
+        },
+        {
+          "content_hash": "7e1cea0829dd53d31135d67e243cf181443de4d84860d661fff6b9997d39b924",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-exercise-service-recovery-composition/proposal.md"
+        },
+        {
+          "content_hash": "ebe1329df7f70926a1021bcf374813ca2b233dfe6e010bd03180297316285d05",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-exercise-service-recovery-composition/review.md"
+        },
+        {
+          "content_hash": "b3ef79f0fc62ab5dbdf532d9161b09ff0cd29589c7c364f266a8edecddb6593f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-exercise-service-recovery-composition/specs/testing-harness/spec.md"
+        },
+        {
+          "content_hash": "284fec055dd4f0afe000c0c4bf5609437694b219aa74700c4b09433903bbb1f9",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-exercise-service-recovery-composition/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/exercise-service-recovery-composition"
+        }
+      ],
+      "manifest_hash": "7b7a962e95c1f79c35f0ddb56d82149f99ca2ac422b79cc3da7cedd492c8a0af"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "25b989d43530b6cb0c0d0743185db33667fdb023ed187b43c2e569215a74e2d5",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-service-recovery-composition/design.md"
+        },
+        {
+          "content_hash": "1e6834df03846fc81435ddaa81f1e8a10eed221b2c48c93a5390f1f4871bbc6d",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-service-recovery-composition/evidence/2026-10-21-verification.md"
+        },
+        {
+          "content_hash": "6d8302ae6a9c12abfdf75a1d981eda83aece9102f138a6d33ed17cae090c409a",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-service-recovery-composition/evidence/2026-10-25-saturation.md"
+        },
+        {
+          "content_hash": "e107b5d88ac5169d895cf46f7c341a4f0884bc7facc8e7933049c93c49df6106",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-service-recovery-composition/evidence/2026-10-31-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "5b9a910e66957f11a7079ab26e05053e4cd18ed6ffea9de9763437f7316ba031",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-service-recovery-composition/evidence/2026-10-31-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "a91ea25dec5476b18b1325a89cfd986205f3ee6b2fea879e3044034ba77dc1b5",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-service-recovery-composition/evidence/2026-10-31-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "6ce3cbe5c49996f262908a29e1bd0fa320aec529574d70ac5b9c440d8c321838",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-service-recovery-composition/evidence/2026-10-31-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "98d0765302d51d7fa903c3955380ace64fef23af96a13b12aab67744d3b535a1",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-service-recovery-composition/evidence/2026-10-31-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "a79358ad1f7ece907bf9d57faa0c2cc388cb1bce6945289852f1b8aa0040c787",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-service-recovery-composition/evidence/2026-10-31-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "f6232eec8a49c6e9b9c179cea506cd602ef31fb07bfc8bad20015405d334d0cb",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-service-recovery-composition/evidence/2026-10-31-closeout/validate.json"
+        },
+        {
+          "content_hash": "7eb75aa29923a777a74ee253f89c37c356d99de7ac2d6e1c1fa60d5f7555bdd9",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-service-recovery-composition/evidence/2026-10-31-live-recovery-twin.log"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-service-recovery-composition/metadata.json"
+        },
+        {
+          "content_hash": "7e1cea0829dd53d31135d67e243cf181443de4d84860d661fff6b9997d39b924",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-service-recovery-composition/proposal.md"
+        },
+        {
+          "content_hash": "ebe1329df7f70926a1021bcf374813ca2b233dfe6e010bd03180297316285d05",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-service-recovery-composition/review.md"
+        },
+        {
+          "content_hash": "b3ef79f0fc62ab5dbdf532d9161b09ff0cd29589c7c364f266a8edecddb6593f",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-service-recovery-composition/specs/testing-harness/spec.md"
+        },
+        {
+          "content_hash": "284fec055dd4f0afe000c0c4bf5609437694b219aa74700c4b09433903bbb1f9",
+          "exists": true,
+          "path": "./.cairn/changes/exercise-service-recovery-composition/tasks.md"
+        }
+      ],
+      "manifest_hash": "ff840f55d2ea52add9f55fe17568c4712e1377cd2e57f2ddcae3f9d791601ebb"
+    },
+    "kind": "archive",
+    "manifest_hash": "33998364c898b178c646f8d26536f6a24ebe9e38759a72cde7a4c39b85794952"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "c06fa01ae02b8ce50ce8487a6763ec34e3b706ac66f1a82c4fe17addaa6e3be8",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "7c1f719ab8b6529b84dcfa8ea473a6d4f9cd6355f32454c04a1f94d5c92638ce",
+  "reasons": [],
+  "receipt_hash": "a3ccd075d88cefb4964cc3b41e8383e84cd6e9d75d277e614d8f711164a23602",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

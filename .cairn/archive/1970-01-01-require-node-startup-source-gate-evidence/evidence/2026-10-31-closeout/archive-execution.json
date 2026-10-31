@@ -1,0 +1,231 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: require-node-startup-source-gate-evidence",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-require-node-startup-source-gate-evidence"
+    }
+  ],
+  "blocked": false,
+  "change": "require-node-startup-source-gate-evidence",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "858dbbf8aa74017507ceb02690951f22eac27b3cbd2f197b03c264ee52521579",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "515fdef1e51c642782361f65941c6c8f9b735887b7736798aaff1541d0f9e7e4",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-require-node-startup-source-gate-evidence/design.md"
+        },
+        {
+          "content_hash": "e2be6a8cbb4db95ad5dab2b347be801b801c622a0648b75b48728d49e864fb6a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-require-node-startup-source-gate-evidence/evidence/2026-10-21-prerequisite-review.md"
+        },
+        {
+          "content_hash": "5b216b24bb62ee349c58cfa75d5b9f4d3ddd2a685239723eee38138a489625f4",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-require-node-startup-source-gate-evidence/evidence/2026-10-29-producer-cutover.md"
+        },
+        {
+          "content_hash": "4514702e39be281a1cd545dc58e3b43fae743240a7376b1fb8c6c30214fd13c9",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-require-node-startup-source-gate-evidence/evidence/2026-10-31-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "963d7d94c2fce1365440bb6c58da7954d961a171c7f891224cee1f8b4c931e2f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-require-node-startup-source-gate-evidence/evidence/2026-10-31-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "3544c2ee09e0e04132013a43f33aa4c9d4df2865ab8fc8db39cf35c5397a86e8",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-require-node-startup-source-gate-evidence/evidence/2026-10-31-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "f6b7babcc9f2c653cc33437f3c73e0e8d72a83fc10f5bfa644d87478ae065740",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-require-node-startup-source-gate-evidence/evidence/2026-10-31-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "933cc86e6c8041afab52846e74fa694e00acf96d3c4318fd7b6583ace08f57a2",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-require-node-startup-source-gate-evidence/evidence/2026-10-31-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "f36430e92f585f92d0d790ca3077e0462582b061648a6ff575ec7f6f663ea425",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-require-node-startup-source-gate-evidence/evidence/2026-10-31-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "f6232eec8a49c6e9b9c179cea506cd602ef31fb07bfc8bad20015405d334d0cb",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-require-node-startup-source-gate-evidence/evidence/2026-10-31-closeout/validate.json"
+        },
+        {
+          "content_hash": "d5e742a04b391566da92141d1889cf30defb33c1a7eeae87976920524997e141",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-require-node-startup-source-gate-evidence/evidence/2026-10-31-verification.md"
+        },
+        {
+          "content_hash": "8be951b64cb3d7903a2047a9e40676ca122ca7ba2d686b81f797a55fc53899b6",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-require-node-startup-source-gate-evidence/metadata.json"
+        },
+        {
+          "content_hash": "2dc5532c8b30ec59ffed584b2dcff920ba9599a87e2061b352eccbef561834d3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-require-node-startup-source-gate-evidence/proposal.md"
+        },
+        {
+          "content_hash": "a90e90adab16636068cb7046fc466479ba27fe95e69b8429d6e1229e136fca36",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-require-node-startup-source-gate-evidence/review.md"
+        },
+        {
+          "content_hash": "9b736448b181a5953ccd7c137339ebc2b90f932927104bf639d4edf661b47c59",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-require-node-startup-source-gate-evidence/specs/node-runtime/spec.md"
+        },
+        {
+          "content_hash": "e4f257f702e245c6478fdc444fae9d2f1338eba0931ef2afccb620678751a276",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-require-node-startup-source-gate-evidence/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/require-node-startup-source-gate-evidence"
+        }
+      ],
+      "manifest_hash": "55c2510051d01470ecc3d91be56aab6b1cdc3d6edce2c208e338b9931995c18f"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "515fdef1e51c642782361f65941c6c8f9b735887b7736798aaff1541d0f9e7e4",
+          "exists": true,
+          "path": "./.cairn/changes/require-node-startup-source-gate-evidence/design.md"
+        },
+        {
+          "content_hash": "e2be6a8cbb4db95ad5dab2b347be801b801c622a0648b75b48728d49e864fb6a",
+          "exists": true,
+          "path": "./.cairn/changes/require-node-startup-source-gate-evidence/evidence/2026-10-21-prerequisite-review.md"
+        },
+        {
+          "content_hash": "5b216b24bb62ee349c58cfa75d5b9f4d3ddd2a685239723eee38138a489625f4",
+          "exists": true,
+          "path": "./.cairn/changes/require-node-startup-source-gate-evidence/evidence/2026-10-29-producer-cutover.md"
+        },
+        {
+          "content_hash": "4514702e39be281a1cd545dc58e3b43fae743240a7376b1fb8c6c30214fd13c9",
+          "exists": true,
+          "path": "./.cairn/changes/require-node-startup-source-gate-evidence/evidence/2026-10-31-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "963d7d94c2fce1365440bb6c58da7954d961a171c7f891224cee1f8b4c931e2f",
+          "exists": true,
+          "path": "./.cairn/changes/require-node-startup-source-gate-evidence/evidence/2026-10-31-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "3544c2ee09e0e04132013a43f33aa4c9d4df2865ab8fc8db39cf35c5397a86e8",
+          "exists": true,
+          "path": "./.cairn/changes/require-node-startup-source-gate-evidence/evidence/2026-10-31-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "f6b7babcc9f2c653cc33437f3c73e0e8d72a83fc10f5bfa644d87478ae065740",
+          "exists": true,
+          "path": "./.cairn/changes/require-node-startup-source-gate-evidence/evidence/2026-10-31-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "933cc86e6c8041afab52846e74fa694e00acf96d3c4318fd7b6583ace08f57a2",
+          "exists": true,
+          "path": "./.cairn/changes/require-node-startup-source-gate-evidence/evidence/2026-10-31-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "f36430e92f585f92d0d790ca3077e0462582b061648a6ff575ec7f6f663ea425",
+          "exists": true,
+          "path": "./.cairn/changes/require-node-startup-source-gate-evidence/evidence/2026-10-31-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "f6232eec8a49c6e9b9c179cea506cd602ef31fb07bfc8bad20015405d334d0cb",
+          "exists": true,
+          "path": "./.cairn/changes/require-node-startup-source-gate-evidence/evidence/2026-10-31-closeout/validate.json"
+        },
+        {
+          "content_hash": "d5e742a04b391566da92141d1889cf30defb33c1a7eeae87976920524997e141",
+          "exists": true,
+          "path": "./.cairn/changes/require-node-startup-source-gate-evidence/evidence/2026-10-31-verification.md"
+        },
+        {
+          "content_hash": "8be951b64cb3d7903a2047a9e40676ca122ca7ba2d686b81f797a55fc53899b6",
+          "exists": true,
+          "path": "./.cairn/changes/require-node-startup-source-gate-evidence/metadata.json"
+        },
+        {
+          "content_hash": "2dc5532c8b30ec59ffed584b2dcff920ba9599a87e2061b352eccbef561834d3",
+          "exists": true,
+          "path": "./.cairn/changes/require-node-startup-source-gate-evidence/proposal.md"
+        },
+        {
+          "content_hash": "a90e90adab16636068cb7046fc466479ba27fe95e69b8429d6e1229e136fca36",
+          "exists": true,
+          "path": "./.cairn/changes/require-node-startup-source-gate-evidence/review.md"
+        },
+        {
+          "content_hash": "9b736448b181a5953ccd7c137339ebc2b90f932927104bf639d4edf661b47c59",
+          "exists": true,
+          "path": "./.cairn/changes/require-node-startup-source-gate-evidence/specs/node-runtime/spec.md"
+        },
+        {
+          "content_hash": "e4f257f702e245c6478fdc444fae9d2f1338eba0931ef2afccb620678751a276",
+          "exists": true,
+          "path": "./.cairn/changes/require-node-startup-source-gate-evidence/tasks.md"
+        }
+      ],
+      "manifest_hash": "319e47c481e0486d8852dd7ce35923dd129fee2ae3557cf0673bffd6221da569"
+    },
+    "kind": "archive",
+    "manifest_hash": "66a5a91770c9d5a98b875de6822be525ddaffd757eefacf57b7ce5a2167dbd18"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "8a8bcad9f6adbe7e4f0b5b7690d1b9b591f7c06fefcb36079b238e5ee931de93",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "18508c07857bdbf911fff2a4a3ae375a3da9270d68f77de43c0b9f48c330eaad",
+  "reasons": [],
+  "receipt_hash": "4d409e41b20b14617dc76a37b0f056e7688803a6ba72b74bad3a5e401f6c7375",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

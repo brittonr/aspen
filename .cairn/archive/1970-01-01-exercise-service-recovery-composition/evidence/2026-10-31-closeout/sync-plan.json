@@ -1,0 +1,86 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/exercise-service-recovery-composition/specs/testing-harness/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/exercise-service-recovery-composition/specs/testing-harness/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "exercise-service-recovery-composition",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/exercise-service-recovery-composition/specs/testing-harness/spec.md"
+  ],
+  "dry_run": true,
+  "input_hash": "cd0a8e6419f937803aef84ef2fce4cf16feff6912756f59ef34ce462adbfa64a",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "53e221a66ae95562225112ffd7a63289f8ccdd3aab6c3cc003da2c676282ddcd",
+        "blocked": false,
+        "changed": false,
+        "delta_hash": "b3ef79f0fc62ab5dbdf532d9161b09ff0cd29589c7c364f266a8edecddb6593f",
+        "destination": ".cairn/specs/testing-harness/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "53e221a66ae95562225112ffd7a63289f8ccdd3aab6c3cc003da2c676282ddcd",
+        "operations": [
+          {
+            "block_hash": "269491cde0d9d0206018c36f0096ecd4e1002ade1732155d87ae02da0672eefa",
+            "heading": "### Requirement: Service recovery composition proves cross-mechanism properties",
+            "kind": "added",
+            "requirement_id": "molten.testing.service_recovery_composition"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.testing.service_recovery_composition",
+            "state": "already_applied"
+          }
+        ],
+        "source": ".cairn/changes/exercise-service-recovery-composition/specs/testing-harness/spec.md"
+      }
+    ]
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "fe0a319f9d6813ef30a48eb03d094318db89fdfcbd4cef5ae26311d7b6342507",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "7c1f719ab8b6529b84dcfa8ea473a6d4f9cd6355f32454c04a1f94d5c92638ce",
+  "reasons": [],
+  "receipt_hash": "8570e0bf932959835a959bcf4e6a3e789d2be2346eb1d9b911a0671e30147a04",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

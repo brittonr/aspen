@@ -1,0 +1,16 @@
+this derivation will be built:
+this derivation will be built:
+added 3 signatures
+output=/nix/store/bic1xc7d7iih5340vqgsjqsmsmrvhwm6-molten-node-source-binding-v1
+tampered=/nix/store/5p663p9zy20cf1x70wll27gm8zwpcykj-molten-node-source-binding-tampered-gate-member
+incomplete=/nix/store/clx3hmvzy4337r8qkd1y0i8iv003cd39-molten-node-source-binding-missing-gate-compiler-closure
+nix=/nix/store/6rwk5j1qqk7na4la5m2ka34p734braxa-nix-2.36.0/bin/nix
+trust_sha256=4d91aeaf46784b387d6a2314b310b83fc90ce6fd14263eeece5f87058a654043
+real-normal-startup negative=missing denied exit=1 lifecycle=unchanged
+real-normal-startup negative=stale denied exit=1 lifecycle=unchanged
+real-normal-startup negative=wrong-candidate denied exit=1 lifecycle=unchanged
+real-normal-startup negative=tamper denied exit=1 lifecycle=unchanged
+real-normal-startup negative=missing-gate-closure denied exit=1 lifecycle=unchanged
+real-normal-startup negative=synthetic denied exit=1 lifecycle=unchanged
+real-normal-startup negative=read-error denied exit=1 lifecycle=unchanged
+real-normal-startup positive=passed authority=explicitly-experimental production-approval=none

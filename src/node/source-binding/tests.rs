@@ -1,5 +1,6 @@
 // r[verify molten.audit_f02.validation]
 // r[verify molten.audit_f02.candidate_binding]
+// r[verify molten.audit_f02.real_evidence]
 #[test]
 fn normal_startup_evidence_errors_preserve_active_lock_and_clean_shutdown() {
     for case in ["missing", "read-error", "synthetic"] {

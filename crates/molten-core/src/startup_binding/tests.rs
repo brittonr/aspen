@@ -82,6 +82,7 @@ fn cohort_rejects_tamper_missing_and_duplicate_roles() {
 }
 
 // r[verify molten.audit_f02.fixture_isolation]
+// r[verify molten.startup_binding.refresh]
 #[test]
 fn historical_and_fixture_producer_profiles_are_not_promoted() {
     let mut binding = binding();

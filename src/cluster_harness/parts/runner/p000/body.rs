@@ -1,7 +1,10 @@
 use super::canonical::*;
 
 pub const DEFAULT_CLUSTER_CHILD_TIMEOUT_MS: u64 = 30_000;
-pub const MAX_CLUSTER_CHILD_TIMEOUT_MS: u64 = 300_000;
+/// A signed child start authenticates the whole producer output and re-measures its retained build
+/// closure before admission, which takes minutes on a loaded host; the ceiling admits that cost
+/// while still bounding a runaway child. Unsigned children follow the same policy.
+pub const MAX_CLUSTER_CHILD_TIMEOUT_MS: u64 = 1_800_000;
 const CHILD_POLL_INTERVAL_MS: u64 = 10;
 const MAX_TICKET_FILES: usize = 1_024;
 pub(super) const RUN_INDEX_HEADER: &str = "molten.cluster-run-index.v1";

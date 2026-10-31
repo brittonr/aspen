@@ -68,6 +68,8 @@ pub enum Issue {
 
 /// This decision grants only this source-gate claim, never runtime authority.
 // r[impl molten.audit_f02.candidate_binding]
+// r[impl molten.audit_f02.real_evidence]
+// r[impl molten.startup_binding.refresh]
 pub fn admit(binding: &Binding, selected: &Selection, observed: &Observation<'_>) -> Result<(), Issue> {
     if binding.schema != SCHEMA {
         return Err(Issue::UnsupportedSchema);

@@ -1,5 +1,10 @@
 use crate::support::*;
 
+/// Every public operation re-authenticates the signed node source, which takes minutes on a loaded
+/// host, and one twin run issues dozens of operations (three scenarios for the broken variants).
+/// A one-hour operator window expired mid-run; the window must outlast the whole supervised run.
+const OPERATOR_AUTHORITY_SECONDS: u64 = 12 * 3600;
+
 pub(super) struct Operator {
     issuer: basalt::ucan::Ed25519InMemorySigner,
     holder: basalt::ucan::Ed25519InMemorySigner,
@@ -17,7 +22,7 @@ impl Operator {
             basalt::ucan::AudienceDid::from(basalt::ucan::TokenSigner::issuer(&holder).or_fail("operator holder DID")?);
         let now = molten::world_witness::WallClock::unix_seconds(&mut molten::world_witness::live_clock()?)?;
         let not_before = now.saturating_sub(1);
-        let expires = now + 3600;
+        let expires = now + OPERATOR_AUTHORITY_SECONDS;
         let trust = molten::node_service_host::authority::wire::Trust {
             issuer: basalt::ucan::TokenSigner::issuer(&issuer).or_fail("operator issuer DID")?.as_str().to_string(),
             issuer_key: basalt::ucan::derive_ed25519_public_key(&[71; 32]).or_fail("operator issuer public key")?,

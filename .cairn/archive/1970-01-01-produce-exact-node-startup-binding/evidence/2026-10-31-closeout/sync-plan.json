@@ -1,0 +1,94 @@
+{
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/produce-exact-node-startup-binding/specs/node-runtime/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/produce-exact-node-startup-binding/specs/node-runtime/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "produce-exact-node-startup-binding",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/produce-exact-node-startup-binding/specs/node-runtime/spec.md"
+  ],
+  "dry_run": true,
+  "input_hash": "40668bc84d218a702c35891af1f0c5f8bc09c3a2ed684824a271777d902ca3c0",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "90bb95412ef742fccf7e4af05093bae10b64f5df8f5c42d4677e56f663f66fec",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "4715696ec6c54fceac5ce5a0ca25fd64c700327a3f434e63c917a88bcc53e329",
+        "destination": ".cairn/specs/node-runtime/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "a52adb748d6de22a95ff05017d6b3cc11aa8091684fe43f1999ccb7eb7130ac5",
+        "operations": [
+          {
+            "block_hash": "8750a874eec7005d3f39522bb4063d09ca162bf000f2db70ad3db3ae82929053",
+            "heading": "### Requirement: Producer measures exact executed build",
+            "kind": "added",
+            "requirement_id": "molten.startup_binding.producer"
+          },
+          {
+            "block_hash": "6d9b0942ecd9b4da9351cdd57a6876447636af4c2db5ebabc95542352a6f0c36",
+            "heading": "### Requirement: Independent producer authentication",
+            "kind": "added",
+            "requirement_id": "molten.startup_binding.authentication"
+          },
+          {
+            "block_hash": "6c4ff68aaa73d23ade87e4acd9bea857a324d1b584462ec731bfb1d59ba82077",
+            "heading": "### Requirement: Versioned replay and operator refresh",
+            "kind": "added",
+            "requirement_id": "molten.startup_binding.refresh"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.startup_binding.producer",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.startup_binding.authentication",
+            "state": "applied"
+          },
+          {
+            "kind": "added",
+            "requirement_id": "molten.startup_binding.refresh",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/produce-exact-node-startup-binding/specs/node-runtime/spec.md"
+      }
+    ]
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "plan_hash": "6779acd4f1dce80b515053044fc3ed4cda8f4445161b84dbda22e8c945920ab4",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "reasons": [],
+  "receipt_hash": "eb2903403841a214c70a5f156dea4377063923143572e02bd46f0ca9e96a06fc"
+}

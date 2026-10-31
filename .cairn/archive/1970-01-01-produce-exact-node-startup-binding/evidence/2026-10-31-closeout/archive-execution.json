@@ -1,0 +1,217 @@
+{
+  "actions": [
+    {
+      "description": "move active change to archive: produce-exact-node-startup-binding",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-produce-exact-node-startup-binding"
+    }
+  ],
+  "blocked": false,
+  "change": "produce-exact-node-startup-binding",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "51d8f682596c5c3ad7d177eb4e4de1108a677fe47a1942438c3f7ede6160d35f",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "b726b3a4d2c82ee8f169b83e244a2de11693a51e4c0db49ec16573774627f97f",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-produce-exact-node-startup-binding/design.md"
+        },
+        {
+          "content_hash": "bc34e27516ef2c6d6eafe66a24f6f170414c0a9171c9ddaa7b9b426d7d6549ca",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-produce-exact-node-startup-binding/evidence/2026-10-31-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "e3c7205ab8e38e1445da52b325bdd062327d5275c32b2db0a5262866d9f08b42",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-produce-exact-node-startup-binding/evidence/2026-10-31-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "332877d817804892a48869fc6b4e097da7683797010068a97b610b4a05ecae1b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-produce-exact-node-startup-binding/evidence/2026-10-31-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "65dc7362eb98982968427f9ca02df70b19ce7b2f177603ecdd26f003067efa9a",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-produce-exact-node-startup-binding/evidence/2026-10-31-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "a9e6e401aea358802bfb57ef5acf6dba8cff406be1f9291c3cb2aec0774e3555",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-produce-exact-node-startup-binding/evidence/2026-10-31-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "e2de2a18784c2e7958591249fa02cf990c0805d647562a4d08c1f424e6aa2501",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-produce-exact-node-startup-binding/evidence/2026-10-31-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "f6232eec8a49c6e9b9c179cea506cd602ef31fb07bfc8bad20015405d334d0cb",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-produce-exact-node-startup-binding/evidence/2026-10-31-closeout/validate.json"
+        },
+        {
+          "content_hash": "1d87b041e272c0e148aace26a03a6e2e83cb8b49dc5f7cc9f528fd04ebcf0b1b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-produce-exact-node-startup-binding/evidence/2026-10-31-startup-extra-negatives-c267d062c.log"
+        },
+        {
+          "content_hash": "7ab1f904a2fef68a1fa31f6b0b88f734d65381a63fe2103c3c367bb5c02a9f41",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-produce-exact-node-startup-binding/evidence/2026-10-31-startup-smoke-c267d062c.log"
+        },
+        {
+          "content_hash": "8fd09061d635a8e1b09315caf40c2021ad3b81834d721261293e4ba4d003c874",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-produce-exact-node-startup-binding/evidence/2026-10-31-startup-smoke-ea61f0463.log"
+        },
+        {
+          "content_hash": "2fcef56b9c8cb890e49d60a3662a96a5adbede262956189975ea00b6118f12e1",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-produce-exact-node-startup-binding/evidence/2026-10-31-verification.md"
+        },
+        {
+          "content_hash": "75de725e5cabdee5e56affb23412f75fad20b8876025f94628f146bc58767349",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-produce-exact-node-startup-binding/proposal.md"
+        },
+        {
+          "content_hash": "e2e01c2bedd83243a20e0ce32f49488be969297c77dff8bdf9d1efe5078318c5",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-produce-exact-node-startup-binding/review.md"
+        },
+        {
+          "content_hash": "4715696ec6c54fceac5ce5a0ca25fd64c700327a3f434e63c917a88bcc53e329",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-produce-exact-node-startup-binding/specs/node-runtime/spec.md"
+        },
+        {
+          "content_hash": "c3baf793a4041675799fba48bdb538249694dc10d54b056624508c9a0b22b4b2",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-produce-exact-node-startup-binding/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/produce-exact-node-startup-binding"
+        }
+      ],
+      "manifest_hash": "47de1f0afffa8f745f5ed070180ab3913be3a4dc081dd464bca213ea1e3ad3fd"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "b726b3a4d2c82ee8f169b83e244a2de11693a51e4c0db49ec16573774627f97f",
+          "exists": true,
+          "path": "./.cairn/changes/produce-exact-node-startup-binding/design.md"
+        },
+        {
+          "content_hash": "bc34e27516ef2c6d6eafe66a24f6f170414c0a9171c9ddaa7b9b426d7d6549ca",
+          "exists": true,
+          "path": "./.cairn/changes/produce-exact-node-startup-binding/evidence/2026-10-31-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "e3c7205ab8e38e1445da52b325bdd062327d5275c32b2db0a5262866d9f08b42",
+          "exists": true,
+          "path": "./.cairn/changes/produce-exact-node-startup-binding/evidence/2026-10-31-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "332877d817804892a48869fc6b4e097da7683797010068a97b610b4a05ecae1b",
+          "exists": true,
+          "path": "./.cairn/changes/produce-exact-node-startup-binding/evidence/2026-10-31-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "65dc7362eb98982968427f9ca02df70b19ce7b2f177603ecdd26f003067efa9a",
+          "exists": true,
+          "path": "./.cairn/changes/produce-exact-node-startup-binding/evidence/2026-10-31-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "a9e6e401aea358802bfb57ef5acf6dba8cff406be1f9291c3cb2aec0774e3555",
+          "exists": true,
+          "path": "./.cairn/changes/produce-exact-node-startup-binding/evidence/2026-10-31-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "e2de2a18784c2e7958591249fa02cf990c0805d647562a4d08c1f424e6aa2501",
+          "exists": true,
+          "path": "./.cairn/changes/produce-exact-node-startup-binding/evidence/2026-10-31-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "f6232eec8a49c6e9b9c179cea506cd602ef31fb07bfc8bad20015405d334d0cb",
+          "exists": true,
+          "path": "./.cairn/changes/produce-exact-node-startup-binding/evidence/2026-10-31-closeout/validate.json"
+        },
+        {
+          "content_hash": "1d87b041e272c0e148aace26a03a6e2e83cb8b49dc5f7cc9f528fd04ebcf0b1b",
+          "exists": true,
+          "path": "./.cairn/changes/produce-exact-node-startup-binding/evidence/2026-10-31-startup-extra-negatives-c267d062c.log"
+        },
+        {
+          "content_hash": "7ab1f904a2fef68a1fa31f6b0b88f734d65381a63fe2103c3c367bb5c02a9f41",
+          "exists": true,
+          "path": "./.cairn/changes/produce-exact-node-startup-binding/evidence/2026-10-31-startup-smoke-c267d062c.log"
+        },
+        {
+          "content_hash": "8fd09061d635a8e1b09315caf40c2021ad3b81834d721261293e4ba4d003c874",
+          "exists": true,
+          "path": "./.cairn/changes/produce-exact-node-startup-binding/evidence/2026-10-31-startup-smoke-ea61f0463.log"
+        },
+        {
+          "content_hash": "2fcef56b9c8cb890e49d60a3662a96a5adbede262956189975ea00b6118f12e1",
+          "exists": true,
+          "path": "./.cairn/changes/produce-exact-node-startup-binding/evidence/2026-10-31-verification.md"
+        },
+        {
+          "content_hash": "75de725e5cabdee5e56affb23412f75fad20b8876025f94628f146bc58767349",
+          "exists": true,
+          "path": "./.cairn/changes/produce-exact-node-startup-binding/proposal.md"
+        },
+        {
+          "content_hash": "e2e01c2bedd83243a20e0ce32f49488be969297c77dff8bdf9d1efe5078318c5",
+          "exists": true,
+          "path": "./.cairn/changes/produce-exact-node-startup-binding/review.md"
+        },
+        {
+          "content_hash": "4715696ec6c54fceac5ce5a0ca25fd64c700327a3f434e63c917a88bcc53e329",
+          "exists": true,
+          "path": "./.cairn/changes/produce-exact-node-startup-binding/specs/node-runtime/spec.md"
+        },
+        {
+          "content_hash": "c3baf793a4041675799fba48bdb538249694dc10d54b056624508c9a0b22b4b2",
+          "exists": true,
+          "path": "./.cairn/changes/produce-exact-node-startup-binding/tasks.md"
+        }
+      ],
+      "manifest_hash": "c0a8bcb24020f7cc0634566fdd41a39698efc5eeb03ba7f0daa5fdf4f5da09b8"
+    },
+    "kind": "archive",
+    "manifest_hash": "de5eed97202594283d9861df5a6bd2e5a96f4655893519404ece85da5fdebd18"
+  },
+  "plan_hash": "d83d0a17cbfc6c120538b6461100651033e35bdb18f40f9e049882330d539ff2",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "reasons": [],
+  "receipt_hash": "414a808cfcc411e0997453e66d22a3d0ec5ccc8111d4ed1b279decd6698db7ee"
+}

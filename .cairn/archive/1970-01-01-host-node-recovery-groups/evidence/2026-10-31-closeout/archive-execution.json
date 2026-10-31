@@ -1,0 +1,211 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: host-node-recovery-groups",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-host-node-recovery-groups"
+    }
+  ],
+  "blocked": false,
+  "change": "host-node-recovery-groups",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "bcc07ff3cccf97928555656b7628e6c50e5e6cc89a8fc62bb40d1494f74145c1",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "421c2838a7cc86de22a1b88d0f629e8516dbf7889158f5be09dbdd3a9da56130",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-host-node-recovery-groups/design.md"
+        },
+        {
+          "content_hash": "409462de6820d3e4498197ae387d78a7c4454b4b794ac4c10b77cf9ca961532b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-host-node-recovery-groups/evidence/2026-10-31-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "a0a5f1453e23247fe8f8548dfe9bcd3e65aa9672e7445cf895eacfae24db190d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-host-node-recovery-groups/evidence/2026-10-31-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "c87f5c25496c69e1332dda5bcdd5e3a605c73412aacc88c17a598e7eeffb51a9",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-host-node-recovery-groups/evidence/2026-10-31-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "f9044c48a9c70b24a1e0330d094d4b0f539d8459af9ba08a632fcd6ee6d66c15",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-host-node-recovery-groups/evidence/2026-10-31-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "ec665bcd62e161809c7acdbcbc281f2e854bfb8e75f94bed6a9ffb0f3d502233",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-host-node-recovery-groups/evidence/2026-10-31-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "b3c939a262ea421be4cffb0ca10d5acb5ace2ce7035bb8f721e62ec8064991f5",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-host-node-recovery-groups/evidence/2026-10-31-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "f6232eec8a49c6e9b9c179cea506cd602ef31fb07bfc8bad20015405d334d0cb",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-host-node-recovery-groups/evidence/2026-10-31-closeout/validate.json"
+        },
+        {
+          "content_hash": "7eb75aa29923a777a74ee253f89c37c356d99de7ac2d6e1c1fa60d5f7555bdd9",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-host-node-recovery-groups/evidence/2026-10-31-live-recovery-twin.log"
+        },
+        {
+          "content_hash": "54287960424e604dfef57fca076755879c70a2e41cba4a9e29e4fece504820c3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-host-node-recovery-groups/metadata.json"
+        },
+        {
+          "content_hash": "9e8053aa357a71d164dcad83ceb7b9f9d6b56cb67435f2827b25681837024fee",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-host-node-recovery-groups/proposal.md"
+        },
+        {
+          "content_hash": "feeb7e3ce0880d7c5526f1cc44019841fd3a909db7a5d324a001524db13b19dd",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-host-node-recovery-groups/review.md"
+        },
+        {
+          "content_hash": "b8c3723a5ffdd4dc4c763a5ed6da2b56c67a47c1c8c2f37047b08c9373c7ccc1",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-host-node-recovery-groups/specs/system-extension/spec.md"
+        },
+        {
+          "content_hash": "23f67ba4fb62791780ae3ea9de25c87f44142e592de509c9a60c2e1bb247ab6c",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-host-node-recovery-groups/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/host-node-recovery-groups"
+        }
+      ],
+      "manifest_hash": "fc2a719ce0f3162a123e5c76ae622b4743039296c5cb56c89e082841cd03e36f"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "421c2838a7cc86de22a1b88d0f629e8516dbf7889158f5be09dbdd3a9da56130",
+          "exists": true,
+          "path": "./.cairn/changes/host-node-recovery-groups/design.md"
+        },
+        {
+          "content_hash": "409462de6820d3e4498197ae387d78a7c4454b4b794ac4c10b77cf9ca961532b",
+          "exists": true,
+          "path": "./.cairn/changes/host-node-recovery-groups/evidence/2026-10-31-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "a0a5f1453e23247fe8f8548dfe9bcd3e65aa9672e7445cf895eacfae24db190d",
+          "exists": true,
+          "path": "./.cairn/changes/host-node-recovery-groups/evidence/2026-10-31-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "c87f5c25496c69e1332dda5bcdd5e3a605c73412aacc88c17a598e7eeffb51a9",
+          "exists": true,
+          "path": "./.cairn/changes/host-node-recovery-groups/evidence/2026-10-31-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "f9044c48a9c70b24a1e0330d094d4b0f539d8459af9ba08a632fcd6ee6d66c15",
+          "exists": true,
+          "path": "./.cairn/changes/host-node-recovery-groups/evidence/2026-10-31-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "ec665bcd62e161809c7acdbcbc281f2e854bfb8e75f94bed6a9ffb0f3d502233",
+          "exists": true,
+          "path": "./.cairn/changes/host-node-recovery-groups/evidence/2026-10-31-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "b3c939a262ea421be4cffb0ca10d5acb5ace2ce7035bb8f721e62ec8064991f5",
+          "exists": true,
+          "path": "./.cairn/changes/host-node-recovery-groups/evidence/2026-10-31-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "f6232eec8a49c6e9b9c179cea506cd602ef31fb07bfc8bad20015405d334d0cb",
+          "exists": true,
+          "path": "./.cairn/changes/host-node-recovery-groups/evidence/2026-10-31-closeout/validate.json"
+        },
+        {
+          "content_hash": "7eb75aa29923a777a74ee253f89c37c356d99de7ac2d6e1c1fa60d5f7555bdd9",
+          "exists": true,
+          "path": "./.cairn/changes/host-node-recovery-groups/evidence/2026-10-31-live-recovery-twin.log"
+        },
+        {
+          "content_hash": "54287960424e604dfef57fca076755879c70a2e41cba4a9e29e4fece504820c3",
+          "exists": true,
+          "path": "./.cairn/changes/host-node-recovery-groups/metadata.json"
+        },
+        {
+          "content_hash": "9e8053aa357a71d164dcad83ceb7b9f9d6b56cb67435f2827b25681837024fee",
+          "exists": true,
+          "path": "./.cairn/changes/host-node-recovery-groups/proposal.md"
+        },
+        {
+          "content_hash": "feeb7e3ce0880d7c5526f1cc44019841fd3a909db7a5d324a001524db13b19dd",
+          "exists": true,
+          "path": "./.cairn/changes/host-node-recovery-groups/review.md"
+        },
+        {
+          "content_hash": "b8c3723a5ffdd4dc4c763a5ed6da2b56c67a47c1c8c2f37047b08c9373c7ccc1",
+          "exists": true,
+          "path": "./.cairn/changes/host-node-recovery-groups/specs/system-extension/spec.md"
+        },
+        {
+          "content_hash": "23f67ba4fb62791780ae3ea9de25c87f44142e592de509c9a60c2e1bb247ab6c",
+          "exists": true,
+          "path": "./.cairn/changes/host-node-recovery-groups/tasks.md"
+        }
+      ],
+      "manifest_hash": "af7e430623b1c2716d6ec0373a71ad56c967fcf62e255ce8431fc3cf84e3aa2e"
+    },
+    "kind": "archive",
+    "manifest_hash": "5526fc8726a94b0d38e94286770346410ad647adf57e66b5d10ae0a6338e3b36"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "05800e0b9cacfc308576a56715a06f7209842820933ff8cabcbf687253d1bf3b",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "cc9ce867411cf41b914512a8f7c40aeb8a34e45354b8fc58f1f47531fdce6bb4",
+  "reasons": [],
+  "receipt_hash": "f08e5c92fc079ff1b789c7c9a0bfd2d4b42c8463c8eb95bf92a7a0e5b522c885",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

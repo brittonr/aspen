@@ -1,0 +1,39 @@
+{
+  "actions": [
+    {
+      "description": "move active change to archive: produce-exact-node-startup-binding",
+      "kind": "archive_change",
+      "path": "./.cairn/changes/produce-exact-node-startup-binding"
+    }
+  ],
+  "blocked": false,
+  "change": "produce-exact-node-startup-binding",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": true,
+  "input_hash": "51d8f682596c5c3ad7d177eb4e4de1108a677fe47a1942438c3f7ede6160d35f",
+  "layout": "cairn",
+  "mutated": false,
+  "mutation_manifest": null,
+  "plan_hash": "71a83b5bc25e53bbe3530f06f79a0d93f56a60282637789cc675a594382965b9",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "reasons": [],
+  "receipt_hash": "c29fc2c0f457886ba10c51de6b620bdce9b8ff9c363e43213ac874421cc39c11"
+}
