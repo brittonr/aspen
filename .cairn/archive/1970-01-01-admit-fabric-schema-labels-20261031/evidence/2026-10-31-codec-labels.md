@@ -28,3 +28,13 @@ inside `nix develop path:. --builders ''` with task-owned cache and temp directo
 
 The fix changes no admission, authority, trust or release eligibility. The producer build that
 exercised it is recorded with the change that needed it (`route-installed-native-effects`).
+
+## Addendum: hermetic cohort vendoring shipped with this commit
+
+The same commit also binds the retained Octet cohort's Cargo git vendoring to
+`crate-hashes.json` (`nix/startup-octet-cohort.nix` `outputHashes`). The collaboration native
+effect rail needed it because `git.onix.computer` returned HTTP 530: crane's
+`builtins.fetchGit` fallback made the producer unevaluable even though every source identity was
+recorded. The fix was verified by a real producer build in this worktree
+(`octet gate pass receipt=blake3:ad0bfb3d…418a3b30`) while that host was unreachable. It is a
+build-hermeticity fix only and claims no admission, authority or release behavior.
