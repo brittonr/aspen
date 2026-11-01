@@ -1778,16 +1778,16 @@
     "hardened-wasmtime-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1793073369,
-        "narHash": "sha256-i+N+OVTdZk7t68IkVYj2EzS/8UfgN3YQ1DjFdGg3+Xg=",
+        "lastModified": 1793491237,
+        "narHash": "sha256-iqYCLS7IKFhLI/VkCctQBruJ/HKgv6gWpROhQBSy3p4=",
         "ref": "refs/heads/main",
-        "rev": "cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c",
-        "revCount": 63,
+        "rev": "57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e",
+        "revCount": 66,
         "type": "git",
         "url": "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx"
       },
       "original": {
-        "rev": "cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c",
+        "rev": "57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e",
         "type": "git",
         "url": "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx"
       }

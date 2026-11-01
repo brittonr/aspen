@@ -243,7 +243,7 @@ fn verify_chaos(report: &serde_json::Value, trust: &Trust, digest: &str, input_d
         ("/wasm_feature_profile", "wasm1"),
         ("/verdict", "match"),
         ("/spacewasm_revision", super::profile::REVISION),
-        ("/wasmtime_version", "45.0.0"),
+        ("/wasmtime_version", "49.0.5"),
         ("/module_blake3", digest),
         ("/input_blake3", input_digest),
         ("/probe_blake3", trust.probe_blake3.as_str()),

@@ -9,7 +9,7 @@ pub fn source_cohort() -> preserves::IOValue {
         crate::preserves_rail::string(
             "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx",
         ),
-        crate::preserves_rail::string("cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c"),
+        crate::preserves_rail::string("57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e"),
         crate::preserves_rail::sequence(vec![
             crate::preserves_rail::string("hardened-wasmtime-runtime@0.1.0"),
             crate::preserves_rail::string("hardened-wasmtime-shell@0.1.0"),

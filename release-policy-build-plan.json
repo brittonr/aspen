@@ -1,15 +1,15 @@
 {
   "version": 1,
-  "workspaceRoot": "/home/brittonr/.cargo-target/aspen-open-cairns-20261029",
+  "workspaceRoot": "/home/brittonr/.cargo-target/aspen-wasmtime-49-20261031",
   "roots": [
-    "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-release-policy#0.1.0"
+    "path+file:///home/brittonr/.cargo-target/aspen-wasmtime-49-20261031/crates/molten-release-policy#0.1.0"
   ],
   "workspaceMembers": {
-    "molten-core": "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-core#0.1.0",
-    "molten-release-policy": "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-release-policy#0.1.0"
+    "molten-core": "path+file:///home/brittonr/.cargo-target/aspen-wasmtime-49-20261031/crates/molten-core#0.1.0",
+    "molten-release-policy": "path+file:///home/brittonr/.cargo-target/aspen-wasmtime-49-20261031/crates/molten-release-policy#0.1.0"
   },
-  "cargoLockHash": "b06eb7f052a815f6c30e6e084a2fc324992132816a22028a4080220c31efc08d",
-  "inputsHash": "151a8b9c592ae28b5001396482560598b19cf5c7cdf0261fddfdf86adf26d580",
+  "cargoLockHash": "f7547d972e4cd6aee9831a681fbd4ce6b5d45a968a465a73a23421b2b9869ffa",
+  "inputsHash": "514ef512df78338bd53be749cc9b2f3a7cd270f0812719edf066bdf90663b474",
   "crates": {
     "git+https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3UDS5cY.git?rev=4fe90e130f2871cf69a6febcdc70785adca98aea#schema-migration-core@0.1.0": {
       "crateName": "schema-migration-core",
@@ -628,7 +628,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.104",
           "externCrateName": "anyhow"
         },
         {
@@ -790,7 +790,7 @@
       "license": "AGPL-3.0-or-later",
       "repository": "https://github.com/OnixResearch/onix-artifact"
     },
-    "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-core#0.1.0": {
+    "path+file:///home/brittonr/.cargo-target/aspen-wasmtime-49-20261031/crates/molten-core#0.1.0": {
       "crateName": "molten-core",
       "version": "0.1.0",
       "edition": "2024",
@@ -854,7 +854,7 @@
       "links": null,
       "license": "AGPL-3.0-or-later"
     },
-    "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-release-policy#0.1.0": {
+    "path+file:///home/brittonr/.cargo-target/aspen-wasmtime-49-20261031/crates/molten-release-policy#0.1.0": {
       "crateName": "molten-release-policy",
       "version": "0.1.0",
       "edition": "2024",
@@ -870,7 +870,7 @@
           "externCrateName": "blake3"
         },
         {
-          "packageId": "path+file:///home/brittonr/.cargo-target/aspen-open-cairns-20261029/crates/molten-core#0.1.0",
+          "packageId": "path+file:///home/brittonr/.cargo-target/aspen-wasmtime-49-20261031/crates/molten-core#0.1.0",
           "externCrateName": "molten_core"
         },
         {
@@ -1162,11 +1162,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-cli/anstyle.git"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102": {
+    "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.104": {
       "crateName": "anyhow",
-      "version": "1.0.102",
+      "version": "1.0.104",
       "edition": "2021",
-      "sha256": "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c",
+      "sha256": "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470",
       "source": {
         "type": "crates-io"
       },
@@ -7804,11 +7804,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/serde-rs/json"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#serde_spanned@1.1.1": {
+    "registry+https://github.com/rust-lang/crates.io-index#serde_spanned@1.1.2": {
       "crateName": "serde_spanned",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "edition": "2024",
-      "sha256": "6662b5879511e06e8999a8a235d848113e942c9124f211511b16466ee2995f26",
+      "sha256": "4e7523beb55eece201a2356bee0bbca0d1ab466c14c07703b2e0ee6d42cb0c2c",
       "source": {
         "type": "crates-io"
       },
@@ -8944,7 +8944,7 @@
           "externCrateName": "serde_core"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_spanned@1.1.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_spanned@1.1.2",
           "externCrateName": "serde_spanned"
         },
         {
@@ -8952,11 +8952,11 @@
           "externCrateName": "toml_datetime"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml_parser@1.1.2+spec-1.1.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml_parser@1.1.5+spec-1.1.0",
           "externCrateName": "toml_parser"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml_writer@1.1.1+spec-1.1.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml_writer@1.1.3+spec-1.1.0",
           "externCrateName": "toml_writer"
         },
         {
@@ -9011,11 +9011,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/toml-rs/toml"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#toml_parser@1.1.2+spec-1.1.0": {
+    "registry+https://github.com/rust-lang/crates.io-index#toml_parser@1.1.5+spec-1.1.0": {
       "crateName": "toml_parser",
-      "version": "1.1.2+spec-1.1.0",
+      "version": "1.1.5+spec-1.1.0",
       "edition": "2024",
-      "sha256": "a2abe9b86193656635d2411dc43050282ca48aa31c2451210f4202550afb7526",
+      "sha256": "baa693a8032d7e1cada7d0041e96126df243179ff061456783ac7f12bda4744c",
       "source": {
         "type": "crates-io"
       },
@@ -9043,11 +9043,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/toml-rs/toml"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#toml_writer@1.1.1+spec-1.1.0": {
+    "registry+https://github.com/rust-lang/crates.io-index#toml_writer@1.1.3+spec-1.1.0": {
       "crateName": "toml_writer",
-      "version": "1.1.1+spec-1.1.0",
+      "version": "1.1.3+spec-1.1.0",
       "edition": "2024",
-      "sha256": "756daf9b1013ebe47a8776667b466417e2d4c5679d441c26230efd9ef78692db",
+      "sha256": "06bdbd8cfc056b8d2e2e85f29b56a3bdbecb527cef81eb39e3e7b98af4652770",
       "source": {
         "type": "crates-io"
       },

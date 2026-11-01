@@ -1,0 +1,86 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/adopt-patched-wasmtime-line/specs/wasm-component-runtime/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/adopt-patched-wasmtime-line/specs/wasm-component-runtime/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "adopt-patched-wasmtime-line",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/adopt-patched-wasmtime-line/specs/wasm-component-runtime/spec.md"
+  ],
+  "dry_run": true,
+  "input_hash": "b5c16c915af17a595e90896df4898b6b7b6e8755ee44c018106a26e58cffd157",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "e3da0d1a82090482f118e891c1f5a1fbf521afabd77fd8e0dfbe230b849c1cac",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "67960715dca639d71f2691c6372ff10f04e1406958db4a9658ea1539b9fa0a45",
+        "destination": ".cairn/specs/wasm-component-runtime/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "9d942b914ecd7c45477cb80b1f5e0be3a23f0c3737e9c5086fdc7d932bebcb3d",
+        "operations": [
+          {
+            "block_hash": "097814a1d84d5270125a97288aeca26c64b35700c56d7a160207680c2f1abbb0",
+            "heading": "### Requirement: The admitted component engine is a patched cohort",
+            "kind": "added",
+            "requirement_id": "molten.wasm_component_adoption.patched_engine"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.wasm_component_adoption.patched_engine",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/adopt-patched-wasmtime-line/specs/wasm-component-runtime/spec.md"
+      }
+    ]
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "1115a22c11f3a68c9c0593b4d175fa1b1be5edd0e8b508665ef166a43575351e",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "40509c8704a356f3346142f4a15a2d7891e3b81c06a5685cf981cc622aef6e17",
+  "reasons": [],
+  "receipt_hash": "616e506c330c862c04446d27f6317ac248dc53d324cec2b26326b48ce2364360",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

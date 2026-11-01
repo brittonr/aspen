@@ -1,5 +1,6 @@
 use super::super::*;
 
+// r[verify molten.wasm_component_adoption.patched_engine]
 #[test]
 fn export_binds_exact_toolchain_wit_and_determinism() {
     // r[verify molten.wasm_component.profile]

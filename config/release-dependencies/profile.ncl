@@ -20,7 +20,7 @@ let SchemaMigrationSource = "https://seed.radicle.garden/z1C4YVMgDGyVdQa72uPNj3U
 let SchemaIdentitySource = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git" in
 let TransactionalReconciliationRevision = "eb2bd3441753af97bfcb247cef7cc22d72675b62" in
 let TransactionalReconciliationSource = "https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git" in
-let HardenedWasmtimeRevision = "cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c" in
+let HardenedWasmtimeRevision = "57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e" in
 let HardenedWasmtimeSource = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx" in
 let MantleWasmVerifierRevision = "dd2bebab894688d07e7a29c75c1437f4ecc120df" in
 let MantleWasmVerifierSource = "ssh://git@github.com/OnixResearch/mantle.git" in
@@ -458,7 +458,7 @@ in
         },
         {
           relative_path = "crates/hardened-wasmtime-shell/src/lib.rs",
-          blake3 = "510b2cf96efd92c096d8d780a844e272c7811317aee3dc94fed891df89f59fa0",
+          blake3 = "e5b243937ee427890b0f81c84d07f7801eeaed88a2e9947ee7ddd9fbe70c4eec",
         },
         {
           relative_path = ".cairn/archive/1970-01-01-preserve-component-execution-boundaries/verification.md",

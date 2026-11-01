@@ -22,7 +22,7 @@ pub(super) fn encode(
     (param "input" (list u8))
     (result (result (list u8) (error string)))
     (canon lift (core func $i "invoke")
-      (memory $i "memory") (realloc (func $i "realloc")) {lift_options})))"#
+      (memory (core memory $i "memory")) (realloc (core func $i "realloc")) {lift_options})))"#
     ))
     .expect("actual parity component")
 }
@@ -49,12 +49,18 @@ pub(super) fn cleanup() -> Vec<u8> {
         "(func (export \"post\") (param i32) i32.const 0 i32.const 7 i32.store)",
         ECHO,
         "",
-        "(post-return (func $i \"post\"))",
+        "(post-return (core func $i \"post\"))",
     )
 }
 
 pub(super) fn cleanup_trap() -> Vec<u8> {
-    encode(1, "(func (export \"post\") (param i32) unreachable)", ECHO, "", "(post-return (func $i \"post\"))")
+    encode(
+        1,
+        "(func (export \"post\") (param i32) unreachable)",
+        ECHO,
+        "",
+        "(post-return (core func $i \"post\"))",
+    )
 }
 
 pub(super) fn cleanup_exhaustion() -> Vec<u8> {
@@ -63,7 +69,7 @@ pub(super) fn cleanup_exhaustion() -> Vec<u8> {
         "(func (export \"post\") (param i32) (loop $forever (br $forever)))",
         ECHO,
         "",
-        "(post-return (func $i \"post\"))",
+        "(post-return (core func $i \"post\"))",
     )
 }
 

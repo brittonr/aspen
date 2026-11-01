@@ -64,8 +64,8 @@
       "wasi_package": "0.2.6",
       "wasm_tools": "1.240.0",
       "wasmparser": "0.240.0",
-      "wasmtime": "45.0.0",
-      "wasmtime_wasi": "45.0.0",
+      "wasmtime": "49.0.5",
+      "wasmtime_wasi": "49.0.5",
       "wit_bindgen": "0.46.0"
     },
     "wit": {

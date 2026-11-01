@@ -1,0 +1,201 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: adopt-patched-wasmtime-line",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-adopt-patched-wasmtime-line"
+    }
+  ],
+  "blocked": false,
+  "change": "adopt-patched-wasmtime-line",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "1c05e9351a60afbda4f976a929342694dda1ec1acc78ba49da563e2e331a0bd3",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "6bbb4c051480c222234875ffc2d7ede2812ae375fb8fc011932940d0e88c6ab0",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-patched-wasmtime-line/design.md"
+        },
+        {
+          "content_hash": "b4194882d25d37bcceaf404a19fafdf9bbce14977449f1abb738758e84a3093d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-patched-wasmtime-line/evidence/2026-10-31-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "1f60171ccdff768a388b2cad770713f2f8530107d81e4d7d1a06e596fa7f0148",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-patched-wasmtime-line/evidence/2026-10-31-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "30e52229d368ead52d2229c1019160fe647470b6dccf0fa2dafdef40872f9c44",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-patched-wasmtime-line/evidence/2026-10-31-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "c978621867fb51dc5fa23bfc436dce61480e6696ae4a2930601e6e43fd51c1ee",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-patched-wasmtime-line/evidence/2026-10-31-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "559114ec8c5593d49e53c4743a1b5ed88a7434b4775dc530536d22ff5889ca11",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-patched-wasmtime-line/evidence/2026-10-31-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "f6ebf529af57268fb884a9345652fa88e9ea63a4e34fb28a0041a4e63b300ec3",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-patched-wasmtime-line/evidence/2026-10-31-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "03420d282241ba6f150968941d1a3857cc401bcf2b77c99c383807b4bb96366d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-patched-wasmtime-line/evidence/2026-10-31-closeout/validate.json"
+        },
+        {
+          "content_hash": "ab87baa4d6195bb9731f9f6e73535998ab39b0f115753db80b0a259b9c806dcf",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-patched-wasmtime-line/evidence/2026-10-31-wasmtime-49.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-patched-wasmtime-line/metadata.json"
+        },
+        {
+          "content_hash": "31ec55af32b7ad40a9326eb6db643af588458c3aa6f42d3248e5d898e6b5441b",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-patched-wasmtime-line/proposal.md"
+        },
+        {
+          "content_hash": "67960715dca639d71f2691c6372ff10f04e1406958db4a9658ea1539b9fa0a45",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-patched-wasmtime-line/specs/wasm-component-runtime/spec.md"
+        },
+        {
+          "content_hash": "4d9551111c878d2f911c4656f583ac518c945c76f995993716be5e95eb61275d",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-adopt-patched-wasmtime-line/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/adopt-patched-wasmtime-line"
+        }
+      ],
+      "manifest_hash": "5d95b7995c0ccd20f4c6ef8092e3c6b5cc9b16d719d4ac4133dfdd3f545998f8"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "6bbb4c051480c222234875ffc2d7ede2812ae375fb8fc011932940d0e88c6ab0",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-patched-wasmtime-line/design.md"
+        },
+        {
+          "content_hash": "b4194882d25d37bcceaf404a19fafdf9bbce14977449f1abb738758e84a3093d",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-patched-wasmtime-line/evidence/2026-10-31-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "1f60171ccdff768a388b2cad770713f2f8530107d81e4d7d1a06e596fa7f0148",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-patched-wasmtime-line/evidence/2026-10-31-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "30e52229d368ead52d2229c1019160fe647470b6dccf0fa2dafdef40872f9c44",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-patched-wasmtime-line/evidence/2026-10-31-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "c978621867fb51dc5fa23bfc436dce61480e6696ae4a2930601e6e43fd51c1ee",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-patched-wasmtime-line/evidence/2026-10-31-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "559114ec8c5593d49e53c4743a1b5ed88a7434b4775dc530536d22ff5889ca11",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-patched-wasmtime-line/evidence/2026-10-31-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "f6ebf529af57268fb884a9345652fa88e9ea63a4e34fb28a0041a4e63b300ec3",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-patched-wasmtime-line/evidence/2026-10-31-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "03420d282241ba6f150968941d1a3857cc401bcf2b77c99c383807b4bb96366d",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-patched-wasmtime-line/evidence/2026-10-31-closeout/validate.json"
+        },
+        {
+          "content_hash": "ab87baa4d6195bb9731f9f6e73535998ab39b0f115753db80b0a259b9c806dcf",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-patched-wasmtime-line/evidence/2026-10-31-wasmtime-49.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-patched-wasmtime-line/metadata.json"
+        },
+        {
+          "content_hash": "31ec55af32b7ad40a9326eb6db643af588458c3aa6f42d3248e5d898e6b5441b",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-patched-wasmtime-line/proposal.md"
+        },
+        {
+          "content_hash": "67960715dca639d71f2691c6372ff10f04e1406958db4a9658ea1539b9fa0a45",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-patched-wasmtime-line/specs/wasm-component-runtime/spec.md"
+        },
+        {
+          "content_hash": "4d9551111c878d2f911c4656f583ac518c945c76f995993716be5e95eb61275d",
+          "exists": true,
+          "path": "./.cairn/changes/adopt-patched-wasmtime-line/tasks.md"
+        }
+      ],
+      "manifest_hash": "debc5c8eccbc07cbd465063b53cedd10b30a10456a5a60718c683e0512c0cc0a"
+    },
+    "kind": "archive",
+    "manifest_hash": "09d207eeec34cbd837cdef8ceb3ef3488e0ac85ede87bd569dd06642f033a781"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "375fabbcc2f9a05310f707b0aa6f1f6c76fa125c650b203daf1ae15f83d324c3",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "40509c8704a356f3346142f4a15a2d7891e3b81c06a5685cf981cc622aef6e17",
+  "reasons": [],
+  "receipt_hash": "e2b571a81b7cd29205fef718911e29228ca55716293547636a3329af4e45f3db",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

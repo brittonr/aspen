@@ -99,8 +99,8 @@ executable-extent-conformance = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", r
 executable-extent-core = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
 executable-extent-linux = { git = "rad://z37R1bP1kHcELs89RNbQRaqbCVKxB", rev = "025d9636f0161777710dac37b3c210ca0ad9483f", optional = true }
 getrandom = "0.3"
-hardened-wasmtime-runtime = { git = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx", rev = "cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c", version = "0.1.0" }
-hardened-wasmtime-shell = { git = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx", rev = "cf4a1913f7f2ca7eb7f655663e87b8b72d0c506c", version = "0.1.0" }
+hardened-wasmtime-runtime = { git = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx", rev = "57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e", version = "0.1.0" }
+hardened-wasmtime-shell = { git = "rad://z3hRCegTsS8jpJVgxYfb9psEzxHpG/z6MksnXbFoE8zkCkGWhHc8zuxpnEUhrJHv2KECRV4GSv9gkx", rev = "57c834dfd0da2f092e2cbbd0e48bb60b61e2d06e", version = "0.1.0" }
 marble = { version = "=16.0.2", optional = true }
 mantle-wasm-consumer-verifier = { git = "ssh://git@github.com/OnixResearch/mantle.git", rev = "dd2bebab894688d07e7a29c75c1437f4ecc120df", version = "0.1.0" }
 molten-core = { path = "crates/molten-core" }
@@ -141,8 +141,8 @@ trellis = { git = "ssh://git@github.com/OnixResearch/basalt.git", rev = "89675cd
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
 vm-cohort-core = { git = "rad://z2QJLUqyAZnnHPiZQ1BFjLsX9ush3", rev = "31f1696ba9391bfda8577a58af84f72361d5573e", version = "0.1.0", optional = true }
 wasmparser = "0.240"
-wasmtime = "45.0.0"
-wasmtime-wasi = "45"
+wasmtime = "49.0.5"
+wasmtime-wasi = "49"
 wasmtime-rpc = { package = "wasmtime", version = "=33.0.0", default-features = false, features = ["async", "component-model", "cranelift", "runtime", "std"], optional = true }
 wasmtime-wasi-rpc = { package = "wasmtime-wasi", version = "=33.0.0", default-features = false, optional = true }
 wit-bindgen = "0.46"

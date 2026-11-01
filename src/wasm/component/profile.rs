@@ -7,11 +7,11 @@ pub const COMPONENT_PROFILE_SOURCE_LANGUAGE: &str = "nickel";
 pub const COMPONENT_PROFILE_ID: &str = "molten.wasm.component.v1";
 pub const TIME_SLICED_PROFILE_ID: &str = "molten.wasm.component.time-sliced.v1";
 pub const COMPONENT_RUNTIME_STRATEGY: &str = "portable-component";
-pub const COMPONENT_WASMTIME_VERSION: &str = "45.0.0";
+pub const COMPONENT_WASMTIME_VERSION: &str = "49.0.5";
 pub const COMPONENT_WASM_TOOLS_VERSION: &str = "1.240.0";
 pub const COMPONENT_WASMPARSER_VERSION: &str = "0.240.0";
 pub const COMPONENT_WIT_BINDGEN_VERSION: &str = "0.46.0";
-pub const COMPONENT_WASMTIME_WASI_VERSION: &str = "45.0.0";
+pub const COMPONENT_WASMTIME_WASI_VERSION: &str = "49.0.5";
 pub const COMPONENT_WASI_PACKAGE_VERSION: &str = "0.2.6";
 pub const COMPONENT_WIT_PACKAGE: &str = "molten:component-runtime@1.0.0";
 pub const COMPONENT_WIT_WORLD: &str = "actor";
@@ -49,6 +49,7 @@ const TIME_SLICED_PROFILE_EXPORT_JSON: &str = include_str!(concat!(
     "/docs/wasm-component-runtime/generated/time-sliced-profile.json"
 ));
 
+// r[impl molten.wasm_component_adoption.patched_engine]
 pub fn supported() -> super::model::Result<super::model::RuntimeProfile> {
     let exported: super::model::ProfileExport = serde_json::from_str(PROFILE_EXPORT_JSON).map_err(|error| {
         super::model::Denial::classified(
