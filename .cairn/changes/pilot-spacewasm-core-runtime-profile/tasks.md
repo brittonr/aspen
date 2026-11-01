@@ -10,3 +10,16 @@
 - [ ] [parallel] Add positive exact-bundle, admitted MVP, Preserves ABI round-trip, declared hostcall, expected trap, out-of-fuel/resume, uninterrupted/segmented replay, and cleanup fixtures plus negative missing/stale evidence, unsupported proposal, component/WASI, undeclared import, wrong ABI, invalid pointer/length, malformed output, memory/growth/stack/instruction exhaustion, stale continuation, host trap, replay mismatch, fallback, and overclaim fixtures. r[molten.spacewasm_core.fixtures]
 - [ ] [depends:spacewasm-core-receipts] Add operator status/readback that keeps SpaceWasm pilot, Wasmtime core, and component evidence distinct and reports promotion blockers. r[molten.spacewasm_core.nonclaims]
 - [ ] [depends:spacewasm-core-fixtures] Run focused pure-core/shell/ABI/resource/resume/replay tests, executor conformance, positive and negative fixtures, Octet and Chaos evidence checks, Cairn validation, proposal/design/tasks gates, and the smallest relevant workspace/Nix checks. r[molten.spacewasm_core.validation]
+
+## Prerequisite status (2026-10-31)
+
+The engine prerequisite is closed: Molten and the shared hardened runtime are both on the
+patched Wasmtime 49.0.5 cohort (archived `adopt-patched-wasmtime-line`), so the SpaceWasm
+differential no longer needs an advisory exception. Remaining before this change can execute
+evidence-bearing acceptance:
+
+- the exact Mantle SpaceWasm reference bundle identity pinned in the pilot cohort (the published
+  bundle `774331f6…` exists; this change must pin it through its own cohort record);
+- the Octet `add-spacewasm-mvp-artifact-profile` archive identity;
+- the ChaosControl `add-spacewasm-mvp-differential-rail`, which must move to the same 49.0.5
+  cohort in its own repository before the differential observations are comparable.
