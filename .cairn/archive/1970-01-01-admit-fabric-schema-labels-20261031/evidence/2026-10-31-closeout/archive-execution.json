@@ -1,0 +1,201 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: admit-fabric-schema-labels-20261031",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/1970-01-01-admit-fabric-schema-labels-20261031"
+    }
+  ],
+  "blocked": false,
+  "change": "admit-fabric-schema-labels-20261031",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "d0c04ab90250a5ea4337dc96ef8d8863a52c9a0a5d7d9cf58bbbc90c57237e41",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "2dae9595353fe222da9e4c41534da2e31b5d25d52223fdbd8a5f3c53a25096fb",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-fabric-schema-labels-20261031/design.md"
+        },
+        {
+          "content_hash": "2cf2941bcfcc903741ce1a239953c3678c493845f5d7a1fdef7303d66547d5ab",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-fabric-schema-labels-20261031/evidence/2026-10-31-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "b5cefcace1fd0fd1e2da612f3b999dfa1c483f2528728b150fa626cc32a6c1a9",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-fabric-schema-labels-20261031/evidence/2026-10-31-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "061454372d869adbc207e35bbed3f282bb350f75cf8b10ed853a84b6322bcd49",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-fabric-schema-labels-20261031/evidence/2026-10-31-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "b6cdea10514e9e5e5c168a9002c93b75eea99e70f362b2a5e64a2a88fd5273f6",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-fabric-schema-labels-20261031/evidence/2026-10-31-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "8dd496e2f862787099c78152a840d1603719295fc30c8998955184eb2f454e36",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-fabric-schema-labels-20261031/evidence/2026-10-31-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "61e53b4fe8f02bfa0bdfe9e9315b7f2a5d2da3fc91c8d10c8b0161cc73a2a337",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-fabric-schema-labels-20261031/evidence/2026-10-31-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "eca723528df04151540bbd90cd538c0285bc9ea409b0dfff39aad283bee724f6",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-fabric-schema-labels-20261031/evidence/2026-10-31-closeout/validate.json"
+        },
+        {
+          "content_hash": "b797c233aa50283ce5b9be0e790c08ea858476822e5d3a9c4ee86560b57bc2e2",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-fabric-schema-labels-20261031/evidence/2026-10-31-codec-labels.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-fabric-schema-labels-20261031/metadata.json"
+        },
+        {
+          "content_hash": "b2521a010dba0121a2c8788d359b5c64ab62f11b65d5feb7c386cd5f0223d420",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-fabric-schema-labels-20261031/proposal.md"
+        },
+        {
+          "content_hash": "8a6683950fda06bc2dcf1d30e614963b0076646e92c4f53e3c3c3604a54abe29",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-fabric-schema-labels-20261031/specs/system-extension/spec.md"
+        },
+        {
+          "content_hash": "f741176d497464a4fba04a00ec98fd43c3f84d25fc3aa6b61a4e6b04a0b152b4",
+          "exists": true,
+          "path": "./.cairn/archive/1970-01-01-admit-fabric-schema-labels-20261031/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/admit-fabric-schema-labels-20261031"
+        }
+      ],
+      "manifest_hash": "484d03d55622193348c22ba11922e3540311f8f6ca5ad58c8bc1127a59c168f6"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "2dae9595353fe222da9e4c41534da2e31b5d25d52223fdbd8a5f3c53a25096fb",
+          "exists": true,
+          "path": "./.cairn/changes/admit-fabric-schema-labels-20261031/design.md"
+        },
+        {
+          "content_hash": "2cf2941bcfcc903741ce1a239953c3678c493845f5d7a1fdef7303d66547d5ab",
+          "exists": true,
+          "path": "./.cairn/changes/admit-fabric-schema-labels-20261031/evidence/2026-10-31-closeout/archive-plan.json"
+        },
+        {
+          "content_hash": "b5cefcace1fd0fd1e2da612f3b999dfa1c483f2528728b150fa626cc32a6c1a9",
+          "exists": true,
+          "path": "./.cairn/changes/admit-fabric-schema-labels-20261031/evidence/2026-10-31-closeout/gate-design.json"
+        },
+        {
+          "content_hash": "061454372d869adbc207e35bbed3f282bb350f75cf8b10ed853a84b6322bcd49",
+          "exists": true,
+          "path": "./.cairn/changes/admit-fabric-schema-labels-20261031/evidence/2026-10-31-closeout/gate-proposal.json"
+        },
+        {
+          "content_hash": "b6cdea10514e9e5e5c168a9002c93b75eea99e70f362b2a5e64a2a88fd5273f6",
+          "exists": true,
+          "path": "./.cairn/changes/admit-fabric-schema-labels-20261031/evidence/2026-10-31-closeout/gate-tasks.json"
+        },
+        {
+          "content_hash": "8dd496e2f862787099c78152a840d1603719295fc30c8998955184eb2f454e36",
+          "exists": true,
+          "path": "./.cairn/changes/admit-fabric-schema-labels-20261031/evidence/2026-10-31-closeout/sync-execution.json"
+        },
+        {
+          "content_hash": "61e53b4fe8f02bfa0bdfe9e9315b7f2a5d2da3fc91c8d10c8b0161cc73a2a337",
+          "exists": true,
+          "path": "./.cairn/changes/admit-fabric-schema-labels-20261031/evidence/2026-10-31-closeout/sync-plan.json"
+        },
+        {
+          "content_hash": "eca723528df04151540bbd90cd538c0285bc9ea409b0dfff39aad283bee724f6",
+          "exists": true,
+          "path": "./.cairn/changes/admit-fabric-schema-labels-20261031/evidence/2026-10-31-closeout/validate.json"
+        },
+        {
+          "content_hash": "b797c233aa50283ce5b9be0e790c08ea858476822e5d3a9c4ee86560b57bc2e2",
+          "exists": true,
+          "path": "./.cairn/changes/admit-fabric-schema-labels-20261031/evidence/2026-10-31-codec-labels.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/admit-fabric-schema-labels-20261031/metadata.json"
+        },
+        {
+          "content_hash": "b2521a010dba0121a2c8788d359b5c64ab62f11b65d5feb7c386cd5f0223d420",
+          "exists": true,
+          "path": "./.cairn/changes/admit-fabric-schema-labels-20261031/proposal.md"
+        },
+        {
+          "content_hash": "8a6683950fda06bc2dcf1d30e614963b0076646e92c4f53e3c3c3604a54abe29",
+          "exists": true,
+          "path": "./.cairn/changes/admit-fabric-schema-labels-20261031/specs/system-extension/spec.md"
+        },
+        {
+          "content_hash": "f741176d497464a4fba04a00ec98fd43c3f84d25fc3aa6b61a4e6b04a0b152b4",
+          "exists": true,
+          "path": "./.cairn/changes/admit-fabric-schema-labels-20261031/tasks.md"
+        }
+      ],
+      "manifest_hash": "bc4731c0a2c7b607a9b674889c27f6eda14fb5a39d0d5c43deada9aaf69c7ea6"
+    },
+    "kind": "archive",
+    "manifest_hash": "a4f2836d88d36ce19aa75892410cf45a42521cd5b81d3b01d991efedd10f9877"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "88a4db8a0e4ffd2009dc406afc8e5193c4517d6e104579fa10dd0df4f92794ae",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "3065e91aced6278e73637a3ef99016e1ec78b33e12ab6029f9fb5e7c93f85f5c",
+  "reasons": [],
+  "receipt_hash": "b5382e145af3262a13143ba5197ed4748d836b72b826ef4db1fc789e650e7fd3",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

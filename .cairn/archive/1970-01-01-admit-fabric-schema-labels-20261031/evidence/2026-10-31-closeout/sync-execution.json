@@ -1,0 +1,86 @@
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/admit-fabric-schema-labels-20261031/specs/system-extension/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/admit-fabric-schema-labels-20261031/specs/system-extension/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "admit-fabric-schema-labels-20261031",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "db590aa05b790925fdf986f022250368d1d39b2a83586461571de4946c808d37",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+    "receipt_hash": "a904c2e684f22844da630261b04dcd4f165f82816b2d7612b88f0099fedec311",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/admit-fabric-schema-labels-20261031/specs/system-extension/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "1d8d6d1ca82ef0bd9d2d1f633274d91d0cfde829476d2e29d3ca68f52e4118c0",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "63bdece6a9f70f372f5fa7af7a053d4f4cbb8a965d0220a721068a955194e5b2",
+        "blocked": false,
+        "changed": false,
+        "delta_hash": "8a6683950fda06bc2dcf1d30e614963b0076646e92c4f53e3c3c3604a54abe29",
+        "destination": ".cairn/specs/system-extension/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "63bdece6a9f70f372f5fa7af7a053d4f4cbb8a965d0220a721068a955194e5b2",
+        "operations": [
+          {
+            "block_hash": "9ec1af21e1a7715ff70138aa98d3b241ba9bde3f8b4eff5b8869a715d63c30a4",
+            "heading": "### Requirement: Hosted bundle codec distinguishes labels from content identities",
+            "kind": "added",
+            "requirement_id": "molten.system_extension.hosted_codec"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "molten.system_extension.hosted_codec",
+            "state": "already_applied"
+          }
+        ],
+        "source": ".cairn/changes/admit-fabric-schema-labels-20261031/specs/system-extension/spec.md"
+      }
+    ]
+  },
+  "mutated": false,
+  "mutation_manifest": null,
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "0970dad4889757fc40c4b493a4360caa68d781faa460d28da6f254834bd45e76",
+  "policy": "cairn-default",
+  "policy_hash": "c8276321e0e82c524e09ad9357fa48a9d38ac8590263ee6f79c51a328dc6037d",
+  "profile_identity_hash": "3065e91aced6278e73637a3ef99016e1ec78b33e12ab6029f9fb5e7c93f85f5c",
+  "reasons": [],
+  "receipt_hash": "8c8e47195dbb36714a4ef968ac2d47ad6596a0eba804c3dc9ed8f7ecb133d14f",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

@@ -202,6 +202,19 @@ mod capacity_tests {
         assert!(super::super::wire::field(&crate::preserves_rail::u64_value(16), "policy_refs").is_err());
     }
 
+    // r[verify molten.system_extension.hosted_codec]
+    #[test]
+    fn fabric_schema_labels_are_not_content_references() {
+        // Fabric descriptors carry schema ids such as `molten.fabric.transport.command.v1`, and the
+        // collaboration commit effect names its input/output schemas the same way. A bundle that
+        // declares them must round-trip instead of failing the content-reference check.
+        let label = crate::preserves_rail::string("molten.fabric.transport.command.v1");
+        assert!(super::super::wire::field(&label, "input_schema_refs").is_ok());
+        assert!(super::super::wire::field(&label, "output_schema_refs").is_ok());
+        assert!(super::super::wire::field(&label, "input_schema_ref").is_ok());
+        assert!(super::super::wire::field(&label, "manifest_ref").is_err());
+    }
+
     #[test]
     fn replacement_alternatives_share_member_slot_but_not_another_members_instances() {
         let profile = profile();

@@ -29,8 +29,24 @@ let
     mkdir -p "$out/lib"
     ln -s ${provider.default}/lib/liboctet.so "$out/lib/liboctet@${rustupToolchain}.so"
   '';
+  # Every Cargo git source is bound to the metadata-free `pkgs.fetchgit` identity recorded in
+  # `crate-hashes.json`, so vendoring is hermetic instead of fetching each remote at evaluation
+  # time. The lock names a source by `git+URL?rev=REV#REV`; the hash file names it by
+  # `URL?rev=REV#CRATE@VERSION`, so the query prefix is the join key.
+  lib = octetPkgs.lib;
+  crateHashes = builtins.fromJSON (builtins.readFile "${source}/crate-hashes.json");
+  queryOf = value: builtins.head (lib.splitString "#" (lib.removePrefix "git+" value));
+  hashByQuery = builtins.listToAttrs (
+    map (key: lib.nameValuePair (queryOf key) crateHashes.${key}) (builtins.attrNames crateHashes)
+  );
+  lockPackages = (builtins.fromTOML (builtins.readFile "${source}/Cargo.lock")).package;
+  gitPackages = builtins.filter (package: lib.hasPrefix "git+" (package.source or "")) lockPackages;
+  outputHashes = builtins.listToAttrs (
+    map (package: lib.nameValuePair package.source hashByQuery.${queryOf package.source}) gitPackages
+  );
   vendor = craneLib.vendorCargoDeps {
     cargoLock = "${source}/Cargo.lock";
+    inherit outputHashes;
     # `cargo package -l` rejects committed publish backups; they are not crate sources.
     # kamacite-core reads governed adapter data from its workspace root; vendor that data
     # beside the crate and keep the same bytes rather than dropping the include.

@@ -167,9 +167,14 @@ impl Wire for std::path::PathBuf {
     }
 }
 
+// r[impl molten.system_extension.hosted_codec]
 pub(super) fn field(value: &preserves::IOValue, name: &str) -> crate::error::Result<()> {
-    // `max_*` fields are numeric bounds on reference collections, not references themselves.
-    if (name.ends_with("_ref") || name.ends_with("_refs")) && !name.starts_with("max_") {
+    // Schema references are contract labels (`molten.fabric.*`), and `max_*` fields are numeric
+    // bounds on reference collections; neither carries a content identity.
+    let is_content_reference = (name.ends_with("_ref") || name.ends_with("_refs"))
+        && !name.starts_with("max_")
+        && !name.contains("schema_ref");
+    if is_content_reference {
         reference_value(value)?;
     }
     Ok(())
