@@ -63,59 +63,16 @@ impl Bound {
             .map_err(|_| crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Domain))
     }
     pub(super) fn trust(&self) -> crate::error::Result<Trust> {
-        let value = read(self.root(), "operator-scope-authority/current.preserves")?;
-        let f = crate::collaboration_scope::decode::fields(&value, "collaboration-operator-trust-v1", 8)?;
-        let issuer = crate::collaboration_scope::decode::string(&f[0])?;
-        let holder = crate::collaboration_scope::decode::string(&f[2])?;
-        let keys = vec![key(&issuer, &f[1])?, key(&holder, &f[3])?];
-        let policies = crate::collaboration_scope::decode::items(&f[4], 6)?
-            .iter()
-            .map(crate::collaboration_scope::decode::string)
-            .collect::<crate::error::Result<Vec<_>>>()?;
-        if policies.is_empty() {
-            return Err(crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Authority));
-        }
-        let revoked = crate::collaboration_scope::decode::items(&f[5], crate::collaboration_scope::MAX_OPERATIONS)?
-            .iter()
-            .map(|v| {
-                let token = basalt::ucan::CompactToken::new(&crate::collaboration_scope::decode::string(v)?)
-                    .map_err(|_| crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Authority))?;
-                Ok(basalt::ucan::proof_reference(&token))
-            })
-            .collect::<crate::error::Result<Vec<_>>>()?;
-        Ok(Trust {
-            reference: molten_core::nominal::RevocationRef::new(crate::preserves_rail::canonical_hash(&value)?)
-                .map_err(|_| crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Domain))?,
-            issuer,
-            holder,
-            keys: basalt::ucan::KeyResolutionContext::new(keys),
-            policies,
-            revocations: basalt::ucan::RevocationList::from_references(revoked),
-            position: crate::collaboration_scope::decode::integer(&f[6])?,
-            unix_seconds: crate::collaboration_scope::decode::integer(&f[7])?,
-        })
+        let value = read_required(self.root(), "operator-scope-authority/current.preserves")?;
+        classify(decode_trust(&value))
     }
     pub(super) fn credential(&self, effect: &str) -> crate::error::Result<Credential> {
         crate::preserves_rail::validate_content_ref(effect)?;
         let digest = effect
             .strip_prefix("blake3:")
             .ok_or_else(|| crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Domain))?;
-        let value = read(self.root(), &format!("operator-scope-authority/credentials/{digest}.preserves"))?;
-        let f = crate::collaboration_scope::decode::fields(&value, "collaboration-operator-credential-v1", 5)?;
-        if crate::collaboration_scope::decode::string(&f[0])? != effect {
-            return Err(crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Authority));
-        }
-        Ok(Credential {
-            read: crate::collaboration_scope::RequestRef::new(crate::collaboration_scope::decode::string(&f[1])?)
-                .map_err(|_| crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Domain))?,
-            token: crate::collaboration_scope::decode::string(&f[2])?,
-            nonce: basalt::ucan::HolderInvocationNonce::from_bytes(hex(&crate::collaboration_scope::decode::string(
-                &f[3],
-            )?)?),
-            signature: basalt::ucan::SignerSignature::from_bytes(hex(&crate::collaboration_scope::decode::string(
-                &f[4],
-            )?)?),
-        })
+        let path = format!("operator-scope-authority/credentials/{digest}.preserves");
+        classify(decode_credential(&read_required(self.root(), &path)?, effect))
     }
 }
 
@@ -135,9 +92,76 @@ pub(super) struct Credential {
     pub nonce: basalt::ucan::HolderInvocationNonce,
     pub signature: basalt::ucan::SignerSignature,
 }
-fn read(root: &crate::node_state::DirectoryRoot, path: &str) -> crate::error::Result<preserves::IOValue> {
-    let path = crate::node_state::RelativePath::parse(path)?;
-    crate::preserves_rail::parse_canonical_bytes(&root.read(&path, crate::collaboration_scope::MAX_RECORD_BYTES)?)
+fn decode_trust(value: &preserves::IOValue) -> crate::error::Result<Trust> {
+    let f = crate::collaboration_scope::decode::fields(value, "collaboration-operator-trust-v1", 8)?;
+    let issuer = crate::collaboration_scope::decode::string(&f[0])?;
+    let holder = crate::collaboration_scope::decode::string(&f[2])?;
+    let keys = vec![key(&issuer, &f[1])?, key(&holder, &f[3])?];
+    let policies = crate::collaboration_scope::decode::items(&f[4], 6)?
+        .iter()
+        .map(crate::collaboration_scope::decode::string)
+        .collect::<crate::error::Result<Vec<_>>>()?;
+    if policies.is_empty() {
+        return Err(crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Authority));
+    }
+    let revoked = crate::collaboration_scope::decode::items(&f[5], crate::collaboration_scope::MAX_OPERATIONS)?
+        .iter()
+        .map(|v| {
+            let token = basalt::ucan::CompactToken::new(&crate::collaboration_scope::decode::string(v)?)
+                .map_err(|_| crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Authority))?;
+            Ok(basalt::ucan::proof_reference(&token))
+        })
+        .collect::<crate::error::Result<Vec<_>>>()?;
+    Ok(Trust {
+        reference: molten_core::nominal::RevocationRef::new(crate::preserves_rail::canonical_hash(value)?)
+            .map_err(|_| crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Domain))?,
+        issuer,
+        holder,
+        keys: basalt::ucan::KeyResolutionContext::new(keys),
+        policies,
+        revocations: basalt::ucan::RevocationList::from_references(revoked),
+        position: crate::collaboration_scope::decode::integer(&f[6])?,
+        unix_seconds: crate::collaboration_scope::decode::integer(&f[7])?,
+    })
+}
+fn decode_credential(value: &preserves::IOValue, effect: &str) -> crate::error::Result<Credential> {
+    let f = crate::collaboration_scope::decode::fields(value, "collaboration-operator-credential-v1", 5)?;
+    if crate::collaboration_scope::decode::string(&f[0])? != effect {
+        return Err(crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Authority));
+    }
+    Ok(Credential {
+        read: crate::collaboration_scope::RequestRef::new(crate::collaboration_scope::decode::string(&f[1])?)
+            .map_err(|_| crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Domain))?,
+        token: crate::collaboration_scope::decode::string(&f[2])?,
+        nonce: basalt::ucan::HolderInvocationNonce::from_bytes(hex(&crate::collaboration_scope::decode::string(
+            &f[3],
+        )?)?),
+        signature: basalt::ucan::SignerSignature::from_bytes(hex(&crate::collaboration_scope::decode::string(&f[4])?)?),
+    })
+}
+fn classify<T>(result: crate::error::Result<T>) -> crate::error::Result<T> {
+    match result {
+        Ok(value) => Ok(value),
+        Err(crate::error::Failure::InvalidHarness(message)) if message.starts_with("collaboration-scope/") => {
+            Err(crate::error::Failure::InvalidHarness(message))
+        }
+        Err(_) => Err(crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Domain)),
+    }
+}
+fn read_required(root: &crate::node_state::DirectoryRoot, path: &str) -> crate::error::Result<preserves::IOValue> {
+    let path = crate::node_state::RelativePath::parse(path)
+        .map_err(|_| crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Domain))?;
+    match root.entry_kind(&path) {
+        Ok(Some(crate::node_state::EntryKind::RegularFile)) => {}
+        Ok(Some(_)) => return Err(crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Domain)),
+        Ok(None) => return Err(crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Missing)),
+        Err(_) => return Err(crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Uncertain)),
+    }
+    let bytes = root
+        .read(&path, crate::collaboration_scope::MAX_RECORD_BYTES)
+        .map_err(|_| crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Uncertain))?;
+    crate::preserves_rail::parse_canonical_bytes(&bytes)
+        .map_err(|_| crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Domain))
 }
 fn key(did: &str, value: &preserves::IOValue) -> crate::error::Result<basalt::ucan::Ed25519VerificationKey> {
     let did = basalt::ucan::IssuerDid::new(did)
@@ -171,6 +195,22 @@ fn hex<const N: usize>(value: &str) -> crate::error::Result<[u8; N]> {
 mod tests {
     use super::*;
 
+    const CURRENT: &str = "operator-scope-authority/current.preserves";
+
+    fn fixture() -> (cap_tempfile::TempDir, crate::node_state::DirectoryRoot) {
+        let temporary = cap_tempfile::tempdir(cap_std::ambient_authority()).expect("temporary authority root");
+        let root = crate::node_state::DirectoryRoot::from_dir(temporary.try_clone().expect("clone authority root"));
+        (temporary, root)
+    }
+
+    fn relative(value: &str) -> crate::node_state::RelativePath {
+        crate::node_state::RelativePath::parse(value).expect("relative authority path")
+    }
+
+    fn domain() -> crate::error::Failure {
+        crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Domain)
+    }
+
     #[test]
     fn source_cannot_select_credential_or_ambient_roots() {
         for path in [
@@ -203,5 +243,54 @@ mod tests {
         assert!(hex::<32>(&"AA".repeat(32)).is_err());
         assert!(hex::<32>(&"0g".repeat(32)).is_err());
         assert_eq!(hex::<32>(&"a5".repeat(32)).expect("canonical bytes"), [0xa5; 32]);
+    }
+
+    #[test]
+    fn absent_value_reports_canonical_missing_denial() {
+        let (_temporary, root) = fixture();
+        let error = read_required(&root, CURRENT).expect_err("absent authority value");
+        assert_eq!(error, crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Missing));
+    }
+
+    #[test]
+    fn malformed_value_reports_canonical_domain_denial() {
+        let (_temporary, root) = fixture();
+        root.create_dir_all(&relative("operator-scope-authority")).expect("authority parent");
+        root.write(&relative(CURRENT), b"").expect("empty authority value");
+        assert_eq!(read_required(&root, CURRENT).expect_err("malformed authority value"), domain());
+    }
+
+    #[test]
+    fn directory_at_value_reports_canonical_domain_denial() {
+        let (_temporary, root) = fixture();
+        root.create_dir_all(&relative(CURRENT)).expect("directory authority value");
+        assert_eq!(read_required(&root, CURRENT).expect_err("directory authority value"), domain());
+    }
+
+    #[test]
+    fn valid_value_is_returned_byte_identically() {
+        let (_temporary, root) = fixture();
+        let value = crate::preserves_rail::record("collaboration-authority-fixture", vec![]);
+        let bytes = crate::preserves_rail::canonical_bytes(&value).expect("canonical authority value");
+        root.create_dir_all(&relative("operator-scope-authority")).expect("authority parent");
+        root.write(&relative(CURRENT), &bytes).expect("valid authority value");
+        let read = read_required(&root, CURRENT).expect("valid authority value");
+        assert_eq!(crate::preserves_rail::canonical_bytes(&read).expect("canonical read"), bytes);
+    }
+
+    #[test]
+    fn wrong_schema_credential_reports_canonical_domain_denial() {
+        let (_temporary, root) = fixture();
+        let value = crate::preserves_rail::record("invalid-scope-credential-v1", vec![]);
+        let bytes = crate::preserves_rail::canonical_bytes(&value).expect("canonical credential value");
+        let effect = format!("blake3:{}", "ab".repeat(32));
+        let path = format!("operator-scope-authority/credentials/{}.preserves", &effect["blake3:".len()..]);
+        root.create_dir_all(&relative("operator-scope-authority/credentials")).expect("credentials parent");
+        root.write(&relative(&path), &bytes).expect("stored credential value");
+        let stored = read_required(&root, &path).expect("stored credential value");
+        match classify(decode_credential(&stored, &effect)) {
+            Err(error) => assert_eq!(error, domain()),
+            Ok(_) => panic!("wrong schema credential must be denied"),
+        }
     }
 }

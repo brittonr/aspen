@@ -27,3 +27,29 @@ pub(crate) fn callback_event_value(input: CallbackEventInput<'_>) -> preserves::
         field("deadline-tick", crate::preserves_rail::u64_value(deadline_tick)),
     ])
 }
+
+impl super::CallbackReceipt {
+    /// The bounded diagnostic code this receipt recorded for a failed dispatch.
+    ///
+    /// A redacted denial names the branch only; the decision and its code are the receipt's own
+    /// admitted fields, so a failed activation can report which check refused it.
+    pub fn diagnostic(&self) -> Option<String> {
+        use preserves::ValueImpl as _;
+        const FIELDS: usize = 16;
+        let fields = self.value.collect_simple_record("system-extension-callback-receipt-v1", Some(FIELDS))?;
+        let mut diagnostic = None;
+        for field in fields.iter() {
+            let Some(record) = field.collect_simple_record("diagnostic", Some(1)) else {
+                continue;
+            };
+            let Some(value) = record.iter().next() else {
+                continue;
+            };
+            if let Some(some) = value.collect_simple_record("some", Some(1)) {
+                diagnostic = some.iter().next().and_then(|item| item.as_string().map(|text| text.to_string()));
+            }
+            break;
+        }
+        diagnostic
+    }
+}

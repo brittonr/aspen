@@ -1,7 +1,4 @@
-
-pub(crate) fn callback_receipt(
-    input: CallbackReceiptInput<'_>,
-) -> crate::error::Result<CallbackReceipt> {
+pub(crate) fn callback_receipt(input: CallbackReceiptInput<'_>) -> crate::error::Result<CallbackReceipt> {
     let approved_effects = if input.decision == CallbackExecutionDecision::Succeeded {
         input.outcome.map_or_else(Vec::new, |outcome| outcome.effects.clone())
     } else {
@@ -220,7 +217,9 @@ pub struct ServiceReadiness {
     pub value: preserves::IOValue,
 }
 
-pub(crate) fn service_readiness(
+/// Project canonical readiness for a concrete callback or lifecycle boundary.
+/// Evidence identity does not grant activation, effect authority, or completion by itself.
+pub fn service_readiness(
     manifest_ref: &str,
     extension_id: &str,
     service_id: &str,

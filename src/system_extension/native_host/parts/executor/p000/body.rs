@@ -39,6 +39,21 @@ pub enum CallbackFailure {
 }
 
 impl CallbackFailure {
+    /// The bounded failure detail that belongs beside the code in an operator receipt.
+    ///
+    /// A code alone says which check refused a callback; the port's own detail says why, and it is
+    /// already bounded by the execution evidence it came from.
+    pub fn detail(&self) -> String {
+        match self {
+            Self::Execution(failure) => failure.detail.clone(),
+            Self::ProcessObservation(detail) => (*detail).to_string(),
+            Self::Wire(detail) | Self::Admission(detail) => detail.clone(),
+            Self::Journal(error) => format!("{error:?}"),
+            Self::StatePoisoned => "executor state poisoned".to_string(),
+            Self::Value(_) => "materialized value denied".to_string(),
+        }
+    }
+
     pub const fn diagnostic_code(&self) -> &'static str {
         match self {
             Self::Journal(_) => CALLBACK_JOURNAL_CODE,

@@ -132,9 +132,9 @@ fn checked_node_profile_from_cli(
 fn parse_adapter_profiles(values: &[String]) -> molten::error::Result<Vec<molten::node_runtime::NodeAdapterBinding>> {
     let mut adapters = Vec::with_capacity(values.len());
     for value in values {
-        let (name, profile_ref) = value.split_once('=').ok_or_else(|| {
-            molten::error::Failure::invalid_harness("--adapter-profile must use name=blake3:<hash>")
-        })?;
+        let (name, profile_ref) = value
+            .split_once('=')
+            .ok_or_else(|| molten::error::Failure::invalid_harness("--adapter-profile must use name=blake3:<hash>"))?;
         adapters.push(molten::node_runtime::node_adapter_binding(name, profile_ref)?);
     }
     Ok(adapters)
@@ -195,6 +195,7 @@ pub(crate) fn serve(input: super::command::base::Serve) -> molten::error::Result
         max_ticks,
         max_requests_per_tick,
         live_iroh,
+        service_host_control_stdio,
         live_max_events,
         live_event_timeout_ms,
         service_receipt_out,
@@ -212,6 +213,7 @@ pub(crate) fn serve(input: super::command::base::Serve) -> molten::error::Result
                 max_ticks,
                 max_requests_per_tick,
                 live_iroh,
+                service_host_control_stdio,
                 live_max_events,
                 live_event_timeout_ms,
                 service_receipt_out,

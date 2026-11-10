@@ -118,14 +118,30 @@ impl Listener {
     where
         F: FnOnce(&[u8]) -> crate::error::Result<String>,
     {
+        self.poll_one_derived_frame(session_ref, timeout, derive_request_ref)
+            .await?
+            .ok_or_else(|| crate::error::Failure::invalid_harness("cross-process listener accept timed out"))
+    }
+
+    /// An idle accept deadline creates no session or delivery; later session failures remain errors.
+    pub async fn poll_one_derived_frame<F>(
+        &mut self,
+        session_ref: &str,
+        timeout: std::time::Duration,
+        derive_request_ref: F,
+    ) -> crate::error::Result<Option<ReceivedFrame>>
+    where
+        F: FnOnce(&[u8]) -> crate::error::Result<String>,
+    {
         crate::preserves_rail::validate_content_ref(session_ref)?;
         if !self.state.is_ready() {
             return Err(crate::error::Failure::invalid_harness("cross-process listener is not ready"));
         }
-        let incoming = tokio::time::timeout(timeout, self.endpoint.accept())
-            .await
-            .map_err(|_| crate::error::Failure::invalid_harness("cross-process listener accept timed out"))?
-            .ok_or_else(|| crate::error::Failure::invalid_harness("cross-process listener closed before accept"))?;
+        let incoming = match tokio::time::timeout(timeout, self.endpoint.accept()).await {
+            Err(_) => return Ok(None),
+            Ok(incoming) => incoming
+                .ok_or_else(|| crate::error::Failure::invalid_harness("cross-process listener closed before accept"))?,
+        };
         let connection = tokio::time::timeout(timeout, incoming)
             .await
             .map_err(|_| crate::error::Failure::invalid_harness("cross-process listener handshake timed out"))?
@@ -178,7 +194,7 @@ impl Listener {
             }
         };
         self.finish_listener_session()?;
-        Ok(received)
+        Ok(Some(received))
     }
 
     // r[impl molten.fabric_transport.cross_process_listener]

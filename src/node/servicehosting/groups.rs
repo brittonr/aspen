@@ -123,7 +123,7 @@ impl<A: super::AuthorityPort, R: super::RuntimePort> super::Host<A, R> {
         Ok(plan.decision)
     }
 
-    pub(super) fn admit(
+    pub(crate) fn admit(
         &mut self,
         operation: &str,
         subject: &str,

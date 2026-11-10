@@ -122,7 +122,7 @@ replay-ledger-core = { git = "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF
 revocation-view-core = { git = "https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git", rev = "a0de79303f3f45c18a34fff535b690a85cb3cf59", version = "0.1.0" }
 release-channel-index = { git = "ssh://git@github.com/OnixResearch/release-channel.git", rev = "fa389e19d5c9bd84cd75df914cc5418c70d92bfb", version = "0.1.0" }
 release-channel-witness = { git = "ssh://git@github.com/OnixResearch/release-channel.git", rev = "fa389e19d5c9bd84cd75df914cc5418c70d92bfb", version = "0.1.0" }
-rustix = { version = "1", features = ["time"] }
+rustix = { version = "1", features = ["event", "time"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 schema-identity-core = { git = "https://seed.radicle.garden/z6gGpUJtzdVBCCtZTzh4cV1skv4H.git", rev = "2562c8aa38a034061f9af9f3e17280494a5b8de2" }

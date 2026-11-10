@@ -35,7 +35,7 @@ The pure core plans generation-fenced lifecycle transitions, callback admission,
 
 The public `node service-host` boundary loads bounded canonical native admission bundles through `node_service_host`, validates the opaque startup source gate before effects, verifies a current holder-signed UCAN/Basalt load request against independently provisioned operator trust, and reconstructs durable native supervisors before host orchestration. Measured executable/workspace handles stay alive across callbacks. Exact operation authority remains separate from source/bundle admission; public status does not project credential or payload material. See [public service-host admission](system-extension-runtime.md#public-node-service-host-admission).
 
-Installed native collaboration effects use the separately governed [admitted native effect runtime](native-effect-runtime.md): explicit exact service/port/group/generation/policy/resource configuration, independent current install/route grants, a retained real scope replica/application, native intent recording, actual committed-state observation and materialized completion callbacks. Queue acceptance and callback success are not commits. Missing configuration and any post-effect uncertainty remain fail-closed/unresolved without implicit retries; source trust never grants effect authority.
+Installed native collaboration effects use the separately governed [admitted native effect runtime](native-effect-runtime.md): explicit exact service/port/group/generation/policy/resource configuration, independent current install/route grants, a retained real scope replica/application, native intent recording, actual committed-state observation and materialized completion callbacks. Queue acceptance and callback success are not commits. Missing configuration and any post-effect uncertainty remain fail-closed/unresolved without implicit retries; definite pre-effect scope authority failures surface as canonical scope denial classes rather than opaque uncertainty. Source trust never grants effect authority.
 
 Recovery-group supervision is admitted per system extension: an ordered member set with restart classes, an elapsed-time window and source ref, backoff, and member/group budgets. The pure planner returns an ordered stop/restart/quarantine/escalate plan over supplied bounded history. Permanent members restart within budget, transient members stop on success and restart only abnormal retryable exits, and temporary members stop on success. Supplied history keeps windowed budgets across supervisor replacement; planning is advisory and does not prove restart success.
 
@@ -621,6 +621,32 @@ retains the installed host across the actual long-lived node loop. `node_service
 owns capability-rooted group, member, work and claim state, ordered intent-before-effect
 lifecycle, fenced restart and explicit cross-generation migration. Effects returned by
 native callbacks are routed only through an explicitly configured effect runtime.
+
+The opt-in local `node serve --live-iroh --service-host-control-stdio` boundary serializes
+bounded commands through that same retained owner while its actual listener remains active.
+It does not reopen live host/replica stores or infer operation permission from startup trust.
+EOF closes the owned reader, listener and installed runtime without fabricating a successful
+listener receipt. Independent current operation grants still precede every protected operation.
+
+Scope-currentness observation is a separately admitted operational read. The scope domain owns
+the actual quorum challenge and ledger/term/index validation; the node composition retains only
+its narrow observation clients. Returned state/currentness/time data are not the sealed
+`CurrentState` used for mutation admission and do not consume its read fence. An operator must
+sign the actual observed snapshot, not an invented genesis term or receipt. Protected staging
+still rechecks the independent current scope roots, consumes the real read, reserves its durable
+fresh probe, verifies the holder grant, and observes an actual committed application transition.
+Retained Raft ingress treats only a pre-session idle accept deadline as absence of an
+incoming session. It keeps listening without consuming the admitted delivery budget;
+session/protocol failures and budget exhaustion remain terminal, not implicit retries.
+
+The installed-consumer checks require closure of the real serving owners before journal readback,
+the exact scope state, terminal materialized effect, native completion-bound readiness and the
+same durable work completion after source-admitted reopen. Failure cases also start an actual
+replacement serving process under the unchanged selected configuration. They require its exact
+independent install admission, retained Unknown work and unchanged protected proposal/application
+facts; a one-shot status read alone is not replacement-router proof. Execution results belong to
+the active change evidence. These checks confer no production or global exactly-once claim.
+
 
 `test remote session` exposes the receiver-owned recorded session source. Envelope build,
 local publication and job workers consult one generation-bound view of initialized sender

@@ -181,7 +181,9 @@ impl<E: SystemExtensionExecutor> Dispatcher<E> {
                 invocation: &invocation,
                 accounted_bytes: event.accounted_bytes,
                 decision: super::CallbackExecutionDecision::ExecutorFailed,
-                diagnostic: EXECUTOR_ERROR_DIAGNOSTIC,
+                // The executor reports its own bounded code (wire, value, journal, execution);
+                // the generic label would hide which check refused the callback.
+                diagnostic: &_executor_error,
                 outcome: None,
                 failure_class: self.executor.failure_class(),
             }),

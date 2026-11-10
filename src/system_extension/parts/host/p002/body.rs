@@ -52,9 +52,7 @@ impl<E: SystemExtensionExecutor> Dispatcher<E> {
                         key.port_id, key.version
                     ))
                 })?;
-                let output = port.route(binding, effect).map_err(|_error| {
-                    crate::error::Failure::invalid_harness("system-extension bound fabric-port routing failed")
-                })?;
+                let output = port.route(binding, effect).map_err(crate::error::Failure::from)?;
                 let completion =
                     super::effect_completion(&callback_receipt.receipt_ref, binding, effect, &output)?;
                 self.record_evidence(Evidence::EffectCompletion(completion.clone()))?;

@@ -73,6 +73,37 @@ pub(super) async fn restage(
 }
 
 impl super::Driver {
+    pub(super) async fn observe_scope(
+        &mut self,
+        request: crate::collaboration_scope::RequestRef,
+    ) -> crate::error::Result<super::Observation> {
+        self.application().store.ensure_serving()?;
+        let trust = self.authority.trust()?;
+        let observation = self.observe_read(&request).await?;
+        self.application().store.ensure_serving()?;
+        let state = self.application().state_ref().clone();
+        let currentness = self.installation.observe_currentness(&crate::collaboration_scope::CurrentInput {
+            replica: self.service.state(),
+            observation: &observation,
+            ledger: self.service.evidence(),
+            request: &request,
+            time_profile: self.authority.time_profile(),
+            revocation: &trust.reference,
+            state: &state,
+        })?;
+        // Diagnostics may reveal an index newer than the operator's logical position.
+        // Only restage checks that position as authority; concurrent trust rotation denies here too.
+        if self.authority.trust()?.reference != trust.reference {
+            return Err(crate::collaboration_scope::denied(crate::collaboration_scope::Denial::Stale));
+        }
+        Ok(super::Observation {
+            read: request,
+            state,
+            currentness,
+            unix_seconds: trust.unix_seconds,
+        })
+    }
+
     /// Real non-consuming diagnostic observation; authority is acquired only in restage.
     pub(super) async fn observe_read(
         &mut self,

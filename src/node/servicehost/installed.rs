@@ -10,6 +10,7 @@ pub struct Owner {
     ready: preserves::IOValue,
     bundle_ref: String,
     groups: std::collections::BTreeMap<String, crate::system_extension::RecoveryGroupDeclaration>,
+    observers: std::collections::BTreeMap<String, super::effects::Observer>,
 }
 
 impl Owner {
@@ -51,7 +52,15 @@ impl Owner {
             &super::command::load_request(&bundle_ref, gate.validation_ref(), logical_tick)?,
         )?;
         let mut materialized = super::runtime::materialize(root, bundle, gate)?;
-        super::effects::install(root, &bundle_ref, gate, logical_tick, &mut materialized.runtime)?;
+        let mut observers = std::collections::BTreeMap::new();
+        super::effects::install(super::effects::InstallInput {
+            root,
+            bundle_ref: &bundle_ref,
+            gate,
+            logical_tick,
+            runtime: &mut materialized.runtime,
+            observers: Some(&mut observers),
+        })?;
         let mut host = crate::node_service_hosting::Host::open(root, authority, materialized.runtime)?;
         let status = host.status(logical_tick)?;
         let ready = crate::preserves_rail::record("node-service-host-ready-v1", vec![
@@ -67,6 +76,7 @@ impl Owner {
             ready,
             bundle_ref,
             groups: materialized.groups,
+            observers,
         })
     }
 
@@ -88,6 +98,60 @@ impl Owner {
         logical_tick: u64,
     ) -> crate::error::Result<crate::node_service_hosting::OperationRequest> {
         self.host.preview(super::command::hosting_input(operation, &self.groups)?, logical_tick)
+    }
+
+    /// Project metadata-only authority for an independent current operator signer.
+    pub fn preview_scope(
+        &self,
+        service: &str,
+        read: &crate::collaboration_scope::RequestRef,
+        logical_tick: u64,
+    ) -> crate::error::Result<crate::node_service_hosting::OperationRequest> {
+        let observer = self.observers.get(service).ok_or_else(|| super::invalid("scope observer unavailable"))?;
+        let actual = self.host.active_instance(service, logical_tick)?;
+        if actual.manifest_ref != observer.manifest_ref || actual.lifecycle.generation != observer.generation {
+            return Err(super::invalid("scope effect runtime is stale, uncertain, or bound to another native service"));
+        }
+        let input_ref = crate::preserves_rail::canonical_hash(&crate::preserves_rail::record(
+            "node-service-host-scope-observation-input-v1",
+            vec![
+                crate::preserves_rail::string(service),
+                crate::preserves_rail::string(&observer.config_ref),
+                crate::preserves_rail::string(&observer.binding_ref),
+                crate::preserves_rail::string(&actual.instance_id),
+                crate::preserves_rail::u64_value(actual.lifecycle.generation),
+                crate::preserves_rail::u64_value(actual.lifecycle.incarnation),
+                crate::preserves_rail::string(read.as_str()),
+            ],
+        ))?;
+        self.host.request("scope-observe", service, &input_ref, logical_tick)
+    }
+
+    /// Observe the retained quorum without granting effect or CurrentState authority.
+    pub fn observe_scope(
+        &mut self,
+        service: &str,
+        read: &crate::collaboration_scope::RequestRef,
+        logical_tick: u64,
+    ) -> crate::error::Result<preserves::IOValue> {
+        let request = self.preview_scope(service, read, logical_tick)?;
+        let admission = self.host.admit("scope-observe", service, &request.input_ref, logical_tick)?;
+        let observer = self.observers.get(service).ok_or_else(|| super::invalid("scope observer unavailable"))?;
+        let observation = observer.client.observe(read.clone())?;
+        let outcome = crate::preserves_rail::record("node-service-host-scope-observed-v1", vec![
+            crate::preserves_rail::string(service),
+            crate::preserves_rail::string(read.as_str()),
+            crate::preserves_rail::string(&observer.config_ref),
+            crate::preserves_rail::string(admission),
+            observation.value(),
+        ]);
+        Ok(crate::preserves_rail::record("node-service-host-receipt-v1", vec![
+            crate::preserves_rail::string(&request.operation),
+            crate::preserves_rail::string(&self.bundle_ref),
+            crate::preserves_rail::u64_value(logical_tick),
+            crate::preserves_rail::string(super::authority::request_ref(&self.bundle_ref, &request)?),
+            outcome,
+        ]))
     }
 
     /// Execute against the already retained actual native/scope runtimes.

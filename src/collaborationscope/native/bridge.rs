@@ -80,7 +80,10 @@ fn parse(value: &preserves::IOValue) -> crate::error::Result<HostState> {
             .transpose()
             .map_err(|_| denied(Denial::Domain))?,
     };
-    if state.generation == 0 || state.incarnation == 0 {
+    // Absence is carried by a missing state value, not by a zero field. The lifecycle authority's
+    // first incarnation is zero and advances on restart, so a zero incarnation is a legitimate
+    // first-instance identity and must not be read as a stale predecessor.
+    if state.generation == 0 {
         return Err(denied(Denial::Stale));
     }
     Ok(state)

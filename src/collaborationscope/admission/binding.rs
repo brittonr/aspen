@@ -96,9 +96,9 @@ impl Installation {
         Ok(())
     }
 
-    /// The observation must come from this service's ChannelReplicaPort receiver;
-    /// callers must not accept a wire projection as a control-port observation.
-    pub fn current_scope(&mut self, source: &CurrentInput<'_>) -> crate::error::Result<CurrentState> {
+    /// Validate locally received quorum evidence without consuming it or creating authority.
+    /// Callers must not accept a wire projection as a control-port observation.
+    pub fn observe_currentness(&self, source: &CurrentInput<'_>) -> crate::error::Result<Currentness> {
         self.validate_replica(source.replica)?;
         if source.time_profile.profile_id != self.time_profile {
             return Err(denied(Denial::Domain));
@@ -141,7 +141,7 @@ impl Installation {
             position: *observed_index,
         });
         crate::fabric_time::validate_time_value(source.time_profile, &logical).map_err(|_| denied(Denial::Domain))?;
-        let currentness = Currentness {
+        Ok(Currentness {
             service_generation: self.generation,
             consistency_epoch: source.replica.current_term,
             committed_index: *observed_index,
@@ -149,7 +149,12 @@ impl Installation {
             revocation: source.revocation.clone(),
             observation: molten_core::nominal::EvidenceRef::new(source.observation.receipt_ref.clone())
                 .map_err(|_| denied(Denial::Domain))?,
-        };
+        })
+    }
+
+    /// Consume locally received quorum evidence at the protected admission boundary.
+    pub fn current_scope(&mut self, source: &CurrentInput<'_>) -> crate::error::Result<CurrentState> {
+        let currentness = self.observe_currentness(source)?;
         if self.consumed_reads.len() >= MAX_OPERATIONS {
             return Err(denied(Denial::Bound));
         }

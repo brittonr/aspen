@@ -1,4 +1,3 @@
-
 fn serve_live(
     input: super::command::base::Serve,
     supervisor_policy_value: Option<&preserves::IOValue>,
@@ -12,9 +11,10 @@ fn serve_live(
         service_receipt_out,
         live_ticket_out,
         receipt_out,
+        service_host_control_stdio,
         ..
     } = input;
-    let hosted = hosting::Session::open(&state_root)?;
+    let mut hosted = hosting::Session::open(&state_root)?;
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -36,9 +36,17 @@ fn serve_live(
         }
         println!("node serve live-iroh bound endpoint={}", bound.bound_endpoint_id());
         hosted.publish_ready()?;
-        bound.serve().await
-    })?;
+        if service_host_control_stdio {
+            stdio::serve(&mut hosted, bound).await
+        } else {
+            bound.serve().await.map(Some)
+        }
+    });
     hosted.close();
+    let Some(served) = served? else {
+        // EOF closes this explicitly owned session, not a successful listener receipt.
+        return Ok(());
+    };
     if let Some(path) = service_receipt_out.as_ref() {
         super::core::write_file(path, &molten::preserves_rail::to_text(&served.service.service_receipt_value)?)?;
     }

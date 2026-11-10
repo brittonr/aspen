@@ -7,15 +7,34 @@ pub mod authority;
 pub mod config;
 mod router;
 
+pub(super) struct Observer {
+    pub manifest_ref: String,
+    pub generation: u64,
+    pub binding_ref: String,
+    pub config_ref: String,
+    pub client: crate::collaboration_scope::native_runtime::Observer,
+}
+
+pub(super) struct InstallInput<'a> {
+    pub root: &'a crate::node_state::DirectoryRoot,
+    pub bundle_ref: &'a str,
+    pub gate: &'a crate::node_runtime::ValidatedNodeSourceGate,
+    pub logical_tick: u64,
+    pub runtime: &'a mut super::runtime::Native,
+    pub observers: Option<&'a mut std::collections::BTreeMap<String, Observer>>,
+}
+
 // r[impl molten.system_extension.native_effect_installation]
 // r[impl molten.system_extension.native_effect_lifetime]
-pub(super) fn install(
-    root: &crate::node_state::DirectoryRoot,
-    bundle_ref: &str,
-    gate: &crate::node_runtime::ValidatedNodeSourceGate,
-    logical_tick: u64,
-    runtime: &mut super::runtime::Native,
-) -> crate::error::Result<()> {
+pub(super) fn install(input: InstallInput<'_>) -> crate::error::Result<()> {
+    let InstallInput {
+        root,
+        bundle_ref,
+        gate,
+        logical_tick,
+        runtime,
+        mut observers,
+    } = input;
     let selector = crate::node_state::RelativePath::parse(config::SELECTOR)?;
     if !root.try_exists(&selector)? {
         return Ok(());
@@ -48,6 +67,15 @@ pub(super) fn install(
         // The genuine install-effects grant and every exact active binding check
         // precede construction of scope storage, replica, transport and worker.
         let scope = crate::collaboration_scope::native_runtime::Worker::open(root, plan)?;
+        if let Some(observers) = observers.as_mut() {
+            observers.insert(binding.service_id.clone(), Observer {
+                manifest_ref: binding.manifest_ref.clone(),
+                generation: binding.generation,
+                binding_ref: config::binding_ref(&binding)?,
+                config_ref: reference.clone(),
+                client: scope.observer()?,
+            });
+        }
         let member = binding.service_id.clone();
         let router = router::Scope::new(binding, effect_authority, scope, recovery_group);
         runtime.register_effect_router(&member, Box::new(router))?;

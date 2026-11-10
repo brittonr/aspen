@@ -1,4 +1,3 @@
-
 /// A live listener bound to its endpoint and subscribed to its topic.
 ///
 /// The bound ticket is final once the listener is bound: it names the stable
@@ -27,7 +26,15 @@ impl BoundControlLiveListener<'_> {
 
     /// Serve until the event bound or the per-event timeout, drain once, and
     /// shut the endpoint down.
-    pub async fn serve(mut self) -> Result<ControlLiveServe> {
+    pub async fn serve(self) -> Result<ControlLiveServe> {
+        self.serve_until(std::future::pending())
+            .await?
+            .ok_or_else(|| MoltenError::invalid_harness("live listener cancelled without a shutdown signal"))
+    }
+
+    /// Finish endpoint shutdown on an explicit owner signal without fabricating a serve receipt.
+    pub async fn serve_until<F>(mut self, shutdown: F) -> Result<Option<ControlLiveServe>>
+    where F: Future<Output = ()> {
         let served = serve_node_control_live_listener_with_topic(
             &self.state_root,
             &self.input,
@@ -37,24 +44,27 @@ impl BoundControlLiveListener<'_> {
                 logical_endpoint_id: &self.identity.endpoint_id,
                 bound_endpoint_id: &self.bound_endpoint_id,
             },
-        )
-        .await;
-        self.router
-            .shutdown()
-            .await
-            .map_err(|error| MoltenError::invalid_harness(format!("live Iroh serve router shutdown failed: {error}")))?;
-        let mut served = served?;
+        );
+        let served = tokio::select! {
+            biased;
+            () = shutdown => Ok(None),
+            result = served => result.map(Some),
+        };
+        self.router.shutdown().await.map_err(|error| {
+            MoltenError::invalid_harness(format!("live Iroh serve router shutdown failed: {error}"))
+        })?;
+        let Some(mut served) = served? else {
+            return Ok(None);
+        };
         served.live_ticket_ref = Some(self.live_ticket.ticket_ref);
         served.live_ticket_value = Some(self.live_ticket.value);
-        Ok(served)
+        Ok(Some(served))
     }
 }
 
 /// Bind the live endpoint, record the bound ticket, and subscribe to the topic.
 // r[impl molten.outside_in.real_stack]
-pub async fn bind_control_live_listener<'a>(
-    input: &ControlLiveServeInput<'a>,
-) -> Result<BoundControlLiveListener<'a>> {
+pub async fn bind_control_live_listener<'a>(input: &ControlLiveServeInput<'a>) -> Result<BoundControlLiveListener<'a>> {
     let state_root = crate::node_state::DirectoryRoot::open(input.state_root)?;
     validate_state_root(input.state_root)?;
     validate_node_id(input.topic)?;

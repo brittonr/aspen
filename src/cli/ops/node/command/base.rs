@@ -76,6 +76,9 @@ pub(crate) struct Serve {
     pub(crate) max_requests_per_tick: u64,
     #[arg(long)]
     pub(crate) live_iroh: bool,
+    /// Serve serial local service-host requests through the retained native owner.
+    #[arg(long, requires = "live_iroh")]
+    pub(crate) service_host_control_stdio: bool,
     #[arg(long, default_value_t = molten::node_daemon::DEFAULT_CONTROL_LIVE_LISTENER_EVENTS)]
     pub(crate) live_max_events: u64,
     #[arg(long, default_value_t = molten::node_daemon::DEFAULT_CONTROL_LIVE_LISTENER_TIMEOUT_MS)]

@@ -92,15 +92,18 @@ impl ReplicaIngressPump {
         let (cancel, mut cancellation) = tokio::sync::oneshot::channel();
         let task = tokio::spawn(async move {
             let mut listener = listener;
-            for _delivery in 0..config.delivery_limit {
+            let mut delivered = 0;
+            while delivered < config.delivery_limit {
                 tokio::select! {
                     _ = &mut cancellation => return Ok(listener),
-                    result = receive_replica_event(&mut listener, &config.session_ref, config.accept_timeout) => {
-                        let event = result?;
-                        event_sender
-                            .send(event)
-                            .await
-                            .map_err(|_| crate::error::Failure::invalid_harness("live Raft ingress consumer closed"))?;
+                    result = poll_replica_event(&mut listener, &config.session_ref, config.accept_timeout) => {
+                        if let Some(event) = result? {
+                            event_sender
+                                .send(event)
+                                .await
+                                .map_err(|_| crate::error::Failure::invalid_harness("live Raft ingress consumer closed"))?;
+                            delivered += 1;
+                        }
                     }
                 }
             }
@@ -169,8 +172,21 @@ pub async fn receive_replica_event<L: ReplicaListenerSource>(
     session_ref: &str,
     timeout: std::time::Duration,
 ) -> crate::error::Result<ReceivedReplicaEvent> {
+    poll_replica_event(listener, session_ref, timeout)
+        .await?
+        .ok_or_else(|| crate::error::Failure::invalid_harness("cross-process listener accept timed out"))
+}
+
+async fn poll_replica_event<L: ReplicaListenerSource>(
+    listener: &mut L,
+    session_ref: &str,
+    timeout: std::time::Duration,
+) -> crate::error::Result<Option<ReceivedReplicaEvent>> {
     let listener = listener.admitted_listener()?;
-    let received = listener.accept_one_derived_frame(session_ref, timeout, derive_replica_request_ref).await?;
+    let Some(received) = listener.poll_one_derived_frame(session_ref, timeout, derive_replica_request_ref).await?
+    else {
+        return Ok(None);
+    };
     let envelope = parse_replica_message(&received.payload)?;
     let refs = replica_transport_refs(&envelope)?;
     let payload_bytes = u64::try_from(received.payload.len())
@@ -180,10 +196,10 @@ pub async fn receive_replica_event<L: ReplicaListenerSource>(
             "live Raft received payload shape does not match transport evidence",
         ));
     }
-    Ok(ReceivedReplicaEvent {
+    Ok(Some(ReceivedReplicaEvent {
         event: ReplicaEvent::Message { envelope },
         transport_evidence: received.evidence,
-    })
+    }))
 }
 
 pub fn replica_transport_refs(envelope: &ReplicaMessageEnvelope) -> crate::error::Result<ReplicaTransportRefs> {

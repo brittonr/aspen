@@ -53,6 +53,44 @@ async fn ingress_shutdown_cancels_accept_and_returns_the_listener() {
         .expect("ingress listener cleanup");
 }
 
+#[tokio::test]
+async fn idle_ingress_keeps_its_delivery_budget_and_accepts_a_later_frame() {
+    let group = super::tests::active_group();
+    let state = super::tests::started_state(&group, super::tests::NODE_A);
+    let election = apply_replica_event(&state, ReplicaEvent::ElectionTimeout {
+        timer_ref: state.active_election_timer_ref.clone(),
+    })
+    .expect("election");
+    let envelope = super::tests::sent_envelope_to(&election, NODE_B);
+    let listener = crate::fabric_transport::cross_process::tests::listener().await;
+    let input = crate::fabric_transport::cross_process::tests::client_input(listener.handoff().clone());
+    let mut pump = ReplicaIngressPump::spawn(listener, ReplicaIngressConfig {
+        session_ref: input.session_ref.clone(),
+        accept_timeout: std::time::Duration::from_secs(POSITIVE_TIMEOUT_SECONDS),
+        event_capacity: 1,
+        delivery_limit: 2,
+    })
+    .expect("pump");
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    let mut transport = ReplicaTransportPort::new(
+        super::tests::test_ref("idle-ingress-protocol"),
+        [(NODE_B.to_owned(), input)].into_iter().collect(),
+        std::time::Duration::from_secs(POSITIVE_TIMEOUT_SECONDS),
+    )
+    .expect("transport");
+    let (sent, received) = tokio::join!(transport.send(&envelope), pump.next());
+    let received = received.expect("frame after idle");
+    assert_eq!(sent.expect("delivered frame"), received.transport_evidence.acknowledgement_ref);
+    assert_eq!(received.event, ReplicaEvent::Message { envelope });
+    let listener = pump.shutdown().await.expect("idle waits did not exhaust deliveries");
+    assert_eq!(listener.state().accepted_sessions, 1);
+    assert_eq!(listener.state().active_sessions, 0);
+    listener
+        .drain_and_close(crate::fabric_transport::ListenerDrainReason::OperatorRequest)
+        .await
+        .expect("cleanup");
+}
+
 // r[verify molten.fabric_consistency.live_service_ports]
 // r[verify molten.fabric_consistency.live_raft]
 #[tokio::test]

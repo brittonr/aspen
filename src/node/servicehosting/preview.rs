@@ -54,7 +54,7 @@ impl<A: super::AuthorityPort, R: super::RuntimePort> super::Host<A, R> {
         self.request(operation, subject, &input_ref, logical_tick)
     }
 
-    pub(super) fn request(
+    pub(crate) fn request(
         &self,
         operation: &str,
         subject: &str,
@@ -69,5 +69,23 @@ impl<A: super::AuthorityPort, R: super::RuntimePort> super::Host<A, R> {
             state_ref: self.state_ref()?,
             input_ref: input_ref.to_string(),
         })
+    }
+
+    /// Observe the actual durable native record without opening another owner.
+    pub(crate) fn active_instance(
+        &self,
+        member: &str,
+        logical_tick: u64,
+    ) -> crate::error::Result<crate::system_extension::NativeInstanceRecord> {
+        let group = self.member_group(member)?;
+        self.available_group(&group, logical_tick)?;
+        let actual = self.runtime.instance(member)?;
+        if self.state.members.get(member) != Some(&actual)
+            || actual.lifecycle.phase != crate::system_extension::LifecyclePhase::Running
+            || !actual.unresolved.is_empty()
+        {
+            return Err(super::invalid("scope effect runtime is stale, uncertain, or bound to another native service"));
+        }
+        Ok(actual)
     }
 }

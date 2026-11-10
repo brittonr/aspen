@@ -4,6 +4,8 @@
 mod authority;
 #[path = "runtime/config.rs"]
 mod config;
+#[path = "runtime/diagnostic.rs"]
+mod diagnostic;
 #[path = "runtime/live.rs"]
 mod live;
 #[path = "runtime/proof.rs"]
@@ -11,6 +13,8 @@ mod proof;
 #[path = "runtime/worker.rs"]
 mod worker;
 pub use config::*;
+pub use diagnostic::Observation;
+pub use diagnostic::Observer;
 
 pub(super) type Replica = crate::fabric_consistency::raft::ScopedLiveReplica<
     crate::fabric_consistency::raft::ConcreteReplicaPortBundle<
@@ -45,17 +49,14 @@ enum Message {
         crate::system_extension::TypedEffectRequest,
         std::sync::mpsc::SyncSender<Result<crate::system_extension::PortEffectOutput, String>>,
     ),
-    Read(
-        super::RequestRef,
-        std::sync::mpsc::SyncSender<Result<crate::fabric_consistency::raft::ReplicaObservation, String>>,
-    ),
-    Stop,
+    Observe(super::RequestRef, std::sync::mpsc::SyncSender<Result<Observation, String>>),
 }
 
 /// Opening is an effect-shell operation. The public host checks the independent
 /// current install-effects grant before calling it; source bytes grant nothing.
 pub struct Worker {
     sender: Option<tokio::sync::mpsc::Sender<Message>>,
+    stop: std::sync::Arc<tokio::sync::Notify>,
     thread: Option<std::thread::JoinHandle<()>>,
     timeout: std::time::Duration,
     is_uncertain: bool,
@@ -64,10 +65,12 @@ impl Worker {
     pub fn open(root: &crate::node_state::DirectoryRoot, plan: AdmittedPlan) -> crate::error::Result<Self> {
         let (sender, receiver) = tokio::sync::mpsc::channel(16);
         let (ready, startup) = std::sync::mpsc::sync_channel(1);
+        let stop = std::sync::Arc::new(tokio::sync::Notify::new());
+        let stopped = std::sync::Arc::clone(&stop);
         let root = root.clone();
         let thread = std::thread::Builder::new()
             .name("collaboration-scope".to_string())
-            .spawn(move || worker::run(root, plan, receiver, ready))
+            .spawn(move || worker::run(root, plan, receiver, ready, stopped))
             .map_err(|_| super::denied(super::Denial::Uncertain))?;
         let timeout = startup
             .recv_timeout(std::time::Duration::from_secs(120))
@@ -75,19 +78,21 @@ impl Worker {
             .map_err(|_| super::denied(super::Denial::Uncertain))?;
         Ok(Self {
             sender: Some(sender),
+            stop,
             thread: Some(thread),
             timeout,
             is_uncertain: false,
         })
     }
-    /// A real quorum challenge, never a reusable authorization projection.
-    pub fn observe_read(
-        &mut self,
-        request: super::RequestRef,
-    ) -> crate::error::Result<crate::fabric_consistency::raft::ReplicaObservation> {
-        let (reply, result) = std::sync::mpsc::sync_channel(1);
-        self.send(Message::Read(request, reply)).map_err(|_| super::denied(super::Denial::Uncertain))?;
-        self.receive(result).map_err(|_| super::denied(super::Denial::Uncertain))
+    /// Build a diagnostic client only when the installing owner requests one.
+    pub fn observer(&self) -> crate::error::Result<Observer> {
+        if self.is_uncertain {
+            return Err(super::denied(super::Denial::Uncertain));
+        }
+        Ok(Observer {
+            sender: self.sender.as_ref().ok_or_else(|| super::denied(super::Denial::Uncertain))?.clone(),
+            timeout: self.timeout,
+        })
     }
     fn send(&self, message: Message) -> Result<(), String> {
         if self.is_uncertain {
@@ -123,8 +128,9 @@ impl crate::system_extension::FabricEffectPort for Worker {
 }
 impl Drop for Worker {
     fn drop(&mut self) {
+        self.stop.notify_one();
         if let Some(sender) = self.sender.take() {
-            let _closed = sender.try_send(Message::Stop);
+            drop(sender);
         }
         if let Some(thread) = self.thread.take() {
             let _stopped = thread.join();

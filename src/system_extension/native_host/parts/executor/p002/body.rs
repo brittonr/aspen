@@ -229,7 +229,11 @@ where
     }
 
     fn invoke(&mut self, invocation: &CallbackInvocation) -> std::result::Result<CallbackOutcome, String> {
-        self.invoke_native(invocation).map_err(|error| error.diagnostic_code().to_string())
+        self.invoke_native(invocation).map_err(|error| {
+            // The receipt records the code; the bounded detail says why the code was chosen.
+            let detail: String = error.detail().chars().take(160).collect();
+            format!("{}: {detail}", error.diagnostic_code())
+        })
     }
 
     fn commit_admitted_outcome(

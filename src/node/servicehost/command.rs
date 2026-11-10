@@ -66,7 +66,14 @@ pub fn invoke(name: &str, args: Arguments) -> crate::error::Result<preserves::IO
     crate::node_service_hosting::AuthorityPort::admit(&mut authority, &load)?;
     let mut materialized = super::runtime::materialize(&root, bundle, &gate)?;
     if name == "deliver" && !args.preview {
-        super::effects::install(&root, &bundle_ref, &gate, args.logical_tick, &mut materialized.runtime)?;
+        super::effects::install(super::effects::InstallInput {
+            root: &root,
+            bundle_ref: &bundle_ref,
+            gate: &gate,
+            logical_tick: args.logical_tick,
+            runtime: &mut materialized.runtime,
+            observers: None,
+        })?;
     }
     let mut host = crate::node_service_hosting::Host::open(&root, authority, materialized.runtime)?;
     let preview = host.preview(hosting_input(&operation, &materialized.groups)?, args.logical_tick)?;
@@ -162,6 +169,7 @@ pub(super) fn execute(
             let result = host.deliver(&input)?;
             return Ok(crate::preserves_rail::record("node-service-host-delivered-v1", vec![
                 crate::preserves_rail::string(result.admission.acknowledgement_ref),
+                effect_outcome(&result.effects),
             ]));
         }
         super::operation::Invocation::Upgrade {
@@ -175,6 +183,30 @@ pub(super) fn execute(
         }
     }
     Ok(crate::preserves_rail::record("node-service-host-committed-v1", Vec::new()))
+}
+
+/// The effect disposition an operator needs to tell an unrouted effect from a completed one.
+///
+/// The delivery acknowledgement alone cannot distinguish "the callback ran and its effect
+/// completed" from "the callback ran and the host had no router", and durable work completion
+/// depends on exactly that distinction.
+fn effect_outcome(disposition: &crate::node_service_hosting::NativeEffectDisposition) -> preserves::IOValue {
+    match disposition {
+        crate::node_service_hosting::NativeEffectDisposition::NotRequested => crate::preserves_rail::record(
+            "node-service-host-effect-outcome-v1",
+            vec![crate::preserves_rail::string("not-requested")],
+        ),
+        crate::node_service_hosting::NativeEffectDisposition::Unrouted => crate::preserves_rail::record(
+            "node-service-host-effect-outcome-v1",
+            vec![crate::preserves_rail::string("unrouted")],
+        ),
+        crate::node_service_hosting::NativeEffectDisposition::Completed(completions) => {
+            crate::preserves_rail::record("node-service-host-effect-outcome-v1", vec![
+                crate::preserves_rail::string("completed"),
+                crate::preserves_rail::sequence(completions.iter().map(crate::preserves_rail::string).collect()),
+            ])
+        }
+    }
 }
 
 fn claim_value(claim: crate::system_extension::DeliveryClaim) -> preserves::IOValue {

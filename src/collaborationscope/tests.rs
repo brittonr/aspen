@@ -157,3 +157,79 @@ fn actual_allowed_audience_is_not_replayable_and_membership_commit_invalidates_i
         Err(Denial::Stale)
     );
 }
+
+/// A canonical callback envelope the native bridge can observe without a host process.
+fn bridge_envelope(
+    context: &crate::system_extension::CallbackContext,
+    callback: crate::system_extension::CallbackKind,
+    incarnation: u64,
+    sequence: u64,
+    state: Option<crate::system_extension::NativeCallbackValue>,
+) -> crate::system_extension::DecodedCallbackEnvelope {
+    let reference = |label: &str| crate::preserves_rail::content_ref_from_bytes(label.as_bytes());
+    let invocation = crate::system_extension::CallbackInvocation {
+        callback,
+        generation: 1,
+        incarnation,
+        sequence,
+        event_ref: reference(&format!("{}-{}", callback.as_str(), sequence)),
+        payload_ref: None,
+        logical_tick: sequence,
+        deadline_tick: sequence + 100,
+    };
+    let inputs = crate::system_extension::CallbackInputs { payload: None, state };
+    let envelope = crate::system_extension::canonical_callback_envelope(context, &invocation, &inputs)
+        .expect("canonical callback envelope");
+    crate::system_extension::decode_callback_envelope(&envelope.bytes, 1_048_576, 1_048_576, 16)
+        .expect("decoded callback envelope")
+}
+
+fn bridge_context() -> crate::system_extension::CallbackContext {
+    let reference = |label: &str| crate::preserves_rail::content_ref_from_bytes(label.as_bytes());
+    crate::system_extension::CallbackContext {
+        manifest_ref: reference("bridge-manifest"),
+        executable_ref: reference("bridge-executable"),
+        instance_id: reference("bridge-instance"),
+        extension_id: EXTENSION_ID.to_string(),
+        service_id: "collaboration-native".to_string(),
+        state_ref: None,
+        policy_refs: vec![reference("bridge-policy")],
+        resource_ref: reference("bridge-resource"),
+        port_binding_refs: vec![reference("bridge-binding")],
+    }
+}
+
+// r[verify molten.system_extension.incarnation_fencing]
+#[test]
+fn the_first_incarnation_is_zero_and_survives_the_start_callback() {
+    let context = bridge_context();
+    let initialize = bridge_envelope(&context, crate::system_extension::CallbackKind::Initialize, 0, 1, None);
+    let initialized = handle_callback(&initialize).expect("initialize at the first incarnation");
+    let state = initialized.state.clone().expect("initialize state");
+    let mut started = context.clone();
+    started.state_ref = Some(state.value_ref.clone());
+    let start = bridge_envelope(&started, crate::system_extension::CallbackKind::Start, 0, 2, Some(state));
+    handle_callback(&start).expect("start at the first incarnation is not a stale predecessor");
+    assert!(initialized.checkpoint.is_none());
+}
+
+// r[verify molten.system_extension.incarnation_fencing]
+#[test]
+fn an_absent_generation_is_still_stale() {
+    let mut context = bridge_context();
+    let value = crate::preserves_rail::record("collaboration-native-bridge-v1", vec![
+        crate::preserves_rail::string(SCHEMA),
+        crate::preserves_rail::u64_value(0),
+        crate::preserves_rail::u64_value(0),
+        crate::preserves_rail::u64_value(1),
+        crate::preserves_rail::record("none", Vec::new()),
+    ]);
+    let bytes = crate::preserves_rail::canonical_bytes(&value).expect("state bytes");
+    let state = crate::system_extension::NativeCallbackValue {
+        value_ref: crate::preserves_rail::content_ref_from_bytes(&bytes),
+        bytes,
+    };
+    context.state_ref = Some(state.value_ref.clone());
+    let start = bridge_envelope(&context, crate::system_extension::CallbackKind::Start, 0, 2, Some(state));
+    assert!(handle_callback(&start).is_err());
+}

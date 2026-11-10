@@ -113,8 +113,11 @@ impl DispatchResult {
                 "system-extension {label} callback was deferred: {decision:?}"
             ))),
             Self::Failed { receipt, lifecycle } => Err(crate::error::Failure::invalid_harness(format!(
-                "system-extension {label} callback failed: callback={} lifecycle={}",
-                receipt.receipt_ref, lifecycle.receipt_ref
+                "system-extension {label} callback failed: callback={} lifecycle={} decision={} diagnostic={}",
+                receipt.receipt_ref,
+                lifecycle.receipt_ref,
+                receipt.decision.as_str(),
+                receipt.diagnostic().unwrap_or_else(|| "unrecorded".to_string())
             ))),
         }
     }
@@ -163,7 +166,7 @@ struct InvocationFailureInput<'a> {
     invocation: &'a super::CallbackInvocation,
     accounted_bytes: u64,
     decision: super::CallbackExecutionDecision,
-    diagnostic: &'static str,
+    diagnostic: &'a str,
     outcome: Option<&'a super::CallbackOutcome>,
     failure_class: super::FailureClass,
 }
