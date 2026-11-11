@@ -14,7 +14,9 @@ type WalkResult = Result<OptionalKeyRange, Vec<ProllyIssue>>;
 // r[impl molten.prolly_map.canonical_nodes]
 // r[impl molten.prolly_map.history_independence]
 pub fn validate_snapshot(profile: &ProllyProfile, snapshot: &MapSnapshot) -> Result<MapReadResult, Vec<ProllyIssue>> {
-    let mut cache = DecodedNodeCache::operation_scoped(snapshot.blocks.len());
+    let mut cache = DecodedNodeCache::operation_scoped(
+        u32::try_from(snapshot.blocks.len()).map_err(|_| vec![ProllyIssue::GraphLimitExceeded])?,
+    );
     validate_snapshot_cached(profile, snapshot, &mut cache)
 }
 

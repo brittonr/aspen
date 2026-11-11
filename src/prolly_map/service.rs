@@ -59,7 +59,7 @@ pub fn load_prolly_snapshot(
         max_bytes: u64::from(profile.limits.max_graph_facts).saturating_mul(u64::from(profile.max_node_bytes)),
     };
     let mut session = port.open_read_session(bounds).map_err(ProllyServiceError::Port)?;
-    let mut cache = DecodedNodeCache::operation_scoped(max_blocks);
+    let mut cache = DecodedNodeCache::operation_scoped(profile.limits.max_graph_facts);
     let discovered = discover_blocks(session.as_mut(), profile, &root, max_blocks, &mut cache);
     let observation = session.close();
     let (blocks, discovery_decodes) = discovered?;

@@ -76,6 +76,7 @@ struct CachedNode {
 pub struct DecodedNodeCache {
     probation_capacity: usize,
     protected_capacity: usize,
+    retained: u32,
     entries: BTreeMap<DecodedNodeKey, CachedNode>,
     probation: BTreeMap<u64, DecodedNodeKey>,
     protected: BTreeMap<u64, DecodedNodeKey>,
@@ -83,12 +84,21 @@ pub struct DecodedNodeCache {
     stats: DecodedNodeCacheStats,
 }
 
+/// Clamp one admitted segment capacity to the cache bound.
+fn segment_capacity(capacity: u32) -> usize {
+    match usize::try_from(capacity) {
+        Ok(value) => value.min(MAX_DECODED_NODE_CACHE_SEGMENT),
+        Err(_) => MAX_DECODED_NODE_CACHE_SEGMENT,
+    }
+}
+
 impl DecodedNodeCache {
     /// A cache with the given segment capacities, each clamped to the bound.
-    pub fn new(probation_capacity: usize, protected_capacity: usize) -> Self {
+    pub fn new(probation_capacity: u32, protected_capacity: u32) -> Self {
         Self {
-            probation_capacity: probation_capacity.min(MAX_DECODED_NODE_CACHE_SEGMENT),
-            protected_capacity: protected_capacity.min(MAX_DECODED_NODE_CACHE_SEGMENT),
+            probation_capacity: segment_capacity(probation_capacity),
+            protected_capacity: segment_capacity(protected_capacity),
+            retained: 0,
             entries: BTreeMap::new(),
             probation: BTreeMap::new(),
             protected: BTreeMap::new(),
@@ -103,13 +113,13 @@ impl DecodedNodeCache {
     }
 
     /// A cache that retains every node one operation decodes.
-    pub fn operation_scoped(node_count: usize) -> Self {
+    pub fn operation_scoped(node_count: u32) -> Self {
         Self::new(node_count, 0)
     }
 
     /// The number of retained entries.
-    pub fn len(&self) -> usize {
-        self.entries.len()
+    pub const fn len(&self) -> u32 {
+        self.retained
     }
 
     /// Whether the cache retains nothing.
@@ -190,6 +200,7 @@ impl DecodedNodeCache {
             tick: self.tick,
             segment: Segment::Probation,
         });
+        self.retained = self.retained.saturating_add(1);
         self.stats.insertions = self.stats.insertions.saturating_add(1);
         self.evict_probation_overflow();
     }
@@ -220,6 +231,7 @@ impl DecodedNodeCache {
                 break;
             };
             self.entries.remove(&key);
+            self.retained = self.retained.saturating_sub(1);
             self.stats.evictions = self.stats.evictions.saturating_add(1);
         }
     }
