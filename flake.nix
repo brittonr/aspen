@@ -122,7 +122,7 @@
       flake = false;
     };
     wrpc-src = {
-      url = "github:bytecodealliance/wrpc/aa01409ed38bf7a978570ff567c4475376925df6";
+      url = "git+https://github.com/bytecodealliance/wrpc?rev=aa01409ed38bf7a978570ff567c4475376925df6&submodules=1";
       flake = false;
     };
     flake-utils.url = "github:numtide/flake-utils/11707dc2f618dd54ca8739b309ec4fc024de578b";

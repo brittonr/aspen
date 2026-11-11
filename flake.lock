@@ -3946,17 +3946,19 @@
       "flake": false,
       "locked": {
         "lastModified": 1748029537,
-        "narHash": "sha256-atDMHeLJ72NRyglNDhaqB7cD+KyBbI0QDbRGGgEkxjg=",
-        "owner": "bytecodealliance",
-        "repo": "wrpc",
+        "narHash": "sha256-OtWXmMwjfzB95FFZ2volg6GNJf8UbTsCAO0cs9Yqb7U=",
+        "ref": "refs/heads/main",
         "rev": "aa01409ed38bf7a978570ff567c4475376925df6",
-        "type": "github"
+        "revCount": 1966,
+        "submodules": true,
+        "type": "git",
+        "url": "https://github.com/bytecodealliance/wrpc"
       },
       "original": {
-        "owner": "bytecodealliance",
-        "repo": "wrpc",
         "rev": "aa01409ed38bf7a978570ff567c4475376925df6",
-        "type": "github"
+        "submodules": true,
+        "type": "git",
+        "url": "https://github.com/bytecodealliance/wrpc"
       }
     }
   },
