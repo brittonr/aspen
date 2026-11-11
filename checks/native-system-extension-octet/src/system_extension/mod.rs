@@ -44,6 +44,7 @@ pub enum HealthState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LifecycleState {
     pub generation: u64,
+    pub incarnation: u64,
     pub phase: LifecyclePhase,
     pub restart_attempts: u64,
     pub health: HealthState,
