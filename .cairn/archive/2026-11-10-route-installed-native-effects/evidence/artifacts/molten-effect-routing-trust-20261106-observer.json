@@ -1,0 +1,11 @@
+{
+  "schema": "molten-node-source-trust-v1",
+  "nix": "/nix/store/6rwk5j1qqk7na4la5m2ka34p734braxa-nix-2.36.0/bin/nix",
+  "output": "/nix/store/lk7kbw7lygb3930mljqrbw930m5wqjda-molten-node-source-binding-v1",
+  "public_key": "molten-experimental-startup-20261030:n9TuYdOAjKyPUs7+zoSGmQ/OtYQFcXQQEWxuW1Udtkw=",
+  "selection": {
+    "binding_ref": "blake3:876419018c61a98bfad12eb3e8fa5a216a8bc6b5ea4142e8f02579e242b829d6",
+    "policy_ref": "blake3:e045c1f58ded52d1d1454096b8fc7618cebab06fd4b7b250c1be93a88bce394c",
+    "profile_ref": "blake3:011767705af95b9a470f3ac8844d89ead9e21deb336471fb703ed878e720f66b"
+  }
+}

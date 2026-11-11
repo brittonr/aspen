@@ -63,6 +63,7 @@ pub(super) fn finish(node: &mut Node) -> crate::producer::Result<()> {
     Ok(())
 }
 
+// r[verify molten.system_extension.native_effect_lifetime]
 #[test]
 fn exited_child_cannot_supply_readiness() -> crate::producer::Result<()> {
     let workspace = crate::test_support::process_workspace("exited-host-readiness")?;

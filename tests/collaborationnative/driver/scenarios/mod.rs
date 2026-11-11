@@ -2,6 +2,7 @@
 
 mod admission;
 mod completion;
+mod installation;
 mod replacement;
 mod uncommitted;
 mod unconfigured;

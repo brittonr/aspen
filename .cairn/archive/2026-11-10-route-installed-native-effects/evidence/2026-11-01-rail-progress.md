@@ -434,7 +434,7 @@ The experimentally signed admitted output is
 Its raw binding selection is
 `blake3:ba60c58a8636517e6a5cacd32bd8b7e22b6495701c0d72c10a38bb3eab71cb35`;
 the policy/profile selections remain those of the earlier admitted cohort.
-Trust is `/tmp/molten-effect-routing-trust-20261106-durable.json`.
+Trust is `evidence/artifacts/molten-effect-routing-trust-20261106-durable.json`.
 
 Two fresh, independent real three-node cohorts reached successful protected delivery,
 exact live work completion, and post-shutdown native completion-bound readiness,
@@ -494,7 +494,7 @@ One experimental signature was added only after these actual checks. Its measure
 raw binding selection is
 `blake3:876419018c61a98bfad12eb3e8fa5a216a8bc6b5ea4142e8f02579e242b829d6`;
 policy/profile selections remain unchanged. Exact trust is
-`/tmp/molten-effect-routing-trust-20261106-observer.json`. These are source-admission
+`evidence/artifacts/molten-effect-routing-trust-20261106-observer.json`. These are source-admission
 facts, not proof that this candidate has completed the actual consumer scenarios.
 Strict Cairn structural validation passed again: 85 specs, 7 changes, zero findings,
 receipt `8c11e4f52f9bfb340d8047e962c17fc8ef625da458c9b0640a5566df675ccc7e`.
@@ -540,10 +540,12 @@ retained-control lifecycle 7, nonignored native fixture 10 (actual rail remains
 separately ignored). All-targets Clippy passed with `-D warnings`.
 The current opaque-aware actual run uses its freshly compiled test executable
 directly under the pinned Nix shell, with evidence root
-`/tmp/molten-effect-routing-evidence-20261106-opaque`. Direct execution avoids a
+`evidence/artifacts`. Direct execution avoids a
 second Cargo job against the shared target while focused checks run; it is the same
 compiled ignored test, not a fixture substitute. Its positive baseline has now passed;
-the six negative cases are still running.
+the six negative cases are still running. Retained artifacts from different attempts share
+`evidence/artifacts`; each file name is its own BLAKE3, so the hashes below distinguish the
+attempts.
 
 ### Retained actual positive baseline
 
@@ -597,7 +599,7 @@ No product transition or completion authority was weakened.
 
 The corrected fixture compiled and passed 10 nonignored tests (1 ignored). A fresh
 independent full rail is running at
-`/tmp/molten-effect-routing-evidence-20261106-uncertain`, using the same exactly
+`evidence/artifacts`, using the same exactly
 admitted signed product/trust and a newly compiled fixture. No possibly performed
 protected delivery from the previous cohort is retried.
 
@@ -691,8 +693,8 @@ experimental signature was added only after those checks. Its measured raw bindi
 selection is
 `blake3:0835866a0192ff8a67e1d855e8d4346255d0a8b2959a57abd14fad9c83acf11d`;
 policy/profile selections are unchanged. Exact trust is
-`/tmp/molten-effect-routing-trust-20261108-denial.json`. The full rail is executing
-at `/tmp/molten-effect-routing-evidence-20261108-denial` on a fresh cohort.
+`evidence/artifacts/molten-effect-routing-trust-20261108-denial.json`. The full rail is executing
+at `evidence/artifacts` on a fresh cohort.
 
 That cohort passed its positive baseline and retained
 `blake3:e292fb2c7877bcf870439ddb2a46a763038bbd227539bc47fef384a7d020e29c`
@@ -725,8 +727,8 @@ one experimental signature was added only after those checks. Measured raw bindi
 selection is
 `blake3:8b456f409a43af023b946357dd1d1c7db5c36e95fc1b9cdce54a5e9a497f7b38`,
 with unchanged policy/profile selections. Trust is
-`/tmp/molten-effect-routing-trust-20261108-bounded.json`; the rail is executing at
-`/tmp/molten-effect-routing-evidence-20261108-bounded` on a fresh cohort.
+`evidence/artifacts/molten-effect-routing-trust-20261108-bounded.json`; the rail is executing at
+`evidence/artifacts` on a fresh cohort.
 
 That cohort's positive baseline is
 `blake3:9827a34440f1b5ee3980542d7e49b9e7aa6c94e071ec17235327de0e9c808d23`
@@ -770,8 +772,8 @@ one experimental signature was added only after those checks. Measured raw bindi
 selection is
 `blake3:c4415d2facf637e93e8b2c4308d75b11b97bbb71e0207a2815c3b07728d5502d`,
 with unchanged policy/profile selections. Trust is
-`/tmp/molten-effect-routing-trust-20261109-admission.json`; the rail executes at
-`/tmp/molten-effect-routing-evidence-20261109-admission` on a fresh cohort.
+`evidence/artifacts/molten-effect-routing-trust-20261109-admission.json`; the rail executes at
+`evidence/artifacts` on a fresh cohort.
 
 Two read-only source reviews pre-checked the still-unexecuted cases:
 
@@ -929,7 +931,81 @@ findings (85 specs, 7 changes, receipt
 All six negative cases, the positive baseline and process replacement now have
 executed canonical artifacts from a product byte-identical to the final admitted
 tree. Not claimed: a killed-store journal readback (an uncleanly closed durable
-store is quarantined and serves only explicit reconciliation), the delta spec's
-mismatched-installation arm, global exactly-once semantics, production or
-cross-machine behaviour, and release eligibility. The rail remains `#[ignore]`d and
-uncommitted; no archive, specification synchronization or publication is authorized.
+store is quarantined and serves only explicit reconciliation), global exactly-once
+semantics, production or cross-machine behaviour, and release eligibility.
+
+### Executed install-boundary observations
+
+Two additional ignored rail tests close the remaining delta-spec scenarios:
+
+- `installed_native_effect_rejects_a_mismatched_installation` rewrote the published
+  selector to a canonically encoded configuration naming a different installation
+  identity, then started one signed node. The node published no readiness, exited
+  with code 1, and created neither the scope-application nor the raft namespace.
+  Retained observation
+  `blake3:e67aa6d2bd239526bcefcd717c73ea063e940820485f0aed4dd968df6ea7c23c`
+  (533 bytes) records the signed executable, the original configuration reference
+  `blake3:1220d0d99db9e808ee7ee275f6b9136800f04d5de84fa53ac9196c6138661cd7`,
+  the mismatched reference
+  `blake3:4d145f71807ff366959ecb2aaa0ffbc3b82680e84b47d8ade961d001307bc1f5`,
+  exit 1 and both absence observations.
+- `installed_native_effect_startup_failure_publishes_no_readiness` removed the
+  operator scope-authority trust before startup. The node published no readiness,
+  exited with code 1, created no scope-application namespace, and left the native
+  journal at `namespace-present` / `journal-present` / `completed-effects-absent`
+  with no completed effect and no retry-permitted operation. Retained observation
+  `blake3:64b8cc1c5188aaabd15ecb7ba157d872ee2aded68e4eb76797524810a9b5f79d`
+  (389 bytes).
+
+Both were produced by the signed admitted product
+`/nix/store/pm6jq09vp99474jjvx2fd1wr64qrxvam-molten-node-source-binding-v1`, whose
+binaries are byte-identical to the final tree's admitted output. They are
+installation-boundary observations: the mismatched case proves refusal before scope
+resource creation, not a callback route; neither case claims a delivery or
+completion.
+
+### Evidence provenance
+
+Every accepted artifact and trust record referenced by this file is copied under
+`evidence/artifacts/` with its BLAKE3 file name unchanged; the `.preserves` names
+were re-verified against their bytes after copying. Remaining `/tmp/...` references
+describe earlier failed attempts whose transient scratch roots were removed after
+the session: those runs retained no canonical artifact, so only their recorded
+outcomes and hashes survive. No accepted observation depends on a transient path.
+
+### Lifecycle closure
+
+- The six delta requirements were synchronized into
+  `.cairn/specs/system-extension/spec.md` (each `r[molten.system_extension.native_effect_*]`
+  identifier appears exactly once).
+- `review.md` records eight read-only source reviews with findings, resolutions and
+  residual risk; no human reviewer signed it, and it is not runtime evidence.
+- `tests/evidence-matrix.ncl` now carries positive and negative coverage entries for
+  the six requirements, and the non-ignored `exited_child_cannot_supply_readiness`
+  test carries `r[verify molten.system_extension.native_effect_lifetime]`.
+- The change was archived at
+  `.cairn/archive/2026-11-10-route-installed-native-effects/`; strict Cairn
+  validation then passed with 6 active changes and zero findings.
+- Final tree source gate: both Octet summaries zero findings/warnings/errors, gate
+  `blake3:fbab34928b04b8ba3f3802bb58244cb9317b45af808730232198518b7adfc7dc`,
+  output `/nix/store/v18y81cm9x1265ssmkjwnq79jaya8a2s-molten-node-source-binding-v1`
+  (binding `blake3:6b86bb2507380e214e305f30126e33d24b8c0d3569799f1bbd9915b9be9b983b`),
+  signed only after admission. Its binaries are byte-identical to the executed
+  product (`molten` `blake3:e628695d…`, `molten-collaboration-scope`
+  `blake3:8a6ae649…`).
+- `cairn readiness route-installed-native-effects` remains
+  `classification: unavailable` because its completion stage needs an externally
+  supplied observation contract/results; the change workflow itself is valid with no
+  next actions. No completion observation was fabricated, and readiness is not
+  claimed.
+- Repository rails: the hermetic `checks.x86_64-linux.nextest` passed with receipt
+  `blake3:262af0210c5d306a44f70974c04d1511aea49aa0b7e273743b3296d136e87fe9`
+  (`decision=pass`). `checks.x86_64-linux.nixos-vm-multinode` failed because
+  `molten-node.service` exited with
+  `invalid harness artifact: node state file source-gate-trust.json does not exist`.
+  That requirement was introduced by `ec1f3d7f4` (an ancestor of this change's base)
+  and the VM service module has never provisioned the trust file, so the failure is
+  pre-existing and outside this change; it is recorded, not fixed. A full
+  `nix flake check` additionally stalls while evaluating
+  `devShells.x86_64-linux.default` in this environment (Nix input fetch/eval lock),
+  so the aggregate rail is not claimed.
