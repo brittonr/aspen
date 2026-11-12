@@ -27,6 +27,14 @@ pub fn profile(
             ContentCapability::Export,
             ContentCapability::Protection,
         ],
+        ContentAdapterClass::ObjectStorage => vec![
+            ContentCapability::StreamingPut,
+            ContentCapability::StreamingGet,
+            ContentCapability::Availability,
+            ContentCapability::Import,
+            ContentCapability::Export,
+            ContentCapability::Protection,
+        ],
         ContentAdapterClass::DeterministicSimulation => vec![
             ContentCapability::StreamingPut,
             ContentCapability::StreamingGet,

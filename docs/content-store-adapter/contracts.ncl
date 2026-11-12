@@ -58,6 +58,9 @@ let valid_profile_set = fun value =>
   && valid_profile value.profiles.iroh_blobs
   && value.profiles.iroh_blobs.class == "iroh-blobs"
   && value.profiles.iroh_blobs.live_network_required
+  && valid_profile value.profiles.object_storage
+  && value.profiles.object_storage.class == "object-storage"
+  && value.profiles.object_storage.live_network_required
   && valid_profile value.profiles.deterministic_simulation
   && value.profiles.deterministic_simulation.class == "deterministic-simulation"
   && value.profiles.deterministic_simulation.same_contract_as_live

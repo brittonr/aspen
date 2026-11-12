@@ -60,6 +60,10 @@ let bound_args = get "bounds" {} args in
       iroh_blobs = profile "iroh-blobs" [
         "streaming-get", "availability", "import", "export", "protection",
       ] ({ live_network_required = true } & get "iroh_blobs" {} args),
+      object_storage = profile "object-storage" [
+        "streaming-put", "streaming-get", "availability",
+        "import", "export", "protection",
+      ] ({ live_network_required = true } & get "object_storage" {} args),
       deterministic_simulation = profile "deterministic-simulation" [
         "streaming-put", "streaming-get", "verified-range", "availability",
         "import", "export", "protection", "durable-completion",

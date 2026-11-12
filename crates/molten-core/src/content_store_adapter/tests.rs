@@ -255,6 +255,12 @@ fn verified_partial_state_resumes_and_disconnect_is_uncertain() {
     assert!(begin_partial_state(&profile, &manifest, &command, GENERATION_ONE, Some(&stale)).is_err());
 }
 
+#[test]
+fn object_storage_is_a_distinct_adapter_class_wire_name() {
+    assert_eq!(ContentAdapterClass::ObjectStorage.as_str(), "object-storage");
+    assert_ne!(ContentAdapterClass::ObjectStorage, ContentAdapterClass::IrohBlobs);
+}
+
 // r[verify molten.content_store_adapter.partial_state]
 #[test]
 fn provider_throttle_is_retryable_and_put_disconnect_tracks_remote_acknowledgement() {

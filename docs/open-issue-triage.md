@@ -22,6 +22,7 @@ The following issues have concrete changes on `molten`:
 - **#22** Read-only capability qualification report joining the evidence matrix with validated receipts.
 - **#28** Resolved-closure dependency advisory, source, and license audit with reviewed exceptions.
 - **#11** Structured release-dependency rule IDs and supporting facts; keep-Rust/stop-Datalog decision recorded.
+- **#8 (partial)** Distinct `ContentAdapterClass::ObjectStorage` and a Nickel profile stub with explicit capabilities; live S3 client and NVMe tier remain unimplemented.
 
 No-go decisions are recorded for **#2**, **#3**, **#6**, **#10**, and **#12** in
 the [deferred decision record](deferred-decisions.md). They remain open until
@@ -35,7 +36,7 @@ their reopening triggers are met.
 | #3 | No-go decision recorded: published bbtree versions pin an incompatible `vstd` cohort. | Reopen with a compatible bbtree source or an isolated benchmark workspace. |
 | #5 | No pinned TLC/TLA-ts tooling in the flake; external TLA+ results do not prove Molten behavior. | Pin a TLA+ toolchain and add a bounded model plus CI exploration. |
 | #6 | No-go decision recorded: no profile output justifies the split. | Reopen after runtime reuse and a measured threshold. |
-| #8 | Needs an object-storage provider contract, client shape, and a live/recording adapter. | Start with the mock transport from #13 and a bounded provider profile. |
+| #8 | Class and profile stub implemented; needs the injectable S3-compatible client, verified NVMe tier, and live/mock parity evidence. | Start with the mock transport from #13 and the new object-storage profile. |
 | #9 | Requires TPM2 hardware and a sealed-key backend; the current host has no qualified TPM path. | Implement the pure key-backend contract first, then a hardware rail. |
 | #10 | No-go decision recorded: threat model and disclosure rule are not agreed. | Reopen after the discovery threat model is agreed. |
 | #12 | No-go decision recorded: no bounded root-blocker consumer. | Reopen with a world-workflow query need. |

@@ -48,6 +48,7 @@ pub enum ContentAdapterClass {
     CapabilityLocal,
     RedbIndexed,
     IrohBlobs,
+    ObjectStorage,
     DeterministicSimulation,
 }
 
@@ -57,6 +58,7 @@ impl ContentAdapterClass {
             Self::CapabilityLocal => "capability-local",
             Self::RedbIndexed => "redb-indexed",
             Self::IrohBlobs => "iroh-blobs",
+            Self::ObjectStorage => "object-storage",
             Self::DeterministicSimulation => "deterministic-simulation",
         }
     }
