@@ -220,3 +220,64 @@ where
         canonical_receipt,
     })
 }
+
+pub struct RetryPlanInput<'a, S> {
+    pub store: &'a S,
+    pub request: &'a WorldPromotionRequest,
+    pub reservation_ref: &'a WorldReleaseReservationRef,
+    pub attempt_ref: &'a WorldReleaseAttemptRef,
+    pub next_attempt_ref: WorldReleaseAttemptRef,
+    pub is_duplicate_risk_acknowledged: bool,
+}
+
+/// Rebuilds the immutable original plan from the operator's request document and
+/// plans one retry for a stored uncertain attempt.
+pub fn plan_retry_for_reservation<S: WorldPromotionBookkeepingPort>(
+    input: RetryPlanInput<'_, S>,
+) -> Result<WorldRetryPlan> {
+    let plan = plan_world_promotion(input.request)
+        .map_err(|issues| Failure::invalid_harness(format!("world retry planning denied: {issues:?}")))?;
+    let reservation = input
+        .store
+        .read_reservation(input.reservation_ref)?
+        .ok_or_else(|| Failure::invalid_harness("world retry reservation is missing"))?;
+    if reservation.promotion_ref != plan.plan_ref || reservation.operation_ref != plan.operation_ref {
+        return Err(Failure::invalid_harness("world retry request does not match the stored reservation plan"));
+    }
+    let attempt = input
+        .store
+        .read_attempt(input.attempt_ref)?
+        .ok_or_else(|| Failure::invalid_harness("world retry attempt is missing"))?;
+    plan_world_retry(&plan, &reservation, &attempt, input.next_attempt_ref, input.is_duplicate_risk_acknowledged)
+        .map_err(|issues| Failure::invalid_harness(format!("world retry denied: {issues:?}")))
+}
+
+pub struct AbandonInput<'a, S> {
+    pub store: &'a mut S,
+    pub request: &'a WorldPromotionRequest,
+    pub attempt_ref: &'a WorldReleaseAttemptRef,
+    pub is_unknown_outcome_acknowledged: bool,
+}
+
+/// Rebuilds the original plan and abandons one stored uncertain attempt.
+pub fn abandon_uncertain_for_attempt<S: WorldPromotionBookkeepingPort>(
+    input: AbandonInput<'_, S>,
+) -> Result<WorldAttemptRecord> {
+    let plan = plan_world_promotion(input.request)
+        .map_err(|issues| Failure::invalid_harness(format!("world abandon planning denied: {issues:?}")))?;
+    let attempt = input
+        .store
+        .read_attempt(input.attempt_ref)?
+        .ok_or_else(|| Failure::invalid_harness("world abandon attempt is missing"))?;
+    let reservation = input
+        .store
+        .read_reservation(&attempt.reservation_ref)?
+        .ok_or_else(|| Failure::invalid_harness("world abandon reservation is missing"))?;
+    if reservation.promotion_ref != plan.plan_ref || reservation.operation_ref != plan.operation_ref {
+        return Err(Failure::invalid_harness("world abandon request does not match the stored reservation plan"));
+    }
+    let abandoned = abandon_uncertain_attempt(&plan, &reservation, &attempt, input.is_unknown_outcome_acknowledged)
+        .map_err(|issues| Failure::invalid_harness(format!("world abandon denied: {issues:?}")))?;
+    input.store.store_attempt(&abandoned)?;
+    Ok(abandoned)
+}

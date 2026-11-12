@@ -26,6 +26,8 @@ use serde::Deserialize;
 
 #[path = "worldpromotion/execute.rs"]
 mod execute;
+#[path = "worldpromotion/mutations.rs"]
+mod mutations;
 #[path = "worldpromotion/retry.rs"]
 mod retry;
 
@@ -76,10 +78,16 @@ pub(crate) enum WorldPromotionCommand {
         state_root: PathBuf,
         #[arg(long)]
         reservation_ref: String,
+        #[arg(long)]
+        authority: PathBuf,
+        #[arg(long)]
+        trusted_signer: String,
     },
     Abandon {
         #[arg(long)]
         state_root: PathBuf,
+        #[arg(long)]
+        request: PathBuf,
         #[arg(long)]
         attempt_ref: String,
         #[arg(long)]
@@ -143,16 +151,29 @@ pub(crate) fn run_world_promotion_command(command: WorldPromotionCommand) -> Res
         WorldPromotionCommand::Deny {
             state_root,
             reservation_ref,
-        } => unavailable_mutation(&state_root, "deny", &reservation_ref),
+            authority,
+            trusted_signer,
+        } => mutations::deny(mutations::DenyArguments {
+            state_root: &state_root,
+            reservation_ref: &reservation_ref,
+            authority: &authority,
+            trusted_signer: &trusted_signer,
+        }),
         WorldPromotionCommand::Abandon {
             state_root,
+            request,
             attempt_ref,
             acknowledge_unknown_outcome,
         } => {
             if !acknowledge_unknown_outcome {
                 return Err(Failure::invalid_harness("abandon requires explicit unknown-outcome acknowledgement"));
             }
-            unavailable_mutation(&state_root, "abandon", &attempt_ref)
+            mutations::abandon(mutations::AbandonArguments {
+                state_root: &state_root,
+                request_path: &request,
+                attempt_ref: &attempt_ref,
+                is_unknown_outcome_acknowledged: acknowledge_unknown_outcome,
+            })
         }
     }
 }
@@ -199,19 +220,6 @@ fn reconcile(state_root: &Path) -> Result<()> {
     println!("observation_first=true");
     println!("automatic_retry=false");
     Ok(())
-}
-
-fn unavailable_mutation(state_root: &Path, action: &str, reference: &str) -> Result<()> {
-    let _store = open_store(state_root)?;
-    molten::preserves_rail::validate_content_ref(reference)
-        .map_err(|_| Failure::invalid_harness("operator reference is invalid"))?;
-    println!("action={action}");
-    println!("reference={reference}");
-    println!("decision=denied");
-    println!("issue=current-operator-authority-adapter-unavailable");
-    Err(Failure::invalid_harness(
-        "standalone outbox mutation is disabled until current operator authority is composed",
-    ))
 }
 
 pub(super) fn read_request(path: &Path) -> Result<WorldPromotionRequest> {

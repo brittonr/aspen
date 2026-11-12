@@ -84,14 +84,37 @@ molten world-promotion retry-plan \
   --acknowledge-duplicate-risk
 ```
 
-The command emits a bound retry plan; it does not dispatch. Deny and abandon
-still deny until their current operator-authority composition lands.
+The command emits a bound retry plan; it does not dispatch.
+
+An operator can deny a committed or blocked reservation with a signed current
+authority grant:
+
+```sh
+molten world-promotion deny \
+  --state-root target/node \
+  --reservation-ref <ref> \
+  --authority authority.json \
+  --trusted-signer <64 hex characters>
+```
+
+An uncertain attempt can be abandoned only with the original request document
+and explicit unknown-outcome acknowledgement:
+
+```sh
+molten world-promotion abandon \
+  --state-root target/node \
+  --request promotion.json \
+  --attempt-ref <ref> \
+  --acknowledge-unknown-outcome
+```
+
+Deny and abandon publish canonical receipts; neither proves external effect
+completion. Effect dispatch remains a separate admitted step.
 
 The promote command publishes its canonical receipt under
 `<state-root>/world-promotion/receipts/<blake3>.preserves`. Promotion commits the
 active head and reservation set atomically; effect dispatch remains a separate
-admitted step. Retry planning, deny, and abandon still deny until their current
-operator-authority composition lands.
+admitted step.
 
 ## Non-claims
 

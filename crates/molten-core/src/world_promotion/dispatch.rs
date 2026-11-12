@@ -143,6 +143,12 @@ pub fn blocked_reservation(reservation: &WorldReleaseReservation) -> WorldReleas
     blocked
 }
 
+pub fn denied_reservation(reservation: &WorldReleaseReservation) -> WorldReleaseReservation {
+    let mut denied = reservation.clone();
+    denied.state = WorldReleaseState::Denied;
+    denied
+}
+
 fn validate_dispatch(
     plan: &WorldPromotionPlan,
     reservation: &WorldReleaseReservation,
