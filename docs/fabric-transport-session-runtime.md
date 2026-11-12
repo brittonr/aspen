@@ -31,7 +31,11 @@ The live rails hash and check the frame before socket I/O, parse the length pref
 
 The pure endpoint contract is in `crates/molten-core/src/fabric_transport/cross_process/`. A handoff is canonical Preserves that binds profile, protocol/ALPN, extension/service owner, generation, endpoint identity, listener identity, peer context, locator and validity cohorts, disclosure policy, framing/resources, and non-claims. Private keys, capabilities, runtime handles, and ambient paths are never serialized.
 
-The initial shell intentionally supports an explicit loopback bind only. Handoffs may contain the Iroh direct IP locators returned by that endpoint; relay/custom/private locator use is not part of the admitted initial operator profile. Default status emits locator classes and refs, not raw locator values. Import checks every expected binding before dial and has no ambient endpoint, socket, protocol, profile, simulation, or locator fallback.
+The initial shell intentionally supports an explicit loopback bind only. A
+pre-admission per-source rate limit is not implemented; the current limits are
+concurrency, credit, in-flight bytes, queue slots, and frame size. See the
+[inbound admission rate-limit review](inbound-admission-rate-limit-review.md)
+for the recorded finding and deferral decision. Handoffs may contain the Iroh direct IP locators returned by that endpoint; relay/custom/private locator use is not part of the admitted initial operator profile. Default status emits locator classes and refs, not raw locator values. Import checks every expected binding before dial and has no ambient endpoint, socket, protocol, profile, simulation, or locator fallback.
 
 A listener publishes only after endpoint setup, exact ALPN activation, registration/capability/profile admission, and readiness. It can accept bounded sessions repeatedly. Drain stops admission, requires active sessions to reach terminal state, awaits endpoint close, and emits cleanup evidence. Client endpoint close is awaited and chained into its terminal cleanup ref.
 

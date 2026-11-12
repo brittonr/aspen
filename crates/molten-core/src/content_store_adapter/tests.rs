@@ -239,15 +239,50 @@ fn verified_partial_state_resumes_and_disconnect_is_uncertain() {
     let resumed = begin_partial_state(&profile, &manifest, &command, GENERATION_ONE, Some(&partial)).expect("resume");
     assert_eq!(resumed.missing_chunk_refs, vec![manifest.chunks[1].chunk_ref.clone()]);
     assert_eq!(
-        classify_content_failure(&profile, &resumed, ContentFailure::TransportDisconnected)
-            .expect("disconnect outcome")
-            .terminal,
+        classify_content_failure(
+            &profile,
+            &resumed,
+            ContentFailure::TransportDisconnected,
+            ContentFailureContext::default(),
+        )
+        .expect("disconnect outcome")
+        .terminal,
         ContentTerminal::Uncertain
     );
 
     let mut stale = resumed;
     stale.generation += 1;
     assert!(begin_partial_state(&profile, &manifest, &command, GENERATION_ONE, Some(&stale)).is_err());
+}
+
+// r[verify molten.content_store_adapter.partial_state]
+#[test]
+fn provider_throttle_is_retryable_and_put_disconnect_tracks_remote_acknowledgement() {
+    let profile = profile();
+    let manifest = manifest();
+    let command = command(ContentOperation::Put);
+    let state = begin_partial_state(&profile, &manifest, &command, GENERATION_ONE, None).expect("put state");
+
+    let throttled =
+        classify_content_failure(&profile, &state, ContentFailure::ProviderThrottle, ContentFailureContext::default())
+            .expect("throttle outcome");
+    assert_eq!(throttled.terminal, ContentTerminal::Retryable);
+    assert_eq!(throttled.failure, Some(ContentFailure::ProviderThrottle));
+    assert_eq!(ContentFailure::ProviderThrottle.as_str(), "provider-throttle");
+
+    let before_acknowledgement =
+        classify_content_failure(&profile, &state, ContentFailure::TransportDisconnected, ContentFailureContext {
+            remote_put_acknowledged: false,
+        })
+        .expect("unacknowledged put disconnect");
+    assert_eq!(before_acknowledgement.terminal, ContentTerminal::Retryable);
+
+    let after_acknowledgement =
+        classify_content_failure(&profile, &state, ContentFailure::TransportDisconnected, ContentFailureContext {
+            remote_put_acknowledged: true,
+        })
+        .expect("acknowledged put disconnect");
+    assert_eq!(after_acknowledgement.terminal, ContentTerminal::Uncertain);
 }
 
 // r[verify molten.content_store_adapter.identity_boundary]

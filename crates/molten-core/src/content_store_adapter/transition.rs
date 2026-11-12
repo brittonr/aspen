@@ -127,14 +127,31 @@ pub fn apply_chunk_observation(
     Ok(next)
 }
 
+/// Put-side uncertainty context for failure classification.
+///
+/// A get has verified chunk refs when it has observed bytes. A put may have
+/// mutated the remote before the client observes a durable acknowledgement, so
+/// the caller records whether the remote accepted any part of the put. An empty
+/// get state and an unacknowledged put remain retryable; a disconnect after a
+/// remote acknowledgement is uncertain and must not be blind-retried.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ContentFailureContext {
+    pub remote_put_acknowledged: bool,
+}
+
 pub fn classify_content_failure(
     profile: &ContentAdapterProfile,
     state: &ContentPartialState,
     failure: ContentFailure,
+    context: ContentFailureContext,
 ) -> Result<ContentPartialState, ContentIssue> {
     let terminal = match failure {
-        ContentFailure::Overload => ContentTerminal::Retryable,
-        ContentFailure::TransportDisconnected if !state.verified_chunk_refs.is_empty() => ContentTerminal::Uncertain,
+        ContentFailure::ProviderThrottle | ContentFailure::Overload => ContentTerminal::Retryable,
+        ContentFailure::TransportDisconnected
+            if !state.verified_chunk_refs.is_empty() || context.remote_put_acknowledged =>
+        {
+            ContentTerminal::Uncertain
+        }
         ContentFailure::TransportDisconnected => ContentTerminal::Retryable,
         ContentFailure::Timeout => ContentTerminal::Uncertain,
         _ => ContentTerminal::Failed,

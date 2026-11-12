@@ -58,8 +58,13 @@ pub fn execute_simulated_stream(input: SimulatedStreamInput<'_>) -> crate::error
             break;
         }
         if fault == Some(Fault::DisconnectAt(descriptor.position)) {
-            state = classify_content_failure(profile, &state, ContentFailure::TransportDisconnected)
-                .map_err(transition_error)?;
+            state = classify_content_failure(
+                profile,
+                &state,
+                ContentFailure::TransportDisconnected,
+                ContentFailureContext::default(),
+            )
+            .map_err(transition_error)?;
             events.push(terminal_stream_event(input, &state, None, state.failure)?);
             break;
         }
@@ -87,7 +92,8 @@ pub fn execute_simulated_stream(input: SimulatedStreamInput<'_>) -> crate::error
             }
             Err(issues) => {
                 let failure = failure_from_issues(&issues);
-                state = classify_content_failure(profile, &state, failure).map_err(transition_error)?;
+                state = classify_content_failure(profile, &state, failure, ContentFailureContext::default())
+                    .map_err(transition_error)?;
                 events.push(terminal_stream_event(input, &state, Some(descriptor.chunk_ref.clone()), Some(failure))?);
                 break;
             }
@@ -131,7 +137,9 @@ fn begin_simulated_state(
         crate::error::Failure::invalid_harness(format!("simulation partial state denied: {issues:?}"))
     })?;
     if fault == Some(Fault::CapacityExceeded) {
-        let state = classify_content_failure(profile, &state, ContentFailure::Overload).map_err(transition_error)?;
+        let state =
+            classify_content_failure(profile, &state, ContentFailure::Overload, ContentFailureContext::default())
+                .map_err(transition_error)?;
         return terminal_execution(profile, manifest, command, state).map(std::ops::ControlFlow::Break);
     }
     if let Some(Fault::LatencyTicks(latency)) = fault {
@@ -140,7 +148,9 @@ fn begin_simulated_state(
             .checked_add(latency)
             .ok_or_else(|| crate::error::Failure::invalid_harness("simulation latency overflow"))?;
         if completion_tick > command.deadline_tick {
-            let state = classify_content_failure(profile, &state, ContentFailure::Timeout).map_err(transition_error)?;
+            let state =
+                classify_content_failure(profile, &state, ContentFailure::Timeout, ContentFailureContext::default())
+                    .map_err(transition_error)?;
             return terminal_execution(profile, manifest, command, state).map(std::ops::ControlFlow::Break);
         }
     }
