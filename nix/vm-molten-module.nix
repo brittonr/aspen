@@ -2,10 +2,23 @@
 
 pkgs.testers.runNixOSTest {
   name = "molten-module";
+  # Source-gate measurement rehashes the retained build closure on each start;
+  # the default one-hour test timeout is shorter than two measured starts in a
+  # single-core VM.
+  globalTimeout = 7200;
   nodes.machine =
     { ... }:
     {
       imports = [ ./modules/molten.nix ];
+      # The test VM has no route to the operator binary cache. Disabling
+      # substituters keeps the source-gate Nix evaluation offline and bounded
+      # instead of retrying an unreachable cache for tens of minutes.
+      nix.settings.substituters = [ ];
+      nix.settings.connect-timeout = 1;
+      virtualisation = {
+        cores = 2;
+        memorySize = 2048;
+      };
       services.molten = {
         enable = true;
         package = moltenPkg;
@@ -67,7 +80,7 @@ pkgs.testers.runNixOSTest {
     machine.succeed("rm -f /var/lib/molten/fixture-trust.json")
     machine.succeed("systemctl reset-failed molten.service")
     machine.fail("systemctl start molten.service")
-    machine.succeed("systemctl is-failed --quiet molten.service")
+    machine.fail("systemctl is-active --quiet molten.service")
     machine.succeed("journalctl -u molten.service --no-pager | grep -q 'fixture-trust.json'")
   '';
 }

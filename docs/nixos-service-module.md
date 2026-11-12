@@ -66,7 +66,15 @@ scripts. It does not boot a VM or prove live node behavior.
 The opt-in `apps.x86_64-linux.nixos-vm-molten-module` builds a NixOS VM test
 that boots the module, checks startup, restarts the service, stops it, and
 checks absent-trust failure. It is deliberately not a flake check because its
-cold closure is large. It was not executed in the session that added it, so it
-is a reviewable rail, not retained execution evidence. Boot, restart, shutdown,
-absent or wrong trust denial, and the exact package/profile result remain
+cold closure is large.
+
+The test VM disables substituters and raises the driver timeout because each
+start remeasures the retained build closure with `nix hash path`; the default
+one-hour driver timeout is shorter than two measured starts on a small VM. A
+run booted the module, wrote startup evidence, restarted it, wrote shutdown
+evidence, and denied an absent trust file. Its final assertion expected the
+unit to be `failed`, but `Restart=on-failure` leaves it restarting; the test now
+asserts that the unit is not active. The corrected full run was not retained
+because the host Nix store entered an automatic-GC lock. Boot, restart,
+shutdown, absent-trust denial, and the exact package/profile result remain
 required before the module is treated as externally qualified.

@@ -26,6 +26,7 @@ The following issues have concrete changes on `molten`:
 - **#5 (partial)** Bounded TLA+ fast-path model with a TLC flake check; TLA-ts is not integrated.
 - **#31 (tracker)** The [external pilot tracker](external-pilot-tracker.md) records the selected-workflow dependencies and distribution checklist; it does not qualify a pilot.
 - **#17 (partial)** Signed authority/closure, observed head, transaction store, and canonical receipts composed into `world-promotion promote`; retry/deny/abandon and effect dispatch remain unavailable.
+- **#26 (partial)** The opt-in VM run booted, started, restarted, stopped, and denied an absent trust file; the final assertion was corrected for the module's restart policy, but the corrected full run was blocked by a host Nix auto-GC lock.
 
 No-go decisions are recorded for **#2**, **#3**, **#6**, **#9**, **#10**, and **#12** in
 the [deferred decision record](deferred-decisions.md). They remain open until
@@ -49,7 +50,7 @@ their reopening triggers are met.
 | #19 | Needs a public-node composition and a non-simulated actor effect port. | Reuse the archived actor profile; do not add a second mailbox or ledger. |
 | #20 | Depends on #15 and #19 plus separate state roots and an independent effect observer. | Qualify ownership fencing after the cross-host and actor paths exist. |
 | #21 | Needs a pinned Golem deployment and matched durability/recovery semantics. | Define the common manifest before any latency comparison. |
-| #26 | `nixosModules.molten`, a module-eval check, and an opt-in `nixos-vm-molten-module` app are implemented; the VM app was not executed, so boot/restart/shutdown and absent-trust denial are not retained evidence. | Run the opt-in VM app and retain the exact package/profile result. |
+| #26 | The opt-in VM run reached startup, restart, shutdown, and absent-trust denial; the final assertion expected `failed` while `Restart=on-failure` leaves the unit restarting. The corrected full run was blocked by a host Nix auto-GC lock. | Rerun the corrected opt-in VM app when the Nix store is idle and retain the exact package/profile result. |
 | #31 | Tracker added at `docs/external-pilot-tracker.md`; depends on #15, #16, #17–#19, #22, #26, #27–#30. | Keep it as the release-readiness checklist, not an implementation task. |
 
 ## Boundaries
