@@ -23,6 +23,7 @@ The following issues have concrete changes on `molten`:
 - **#28** Resolved-closure dependency advisory, source, and license audit with reviewed exceptions.
 - **#11** Structured release-dependency rule IDs and supporting facts; keep-Rust/stop-Datalog decision recorded.
 - **#8 (partial)** Distinct `ContentAdapterClass::ObjectStorage` and a Nickel profile stub with explicit capabilities; live S3 client and NVMe tier remain unimplemented.
+- **#5 (partial)** Bounded TLA+ fast-path model with a TLC flake check; TLA-ts is not integrated.
 
 No-go decisions are recorded for **#2**, **#3**, **#6**, **#9**, **#10**, and **#12** in
 the [deferred decision record](deferred-decisions.md). They remain open until
@@ -34,7 +35,7 @@ their reopening triggers are met.
 | --- | --- | --- |
 | #2 | No-go decision recorded: prerequisite query and baseline evidence are absent. | Reopen with a measured query requirement. |
 | #3 | No-go decision recorded: published bbtree versions pin an incompatible `vstd` cohort. | Reopen with a compatible bbtree source or an isolated benchmark workspace. |
-| #5 | No pinned TLC/TLA-ts tooling in the flake; external TLA+ results do not prove Molten behavior. | Pin a TLA+ toolchain and add a bounded model plus CI exploration. |
+| #5 | Bounded model and TLC check implemented; TLA-ts parser check is not integrated. | Add a pinned TLA-ts package and CI parse check. |
 | #6 | No-go decision recorded: no profile output justifies the split. | Reopen after runtime reuse and a measured threshold. |
 | #8 | Class and profile stub implemented; needs the injectable S3-compatible client, verified NVMe tier, and live/mock parity evidence. | Start with the mock transport from #13 and the new object-storage profile. |
 | #9 | No-go decision recorded: `ManagedSecret` has no loader; TPM2 needs a swtpm/hardware PCR test. | Implement the sealed backend with a fail-closed denial and rotation fixture. |

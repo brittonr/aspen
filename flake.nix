@@ -3292,6 +3292,20 @@
                   test "${moduleEval.systemd.services.molten.serviceConfig.User}" = "molten"
                   touch "$out"
                 '';
+            consensus-fastpath-tla =
+              pkgs.runCommand "molten-consensus-fastpath-tla"
+                {
+                  nativeBuildInputs = [ pkgs.tlaplus ];
+                  src = sourceForConfigChecks;
+                }
+                ''
+                  set -euo pipefail
+                  cp -R $src source
+                  chmod -R u+w source
+                  cd source/verification/tla
+                  mkdir -p "$TMPDIR/tlc"
+                  tlc -metadir "$TMPDIR/tlc" -config ConsensusFastPath.cfg ConsensusFastPath.tla > "$out"
+                '';
             atlas-current =
               pkgs.runCommand "molten-atlas-current"
                 {

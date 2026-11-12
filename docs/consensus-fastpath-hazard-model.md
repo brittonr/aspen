@@ -8,7 +8,7 @@ The model is not a live engine and cannot select a production profile.
 The design reference is `Jetpack: Consensus Made Generally Fast`, OSDI 2026.
 The artifact reference is `stonysystems/jetpack` commit `c03e318ec355b11edd42aac56c68d0765f88d1d2` under MIT terms.
 
-Molten independently expresses its profile, transitions, schedules, and invariants.
+Molten independently expresses its profile, transitions, schedules, and invariants. The bounded TLA+ model is in [`verification/tla/ConsensusFastPath.tla`](../verification/tla/ConsensusFastPath.tla) and is checked by the `consensus-fastpath-tla` flake check. See [the model notes](consensus-fastpath-tla.md).
 External TLA+ results and benchmarks do not prove Molten behavior or performance.
 
 ## Profile and quorum boundary
