@@ -40,7 +40,7 @@ their reopening triggers are met.
 | #2 | No-go decision recorded: prerequisite query and baseline evidence are absent. | Reopen with a measured query requirement. |
 | #3 | No-go decision recorded: published bbtree versions pin an incompatible `vstd` cohort. | Reopen with a compatible bbtree source or an isolated benchmark workspace. |
 | #6 | No-go decision recorded: no profile output justifies the split. | Reopen after runtime reuse and a measured threshold. |
-| #8 | Class, profile stub, and bounded SigV4 S3 client implemented with mock-endpoint signing tests; needs a live S3-compatible endpoint, verified NVMe tier, and live/mock parity evidence. | Run the client against an endpoint and implement the NVMe tier. |
+| #8 | Class, profile stub, and bounded SigV4 S3 client implemented with mock-endpoint signing tests; needs a live S3-compatible endpoint, verified NVMe tier, and live/mock parity evidence. A `minio/minio` pull was denied by the registry in this environment. | Obtain a reachable S3-compatible endpoint and implement the NVMe tier. |
 | #9 | No-go decision recorded: `ManagedSecret` has no loader; TPM2 needs a swtpm/hardware PCR test. | Implement the sealed backend with a fail-closed denial and rotation fixture. |
 | #10 | No-go decision recorded: threat model and disclosure rule are not agreed. | Reopen after the discovery threat model is agreed. |
 | #12 | No-go decision recorded: no bounded root-blocker consumer. | Reopen with a world-workflow query need. |
@@ -49,7 +49,7 @@ their reopening triggers are met.
 | #19 | Needs a public-node composition and a non-simulated actor effect port. | Reuse the archived actor profile; do not add a second mailbox or ledger. |
 | #20 | Depends on #15 and #19 plus separate state roots and an independent effect observer. | Qualify ownership fencing after the cross-host and actor paths exist. |
 | #21 | Needs a pinned Golem deployment and matched durability/recovery semantics. | Define the common manifest before any latency comparison. |
-| #26 | The opt-in VM run reached startup, restart, shutdown, and absent-trust denial; the final assertion expected `failed` while `Restart=on-failure` leaves the unit restarting. The corrected full run was blocked by a host Nix auto-GC lock. | Rerun the corrected opt-in VM app when the Nix store is idle and retain the exact package/profile result. |
+| #26 | The opt-in VM run reached startup, restart, shutdown, and absent-trust denial; the final assertion expected `failed` while `Restart=on-failure` leaves the unit restarting. The corrected full run is blocked by a host Nix auto-GC lock; repeated `nix eval` probes time out. | Rerun the corrected opt-in VM app when the Nix store is idle and retain the exact package/profile result. |
 | #31 | Tracker added at `docs/external-pilot-tracker.md`; depends on #15, #16, #17–#19, #22, #26, #27–#30. | Keep it as the release-readiness checklist, not an implementation task. |
 
 ## Boundaries
