@@ -6,6 +6,57 @@ use super::ClientConfig;
 use super::LocalTier;
 use super::TierPut;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReadSource {
+    Local,
+    Remote,
+}
+
+#[derive(Debug, Clone)]
+pub struct TimedRead {
+    pub bytes: Vec<u8>,
+    pub source: ReadSource,
+    pub elapsed: std::time::Duration,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LatencySummary {
+    pub local_count: usize,
+    pub remote_count: usize,
+    pub local_p50_micros: u64,
+    pub local_p99_micros: u64,
+    pub remote_p50_micros: u64,
+    pub remote_p99_micros: u64,
+}
+
+#[derive(Debug, Default)]
+pub struct LatencyRecorder {
+    local: Vec<std::time::Duration>,
+    remote: Vec<std::time::Duration>,
+}
+
+impl LatencyRecorder {
+    pub fn record(&mut self, read: &TimedRead) {
+        match read.source {
+            ReadSource::Local => self.local.push(read.elapsed),
+            ReadSource::Remote => self.remote.push(read.elapsed),
+        }
+    }
+
+    pub fn summary(&self) -> LatencySummary {
+        let (local_p50, local_p99) = percentiles(&self.local);
+        let (remote_p50, remote_p99) = percentiles(&self.remote);
+        LatencySummary {
+            local_count: self.local.len(),
+            remote_count: self.remote.len(),
+            local_p50_micros: local_p50,
+            local_p99_micros: local_p99,
+            remote_p50_micros: remote_p50,
+            remote_p99_micros: remote_p99,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CachedObjectObservation {
     pub object_ref: String,
@@ -34,6 +85,19 @@ impl CachedClient {
         let remote = self.remote.put(key, bytes).await?;
         let cached = matches!(self.tier.put(&object_ref, bytes)?, TierPut::Cached(_));
         Ok(CachedObjectObservation { object_ref, bytes: remote.bytes, cached })
+    }
+
+    pub async fn get_timed(&mut self, key: &str, expected_ref: &str) -> Result<TimedRead> {
+        let started = std::time::Instant::now();
+        if let Some(bytes) = self.tier.get(expected_ref)? {
+            return Ok(TimedRead { bytes, source: ReadSource::Local, elapsed: started.elapsed() });
+        }
+        let bytes = self.remote.get(key).await?;
+        if crate::preserves_rail::content_ref_from_bytes(&bytes) != expected_ref {
+            return Err(Failure::invalid_harness("remote object does not match the expected content identity"));
+        }
+        self.tier.put(expected_ref, &bytes)?;
+        Ok(TimedRead { bytes, source: ReadSource::Remote, elapsed: started.elapsed() })
     }
 
     pub async fn get(&self, key: &str, expected_ref: &str) -> Result<Vec<u8>> {
@@ -72,6 +136,18 @@ impl CachedClient {
         self.remote.head(key).await
     }
 }
+
+fn percentiles(values: &[std::time::Duration]) -> (u64, u64) {
+    if values.is_empty() {
+        return (0, 0);
+    }
+    let mut micros = values.iter().map(|value| value.as_micros() as u64).collect::<Vec<_>>();
+    micros.sort_unstable();
+    let p50 = micros[(micros.len() - 1) * 50 / 100];
+    let p99 = micros[(micros.len() - 1) * 99 / 100];
+    (p50, p99)
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -120,6 +196,26 @@ mod tests {
         let expected = crate::preserves_rail::content_ref_from_bytes(b"hello");
         assert_eq!(client.get("objects/hello", &expected).await.expect("remote get"), b"hello");
         assert_eq!(client.get("objects/hello", &expected).await.expect("local get"), b"hello");
+    }
+
+    #[tokio::test]
+    async fn latency_summary_separates_local_and_remote_reads() {
+        let temporary = tempfile::tempdir().expect("tier");
+        let tier = LocalTier::open(temporary.path(), 1024, false).expect("tier");
+        let endpoint = server(vec![
+            b"HTTP/1.1 200 OK\r\ncontent-length: 5\r\nconnection: close\r\n\r\nhello",
+        ])
+        .await;
+        let mut client = CachedClient::connect(config(endpoint), tier).expect("client");
+        let expected = crate::preserves_rail::content_ref_from_bytes(b"hello");
+        let mut recorder = LatencyRecorder::default();
+        recorder.record(&client.get_timed("objects/hello", &expected).await.expect("remote"));
+        recorder.record(&client.get_timed("objects/hello", &expected).await.expect("local"));
+        let summary = recorder.summary();
+        assert_eq!(summary.remote_count, 1);
+        assert_eq!(summary.local_count, 1);
+        assert!(summary.remote_p50_micros <= summary.remote_p99_micros);
+        assert!(summary.local_p50_micros <= summary.local_p99_micros);
     }
 
     #[tokio::test]
