@@ -43,3 +43,34 @@ impl WorldPromotionReceiptPort for LocalPromotionReceipts {
         Ok(())
     }
 }
+#[cfg(test)]
+mod tests {
+    use molten_node_host::node_state::NamespaceKind;
+
+    use super::*;
+
+    fn receipt(bytes: &[u8]) -> CanonicalWorldPromotionRecord {
+        CanonicalWorldPromotionRecord {
+            record_ref: "blake3:0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            value: preserves::IOValue::new(0),
+            bytes: bytes.to_vec(),
+        }
+    }
+
+    #[test]
+    fn receipts_are_content_addressed_idempotent_and_tamper_evident() {
+        let temporary = cap_tempfile::tempdir(cap_std::ambient_authority()).expect("temporary state root");
+        let root = DirectoryRoot::from_dir(temporary.try_clone().expect("clone root"));
+        root.create_layout().expect("state layout");
+        let mut receipts = LocalPromotionReceipts {
+            storage: root.namespace(NamespaceKind::Storage).expect("storage"),
+        };
+        let record = receipt(b"canonical promotion receipt");
+        receipts.publish_promotion_receipt(&record).expect("first publication");
+        receipts.publish_promotion_receipt(&record).expect("idempotent publication");
+        let hash = blake3::hash(&record.bytes).to_hex().to_string();
+        let path = RelativePath::parse(&format!("{RECEIPT_DIRECTORY}/{hash}.preserves")).expect("receipt path");
+        receipts.storage.write(&path, b"tampered").expect("tamper");
+        assert!(receipts.publish_promotion_receipt(&record).is_err());
+    }
+}
