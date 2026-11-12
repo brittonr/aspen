@@ -2,6 +2,8 @@ mod canonical;
 mod integration;
 #[path = "live/iroh.rs"]
 mod live_iroh;
+#[path = "live/s3.rs"]
+mod live_s3;
 mod local;
 mod persistence;
 mod simulation;
@@ -11,6 +13,7 @@ mod write;
 pub use canonical::*;
 pub use integration::*;
 pub use live_iroh::*;
+pub use live_s3::*;
 pub use local::*;
 pub use molten_core::content_store_adapter::*;
 pub use persistence::*;

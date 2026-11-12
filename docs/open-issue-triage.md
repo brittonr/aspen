@@ -22,7 +22,7 @@ The following issues have concrete changes on `molten`:
 - **#22** Read-only capability qualification report joining the evidence matrix with validated receipts.
 - **#28** Resolved-closure dependency advisory, source, and license audit with reviewed exceptions.
 - **#11** Structured release-dependency rule IDs and supporting facts; keep-Rust/stop-Datalog decision recorded.
-- **#8 (partial)** Distinct `ContentAdapterClass::ObjectStorage` and a Nickel profile stub with explicit capabilities; live S3 client and NVMe tier remain unimplemented.
+- **#8 (partial)** Distinct `ContentAdapterClass::ObjectStorage`, a Nickel profile stub, and a bounded SigV4 S3 put/get/head client with mock-endpoint tests; a live S3-compatible endpoint and verified NVMe tier remain unimplemented.
 - **#5 (partial)** Bounded TLA+ fast-path model with a TLC flake check; TLA-ts is not integrated.
 - **#31 (tracker)** The [external pilot tracker](external-pilot-tracker.md) records the selected-workflow dependencies and distribution checklist; it does not qualify a pilot.
 - **#17** Public `promote`, `retry-plan`, `deny`, and `abandon`; signed authority/closure, observed head, atomic store, canonical receipts, and a real CLI fixture for positive plus stale/revoked/incomplete promotion. Effect dispatch remains a separate admitted step.
@@ -41,7 +41,7 @@ their reopening triggers are met.
 | #3 | No-go decision recorded: published bbtree versions pin an incompatible `vstd` cohort. | Reopen with a compatible bbtree source or an isolated benchmark workspace. |
 | #5 | Bounded model and TLC check implemented; TLA-ts parser check is not integrated. | Add a pinned TLA-ts package and CI parse check. |
 | #6 | No-go decision recorded: no profile output justifies the split. | Reopen after runtime reuse and a measured threshold. |
-| #8 | Class and profile stub implemented; needs the injectable S3-compatible client, verified NVMe tier, and live/mock parity evidence. | Start with the mock transport from #13 and the new object-storage profile. |
+| #8 | Class, profile stub, and bounded SigV4 S3 client implemented with mock-endpoint signing tests; needs a live S3-compatible endpoint, verified NVMe tier, and live/mock parity evidence. | Run the client against an endpoint and implement the NVMe tier. |
 | #9 | No-go decision recorded: `ManagedSecret` has no loader; TPM2 needs a swtpm/hardware PCR test. | Implement the sealed backend with a fail-closed denial and rotation fixture. |
 | #10 | No-go decision recorded: threat model and disclosure rule are not agreed. | Reopen after the discovery threat model is agreed. |
 | #12 | No-go decision recorded: no bounded root-blocker consumer. | Reopen with a world-workflow query need. |
