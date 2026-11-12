@@ -1,9 +1,12 @@
+use molten_core::world_head::WorldBranchId;
+use molten_core::world_head::WorldHeadState;
 use molten_node_host::node_state::Scope;
 use redb::ReadableDatabase;
 
 use crate::error::Failure;
 use crate::error::Result;
 use crate::world_head::LocalWorldHeadStore;
+use crate::world_head::WorldHeadStatePort;
 
 mod outbox;
 mod transaction;
@@ -31,6 +34,12 @@ impl LocalWorldPromotionStore {
 
     pub(super) const fn database(&self) -> &redb::Database {
         self.heads.database()
+    }
+
+    pub fn read_head(&self, branch_id: &WorldBranchId) -> Result<Option<WorldHeadState>> {
+        self.heads
+            .read_head(branch_id)
+            .map_err(|error| Failure::invalid_harness(format!("world head read failed: {error}")))
     }
 
     #[cfg(test)]

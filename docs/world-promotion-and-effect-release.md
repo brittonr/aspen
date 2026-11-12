@@ -1,5 +1,10 @@
 # World promotion and effect release
 
+The signed local current-facts adapter is documented in
+[world promotion current facts](world-promotion-current-facts.md). It verifies
+operator authority and intent closure before the transaction validator, but the
+public promotion command still denies until the full composition lands.
+
 World promotion makes an admitted candidate active and creates its complete local release-reservation set in one Redb transaction.
 
 ## Ownership
