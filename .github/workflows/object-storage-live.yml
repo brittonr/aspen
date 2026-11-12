@@ -1,0 +1,52 @@
+name: Object storage live
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "src/content_store_adapter/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/object-storage-live.yml"
+
+jobs:
+  live-s3:
+    runs-on: ubuntu-latest
+    services:
+      minio:
+        image: minio/minio:latest
+        env:
+          MINIO_ROOT_USER: molten
+          MINIO_ROOT_PASSWORD: molten-secret
+        ports:
+          - 9000:9000
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for MinIO
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:9000/minio/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+      - name: Create bucket
+        run: |
+          docker run --rm --network host             -e MC_HOST_local=http://molten:molten-secret@127.0.0.1:9000             minio/mc:latest mb --ignore-existing local/molten-live
+      - uses: DeterminateSystems/nix-installer-action@v19
+      - name: Client roundtrip
+        run: nix develop -c cargo test -p molten --lib --features content-store-object-storage content_store_adapter::live_cache::tests::live_endpoint_roundtrip -- --ignored
+        env:
+          MOLTEN_S3_ENDPOINT: http://127.0.0.1:9000
+          MOLTEN_S3_BUCKET: molten-live
+      - name: Object shell Put/Get
+        run: nix develop -c cargo test -p molten --lib --features content-store-object-storage content_store_adapter::live_object::live_tests::live_publish_and_fetch_run_the_transition_core -- --ignored
+        env:
+          MOLTEN_S3_ENDPOINT: http://127.0.0.1:9000
+          MOLTEN_S3_BUCKET: molten-live
+      - name: Live corrupt-fault parity
+        run: nix develop -c cargo test -p molten --lib --features content-store-object-storage content_store_adapter::live_object::live_fault_tests::live_corrupt_remote_chunk_fails_without_verified_payload -- --ignored
+        env:
+          MOLTEN_S3_ENDPOINT: http://127.0.0.1:9000
+          MOLTEN_S3_BUCKET: molten-live
